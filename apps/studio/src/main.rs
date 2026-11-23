@@ -7,16 +7,16 @@
 //! Drive documents too (`setlist` the model, `sets` live).
 
 mod actions;
-// Read natively (the browser build will read it from Drive's bytes).
-#[cfg_attr(not(feature = "native"), allow(dead_code))]
-mod arrangement;
 mod data;
 #[cfg(feature = "drive")]
 mod drive_sets;
 #[cfg(feature = "native")]
 mod engine;
+// The session's views: the real extensions, hosted (natively).
 mod files;
 mod files_live;
+#[cfg(feature = "native")]
+mod hosted;
 mod icons;
 mod keys;
 mod live_sync;
@@ -221,15 +221,15 @@ fn main() {
     dioxus::launch(App);
 }
 
-/// Studio's own windows: the mixer.
+/// The session's pop-out windows (the mixer's): a window of the session's
+/// layout, drawing its extension view as the main window does.
 #[cfg(feature = "native")]
 fn popout(id: app_shell::WindowId) -> Element {
-    if id.0 == session::MIXER_WINDOW {
-        rsx! {
-            session::MixerWindow { id }
+    // A document of its own, without the app's sheets: sized inline.
+    rsx! {
+        div { style: "position:absolute; top:0; left:0; width:100vw; height:100vh; display:flex; flex-direction:column;",
+            app_shell_extensions::ExtensionPopout { window: id, theme: crate::shell::theme() }
         }
-    } else {
-        rsx! {}
     }
 }
 

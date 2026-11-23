@@ -1372,53 +1372,17 @@ span.aglogo { overflow: hidden; display: block; }
 .rnp-next { padding: 4px 8px; font-size: 13px; color: var(--ink-2); }
 .tbchart { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 13px; color: var(--ink); }
 
-/* The arrangement of the song playing: a progress bar over the song,
-   then the ruler, sections and tracks in one scrolling pane. Plain
-   blocks placed in percent of the song, for Blitz and a browser alike. */
-.arrpage { display: flex; flex-direction: column; gap: 8px; }
-.arreng { font-size: 12px; }
-.arrprog { position: relative; height: 30px; border-radius: 8px; background: var(--surface-2); overflow: hidden; cursor: pointer; margin-top: 4px; }
-.arrprogsec { position: absolute; top: 0; bottom: 0; background: hsla(var(--h), 55%, 45%, .35); border-right: 1px solid rgba(0,0,0,.5); overflow: hidden; white-space: nowrap; pointer-events: none; }
-.arrprogsec span { display: block; padding: 7px 6px 0; font-size: 11px; font-weight: 600; color: var(--ink); }
-.arrprogfill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(45,212,191,.22); pointer-events: none; }
-.arrprogknob { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: var(--accent); pointer-events: none; }
-.arrprogtimes { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); }
-.arrscroll { height: 58vh; overflow-y: scroll; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
-.arrgrid { display: flex; align-items: flex-start; }
-.arrnames { width: 190px; flex: none; border-right: 1px solid var(--rule); background: var(--surface); }
-.arrnh { height: 20px; padding: 2px 8px; font-size: 11px; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
-.arrsech, .arrsecs { height: 24px; }
-.arrname { height: 22px; display: flex; align-items: center; gap: 6px; padding-right: 6px; border-bottom: 1px solid #1c1c21; overflow: hidden; white-space: nowrap; font-size: 12px; min-width: 0; }
-.arrname.tfolder { font-weight: 700; background: #18181c; }
-.arrsw { width: 4px; height: 14px; border-radius: 2px; flex: none; }
-.arrnm { overflow: hidden; white-space: nowrap; min-width: 0; }
-.arrtl { position: relative; flex: 1 1 0; min-width: 0; cursor: pointer; }
-.arrruler { position: relative; height: 20px; border-bottom: 1px solid var(--rule); background: var(--surface); }
-.arrtick { position: absolute; top: 0; bottom: 0; border-left: 1px solid #3a3a42; pointer-events: none; }
-.arrtick span { display: block; padding: 3px 0 0 3px; font-size: 10px; color: var(--ink-3); white-space: nowrap; }
-.arrsecs { position: relative; border-bottom: 1px solid var(--rule); }
-.arrsec { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; background: hsla(var(--h), 55%, 45%, .55); overflow: hidden; white-space: nowrap; pointer-events: none; }
-.arrsec span { display: block; padding: 4px 5px 0; font-size: 11px; font-weight: 600; }
-.arrlane { position: relative; height: 22px; border-bottom: 1px solid #1c1c21; }
-.arrlane.tfolder { background: #121216; }
-.arrclip { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; opacity: .85; overflow: hidden; white-space: nowrap; pointer-events: none; }
-.arrclip span { display: block; padding: 2px 4px 0; font-size: 10px; color: #0b0b0d; font-weight: 600; }
-.arrclip.midi { border: 1px dashed rgba(255,255,255,.6); }
-.arrclip.muted { opacity: .35; }
-.arrph { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; }
 .agline { display: flex; align-items: center; gap: 6px; }
 .agline > .ag { flex: 1 1 0; min-width: 0; }
 .agline > .agarr { flex: none; margin-left: 0; }
 .playset.quiet { color: var(--ink); }
-.content[data-form="desktop"] .page:has(.arrpage) { width: min(100%, 1600px); }
 
-/* The session: a set open for playing, the whole window. Its setlist bar
-   fills the top bar's middle; the views and transport are its foot. */
+/* The session: a set open for playing, the whole window. session-ui's
+   top bar fills the shell's top bar's middle, its bottom bar is the foot;
+   the views are the hosted extensions' (src/hosted.rs). */
 .content.session { background: var(--desk); }
 .sessstage { flex: 1 1 0px; min-height: 0; display: flex; flex-direction: column; padding: 10px 16px 6px; }
 .sessview { flex: 1 1 0px; min-height: 0; display: flex; flex-direction: column; overflow-y: scroll; }
-.sessview .arrpage { flex: 1 1 0px; min-height: 0; }
-.sessview .arrscroll { flex: 1 1 0px; min-height: 0; height: auto; }
 .sessview .chartnow { max-width: 1100px; width: 100%; margin: 0 auto; }
 .sessempty { display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; flex: 1; color: var(--ink-2); }
 .sessempty b { font-size: 20px; color: var(--ink); }
@@ -1430,54 +1394,10 @@ span.aglogo { overflow: hidden; display: block; }
 .sesst { flex: 1 1 0px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .sesslen { color: var(--ink-2); font-size: 13px; }
 
-.sbar { display: flex; align-items: center; gap: 8px; flex: 1 1 0px; min-width: 0; height: 100%; padding: 0 6px; }
-.sbset { position: relative; width: 8px; height: 30px; flex: none; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
-.sbsetfill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); }
-.sbname { display: flex; flex-direction: column; flex: none; max-width: 200px; overflow: hidden; white-space: nowrap; line-height: 1.15; }
-.sbname b { font-size: 13px; overflow: hidden; }
-.sbname span { font-size: 11px; color: var(--ink-3); }
-.sbstep { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; border-radius: 7px; color: var(--ink-2); }
-.sbstep:disabled { opacity: .35; }
-.sbtabs { display: flex; gap: 3px; flex: 1 1 0px; min-width: 0; overflow: hidden; }
-.sbtab { display: flex; flex-direction: column; gap: 3px; flex: 1 1 0px; min-width: 0; padding: 4px 6px 4px; border-radius: 6px; background: var(--surface); }
-.sbtab.on { background: var(--accent-soft); }
-.sbtab.done .sbtabt { color: var(--ink-3); }
-.sbtabt { font-size: 11.5px; font-weight: 600; overflow: hidden; white-space: nowrap; min-width: 0; }
-.sbtab.on .sbtabt { color: var(--accent); }
-.sbtabp { position: relative; display: block; height: 3px; border-radius: 2px; background: #2a2a30; overflow: hidden; }
-.sbtabp i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
-.sbtab.done .sbtabp i { background: #4b5563; }
 .sbbadge { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 11.5px; color: var(--ink-2); padding: 0 4px; }
 .sbbadge i { width: 7px; height: 7px; border-radius: 4px; background: #52525b; }
 .sbbadge.ok i { background: var(--ok); }
 .sbbadge.busy i { background: var(--live); }
 .sbbadge.bad i { background: #ef4444; }
 
-.sbot { display: flex; align-items: center; gap: 14px; width: 100%; min-width: 0; padding: 6px 12px; border-top: 1px solid var(--rule); background: var(--sheet); }
-.sbback { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--rule); font-size: 13px; font-weight: 600; }
-.sbtrans { display: flex; align-items: center; gap: 6px; flex: 1 1 0px; min-width: 0; }
-.sbtp { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex: none; border-radius: 15px; color: var(--ink); }
-.sbtp.big { width: 36px; height: 36px; border-radius: 18px; background: var(--ink); color: var(--desk); }
-.sbclock { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; min-width: 0; }
-.sbclock b { color: var(--ink); margin-right: 6px; }
-.sbviews { display: flex; gap: 2px; flex: none; padding: 3px; border-radius: 9px; background: var(--surface); }
-.sbview { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 7px; font-size: 12.5px; color: var(--ink-2); flex: none; }
-.sbview.on { background: var(--surface-2); color: var(--ink); font-weight: 600; }
-.sbview.pop { border: 1px solid var(--rule); color: var(--ink); }
 
-.mixwin { position: relative; flex: 1 1 0px; min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 10px; background: var(--desk); }
-.mixer { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0px; min-height: 0; }
-.mixstrips { display: flex; gap: 4px; align-items: stretch; overflow-x: scroll; padding-bottom: 6px; flex: 1 1 0px; min-height: 0; }
-.mstrip { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 64px; flex: none; padding: 8px 4px; border-radius: 8px; background: var(--surface); border: 1px solid #1f1f24; }
-.mstrip.tfolder { background: #18181d; border-color: #2c2c33; }
-.mdb { font-size: 11px; color: var(--ink-2); }
-.mfader { position: relative; width: 30px; flex: 1 1 0px; min-height: 120px; border-radius: 6px; background: #0b0b0d; border: 1px solid #26262c; cursor: pointer; overflow: hidden; }
-.mfill { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(45,212,191,.28); pointer-events: none; }
-.munity { position: absolute; left: 0; right: 0; height: 1px; background: #52525b; pointer-events: none; }
-.mknob { position: absolute; left: 2px; right: 2px; height: 8px; margin-bottom: -4px; border-radius: 3px; background: var(--ink); pointer-events: none; }
-.mbtns { display: flex; gap: 4px; }
-.mbtn { width: 24px; height: 20px; border-radius: 5px; font-size: 11px; font-weight: 700; text-align: center; background: var(--surface-2); color: var(--ink-2); }
-.mbtn.m.on { background: #f59e0b; color: #111; }
-.mbtn.s.on { background: #facc15; color: #111; }
-.mname { font-size: 11px; width: 100%; text-align: center; overflow: hidden; white-space: nowrap; }
-.sessview .mixer { height: 100%; }

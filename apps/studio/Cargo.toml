@@ -33,10 +33,14 @@ loro = "1.18"
 # FastTrackStudios/app-shell, not features/app/shell (the old apps' log
 # ring and update check), which has the same package name: say
 # `-p studio-app`, never `-p app-shell`.
-app-shell = { git = "https://github.com/FastTrackStudios/app-shell", rev = "bc68a681c61f4e9cb00303c7e2e06a80e097d938" }
+app-shell = { git = "https://github.com/FastTrackStudios/app-shell", rev = "bf7489c25c9b7871431e19add2b360b5f9288e66" }
 # app-shell's native side: the Blitz window without a system frame, the
 # shell's title bar drawing the window's buttons (and dragging it).
-app-shell-native = { git = "https://github.com/FastTrackStudios/app-shell", rev = "bc68a681c61f4e9cb00303c7e2e06a80e097d938", optional = true }
+app-shell-native = { git = "https://github.com/FastTrackStudios/app-shell", rev = "bf7489c25c9b7871431e19add2b360b5f9288e66", optional = true }
+# Architect's extensions in app-shell's panes and windows: the session's
+# arrangement, the mixer's window and the engine are the real extensions
+# (extensions/*), hosted here.
+app-shell-extensions = { git = "https://github.com/FastTrackStudios/app-shell", rev = "bf7489c25c9b7871431e19add2b360b5f9288e66", optional = true }
 serde_json = { version = "1", optional = true }
 js-sys = { version = "0.3", optional = true }
 # The browser's fetch, for bytes (waveforms, uploads).
@@ -56,6 +60,21 @@ facet = { workspace = true, optional = true }
 facet-json = { workspace = true, optional = true }
 futures-channel = { version = "0.3", optional = true }
 tracing = { workspace = true, optional = true }
+# The session's views are the real extensions, linked in and hosted in
+# app-shell's panes (src/hosted.rs): the arrangement, the mixer (in a
+# window of its own), the lyrics and the navigator, each a Studio window
+# on the engine (studio-view-link), and session-ui's own top and bottom
+# bars around them, fed from the same engine link.
+studio-arrangement = { workspace = true, optional = true }
+studio-mixer = { workspace = true, optional = true }
+studio-lyrics = { workspace = true, optional = true }
+studio-navigator = { workspace = true, optional = true }
+studio-view-link = { workspace = true, optional = true }
+session-ui = { workspace = true, optional = true, features = ["native"] }
+session-engine = { workspace = true, optional = true, features = ["native"] }
+architect-extensions = { workspace = true, optional = true, features = ["host", "linked"] }
+architect-extensions-dioxus = { workspace = true, optional = true }
+architect-settings = { workspace = true, optional = true }
 # Waveform peaks (the sidecar format; no producers in the app).
 drive-sidecars.workspace = true
 # Drive's agent on this computer: any Drive file as a real local path,
@@ -80,6 +99,7 @@ native = [
     "dep:opentelemetry",
     "dep:tracing-opentelemetry",
     "dep:app-shell-native",
+    "dep:app-shell-extensions",
     # The app's Action List served to agents: MCP on loopback with a
     # token, the control socket, Luau scripts over every action.
     "dep:architect",
@@ -91,6 +111,16 @@ native = [
     "dep:serde_json",
     "dep:futures-channel",
     "dep:tracing",
+    "dep:studio-arrangement",
+    "dep:studio-mixer",
+    "dep:studio-lyrics",
+    "dep:studio-navigator",
+    "dep:studio-view-link",
+    "dep:session-ui",
+    "dep:session-engine",
+    "dep:architect-extensions",
+    "dep:architect-extensions-dioxus",
+    "dep:architect-settings",
 ]
 local = ["dep:drive-local"]
 mobile = ["dioxus/mobile"]

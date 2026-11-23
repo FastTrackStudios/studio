@@ -39,7 +39,7 @@ pub fn EngineHost() -> Element {
                 files
                     .borrow_mut()
                     .entry(p.folder.clone())
-                    .or_insert_with(|| crate::arrangement::song_file(&p.folder))
+                    .or_insert_with(|| crate::session_file::song_file(&p.folder))
                     .clone()
             };
             let set: Vec<Option<PathBuf>> = n

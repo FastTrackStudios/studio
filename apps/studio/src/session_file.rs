@@ -237,6 +237,24 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// The file the engine opens for the song in `folder`: its one file (a
+/// store) when it has one, else the first session file there.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn song_file(folder: &str) -> Option<std::path::PathBuf> {
+    use std::io::Read as _;
+    let dir = crate::storage::resolve(folder)?;
+    let mut all: Vec<_> = crate::song_ids::sessions(&dir).collect();
+    all.sort();
+    let store = all.iter().find(|f| {
+        let mut head = [0u8; 16];
+        std::fs::File::open(f)
+            .and_then(|mut h| h.read_exact(&mut head))
+            .is_ok()
+            && is_store(&head)
+    });
+    store.cloned().or_else(|| all.into_iter().next())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

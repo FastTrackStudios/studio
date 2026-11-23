@@ -423,9 +423,6 @@ pub struct AppState {
     /// The setlist file a page shows: its name and songs, for an action
     /// to pick one of them.
     pub shown_set: Signal<Option<(String, Vec<(Song, Place)>)>>,
-    /// Each song's length in seconds, by its place in Now Playing's list
-    /// (read from the songs' files when a session opens; 0 not known).
-    pub set_lens: Signal<Vec<f64>>,
     /// Where "back to sets" goes from the session: the page it was opened from.
     pub session_from: Signal<Option<crate::Route>>,
     /// A session asked for before its set was read (an action naming a
@@ -482,7 +479,6 @@ impl AppState {
             engine: Signal::new(EngineStatus::Off),
             engine_drives: Signal::new(false),
             shown_set: Signal::new(None),
-            set_lens: Signal::new(Vec::new()),
             session_from: Signal::new(None),
             pending_session: Signal::new(None),
         }

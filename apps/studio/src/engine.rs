@@ -445,25 +445,16 @@ fn run(mcp: &str, id: &str, args: Value) -> Result<Value, String> {
 
 // ── the engine, from the window ────────────────────────────────────────
 
-/// The engine the app is linked to: every window of the app (the mixer's
-/// too, a document of its own) calls it through [`call`].
+/// The engine the app is linked to.
 static LINKED: Mutex<Option<Found>> = Mutex::new(None);
 
-/// Runs action `id` of the linked engine off the UI thread.
-pub async fn call(id: &'static str, args: Value) -> Result<Value, String> {
-    let found = LINKED
+/// The engine the app is linked to now, when it is: the one the session's
+/// views attach to (`crate::hosted::use_engine_link`).
+pub fn linked() -> Option<Found> {
+    LINKED
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clone()
-        .ok_or("no engine is linked yet: play a set")?;
-    let (tx, rx) = futures_channel::oneshot::channel();
-    std::thread::Builder::new()
-        .name("studio-engine-call".into())
-        .spawn(move || {
-            let _ = tx.send(run(&found.mcp, id, args));
-        })
-        .map_err(|e| e.to_string())?;
-    rx.await.map_err(|_| "the call was dropped".to_string())?
 }
 
 /// What the window wants of the engine.

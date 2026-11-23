@@ -67,6 +67,13 @@ pub fn attach() {
         });
 }
 
+/// The app attaches the views itself ([`attach_at`]): a view's own
+/// [`attach`] does nothing from now on, so no view links to another
+/// engine first.
+pub fn attach_by_host() {
+    ATTACHING.store(true, Ordering::Release);
+}
+
 /// Attach this process to the engine the app itself found (and checked:
 /// Studio's engine discovery makes sure the pid owns its port), rather
 /// than the newest that answers: an app that drives the engine over its

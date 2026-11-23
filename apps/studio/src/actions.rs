@@ -270,7 +270,7 @@ mod imp {
         "STUDIO_MIXER_WINDOW",
         "The mixer's window",
         "Session",
-        "Opens the mixer in a window of its own: a strip per track of the engine's song, its fader, mute and solo driving the engine."
+        "Opens the mixer in a window of its own (from the session): the mixer extension's view, Studio's mixer on the engine's song."
     );
     meta!(
         ENGINE,
@@ -298,11 +298,6 @@ mod imp {
     #[derive(Facet)]
     struct ViewArgs {
         view: String,
-    }
-
-    thread_local! {
-        /// The platform's windows, for STUDIO_MIXER_WINDOW (put by the host).
-        static WINDOWS: RefCell<Option<app_shell::ui::Windows>> = const { RefCell::new(None) };
     }
 
     #[derive(Facet)]
@@ -560,8 +555,6 @@ mod imp {
     #[component]
     pub fn ActionHost() -> Element {
         let app = use_app();
-        let windows = try_use_context::<app_shell::ui::Windows>();
-        use_hook(move || WINDOWS.with(|w| *w.borrow_mut() = windows));
         let route = use_route::<Route>();
         let index = crate::sets::use_index();
         let library = crate::songs::use_library();
@@ -936,9 +929,8 @@ mod imp {
                 Ok(json!({ "route": to.to_string() }))
             }
             "STUDIO_MIXER_WINDOW" => {
-                let windows = WINDOWS.with(|w| w.borrow().clone());
-                crate::session::open_mixer_window(windows)?;
-                Ok(json!({ "window": crate::session::MIXER_WINDOW }))
+                crate::hosted::open_mixer_in_session()?;
+                Ok(json!({ "window": crate::hosted::MIXER }))
             }
             "STUDIO_ENGINE" => Ok(json!({
                 "status": format!("{:?}", (app.engine)()),
