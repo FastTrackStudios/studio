@@ -11,6 +11,14 @@ use crate::registry::{
 use crate::{attack_peak, attack_start, db, samples, seconds};
 
 const CLASSES: [&str; 5] = ["kick", "snare", "toms", "hihat", "cymbals"];
+const CLOSE_MICS: [(&str, usize); 6] = [
+    ("kick", 0),
+    ("snare", 1),
+    ("t1", 2),
+    ("t2", 2),
+    ("t3", 2),
+    ("t4", 2),
+];
 
 #[derive(Clone, Copy)]
 enum Timing {
@@ -100,7 +108,7 @@ impl HitDetector for AdtofDetector {
         DetectorInfo {
             id: id.into(),
             name: name.into(),
-            description: "Five-class drum transcription from a mono drum_bus, or kick/snare transcription from a single close mic.".into(),
+            description: "Five-class drum transcription from a mono drum_bus, or independent hit detection on named kick, snare, and tom tracks.".into(),
             supports_triggers: false,
             supports_multi_mic_bleed: matches!(self.timing, Timing::CloseMics),
             supports_beats: false,
@@ -121,19 +129,41 @@ impl HitDetector for AdtofDetector {
             return Err("ADTOF requires a positive sample rate".into());
         }
         let mic = |name| input.pieces.iter().find(|p| p.name == name).map(|p| p.mic);
-        let solo = match (self.timing, input.pieces) {
-            (Timing::Raw | Timing::Bus, [piece]) => {
-                let name = piece.name.trim();
-                ["kick", "snare"]
-                    .iter()
-                    .position(|class| name.eq_ignore_ascii_case(class))
-                    .map(|class| (class, piece.mic))
+        let bus = mic("drum_bus");
+        let close_only = bus.is_none() && matches!(self.timing, Timing::Raw | Timing::Bus);
+        if close_only && input.pieces.len() > 1 {
+            let mut output = self.empty_output(rate);
+            let mut names = HashSet::new();
+            for piece in input.pieces {
+                let name = piece.name.trim().to_ascii_lowercase();
+                if !names.insert(name) {
+                    return Err(format!("duplicate ADTOF close-mic piece '{}'", piece.name));
+                }
+                let mut single = self.try_detect(&DetectorInput {
+                    pieces: std::slice::from_ref(piece),
+                    ..*input
+                })?;
+                output.hits.append(&mut single.hits);
+                output.pieces.append(&mut single.pieces);
             }
-            _ => None,
+            output
+                .hits
+                .sort_by(|a, b| a.at.total_cmp(&b.at).then(a.id.cmp(&b.id)));
+            return Ok(output);
+        }
+        let solo = if close_only {
+            input.pieces.first().and_then(|piece| {
+                CLOSE_MICS
+                    .iter()
+                    .find(|(name, _)| piece.name.trim().eq_ignore_ascii_case(name))
+                    .map(|&(name, class)| (name, class, piece.mic))
+            })
+        } else {
+            None
         };
-        let source = mic("drum_bus")
-            .or_else(|| solo.map(|(_, signal)| signal))
-            .ok_or("ADTOF requires a drum_bus or a single kick or snare piece")?;
+        let source = bus
+            .or_else(|| solo.map(|(_, _, signal)| signal))
+            .ok_or("ADTOF requires drum_bus or named kick, snare, t1–t4 close-mic pieces")?;
         let reference = match self.timing {
             Timing::Overheads => mic("ohs").ok_or("ADTOF overhead timing requires an ohs piece")?,
             _ => source,
@@ -163,14 +193,7 @@ impl HitDetector for AdtofDetector {
                 crest_db: input.crest_db,
                 retrig_secs: input.retrig_ms / 1000.0,
             };
-            for (name, class) in [
-                ("kick", 0),
-                ("snare", 1),
-                ("t1", 2),
-                ("t2", 2),
-                ("t3", 2),
-                ("t4", 2),
-            ] {
+            for (name, class) in CLOSE_MICS {
                 if let Some(signal) = mic(name) {
                     close_mics.push((name, class, signal, gate(signal, rate, &settings)));
                 }
@@ -180,7 +203,7 @@ impl HitDetector for AdtofDetector {
             }
         }
         for (class, name) in CLASSES.into_iter().enumerate() {
-            if solo.is_some_and(|(selected, _)| selected != class) {
+            if solo.is_some_and(|(_, selected, _)| selected != class) {
                 continue;
             }
             let mut seen = HashSet::new();
@@ -191,7 +214,7 @@ impl HitDetector for AdtofDetector {
                 }
                 let mut signal = reference;
                 let mut at = nominal;
-                let mut piece = name;
+                let mut piece = solo.map_or(name, |(piece, _, _)| piece);
                 if matches!(self.timing, Timing::CloseMics) && class < 3 {
                     let Some((close_name, close_signal, candidate)) =
                         nearest_gate(&close_mics, class, nominal, samples(0.025, rate))

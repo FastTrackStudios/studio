@@ -56,25 +56,28 @@ done
 cargo run --release -p rhythm-bench -- --song "set in stone" --detector <id>
 ```
 
-#### Individual kick and snare tracks
+#### Individual close-mic tracks
 
-Build with ONNX enabled and name the input piece `kick` or `snare`. ADTOF
-runs on that track and returns hits for the named piece.
+Build with ONNX enabled and name each input `kick`, `snare`, or `t1` through
+`t4`. ADTOF processes each supplied close mic independently and returns hits
+labeled with that track's name. You can pass one track or several in one call.
 
 ```bash
 cargo run --release -p rhythm-ext --features onnx -- detect \
   --detector fts.hits.adtof-onnx kick=/path/to/kick.wav
 cargo run --release -p rhythm-ext --features onnx -- detect \
-  --detector fts.hits.adtof-onnx snare=/path/to/snare.wav
+  --detector fts.hits.adtof-onnx snare=/path/to/snare.wav t1=/path/to/tom1.wav
 ```
 
-The album benchmark uses Kick In for `kick-only` and Snare Top for
-`snare-only`. Each mode scores against that piece's healthy piezo triggers
-and passes only the acoustic waveform to the detector. The default corpus is
+The album benchmark uses Kick In for `kick-only`, Snare Top for `snare-only`,
+and the corresponding tom mic for `t1-only` through `t4-only`. Each mode scores
+against that piece's healthy piezo trigger and passes only the acoustic
+waveform to the detector. Songs with an unhealthy or missing trigger for that
+piece are marked unscored. The default corpus is
 the Crescendum session folder under `/run/media/AudioHaven/Project`.
 
 ```bash
-for piece in kick snare; do
+for piece in kick snare t1 t2 t3 t4; do
   cargo run --release -p rhythm-bench --features onnx -- \
     --detector fts.hits.adtof-onnx --mode "$piece-only" \
     --out "benchmarks/adtof-onnx-$piece-only.json"

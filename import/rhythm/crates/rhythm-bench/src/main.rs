@@ -34,6 +34,11 @@ enum BenchMode {
     KickOnly,
     /// Pass only the close snare mic and score against the snare trigger.
     SnareOnly,
+    /// Pass only the named tom close mic and score against its trigger.
+    T1Only,
+    T2Only,
+    T3Only,
+    T4Only,
 }
 
 impl BenchMode {
@@ -41,6 +46,10 @@ impl BenchMode {
         match self {
             Self::KickOnly => Some(("kick", "kick_in")),
             Self::SnareOnly => Some(("snare", "snare_top")),
+            Self::T1Only => Some(("t1", "t1")),
+            Self::T2Only => Some(("t2", "t2")),
+            Self::T3Only => Some(("t3", "t3")),
+            Self::T4Only => Some(("t4", "t4")),
             _ => None,
         }
     }
@@ -115,7 +124,7 @@ struct SongBenchmark {
     cpu_rtf: f64,
     dead_triggers: Vec<String>,
     by_class: BTreeMap<String, ClassMetrics>,
-    overall: ClassMetrics,
+    overall: Option<ClassMetrics>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -219,7 +228,13 @@ fn run_rust_detector(
 
     let t0 = Instant::now();
     let out = match mode {
-        BenchMode::BusOnly | BenchMode::KickOnly | BenchMode::SnareOnly => {
+        BenchMode::BusOnly
+        | BenchMode::KickOnly
+        | BenchMode::SnareOnly
+        | BenchMode::T1Only
+        | BenchMode::T2Only
+        | BenchMode::T3Only
+        | BenchMode::T4Only => {
             let (name, track) = mode.solo_piece().unwrap_or(("drum_bus", "drum_bus"));
             let mic = kit
                 .tracks
@@ -324,7 +339,7 @@ fn run() -> Result<(), String> {
 
     let solo_piece = cli.mode.solo_piece().map(|(piece, _)| piece);
     if solo_piece.is_some() && (cli.beat_grid || cli.export_stems.is_some()) {
-        return Err("kick-only and snare-only require a drum hit benchmark".into());
+        return Err("Individual close-mic modes require a drum hit benchmark".into());
     }
     let registry = DetectorRegistry::default();
     if cli.beat_grid {
@@ -393,8 +408,11 @@ fn run() -> Result<(), String> {
                 by_class.insert(cls.to_owned(), m);
             }
         }
-        let overall = aggregate_metrics(&song_class_list, &song_errs);
-        all_overall_metrics.push(overall.clone());
+        let overall = (solo_piece.is_none() || !song_class_list.is_empty())
+            .then(|| aggregate_metrics(&song_class_list, &song_errs));
+        if let Some(score) = &overall {
+            all_overall_metrics.push(score.clone());
+        }
 
         let dead_triggers: Vec<String> = gt
             .pieces
@@ -411,18 +429,28 @@ fn run() -> Result<(), String> {
         total_audio_secs += kit.duration_secs;
         total_elapsed_secs += elapsed;
 
-        println!(
-            "{:<22} | {:3.0} BPM | F1@20ms={:.3} (P={:.3} R={:.3}) | F1@50ms={:.3} | med_err={:4.2}ms | RTF={:.4}x | dead={}",
-            kit.song_name,
-            kit.bpm,
-            overall.f1_20ms,
-            overall.precision_20ms,
-            overall.recall_20ms,
-            overall.f1_50ms,
-            overall.median_abs_err_ms,
-            rtf,
-            dead_triggers.len()
-        );
+        if let Some(overall) = &overall {
+            println!(
+                "{:<22} | {:3.0} BPM | F1@20ms={:.3} (P={:.3} R={:.3}) | F1@50ms={:.3} | med_err={:4.2}ms | RTF={:.4}x | dead={}",
+                kit.song_name,
+                kit.bpm,
+                overall.f1_20ms,
+                overall.precision_20ms,
+                overall.recall_20ms,
+                overall.f1_50ms,
+                overall.median_abs_err_ms,
+                rtf,
+                dead_triggers.len()
+            );
+        } else {
+            println!(
+                "{:<22} | {:3.0} BPM | unscored (no healthy {} trigger) | RTF={:.4}x",
+                kit.song_name,
+                kit.bpm,
+                solo_piece.unwrap_or("selected piece"),
+                rtf,
+            );
+        }
 
         song_results.push(SongBenchmark {
             song: kit.song_name,
@@ -440,6 +468,9 @@ fn run() -> Result<(), String> {
         return Ok(());
     }
 
+    if solo_piece.is_some() && all_overall_metrics.is_empty() {
+        return Err("none of the selected songs has a healthy trigger for this piece".into());
+    }
     let mut agg_by_class = BTreeMap::new();
     for (cls, list) in &all_class_metrics {
         let errs: Vec<f64> = list
