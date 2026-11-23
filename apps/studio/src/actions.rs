@@ -476,6 +476,10 @@ mod imp {
             if let Err(e) = scripting.install() {
                 tracing::warn!(error = %e, "scripts could not be put on the list");
             }
+            // How process extensions' views keep up: their frames' times.
+            if let Err(e) = app_shell_extensions::install_view_actions(&list) {
+                tracing::warn!(error = %e, "no EXT_VIEWS");
+            }
             list
         })
         .clone()
