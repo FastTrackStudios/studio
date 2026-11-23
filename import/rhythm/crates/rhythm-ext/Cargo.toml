@@ -1,0 +1,19 @@
+[package]
+name = "rhythm-ext"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Out-of-process DAW extension and CLI for swappable hit detection and hybrid drum editing (fts.rhythm)"
+
+[[bin]]
+name = "fts-rhythm"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+hound = { workspace = true }
+rhythm-editing = { workspace = true }
+rhythm-hits = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

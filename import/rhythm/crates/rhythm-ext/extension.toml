@@ -1,0 +1,52 @@
+id = "fts.rhythm"
+name = "Rhythm"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Swappable drum hit detection and hybrid slip/stretch per-hit rhythm editing as a process extension."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "fts-rhythm"
+args = ["serve"]
+
+[provides]
+"daw.hit-detector" = "0.1.0"
+"daw.rhythm-editor" = "0.1.0"
+
+[uses]
+"fts.session" = "^0.1"
+
+[capabilities]
+effect = "mutating"
+
+[[actions]]
+id = "RHYTHM_STATE"
+name = "Rhythm: state and available detectors"
+description = "Lists registered hit-detection algorithms and editing strategies provided by this process."
+group = "Rhythm"
+effect = "read_only"
+
+[[actions]]
+id = "RHYTHM_DETECT"
+name = "Rhythm: detect hits on WAV tracks"
+description = "Runs the selected hit detector (`detector`: `fts.hits.kit-fusion` or `fts.hits.envelope-gate`) over close-mic and optional trigger WAV files and returns canonical hit markers."
+group = "Rhythm"
+effect = "read_only"
+params = '{"type":"object","properties":{"detector":{"type":"string"},"pieces":{"type":"array"},"threshold_db":{"type":"number"},"crest_db":{"type":"number"},"retrig_ms":{"type":"number"}},"required":["pieces"]}'
+
+[[actions]]
+id = "RHYTHM_PLACE_HITS"
+name = "Rhythm: plan individual hit placements"
+description = "Deterministically plans phase-locked slip+crossfade, transient-protected tail-stretch, or warp segments from recorded hits and per-hit moves (from UI drags or agent calls)."
+group = "Rhythm"
+effect = "read_only"
+params = '{"type":"object","properties":{"hits":{"type":"array"},"moves":{"type":"array"},"span":{"type":"array"},"policy":{"type":"object"}},"required":["hits","moves","span"]}'
+
+[[actions]]
+id = "RHYTHM_QUANTIZE_PLAN"
+name = "Rhythm: quantize hits with manual pins"
+description = "Quantizes recorded hits to a grid while preserving manual per-hit pins, returning a hybrid slip/stretch edit plan."
+group = "Rhythm"
+effect = "read_only"
+params = '{"type":"object","properties":{"hits":{"type":"array"},"bpm":{"type":"number"},"subdivision":{"type":"integer"},"strength":{"type":"number"},"tolerance_ms":{"type":"number"},"pinned_moves":{"type":"array"},"span":{"type":"array"},"policy":{"type":"object"}},"required":["hits","bpm","span"]}'

@@ -1,0 +1,12 @@
+[package]
+name = "rhythm-hits"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Swappable multi-mic drum hit detection (trigger fusion, calibration, bleed rejection, envelope gate)"
+
+[dependencies]
+num-traits = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
