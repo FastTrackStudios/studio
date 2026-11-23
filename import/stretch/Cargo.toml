@@ -1,0 +1,19 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/stretch-abi",
+    "crates/stretch-pv",
+    "crates/stretch-wsola",
+    "crates/stretch-host-tests",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["FastTrackStudios"]
+
+[workspace.dependencies]
+libloading = "0.8"
+realfft = "3.5"
+stretch-abi = { path = "crates/stretch-abi" }
