@@ -1,0 +1,52 @@
+id = "fts.pitch"
+name = "Pitch"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Swappable pitch detection, note segmentation, scale correction, and ARA-style cached-span resynthesis as a process extension."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "fts-pitch"
+args = ["serve"]
+
+[provides]
+"daw.pitch-detector" = "0.1.0"
+"daw.pitch-editor" = "0.1.0"
+
+[uses]
+"fts.session" = "^0.1"
+
+[capabilities]
+effect = "mutating"
+
+[[actions]]
+id = "PITCH_STATE"
+name = "Pitch: state and available backends"
+description = "Lists registered pitch detectors, note segmenters, and synthesizers provided by this process."
+group = "Pitch"
+effect = "read_only"
+
+[[actions]]
+id = "PITCH_ANALYZE"
+name = "Pitch: analyze WAV file"
+description = "Runs the chosen pitch detector and note segmenter on a WAV file, returning a canonical PitchAnalysisDoc."
+group = "Pitch"
+effect = "read_only"
+params = '{"type":"object","properties":{"wav":{"type":"string"},"detector":{"type":"string"},"segmenter":{"type":"string"}},"required":["wav"]}'
+
+[[actions]]
+id = "PITCH_CORRECT_SCALE"
+name = "Pitch: snap notes to scale"
+description = "Snaps notes in a PitchAnalysisDoc toward a musical scale (`root_pc` 0..11, `mode`: `major` | `minor`, `strength`: 0..1)."
+group = "Pitch"
+effect = "read_only"
+params = '{"type":"object","properties":{"doc":{"type":"object"},"root_pc":{"type":"integer"},"mode":{"type":"string"},"strength":{"type":"number"}},"required":["doc"]}'
+
+[[actions]]
+id = "PITCH_RENDER_SPAN"
+name = "Pitch: incrementally render edited span to cache WAV"
+description = "ARA-style incremental resynthesis: renders `span` (or full take) with the selected synthesizer into `out_wav` and returns a cache descriptor for lock-free DAW playback."
+group = "Pitch"
+effect = "mutating"
+params = '{"type":"object","properties":{"source_wav":{"type":"string"},"doc":{"type":"object"},"out_wav":{"type":"string"},"span":{"type":"array"},"synthesizer":{"type":"string"}},"required":["source_wav","doc","out_wav"]}'
