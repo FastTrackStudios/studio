@@ -95,7 +95,10 @@ pub fn extensions() -> &'static Extensions {
             tracing::warn!(error = %e, "studio: no process views");
         }
         let host = host.with_view_kinds(kinds);
-        let host = match architect_extensions::process::ProcessRunner::new() {
+        let host = match architect_extensions::process::ProcessRunner::new()
+            // Its processes are the ones the panes draw views from.
+            .map(|r| r.with_processes(app_shell_extensions::processes()))
+        {
             Ok(runner) => host.with_runner(runner),
             Err(e) => {
                 tracing::warn!(error = %e, "studio: no process extensions");
@@ -114,7 +117,11 @@ pub fn extensions() -> &'static Extensions {
             &keyflow_extension::Keyflow,
             &ignition_pane::ext::Lighting,
         ];
-        let mut ext = Extensions::new(host, Installs::new(installs));
+        let dev_root = installs.join("dev");
+        let mut ext = Extensions::new(host, Installs::new(installs)).with_dev_root(&dev_root);
+        if let Some(target) = std::env::var_os(DEV_TARGET) {
+            ext = ext.with_build_target(std::path::PathBuf::from(target));
+        }
         for one in linked {
             ext = match ext.clone().with_linked(one) {
                 Ok(next) => next,
@@ -136,8 +143,209 @@ pub fn extensions() -> &'static Extensions {
             }
             Err(e) => tracing::warn!(error = %e, "studio: the daw extension is not here"),
         }
+        // EXT_LIST, EXT_CLONE, EXT_RELOAD, EXT_LOGS, …: on MCP and the
+        // socket like the app's own.
+        if let Err(e) = ext.install_actions() {
+            tracing::warn!(error = %e, "studio: no EXT_* actions");
+        }
+        // The overrides a person set (STUDIO_EXT_DEV), kept across starts,
+        // and any the environment names for this run: in every build.
+        let overrides = Overrides::at(&dev_root);
+        for dir in overrides.folders().into_iter().chain(
+            std::env::var_os(DEV_EXTENSIONS)
+                .map(|v| std::env::split_paths(&v).collect::<Vec<_>>())
+                .unwrap_or_default(),
+        ) {
+            if let Err(e) = override_with(&ext, &dir) {
+                tracing::warn!(ext.dev = %dir.display(), error = %e, "studio: an override did not start");
+            }
+        }
+        if let Err(e) = install_dev_actions(&ext, overrides) {
+            tracing::warn!(error = %e, "studio: no STUDIO_EXT_DEV actions");
+        }
+        watch_dev_copies(ext.clone());
         ext
     })
+}
+
+/// Folders (`:`-separated) to override linked extensions with for this
+/// run only, beside the ones kept by STUDIO_EXT_DEV.
+pub const DEV_EXTENSIONS: &str = "STUDIO_DEV_EXTENSIONS";
+
+/// Where overrides built from source build (`CARGO_TARGET_DIR`); the
+/// override folder's `.target` unless given.
+pub const DEV_TARGET: &str = "STUDIO_DEV_TARGET";
+
+static DEV: architect::action::ActionMeta = dev_meta(
+    "STUDIO_EXT_DEV",
+    "Override an extension",
+    "Runs the extension in `folder` in place of the copy linked into Studio, from now and at every start until STUDIO_EXT_DEV_END, in any build. A crate (its `extension.toml` and `Cargo.toml`, e.g. keyflow's features/extension) is built as a process with cargo, overrides the linked copy of its id once its first build is good, and is rebuilt and swapped in when its sources change (a failed build keeps the last good one; EXT_LOGS says why). A built package (its `extension.toml` and program) runs as it is and reloads when its files change.",
+);
+static DEV_END: architect::action::ActionMeta = dev_meta(
+    "STUDIO_EXT_DEV_END",
+    "Use the linked extension",
+    "Ends the override in `folder`: the copy linked into Studio runs again, now and at the next start.",
+);
+static DEV_LIST: architect::action::ActionMeta = dev_meta(
+    "STUDIO_EXT_DEV_LIST",
+    "Extension overrides",
+    "The folders overriding linked extensions (kept across starts), each with its extension's id and how its build is.",
+);
+
+const fn dev_meta(
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+) -> architect::action::ActionMeta {
+    architect::action::ActionMeta {
+        id,
+        trait_name: "",
+        method_name: "",
+        display_name: name,
+        description,
+        category: "Extensions",
+        group: "Studio",
+        shortcut: "",
+        toggleable: false,
+        undo: false,
+    }
+}
+
+/// `STUDIO_EXT_DEV`'s and `STUDIO_EXT_DEV_END`'s arguments.
+#[derive(Debug, facet::Facet)]
+struct DevArgs {
+    /// The extension's folder: its crate, or its built package.
+    folder: String,
+}
+
+/// The overrides kept across starts: `overrides.json` in the override
+/// folder, a list of folders.
+#[derive(Clone)]
+struct Overrides {
+    file: std::path::PathBuf,
+}
+
+impl Overrides {
+    fn at(dev_root: &std::path::Path) -> Self {
+        Self {
+            file: dev_root.join("overrides.json"),
+        }
+    }
+
+    fn folders(&self) -> Vec<std::path::PathBuf> {
+        std::fs::read(&self.file)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Vec<String>>(&b).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .map(std::path::PathBuf::from)
+            .collect()
+    }
+
+    fn set(&self, dir: &std::path::Path, on: bool) -> Result<(), String> {
+        let mut all = self.folders();
+        all.retain(|d| d != dir);
+        if on {
+            all.push(dir.to_path_buf());
+        }
+        let text: Vec<String> = all.iter().map(|d| d.display().to_string()).collect();
+        if let Some(parent) = self.file.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let json = serde_json::to_vec_pretty(&text).map_err(|e| e.to_string())?;
+        std::fs::write(&self.file, json).map_err(|e| e.to_string())
+    }
+}
+
+fn install_dev_actions(
+    ext: &Extensions,
+    overrides: Overrides,
+) -> Result<(), architect::action::ActionError> {
+    use architect::action::{ActionCaller, Effect, RawJson};
+    let list = ext.host().list().clone();
+    let (me, kept) = (ext.clone(), overrides.clone());
+    list.register_with(
+        &DEV,
+        Effect::Mutating,
+        move |_: &ActionCaller, a: DevArgs| {
+            let dir = std::path::PathBuf::from(&a.folder);
+            let id = override_with(&me, &dir)?;
+            kept.set(&dir, true)?;
+            Ok::<_, String>(RawJson::from(
+                serde_json::json!({ "folder": a.folder, "id": id, "build": me.build_of(&id) })
+                    .to_string(),
+            ))
+        },
+    )?;
+    let (me, kept) = (ext.clone(), overrides.clone());
+    list.register_with(
+        &DEV_END,
+        Effect::Mutating,
+        move |_: &ActionCaller, a: DevArgs| {
+            let dir = std::path::PathBuf::from(&a.folder);
+            tell(&me.end_dev(&dir));
+            kept.set(&dir, false)?;
+            Ok::<_, String>(RawJson::from(
+                serde_json::json!({ "folder": a.folder }).to_string(),
+            ))
+        },
+    )?;
+    let me = ext.clone();
+    list.register_with(
+        &DEV_LIST,
+        Effect::ReadOnly,
+        move |_: &ActionCaller, (): ()| {
+            let rows: Vec<serde_json::Value> = overrides
+            .folders()
+            .into_iter()
+            .map(|dir| {
+                let id = architect_extensions::package::Package::read(&dir)
+                    .map(|p| p.manifest.id)
+                    .ok();
+                let build = id.as_deref().map(|id| me.build_of(id));
+                serde_json::json!({ "folder": dir.display().to_string(), "id": id, "build": build })
+            })
+            .collect();
+            Ok::<_, String>(RawJson::from(
+                serde_json::json!({ "overrides": rows }).to_string(),
+            ))
+        },
+    )?;
+    Ok(())
+}
+
+/// Overrides the linked copy of the extension in `dir` with it: built
+/// from source when `dir` is a crate, run as it is when a built package.
+/// Its id.
+fn override_with(ext: &Extensions, dir: &std::path::Path) -> Result<String, String> {
+    let id = architect_extensions::package::Package::read(dir)
+        .map_err(|e| e.to_string())?
+        .manifest
+        .id;
+    let events = if dir.join("Cargo.toml").is_file() {
+        ext.dev_crate(dir)?
+    } else {
+        ext.dev(dir.to_path_buf())
+    };
+    tracing::info!(ext.id = %id, ext.dev = %dir.display(), "studio: an extension is overridden");
+    tell(&events);
+    Ok(id)
+}
+
+/// Every second: rebuilds the development copies whose sources changed,
+/// swaps in what built, and reloads a dev package whose files changed.
+fn watch_dev_copies(ext: Extensions) {
+    let spawned = std::thread::Builder::new()
+        .name("studio-ext-dev".into())
+        .spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                tell(&ext.reload_changed());
+            }
+        });
+    if let Err(e) = spawned {
+        tracing::warn!(error = %e, "studio: development copies are not watched");
+    }
 }
 
 /// What loading the extensions did, a failure as one warning each.
