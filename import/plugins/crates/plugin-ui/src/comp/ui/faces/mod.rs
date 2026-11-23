@@ -1,0 +1,363 @@
+//! One front panel per profile.
+//!
+//! Selecting a profile does not re-tint the FTS surface any more — it swaps
+//! the whole UI for the unit's own front panel. `control` is the FTS surface
+//! (graph + sections), unchanged; the other three are faceplates built from
+//! [`crate::comp::ui::hardware`].
+//!
+//! Every control on a hardware face is driven through
+//! [`crate::comp::ui::profile_handle`], so what the knobs write is the profile data in
+//! `comp-profiles` — the panel is a view of the mapping, not a second copy of
+//! it.
+
+pub mod control;
+pub mod rack;
+pub mod units;
+
+use std::sync::Arc;
+
+use crate::comp::profiles::Profile;
+use fts_audio_ui::ParamHandle;
+use fts_audio_ui::shell::ShellItem;
+use nice_plug_dioxus::prelude::ParamContext;
+use plugin_core::prelude::*;
+
+use crate::comp::ui::params::CompUiState;
+use crate::comp::ui::profile_handle::handle_for;
+
+/// Profile ids in `crate::comp::profiles::all_profiles()` order — which is the order
+/// the `profile` parameter's values are in.
+#[must_use]
+pub fn profile_ids() -> Vec<&'static str> {
+    crate::comp::profiles::all_profiles()
+        .iter()
+        .map(|p| p.id())
+        .collect()
+}
+
+/// The profile id a `profile` param index selects.
+#[must_use]
+pub fn profile_id_for_index(index: usize) -> &'static str {
+    crate::comp::profiles::all_profiles()
+        .get(index)
+        .map_or("control", |p| p.id())
+}
+
+/// The profile a `profile` param index selects.
+#[must_use]
+pub fn profile_for_index(index: usize) -> &'static (dyn Profile + Sync) {
+    crate::comp::profiles::all_profiles()
+        .get(index)
+        .copied()
+        .unwrap_or(&crate::comp::profiles::CONTROL)
+}
+
+/// The rail badge for a profile — how the unit is named on its own panel.
+#[must_use]
+pub fn profile_badge(profile_id: &str) -> &'static str {
+    match profile_id {
+        "control" => "MAIN",
+        "urei_1176" => "76",
+        "urei_1176_silver" => "76s",
+        "urei_1176_ln" => "LN",
+        "la2a" => "2A",
+        "cl1b" => "CL",
+        "fairchild670" => "670",
+        "manley_vari_mu" => "MAN",
+        "ssl_bus" => "SSL",
+        "dbx160" => "160",
+        "distressor" => "DIS",
+        _ => "?",
+    }
+}
+
+/// The rail, as the shell wants it: one entry per compressor family, badged
+/// with the *active* unit when that family is the one you are on.
+///
+/// A family with more than one unit says so in its tooltip, because a button
+/// that changes on a second click is not discoverable otherwise.
+#[must_use]
+pub fn rail_items(profile_index: usize) -> Vec<ShellItem> {
+    let active_id = profile_id_for_index(profile_index);
+    let active = crate::comp::profiles::category_of(active_id).map(|(c, _)| c);
+
+    crate::comp::profiles::CATEGORIES
+        .iter()
+        .enumerate()
+        .map(|(index, category)| {
+            let is_active = active == Some(index);
+            let badge = if is_active {
+                profile_badge(active_id)
+            } else {
+                category.badge
+            };
+            let names: Vec<&str> = category
+                .profiles
+                .iter()
+                .filter_map(|id| {
+                    crate::comp::profiles::profile_by_id(id)
+                        .map(crate::comp::profiles::Profile::name)
+                })
+                .collect();
+            let label = if names.len() > 1 {
+                format!(
+                    "{} — {} (click again to cycle)",
+                    category.label,
+                    names.join(" · ")
+                )
+            } else {
+                format!("{} — {}", category.label, names.join(""))
+            };
+            // The dots say how many units are stacked behind this family and
+            // which one is showing. Clicking cycles them, and until now
+            // nothing on the rail admitted that a family of three existed.
+            let at = if is_active {
+                crate::comp::profiles::category_of(active_id).map_or(0, |(_, v)| v)
+            } else {
+                0
+            };
+            ShellItem::new(category.id, label)
+                .with_badge(badge)
+                .with_cycle(category.profiles.len(), at)
+        })
+        .collect()
+}
+
+/// The `profile` parameter index a rail click selects.
+///
+/// Clicking the family you are already on advances to the next unit inside it
+/// and wraps; clicking any other family lands on its first unit.
+#[must_use]
+pub fn rail_click_target(profile_index: usize, clicked_category: usize) -> usize {
+    let active_id = profile_id_for_index(profile_index);
+    let Some(category) = crate::comp::profiles::CATEGORIES.get(clicked_category) else {
+        return profile_index;
+    };
+    let next_id = match crate::comp::profiles::category_of(active_id) {
+        Some((current, variant)) if current == clicked_category => {
+            category.profiles[(variant + 1) % category.profiles.len()]
+        }
+        _ => category.profiles[0],
+    };
+    crate::comp::profiles::profile_index(next_id).unwrap_or(profile_index)
+}
+
+/// The editor size a face wants, in logical px — including the shell rail.
+///
+/// A face is not a page in a fixed window; it is a different instrument, and
+/// the instruments are different shapes. The FTS surface is a graph and wants
+/// height. A rack unit is 4:1 and wants none — given a tall window it just
+/// draws black above and below itself. So switching profile asks the host to
+/// resize, the same way the plugin asks on open.
+#[must_use]
+pub const fn preferred_editor_size(_profile_index: usize) -> (u32, u32) {
+    // Every face asks for the same box: the panel's 900x300 drawing plus the
+    // rail, with a little air around it.
+    //
+    // The FTS surface used to ask for a tall window of its own, which meant
+    // the editor jumped size every time you passed through Main on the way to
+    // a unit. A window that changes shape under you while you are browsing is
+    // worse than a graph with less height, so Main wears the rack's size too
+    // and the window only moves when you ask it to with a size preset.
+    (
+        crate::comp::ui::control_view::EDITOR_W,
+        crate::comp::ui::control_view::EDITOR_H,
+    )
+}
+
+/// The editor size for a profile *and* a chosen form: the form decides, except
+/// for Responsive, which defers to the face.
+#[must_use]
+pub fn editor_size_for(profile_index: usize, form: fts_audio_ui::EditorForm) -> (u32, u32) {
+    form.editor_size(
+        crate::comp::ui::control_view::RAIL_W,
+        preferred_editor_size(profile_index),
+    )
+}
+
+/// Height of a stage row's header strip, in CSS px.
+pub const ROW_HEADER_H: f64 = 18.0;
+
+/// Width of a stage's sidechain-EQ sidecar, in CSS px — the EQ column that
+/// opens to the RIGHT of the stage's face (`fx.embed-eq.one-surface`).
+pub const SIDECAR_W: f64 = 560.0;
+
+/// The row height a stage's face WANTS at `row_w` window width — so a
+/// faceplate fills its row instead of floating in dead space.
+///
+/// A hardware panel's row is its design aspect at full width (the drawing's own
+/// proportions, rack ears to rack ears), the FTS surface's is the graph's
+/// standard height.
+#[must_use]
+pub fn preferred_row_height(profile_index: usize, row_w: f64) -> f64 {
+    let face_w = (row_w - crate::comp::ui::control_view::RAIL_W).max(1.0);
+    match units::design_for(profile_id_for_index(profile_index)) {
+        Some(design) => {
+            let scale = (face_w / design.w).clamp(
+                crate::comp::ui::hardware::panel_svg::MIN_SCALE,
+                crate::comp::ui::hardware::panel_svg::MAX_SCALE,
+            );
+            (design.h * scale).max(160.0)
+        }
+        // The FTS surface (graph) is flexible; give it its standard box.
+        None => f64::from(crate::comp::ui::control_view::EDITOR_H),
+    }
+}
+
+/// The stack's rows at `row_w` width, each at its face's preferred height
+/// (`fx.stack.strip`): `(heights, total)`.
+///
+/// Headers included when more than one stage is up, scaled down together when
+/// the total passes the resize bound so the proportions hold.
+pub fn stack_row_heights(
+    params: &crate::comp::ui::params::CompParams,
+    rows: &[usize],
+    row_w: f64,
+    sidecar_mask: u64,
+) -> (Vec<f64>, f64) {
+    let with_headers = rows.len() > 1;
+    // A row with its sidecar open keeps the face at the width the sidecar
+    // leaves it; the row is at least tall enough for a usable EQ.
+    let mut heights: Vec<f64> = rows
+        .iter()
+        .map(|&si| {
+            let face_w = if sidecar_mask & (1 << si.min(63)) != 0 {
+                row_w - SIDECAR_W
+            } else {
+                row_w
+            };
+            preferred_row_height(params.stage(si).resolved_profile_index(), face_w).max(
+                if sidecar_mask & (1 << si.min(63)) != 0 {
+                    220.0
+                } else {
+                    0.0
+                },
+            ) + if with_headers { ROW_HEADER_H } else { 0.0 }
+        })
+        .collect();
+    let total: f64 = heights.iter().sum();
+    let max_h = f64::from(crate::comp::ui::control_view::max_editor_size().1);
+    if total > max_h {
+        let k = max_h / total;
+        for h in &mut heights {
+            *h *= k;
+        }
+        (heights, max_h)
+    } else {
+        (heights, total)
+    }
+}
+
+/// The editor size for a STACK (`fx.stack.strip`): the form's width, the sum
+/// of every row's preferred height, capped at the resize bounds.
+pub fn stack_editor_size_rows(
+    params: &crate::comp::ui::params::CompParams,
+    rows: &[usize],
+    form: fts_audio_ui::EditorForm,
+    sidecar_mask: u64,
+) -> (u32, u32) {
+    let focused = rows.first().copied().unwrap_or(0);
+    let (base_w, single_h) = editor_size_for(params.stage(focused).resolved_profile_index(), form);
+    // An open sidecar extends the window to the RIGHT — the faces keep
+    // their size and the EQ column takes the new width.
+    let w = if sidecar_mask != 0 {
+        base_w + SIDECAR_W as u32
+    } else {
+        base_w
+    };
+    if rows.len() <= 1 && sidecar_mask == 0 {
+        return (w, single_h);
+    }
+    let (_, total) = stack_row_heights(params, rows, f64::from(w), sidecar_mask);
+    (w, (total.ceil() as u32).max(single_h))
+}
+
+/// The editor body for a profile index.
+///
+/// `advanced` is the FTS surface's page selection; the hardware faces ignore
+/// it (a unit has the controls it has).
+///
+/// `frame` is the shell's redraw tick, and it is load-bearing rather than
+/// decorative: faces read plugin params and meter atomics directly rather than
+/// through signals, and Dioxus memoizes a component whose props have not
+/// changed — so without a prop that changes every tick, a face would render
+/// once and then sit there with a frozen VU and stale knob positions.
+#[component]
+pub fn Face(
+    profile_index: usize,
+    advanced: bool,
+    frame: u64,
+    /// The editor's form factor — a face draws its panel or flows its controls
+    /// depending on whether the panel fits the shape.
+    form: fts_audio_ui::EditorForm,
+) -> Element {
+    let _ = frame;
+    match units::design_for(profile_id_for_index(profile_index)) {
+        // Rendered as a keyed list of one, which is the shape Dioxus honours
+        // keys in. It has to *remount* rather than diff: the panels do not
+        // share an item list, and diffing one design's items into another's
+        // walks blitz's mutator off the end of a template path — the same
+        // failure the EQ hit tearing down its graph.
+        Some(design) => rsx! {
+            for id in [design.id] {
+                rack::RackFace { key: "{id}", design: *design, frame, form }
+            }
+        },
+        None => rsx! { control::ControlFace { advanced, frame } },
+    }
+}
+
+/// What a hardware face needs out of context: the shared UI state (params and
+/// live meters) and the host parameter context.
+pub struct FaceContext {
+    pub ui: Arc<CompUiState>,
+    pub ctx: ParamContext,
+    pub profile: &'static (dyn Profile + Sync),
+    /// The stack stage this face is editing (`fx.stack.focus`).
+    pub stage: usize,
+}
+
+impl FaceContext {
+    /// A handle for one of the profile's controls, by id.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the control is not on the profile or writes nothing this
+    /// plugin exposes — both are authoring mistakes in a face, not runtime
+    /// conditions, and a silently missing knob is worse than a loud one.
+    ///
+    /// The exception is an empty id, which means a control the panel has and
+    /// the DSP does not yet: it draws and does not move. Which controls those
+    /// are is pinned by `the_unwired_controls_are_the_ones_we_know_about`, so
+    /// a typo still lands in the panic above rather than here.
+    #[must_use]
+    pub fn handle(&self, control_id: &str) -> ParamHandle {
+        if control_id.is_empty() {
+            return ParamHandle::inert("Not wired", 0.5);
+        }
+        handle_for(
+            self.profile,
+            control_id,
+            self.ui.params.clone(),
+            self.stage,
+            self.ctx.clone(),
+        )
+        .unwrap_or_else(|| panic!("{} has no drivable control {control_id}", self.profile.id()))
+    }
+}
+
+/// Pull the face's context out of the editor's Dioxus contexts.
+///
+/// # Panics
+///
+/// Panics if `CompUiState` is not found in the shared context.
+pub fn use_face_context(profile: &'static (dyn Profile + Sync)) -> FaceContext {
+    let shared = use_context::<SharedState>();
+    let ui = shared.get::<CompUiState>().expect("CompUiState missing");
+    FaceContext {
+        ui,
+        ctx: use_param_context(),
+        profile,
+        stage: crate::comp::ui::focus::use_focused_stage(),
+    }
+}

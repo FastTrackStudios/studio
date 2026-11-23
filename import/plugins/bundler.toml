@@ -1,0 +1,45 @@
+# nice-plug bundler metadata for the FTS effect plugins —
+# `cargo run -p fts-plugin-xtask -- bundle <package> --release` reads this
+# to name the .clap/.vst3 bundles (see apps/plugins/).
+
+[eq-plugin]
+name = "FTS EQ"
+
+[comp-plugin]
+name = "FTS Comp"
+
+[reverb-plugin]
+name = "FTS Reverb"
+
+[delay-plugin]
+name = "FTS Delay"
+
+[modulation-plugin]
+name = "FTS Modulation"
+
+[level-plugin]
+name = "FTS Level"
+
+[saturate-plugin]
+name = "FTS Saturate"
+
+[gate-plugin]
+name = "FTS Gate"
+
+[limiter-plugin]
+name = "FTS Limiter"
+
+[trigger-plugin]
+name = "FTS Trigger"
+
+[meter-plugin]
+name = "FTS Meter"
+
+[pitch-plugin]
+name = "FTS Pitch"
+
+[unison-plugin]
+name = "FTS Unison"
+
+[mic-plugin]
+name = "FTS Mic"
