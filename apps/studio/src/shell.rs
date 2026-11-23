@@ -357,8 +357,16 @@ pub fn Shell() -> Element {
     // The right sidebar is Now Playing, while something plays.
     let playing = (app.np)().is_some_and(|n| n.song().is_some());
     let right = playing.then(|| rsx! { NowPlayingPanel {} });
+    // The window's title again on the way home from a session (which
+    // titled it "Studio — <set>").
+    let window_title = if crate::in_launcher_window() {
+        "Launcher"
+    } else {
+        "Studio"
+    };
 
     rsx! {
+        document::Title { "{window_title}" }
         div { class: "window",
             AppShell {
                 theme: use_hook(theme),
