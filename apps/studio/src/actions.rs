@@ -209,6 +209,13 @@ mod imp {
         "Takes entry `entry` out of set `id`."
     );
     meta!(
+        SET_DELETE,
+        "STUDIO_SET_DELETE",
+        "Delete a set",
+        "Setlists",
+        "Takes set `id` out of the org's list of sets. Its document is kept, and a setlist file it was written to stays on disk as a plain file (its path is given back)."
+    );
+    meta!(
         SET_SONG_MOVE,
         "STUDIO_SET_SONG_MOVE",
         "Move a song in a set",
@@ -373,6 +380,7 @@ mod imp {
             forward::<SetArgs>(&list, &SET_SONGS, R, true);
             forward::<AddArgs>(&list, &SET_SONG_ADD, M, true);
             forward::<EntryArgs>(&list, &SET_SONG_REMOVE, Effect::Destructive, true);
+            forward::<SetArgs>(&list, &SET_DELETE, Effect::Destructive, true);
             forward::<MoveArgs>(&list, &SET_SONG_MOVE, M, true);
             forward::<KeyArgs>(&list, &SET_SONG_KEY, M, true);
             forward::<PlaySetArgs>(&list, &SET_PLAY, M, true);
@@ -716,6 +724,18 @@ mod imp {
                 setlist::remove_entry(&doc, &a.entry).map_err(|e| e.to_string())?;
                 edited(&doc, index);
                 Ok(json!({ "removed": a.entry }))
+            }
+            "STUDIO_SET_DELETE" => {
+                let a: SetArgs = args(raw)?;
+                let face = index
+                    .face(&a.id)
+                    .ok_or_else(|| format!("no set {} in {}", a.id, index.org))?;
+                let when = format!("{:.0}", drive_dioxus::env::now_ms());
+                index.remove(&a.id, &when);
+                let file = crate::storage::setlists()
+                    .and_then(|dir| crate::set_files::file_of(&dir, &a.id))
+                    .map(|p| p.display().to_string());
+                Ok(json!({ "deleted": a.id, "title": face.title, "file": file }))
             }
             "STUDIO_SET_SONG_MOVE" => {
                 let a: MoveArgs = args(raw)?;

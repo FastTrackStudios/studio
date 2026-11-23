@@ -246,6 +246,11 @@ fn write(path: &Path, text: &str) -> bool {
     std::fs::write(&tmp, text).is_ok() && std::fs::rename(&tmp, path).is_ok()
 }
 
+/// The setlist file in `dir` that says it is set `id`, if there is one.
+pub fn file_of(dir: &Path, id: &str) -> Option<PathBuf> {
+    find(dir, id)
+}
+
 /// The file in `dir` that says it is set `id`.
 fn find(dir: &Path, id: &str) -> Option<PathBuf> {
     std::fs::read_dir(dir)
