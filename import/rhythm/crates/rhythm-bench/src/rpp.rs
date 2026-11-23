@@ -23,6 +23,7 @@ pub struct RppItem {
 
 #[derive(Clone, Debug)]
 pub struct RppTrack {
+    pub project_index: usize,
     pub name: String,
     pub folder_path: String,
     pub lane_solo: Vec<u32>,
@@ -134,7 +135,7 @@ pub fn parse_comped_rpp(rpp_path: &Path) -> Result<CompedDrumSession, String> {
     let mut folder_stack: Vec<String> = Vec::new();
     let mut tracks: HashMap<String, RppTrack> = HashMap::new();
 
-    for raw_track in text.split("  <TRACK ").skip(1) {
+    for (project_index, raw_track) in text.split("  <TRACK ").skip(1).enumerate() {
         let header = raw_track.split("    <ITEM").next().unwrap_or(raw_track);
         let mut name = String::new();
         let mut isbus = (0_i32, 0_i32);
@@ -240,6 +241,7 @@ pub fn parse_comped_rpp(rpp_path: &Path) -> Result<CompedDrumSession, String> {
                 tracks.insert(
                     key.to_owned(),
                     RppTrack {
+                        project_index,
                         name: name.clone(),
                         folder_path: folder_stack.join("/"),
                         lane_solo,
@@ -328,6 +330,55 @@ fn read_wav_slice_mono(
     }
 
     Ok((out, sr))
+}
+
+/// Render one active-comp track without collapsing stereo sources.
+pub fn render_track_channels(
+    track: &RppTrack,
+    rate: u32,
+    frames: usize,
+) -> Result<(Vec<f32>, usize), String> {
+    let open = |path: &Path| {
+        hound::WavReader::open(path).map_err(|e| format!("open {}: {e}", path.display()))
+    };
+    let first = track.items.first().ok_or("empty comp track")?;
+    let channels = usize::from(open(&first.file)?.spec().channels);
+    if channels == 0 {
+        return Err("comp source has no channels".into());
+    }
+    let mut audio = vec![0.0_f32; frames * channels];
+    let samples = |s: f64| (s * f64::from(rate)).round().max(0.0) as usize;
+    for item in &track.items {
+        let mut reader = open(&item.file)?;
+        let spec = reader.spec();
+        if spec.sample_rate != rate || usize::from(spec.channels) != channels {
+            return Err(format!("inconsistent source format in {}", item.file.display()));
+        }
+        let start = samples(item.position).min(frames);
+        let count = samples(item.length).min(frames - start);
+        let offset = samples(item.soffs);
+        let available = (reader.duration() as usize).saturating_sub(offset).min(count);
+        if available == 0 {
+            continue;
+        }
+        reader.seek(offset as u32).map_err(|e| e.to_string())?;
+        let scale = (1_u64 << spec.bits_per_sample.saturating_sub(1)) as f32;
+        let input: Box<dyn Iterator<Item = Result<f32, hound::Error>>> = match spec.sample_format {
+            hound::SampleFormat::Float => Box::new(reader.samples::<f32>()),
+            hound::SampleFormat::Int => Box::new(reader.samples::<i32>().map(move |s| s.map(|x| x as f32 / scale))),
+        };
+        let fade_in = samples(item.fade_in);
+        let fade_out = samples(item.fade_out);
+        for (index, value) in input.take(available * channels).enumerate() {
+            let frame = index / channels;
+            let fade = |distance: usize, length: usize| (distance as f32 / length.max(1) as f32).min(1.0);
+            let gain_in = if fade_in == 0 { 1.0 } else { fade(frame, fade_in) };
+            let gain_out = if fade_out == 0 { 1.0 } else { fade(available - 1 - frame, fade_out) };
+            audio[start * channels + index] += value.map_err(|e| e.to_string())?
+                * item.vol as f32 * gain_in * gain_out;
+        }
+    }
+    Ok((audio, channels))
 }
 
 pub fn render_comped_kit(session: &CompedDrumSession) -> Result<RenderedKit, String> {

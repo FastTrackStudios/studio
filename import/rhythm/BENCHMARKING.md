@@ -169,3 +169,21 @@ Use a new output path.
 The renderer writes one 32-bit float WAV. Slip segments copy the source.
 Stretched segments use shared waveform search offsets and overlap weights for
 every channel. This command provides an offline WAV preview for the edit plan.
+
+### F. Export a quantized REAPER session
+
+```bash
+cargo run --release -p rhythm-bench -- --song unbreakable \
+  --quantize-out target/unbreakable-final --quantize-subdivision 4
+```
+
+Choose a new output directory. The exporter uses Kit Fusion with trigger
+health checks and applies one timeline to the active comp of each drum track.
+It keeps stereo sources interleaved. It moves tightly spaced attacks together
+where separate moves would cut an attack or require excessive stretch.
+
+Open `unbreakable.quantized.RPP` for the full project copy with consolidated
+drum edits and references to the original backing media. Open
+`unbreakable.drums.quantized.RPP` for the drum-only project. Keep the generated
+WAVs beside the project files. The edit plan lists each source hit, its target,
+and the rendered segments. Export currently requires a constant-tempo project.

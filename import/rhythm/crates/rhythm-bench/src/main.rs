@@ -1,6 +1,7 @@
 //! Shared Crescendum album benchmark CLI (`rhythm-bench`).
 
 mod beat_grid;
+mod edit_export;
 mod metrics;
 mod rpp;
 
@@ -86,6 +87,14 @@ struct Cli {
     /// Optional output path to write canonical benchmark JSON results.
     #[arg(long)]
     out: Option<PathBuf>,
+
+    /// Write a new quantized REAPER drum project and channel-preserving stems.
+    #[arg(long, requires = "song", conflicts_with_all = ["predictions", "export_stems", "beat_grid"])]
+    quantize_out: Option<PathBuf>,
+
+    /// Grid divisions per quarter note for the drum project export.
+    #[arg(long, default_value_t = 4, value_parser = clap::value_parser!(u32).range(1..=32))]
+    quantize_subdivision: u32,
 
     /// Score beat and downbeat events against the REAPER project grid.
     #[arg(long, conflicts_with_all = ["predictions", "export_stems"])]
@@ -326,6 +335,13 @@ fn run() -> Result<(), String> {
     let rpps = discover_comped_rpps(&cli.corpus, cli.song.as_deref())?;
     if rpps.is_empty() {
         return Err(format!("no .comped.RPP files found under {}", cli.corpus.display()));
+    }
+
+    if let Some(out) = &cli.quantize_out {
+        let [path] = rpps.as_slice() else {
+            return Err("quantized export requires exactly one matching song".into());
+        };
+        return edit_export::run(path, out, &cli);
     }
 
     let external: Option<ExternalPredictions> = match &cli.predictions {
