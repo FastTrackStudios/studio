@@ -8,7 +8,9 @@
 //! Every two seconds: a set whose document changed since it was last
 //! written is written again; a file that changed since it was last read
 //! is read into its set. Nothing is ever deleted: a set renamed leaves
-//! its old file only when that file is exactly what Studio wrote.
+//! its old file only when that file is exactly what Studio wrote. A file
+//! deleted by hand takes its set out of the org's list (the set's
+//! document is kept); Studio never writes it back.
 
 // A browser has no disk: what reads and writes it is the native build's.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -96,9 +98,17 @@ pub fn Sync() -> Element {
                     if setlist::info(&doc).title.is_empty() {
                         continue; // not read from this device's copy yet
                     }
-                    if step(&dir, &f.id, &doc) {
-                        drive.drive.commit(&full);
-                        index.put_face(&setlist::face_of(&doc));
+                    match step(&dir, &f.id, &doc) {
+                        Step::Same => {}
+                        Step::Read => {
+                            drive.drive.commit(&full);
+                            index.put_face(&setlist::face_of(&doc));
+                        }
+                        Step::Deleted => {
+                            let when = format!("{:.0}", drive_dioxus::env::now_ms());
+                            tracing::info!(studio.set = %f.id, "set file deleted by hand: set taken out of the list");
+                            index.remove(&f.id, &when);
+                        }
                     }
                 }
                 crate::state::sleep_ms(2000).await;
@@ -149,13 +159,34 @@ fn session_of(folder: &str, bpm: f64) -> Option<crate::session_file::Timeline> {
 }
 
 /// One set: write it, or read its file into it. True when the set changed.
-fn step(dir: &Path, id: &str, doc: &LoroDoc) -> bool {
+/// What one pass did with a set and its file.
+#[derive(Debug, PartialEq)]
+enum Step {
+    /// Nothing, or the set written to its file.
+    Same,
+    /// The file's edits read into the set.
+    Read,
+    /// The file Studio wrote or read is gone: deleted by hand.
+    Deleted,
+}
+
+fn step(dir: &Path, id: &str, doc: &LoroDoc) -> Step {
     let info = setlist::info(doc);
-    let file = find(dir, id).unwrap_or_else(|| dir.join(file_name(&info.title)));
+    let found = find(dir, id);
+    let file = found
+        .clone()
+        .unwrap_or_else(|| dir.join(file_name(&info.title)));
     let on_disk = std::fs::read_to_string(&file).ok();
     SEEN.with(|seen| {
         let mut seen = seen.borrow_mut();
         let first = !seen.contains_key(id);
+        // A file this run has had, gone from the folder: deleted by hand
+        // (only when the folder itself is there, so an unmounted Drive
+        // never reads as every set deleted).
+        if !first && found.is_none() && on_disk.is_none() && dir.is_dir() {
+            seen.remove(id);
+            return Step::Deleted;
+        }
         let s = seen.entry(id.to_string()).or_default();
         // Song lines the file has, by title, kept when the set is written.
         let lines = on_disk
@@ -177,11 +208,11 @@ fn step(dir: &Path, id: &str, doc: &LoroDoc) -> bool {
                     text: t,
                     file,
                 };
-                changed
+                if changed { Step::Read } else { Step::Same }
             }
             Some(t) if !first && made == s.made && file == s.file => {
                 s.text = t;
-                false
+                Step::Same
             }
             _ => {
                 // The set changed (or has no file yet): write it, under its
@@ -190,7 +221,13 @@ fn step(dir: &Path, id: &str, doc: &LoroDoc) -> bool {
                 if want != file && std::fs::read_to_string(&file).ok() == Some(s.text.clone()) {
                     let _ = std::fs::rename(&file, &want);
                 }
-                let _ = std::fs::create_dir_all(dir);
+                // The Setlists folder is made in a home that is there, never
+                // the home itself: a Drive mount that has dropped out leaves
+                // an empty mount point, and nothing may be written into it.
+                if !dir.is_dir() && !dir.parent().is_some_and(Path::is_dir) {
+                    return Step::Same;
+                }
+                let _ = std::fs::create_dir(dir);
                 if write(&want, &made) {
                     *s = Seen {
                         file: want,
@@ -198,7 +235,7 @@ fn step(dir: &Path, id: &str, doc: &LoroDoc) -> bool {
                         made,
                     };
                 }
-                false
+                Step::Same
             }
         }
     })
@@ -365,5 +402,38 @@ mod tests {
         assert_eq!(set_id("# JT's Senior Recital\nknow-me\n"), None);
         assert_eq!(file_name("Sunday 11/22: AM"), "Sunday 11-22- AM.setlist");
         assert_eq!(file_name("  "), "Untitled.setlist");
+    }
+
+    #[test]
+    fn a_file_deleted_by_hand_takes_its_set_out() {
+        let dir = std::env::temp_dir().join(format!("studio-set-files-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let doc = LoroDoc::new();
+        let mut info = setlist::info(&doc);
+        info.id = "sdel".into();
+        info.title = "Deleted By Hand".into();
+        setlist::put_info(&doc, &info).unwrap();
+        // First pass writes the file.
+        assert_eq!(step(&dir, "sdel", &doc), Step::Same);
+        let file = dir.join(file_name(&info.title));
+        assert!(file.exists());
+        // Deleted by hand: the set is reported gone, not written back.
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(step(&dir, "sdel", &doc), Step::Deleted);
+        assert!(!file.exists());
+
+        // A folder that is gone (an unmounted Drive) is not every set deleted.
+        assert_eq!(step(&dir, "sdel", &doc), Step::Same);
+        std::fs::remove_dir_all(&dir).unwrap();
+        let gone = dir.join("Setlists");
+        assert_eq!(step(&gone, "sdel", &doc), Step::Same);
+        assert!(!dir.exists(), "nothing is made where the home was");
+
+        let index = LoroDoc::new();
+        let face = setlist::face_of(&doc);
+        setlist::put_face(&index, &face);
+        assert_eq!(setlist::faces(&index).len(), 1);
+        setlist::remove_set(&index, "sdel", "0");
+        assert!(setlist::faces(&index).is_empty());
     }
 }

@@ -33,8 +33,15 @@ pub fn dir() -> Option<PathBuf> {
     config_dir().map(|c| c.join("fasttrackstudio").join("studio-app"))
 }
 
-/// The home: where the sets and songs are (see the module's doc).
+/// The home: where the sets and songs are (see the module's doc). Chosen
+/// once a run: a Drive mount that drops out while Studio runs leaves an
+/// empty mount point, and the home must not move to (or be made in) it.
 pub fn home() -> Option<PathBuf> {
+    static HOME: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    HOME.get_or_init(find_home).clone()
+}
+
+fn find_home() -> Option<PathBuf> {
     if let Some(d) = std::env::var_os("STUDIO_HOME").filter(|v| !v.is_empty()) {
         return Some(PathBuf::from(d));
     }

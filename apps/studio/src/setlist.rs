@@ -853,10 +853,25 @@ pub fn face_of(doc: &LoroDoc) -> Face {
     }
 }
 
+/// Sets taken out of the org's list (their setlist file was deleted by
+/// hand): the index's `removed` map, set id → when. Their documents are
+/// kept; only the list no longer shows them, and nothing writes their
+/// file again.
+pub fn removed_sets(index: &LoroDoc) -> Vec<String> {
+    keys_of(&index.get_map("removed"))
+}
+
+/// Take a set out of the org's list (see `removed_sets`).
+pub fn remove_set(index: &LoroDoc, id: &str, when: &str) {
+    let _ = put_s(&index.get_map("removed"), id, when);
+}
+
 pub fn faces(index: &LoroDoc) -> Vec<Face> {
     let m = index.get_map("sets");
+    let gone = removed_sets(index);
     let mut out: Vec<Face> = keys_of(&m)
         .into_iter()
+        .filter(|k| !gone.contains(k))
         .filter_map(|k| child(m.get(&k)))
         .map(|m| Face {
             id: s(&m, "id"),

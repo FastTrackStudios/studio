@@ -56,6 +56,10 @@ impl Index {
             setlist::put_face(d, f);
         });
     }
+    /// Take a set out of the list (its setlist file was deleted by hand).
+    pub fn remove(&self, id: &str, when: &str) {
+        self.b.edit(|d| setlist::remove_set(d, id, when));
+    }
     pub fn ready(&self) -> bool {
         self.b.ready()
     }
