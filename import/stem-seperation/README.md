@@ -54,9 +54,40 @@ fn separate_mix() -> std::io::Result<Vec<std::path::PathBuf>> {
 }
 ```
 
-Run `cargo test --locked` to verify the adapter behavior. A quality comparison
-needs the same source mix and aligned reference stems for each candidate, with
-per-stem scores and runtime recorded alongside the backend and model versions.
+Run `cargo test --locked` to verify the adapter behavior.
+
+## Score separation accuracy
+
+Use Python 3.12, uv, FFmpeg, and ffprobe. The Nix development shell supplies
+the tools.
+
+Send the same source mix to each system, then export sample-aligned WAVs from
+the same start through the same end. Disable warping, normalization, and
+effects. Use the same sample rate and channel layout as the reference. The
+scorer rejects incompatible rates, frame counts, and channel counts. Check
+timing and channel order in the DAW before scoring.
+
+```sh
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python 'museval==0.4.1'
+cargo run --locked -- bench score manifest.json --output results --python .venv/bin/python
+```
+
+Adapt [the example manifest](bench/example.json) to your exported files. Paths
+are relative to the manifest. Every system must supply the same named stem
+groups for a track. An array of paths sums those exports sample by sample,
+for example to map Logic's guitar, piano, and other into MUSDB18-HQ's other
+group. Record app version, model, mode, hardware, and timing in the system
+metadata or separate run records.
+
+The new output directory contains `scores.json` and `scores.csv` with one row
+per system, song, and stem. BSS Eval v4 columns are medians over finite
+one-second frames. Global SDR uses the full aligned waveforms without gain
+matching. Undefined scores are null in JSON and blank in CSV, with a status
+for silent references, silent estimates, and exact matches. A wholly silent
+stem leaves the joint BSS Eval columns empty for that system and song.
+
+See the [open-model pilot](bench/PILOT.md) for the Crescendum and fine-stem workflows.
 
 ## License
 

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "systems": {
+    "logic": {"app": "Logic Pro", "version": "13", "mode": "Stem Splitter"},
+    "demucs": {"app": "Demucs", "version": "4.0.1", "model": "htdemucs"}
+  },
+  "tracks": [
+    {
+      "id": "track-01",
+      "reference": {
+        "vocals": "reference/track-01/vocals.wav",
+        "drums": "reference/track-01/drums.wav",
+        "bass": "reference/track-01/bass.wav",
+        "other": "reference/track-01/other.wav"
+      },
+      "estimates": {
+        "logic": {
+          "vocals": "logic/track-01/Vocals.wav",
+          "drums": "logic/track-01/Drums.wav",
+          "bass": "logic/track-01/Bass.wav",
+          "other": ["logic/track-01/Guitar.wav", "logic/track-01/Piano.wav", "logic/track-01/Other.wav"]
+        },
+        "demucs": {
+          "vocals": "demucs/track-01/vocals.wav",
+          "drums": "demucs/track-01/drums.wav",
+          "bass": "demucs/track-01/bass.wav",
+          "other": "demucs/track-01/other.wav"
+        }
+      }
+    }
+  ]
+}

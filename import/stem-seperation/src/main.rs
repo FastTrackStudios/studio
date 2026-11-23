@@ -2,6 +2,7 @@ use std::{
     ffi::OsString,
     io::{self, Write},
     path::PathBuf,
+    process::Command,
 };
 
 use clap::{Parser, Subcommand};
@@ -19,6 +20,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Action {
+    /// Evaluate exported stems against reference WAVs.
+    Bench {
+        #[command(subcommand)]
+        command: BenchAction,
+    },
     /// List audio-separator models or common Demucs presets.
     Models {
         #[arg(value_enum)]
@@ -50,6 +56,23 @@ enum Action {
     },
 }
 
+#[derive(Subcommand)]
+enum BenchAction {
+    /// Score the WAVs listed in a benchmark manifest.
+    Score {
+        manifest: PathBuf,
+        /// New directory for scores.json and scores.csv.
+        #[arg(long)]
+        output: PathBuf,
+        /// Python interpreter with museval installed.
+        #[arg(long, default_value = "python3")]
+        python: OsString,
+        /// Score full-track SDR only, skipping the more expensive BSS Eval.
+        #[arg(long)]
+        global_only: bool,
+    },
+}
+
 #[derive(Clone, clap::ValueEnum)]
 enum Engine {
     AudioSeparator,
@@ -62,6 +85,33 @@ fn main() -> io::Result<()> {
         command,
     } = Cli::parse();
     match command {
+        Action::Bench {
+            command:
+                BenchAction::Score {
+                    manifest,
+                    output,
+                    python,
+                    global_only,
+                },
+        } => {
+            let mut scorer = Command::new(python);
+            scorer
+                .arg("-c")
+                .arg(include_str!("../bench/score.py"))
+                .arg(manifest)
+                .arg(output);
+            if global_only {
+                scorer.arg("--global-only");
+            }
+            let status = scorer.status()?;
+            if status.success() {
+                Ok(())
+            } else {
+                Err(io::Error::other(format!(
+                    "benchmark scorer exited with {status}"
+                )))
+            }
+        }
         Action::Models { backend } => {
             let backend = match backend {
                 Engine::AudioSeparator => Backend::AudioSeparator {
