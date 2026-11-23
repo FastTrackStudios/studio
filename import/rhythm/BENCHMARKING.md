@@ -56,6 +56,31 @@ done
 cargo run --release -p rhythm-bench -- --song "set in stone" --detector <id>
 ```
 
+#### Individual kick and snare tracks
+
+Build with ONNX enabled and name the input piece `kick` or `snare`. ADTOF
+runs on that track and returns hits for the named piece.
+
+```bash
+cargo run --release -p rhythm-ext --features onnx -- detect \
+  --detector fts.hits.adtof-onnx kick=/path/to/kick.wav
+cargo run --release -p rhythm-ext --features onnx -- detect \
+  --detector fts.hits.adtof-onnx snare=/path/to/snare.wav
+```
+
+The album benchmark uses Kick In for `kick-only` and Snare Top for
+`snare-only`. Each mode scores against that piece's healthy piezo triggers
+and passes only the acoustic waveform to the detector. The default corpus is
+the Crescendum session folder under `/run/media/AudioHaven/Project`.
+
+```bash
+for piece in kick snare; do
+  cargo run --release -p rhythm-bench --features onnx -- \
+    --detector fts.hits.adtof-onnx --mode "$piece-only" \
+    --out "benchmarks/adtof-onnx-$piece-only.json"
+done
+```
+
 ### B. Python / `uv` / PyTorch / ONNX prototypes (zero RPP parsing needed!)
 1. **Export rendered active-comp WAV stems + `gt_onsets.json` once:**
    ```bash

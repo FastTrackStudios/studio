@@ -100,7 +100,7 @@ impl HitDetector for AdtofDetector {
         DetectorInfo {
             id: id.into(),
             name: name.into(),
-            description: "Five-class drum transcription from a mono drum_bus input.".into(),
+            description: "Five-class drum transcription from a mono drum_bus, or kick/snare transcription from a single close mic.".into(),
             supports_triggers: false,
             supports_multi_mic_bleed: matches!(self.timing, Timing::CloseMics),
             supports_beats: false,
@@ -121,16 +121,28 @@ impl HitDetector for AdtofDetector {
             return Err("ADTOF requires a positive sample rate".into());
         }
         let mic = |name| input.pieces.iter().find(|p| p.name == name).map(|p| p.mic);
-        let bus = mic("drum_bus").ok_or("ADTOF requires a drum_bus piece")?;
+        let solo = match (self.timing, input.pieces) {
+            (Timing::Raw | Timing::Bus, [piece]) => {
+                let name = piece.name.trim();
+                ["kick", "snare"]
+                    .iter()
+                    .position(|class| name.eq_ignore_ascii_case(class))
+                    .map(|class| (class, piece.mic))
+            }
+            _ => None,
+        };
+        let source = mic("drum_bus")
+            .or_else(|| solo.map(|(_, signal)| signal))
+            .ok_or("ADTOF requires a drum_bus or a single kick or snare piece")?;
         let reference = match self.timing {
             Timing::Overheads => mic("ohs").ok_or("ADTOF overhead timing requires an ohs piece")?,
-            _ => bus,
+            _ => source,
         };
         let mut output = self.empty_output(rate);
-        if bus.is_empty() {
+        if source.is_empty() {
             return Ok(output);
         }
-        let mut audio = crate::onnx::resample_mono(bus, rate, 44_100.0);
+        let mut audio = crate::onnx::resample_mono(source, rate, 44_100.0);
         let peak = audio
             .iter()
             .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
@@ -168,10 +180,13 @@ impl HitDetector for AdtofDetector {
             }
         }
         for (class, name) in CLASSES.into_iter().enumerate() {
+            if solo.is_some_and(|(selected, _)| selected != class) {
+                continue;
+            }
             let mut seen = HashSet::new();
             for (frame, confidence) in peaks(&activations, class) {
                 let nominal = samples(frame as f64 / 100.0, rate);
-                if nominal >= bus.len() {
+                if nominal >= source.len() {
                     continue;
                 }
                 let mut signal = reference;

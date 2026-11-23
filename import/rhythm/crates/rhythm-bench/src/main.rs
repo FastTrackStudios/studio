@@ -30,6 +30,20 @@ enum BenchMode {
     WithTriggers,
     /// Pass only the mono summed acoustic drum_bus (for stereo/bus neural models).
     BusOnly,
+    /// Pass only the close kick mic and score against the kick trigger.
+    KickOnly,
+    /// Pass only the close snare mic and score against the snare trigger.
+    SnareOnly,
+}
+
+impl BenchMode {
+    fn solo_piece(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Self::KickOnly => Some(("kick", "kick_in")),
+            Self::SnareOnly => Some(("snare", "snare_top")),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -205,14 +219,15 @@ fn run_rust_detector(
 
     let t0 = Instant::now();
     let out = match mode {
-        BenchMode::BusOnly => {
-            let bus = kit
+        BenchMode::BusOnly | BenchMode::KickOnly | BenchMode::SnareOnly => {
+            let (name, track) = mode.solo_piece().unwrap_or(("drum_bus", "drum_bus"));
+            let mic = kit
                 .tracks
-                .get("drum_bus")
-                .ok_or_else(|| "missing drum_bus".to_owned())?;
+                .get(track)
+                .ok_or_else(|| format!("missing {track} in {}", kit.song_name))?;
             let pieces = [PieceInput {
-                name: "drum_bus".to_owned(),
-                mic: bus.as_slice(),
+                name: name.to_owned(),
+                mic: mic.as_slice(),
                 trigger: None,
             }];
             detector.try_detect(&DetectorInput {
@@ -307,6 +322,10 @@ fn run() -> Result<(), String> {
         None => None,
     };
 
+    let solo_piece = cli.mode.solo_piece().map(|(piece, _)| piece);
+    if solo_piece.is_some() && (cli.beat_grid || cli.export_stems.is_some()) {
+        return Err("kick-only and snare-only require a drum hit benchmark".into());
+    }
     let registry = DetectorRegistry::default();
     if cli.beat_grid {
         return beat_grid::run(&cli, &registry, &rpps);
@@ -320,7 +339,10 @@ fn run() -> Result<(), String> {
     for rpp_path in &rpps {
         let session = parse_comped_rpp(rpp_path)?;
         let kit = render_comped_kit(&session)?;
-        let gt = extract_ground_truth(&kit);
+        let mut gt = extract_ground_truth(&kit);
+        if let Some(piece) = solo_piece {
+            gt.pieces.retain(|p| p.piece == piece);
+        }
 
         if let Some(ref export_dir) = cli.export_stems {
             export_song_stems(export_dir, &kit, &gt)?;
@@ -442,7 +464,9 @@ fn run() -> Result<(), String> {
     let engine = external
         .as_ref()
         .map_or_else(|| cli.detector.clone(), |e| e.engine.clone());
-    let mode_str = if external.is_some() {
+    let mode_str = if let Some(piece) = solo_piece {
+        format!("{piece}-only")
+    } else if external.is_some() {
         "external-predictions".to_owned()
     } else {
         format!("{:?}", cli.mode).to_ascii_lowercase()
