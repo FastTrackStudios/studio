@@ -46,8 +46,6 @@ cli = [
     "dep:eyre",
     "dep:fts-sample",
     "dep:keyflow",
-    "dep:setlists",
-    "dep:productions",
     "dep:libc",
     "dep:serde",
     "dep:serde_json",
@@ -152,11 +150,9 @@ fts-audio-ui = { workspace = true }
 # are native-only and live in the cfg(not wasm) table below.
 session = { workspace = true, optional = true }
 keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
-# `studio setlist …`: song libraries and setlists in a vault, shared by link.
-setlists = { workspace = true, optional = true, features = ["cli"] }
-# `studio productions …`: the Ableton sets, Pro Tools sessions, REAPER and
-# Logic projects a studio has, as project notes with a stage (studio#396).
-productions = { workspace = true, optional = true, features = ["cli"] }
+# `studio setlist …` and `studio productions …` went with features/setlists
+# and features/productions (Architect's vault, Bases and Sites, which the
+# stripped Architect no longer has): apps/studio keeps setlists as files.
 # Ordered-collection wire contract (song Library / Setlist / …). Only the
 # wasm build uses it (the /{org}/{collection} browser dials the task-server's
 # per-org CollectionService), so the actual optional dep lives in the wasm

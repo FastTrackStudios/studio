@@ -3,6 +3,7 @@
 //! (`extension.toml`'s `[entry]`).
 
 use architect_extensions::guest::{Guest, GuestError};
+use architect_extensions_dioxus::guest::GuestExt as _;
 
 fn main() -> Result<(), GuestError> {
     Guest::extension(&studio_views::ext::StudioViews).serve()

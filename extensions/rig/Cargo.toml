@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 studio-rig-link = { workspace = true }
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+architect-extensions-dioxus = { workspace = true, features = ["guest"] }
 architect = { workspace = true, features = ["host", "rig", "vox", "action-list"] }
 guitar = { workspace = true }
 keys = { workspace = true }

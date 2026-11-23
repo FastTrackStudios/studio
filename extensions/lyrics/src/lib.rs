@@ -9,6 +9,7 @@
 //! engine: `studio_view_link` reads its song from there.
 
 use architect_extensions::linked::{Builder, Extension};
+use architect_extensions_dioxus::BuilderExt as _;
 use dioxus::prelude::*;
 use serde_json::json;
 use session_ui::song_model::StudioSession;

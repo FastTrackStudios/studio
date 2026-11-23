@@ -14,12 +14,8 @@
 //! setlist, anything `studio engine --open` takes) or the `DAW_OPEN`
 //! action.
 //!
-//! **In a browser** (studio-web, `wasm32`) the extension is linked into
-//! the web app and the engine is in the page ([`web`]): the same id, the
-//! same actions where a page has them, session-engine's web engine
-//! (`session_engine::web_engine`) hosted by `session_ui::web_host`, and
-//! the engine given to the app as the playhead's clock
-//! (`architect_playhead::engine`).
+//! Native only: the browser engine that clocked Architect's web playhead
+//! (studio-web) went with studio-web and Architect's playhead.
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod buttons;
@@ -41,11 +37,6 @@ use architect_extensions::linked::{Builder, Extension};
 use serde_json::{Value as Json, json};
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
-
-#[cfg(target_arch = "wasm32")]
-pub mod web;
-#[cfg(target_arch = "wasm32")]
-pub use web::Daw;
 
 /// Where the engine said it is, once up.
 #[cfg(not(target_arch = "wasm32"))]

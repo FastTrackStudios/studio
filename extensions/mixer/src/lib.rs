@@ -35,11 +35,12 @@ pub mod web;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, PoisonError};
 
-#[cfg(not(target_arch = "wasm32"))]
-use architect_extensions::linked::PaintPane;
 use architect_extensions::linked::{Builder, Extension};
+use architect_extensions_dioxus::BuilderExt as _;
 #[cfg(not(target_arch = "wasm32"))]
-use architect_workspace::paint::PaintMount;
+use architect_extensions_dioxus::PaintPane;
+#[cfg(not(target_arch = "wasm32"))]
+use architect_scene::paint::PaintMount;
 #[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
 use serde_json::{Value as Json, json};

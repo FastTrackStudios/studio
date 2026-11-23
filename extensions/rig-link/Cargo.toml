@@ -12,6 +12,7 @@ doctest = false
 [dependencies]
 architect = { workspace = true, features = ["connect", "vox", "platform"] }
 architect-extensions = { workspace = true, features = ["linked-core"] }
+architect-extensions-dioxus = { workspace = true, features = ["guest"] }
 guitar = { workspace = true, features = ["ui"] }
 keys = { workspace = true, features = ["ui"] }
 signal-rigs-proto = { workspace = true }

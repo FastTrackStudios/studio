@@ -18,13 +18,12 @@ web-time = { workspace = true }
 
 # The native process: attached to the engine's socket, painting panes.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-architect-workspace = { workspace = true, features = ["paint-ui"] }
 session-ui = { workspace = true, features = ["native"] }
 session-engine = { workspace = true, features = ["native"] }
 blitz-traits = { workspace = true }
 anyrender = { workspace = true }
 futures-timer = { workspace = true }
-architect-scene = { workspace = true }
+architect-scene = { workspace = true, features = ["paint-ui"] }
 
 # The browser: the page's own engine (`session_ui::web_host`).
 [target.'cfg(target_arch = "wasm32")'.dependencies]

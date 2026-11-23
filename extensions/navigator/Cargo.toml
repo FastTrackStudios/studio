@@ -16,12 +16,14 @@ path = "src/main.rs"
 [dependencies]
 studio-view-link = { workspace = true }
 architect-extensions = { workspace = true, features = ["linked-core"] }
+architect-extensions-dioxus = { workspace = true }
 dioxus = { workspace = true }
 serde_json = { workspace = true }
 
 # The native process: attached to the engine's socket.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+architect-extensions-dioxus = { workspace = true, features = ["guest"] }
 session-ui = { workspace = true, features = ["native"] }
 session-engine = { workspace = true, features = ["native"] }
 futures-timer = { workspace = true }

@@ -16,18 +16,19 @@ path = "src/main.rs"
 [dependencies]
 studio-view-link = { workspace = true }
 architect-extensions = { workspace = true, features = ["linked-core"] }
+architect-extensions-dioxus = { workspace = true }
 dioxus = { workspace = true }
 serde_json = { workspace = true }
 
 # The native process: panes painted from the engine attached over its
 # socket (`src/host.rs`), the window actions it claims (`src/claim.rs`).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-architect-extensions = { workspace = true, features = ["guest", "linked-core", "paint-pane"] }
-architect-workspace = { workspace = true, features = ["paint-ui"] }
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+architect-extensions-dioxus = { workspace = true, features = ["guest", "paint"] }
 session-ui = { workspace = true, features = ["native"] }
 session-engine = { workspace = true, features = ["native"] }
 blitz-traits = { workspace = true }
-architect-scene = { workspace = true }
+architect-scene = { workspace = true, features = ["paint-ui"] }
 anyrender = { workspace = true }
 web-time = { workspace = true }
 architect = { workspace = true, features = ["action-list"] }
@@ -38,6 +39,8 @@ tracing = { workspace = true }
 session-ui = { workspace = true, features = ["web"] }
 
 [dev-dependencies]
+# The tests stand a pane up as the workspace does (`ViewHost`, `Placement`).
+architect-workspace = { workspace = true, features = ["paint-ui"] }
 anyrender_vello_cpu = { workspace = true }
 peniko = { workspace = true }
 png = { workspace = true }

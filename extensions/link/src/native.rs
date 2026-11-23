@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use anyrender::recording::RenderCommand;
-use architect_workspace::paint::PaintMount;
-use architect_workspace::paint::{Layer, LayerKey, Scene};
+use architect_scene::paint::PaintMount;
+use architect_scene::paint::{Layer, LayerKey, Scene};
 use dioxus::prelude::*;
 use serde_json::Value as Json;
 use session_engine::studio_engine::link;
@@ -65,6 +65,29 @@ pub fn attach() {
                 }
             }
         });
+}
+
+/// Attach this process to the engine the app itself found (and checked:
+/// Studio's engine discovery makes sure the pid owns its port), rather
+/// than the newest that answers: an app that drives the engine over its
+/// Action List views the same one. Kept linked after, as [`attach`] is.
+///
+/// # Errors
+///
+/// The engine's socket refused the link.
+pub fn attach_at(pid: u32, socket: std::path::PathBuf, mcp: String) -> Result<(), String> {
+    ATTACHING.store(true, Ordering::Release);
+    let found = link::Found {
+        pid,
+        socket,
+        mcp,
+        ws: None,
+        build: String::new(),
+    };
+    attach_to(&found)?;
+    set_problem(None);
+    link::keep_linked(link::Mode::Attach, attach_to);
+    Ok(())
 }
 
 fn attach_to(found: &link::Found) -> Result<(), String> {
@@ -311,7 +334,7 @@ impl ValueParts {
         parts: &[session_ui::overlay::ValueLayer],
         first: LayerKey,
         (z, over_z): (i32, i32),
-        transform: architect_workspace::paint::peniko::kurbo::Affine,
+        transform: architect_scene::paint::peniko::kurbo::Affine,
     ) -> Vec<(LayerKey, Layer)> {
         let mut out = Vec::with_capacity(parts.len());
         for (i, part) in parts.iter().enumerate() {
@@ -343,7 +366,7 @@ impl ValueParts {
 
 /// A pane's size in whole logical pixels.
 #[must_use]
-pub const fn pane_size(ctx: &architect_workspace::ViewCtx) -> (u32, u32) {
+pub const fn pane_size(ctx: &architect_scene::view::ViewCtx) -> (u32, u32) {
     #[expect(
         clippy::as_conversions,
         clippy::cast_possible_truncation,

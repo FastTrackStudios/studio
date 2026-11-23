@@ -12,6 +12,7 @@
 //! picked there gone to ([`web`]).
 
 use architect_extensions::linked::{Builder, Extension};
+use architect_extensions_dioxus::BuilderExt as _;
 use serde_json::json;
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -2,6 +2,8 @@
 //! started it.
 
 #[cfg(not(target_arch = "wasm32"))]
+use architect_extensions_dioxus::guest::GuestExt as _;
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<(), architect_extensions::guest::GuestError> {
     // The mixer's window actions are the mixer pane's (`studio.mixer`
     // claims them): a key here that runs one goes to the engine, which

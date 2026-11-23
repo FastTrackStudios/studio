@@ -4,6 +4,7 @@
 //! (`studio_rig_link::RigPane`) around Signal's own panel.
 
 use architect_extensions::linked::{Builder, Extension};
+use architect_extensions_dioxus::BuilderExt as _;
 use dioxus::prelude::*;
 use guitar::ui::panels::Focus;
 use serde_json::Value as Json;

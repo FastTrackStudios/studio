@@ -31,6 +31,7 @@
 //! rebuilt) is replaced when a window attaches: it stops, and a new one
 //! starts, as `studio_engine::link::plan`'s `Replace`.
 
+use architect_extensions_dioxus::guest::GuestExt as _;
 use std::io::{BufRead as _, BufReader, Write as _};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -223,13 +224,21 @@ fn spawn_engine(dir: &Path) -> Result<(), String> {
 /// what the window was given: what to open, its audio, its libraries);
 /// `None` when there is no user systemd to ask or it refused.
 fn spawn_as_service(exe: &Path, log_path: &Path) -> Option<u32> {
-    if std::env::var_os("FTS_DAW_NO_SERVICE").is_some() || std::env::var_os("XDG_RUNTIME_DIR").is_none() {
+    if std::env::var_os("FTS_DAW_NO_SERVICE").is_some()
+        || std::env::var_os("XDG_RUNTIME_DIR").is_none()
+    {
         return None;
     }
     let mut command = std::process::Command::new("systemd-run");
     command.args(["--user", "--quiet", "--collect", "--unit", UNIT]);
-    command.arg(format!("--property=StandardOutput=append:{}", log_path.display()));
-    command.arg(format!("--property=StandardError=append:{}", log_path.display()));
+    command.arg(format!(
+        "--property=StandardOutput=append:{}",
+        log_path.display()
+    ));
+    command.arg(format!(
+        "--property=StandardError=append:{}",
+        log_path.display()
+    ));
     for (k, v) in std::env::vars_os() {
         if k == HOST_SOCKET {
             continue;

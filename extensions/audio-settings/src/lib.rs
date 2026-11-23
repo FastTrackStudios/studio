@@ -18,6 +18,7 @@
 pub mod engines;
 
 use architect_extensions::linked::{Builder, Extension};
+use architect_extensions_dioxus::BuilderExt as _;
 use dioxus::prelude::*;
 use guitar::ui::panels::SetupTab;
 use serde_json::Value as Json;

@@ -15,19 +15,9 @@ path = "src/main.rs"
 
 [dependencies]
 architect-extensions = { workspace = true, features = ["linked-core"] }
+architect-extensions-dioxus = { workspace = true, features = ["guest"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-
-# The browser (studio-web): the engine in the page (`src/web.rs`).
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-studio-view-link = { workspace = true }
-architect-playhead = { workspace = true }
-session-engine = { workspace = true, features = ["web"] }
-session-ui = { workspace = true, features = ["web"] }
-session-runtime = { workspace = true }
-web-sys = { workspace = true, features = ["Window", "Location", "Document", "Element", "Performance"] }
-wasm-bindgen-futures = { workspace = true }
-gloo-timers = { workspace = true, features = ["futures"] }
 
 # The native process: the engine and its launcher (`src/owner.rs`).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
