@@ -5,10 +5,12 @@
 //! song folders are (`crate::song_ids` finds them). `= Title` is a song
 //! with no session yet. Older files name a session folder by path,
 //! relative to the file (`../Songs/know-me`) or absolute; those still
-//! read. `# id: <uuid>` is the set's own id; `#` lines are comments.
+//! read. `# id: <uuid>` is the set's own id; `# org: <slug>` the org it
+//! belongs to (else the org Studio is in); other `#` lines are comments.
 //!
 //! ```text
 //! # id: 8d1c0f8e-0c84-4c1b-9a51-6f0f3a8b2d10
+//! # org: codywright
 //! # JT's Senior Recital — split from show-v2.
 //!
 //! # Act I: “The Originals”
@@ -39,6 +41,8 @@ pub struct Act {
 pub struct SetFile {
     /// The set's own id (`# id: …`), when the file has one.
     pub id: Option<String>,
+    /// The org the set belongs to (`# org: <slug>`), when the file says.
+    pub org: Option<String>,
     pub acts: Vec<Act>,
 }
 
@@ -105,6 +109,10 @@ pub fn parse(text: &str) -> SetFile {
                 out.id = Some(id.to_string());
                 continue;
             }
+            if let Some(org) = c.strip_prefix("org:").map(str::trim).filter(|o| is_slug(o)) {
+                out.org = Some(org.to_string());
+                continue;
+            }
             // A commented-out song names nothing.
             comment = (!c.is_empty() && !looks_like_path(c)).then(|| act_name(c));
             continue;
@@ -125,6 +133,20 @@ pub fn parse(text: &str) -> SetFile {
         }
     }
     out
+}
+
+/// An org's slug: lower-case letters, digits and `-`.
+pub fn is_slug(s: &str) -> bool {
+    !s.is_empty()
+        && !s.starts_with('-')
+        && s.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// The org a setlist file's set belongs to: the one its `# org:` line
+/// names, else `here` (the org Studio is in).
+pub fn org_of(text: &str, here: &str) -> String {
+    parse(text).org.unwrap_or_else(|| here.to_string())
 }
 
 /// A song line that names a song by its title alone (`= Amazing Grace`):
@@ -363,6 +385,30 @@ sleeptalker
         assert_eq!(s.acts[0].name, None);
         assert!(is_uuid(DTLA));
         assert!(!is_uuid("drive-to-la"));
+    }
+
+    #[test]
+    fn a_set_names_its_org_else_it_is_the_org_studio_is_in() {
+        let text = format!(
+            "# id: {SET}\n# org: crossroads-church\n# Days to Praise\n\n# Act I\n{DTLA}  Drive To LA\n"
+        );
+        let s = parse(&text);
+        assert_eq!(s.org.as_deref(), Some("crossroads-church"));
+        assert_eq!(s.id.as_deref(), Some(SET));
+        // The org line is not a comment: the act is still named by the
+        // comment directly above its first song.
+        assert_eq!(s.acts.len(), 1);
+        assert_eq!(s.acts[0].name.as_deref(), Some("Act I"));
+        assert_eq!(org_of(&text, "codywright"), "crossroads-church");
+        assert_eq!(
+            org_of(&format!("# id: {SET}\n{DTLA}  Drive To LA\n"), "codywright"),
+            "codywright"
+        );
+        // Not a slug: a comment, and the set is the org Studio is in.
+        let odd = "# org: Crossroads Church\n= Amazing Grace\n";
+        assert_eq!(parse(odd).org, None);
+        assert_eq!(org_of(odd, "codywright"), "codywright");
+        assert!(is_slug("days-to-praise") && !is_slug("-x") && !is_slug("A"));
     }
 
     #[test]

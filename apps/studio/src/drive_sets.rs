@@ -35,22 +35,34 @@ pub async fn files(space: &str) -> Vec<Hit> {
     v
 }
 
-/// The setlist files in Studio's own folder (`<home>/Setlists`), by name.
-pub fn on_disk(space: &str) -> Vec<Hit> {
-    let mut v: Vec<Hit> = disk::list(space, "Setlists")
+/// The setlist files in Studio's own folder (`<home>/Setlists`), by name,
+/// each in the org its `# org:` line names, else in `here` (the org
+/// Studio is in).
+pub fn on_disk(here: &str) -> Vec<Hit> {
+    let mut v: Vec<Hit> = disk::list(here, "Setlists")
         .into_iter()
-        .filter(|h| h.name.ends_with(".setlist") && !h.dir && !is_studios(h))
+        .filter(|h| h.name.ends_with(".setlist") && !h.dir)
+        .filter_map(|h| {
+            let text = disk::bytes(&disk::url(&h.path))
+                .and_then(Result::ok)
+                .map(|(_, b)| String::from_utf8_lossy(&b).into_owned())
+                .unwrap_or_default();
+            listed(h, &text, here)
+        })
         .collect();
     v.sort_by(|a, b| a.name.cmp(&b.name));
     v
 }
 
-/// A file Studio writes for one of its own sets (`crate::set_files`):
-/// that set is listed as itself, not again as a file.
-fn is_studios(h: &Hit) -> bool {
-    disk::bytes(&disk::url(&h.path))
-        .and_then(Result::ok)
-        .is_some_and(|(_, b)| crate::set_files::set_id(&String::from_utf8_lossy(&b)).is_some())
+/// A setlist file on disk as listed: in the org its text names, else in
+/// `here`; none for a file Studio writes for one of its own sets
+/// (`crate::set_files`), which is listed as itself, not again as a file.
+fn listed(mut h: Hit, text: &str, here: &str) -> Option<Hit> {
+    if crate::set_files::set_id(text).is_some() {
+        return None;
+    }
+    h.space = setfile::org_of(text, here);
+    Some(h)
 }
 
 /// The files on disk first, then Drive's, each once: a Drive file with
@@ -386,4 +398,43 @@ async fn read(
         location_name,
         acts,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hit(path: &str) -> Hit {
+        Hit {
+            space: "codywright".into(),
+            location: files::DISK.into(),
+            name: path.rsplit('/').next().unwrap_or(path).into(),
+            path: path.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_file_on_disk_is_listed_in_the_org_it_names() {
+        let h = hit("Setlists/Days to Praise.setlist");
+        let crossroads =
+            "# id: 8d1c0f8e-0c84-4c1b-9a51-6f0f3a8b2d10\n# org: crossroads-church\n= Praise\n";
+        assert_eq!(
+            listed(h.clone(), crossroads, "codywright").map(|h| h.space),
+            Some("crossroads-church".to_string())
+        );
+        assert_eq!(
+            listed(h.clone(), "= Praise\n", "codywright").map(|h| h.space),
+            Some("codywright".to_string())
+        );
+        // Studio's own set's file is the set, not a file.
+        assert_eq!(
+            listed(
+                h,
+                "# id: 8d1c0f8e-0c84-4c1b-9a51-6f0f3a8b2d10\n# Studio set s1\n",
+                "codywright"
+            ),
+            None
+        );
+    }
 }

@@ -86,6 +86,31 @@ Songs/Drive To LA - JT/
       Reference/          Media/Proxy/Reference/x.ogg is the proxy of
                           Media/Reference/x.wav
 ```
+  Inbox/                  material for this song not in the session's form
+                          yet: a REAPER project, a chart, lyrics, a note
+```
+
+### Inbox/
+
+`Inbox/` holds what a song came with that its `.session` does not take
+yet: a DAW project (`.RPP`, …), a chart as text (`chart/*.kf`), lyrics and
+their timing (`lyrics/`, `sync/`), the song's old note (`.md`). Each is a
+copy, its name kept, of what the song was brought in from. Nothing reads
+it as the song: the song is its `.session` and its `Media/`.
+
+A tool that converts a kind of material into the session (the REAPER
+importer, Keyflow's chart, the lyrics) reads it from `Inbox/`, writes it
+into the `.session`, verifies it there, and then takes it out of
+`Inbox/` to the Trash. An empty `Inbox/` is removed; a song with nothing
+left to convert has none.
+
+Its media is in `Media/`, never copied into `Inbox/`. A project in
+`Inbox/` that names its audio by a relative path (`audio/ogg/x.ogg`)
+finds it at the matching place under `Media/` (for the Days to Praise
+songs: `audio/wav/x.wav` is `Media/Stems/x.wav`, `audio/ogg/x.ogg` its
+proxy `Media/Proxy/Stems/x.ogg`), and the importer maps those paths as it
+converts. Drive's mount allows no links, so the project is not made to
+open in place.
 
 `<Title>.session` is the whole song, one file. It is a SQLite (Turso)
 store, and nothing sits beside it: no `.fts-session`, no `.kf`, and no
@@ -129,10 +154,17 @@ converted yet, the UUID in its `.fts-session` header) and a readable title. The 
 
 ```text
 # id: 9b1c…
+# org: crossroads-church
 # Act I: The Originals
 45b794d1-d6ba-4d66-ab2d-6be35df2f6bc  Drive To LA
 = Amazing Grace
 ```
+
+`# org: <slug>` says which org the set belongs to: Studio lists it in
+that org's setlists, whichever org Studio is in. A file without one
+belongs to the org Studio is in. The org is a line of the file, not a
+folder: `Setlists/<Set>/` is already the folder of that set's venue
+material (below).
 
 `= Title` is a song with no session yet. A comment directly above a song
 names the act it opens. A commented-out song is kept but not played. Old
