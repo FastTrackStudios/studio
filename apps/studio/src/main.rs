@@ -173,7 +173,29 @@ fn main() {
     // under it too (`/studio/api/…`), so a site can hand Studio that path.
     #[cfg(feature = "web")]
     drive_dioxus::mount::set(&dioxus::cli_config::web_base_path().unwrap_or_default());
+    // Drawn by Blitz on a desktop: the window has no system frame, the
+    // shell's title bar is its frame (app-shell-native).
+    #[cfg(feature = "native")]
+    app_shell_native::launch(
+        App,
+        no_popout,
+        app_shell_native::Config {
+            title: "Studio".to_owned(),
+            size: (1440.0, 900.0),
+            system_decorations: false,
+            // `shot <path.png>` on $XDG_RUNTIME_DIR/app-shell/studio.sock:
+            // the app paints its window to a file (development, agents).
+            control: Some("studio".to_owned()),
+        },
+    );
+    #[cfg(not(feature = "native"))]
     dioxus::launch(App);
+}
+
+/// Studio opens no pop-out windows yet.
+#[cfg(feature = "native")]
+fn no_popout(_: app_shell::WindowId) -> Element {
+    rsx! {}
 }
 
 #[component]

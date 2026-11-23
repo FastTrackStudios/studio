@@ -138,15 +138,24 @@ pub fn Shell() -> Element {
     let me = crate::team::use_me();
     let here = (app.here)();
 
-    // The setlist files in the org's Drive: found once per org, for the
-    // Setlists page and the sidebar's count.
+    // The setlist files in Drive, in every org this person is in (a
+    // computer's locations are its own space's, whichever org the set is
+    // for): found once, for the Setlists page, Home and the sidebar's count.
     #[cfg(feature = "web")]
     {
-        let here = here.clone();
-        use_effect(use_reactive!(|here| {
+        let spaces = {
+            let mut v = vec![here.clone()];
+            for o in (app.orgs)() {
+                if !v.contains(&o) {
+                    v.push(o);
+                }
+            }
+            v
+        };
+        use_effect(use_reactive!(|spaces| {
             let mut sets = app.drive_sets;
             spawn(async move {
-                let found = crate::drive_sets::files(&here).await;
+                let found = crate::drive_sets::files_in(&spaces).await;
                 sets.set(Some(found));
             });
         }));

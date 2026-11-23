@@ -32,6 +32,22 @@ pub async fn files(space: &str) -> Vec<Hit> {
     v
 }
 
+/// The setlist files in every one of these spaces, each once.
+pub async fn files_in(spaces: &[String]) -> Vec<Hit> {
+    let found = futures_util::future::join_all(spaces.iter().map(|s| files(s))).await;
+    let mut out: Vec<Hit> = Vec::new();
+    for h in found.into_iter().flatten() {
+        if !out
+            .iter()
+            .any(|o| o.location == h.location && o.path == h.path)
+        {
+            out.push(h);
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
 /// Every chart in these spaces.
 pub async fn charts(parent: Option<&crate::trace::Span>, spaces: &[String]) -> Vec<Hit> {
     let mut out = Vec::new();

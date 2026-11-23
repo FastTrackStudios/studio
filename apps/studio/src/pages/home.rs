@@ -5,9 +5,9 @@ use dioxus::prelude::*;
 use super::{BookButton, FaceRow, OrgPill, RehRow, progress_of};
 use crate::Route;
 use crate::data::{self, DAY, MONTH, TODAY};
-use crate::setlist::{Face, Rehearsal};
 use crate::icons::{I, Icon};
 use crate::pieces::{Art, Bar, Page};
+use crate::setlist::{Face, Rehearsal};
 use crate::state::use_app;
 
 /// A row of the week: a set or a rehearsal.
@@ -247,6 +247,16 @@ pub fn TrackCover(idx: usize, size: u32) -> Element {
 
 #[component]
 fn ShelfItem(open: &'static str, title: &'static str, kind: &'static str) -> Element {
+    // A set Drive has as a setlist file opens that file, not the sample.
+    let app = use_app();
+    let file = (kind == "Setlist")
+        .then(|| {
+            (app.drive_sets)()
+                .unwrap_or_default()
+                .into_iter()
+                .find(|h| crate::reference::fit(&crate::setfile::name_of(&h.name), title).is_some())
+        })
+        .flatten();
     let hue = data::album(open)
         .map(|a| a.hue)
         .or_else(|| open.strip_prefix("t:").and_then(data::track).map(|t| t.hue))
@@ -257,7 +267,19 @@ fn ShelfItem(open: &'static str, title: &'static str, kind: &'static str) -> Ele
         button {
             class: "shelfi",
             onclick: move |_| {
-                navigator().push(Route::open(open));
+                match &file {
+                    Some(h) => {
+                        navigator()
+                            .push(Route::DriveSet {
+                                space: h.space.clone(),
+                                location: h.location.clone(),
+                                path: h.path.split('/').map(str::to_string).collect(),
+                            });
+                    }
+                    None => {
+                        navigator().push(Route::open(open));
+                    }
+                }
             },
             span { class: "sc",
                 Art { img, title: cover_title, hue }

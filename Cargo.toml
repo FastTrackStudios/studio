@@ -976,6 +976,11 @@ rustfft = "6.2"
 test-that = { version = "0.5.2", default-features = false }
 
 [patch.crates-io]
+# app-shell-native (the one app's Blitz window) names the published
+# dioxus-native; this hands it Studio's own, built for the blitz fork
+# patched below (the published one wants blitz-shell features the fork
+# does not have).
+dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 # app-shell and Drive (apps/studio) are on crates.io's dioxus 0.8.0-alpha.3;
 # this hands them the workspace's revision (also 0.8.0-alpha.3), so one
 # dioxus is built. Keep the rev equal to the dioxus lines above.
