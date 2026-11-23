@@ -101,12 +101,28 @@ fn is_session(p: &Path) -> bool {
         .is_some_and(|x| x == "fts-session" || x == "session")
 }
 
-/// A session file's id, from its first bytes.
+/// A session file's id, from its first bytes: the header of an older
+/// `.fts-session`, or `meta.id` of a song's one `.session` (a store: its
+/// meta table is in its first pages; the whole file is read only when it
+/// is not). An engine store of a folder not converted yet has no id; its
+/// `.fts-session` beside it has.
 pub fn session_id(file: &Path) -> Option<String> {
     use std::io::Read as _;
-    let mut head = vec![0; 4096];
-    let n = std::fs::File::open(file).ok()?.read(&mut head).ok()?;
-    id(&head[..n])
+    let mut head = vec![0; 64 * 1024];
+    let mut f = std::fs::File::open(file).ok()?;
+    let mut n = 0;
+    while n < head.len() {
+        match f.read(&mut head[n..]) {
+            Ok(0) | Err(_) => break,
+            Ok(k) => n += k,
+        }
+    }
+    let head = &head[..n];
+    if crate::session_file::is_store(head) {
+        return session_format::read::song_id(head)
+            .or_else(|| crate::session_file::store_id(&std::fs::read(file).ok()?));
+    }
+    id(head)
 }
 
 /// The id in an Architect document's header (`ARCHDOC\0`, a `u32`
@@ -284,5 +300,33 @@ mod tests {
     fn the_header_id_is_read() {
         assert_eq!(id(&session(A)).as_deref(), Some(A));
         assert_eq!(id(b"not a session"), None);
+    }
+
+    /// A song converted to one file is found by the id in its store's
+    /// `meta.id`; an engine store beside an older `.fts-session` has none,
+    /// and the document beside it names the song.
+    #[test]
+    fn a_one_file_song_is_found_by_its_stores_id() {
+        let dir = temp("one-file");
+        let song = dir.join("Songs").join("Drive To LA - JT");
+        std::fs::create_dir_all(&song).unwrap();
+        let file = song.join("Drive To LA.session");
+        let store = session_format::store::Store::open(&file).unwrap();
+        store
+            .set_song_id(uuid::Uuid::parse_str(A).unwrap())
+            .unwrap();
+        store.close().unwrap();
+        assert_eq!(session_id(&file).as_deref(), Some(A));
+        assert!(holds(&song, A));
+
+        let pair = dir.join("Songs").join("Intro");
+        std::fs::create_dir_all(&pair).unwrap();
+        session_format::store::Store::open(&pair.join("Intro.session"))
+            .unwrap()
+            .close()
+            .unwrap();
+        std::fs::write(pair.join("Intro.fts-session"), session(B)).unwrap();
+        assert_eq!(session_id(&pair.join("Intro.session")), None);
+        assert!(holds(&pair, B));
     }
 }

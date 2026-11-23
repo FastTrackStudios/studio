@@ -79,6 +79,11 @@ pub fn is_store(bytes: &[u8]) -> bool {
 pub fn main_doc(bytes: &[u8]) -> Result<LoroDoc, String> {
     if is_store(bytes) {
         let file = session_format::read::ProjectFile::read(bytes).map_err(|e| e.to_string())?;
+        // An engine store of a folder not converted yet holds no session:
+        // its `.fts-session` beside it does.
+        if !file.has_part(session_format::read::SESSION, MAIN) {
+            return Err("this store holds no session (its folder is not converted)".into());
+        }
         return file
             .part(session_format::read::SESSION, MAIN)
             .map_err(|e| e.to_string());

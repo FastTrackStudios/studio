@@ -106,3 +106,8 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 tokio = { version = "1", features = ["time"] }
 opentelemetry = { version = "0.30", optional = true }
 tracing-opentelemetry = { version = "0.31", optional = true }
+
+[dev-dependencies]
+# song_ids' tests write one-file songs.
+session-format = { workspace = true, features = ["read", "store"] }
+uuid = { workspace = true }
