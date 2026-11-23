@@ -97,6 +97,11 @@ pub struct DetectorOutput {
 pub trait HitDetector: Send + Sync {
     fn info(&self) -> DetectorInfo;
     fn detect(&self, input: &DetectorInput<'_>) -> DetectorOutput;
+
+    /// Detect with error reporting for backends that load external resources.
+    fn try_detect(&self, input: &DetectorInput<'_>) -> Result<DetectorOutput, String> {
+        Ok(self.detect(input))
+    }
 }
 
 /// Full multi-mic calibrated kit detector (`detect_kit`).
@@ -263,6 +268,14 @@ impl Default for DetectorRegistry {
         };
         reg.register(Box::new(KitFusionDetector));
         reg.register(Box::new(EnvelopeGateDetector));
+        #[cfg(feature = "onnx")]
+        for detector in crate::adtof::AdtofDetector::variants() {
+            reg.register(Box::new(detector));
+        }
+        #[cfg(feature = "onnx")]
+        reg.register(Box::new(crate::beat_this::BeatThisDetector::default()));
+        #[cfg(feature = "onnx")]
+        reg.register(Box::new(crate::beat_this::BeatThisDetector::combined()));
         reg
     }
 }

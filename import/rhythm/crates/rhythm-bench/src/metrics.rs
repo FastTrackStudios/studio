@@ -115,7 +115,7 @@ pub struct ClassMetrics {
     pub median_signed_err_ms: f64,
 }
 
-fn greedy_match(truth: &[f64], pred: &[f64], tol_secs: f64) -> Vec<(usize, usize, f64)> {
+pub(crate) fn greedy_match(truth: &[f64], pred: &[f64], tol_secs: f64) -> Vec<(usize, usize, f64)> {
     let mut pairs: Vec<(usize, usize, f64)> = Vec::new();
     for (ti, &t) in truth.iter().enumerate() {
         for (pi, &p) in pred.iter().enumerate() {

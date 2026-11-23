@@ -39,8 +39,18 @@ All rhythm & drum detection models in `FastTrackStudios/rhythm` are evaluated wi
 # Fair acoustic multi-mic benchmark (no triggers passed to detector):
 cargo run --release -p rhythm-bench --   --detector fts.hits.kit-fusion   --mode mic-only   --out benchmarks/kit-fusion-mic-only.json
 
-# Bus-only mode (for stereo/mono drum-bus neural models):
-cargo run --release -p rhythm-bench --   --detector fts.hits.adtof-onnx   --mode bus-only   --out benchmarks/adtof-onnx-bus-only.json
+# ADTOF requires the optional model pack in models.json and ORT_DYLIB_PATH.
+# Raw frame peaks and drum-bus attack snapping:
+for variant in adtof-onnx-raw adtof-onnx; do
+  cargo run --release -p rhythm-bench --features onnx -- \
+    --detector "fts.hits.$variant" --mode bus-only --out "benchmarks/$variant.json"
+done
+
+# Overhead attack snapping and class-gated close-mic attacks:
+for variant in adtof-onnx-ohs adtof-onnx-close; do
+  cargo run --release -p rhythm-bench --features onnx -- \
+    --detector "fts.hits.$variant" --mode mic-only --out "benchmarks/$variant.json"
+done
 
 # Fast single-song iteration while developing:
 cargo run --release -p rhythm-bench -- --song "set in stone" --detector <id>
@@ -71,3 +81,23 @@ cargo run --release -p rhythm-bench -- --song "set in stone" --detector <id>
    ```bash
    cargo run --release -p rhythm-bench --      --predictions /tmp/adtof_plus_preds.json      --out benchmarks/adtof-plus.json
    ```
+
+### C. Beat and downbeat tracking
+
+Download both `beat-this-small0` and `beat-this-logmel` as listed in
+`models.json`. Score the drum-bus results against the REAPER project grid:
+
+```bash
+cargo run --release -p rhythm-bench --features onnx -- \
+  --detector fts.hits.beat-this --beat-grid --out benchmarks/beat-this-small0.json
+```
+
+Beat and downbeat F1 are scored separately at ±50 ms and ±70 ms with
+one-to-one matching. The reference includes tempo and time-signature changes
+from REAPER step markers. It includes the whole rendered timeline, including
+silent count-in and gaps. The report also gives per-song median inter-beat
+BPM for identifying half-time and double-time tracking.
+
+The `fts.hits.adtof-beat-this` detector emits both hits and beats in the same
+response when all three models are cached. Build `rhythm-ext` with
+`--features onnx` and pass the mono input as the `drum_bus` piece.

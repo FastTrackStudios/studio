@@ -12,3 +12,6 @@ rayon.workspace = true
 rhythm-hits = { path = "../rhythm-hits" }
 serde.workspace = true
 serde_json.workspace = true
+
+[features]
+onnx = ["rhythm-hits/onnx"]

@@ -17,3 +17,6 @@ rhythm-editing = { workspace = true }
 rhythm-hits = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[features]
+onnx = ["rhythm-hits/onnx"]

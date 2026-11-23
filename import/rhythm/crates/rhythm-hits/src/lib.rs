@@ -2,7 +2,11 @@
 //! detector registry (`DetectorRegistry`) so multiple algorithms (trigger+mic
 //! fusion, envelope gate, third-party/ML detectors) share one canonical output.
 
+#[cfg(feature = "onnx")]
+mod adtof;
 pub mod attack;
+#[cfg(feature = "onnx")]
+mod beat_this;
 pub mod bleed;
 pub mod calibrate;
 pub mod fuse;

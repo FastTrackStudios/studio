@@ -1,5 +1,6 @@
 //! Shared Crescendum album benchmark CLI (`rhythm-bench`).
 
+mod beat_grid;
 mod metrics;
 mod rpp;
 
@@ -8,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use clap::{Parser, ValueEnum};
-use rhythm_hits::{DetectorInput, DetectorRegistry, PieceInput};
+use rhythm_hits::{DetectorInput, DetectorOutput, DetectorRegistry, PieceInput};
 use serde::{Deserialize, Serialize};
 
 use crate::metrics::{
@@ -62,6 +63,10 @@ struct Cli {
     /// Optional output path to write canonical benchmark JSON results.
     #[arg(long)]
     out: Option<PathBuf>,
+
+    /// Score beat and downbeat events against the REAPER project grid.
+    #[arg(long, conflicts_with_all = ["predictions", "export_stems"])]
+    beat_grid: bool,
 
     #[arg(long)]
     threshold_db: Option<f64>,
@@ -193,7 +198,7 @@ fn run_rust_detector(
     mode: BenchMode,
     kit: &RenderedKit,
     cli: &Cli,
-) -> Result<(Vec<(String, f64)>, f64), String> {
+) -> Result<(DetectorOutput, f64), String> {
     let detector = registry
         .get(detector_id)
         .ok_or_else(|| format!("unknown detector '{detector_id}'"))?;
@@ -210,7 +215,7 @@ fn run_rust_detector(
                 mic: bus.as_slice(),
                 trigger: None,
             }];
-            detector.detect(&DetectorInput {
+            detector.try_detect(&DetectorInput {
                 sample_rate: kit.sample_rate,
                 pieces: &pieces,
                 extra_mics: &[],
@@ -219,7 +224,7 @@ fn run_rust_detector(
                 retrig_ms: cli.retrig_ms,
                 tempo_bpm: Some(kit.bpm),
                 time_sig: Some(kit.time_sig),
-            })
+            })?
         }
         BenchMode::MicOnly | BenchMode::WithTriggers => {
             let use_trig = matches!(mode, BenchMode::WithTriggers);
@@ -246,13 +251,24 @@ fn run_rust_detector(
                     });
                 }
             }
+            if detector_id.starts_with("fts.hits.adtof-onnx") {
+                for name in ["drum_bus", "ohs"] {
+                    if let Some(mic) = kit.tracks.get(name) {
+                        pieces.push(PieceInput {
+                            name: name.to_owned(),
+                            mic,
+                            trigger: None,
+                        });
+                    }
+                }
+            }
             let mut extras = Vec::new();
             for k in ["ohs", "hihat", "ride", "rooms"] {
                 if let Some(m) = kit.tracks.get(k) {
                     extras.push(m.as_slice());
                 }
             }
-            detector.detect(&DetectorInput {
+            detector.try_detect(&DetectorInput {
                 sample_rate: kit.sample_rate,
                 pieces: &pieces,
                 extra_mics: &extras,
@@ -261,12 +277,11 @@ fn run_rust_detector(
                 retrig_ms: cli.retrig_ms,
                 tempo_bpm: Some(kit.bpm),
                 time_sig: Some(kit.time_sig),
-            })
+            })?
         }
     };
     let elapsed = t0.elapsed().as_secs_f64();
-    let hits = out.hits.into_iter().map(|h| (h.piece, h.at)).collect();
-    Ok((hits, elapsed))
+    Ok((out, elapsed))
 }
 
 fn main() {
@@ -293,6 +308,9 @@ fn run() -> Result<(), String> {
     };
 
     let registry = DetectorRegistry::default();
+    if cli.beat_grid {
+        return beat_grid::run(&cli, &registry, &rpps);
+    }
     let mut song_results = Vec::new();
     let mut all_class_metrics: BTreeMap<String, Vec<ClassMetrics>> = BTreeMap::new();
     let mut all_overall_metrics: Vec<ClassMetrics> = Vec::new();
@@ -316,7 +334,7 @@ fn run() -> Result<(), String> {
             continue;
         }
 
-        let (preds, elapsed) = if let Some(ref ext) = external {
+        let (preds, elapsed): (Vec<_>, _) = if let Some(ref ext) = external {
             let list = ext
                 .songs
                 .get(&kit.song_name)
@@ -328,7 +346,10 @@ fn run() -> Result<(), String> {
             let el = ext.cpu_rtf.map_or(0.0, |rtf| rtf * kit.duration_secs);
             (list, el)
         } else {
-            run_rust_detector(&registry, &cli.detector, cli.mode, &kit, &cli)?
+            let (output, elapsed) =
+                run_rust_detector(&registry, &cli.detector, cli.mode, &kit, &cli)?;
+            let hits = output.hits.into_iter().map(|h| (h.piece, h.at)).collect();
+            (hits, elapsed)
         };
 
         let grouped = grouped_truth_and_preds(&gt, &preds);

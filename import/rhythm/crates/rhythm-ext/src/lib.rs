@@ -168,7 +168,7 @@ pub fn run_detect(
         .collect();
     let extras: Vec<&[f32]> = extras_owned.iter().map(Vec::as_slice).collect();
 
-    Ok(detector.detect(&DetectorInput {
+    detector.try_detect(&DetectorInput {
         sample_rate: rate.unwrap_or(48_000.0),
         pieces: &pieces,
         extra_mics: &extras,
@@ -177,7 +177,7 @@ pub fn run_detect(
         retrig_ms: req.retrig_ms,
         tempo_bpm: req.tempo_bpm,
         time_sig: req.time_sig,
-    }))
+    })
 }
 
 pub fn dispatch(registry: &DetectorRegistry, action: &str, params: Json) -> Result<Json, String> {
