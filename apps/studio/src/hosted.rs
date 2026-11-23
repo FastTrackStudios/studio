@@ -31,6 +31,52 @@ pub const PAGE: &str = "studio.page";
 
 static EXTENSIONS: OnceLock<Extensions> = OnceLock::new();
 
+thread_local! {
+    /// The session's window while it is open, for what closes its Stage.
+    static SESSION_UI: std::cell::Cell<Option<ExtensionUi>> = const { std::cell::Cell::new(None) };
+}
+
+/// The session's window is `ui` (or gone).
+pub fn set_session_ui(ui: Option<ExtensionUi>) {
+    SESSION_UI.with(|s| s.set(ui));
+}
+
+/// Opens the launcher in a window of its own (titled "Launcher") beside
+/// the session, or brings it forward: whether a session is open.
+pub fn open_launcher_window() -> bool {
+    let Some(ui) = SESSION_UI.with(std::cell::Cell::get) else {
+        return false;
+    };
+    let pane = PaneId::new(crate::stage::LAUNCHER);
+    let _ = ui.apply(|w| {
+        if w.pane(&pane).is_some() {
+            return w.activate(&pane);
+        }
+        w.open(
+            app_shell::Pane::new(crate::stage::LAUNCHER, crate::stage::LAUNCHER, "Launcher"),
+            app_shell::Target::Window(Some(app_shell::Rect::new(80.0, 80.0, 1440.0, 900.0))),
+        )
+        .map(drop)
+    });
+    true
+}
+
+/// Closes the Stage's Lighting and Chart windows, when a session is open:
+/// whether it was.
+pub fn close_stage_windows() -> bool {
+    let Some(ui) = SESSION_UI.with(std::cell::Cell::get) else {
+        return false;
+    };
+    for id in [crate::stage::LIGHTING_WINDOW, crate::stage::CHART_WINDOW] {
+        let window = app_shell::WindowId::new(id);
+        let _ = ui.apply(|w| w.close_window(&window));
+    }
+    // The launcher's window too: the main one is the launcher now.
+    let launcher = PaneId::new(crate::stage::LAUNCHER);
+    let _ = ui.apply(|w| w.close(&launcher));
+    true
+}
+
 /// The app's extensions: the session's views, linked in, on the app's
 /// Action List (their actions are the app's, on MCP and the socket).
 pub fn extensions() -> &'static Extensions {
@@ -205,9 +251,41 @@ async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
             .and_then(|s| s.to_str())
             .unwrap_or("song"),
     );
+    // The song's cue list into the session, when the night has one: its
+    // file in IGNITION_CUES (a folder of `<lane>.json`), resolved against
+    // the Live set (IGNITION_LIVE_SET) as the night does.
+    let title = std::path::Path::new(&f.path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("song")
+        .to_owned();
+    let mut lane = song.clone();
+    if let (Some(dir), Some(live_set)) = (
+        std::env::var_os("IGNITION_CUES"),
+        std::env::var_os("IGNITION_LIVE_SET"),
+    ) && let Some(cues) = cue_file(std::path::Path::new(&dir), &title)
+    {
+        lane = cues
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&song)
+            .to_owned();
+        let stored = run(
+            "IGNITION_SESSION_SONG",
+            serde_json::json!({
+                "doc": f.id, "lane": lane, "live_set": live_set.to_string_lossy(),
+                "locator": title, "cues": cues.display().to_string(), "tempo": false,
+            }),
+        )
+        .await;
+        span.set(
+            "studio.follow.cues",
+            stored.map_or_else(|e| e, |_| "ok".to_owned()),
+        );
+    }
     match run(
         "IGNITION_SESSION_ROOM",
-        serde_json::json!({ "url": f.url, "doc": f.id, "song": song }),
+        serde_json::json!({ "url": f.url, "doc": f.id, "song": song, "lane": lane }),
     )
     .await
     {
@@ -256,6 +334,36 @@ pub fn kinds(ui: ExtensionUi, page: fn(String) -> Element) -> TabKinds {
         page(ctx.pane.state.clone())
     }));
     kinds
+}
+
+/// The cue list of song `title` in folder `dir`: `<lane>.json` whose lane
+/// is the song's name as the night spells it, with or without its "(…)",
+/// or one that ends in it (`dtla-cinematic-intro`).
+fn cue_file(dir: &std::path::Path, title: &str) -> Option<std::path::PathBuf> {
+    let short = song_slug(title);
+    let long = song_slug(&title.replace(['(', ')'], ""));
+    let digits = short.replace('7', "seven");
+    let files: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .collect();
+    let stem = |p: &std::path::PathBuf| {
+        p.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_owned()
+    };
+    files
+        .iter()
+        .find(|p| [&short, &long, &digits].iter().any(|n| stem(p) == **n))
+        .or_else(|| {
+            files
+                .iter()
+                .find(|p| stem(p).ends_with(&format!("-{short}")))
+        })
+        .cloned()
 }
 
 /// A song as the lighting's night names it: its title without a trailing

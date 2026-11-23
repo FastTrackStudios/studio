@@ -231,6 +231,10 @@ fn main() {
 /// window does.
 #[cfg(feature = "native")]
 fn popout(id: app_shell::WindowId) -> Element {
+    // The launcher, in a window of its own while a session plays.
+    if id.0 == stage::LAUNCHER_WINDOW {
+        return rsx! { LauncherApp {} };
+    }
     // A document of its own, without the app's sheets: sized inline.
     rsx! {
         div { style: "position:absolute; top:0; left:0; width:100vw; height:100vh; display:flex; flex-direction:column;",
@@ -243,9 +247,33 @@ fn popout(id: app_shell::WindowId) -> Element {
     }
 }
 
+/// The launcher's own window during a session (its context): it browses
+/// and plays nothing itself; the session and the engine are the main
+/// window's.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LauncherWindow;
+
+/// Whether this document is the launcher's own window.
+pub(crate) fn in_launcher_window() -> bool {
+    try_use_context::<LauncherWindow>().is_some()
+}
+
+/// The launcher's window: the app, as a window titled "Launcher".
+#[cfg(feature = "native")]
+#[component]
+fn LauncherApp() -> Element {
+    use_context_provider(|| LauncherWindow);
+    rsx! { App {} }
+}
+
 #[component]
 fn App() -> Element {
     use_context_provider(state::AppState::new);
+    let title = if in_launcher_window() {
+        "Launcher"
+    } else {
+        "Studio"
+    };
     // From navigation until the app has first drawn.
     #[cfg(feature = "drive")]
     use_effect(trace::boot);
@@ -255,7 +283,7 @@ fn App() -> Element {
             content: "width=device-width, initial-scale=1, viewport-fit=cover",
         }
         document::Meta { name: "theme-color", content: "#000000" }
-        document::Title { "Studio" }
+        document::Title { "{title}" }
         document::Link { rel: "preconnect", href: "https://fonts.googleapis.com" }
         document::Stylesheet { href: FONT }
         document::Stylesheet { href: STYLE }

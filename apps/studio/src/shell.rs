@@ -182,10 +182,15 @@ pub fn Root() -> Element {
         }
     });
 
+    // The launcher's own window plays nothing and answers no actions: the
+    // main window does both.
+    let main = !crate::in_launcher_window();
     rsx! {
         Outlet::<Route> {}
-        PlayerHost {}
-        crate::actions::ActionHost {}
+        if main {
+            PlayerHost {}
+            crate::actions::ActionHost {}
+        }
     }
 }
 

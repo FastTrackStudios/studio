@@ -30,6 +30,10 @@ pub const CUES: &str = "ignition/cues";
 /// The lighting's window and the chart's.
 pub const LIGHTING_WINDOW: &str = "lighting";
 pub const CHART_WINDOW: &str = "chart";
+/// The launcher's own window during a session, titled "Launcher".
+pub const LAUNCHER_WINDOW: &str = "launcher";
+/// Its pane (the window's title; the app draws the window itself).
+pub const LAUNCHER: &str = "studio.launcher";
 
 /// The mixer's width beside the arrangement, points: its strips (the top
 /// groups of a song).

@@ -259,6 +259,20 @@ mod imp {
         "Leaves the session for the launcher, where it was opened from. The set plays on."
     );
     meta!(
+        HOME,
+        "STUDIO_HOME",
+        "Home",
+        "Session",
+        "Back to Studio's home, the launcher (⌘⇧H): the session's Lighting and Chart windows close, the main window shows the launcher. The engine keeps the set loaded, so going back in is instant."
+    );
+    meta!(
+        LAUNCHER_WINDOW,
+        "STUDIO_LAUNCHER_WINDOW",
+        "The launcher's window",
+        "Session",
+        "Opens the launcher in a window of its own, titled \"Launcher\" (⌘⇧L), beside the session that plays on."
+    );
+    meta!(
         SESSION_VIEW,
         "STUDIO_SESSION_VIEW",
         "Show a session view",
@@ -452,6 +466,8 @@ mod imp {
             forward::<()>(&list, &ENGINE, R, false);
             forward::<SessionArgs>(&list, &SESSION_OPEN, M, true);
             forward::<()>(&list, &SESSION_CLOSE, M, false);
+            forward::<()>(&list, &HOME, M, false);
+            forward::<()>(&list, &LAUNCHER_WINDOW, M, false);
             forward::<ViewArgs>(&list, &SESSION_VIEW, M, true);
             let scripting = architect_scripting::actions::Scripting::new(
                 list.clone(),
@@ -908,7 +924,7 @@ mod imp {
                     "engine": (app.engine)().line(),
                 }))
             }
-            "STUDIO_SESSION_CLOSE" => {
+            "STUDIO_SESSION_CLOSE" | "STUDIO_HOME" => {
                 crate::session::leave(app);
                 Ok(json!({ "to": app.session_from.peek().as_ref().map(ToString::to_string) }))
             }
@@ -919,6 +935,13 @@ mod imp {
                 let to = crate::session::route(v);
                 navigator().push(to.clone());
                 Ok(json!({ "route": to.to_string() }))
+            }
+            "STUDIO_LAUNCHER_WINDOW" => {
+                if crate::hosted::open_launcher_window() {
+                    Ok(json!({ "window": "Launcher" }))
+                } else {
+                    Err("the launcher's window opens beside a session: open one first".into())
+                }
             }
             "STUDIO_ENGINE" => Ok(json!({
                 "status": format!("{:?}", (app.engine)()),

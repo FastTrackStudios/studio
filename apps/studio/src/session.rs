@@ -137,6 +137,16 @@ pub fn leave(app: AppState) {
         .peek()
         .clone()
         .unwrap_or(Route::Setlists {});
+    // Natively the Stage's other windows close first, while the session's
+    // shell is there to close them; the engine keeps the set.
+    #[cfg(feature = "native")]
+    if crate::hosted::close_stage_windows() {
+        spawn(async move {
+            crate::state::sleep_ms(120).await;
+            navigator().push(to);
+        });
+        return;
+    }
     navigator().push(to);
 }
 
@@ -171,6 +181,14 @@ pub fn SessionShell() -> Element {
         .unwrap_or_else(|| "Session".into());
     #[cfg(feature = "native")]
     {
+        if crate::in_launcher_window() {
+            return rsx! {
+                div { class: "sessempty",
+                    b { "{title}" }
+                    p { class: "pline", "The session is in Studio's main window." }
+                }
+            };
+        }
         rsx! {
             native::Session { view, title }
         }
@@ -184,7 +202,8 @@ pub fn SessionShell() -> Element {
                     theme: use_hook(crate::shell::theme),
                     title: title.clone(),
                     top_bar: rsx! {
-                        TopBar { title: title.clone() }
+                        // Back is home: the launcher (⌘⇧H, STUDIO_HOME).
+                        TopBar { title: title.clone(), on_back: move |()| leave(app) }
                     },
                     div { class: "content session", "data-form": "desktop",
                         main { class: "sessstage", Outlet::<Route> {} }
@@ -215,12 +234,18 @@ pub fn page(slug: String) -> Element {
         View::Overview => rsx! {
             Overview {}
         },
+        // session-ui's own panels over the engine's song, as the old
+        // Session window showed them (no extension of their own yet).
+        #[cfg(feature = "native")]
+        View::Setup | View::Editor | View::Fx => rsx! {
+            native::SongPanel { view: v }
+        },
         other => rsx! {
             div { class: "sessempty",
                 b { "{other.name()}" }
                 p { class: "pline",
                     if cfg!(feature = "native") {
-                        "Not in this Studio yet: the arrangement, lyrics, chart, lighting, overview and mixer are."
+                        "Not in this Studio yet."
                     } else {
                         "The session's views are the desktop app's for now; the chart and the overview are here."
                     }
@@ -341,6 +366,29 @@ mod native {
         crate::stage::stage(crate::stage::Area::default(), &names, page_for(view))
     }
 
+    /// session-ui's Setup, Editor or FX panel over the song the engine has
+    /// (its session in context, as the old window's `SongViews` gave it).
+    #[component]
+    pub fn SongPanel(view: View) -> Element {
+        let song = studio_view_link::use_song();
+        let Some((key, session)) = song() else {
+            return studio_view_link::waiting();
+        };
+        rsx! {
+            div { style: "position:relative; flex:1; min-height:0; height:100%;",
+                for key in std::iter::once(key) {
+                    WithSong { key: "{key}", session: Song(session.clone()),
+                        match view {
+                            View::Setup => rsx! { session_ui::setup::SetupView {} },
+                            View::Editor => rsx! { session_ui::editor_view::EditorPanel {} },
+                            _ => rsx! { session_ui::fx_view::FxPanel { lanes: 4 } },
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// The engine's set, as session-ui's song tabs read it (a signal of
     /// the setlist, as the old window provided it): followed over the
     /// views' link, changed when the engine's set does.
@@ -373,6 +421,16 @@ mod native {
         // with the session.
         let layout = use_signal(|| stage_for(view, &title, None));
         let ui = use_extension_ui(hosted::host(), layout);
+        use_hook(move || hosted::set_session_ui(Some(ui)));
+        use_drop(|| hosted::set_session_ui(None));
+        // Closing the main window goes home to the launcher, not out of
+        // the app (the shell's own close button reads these controls).
+        if let Some(controls) = try_use_context::<app_shell::ui::WindowControls>() {
+            use_context_provider(move || app_shell::ui::WindowControls {
+                close: Some(Callback::new(move |()| leave(app))),
+                ..controls
+            });
+        }
         // Process views (Ignition's room) drawn in the window's panes.
         use_context_provider({
             let views = architect_process_view::extension::use_process_views(hosted::host());
@@ -431,7 +489,22 @@ mod native {
         let kinds = hosted::kinds(ui, super::page);
         rsx! {
             document::Title { "Studio — {title}" }
-            div { class: "window",
+            div {
+                class: "window",
+                // ⌘⇧H (Ctrl+Shift+H): home to the launcher.
+                onkeydown: move |e: KeyboardEvent| {
+                    let m = e.modifiers();
+                    let key = e.key().to_string();
+                    if (m.meta() || m.ctrl()) && m.shift() && key.eq_ignore_ascii_case("h") {
+                        e.prevent_default();
+                        leave(app);
+                    }
+                    // ⌘⇧L: the launcher in a window of its own.
+                    if (m.meta() || m.ctrl()) && m.shift() && key.eq_ignore_ascii_case("l") {
+                        e.prevent_default();
+                        hosted::open_launcher_window();
+                    }
+                },
                 AppShell {
                     theme: use_hook(crate::shell::theme),
                     title: title.clone(),
