@@ -11,6 +11,10 @@ from math import gcd
 RATE = 44100
 SECONDS = 20
 FIXTURES = {
+    "angela-song": ("AngelaThomasWade_MilkCowBlues", {
+        "drums": [1, 2, 3, 4], "bass": [5], "guitar": [6, 7, 8],
+        "piano": [10], "other": [9], "vocals": [11],
+    }),
     "patrick-vocals": ("PatrickTalbot_AReasonToLeave", {
         "lead": [32, 33], "backing": list(range(34, 39)),
     }),

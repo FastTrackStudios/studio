@@ -87,7 +87,8 @@ matching. Undefined scores are null in JSON and blank in CSV, with a status
 for silent references, silent estimates, and exact matches. A wholly silent
 stem leaves the joint BSS Eval columns empty for that system and song.
 
-See the [open-model pilot](bench/PILOT.md) for the Crescendum and fine-stem workflows.
+See the [pilot guide](bench/PILOT.md) to reproduce the Crescendum and fine-stem
+benchmarks, and [pilot results](bench/RESULTS.md) for the current comparisons.
 
 ## License
 

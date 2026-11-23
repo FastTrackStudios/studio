@@ -145,3 +145,39 @@ The ensemble averages corresponding waveforms with equal weights. Its
 separate reconstruction report measures residual energy after summing the
 stems, relative to the reference mix energy. Use the per-stem scores to
 assess where the audio was assigned.
+
+## Six-stem and kit checkpoint comparisons
+
+For the matched six-stem test, run the [BS-RoFormer SW checkpoint and YAML
+mirror](https://huggingface.co/koidn/BS-RoFormer-SW-6stem) through
+`bench/separate_mdxc.py` on the same `patrick-song/mix.wav` used for
+HTDemucs six-stem. Write to `target/song-pilot/bs-roformer-six` and generate
+the manifest with `bench/pilot_manifests.py target/song-pilot six --bs-roformer-six`.
+Score `six-matched.json`. The mirror records unknown weight terms. The
+checkpoint is for local evaluation, with redistribution status unresolved.
+
+For the third kit candidate, obtain `drumsep_5stems_mdx23c_jarredou.ckpt`
+and `config_mdx23c_drumsep2025.yaml` from the [DrumSep
+mirror](https://huggingface.co/xavriley/source_separation_mirror). Run the
+same MDXC runner on each unchanged Crescendum reference mix, writing to
+`drumsep-five` under each pilot directory. Generate
+`kit-three-models.json` with `bench/pilot_manifests.py RUN_DIR crescendum --drumsep-five`
+and use it for waveform and trigger scoring. This five-stem checkpoint
+provides cymbals as a single output. The six-stem checkpoint uses
+ride plus crash for that same comparison group. The reference is still
+the ride mic, so this score is a waveform proxy for the cymbal group.
+
+To compare multiple songs, pass their separate score reports to
+`bench/paired_summary.py` with `--baseline drumsep` and `--output FILE.json`.
+The summary computes per-track score differences before taking the median
+and reports how many tracks were available for each pair. It rejects
+duplicate rows, differing protocols, and changed system metadata. Run
+global-only and full BSS Eval summaries on their respective reports.
+
+The second six-stem fixture is seconds 40–60 of Angela Thomas Wade's “Milk
+Cow Blues,” with acoustic piano, a grouped guitar stem, and fiddle as
+other. Prepare it with
+`bench/prepare_pilot.py CAMBRIDGE_ROOT target/acoustic-pilot/references --fixture angela-song --start 40`.
+Use `target/acoustic-pilot/references/angela-song/mix.wav` for both models.
+Keep the same output directory names under `target/acoustic-pilot` and
+pass `--track angela-song` when generating the matched manifest.
