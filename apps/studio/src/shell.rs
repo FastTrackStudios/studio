@@ -327,6 +327,7 @@ pub fn Shell() -> Element {
                     if cfg!(feature = "web") {
                         PlayerHost {}
                     }
+                    crate::actions::ActionHost {}
                     MenuView {}
                 }
                 SheetBridge {}

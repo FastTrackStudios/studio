@@ -41,6 +41,16 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 # Charts: a song's .kf parsed and engraved to SVG in the page, each bar
 # timed to the recording (CPU-only `svg` tier: no wgpu, builds for wasm).
 keyflow = { workspace = true, features = ["text", "svg"] }
+# The Action List and its doors (native): what agents drive the app with
+# (src/actions.rs).
+architect = { workspace = true, optional = true, features = ["action-list"] }
+architect-mcp = { workspace = true, optional = true, features = ["http"] }
+architect-control = { workspace = true, optional = true, features = ["server"] }
+architect-scripting = { workspace = true, optional = true, features = ["luau"] }
+facet = { workspace = true, optional = true }
+facet-json = { workspace = true, optional = true }
+futures-channel = { version = "0.3", optional = true }
+tracing = { workspace = true, optional = true }
 # Waveform peaks (the sidecar format; no producers in the app).
 drive-sidecars.workspace = true
 # Drive's agent on this computer: any Drive file as a real local path,
@@ -54,7 +64,22 @@ desktop = ["dioxus/desktop", "local"]
 # The same app drawn by Blitz (the GPU renderer Signal's panes and the
 # engine's views use), on a desktop and on iOS: what the one app runs on
 # outside a browser.
-native = ["dioxus/native", "local", "dep:app-shell-native"]
+native = [
+    "dioxus/native",
+    "local",
+    "dep:app-shell-native",
+    # The app's Action List served to agents: MCP on loopback with a
+    # token, the control socket, Luau scripts over every action.
+    "dep:architect",
+    "dep:architect-mcp",
+    "dep:architect-control",
+    "dep:architect-scripting",
+    "dep:facet",
+    "dep:facet-json",
+    "dep:serde_json",
+    "dep:futures-channel",
+    "dep:tracing",
+]
 local = ["dep:drive-local"]
 mobile = ["dioxus/mobile"]
 

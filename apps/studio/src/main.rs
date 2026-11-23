@@ -6,6 +6,7 @@
 //! settings, and shares songs with others (`orgs`, `team`); its sets are
 //! Drive documents too (`setlist` the model, `sets` live).
 
+mod actions;
 mod data;
 #[cfg(feature = "web")]
 mod drive_sets;

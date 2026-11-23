@@ -398,6 +398,8 @@ architect-derive = { git = "https://github.com/FastTrackStudios/architect", tag 
 architect-rpc-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 architect-action-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 architect-mcp = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-control = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-scripting = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 architect-atom = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 architect-form = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 architect-permissions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
