@@ -23,6 +23,7 @@
 
 pub mod convert;
 pub mod media;
+pub mod new;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -32,7 +33,8 @@ use session_format::store::{MAIN, PartReplica, SESSION, Store};
 use session_format::{FileFormat, sniff_path};
 use uuid::Uuid;
 
-pub use convert::{Options, Outcome, Report, convert};
+pub use convert::{Options, Outcome, Report, SessionSummary, convert};
+pub use new::{Made, Tempo, new_song};
 
 /// The extension of a song's file.
 pub const EXTENSION: &str = "session";

@@ -119,7 +119,9 @@ pub struct SessionSummary {
 }
 
 impl SessionSummary {
-    fn of(doc: &LoroDoc) -> Self {
+    /// What `doc` (a branch of the session part) holds.
+    #[must_use]
+    pub fn of(doc: &LoroDoc) -> Self {
         let session = SessionDoc::from_doc(doc.clone()).read();
         Self {
             tempo_points: session.tempo.points().len(),

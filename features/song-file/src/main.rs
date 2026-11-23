@@ -4,6 +4,9 @@
 //! song-file convert [--dry-run] [--trash-into <dir>] <song folder>…
 //!                                                fold the old pair into one file,
 //!                                                or give a lone store an id
+//! song-file new [--bpm <n>] [--meter <n/d>] <folder> <title>
+//!                                                a new song: <folder>/<title>.session
+//!                                                with a minted id, nothing else in it
 //! song-file inspect <file>                       what a song's file holds
 //! ```
 //!
@@ -22,7 +25,7 @@ use song_file::{Options, Outcome, Report};
 fn usage() -> ExitCode {
     let _ = writeln!(
         std::io::stderr(),
-        "usage: song-file convert [--dry-run] [--trash-into <dir>] <song folder>…\n       song-file inspect <file>"
+        "usage: song-file convert [--dry-run] [--trash-into <dir>] <song folder>…\n       song-file new [--bpm <n>] [--meter <n/d>] <folder> <title>\n       song-file inspect <file>"
     );
     ExitCode::from(2)
 }
@@ -69,6 +72,32 @@ fn report(
         )?;
     }
     Ok(())
+}
+
+/// `new`'s arguments: the tempo (`--bpm`, with `--meter`, 4/4 when not
+/// given) and the rest in order. None when one does not read.
+fn new_args(rest: &[String]) -> Option<(Option<song_file::Tempo>, Vec<String>)> {
+    let mut bpm = None;
+    let mut meter = (4, 4);
+    let mut positional = Vec::new();
+    let mut it = rest.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--bpm" => bpm = Some(it.next()?.parse::<f64>().ok()?),
+            "--meter" => {
+                let (n, d) = it.next()?.split_once('/')?;
+                meter = (n.trim().parse().ok()?, d.trim().parse().ok()?);
+            }
+            s if s.starts_with("--") => return None,
+            s => positional.push(s.to_owned()),
+        }
+    }
+    let tempo = bpm.map(|bpm| song_file::Tempo {
+        bpm,
+        beats_per_bar: meter.0,
+        beat_unit: meter.1,
+    });
+    Some((tempo, positional))
 }
 
 fn main() -> ExitCode {
@@ -137,6 +166,31 @@ fn main() -> ExitCode {
                 ExitCode::SUCCESS
             }
         }
+        "new" => {
+            let Some((tempo, positional)) = new_args(rest) else {
+                return usage();
+            };
+            let [folder, title] = positional.as_slice() else {
+                return usage();
+            };
+            match song_file::new_song(&PathBuf::from(folder), title, tempo) {
+                Ok(made) => {
+                    let s = &made.session;
+                    let _ = writeln!(out, "made {}", made.file.display());
+                    let _ = writeln!(out, "  id {}", made.id);
+                    let _ = writeln!(
+                        out,
+                        "  session@main: {} tempo points, {} markers, {} regions",
+                        s.tempo_points, s.markers, s.regions
+                    );
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    let _ = writeln!(out, "NOT made: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         "inspect" => {
             let [file] = rest else { return usage() };
             let path = PathBuf::from(file);
@@ -154,6 +208,32 @@ fn main() -> ExitCode {
                             "  session part on main: {}",
                             read.has_part(session_format::read::SESSION, "main")
                         );
+                        if let Ok(doc) = read.doc("main") {
+                            let p = session::sync::SessionDoc::from_loro(doc).read();
+                            let _ = writeln!(
+                                out,
+                                "  engine@main: {} tracks, {} items, {} markers, {} regions, tempo {}",
+                                p.tracks.len(),
+                                p.items.len(),
+                                p.markers.len(),
+                                p.regions.len(),
+                                p.tempo.first().map_or_else(
+                                    || "none".to_owned(),
+                                    |t| format!(
+                                        "{} bpm {}/{}",
+                                        t.bpm, t.beats_per_bar, t.beat_unit
+                                    )
+                                )
+                            );
+                        }
+                        if let Ok(part) = read.part(session_format::read::SESSION, "main") {
+                            let s = song_file::SessionSummary::of(&part);
+                            let _ = writeln!(
+                                out,
+                                "  session@main: {} tempo points, {} markers, {} regions, bar one {}",
+                                s.tempo_points, s.markers, s.regions, s.bar_one
+                            );
+                        }
                     }
                     Err(e) => {
                         let _ = writeln!(out, "  not readable alone (its log not folded in?): {e}");
