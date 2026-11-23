@@ -355,6 +355,18 @@ mod native {
         }
     }
 
+    /// The main window's area now (app-shell-native's measure), else the
+    /// display the Stage was first laid out on.
+    fn area_now() -> crate::stage::Area {
+        try_consume_context::<app_shell::ui::ViewportSize>()
+            .map(|v| *v.0.peek())
+            .filter(|(w, h)| *w > 0.0 && *h > 0.0)
+            .map_or_else(crate::stage::Area::default, |(w, h)| crate::stage::Area {
+                w,
+                h,
+            })
+    }
+
     /// The Stage for `view`, its chart on `followed`'s session.
     fn stage_for(view: View, set: &str, followed: Option<&hosted::Followed>) -> Workspace {
         let names = crate::stage::Names {
@@ -363,7 +375,7 @@ mod native {
                 .map(|f| format!("session:{}", f.id))
                 .unwrap_or_default(),
         };
-        crate::stage::stage(crate::stage::Area::default(), &names, page_for(view))
+        crate::stage::stage(area_now(), &names, page_for(view))
     }
 
     /// session-ui's Setup, Editor or FX panel over the song the engine has
@@ -449,6 +461,28 @@ mod native {
         use_engine_setlist();
         // Keyflow's chart and Ignition's room follow the engine's song.
         let followed = hosted::use_follow_session(ui, layout);
+        // The mixer beside the arrangement or under it as the main window
+        // is wide or not: laid out again when that changes.
+        if let Some(viewport) = try_use_context::<app_shell::ui::ViewportSize>() {
+            let wide = move || {
+                let (w, h) = viewport.0();
+                h > 0.0 && w / h >= crate::stage::WIDE
+            };
+            let mut was = use_signal(|| None::<bool>);
+            let set_now = title.clone();
+            use_effect(move || {
+                let now = wide();
+                let before = *was.peek();
+                was.set(Some(now));
+                if before.is_some_and(|b| b != now) && page_for(view).is_none() {
+                    let next = stage_for(view, &set_now, followed.peek().as_ref());
+                    ui.apply(move |w| {
+                        *w = next;
+                        Ok::<_, app_shell::WorkspaceError>(())
+                    });
+                }
+            });
+        }
         // The bottom bar's view: the route's, and a press there goes to
         // its route (the mixer is beside the arrangement: the view stays).
         let mut shown = use_signal(|| to_ui(view));

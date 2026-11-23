@@ -42,7 +42,7 @@ const MIXER_WIDTH: f64 = 1070.0;
 const PROGRESS_HEIGHT: f64 = 50.0;
 /// A window this much wider than tall puts the mixer beside the
 /// arrangement (an ultrawide); narrower, under it.
-const WIDE: f64 = 2.4;
+pub const WIDE: f64 = 2.4;
 
 /// A window's shape, points.
 #[derive(Debug, Clone, Copy, PartialEq)]
