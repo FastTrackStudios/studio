@@ -17,6 +17,7 @@
 //!   offset and polarity against the reference mic and what it adds to
 //!   (or takes from) the sum; a picture of every mic's averaged hit.
 
+pub mod ab;
 pub mod measure;
 pub mod plot;
 pub mod render;
@@ -41,7 +42,7 @@ pub const PICTURES: &str = "/tmp/listen";
 /// The words `at` takes, for the descriptions.
 macro_rules! at_words {
     () => {
-        "`at`: `input` (the track's own media alone), `pre-fx` (its media, its children's sum and what is sent to it, before its FX), `fx:<n>:in` / `fx:<n>:out` (into or out of the FX at place `n` — `fx:2:out` — or named `fx:Signal:out`), `post-fx` (after its FX, before its fader; also `pre-fader`), `post-fader` (what it puts into its parent; the default)"
+        "`at`: `input` (the track's own media alone), `pre-fx` (its media, its children's sum and what is sent to it, before its FX), `fx:<n>:in` / `fx:<n>:out` (into or out of the FX at place `n` — `fx:2:out` — or named `fx:Signal:out`), `post-fx` (after its FX, before its fader; also `pre-fader`), `post-fader` (what it puts into its parent; the default), `block:<id>:pre` / `block:<id>:post` (arriving at or leaving one block of the track's Signal instance, its id as SIGNAL_CHAIN gives it — `block:rescue.gate:pre`: rendered on a copy of the instance with that block, the rest of its phase and every later phase bypassed and the phase's make-up at 0; LISTEN, LISTEN_RENDER and LISTEN_AB only)"
     };
 }
 
@@ -70,6 +71,57 @@ static HITS: ActionMeta = meta(
     "Mix",
     "",
 );
+
+static RENDER: ActionMeta = meta(
+    "LISTEN_RENDER",
+    "listen_render",
+    "Render a point of the mix to a file",
+    concat!(
+        "The audio at one point of `track` (GUID, path or name) over `from`..`to` (bars, times or sections as LISTEN), rendered as LISTEN renders it (only what feeds the point; answered from an earlier listen when nothing it hears has changed), written to the WAV `to_file` (48 kHz, 32-bit float, stereo; under /tmp/listen/ when not given). ",
+        at_words!(),
+        ". What a tool that needs the audio itself reads — an offline Signal block's analysis renders `block:<id>:pre` through it. Answers `file`, `seconds`, `rate`, `lufs`, `true_peak`, `latency` (samples the point was late, put right), `answered` (replayed, partly, rendered) and the time taken. Touches neither playback nor the song."
+    ),
+    "Mix",
+    "",
+);
+
+static AB: ActionMeta = meta(
+    "LISTEN_AB",
+    "listen_ab",
+    "Listen before and after a change",
+    concat!(
+        "Listen to one point of `track` over `from`..`to` (as LISTEN: ",
+        at_words!(),
+        "), make `change` — a list of action calls, each `{\"action\": \"FX_SET\", \"args\": {…}}` (args an object, or its JSON as a string), run in order as one undo step, stopping at the first that fails — listen again, and put the mix back as it was unless `keep: true` — every fader, pan, mute, solo, polarity, send, FX switch, held parameter value and plugin state that differs, as MIX_RESTORE does (so Signal's own edits through SIGNAL_RUN go back too; an edit to items or automation is not part of the mix and is not put back). Answers `a` and `b` (LISTEN's `figures` before and after), `difference` (b − a: every figure, and the bands band by band, dB, centres in `bands_hz`), `changed` (each call's answer), `kept`, `put_back` (what was `changed` back, and how many `plugin_states` were loaded), `a_ms`, `change_ms`, `b_ms`, `back_ms`, `ms`, and a PNG of both spectra and their difference under /tmp/listen/ (`png: false`: none). A change that failed is put back the same way, and its error said."
+    ),
+    "Mix",
+    "",
+);
+
+/// LISTEN_RENDER's arguments.
+#[derive(Facet)]
+struct RenderArg {
+    track: String,
+    at: Option<String>,
+    from: String,
+    to: String,
+    to_file: Option<String>,
+}
+
+/// LISTEN_AB's arguments, for its schema (it reads its JSON itself: a
+/// call's `args` may be an object).
+#[derive(Facet)]
+struct AbDoc {
+    track: String,
+    at: Option<String>,
+    from: String,
+    to: String,
+    /// Each `{action, args}`.
+    change: Vec<String>,
+    keep: Option<bool>,
+    solo: Option<Vec<String>>,
+    png: Option<bool>,
+}
 
 /// LISTEN's arguments.
 #[derive(Facet)]
@@ -143,6 +195,97 @@ fn probe_of(
         "out" => Ok(Probe::FxOut(place)),
         other => Err(format!("`at` {word:?}: {other:?} is neither in nor out")),
     }
+}
+
+/// A point of a track: where along it, and for a point inside a Signal
+/// instance (`block:<id>:pre|post`), the instance (FX guid) and its cut.
+#[derive(Clone, Debug)]
+pub struct At {
+    pub probe: Probe,
+    pub cut: Option<(String, render::Cut)>,
+}
+
+/// Where in `track` (its guid) `word` reads it: `at_words!`, or
+/// `block:<id>:pre|post` — the signal arriving at, or leaving, one block
+/// of the track's Signal instance (its id as SIGNAL_CHAIN gives it).
+///
+/// # Errors
+/// Not one of the words, or no such FX or block on the track.
+pub fn point_of(
+    daw: &Standalone,
+    project: &ProjectContext,
+    track: &str,
+    word: &str,
+) -> Result<At, String> {
+    let Some(rest) = word.trim().strip_prefix("block:") else {
+        return probe_of(daw, project, track, word).map(|probe| At { probe, cut: None });
+    };
+    let (block, side) = rest
+        .rsplit_once(':')
+        .ok_or_else(|| format!("`at` {word:?}: say block:<id>:pre or block:<id>:post"))?;
+    let side = match side {
+        "pre" | "in" => render::Side::Pre,
+        "post" | "out" => render::Side::Post,
+        other => return Err(format!("`at` {word:?}: {other:?} is neither pre nor post")),
+    };
+    let chain = Effects::list(
+        daw,
+        project.clone(),
+        FxChainContext::Track(track.to_owned()),
+    );
+    // The Signal instance on the track whose chain holds the block.
+    let holds = |fx: &daw_proto::fx::Fx| {
+        crate::clap_host::signal::chain(daw, project, track, Some(&fx.guid))
+            .ok()
+            .is_some_and(|c| {
+                c["chain"]["phases"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|p| p["blocks"].as_array())
+                    .flatten()
+                    .any(|b| b["id"] == block)
+            })
+    };
+    let (place, fx) = chain
+        .iter()
+        .enumerate()
+        .find(|(_, fx)| crate::signal_kit::is_signal_bundle(&fx.name) && holds(fx))
+        .ok_or_else(|| {
+            format!(
+                "no Signal instance on the track has a block {block:?} (SIGNAL_CHAIN lists them)"
+            )
+        })?;
+    Ok(At {
+        probe: Probe::FxOut(place),
+        cut: Some((
+            fx.guid.clone(),
+            render::Cut {
+                block: block.to_owned(),
+                side,
+            },
+        )),
+    })
+}
+
+/// The words for a point, back.
+fn at_word(at: &At) -> String {
+    match &at.cut {
+        Some((_, cut)) => format!(
+            "block:{}:{}",
+            cut.block,
+            match cut.side {
+                render::Side::Pre => "pre",
+                render::Side::Post => "post",
+            }
+        ),
+        None => probe_word(at.probe),
+    }
+}
+
+/// The cuts a point asks for, by FX guid.
+fn cuts_of(at: &At) -> std::collections::HashMap<String, render::Cut> {
+    at.cut.iter().cloned().collect()
 }
 
 /// How a probe reads, in `at`'s words.
@@ -244,7 +387,7 @@ fn r2(x: f64) -> f64 {
 
 /// A render's cost and reach, as answered (`path` names a track).
 fn rendered_json(h: &render::Heard, path: &dyn Fn(&str) -> String) -> Value {
-    let mut names = |g: &[String]| {
+    let names = |g: &[String]| {
         let mut v: Vec<String> = g.iter().map(|g| path(g)).collect();
         v.sort();
         v
@@ -296,7 +439,9 @@ pub fn listen(
     let began = web_time::Instant::now();
     let song = crate::fx_actions::project_guid(project)?;
     let track = resolve(daw, project, a.track)?;
-    let at = probe_of(daw, project, &track, a.at.unwrap_or("post-fader"))?;
+    let point = point_of(daw, project, &track, a.at.unwrap_or("post-fader"))?;
+    let at = point.probe;
+    let cuts = cuts_of(&point);
     let (from, to) = span_of(daw, project, a.from, a.to)?;
     let solo: Option<HashSet<String>> = match a.solo {
         Some(names) if !names.is_empty() => Some(
@@ -334,6 +479,7 @@ pub fn listen(
             bypass_fx: HashSet::new(),
             keyed: &keyed(daw, project),
             fresh: a.fresh,
+            cuts: &cuts,
         },
     )?;
     let analysed = web_time::Instant::now();
@@ -353,7 +499,7 @@ pub fn listen(
     let all = Tracks::all(daw, project.clone());
     let paths = crate::mix_sends::paths(&all);
     let path = paths.get(&track).cloned().unwrap_or(track.clone());
-    let what = format!("{path} {}", probe_word(at));
+    let what = format!("{path} {}", at_word(&point));
     let pictures = if a.png {
         let title = format!("{what} · {from:.2}–{to:.2} s");
         json!({
@@ -365,7 +511,7 @@ pub fn listen(
     };
     let answer = json!({
         "track": path,
-        "at": probe_word(at),
+        "at": at_word(&point),
         "from": from,
         "to": to,
         "figures": figures,
@@ -553,6 +699,7 @@ fn listen_hits(daw: &Standalone, project: &ProjectContext, a: &HitsArg) -> Resul
             bypass_fx: HashSet::new(),
             keyed: &keyed(daw, project),
             fresh: a.fresh.unwrap_or(false),
+            cuts: &std::collections::HashMap::new(),
         },
     )?;
     let analysed = web_time::Instant::now();
@@ -658,7 +805,334 @@ fn listen_hits(daw: &Standalone, project: &ProjectContext, a: &HitsArg) -> Resul
     }))
 }
 
+/// What to render at a point: [`render_at`]'s question.
+pub struct RenderAt<'a> {
+    /// A track's GUID, path or name.
+    pub track: &'a str,
+    /// Where along it, in LISTEN's words (`post-fader`, `fx:2:out`,
+    /// `block:rescue.gate:pre`, …).
+    pub at: &'a str,
+    /// The span, seconds.
+    pub from: f64,
+    pub to: f64,
+}
+
+/// The audio at a point.
+pub struct Audio {
+    /// Interleaved stereo, exactly `from`..`to`.
+    pub samples: Vec<f32>,
+    pub rate: u32,
+    /// How late the point was, samples, put right.
+    pub latency: u32,
+    pub answered: render::Answered,
+}
+
+/// The audio arriving at one point of the mix over a span, rendered as
+/// LISTEN renders it: only what feeds the point, answered from an earlier
+/// listen when nothing it hears has changed. The entry point for any tool
+/// that needs the audio itself (an offline Signal block analyses
+/// `block:<id>:pre` through it; LISTEN_RENDER writes it to a file).
+///
+/// # Errors
+/// No such track or point, a bad span, or the render failed.
+pub fn render_at(
+    daw: &Standalone,
+    project: &ProjectContext,
+    r: &RenderAt<'_>,
+) -> Result<Audio, String> {
+    let song = crate::fx_actions::project_guid(project)?;
+    let track = resolve(daw, project, r.track)?;
+    let point = point_of(daw, project, &track, r.at)?;
+    let points = [ProbeAt {
+        track,
+        at: point.probe,
+    }];
+    let heard = render::render(
+        daw,
+        project,
+        &song,
+        &render::Ask {
+            from: r.from,
+            to: r.to,
+            points: &points,
+            solo: None,
+            bypass_fx: HashSet::new(),
+            keyed: &keyed(daw, project),
+            fresh: false,
+            cuts: &cuts_of(&point),
+        },
+    )?;
+    Ok(Audio {
+        latency: heard.latencies.first().copied().unwrap_or(0),
+        samples: heard.signals.into_iter().next().unwrap_or_default(),
+        rate: RATE,
+        answered: heard.answered,
+    })
+}
+
+/// `LISTEN_RENDER`.
+///
+/// # Errors
+/// As [`render_at`], or the file would not be written.
+fn listen_render(
+    daw: &Standalone,
+    project: &ProjectContext,
+    a: &RenderArg,
+) -> Result<Value, String> {
+    let began = web_time::Instant::now();
+    let (from, to) = span_of(daw, project, &a.from, &a.to)?;
+    let at = a.at.as_deref().unwrap_or("post-fader");
+    let audio = render_at(
+        daw,
+        project,
+        &RenderAt {
+            track: &a.track,
+            at,
+            from,
+            to,
+        },
+    )?;
+    let file = a.to_file.as_ref().map_or_else(
+        || {
+            let p = picture("render", &format!("{} {at}", a.track));
+            p.with_extension("wav")
+        },
+        PathBuf::from,
+    );
+    if let Some(dir) = file.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    let (l, r) = measure::channels(&audio.samples);
+    let stats = crate::mix_measure::analysis::measure(&l, &r, RATE, Bands::Octave);
+    fts_sample::write_wav_f32(&file, RATE, &[l, r])
+        .map_err(|e| format!("{}: {e}", file.display()))?;
+    Ok(json!({
+        "file": file.display().to_string(),
+        "seconds": to - from,
+        "rate": audio.rate,
+        "lufs": stats.lufs,
+        "true_peak": stats.true_peak,
+        "latency": audio.latency,
+        "answered": audio.answered.word(),
+        "ms": r2(began.elapsed().as_secs_f64() * 1e3),
+    }))
+}
+
+/// LISTEN_AB's arguments, read from its JSON.
+struct AbArgs {
+    track: String,
+    at: Option<String>,
+    from: String,
+    to: String,
+    change: Vec<(String, String)>,
+    keep: bool,
+    solo: Option<Vec<String>>,
+    png: bool,
+}
+
+/// Read LISTEN_AB's JSON.
+fn ab_args(raw: &[u8]) -> Result<AbArgs, String> {
+    let v: Value = serde_json::from_slice(if raw.is_empty() { b"{}" } else { raw })
+        .map_err(|e| e.to_string())?;
+    let text = |k: &str| v.get(k).and_then(Value::as_str).map(str::to_owned);
+    let need = |k: &str| text(k).ok_or_else(|| format!("`{k}` is missing"));
+    let change = v
+        .get("change")
+        .and_then(Value::as_array)
+        .ok_or("`change` is missing: a list of {action, args}")?
+        .iter()
+        .map(|c| {
+            let action = c
+                .get("action")
+                .and_then(Value::as_str)
+                .ok_or_else(|| format!("a change has no `action`: {c}"))?;
+            let args = match c.get("args") {
+                None | Some(Value::Null) => "{}".to_owned(),
+                Some(Value::String(s)) => s.clone(),
+                Some(other) => other.to_string(),
+            };
+            Ok((action.to_owned(), args))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(AbArgs {
+        track: need("track")?,
+        at: text("at"),
+        from: need("from")?,
+        to: need("to")?,
+        change,
+        keep: v.get("keep").and_then(Value::as_bool).unwrap_or(false),
+        solo: v.get("solo").and_then(Value::as_array).map(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        }),
+        png: v.get("png").and_then(Value::as_bool).unwrap_or(true),
+    })
+}
+
+/// `LISTEN_AB`.
+///
+/// # Errors
+/// The first listen failed (nothing was changed then), or the second did
+/// (the change is put back first).
+fn listen_ab(
+    daw: &Standalone,
+    project: &ProjectContext,
+    list: &ActionList,
+    a: &AbArgs,
+) -> Result<Value, String> {
+    let span = tracing::info_span!(
+        "LISTEN_AB",
+        listen.calls = a.change.len(),
+        listen.kept = a.keep,
+        listen.outcome = tracing::field::Empty,
+        listen.ms = tracing::field::Empty,
+    );
+    let _in = span.enter();
+    let began = web_time::Instant::now();
+    let ask = |png: bool| ListenArgs {
+        track: &a.track,
+        at: a.at.as_deref(),
+        from: &a.from,
+        to: &a.to,
+        solo: a.solo.as_deref(),
+        png,
+        fresh: false,
+    };
+    let before = listen(daw, project, &ask(false))?;
+    let a_ms = began.elapsed().as_secs_f64() * 1e3;
+    let mix = crate::mix_snapshot::current(daw, project)?;
+    let changing = web_time::Instant::now();
+    let changed = ab::change(daw, project, list, &a.change);
+    let change_ms = changing.elapsed().as_secs_f64() * 1e3;
+    let undo = |span: &tracing::Span| {
+        let back = ab::put_back(daw, project, &mix);
+        if let Err(why) = &back {
+            span.record("listen.outcome", "put_back_failed");
+            tracing::warn!(listen.why = %why, "LISTEN_AB: the mix would not go back");
+        }
+        back
+    };
+    let said = match changed {
+        Ok(said) => said,
+        Err((said, why)) => {
+            let back = undo(&span);
+            span.record("listen.outcome", "change_failed");
+            return Err(format!(
+                "{why} (after {} call(s) that ran; put back: {})",
+                said.len(),
+                match back {
+                    Ok(b) => format!(
+                        "{} setting(s), {} plugin state(s)",
+                        b.changed.len(),
+                        b.states
+                    ),
+                    Err(e) => format!("FAILED: {e}"),
+                }
+            ));
+        }
+    };
+    let b_began = web_time::Instant::now();
+    let after = listen(daw, project, &ask(false));
+    let b_ms = b_began.elapsed().as_secs_f64() * 1e3;
+    let backing = web_time::Instant::now();
+    let back = (!a.keep || after.is_err())
+        .then(|| undo(&span))
+        .transpose()?;
+    let back_ms = backing.elapsed().as_secs_f64() * 1e3;
+    let after = after?;
+    let fa = &before.answer["figures"];
+    let fb = &after.answer["figures"];
+    let png = if a.png {
+        let centres = Bands::Third.centres();
+        let bands = |f: &Value| -> Vec<f64> {
+            f["bands"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_f64)
+                .collect()
+        };
+        let title = format!(
+            "{} {} · A (before) and B (after) · {}–{}",
+            before.answer["track"].as_str().unwrap_or(""),
+            before.answer["at"].as_str().unwrap_or(""),
+            a.from,
+            a.to
+        );
+        drawn(
+            Ok(plot::spectra(
+                &centres,
+                &[
+                    ("A before".into(), bands(fa)),
+                    ("B after".into(), bands(fb)),
+                ],
+                &title,
+            )),
+            picture(
+                "ab",
+                &format!("{} {}", a.track, a.at.as_deref().unwrap_or("post-fader")),
+            ),
+        )
+    } else {
+        Value::Null
+    };
+    let ms = began.elapsed().as_secs_f64() * 1e3;
+    span.record("listen.ms", ms);
+    Ok(json!({
+        "track": before.answer["track"],
+        "at": before.answer["at"],
+        "from": before.answer["from"],
+        "to": before.answer["to"],
+        "a": fa,
+        "b": fb,
+        "difference": ab::difference(fa, fb),
+        "bands_hz": bands_hz(),
+        "changed": said,
+        "kept": a.keep,
+        "put_back": back.map(|b| json!({ "changed": b.changed, "plugin_states": b.states })),
+        "a_answered": before.answer["rendered"]["answered"],
+        "b_answered": after.answer["rendered"]["answered"],
+        "png": png,
+        "a_ms": r2(a_ms),
+        "change_ms": r2(change_ms),
+        "b_ms": r2(b_ms),
+        "back_ms": r2(back_ms),
+        "ms": r2(ms),
+    }))
+}
+
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register_with(
+        &RENDER,
+        Effect::ReadOnly,
+        |_: &ActionCaller, a: RenderArg| {
+            let (daw, project) = song()?;
+            listen_render(daw, &project, &a).map(|v| RawJson::from(v.to_string()))
+        },
+    )?;
+    list.register_dynamic(
+        &AB,
+        Effect::Mutating,
+        Some(AbDoc::SHAPE),
+        None,
+        std::sync::Arc::new(|raw: &[u8]| {
+            let failed = |message: String| architect::action::ActionError::Failed {
+                id: AB.id.to_owned(),
+                message,
+            };
+            let a = ab_args(raw).map_err(|message| architect::action::ActionError::BadArgs {
+                id: AB.id.to_owned(),
+                message,
+                expected: Some(architect::schema::json_schema(AbDoc::SHAPE)),
+            })?;
+            let (daw, project) = song().map_err(failed)?;
+            listen_ab(daw, &project, crate::actions::list(), &a)
+                .map(|v| v.to_string().into_bytes())
+                .map_err(failed)
+        }),
+    )?;
     list.register_with(
         &LISTEN,
         Effect::ReadOnly,

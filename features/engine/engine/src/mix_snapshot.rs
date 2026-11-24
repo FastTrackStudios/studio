@@ -108,7 +108,7 @@ struct FxMix {
 
 /// A whole mix.
 #[derive(Facet, Clone, Debug, PartialEq, Default)]
-struct Mix {
+pub(crate) struct Mix {
     name: String,
     taken: String,
     master_db: f64,
@@ -324,6 +324,31 @@ fn snapshot(daw: &Standalone, project: &ProjectContext, name: &str) -> Result<Sn
 
 /// `MIX_RESTORE`.
 fn restore(daw: &Standalone, project: &ProjectContext, name: &str) -> Result<RestoreRow, String> {
+    let want = load(daw, project, name)?;
+    put(daw, project, name, &want)
+}
+
+/// The mix as it stands, kept in memory (not on the song): what [`put`]
+/// puts back.
+///
+/// # Errors
+/// The song has no GUID.
+pub(crate) fn current(daw: &Standalone, project: &ProjectContext) -> Result<Mix, String> {
+    let song = crate::fx_actions::project_guid(project)?;
+    Ok(take(daw, project, &song, "current"))
+}
+
+/// Put the mix back as `want` has it (`name` its label), as MIX_RESTORE
+/// does: only what differs, one undo step.
+///
+/// # Errors
+/// A track, send or FX would not take its setting.
+pub(crate) fn put(
+    daw: &Standalone,
+    project: &ProjectContext,
+    name: &str,
+    want: &Mix,
+) -> Result<RestoreRow, String> {
     let span = tracing::info_span!(
         "MIX_RESTORE",
         mix.changed = tracing::field::Empty,
@@ -334,7 +359,6 @@ fn restore(daw: &Standalone, project: &ProjectContext, name: &str) -> Result<Res
     let _in = span.enter();
     let began = web_time::Instant::now();
     let song = crate::fx_actions::project_guid(project)?;
-    let want = load(daw, project, name)?;
     let now = take(daw, project, &song, "current");
     let mut changed = Vec::new();
     let mut missing = Vec::new();
@@ -385,12 +409,12 @@ fn restore(daw: &Standalone, project: &ProjectContext, name: &str) -> Result<Res
             changed.push(t.path.clone());
         }
         // The sends, pair by pair of tracks.
-        restore_sends(daw, project, (&now, &want), (&mut changed, &mut missing))?;
+        restore_sends(daw, project, (&now, want), (&mut changed, &mut missing))?;
         // The FX.
         let fxs: HashMap<&str, &FxMix> = now.fx.iter().map(|f| (f.guid.as_str(), f)).collect();
         for f in &want.fx {
             let Some(is) = fxs.get(f.guid.as_str()) else {
-                missing.push(format!("fx {} on {}", f.name, path_in(&want, &f.track)));
+                missing.push(format!("fx {} on {}", f.name, path_in(want, &f.track)));
                 continue;
             };
             if *is == f {
@@ -428,7 +452,7 @@ fn restore(daw: &Standalone, project: &ProjectContext, name: &str) -> Result<Res
             if is.on != f.on {
                 Effects::set_enabled(daw, project.clone(), target, f.on).map_err(failed)?;
             }
-            changed.push(format!("fx {} on {}", f.name, path_in(&want, &f.track)));
+            changed.push(format!("fx {} on {}", f.name, path_in(want, &f.track)));
         }
         Ok(())
     })();

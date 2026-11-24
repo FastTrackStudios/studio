@@ -196,9 +196,11 @@ fn signal_chain(list: &ActionList, fx: &daw_proto::fx::Fx, track_path: &str) -> 
     if !crate::signal_kit::is_signal_bundle(&fx.name) || list.info("SIGNAL_CHAIN").is_none() {
         return None;
     }
-    let args = json!({ "track": track_path }).to_string();
+    let args = json!({ "track": track_path, "fx": fx.guid }).to_string();
     let bytes = list.run_json("SIGNAL_CHAIN", args.as_bytes()).ok()?;
-    serde_json::from_slice(&bytes).ok()
+    let answer: Value = serde_json::from_slice(&bytes).ok()?;
+    // SIGNAL_CHAIN answers `{track, fx, revision, cached, chain}`.
+    answer.get("chain").cloned()
 }
 
 /// A track's FX, as MIX_STATE says them.

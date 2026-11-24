@@ -50,7 +50,7 @@ pub const PREROLL: f64 = 1.0;
 /// The longest span listened to at once, seconds.
 const MOST: f64 = 600.0;
 /// The most recordings kept (about 5 MB each for 13 s).
-const KEPT_RECORDINGS: usize = 160;
+const KEPT_RECORDINGS: usize = 240;
 /// The Signal session the copies share: one of their own, never the live
 /// kit's, and the same for every listen so a reused copy and a fresh one
 /// meet in it.
@@ -62,6 +62,102 @@ const SESSION_TAG: &str = "listen";
 pub struct Keyed {
     pub from: String,
     pub by: Vec<String>,
+}
+
+/// Which side of a Signal block a point is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Side {
+    /// What arrives at it.
+    Pre,
+    /// What it puts out.
+    Post,
+}
+
+/// A Signal instance's chain cut at one block: on the render's copy of
+/// it, the block (for [`Side::Pre`]) and everything after it in its phase
+/// bypassed, that phase's make-up at 0 and every later phase bypassed, so
+/// the instance's output is the signal at that side of the block. The
+/// live instance is never touched.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Cut {
+    /// The block's id in `signal.chain/1` (`rescue.gate`).
+    pub block: String,
+    pub side: Side,
+}
+
+/// The `signal/1` actions that cut `chain` (its `signal.chain/1` JSON) at
+/// `cut`: `(action, args)` pairs for SIGNAL_SET.
+///
+/// # Errors
+/// The chain is not `signal.chain/1` with phases, or has no such block.
+pub fn cut_actions(chain: &serde_json::Value, cut: &Cut) -> Result<Vec<(String, String)>, String> {
+    use serde_json::json;
+    let phases = chain["phases"]
+        .as_array()
+        .filter(|p| !p.is_empty())
+        .ok_or("the instance has no phases (a kit-mode instance cannot be cut)")?;
+    let found = phases.iter().enumerate().find_map(|(pi, p)| {
+        p["blocks"]
+            .as_array()?
+            .iter()
+            .position(|b| b["id"] == cut.block.as_str())
+            .map(|bi| (pi, bi))
+    });
+    let (phase_at, block_at) = found.ok_or_else(|| {
+        let ids: Vec<&str> = phases
+            .iter()
+            .filter_map(|p| p["blocks"].as_array())
+            .flatten()
+            .filter_map(|b| b["id"].as_str())
+            .collect();
+        format!(
+            "no block {:?} — the chain has {}",
+            cut.block,
+            ids.join(", ")
+        )
+    })?;
+    let set = |args: serde_json::Value| ("SIGNAL_SET".to_owned(), args.to_string());
+    let mut out = Vec::new();
+    let phase = &phases[phase_at];
+    let first_cut = match cut.side {
+        Side::Pre => block_at,
+        Side::Post => block_at + 1,
+    };
+    for b in phase["blocks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .skip(first_cut)
+    {
+        if let Some(id) = b["id"].as_str() {
+            out.push(set(json!({ "block": id, "bypass": true })));
+        }
+    }
+    if let Some(id) = phase["id"].as_str() {
+        out.push(set(json!({ "phase": id, "makeup_db": 0.0 })));
+    }
+    for p in &phases[phase_at + 1..] {
+        if let Some(id) = p["id"].as_str() {
+            out.push(set(json!({ "phase": id, "bypass": true })));
+        }
+    }
+    Ok(out)
+}
+
+/// Cut a copy's chain (see [`Cut`]) through its `signal/1`.
+fn cut_copy(copy: &mut dyn PluginInstance, cut: &Cut) -> Result<(), String> {
+    let signal = copy
+        .signal()
+        .ok_or("the FX has no signal/1: only a Signal instance has blocks")?;
+    let chain =
+        crate::clap_host::plugin_call(|| signal.chain()).map_err(|e| format!("its chain: {e}"))?;
+    let chain: serde_json::Value =
+        serde_json::from_str(&chain).map_err(|e| format!("its chain: {e}"))?;
+    for (action, args) in cut_actions(&chain, cut)? {
+        crate::clap_host::plugin_call(|| signal.run_action(&action, &args))
+            .map_err(|e| format!("{action} {args}: {e}"))?;
+    }
+    Ok(())
 }
 
 /// What to render.
@@ -81,6 +177,9 @@ pub struct Ask<'a> {
     /// Render everything again, playing nothing back (what is rendered is
     /// still kept for the next listen).
     pub fresh: bool,
+    /// Signal instances (by FX guid) cut at a block for this render (a
+    /// point at `block:<id>:pre|post`): fresh copies, cut, never kept.
+    pub cuts: &'a HashMap<String, Cut>,
 }
 
 /// How a listen was answered.
@@ -131,7 +230,15 @@ pub struct Heard {
 /// A copy of a live plugin, and the fingerprint of the state it was made
 /// from.
 struct Warm {
-    fingerprint: u64,
+    /// The fingerprint of the live instance's state the copy was made
+    /// from: when it moves, the copy is made again (Signal loading a state
+    /// into an instance that held another does not sound like a fresh one
+    /// loading it).
+    state: u64,
+    /// The values the song held over its parameters when the copy last
+    /// rendered: a value held then and let go since is still set in the
+    /// copy, so when they differ the state is loaded into it again.
+    held: u64,
     plugin: Box<dyn PluginInstance>,
 }
 
@@ -163,7 +270,9 @@ type Point = (String, Probe);
 #[derive(Default)]
 struct Kept {
     warm: HashMap<String, Warm>,
-    recordings: HashMap<Point, Recorded>,
+    /// By point and key: a point keeps what it sounded like before and
+    /// after a change, so putting a change back replays the first.
+    recordings: HashMap<(Point, u64), Recorded>,
     stamp: u64,
 }
 
@@ -172,7 +281,7 @@ impl Kept {
     fn keep(&mut self, at: Point, mut r: Recorded) {
         self.stamp += 1;
         r.stamp = self.stamp;
-        self.recordings.insert(at, r);
+        self.recordings.insert((at, r.key), r);
         while self.recordings.len() > KEPT_RECORDINGS {
             let Some(oldest) = self
                 .recordings
@@ -188,9 +297,10 @@ impl Kept {
 
     /// The recording of `at` under `key` over `frames`, if one is kept.
     fn holding(&self, at: &Point, key: Option<u64>, frames: (u64, u64)) -> Option<&Recorded> {
+        let key = key?;
         self.recordings
-            .get(at)
-            .filter(|r| key.is_some_and(|k| r.holds(k, frames)))
+            .get(&(at.clone(), key))
+            .filter(|r| r.holds(key, frames))
     }
 }
 
@@ -365,6 +475,9 @@ struct Instance {
     guid: String,
     name: String,
     state: Vec<u8>,
+    /// A fingerprint of the values the song holds over its parameters
+    /// (FX_SET on a hosted plugin), sent to it every block.
+    held: u64,
 }
 
 /// The live plugins on `tracks`' chains, by track, their states read.
@@ -374,14 +487,25 @@ fn instances(
     tracks: &HashSet<String>,
 ) -> HashMap<String, Vec<Instance>> {
     let names: HashMap<String, String> = hosted(daw, song).into_iter().collect();
-    let chains: Vec<(String, Vec<String>)> = daw
+    let held_print = |params: &HashMap<u32, f64>| {
+        let mut held: Vec<(u32, u64)> = params.iter().map(|(k, v)| (*k, v.to_bits())).collect();
+        held.sort_unstable();
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        held.hash(&mut h);
+        h.finish()
+    };
+    let chains: Vec<(String, Vec<(String, u64)>)> = daw
         .read_project(song, |p| {
             p.fx_chains
                 .iter()
                 .filter_map(|(key, chain)| match key {
-                    daw_standalone::sync::FxChainKey::Track(t) if tracks.contains(t) => {
-                        Some((t.clone(), chain.iter().map(|e| e.fx.guid.clone()).collect()))
-                    }
+                    daw_standalone::sync::FxChainKey::Track(t) if tracks.contains(t) => Some((
+                        t.clone(),
+                        chain
+                            .iter()
+                            .map(|e| (e.fx.guid.clone(), held_print(&e.params)))
+                            .collect(),
+                    )),
                     _ => None,
                 })
                 .collect()
@@ -392,13 +516,14 @@ fn instances(
         .map(|(track, fx)| {
             let live = fx
                 .into_iter()
-                .filter_map(|g| {
+                .filter_map(|(g, held)| {
                     let name = names.get(&g)?.clone();
                     let state = daw.save_plugin_state(&g).unwrap_or_default();
                     Some(Instance {
                         guid: g,
                         name,
                         state,
+                        held,
                     })
                 })
                 .collect();
@@ -410,8 +535,8 @@ fn instances(
 /// What [`ready`] made ready.
 struct Ready {
     plugins: Arc<Plugins>,
-    /// Each copy's guid and the fingerprint it carries.
-    kept: Vec<(String, u64)>,
+    /// Each copy's guid and the state and held values it carries.
+    kept: Vec<(String, u64, u64)>,
     copied: u32,
     reused: u32,
     failures: Vec<String>,
@@ -420,7 +545,12 @@ struct Ready {
 /// A copy of each of `wanted` carrying its live instance's state: the warm
 /// one when its state is unchanged (reset, so it starts as from silence),
 /// else made again.
-fn ready(daw: &Standalone, wanted: Vec<Instance>, warm: &mut HashMap<String, Warm>) -> Ready {
+fn ready(
+    daw: &Standalone,
+    wanted: Vec<Instance>,
+    warm: &mut HashMap<String, Warm>,
+    cuts: &HashMap<String, Cut>,
+) -> Result<Ready, String> {
     let restate = |name: &str, state: Vec<u8>| {
         if crate::signal_kit::is_signal_bundle(name) {
             crate::signal_kit::private_session(state, SESSION_TAG)
@@ -442,31 +572,64 @@ fn ready(daw: &Standalone, wanted: Vec<Instance>, warm: &mut HashMap<String, War
     };
     for i in wanted {
         let print = fingerprint(&i.state);
-        let copy = match warm.remove(&i.guid) {
-            Some(mut w) if w.fingerprint == print => {
+        if let Some(cut) = cuts.get(&i.guid) {
+            let (mut copy, _) = copy_plugin(daw, &i.name, i.state, how)?;
+            cut_copy(&mut *copy, cut)?;
+            out.copied += 1;
+            plugins.write().insert(i.guid, copy);
+            continue;
+        }
+        let usable = warm.remove(&i.guid).and_then(|mut w| {
+            let fits =
+                w.state == print && (w.held == i.held || reload(&mut *w.plugin, &i, &restate));
+            if fits {
+                Some(w)
+            } else {
+                drop_later(vec![w.plugin]);
+                None
+            }
+        });
+        let copy = match usable {
+            Some(mut w) => {
                 if !w.plugin.reset() {
                     w.plugin.deactivate();
                 }
                 out.reused += 1;
                 Ok(w.plugin)
             }
-            stale => {
-                drop_later(stale.map(|w| w.plugin).into_iter().collect());
-                copy_plugin(daw, &i.name, i.state, how).map(|(copy, _)| {
-                    out.copied += 1;
-                    copy
-                })
-            }
+            None => copy_plugin(daw, &i.name, i.state, how).map(|(copy, _)| {
+                out.copied += 1;
+                copy
+            }),
         };
         match copy {
             Ok(copy) => {
                 plugins.write().insert(i.guid.clone(), copy);
-                out.kept.push((i.guid, print));
+                out.kept.push((i.guid, print, i.held));
             }
             Err(why) => out.failures.push(format!("{}: {why}", i.guid)),
         }
     }
-    out
+    Ok(out)
+}
+
+/// Load `live`'s state (through `restate`) into a warm copy whose held
+/// values have changed since it rendered: whether it took it (a plugin
+/// with no state of its own, or one refusing it, is made again).
+fn reload(
+    copy: &mut dyn PluginInstance,
+    live: &Instance,
+    restate: &dyn Fn(&str, Vec<u8>) -> Vec<u8>,
+) -> bool {
+    if live.state.is_empty() {
+        return false;
+    }
+    let state = restate(&live.name, live.state.clone());
+    let took = copy.load_state(&state).is_ok();
+    if took {
+        copy.restart_if_requested();
+    }
+    took
 }
 
 /// Copies dropped off the action's thread: tearing instances down takes
@@ -496,6 +659,7 @@ fn frames_of(from: f64, to: f64) -> (u64, u64, u64) {
 fn own_prints(
     prints: Vec<(String, u64)>,
     plugins: &HashMap<String, Vec<Instance>>,
+    cuts: &HashMap<String, Cut>,
 ) -> HashMap<String, u64> {
     prints
         .into_iter()
@@ -504,6 +668,8 @@ fn own_prints(
             p.hash(&mut h);
             for i in plugins.get(&g).into_iter().flatten() {
                 fingerprint(&i.state).hash(&mut h);
+                i.held.hash(&mut h);
+                cuts.get(&i.guid).hash(&mut h);
             }
             (g, h.finish())
         })
@@ -604,7 +770,7 @@ pub fn render(
         },
     )
     .track_prints();
-    let keys = keys(&routes, &everything, &own_prints(prints, &live));
+    let keys = keys(&routes, &everything, &own_prints(prints, &live, ask.cuts));
     let (start, from, to) = frames_of(ask.from, ask.to);
     let mut kept = kept()
         .lock()
@@ -677,7 +843,7 @@ pub fn render(
         .fed
         .iter()
         .filter_map(|g| {
-            let r = kept.recordings.get(&(g.clone(), Probe::PostFader))?;
+            let r = kept.holding(&(g.clone(), Probe::PostFader), key(g), (start, to))?;
             Some((
                 g.clone(),
                 Fed {
@@ -696,7 +862,7 @@ pub fn render(
         .collect();
     let plan_ms = began.elapsed().as_secs_f64() * 1e3;
     let copying = web_time::Instant::now();
-    let ready = ready(daw, wanted, &mut kept.warm);
+    let ready = ready(daw, wanted, &mut kept.warm, ask.cuts)?;
     let copy_ms = copying.elapsed().as_secs_f64() * 1e3;
     // The points asked for, then every rendered track's output to keep.
     let mut probes = ask.points.to_vec();
@@ -752,12 +918,13 @@ pub fn render(
             },
         );
     }
-    for (guid, print) in ready.kept {
+    for (guid, state, held) in ready.kept {
         if let Some(plugin) = ready.plugins.write().remove(&guid) {
             kept.warm.insert(
                 guid,
                 Warm {
-                    fingerprint: print,
+                    state,
+                    held,
                     plugin,
                 },
             );
@@ -933,6 +1100,47 @@ mod tests {
             |_| false,
         );
         assert_eq!(p.rendered, set(&["kick"]));
+    }
+
+    #[test]
+    fn a_cut_bypasses_the_block_on_and_what_follows_it() {
+        let chain = serde_json::json!({"phases": [
+            {"id": "rescue", "blocks": [{"id": "rescue.gate"}, {"id": "rescue.eq"}]},
+            {"id": "tone", "blocks": [{"id": "tone.comp"}]},
+        ]});
+        let words = |side| {
+            cut_actions(
+                &chain,
+                &Cut {
+                    block: "rescue.gate".into(),
+                    side,
+                },
+            )
+            .unwrap()
+            .into_iter()
+            .map(|(_, a)| a)
+            .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            words(Side::Pre),
+            vec![
+                r#"{"block":"rescue.gate","bypass":true}"#,
+                r#"{"block":"rescue.eq","bypass":true}"#,
+                r#"{"makeup_db":0.0,"phase":"rescue"}"#,
+                r#"{"bypass":true,"phase":"tone"}"#,
+            ]
+        );
+        assert_eq!(words(Side::Post).len(), 3);
+        assert!(
+            cut_actions(
+                &chain,
+                &Cut {
+                    block: "x".into(),
+                    side: Side::Pre
+                }
+            )
+            .is_err()
+        );
     }
 
     #[test]
