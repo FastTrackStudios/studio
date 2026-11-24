@@ -27,7 +27,16 @@
 //! never EQ — chosen one at a time, each the section that raises the
 //! sum's score most, while one gains more than [`CLOSE`].
 //!
-//! Every function here is honest: plain windows in, figures out.
+//! Every function here is honest: plain windows in, figures out — public
+//! API, so a test elsewhere can predict what a fix does without
+//! re-deriving it:
+//!
+//! ```ignore
+//! use session_engine::listen::align::{apply, Fix, Section, Windows};
+//! let w = Windows::new(48_000, 480); // the hit 10 ms into each window
+//! let fix = Fix { delay: -136, invert: false, allpass: vec![Section::Second { hz: 63.0, q: 2.0 }] };
+//! let mic_as_the_block_sets_it = apply(&w, &mic_windows, &fix);
+//! ```
 
 use realfft::RealFftPlanner;
 
