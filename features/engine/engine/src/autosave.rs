@@ -129,8 +129,8 @@ fn file_of(daw: &Standalone, guid: &str) -> Option<PathBuf> {
 /// A line in the song's log: when, what, and its fingerprint then.
 fn log(file: &Path, what: &str, fingerprint: u64) {
     let path = PathBuf::from(format!("{}.log", file.display()));
-    let at = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    let at = web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
     let line = format!(
         "{{\"at\":{at},\"event\":\"{what}\",\"fingerprint\":\"{fingerprint:016x}\",\"engine\":{}}}\n",
