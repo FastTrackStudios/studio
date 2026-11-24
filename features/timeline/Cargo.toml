@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Editing time by rows — the grid that follows the zoom, razor areas, and the view gestures the arrangement and the Editor share"
+description = "Editing time by rows — the grid that follows the zoom, razor areas, the view gestures and the pointer glyphs the arrangement and the Editor share"
 
 [dependencies]
 web-time.workspace = true
@@ -13,8 +13,14 @@ architect = { workspace = true, optional = true }
 architect-action-derive = { workspace = true, optional = true }
 
 [features]
+# Drawing the pointer glyphs (`glyph::draw`, feature `paint`).
+anyrender = { workspace = true, optional = true }
+kurbo = { workspace = true, optional = true }
+peniko = { workspace = true, optional = true }
 # The TIMELINE_* action group (`actions`), for the surfaces that bind it.
 actions = ["dep:architect", "dep:architect-action-derive"]
 
 [lints]
+# The pointer glyphs drawn into a scene (`glyph::draw`).
+paint = ["dep:anyrender", "dep:kurbo", "dep:peniko"]
 workspace = true

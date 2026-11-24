@@ -15,9 +15,12 @@ pub mod editor_view;
 pub mod expression;
 
 /// Make this editor the app's: the arrangement's edit target (a plain
-/// click on an item opens it here) and the `editor.*` tokens of the themes
-/// the kit exports. Once per process, at start.
+/// click on an item opens it here), its key sequences (the panes stand
+/// aside while one is pending) and the `editor.*` tokens of the themes the
+/// kit exports. Once per process, at start.
 pub fn install() {
     editor_view::install();
+    // A sequence half typed (`g e`) keeps its keys from the panes.
+    daw_view_kit::keys::install_pending(editor::paint::keys::is_pending);
     daw_view_kit::skin::export::install_editor_tokens(expression::theme_tokens);
 }

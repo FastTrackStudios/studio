@@ -27,53 +27,22 @@
 
 use crate::doc::{Dimension, Note};
 
-/// Which handle a press landed on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Handle {
-    /// The note body — coarse pitch, snapping to the row by default.
-    Pitch,
-    /// Fine pitch, in cents, ignoring snap.
-    FinePitch,
-    /// Tilt of the entry transition.
-    LeftSlope,
-    /// Tilt of the exit transition.
-    RightSlope,
-    Formant,
-    /// Level, and right-click mutes.
-    Amplitude,
-    /// Vibrato depth — the modulation term's blend.
-    Vibrato,
-}
+/// Which handle a press landed on: the glyph's handle (`timeline::glyph`),
+/// which every view that draws a pointer shares.
+pub use timeline::glyph::Handle;
 
-impl Handle {
-    pub const ALL: [Handle; 7] = [
-        Handle::Pitch,
-        Handle::FinePitch,
-        Handle::LeftSlope,
-        Handle::RightSlope,
-        Handle::Formant,
-        Handle::Amplitude,
-        Handle::Vibrato,
-    ];
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            Handle::Pitch => "Pitch",
-            Handle::FinePitch => "Fine",
-            Handle::LeftSlope => "Slope L",
-            Handle::RightSlope => "Slope R",
-            Handle::Formant => "Formant",
-            Handle::Amplitude => "Amplitude",
-            Handle::Vibrato => "Vibrato",
-        }
-    }
-
+/// What a handle writes to.
+pub trait HandleDimension {
     /// Which dimension the handle writes to, where it writes to one.
     ///
     /// Pitch, fine pitch and both slopes all shape the Pitch dimension;
     /// vibrato rewrites it through the decomposition rather than
     /// directly, so it has no single dimension in this sense.
-    pub fn dimension(&self) -> Option<Dimension> {
+    fn dimension(&self) -> Option<Dimension>;
+}
+
+impl HandleDimension for Handle {
+    fn dimension(&self) -> Option<Dimension> {
         match self {
             Handle::Pitch | Handle::FinePitch | Handle::LeftSlope | Handle::RightSlope => {
                 Some(Dimension::Pitch)

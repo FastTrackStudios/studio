@@ -30,6 +30,22 @@ use architect_input::{
 use crate::which_key::{Entry, WhichKey};
 pub use crate::window_queue::{Action, StretchEdit, Visibility};
 
+/// What says another view is half way through a key sequence of its own
+/// (the Editor's `g e`, `a x`), installed by that view ([`install_pending`]).
+static PENDING: std::sync::OnceLock<fn() -> bool> = std::sync::OnceLock::new();
+
+/// Say how to ask whether a view's own key sequence is pending: the keys
+/// it would take stay its, not a pane's. Once per process, by the view
+/// that keeps sequences (the MIDI editor's `install`).
+pub fn install_pending(pending: fn() -> bool) {
+    let _ = PENDING.set(pending);
+}
+
+/// Whether a view's key sequence is pending ([`install_pending`]).
+fn sequence_pending() -> bool {
+    PENDING.get().is_some_and(|pending| pending())
+}
+
 /// The arrangement's action for a verb every timeline shares
 /// (`timeline::actions`), where it has one: the view's zooms and history,
 /// the cursor's steps, snapping. The grid's division and the razor verbs
@@ -555,7 +571,7 @@ pub fn use_window_transport_keys() {
             // the document hands the key on, so the Editor still shows the
             // sequence pending. Only the panes stand aside — the transport
             // never does, or a sequence left pending would take Space.
-            let editors = editor::paint::keys::is_pending();
+            let editors = sequence_pending();
             for action in keys.borrow_mut().press(code, held.get()) {
                 if editors
                     && matches!(

@@ -216,6 +216,10 @@ fn main() {
             std::env::set_var("FTS_MCP_PORT", port.to_string());
         }
     }
+    // The Editor: what the arrangement picks opens there, and a key
+    // sequence it has half typed keeps its keys from the panes.
+    #[cfg(feature = "native")]
+    midi_editor::install();
     storage::init();
     // Natively: stderr and, when OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set,
     // the app's spans to that collector.

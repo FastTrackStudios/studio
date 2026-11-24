@@ -5,10 +5,9 @@
 #[cfg(feature = "actions")]
 pub mod actions;
 pub mod camera;
-pub mod clipboard;
-pub mod cursor;
 pub mod drag;
 pub mod gestures;
+pub mod glyph;
 pub mod grid;
 pub mod hit;
 pub mod input;

@@ -20,7 +20,7 @@
 //! the whole arrangement is one node.
 
 use cursor_icon::CursorIcon;
-use editor::cursor::Cursor;
+use timeline::glyph::Cursor;
 
 use crate::window_cursor::{Glyph, Shape};
 use std::cell::RefCell;

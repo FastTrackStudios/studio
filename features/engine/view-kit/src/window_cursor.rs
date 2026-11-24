@@ -3,7 +3,7 @@
 //! The system's shapes have no `[`, no `]`, no seam and no fade — which
 //! is to say none of the shapes that tell you *which* edge you are about
 //! to take, or which way a fade runs. The editor already draws those
-//! (`editor::paint::cursor`); here they are rasterized into
+//! (`timeline::glyph`); here they are rasterized into
 //! real window cursors, so the arrangement and the Editor point the same
 //! way and the shape is the OS pointer itself, not a picture following it.
 //!
@@ -21,8 +21,7 @@ use std::rc::Rc;
 
 use anyrender::{PaintScene, Scene};
 use cursor_icon::CursorIcon;
-use editor::cursor::Cursor;
-use editor::paint::cursor::{SIZE, draw};
+use timeline::glyph::{Cursor, SIZE, draw};
 use vello::kurbo::{Affine, BezPath, Stroke};
 use vello::peniko::Color;
 
@@ -101,7 +100,7 @@ impl Glyph {
     pub fn scene(self) -> Scene {
         let mut scene = Scene::new();
         match self {
-            Self::Editor(cursor) => draw(&mut scene, cursor, SIZE, SIZE),
+            Self::Editor(cursor) => draw(&mut scene, cursor, SIZE, SIZE, ink()),
             Self::Seam => seam(&mut scene),
             Self::FadeIn => fade(&mut scene, true),
             Self::FadeOut => fade(&mut scene, false),
@@ -147,11 +146,15 @@ impl Glyph {
 /// read over a dark grid and a bright waveform alike.
 fn passes(scene: &mut Scene, path: &BezPath) {
     let halo = Color::from_rgba8(0, 0, 0, 190);
-    // The Editor's glyphs' own ink, so the two sets are one set.
-    let ink = editor::paint::paint::color(editor::paint::theme::TEXT_BRIGHT);
-    for (color, width) in [(halo, 3.4), (ink, 1.5)] {
+    for (color, width) in [(halo, 3.4), (ink(), 1.5)] {
         scene.stroke(&Stroke::new(width), Affine::IDENTITY, color, None, path);
     }
+}
+
+/// The glyphs' ink: the theme's brightest text, the Editor's glyphs' own,
+/// so the two sets are one set.
+fn ink() -> Color {
+    crate::theme_tokens::css(daw_ui::theme::defaults::TEXT_BRIGHT)
 }
 
 /// A horizontal double arrow through `y`, `half` either side of `c`.

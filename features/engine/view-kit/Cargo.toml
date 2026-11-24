@@ -68,10 +68,6 @@ dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturat
 architect-input = { workspace = true }
 keybinds = { workspace = true }
 
-# The editor's pointer glyphs (`tool`, `window_cursor`), its pending text
-# entry (`keys`): its painter only. The expression editor itself is
-# midi-editor's, which sits on this crate.
-editor = { workspace = true, features = ["paint"] }
 
 # The Tone rack's response math — the plugins' own, not a copy. See the
 # `signal` block in the root manifest for why these are core-only.
@@ -127,7 +123,7 @@ image = { workspace = true }
 # Finding REAPER's resource path, for the toolbar icons it installs.
 dirs = { workspace = true, optional = true }
 skrifa = { workspace = true }
-timeline = { workspace = true, features = ["actions"] }
+timeline = { workspace = true, features = ["actions", "paint"] }
 # Razor areas, the same ones the expression editor uses — see the
 # `razor` crate for why the rectangle is shared and the operations on
 # its contents are not.
