@@ -106,6 +106,19 @@ fn main() {
         kit_shot(&palette, &std::path::PathBuf::from(out), width, height);
         return;
     }
+    if let Ok(out) = std::env::var("FTS_BENCH_SIGNAL") {
+        // The Kick folder's Signal strips, every block an insert, over the
+        // kit's own chains (`mixer_view::signal::fixtures`): no project.
+        signal_shots(
+            &palette,
+            &font,
+            layout,
+            &std::path::PathBuf::from(out),
+            width,
+            height,
+        );
+        return;
+    }
     if let Ok(out) = std::env::var("FTS_BENCH_PATCH_LIST") {
         // The Patch List view over the fixture album in the fixture
         // room — no project needed: the plan is the album's, not the
@@ -1126,6 +1139,7 @@ fn mixer_shot(
             lit: None,
             panels: mixer_view::tone::panels_for(TONE),
             folded: Box::leak(Box::new(mixer_view::tone::Fold::rest())),
+            signal: None,
         }
     } else {
         mixer_view::strip_overlay::Racks::none()
@@ -1784,6 +1798,7 @@ impl MixerRig {
                 spectra: &mut self.spectra,
                 lit: None,
                 panels: mixer_view::tone::panels_for(TONE),
+                signal: None,
             },
             0.0,
             self.frame.content_width(),
@@ -2486,4 +2501,194 @@ fn faces_bench(which: &str) {
             60
         );
     }
+}
+
+/// The Kick folder's strips, its Signal FX open into phases and blocks:
+/// `kick-signal-open.png` (as the kit has them), `kick-signal-states.png`
+/// (shut, bypassed, unavailable, an error and a key fallen back to its own
+/// input), into the directory `out`.
+fn signal_shots(
+    palette: &Palette,
+    font: &daw_view_kit::text::Font,
+    layout: daw_view_kit::layout::Layout,
+    out: &std::path::Path,
+    width: u32,
+    height: u32,
+) {
+    use mixer_view::signal::chain::Status;
+    use mixer_view::signal::source::MeterValue;
+    use mixer_view::signal::{Fixture, Fold, Inserts, SignalSource};
+
+    let kit = mixer_view::signal::fixtures::kick_kit().expect("the Kick fixture");
+    // The folder as the mixer shows it: (path, name, depth, folder).
+    let folder: [(&str, &str, u32, bool); 10] = [
+        ("Drums/Kick", "Kick", 0, true),
+        ("Drums/Kick/Sum", "Sum", 1, true),
+        ("Drums/Kick/Sum/In", "In", 2, false),
+        ("Drums/Kick/Sum/Out", "Out", 2, false),
+        ("Drums/Kick/Sum/Trig", "Trig", 2, false),
+        ("Drums/Kick/Sum/Sample", "Sample", 2, false),
+        ("Drums/Kick/Sub", "Sub", 1, false),
+        ("Drums/Kick/Verb", "Verb", 1, true),
+        ("Drums/Kick/Verb/Room", "Room", 2, false),
+        ("Drums/Kick/Verb/Room", "", 0, false),
+    ];
+    let rows: Vec<(daw_proto::Track, u32)> = folder
+        .iter()
+        .take(9)
+        .enumerate()
+        .map(|(i, (path, name, depth, is_folder))| {
+            let index = u32::try_from(i).unwrap_or(0);
+            let next = folder.get(i + 1).map_or(0, |n| n.2);
+            let has_signal = kit.iter().any(|(p, _)| p == path);
+            let track = daw_proto::Track {
+                is_folder: *is_folder,
+                folder_depth: if *is_folder {
+                    1
+                } else {
+                    i32::try_from(next).unwrap_or(0) - i32::try_from(*depth).unwrap_or(0)
+                },
+                width: Some(170),
+                fx_count: u32::from(has_signal),
+                color: Some(0x00c0_5030),
+                volume: 0.8,
+                ..daw_proto::Track::new((*path).to_owned(), index, (*name).to_owned())
+            };
+            (track, *depth)
+        })
+        .collect();
+    let tracks: Vec<daw_proto::Track> = rows.iter().map(|(t, _)| t.clone()).collect();
+    let project =
+        daw_ui::studio::ProjectRef(std::sync::Arc::new(daw_ui::studio::project::Project {
+            tracks: tracks.clone(),
+            ..Default::default()
+        }));
+    let rows_ref = daw_ui::studio::RowsRef(std::sync::Arc::new(rows));
+    let meters_of = |chain: &mixer_view::signal::Chain| {
+        chain
+            .meter_indices()
+            .map(|index| MeterValue {
+                index,
+                value: -2.5 - f32::from(u8::try_from(index % 5).unwrap_or(0)) * 1.7,
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let shot = |name: &str, kit: Vec<(String, mixer_view::signal::Chain)>, shut: &[&str]| {
+        let fixture = std::sync::Arc::new(Fixture::new(kit.clone()));
+        for (path, chain) in &kit {
+            fixture.set_meters(path, meters_of(chain));
+        }
+        let mut inserts = Inserts::new(Some(fixture.clone() as std::sync::Arc<dyn SignalSource>));
+        inserts.follow();
+        inserts.read_meters(std::time::Instant::now());
+        for track in shut {
+            inserts.set_fold(track, Some(Fold::Shut));
+        }
+        let mut store = mixer_view::tone::Store::default();
+        store.seed(rows_ref.as_slice());
+        let mixer = Mixer::build(
+            palette,
+            font,
+            &project,
+            &rows_ref,
+            f64::from(height) - 16.0,
+            layout,
+            mixer_view::tone::panels_for(TONE),
+            true,
+            session_engine::settings::Settings::default(),
+            &store,
+        );
+        let map = session_engine::plan::Rows::of(rows_ref.as_slice(), &tracks);
+        let mut history = std::collections::HashMap::new();
+        let mut spectra = std::collections::HashMap::new();
+        let fold = mixer_view::tone::Fold::rest();
+        let mut image = VelloImageRenderer::new(width, height);
+        let mut buffer = Vec::new();
+        image.render_to_vec(
+            |painter| {
+                painter.reset();
+                painter.fill(
+                    vello::peniko::Fill::NonZero,
+                    Affine::IDENTITY,
+                    palette.surface,
+                    None,
+                    &vello::kurbo::Rect::new(0.0, 0.0, f64::from(width), f64::from(height)),
+                );
+                let at = Affine::translate((8.0, 8.0));
+                mixer.replay(painter, 0.0, f64::from(width), at);
+                mixer_view::strip_overlay::controls(
+                    painter,
+                    palette,
+                    font,
+                    &mixer,
+                    &tracks,
+                    &map,
+                    &daw_view_kit::pointer::Pointer::default(),
+                    &[],
+                    &mixer_view::strip_overlay::Clips::default(),
+                    0.0,
+                    &mut mixer_view::strip_overlay::Racks {
+                        settings: &store,
+                        history: &mut history,
+                        spectra: &mut spectra,
+                        lit: None,
+                        panels: mixer_view::tone::panels_for(TONE),
+                        folded: &fold,
+                        signal: Some(&mut inserts),
+                    },
+                    0.0,
+                    f64::from(width),
+                    at,
+                    None,
+                );
+            },
+            &mut buffer,
+        );
+        let path = out.join(name);
+        image::save_buffer(&path, &buffer, width, height, image::ColorType::Rgba8)
+            .expect("write the frame");
+        tracing::info!(shot.path = %path.display(), shot.strips = mixer.count, "signal shot written");
+    };
+
+    std::fs::create_dir_all(out).expect("the shots' directory");
+    shot("kick-signal-open.png", kit.clone(), &[]);
+
+    // Every state a row can say: Kick's comp bypassed and its Rescue phase
+    // off, Out's saturator in error, Sub's band-pass unavailable and its
+    // gate keyed from its own input, In shut to one insert.
+    let mut states = kit;
+    for (path, chain) in &mut states {
+        let find = |chain: &mut mixer_view::signal::Chain,
+                    id: &str,
+                    f: &dyn Fn(&mut mixer_view::signal::chain::Block)| {
+            if let Some(b) = chain
+                .phases
+                .iter_mut()
+                .flat_map(|p| &mut p.blocks)
+                .find(|b| b.id.as_str() == id)
+            {
+                f(b);
+            }
+        };
+        match path.as_str() {
+            "Drums/Kick" => {
+                find(chain, "tone.comp", &|b| b.bypass = true);
+                if let Some(p) = chain.phases.iter_mut().find(|p| p.id.as_str() == "rescue") {
+                    p.bypass = true;
+                }
+            }
+            "Drums/Kick/Sum/Out" => find(chain, "tone.sat", &|b| b.status = Status::Error),
+            "Drums/Kick/Sub" => {
+                find(chain, "tone.band_pass", &|b| b.status = Status::Unavailable);
+                find(chain, "tone.gate", &|b| {
+                    if let Some(key) = &mut b.key {
+                        key.via = mixer_view::signal::chain::Via::OwnInput;
+                    }
+                });
+            }
+            _ => {}
+        }
+    }
+    shot("kick-signal-states.png", states, &["Drums/Kick/Sum/In"]);
 }
