@@ -30,7 +30,6 @@ pub mod components;
 pub mod controls;
 pub mod hooks;
 pub mod layouts;
-pub mod panel_registration;
 pub mod prelude;
 pub mod signals;
 /// The studio's shared pieces — the project snapshot, the by-pointer
@@ -75,4 +74,3 @@ pub use components::toolbars::{
     LeftToolbar, ModeDropdown, ModeIndicator, ModeOption, RightToolbar, ToolbarAction, TopToolbar,
 };
 pub use layouts::daw_panels::{DawApplication, FxBrowserDockPanel};
-pub use panel_registration::register_panels;
