@@ -113,6 +113,8 @@ pub mod mix_state;
 #[cfg(feature = "native")]
 pub mod signal_kit;
 #[cfg(feature = "native")]
+pub mod signal_offline;
+#[cfg(feature = "native")]
 pub mod vocal_level;
 /// On the web there is no in-process tokio runtime: the engine clients
 /// (`engine::Transport`, `Applier`, `Meters`, …) find none and run

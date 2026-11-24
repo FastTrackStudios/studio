@@ -574,7 +574,7 @@ pub struct ListenArgs<'a> {
 /// whenever it reaches what they key: the kit's triggers (each one's
 /// Signal instance publishes its piece's hits to the session, and the
 /// piece's gates follow them), each with its piece's mics.
-fn keyed(daw: &Standalone, project: &ProjectContext) -> Vec<render::Keyed> {
+pub(crate) fn keyed(daw: &Standalone, project: &ProjectContext) -> Vec<render::Keyed> {
     let (kit, _) = crate::hits::kit(daw, project);
     kit.into_iter()
         .map(|p| render::Keyed {
