@@ -818,7 +818,9 @@ fn detect_take(
             .filter_map(|e| take.by_track.get(e))
             .map(|r| r.path.clone()),
     );
+    let decode = tracing::info_span!("hits.detect.decode", take.files = paths.len()).entered();
     let read = decode_all(&paths);
+    drop(decode);
     let rates: BTreeSet<u64> = read.values().map(|(_, r)| r.to_bits()).collect();
     let Some(rate) = read.values().map(|(_, r)| *r).next() else {
         return Ok(None);
@@ -851,7 +853,9 @@ fn detect_take(
         .filter_map(|e| take.by_track.get(e).and_then(signal))
         .collect();
     let kit_in: Vec<dsp::hits::Piece<'_>> = present.iter().map(|(_, p)| *p).collect();
+    let stage = tracing::info_span!("hits.detect.kit", edit.pieces = kit_in.len()).entered();
     let found = dsp::hits::detect_kit(&kit_in, &extra, rate, &settings.detector());
+    drop(stage);
     Ok(Some((
         rate,
         present.into_iter().map(|(i, _)| i).zip(found).collect(),
@@ -1181,6 +1185,12 @@ pub fn detect(
             else {
                 continue;
             };
+            let _piece = tracing::info_span!(
+                "hits.detect.piece",
+                piece = piece.name.as_str(),
+                take.pass = take.pass.as_str(),
+            )
+            .entered();
             note_take(line, s, &f, take.origin);
             placed.push((
                 take.clone(),
@@ -1195,7 +1205,9 @@ pub fn detect(
             ));
         }
     }
+    let midi = tracing::info_span!("hits.midi_check").entered();
     check_against_midi(daw, project, &mut placed);
+    drop(midi);
 
     // On every recording of the piece in its take.
     let mut written: BTreeMap<String, (String, Vec<Found>)> = BTreeMap::new();
@@ -1245,6 +1257,8 @@ fn found_in_parallel(
     extras: &[String],
     settings: &HitSettings,
 ) -> Vec<Result<Option<TakeFound>, String>> {
+    // Each take's span under the call's, from whichever worker finds it.
+    let parent = tracing::Span::current();
     let next = std::sync::atomic::AtomicUsize::new(0);
     let mut out: Vec<Option<Result<Option<TakeFound>, String>>> =
         (0..takes.len()).map(|_| None).collect();
@@ -1257,7 +1271,14 @@ fn found_in_parallel(
                 loop {
                     let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let Some(take) = takes.get(i) else { break };
-                    let found = detect_take(take, pieces, extras, settings);
+                    let span = tracing::info_span!(
+                        parent: &parent,
+                        "hits.detect.take",
+                        take.pass = take.pass.as_str(),
+                        take.origin = take.origin,
+                        take.tracks = take.by_track.len(),
+                    );
+                    let found = span.in_scope(|| detect_take(take, pieces, extras, settings));
                     if let Some(slot) = slots.get(i)
                         && let Ok(mut slot) = slot.lock()
                     {
@@ -3401,7 +3422,7 @@ static DETECT: ActionMeta = meta(
     "HITS_DETECT",
     "hits_detect",
     "Detect drum hits",
-    "Find every drum hit, once, and write it down as a hit marker on each of its piece's recordings (its mics and trigger, one id across them): the triggers fit each close mic's gate, a dead trigger is caught and its piece read from its mic alone with the other mics' bleed refused. Runs on the takes the song plays (comp or EDIT lanes; `all_takes` for every take kept). Replaces only unchecked detected hits (`auto`) in `from`/`to` (project seconds; the whole song when left out) on `pieces` (all when left out) — hits placed by hand or approved are kept. Settings (HITS_SETTINGS) can be given for this run alone. Says per piece how it was found, the trigger's verdict, the fitted gate, and the counts: both/trigger-only/mic-only/ghosts/flams/unsure (the ones to look at). Sets a mark on the song first, in its history (`Before HITS_DETECT <date time>`, named in the result's `checkpoint`), and is refused if one cannot be made.",
+    "Find every drum hit, once, and write it down as a hit marker on each of its piece's recordings (its mics and trigger, one id across them): the triggers fit each close mic's gate, a dead trigger is caught and its piece read from its mic alone with the other mics' bleed refused. Runs on the takes the song plays (comp or EDIT lanes; `all_takes` for every take kept). Replaces only unchecked detected hits (`auto`) in `from`/`to` (project seconds; the whole song when left out) on `pieces` (all when left out) — hits placed by hand or approved are kept. Settings (HITS_SETTINGS) can be given for this run alone. Says per piece how it was found, the trigger's verdict, the fitted gate, and the counts: both/trigger-only/mic-only/ghosts/flams/unsure (the ones to look at). Sets a mark on the song first, in its history (`Before HITS_DETECT <date time>`, named in the result's `checkpoint`), and is refused if one cannot be made. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -3433,7 +3454,7 @@ static ADD: ActionMeta = meta(
     "HITS_ADD",
     "hits_add",
     "Place a drum hit",
-    "Place a hit of `piece` by hand at `time` (project seconds, as recorded; with `now`, where it plays now — after any edit) on every recording of the piece — snapped to the attack start on its first mic unless `snap` is false. Hand-placed hits are never replaced by a detection run. Says its id.",
+    "Place a hit of `piece` by hand at `time` (project seconds, as recorded; with `now`, where it plays now — after any edit) on every recording of the piece — snapped to the attack start on its first mic unless `snap` is false. Hand-placed hits are never replaced by a detection run. Says its id. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -3441,7 +3462,7 @@ static REMOVE: ActionMeta = meta(
     "HITS_REMOVE",
     "hits_remove",
     "Remove drum hits",
-    "Remove the hits `ids` from every recording that carries them. One undo step.",
+    "Remove the hits `ids` from every recording that carries them. One undo step. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -3449,7 +3470,7 @@ static MOVE: ActionMeta = meta(
     "HITS_MOVE",
     "hits_move",
     "Move a drum hit",
-    "Move the hit `id` to `time` (project seconds, as recorded) or by `by_ms`, on every recording that carries it; it becomes hand-placed (`manual`).",
+    "Move the hit `id` to `time` (project seconds, as recorded) or by `by_ms`, on every recording that carries it; it becomes hand-placed (`manual`). `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -3457,7 +3478,7 @@ static MARK: ActionMeta = meta(
     "HITS_MARK",
     "hits_mark",
     "Mark drum hits",
-    "Set what is known about the hits `ids`: `approve` (true: checked — kept by every run; false: back to auto), `ghost`, `bleed`, `note`. One undo step.",
+    "Set what is known about the hits `ids`: `approve` (true: checked — kept by every run; false: back to auto), `ghost`, `bleed`, `note`. One undo step. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -3539,6 +3560,8 @@ struct ZoneEditArg {
 
 #[derive(Facet, Default)]
 struct DetectArg {
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
     from: Option<f64>,
     /// Every recorded take, not only those the song plays.
     all_takes: Option<bool>,
@@ -3561,6 +3584,8 @@ struct ExplainArg {
 
 #[derive(Facet)]
 struct AddArg {
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
     piece: String,
     time: f64,
     /// `time` is where it plays now, after any edit (as a click on the
@@ -3573,10 +3598,14 @@ struct AddArg {
 #[derive(Facet)]
 struct IdsArg {
     ids: Vec<String>,
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
 }
 
 #[derive(Facet)]
 struct MoveArg {
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
     id: String,
     time: Option<f64>,
     by_ms: Option<f64>,
@@ -3584,6 +3613,8 @@ struct MoveArg {
 
 #[derive(Facet)]
 struct MarkArg {
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
     ids: Vec<String>,
     approve: Option<bool>,
     ghost: Option<bool>,
@@ -3605,11 +3636,15 @@ fn register_reads(list: &ActionList) -> Result<(), architect::action::ActionErro
         Ok(set_settings(&a))
     })?;
     list.register(&DETECT, Effect::Mutating, |a: DetectArg| {
+        let traced = crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("HITS_DETECT"));
+        crate::history_marks::begin(DETECT.id, a.mark.as_deref())?;
         let (daw, project) = song()?;
         let settings = settings().with(&a.settings);
         // Every unchecked hit in the span is replaced.
+        let stage = tracing::info_span!("edit.checkpoint").entered();
         let net = crate::safety_net::before(DETECT.id, crate::safety_net::Reach::Song)?;
-        let mut report = detect(
+        drop(stage);
+        let report = detect(
             daw,
             &project,
             (
@@ -3619,7 +3654,14 @@ fn register_reads(list: &ActionList) -> Result<(), architect::action::ActionErro
             &a.pieces,
             &settings,
             a.all_takes.unwrap_or(false),
-        )?;
+        );
+        traced.outcome(&report);
+        let mut report = report?;
+        traced.count(
+            "edit.takes",
+            usize::try_from(report.takes).unwrap_or(usize::MAX),
+        );
+        traced.count("edit.pieces", report.pieces.len());
         report.checkpoint = net.name();
         Ok::<_, String>(report)
     })?;
@@ -3806,6 +3848,45 @@ fn edit_zone(
 /// Correcting what was found.
 fn register_edits(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
+        let span = crate::edit_trace::edit_span!("HITS_ADD");
+        let mark = a.mark.clone();
+        crate::edit_trace::run_edit(span, (ADD.id, mark.as_deref()), |_| add(a))
+    })?;
+    list.register(&REMOVE, Effect::Mutating, |a: IdsArg| {
+        let span = crate::edit_trace::edit_span!("HITS_REMOVE");
+        let mark = a.mark.clone();
+        crate::edit_trace::run_edit(span, (REMOVE.id, mark.as_deref()), |traced| {
+            traced.count("edit.hits", a.ids.len());
+            let (daw, project) = song()?;
+            let ids: BTreeSet<String> = a.ids.into_iter().collect();
+            Ok(edit_hits(
+                daw,
+                &project,
+                &ids,
+                "Remove drum hits",
+                |_, _| false,
+            ))
+        })
+    })?;
+    list.register(&MOVE, Effect::Mutating, |a: MoveArg| {
+        let span = crate::edit_trace::edit_span!("HITS_MOVE");
+        let mark = a.mark.clone();
+        crate::edit_trace::run_edit(span, (MOVE.id, mark.as_deref()), |_| move_hit(&a))
+    })?;
+    list.register(&MARK, Effect::Mutating, |a: MarkArg| {
+        let span = crate::edit_trace::edit_span!("HITS_MARK");
+        let mark = a.mark.clone();
+        crate::edit_trace::run_edit(span, (MARK.id, mark.as_deref()), |traced| {
+            traced.count("edit.hits", a.ids.len());
+            mark_hits(&a)
+        })
+    })?;
+    Ok(())
+}
+
+/// `HITS_ADD`: see its description.
+fn add(a: AddArg) -> Result<String, String> {
+    {
         let (daw, project) = song()?;
         let time = if a.now.unwrap_or(false) {
             recorded_at(daw, &project, &a.piece, a.time)
@@ -3820,19 +3901,12 @@ fn register_edits(list: &ActionList) -> Result<(), architect::action::ActionErro
             time,
             (a.snap.unwrap_or(true), a.note.unwrap_or_default()),
         )
-    })?;
-    list.register(&REMOVE, Effect::Mutating, |a: IdsArg| {
-        let (daw, project) = song()?;
-        let ids: BTreeSet<String> = a.ids.into_iter().collect();
-        Ok(edit_hits(
-            daw,
-            &project,
-            &ids,
-            "Remove drum hits",
-            |_, _| false,
-        ))
-    })?;
-    list.register(&MOVE, Effect::Mutating, |a: MoveArg| {
+    }
+}
+
+/// `HITS_MOVE`: see its description.
+fn move_hit(a: &MoveArg) -> Result<u32, String> {
+    {
         let (daw, project) = song()?;
         let which = BTreeSet::from([a.id.clone()]);
         let n = edit_hits(daw, &project, &which, "Move a drum hit", |m, origin| {
@@ -3850,8 +3924,12 @@ fn register_edits(list: &ActionList) -> Result<(), architect::action::ActionErro
             return Err(format!("no hit {}", a.id));
         }
         Ok(n)
-    })?;
-    list.register(&MARK, Effect::Mutating, |a: MarkArg| {
+    }
+}
+
+/// `HITS_MARK`: see its description.
+fn mark_hits(a: &MarkArg) -> Result<u32, String> {
+    {
         let (daw, project) = song()?;
         let ids: BTreeSet<String> = a.ids.iter().cloned().collect();
         Ok(edit_hits(daw, &project, &ids, "Mark drum hits", |m, _| {
@@ -3873,8 +3951,7 @@ fn register_edits(list: &ActionList) -> Result<(), architect::action::ActionErro
             }
             true
         }))
-    })?;
-    Ok(())
+    }
 }
 
 #[cfg(test)]

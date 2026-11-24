@@ -90,7 +90,11 @@ pub fn begin(action: &str, mark: Option<&str>) -> Result<Begun, String> {
         history.mark = tracing::field::Empty,
     );
     let _in = span.enter();
-    settle(SETTLE);
+    // An action another runs is a part of its caller's step: nothing to
+    // wait for between them.
+    if !crate::history::nested() {
+        settle(SETTLE);
+    }
     let Some(wanted) = mark.map(str::trim).filter(|m| !m.is_empty()) else {
         return Ok(Begun::default());
     };

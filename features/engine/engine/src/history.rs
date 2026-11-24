@@ -44,6 +44,13 @@ pub fn running_run() -> Option<u64> {
     RUNNING.with(|r| r.borrow().first().map(|(_, run)| *run))
 }
 
+/// Whether the action running on this thread was run by another (an
+/// action's own `run_json`): its steps are its caller's.
+#[must_use]
+pub fn nested() -> bool {
+    RUNNING.with(|r| r.borrow().len() > 1)
+}
+
 /// An action's id and its call's run number, kept on its span.
 struct ActionId(String, u64);
 
@@ -217,13 +224,24 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             (None, Some(name)) => MomentRef::Mark(name),
             _ => return Err("say one of `step` or `mark`".to_owned()),
         };
+        let traced = crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!(
+            "SESSION_HISTORY_RESTORE"
+        ));
         let guid = open_song()?;
-        let moment = crate::project_file::restore(&guid, which)?;
+        let stage = tracing::info_span!("history.restore").entered();
+        let moment = crate::project_file::restore(&guid, which);
+        drop(stage);
+        traced.outcome(&moment);
+        let moment = moment?;
         let (daw, project) = crate::actions::song()?;
+        let stage = tracing::info_span!("history.follow").entered();
         crate::actions::samples_follow(daw, &project, crate::hits_midi::Mode::Follow);
+        drop(stage);
+        let stage = tracing::info_span!("history.resync").entered();
         crate::changes::announce(crate::changes::Change::Marks);
         crate::song_model::request_resync();
         crate::actions::list().changed("items", "history");
+        drop(stage);
         Ok(format!(
             "went back to {} ({}), as a step of its own: SESSION_UNDO takes it back",
             moment.label,

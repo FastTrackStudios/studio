@@ -40,7 +40,7 @@ static CHOOSE: ActionMeta = crate::actions::meta(
     "COMP_CHOOSE",
     "comp_choose",
     "Comp a take",
-    "Over a stretch (the selection, or `from`/`to` / `sections`), comp the kit from take `take` — its pass, its lane's name or its colour (`blue`, `light green`), as COMP_CANDIDATES says them — every mic from it; where the kit is edited, the edit over the stretch made the new comp as recorded. What a model nominates as the best version of a fill.",
+    "Over a stretch (the selection, or `from`/`to` / `sections`), comp the kit from take `take` — its pass, its lane's name or its colour (`blue`, `light green`), as COMP_CANDIDATES says them — every mic from it; where the kit is edited, the edit over the stretch made the new comp as recorded. What a model nominates as the best version of a fill. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Edit",
     "",
 );
@@ -66,6 +66,8 @@ struct ChooseArg {
     #[facet(flatten, default)]
     on: crate::edit_actions::On,
     take: String,
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
 }
 
 /// One take, as ranked for a stretch.
@@ -819,10 +821,27 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         Ok(out)
     })?;
     list.register(&CHOOSE, Effect::Mutating, |a: ChooseArg| {
+        let span = crate::edit_trace::edit_span!("COMP_CHOOSE");
+        let mark = a.mark.clone();
+        crate::edit_trace::run_edit(span, (CHOOSE.id, mark.as_deref()), |traced| {
+            choose(&a, traced)
+        })
+    })?;
+    Ok(())
+}
+
+/// `COMP_CHOOSE`, under its span.
+fn choose(a: &ChooseArg, traced: &crate::edit_trace::Traced) -> Result<Vec<Comped>, String> {
+    {
         let (daw, project) = crate::actions::song()?;
         let mut out = Vec::new();
-        for (from, to) in crate::edit_actions::stretches(daw, &project, &a.on)? {
+        let stretches = crate::edit_actions::stretches(daw, &project, &a.on)?;
+        traced.count("edit.spans", stretches.len());
+        for (from, to) in stretches {
+            let stage = tracing::info_span!("comp.rank").entered();
             let (takes, versions, _) = ranked_for(daw, &project, (from, to));
+            drop(stage);
+            traced.count("edit.takes", takes.len());
             // By its pass, its lane's name or its colour's, as
             // COMP_CANDIDATES says them.
             let colored = kit_takes(&project).pass_named(&a.take).map(str::to_owned);
@@ -841,7 +860,9 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                     version.pass
                 ));
             }
+            let stage = crate::edit_trace::stage_span!("comp.swipe").entered();
             let edit_restored = comp_in(daw, &project, (version, &versions), (from, to))?;
+            drop(stage);
             now_comped((from, to), &version.pass);
             out.push(Comped {
                 from,
@@ -852,6 +873,5 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             });
         }
         Ok(out)
-    })?;
-    Ok(())
+    }
 }
