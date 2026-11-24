@@ -13,6 +13,10 @@
 //! - `THEME_INSTALL {link}`: install a pack without showing it.
 //! - `THEME_CHECK {pack?, theme?}`: hold a theme (the shown one when left
 //!   out) to the spec, and say which of each view's pages it draws.
+//! - `THEME_GALLERY {pack, theme?, shots?, out}`: draw a pack's showcase
+//!   shots from the golden session into `out` (`daw-view-tools gallery`,
+//!   in a process of its own: the gallery sets the views' theme, folds and
+//!   lanes, which would restyle this window).
 //!
 //! The installed packs and the choice are kept in
 //! `<config>/fts/studio-themes.json`; a linked pack is fetched into
@@ -28,10 +32,7 @@ use facet::Facet;
 use serde_json::{Value, json};
 
 /// The packs Studio knows by name before any is installed.
-const FIRST_PARTY: [(&str, &str); 2] = [
-    ("fts", "FastTrackStudios/studio-fts-theme"),
-    ("reaper", "FastTrackStudios/studio-reaper-theme"),
-];
+const FIRST_PARTY: &[(&str, &str)] = daw_theme::source::FIRST_PARTY;
 
 fn library_file() -> Option<PathBuf> {
     crate::storage::config_dir().map(|d| d.join("fts").join("studio-themes.json"))
@@ -259,6 +260,12 @@ meta!(
     "Installs the pack at `link` (`owner/repo[@rev]`, a github.com URL or a folder) without showing it; answers its name, themes and commit."
 );
 meta!(
+    GALLERY,
+    "THEME_GALLERY",
+    "Draw a theme pack's gallery",
+    "Draws `pack`'s showcase shots (daw-theme's gallery) from the golden session into the folder `out`: `<theme>/<shot>.png` for each theme (or only `theme`) and shot (or only `shots`), and `README.md` when every shot is drawn, ready to commit as a pack repository's `gallery/`. `pack` as THEME_SET takes it, or `none` for the built-in look. Runs `daw-view-tools gallery` in a process of its own, so the window's look is untouched; answers what it wrote and how long each theme took."
+);
+meta!(
     CHECK,
     "THEME_CHECK",
     "Check a theme",
@@ -308,6 +315,55 @@ fn register<A: Facet<'static>>(
 }
 
 #[derive(Facet)]
+struct GalleryArgs {
+    pack: String,
+    #[facet(default)]
+    theme: Option<String>,
+    #[facet(default)]
+    shots: Vec<String>,
+    out: String,
+}
+
+/// The gallery tool: `FTS_VIEW_TOOLS`, else beside Studio's own binary,
+/// else on the `PATH`.
+fn view_tools() -> PathBuf {
+    std::env::var_os("FTS_VIEW_TOOLS")
+        .map(PathBuf::from)
+        .or_else(|| {
+            let beside = std::env::current_exe()
+                .ok()?
+                .with_file_name("daw-view-tools");
+            beside.is_file().then_some(beside)
+        })
+        .unwrap_or_else(|| PathBuf::from("daw-view-tools"))
+}
+
+/// The `daw-view-tools gallery` arguments for `a`.
+fn gallery_command(a: &GalleryArgs) -> Vec<String> {
+    let mut args = vec!["gallery".to_owned(), "--pack".to_owned(), a.pack.clone()];
+    if let Some(theme) = &a.theme {
+        args.extend(["--theme".to_owned(), theme.clone()]);
+    }
+    for shot in &a.shots {
+        args.extend(["--shot".to_owned(), shot.clone()]);
+    }
+    args.extend(["--out".to_owned(), a.out.clone()]);
+    args
+}
+
+fn gallery(a: GalleryArgs) -> Result<Value, String> {
+    let tool = view_tools();
+    let out = std::process::Command::new(&tool)
+        .args(gallery_command(&a))
+        .output()
+        .map_err(|e| format!("{}: {e}", tool.display()))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_owned());
+    }
+    serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())
+}
+
+#[derive(Facet)]
 struct NoArgs {}
 
 /// The theme actions, on the app's list.
@@ -316,4 +372,36 @@ pub fn install_actions(list: &ActionList) {
     register::<SetArgs>(list, &SET, Effect::Mutating, true, set);
     register::<InstallArgs>(list, &INSTALL, Effect::Mutating, true, install_action);
     register::<CheckArgs>(list, &CHECK, Effect::ReadOnly, true, check);
+    register::<GalleryArgs>(list, &GALLERY, Effect::Mutating, true, gallery);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_gallery_call_is_the_command_line_the_tool_takes() {
+        let a = GalleryArgs {
+            pack: "fts".into(),
+            theme: Some("console".into()),
+            shots: vec!["mixer.overview".into(), "editor.drums".into()],
+            out: "gallery".into(),
+        };
+        assert_eq!(
+            gallery_command(&a),
+            [
+                "gallery",
+                "--pack",
+                "fts",
+                "--theme",
+                "console",
+                "--shot",
+                "mixer.overview",
+                "--shot",
+                "editor.drums",
+                "--out",
+                "gallery",
+            ]
+        );
+    }
 }
