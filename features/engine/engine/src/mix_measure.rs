@@ -12,7 +12,7 @@
 //! song's latency is known at the first block, and reads each track's tap
 //! and master that many samples late — each is then the span exactly.
 
-mod analysis;
+pub(crate) mod analysis;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -214,7 +214,7 @@ pub struct Span<'a> {
 /// A plugin made the way an instance's bundle would now load: from the
 /// rebuilt copy when the bundle was reloaded (FX_RELOAD), else `None` (the
 /// engine's own way).
-fn make_fresh(name: &str) -> Option<Box<dyn daw_standalone::plugin::PluginInstance>> {
+pub(crate) fn make_fresh(name: &str) -> Option<Box<dyn daw_standalone::plugin::PluginInstance>> {
     let path = Path::new(name);
     if !path
         .extension()
@@ -295,6 +295,7 @@ pub fn render_span(daw: &Standalone, project: &str, span: &Span<'_>) -> Result<R
             } else {
                 Tap::PreFader
             }),
+            ..Offline::default()
         },
     );
     let primed = web_time::Instant::now();

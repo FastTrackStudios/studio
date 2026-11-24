@@ -259,7 +259,7 @@ fn true_peak(ch: &[f32]) -> f64 {
 
 /// Each band's level of the mid signal: a Welch average of Hann-windowed
 /// 8192-point spectra, half overlapped.
-fn spectrum(l: &[f32], r: &[f32], rate: f64, bands: Bands) -> Vec<f64> {
+pub fn spectrum(l: &[f32], r: &[f32], rate: f64, bands: Bands) -> Vec<f64> {
     const N: usize = 8_192;
     let centres = bands.centres();
     let n = l.len().min(r.len());
@@ -327,6 +327,20 @@ fn spectrum(l: &[f32], r: &[f32], rate: f64, bands: Bands) -> Vec<f64> {
                 .sum();
             power_db(ms * padded)
         })
+        .collect()
+}
+
+/// The short-term loudness (3 s windows, BS.1770) every `hop` seconds,
+/// LUFS: one value for a signal shorter than a window.
+#[must_use]
+pub fn short_term(l: &[f32], r: &[f32], rate: u32, hop: f64) -> Vec<f64> {
+    let rate_f = f64::from(rate);
+    let n = l.len().min(r.len());
+    let (kl, kr) = (k_weighted(&l[..n], rate_f), k_weighted(&r[..n], rate_f));
+    let samples = |s: f64| (s * rate_f).round() as usize;
+    window_powers(&kl, &kr, samples(3.0), samples(hop))
+        .into_iter()
+        .map(|p| (lufs_of(p) * 10.0).round() / 10.0)
         .collect()
 }
 
