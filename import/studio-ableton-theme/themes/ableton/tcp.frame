@@ -1,0 +1,47 @@
+<Document>
+  <!-- The track header beside the arrangement: a flat grey row, the
+       track's colour as a thin bar at its left edge, the name, and one
+       line of compact fields and buttons right-aligned. -->
+  <Page name="tcp.row">
+    <Frame name="Row" w=343 h=44>
+      <Rectangle name="Ground" w=343 h=44 bind:w="w" bind:h="h" bind:fill="track.tint" />
+      <Rectangle name="Column" w=20 h=44 bind:w="row.indent" bind:h="h" bind:fill="$tcp.column" bind:visible="row.indent > 0" />
+      <Rectangle name="Colour" w=4 h=44 bind:x="row.indent" bind:h="h - 1" bind:fill="track.has_color ? track.color : $text.faint" />
+      <Rectangle name="Divider" w=343 h=1 bind:w="w" bind:y="h - 1" bind:fill="$border" />
+      <Rectangle name="Edge" w=1 h=44 bind:x="w - 1" bind:h="h" bind:fill="$border" />
+      <Frame name="Body" w=343 h=44 bind:w="w" bind:h="h" bind:visible="h >= 12">
+        <!-- A group's fold: a triangle, open or shut. -->
+        <Vector name="Open" w=8 h=6 geometry="M 0 0 L 8 0 L 4 6 Z" bind:x="row.indent + 9" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5) + 4" bind:visible="track.folder && !track.collapsed" bind:fill="$text.dim" />
+        <Vector name="Shut" w=6 h=8 geometry="M 0 0 L 6 4 L 0 8 Z" bind:x="row.indent + 10" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5) + 3" bind:visible="track.folder && track.collapsed" bind:fill="$text.dim" />
+        <Text name="Name" w=400 h=14 size=10 bind:x="row.indent + 22" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5) + (14 - 1.1 * min(row.name_size, 10.5)) / 2" bind:size="min(row.name_size, 10.5)" bind:text="row.name" bind:fill="track.selected ? $text.bright : $text">Track</Text>
+        <Rectangle name="Name hover" h=1 bind:x="row.indent + 22" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5) + 14" bind:w="max(w - 232 - row.indent, 0)" bind:fill="$selected" bind:visible="ui.pressed == \"name\" || (ui.hover == \"name\" && ui.pressed == \"\")" />
+        <Instance name="Routing" of="routing" w=24 h=14 bind:x="w - 226" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" bind:visible="w >= 300" arg:parent_send="track.parent_send" arg:sends="track.sends" arg:receives="track.receives" />
+        <Instance name="FX" of="fx" w=32 h=14 bind:x="w - 198" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" arg:count="track.fx" />
+        <Instance name="Volume" of="volume" w=48 h=14 bind:x="w - 162" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" arg:value="track.fader" arg:label="ui.pressed == \"volume\" ? track.volume_label : \"\"" />
+        <Instance name="Pan" of="pan.field" w=34 h=14 bind:x="w - 110" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" arg:value="track.pan" />
+        <Instance name="Activator" of="mute" w=24 h=14 bind:x="w - 72" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" arg:on="track.mute" arg:label="fmt(track.number)" />
+        <Instance name="Solo" of="solo" w=18 h=14 bind:x="w - 46" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" arg:on="track.solo" />
+        <Instance name="Arm" of="arm" w=18 h=14 bind:x="w - 26" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" bind:visible="ui.recording" arg:armed="track.armed" />
+        <Instance name="Phase" of="phase" w=18 h=14 bind:x="w - 46" bind:y="h - 19" bind:visible="h >= 60" arg:on="track.phase" />
+        <!-- Armed and tall enough: what it records from, and how it
+             monitors. -->
+        <Frame name="Input" w=343 h=44 bind:w="w" bind:visible="h >= 40 && track.armed">
+          <Rectangle name="Field" w=150 h=14 y=22 bind:x="row.indent + 22" bind:fill="$field" />
+          <Rectangle name="Outline" w=149 h=13 y=22.5 stroke-weight=1 stroke-align="center" bind:x="row.indent + 22.5" bind:stroke="$hardware.edge" />
+          <Text name="Source" w=140 h=12 y=24 size=9 bind:x="row.indent + 27" bind:text="row.input" bind:fill="$text.dim">None</Text>
+          <Instance name="Monitor" of="monitor" w=30 h=14 y=22 bind:x="row.indent + 176" arg:mode="track.monitor" />
+        </Frame>
+        <Frame name="@name" w=10 h=10 bind:x="row.indent + 20" bind:y="0" bind:w="max(w - 230 - row.indent, 0)" bind:h="min(h, 24)" />
+        <Frame name="@folder" w=10 h=10 bind:x="row.indent" bind:y="0" bind:w="20" bind:h="h" bind:visible="track.folder" />
+        <Frame name="@routing" w=10 h=10 bind:x="w - 226" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" bind:w="24" bind:h="14" bind:visible="w >= 300" />
+        <Frame name="@fx" w=10 h=10 bind:x="w - 198" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" bind:w="32" bind:h="14" />
+        <Frame name="@volume" w=10 h=10 bind:x="w - 162" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" bind:w="48" bind:h="14" />
+        <Frame name="@pan" w=10 h=10 bind:x="w - 110" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" bind:w="34" bind:h="14" />
+        <Frame name="@mute" w=10 h=10 bind:x="w - 72" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" bind:w="24" bind:h="14" />
+        <Frame name="@solo" w=10 h=10 bind:x="w - 46" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" bind:w="18" bind:h="14" />
+        <Frame name="@arm" w=10 h=10 bind:x="w - 26" bind:y="clamp((min(h, 24) - 14) / 2, 0, 5)" bind:w="18" bind:h="14" bind:visible="ui.recording" />
+        <Frame name="@phase" w=10 h=10 bind:x="w - 46" bind:y="h - 19" bind:w="18" bind:h="14" bind:visible="h >= 60" />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

@@ -1,0 +1,73 @@
+<Document>
+  <!-- The shared controls, one component each. The track header and the
+       mixer strip place the same ones, so a solo looks the same in both.
+       Flat rectangles with a one-pixel outline; no gradients, no glow. -->
+  <Page name="controls">
+    <!-- The activator: lit while the track plays, dim when it is muted.
+         It carries the track's number. -->
+    <Component name="mute" w=24 h=14 arg:on="false" arg:label="\"\"">
+      <Rectangle name="Face" w=24 h=14 bind:w="pw" bind:h="ph" bind:fill="arg.on ? (ui.hover == \"mute\" && ui.pressed == \"\" ? lighten($mute, 0.06) : $mute) : (ui.hover == \"mute\" && ui.pressed == \"\" ? lighten($local.active, 0.08) : $local.active)" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=23 h=13 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Number" w=400 h=12 size=9 weight=600 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 11) / 2" bind:text="arg.label" bind:fill="arg.on ? $text.faint : $local.active_ink">1</Text>
+    </Component>
+    <Component name="solo" w=18 h=14 arg:on="false">
+      <Rectangle name="Face" w=18 h=14 bind:w="pw" bind:h="ph" bind:fill="arg.on ? $solo : (ui.hover == \"solo\" && ui.pressed == \"\" ? $local.button_hover : $local.button)" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=17 h=13 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="S" w=400 h=12 size=9 weight=600 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 11) / 2" bind:fill="arg.on ? $local.lit_ink : $text.dim">S</Text>
+    </Component>
+    <Component name="arm" w=18 h=14 arg:armed="false">
+      <Rectangle name="Face" w=18 h=14 bind:w="pw" bind:h="ph" bind:fill="arg.armed ? $rec : (ui.hover == \"arm\" && ui.pressed == \"\" ? $local.button_hover : $local.button)" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=17 h=13 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Ellipse name="Dot" w=6 h=6 bind:x="(pw - 6) / 2" bind:y="(ph - 6) / 2" bind:fill="arg.armed ? $local.lit_ink : $text.dim" />
+    </Component>
+    <!-- Input monitoring: off, in, auto. -->
+    <Component name="monitor" w=30 h=14 arg:mode="0">
+      <Rectangle name="Face" w=30 h=14 bind:w="pw" bind:h="ph" bind:fill="arg.mode == 0 ? $local.button : $monitor.tape" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=29 h=13 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Off" w=400 h=12 size=8 weight=600 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:visible="arg.mode == 0" bind:fill="$text.dim">OFF</Text>
+      <Text name="In" w=400 h=12 size=8 weight=600 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:visible="arg.mode == 1" bind:fill="$local.active_ink">IN</Text>
+      <Text name="Auto" w=400 h=12 size=8 weight=600 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:visible="arg.mode == 2" bind:fill="$local.active_ink">AUTO</Text>
+    </Component>
+    <Component name="phase" w=18 h=14 arg:on="false">
+      <Rectangle name="Face" w=18 h=14 bind:w="pw" bind:h="ph" bind:fill="arg.on ? $accent : $local.button" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=17 h=13 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Polarity" w=400 h=12 size=9 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 11) / 2" bind:fill="arg.on ? $local.lit_ink : $text.dim">Ø</Text>
+    </Component>
+    <!-- The pan knob: a ring, the arc from the centre to the value, a
+         pointer. -->
+    <Component name="pan" w=24 h=24 arg:value="0">
+      <Vector name="Track" w=24 h=24 geometry="M 0 0" stroke-weight=2 bind:stroke="$surface.sunken" bind:geometry="arc(12, 12, 9, -135, 135)" />
+      <Vector name="Value" w=24 h=24 geometry="M 0 0" stroke-weight=2 bind:stroke="$pan" bind:geometry="arc(12, 12, 9, 0, clamp(arg.value, -1, 1) * 135)" bind:visible="abs(clamp(arg.value, -1, 1) * 135) > 0.5" />
+      <Ellipse name="Cap" x=6 y=6 w=12 h=12 bind:fill="ui.hover == \"pan\" && ui.pressed == \"\" ? $local.button_hover : $local.button" />
+      <Vector name="Pointer" x=12 y=12 w=1 h=1 geometry="M -0.75 -6 L 0.75 -6 L 0.75 -1.5 L -0.75 -1.5 Z" bind:fill="$text" bind:rotation="clamp(arg.value, -1, 1) * 135" />
+    </Component>
+    <!-- Pan as a field: a bar from the centre, for the track header. -->
+    <Component name="pan.field" w=34 h=14 arg:value="0">
+      <Rectangle name="Well" w=34 h=14 bind:w="pw" bind:h="ph" bind:fill="$field" />
+      <Rectangle name="Bar" y=5 w=1 h=4 bind:y="ph / 2 - 2" bind:x="pw / 2 + min(clamp(arg.value, -1, 1), 0) * (pw / 2 - 2)" bind:w="max(abs(clamp(arg.value, -1, 1)) * (pw / 2 - 2), 1)" bind:fill="$pan" />
+      <Rectangle name="Centre" y=2 w=1 h=10 bind:x="pw / 2 - 0.5" bind:h="ph - 4" bind:fill="$text.faint" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=33 h=13 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="ui.hover == \"pan\" && ui.pressed == \"\" ? $text.faint : $hardware.edge" />
+    </Component>
+    <!-- Volume as a field: the level filled from the left, the gain over
+         it while it is being dragged. -->
+    <Component name="volume" w=48 h=14 arg:value="0" arg:label="\"\"">
+      <Rectangle name="Well" w=48 h=14 bind:w="pw" bind:h="ph" bind:fill="$field" />
+      <Rectangle name="Level" x=1 y=1 w=46 h=12 bind:h="ph - 2" bind:w="max((pw - 2) * clamp(arg.value, 0, 1), 0)" bind:fill="$local.slider" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=47 h=13 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="ui.hover == \"volume\" && ui.pressed == \"\" ? $text.faint : $hardware.edge" />
+      <Text name="Gain" w=400 h=12 size=8 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:text="arg.label" bind:fill="$text">0.0</Text>
+    </Component>
+    <Component name="fx" w=40 h=14 arg:count="0">
+      <Rectangle name="Face" w=40 h=14 bind:w="pw" bind:h="ph" bind:fill="ui.hover == \"fx\" && ui.pressed == \"\" ? $local.button_hover : $local.button" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=39 h=13 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="FX" x=5 w=40 h=12 size=8 weight=600 bind:y="(ph - 10) / 2" bind:fill="arg.count > 0 ? $text : $text.faint">FX</Text>
+      <Text name="Count" w=400 h=12 size=8 text-align="right" bind:x="pw - 405" bind:y="(ph - 10) / 2" bind:visible="arg.count > 0" bind:text="fmt(arg.count)" bind:fill="$accent">0</Text>
+    </Component>
+    <Component name="routing" w=24 h=14 arg:parent_send="true" arg:sends="0" arg:receives="0">
+      <Rectangle name="Face" w=24 h=14 bind:w="pw" bind:h="ph" bind:fill="ui.hover == \"routing\" && ui.pressed == \"\" ? $local.button_hover : $local.button" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=23 h=13 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Rectangle name="Out" x=4 w=6 h=2 bind:y="ph / 2 - 1" bind:fill="arg.parent_send ? $route.out : $text.faint" />
+      <Rectangle name="Send" w=3 h=3 bind:x="pw - 11" bind:y="ph / 2 - 1.5" bind:visible="arg.sends > 0" bind:fill="$route.send" />
+      <Rectangle name="Receive" w=3 h=3 bind:x="pw - 6" bind:y="ph / 2 - 1.5" bind:visible="arg.receives > 0" bind:fill="$route.recv" />
+    </Component>
+  </Page>
+</Document>
