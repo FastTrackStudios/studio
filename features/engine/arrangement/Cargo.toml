@@ -9,7 +9,7 @@ description = "Studio's arrangement, a view only: the recorded scene, its widget
 [dependencies]
 # The kit the arrangement is drawn with (`crate::tcp`, `crate::skin`, …,
 # re-exported at this crate's root).
-session-ui = { workspace = true }
+daw-view-kit = { workspace = true }
 session-engine-client = { workspace = true }
 session-engine = { workspace = true, optional = true }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
@@ -53,15 +53,15 @@ facet-json = { workspace = true }
 
 [features]
 default = ["native"]
-# session-ui's features, forwarded, with what the arrangement's own code
+# daw-view-kit's features, forwarded, with what the arrangement's own code
 # needs.
-native = ["session-ui/native", "session-engine-client/native", "dep:dioxus-native", "dep:winit", "dep:anyrender_vello", "dep:patch-list"]
-web = ["session-ui/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures"]
-engine = ["session-ui/engine", "dep:session-engine"]
-signal = ["native", "session-ui/signal"]
+native = ["daw-view-kit/native", "session-engine-client/native", "dep:dioxus-native", "dep:winit", "dep:anyrender_vello", "dep:patch-list"]
+web = ["daw-view-kit/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures"]
+engine = ["daw-view-kit/engine", "dep:session-engine"]
+signal = ["native", "daw-view-kit/signal"]
 
 [dev-dependencies]
-session-ui = { workspace = true, features = ["test-support"] }
+daw-view-kit = { workspace = true, features = ["test-support"] }
 session-engine = { workspace = true }
 tracing-subscriber = { workspace = true }
 

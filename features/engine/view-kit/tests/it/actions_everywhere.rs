@@ -3,7 +3,7 @@
 //!
 //! A control that changes the song or the window's state runs a named
 //! action (`window::press`, `mcp::run`), so `watch`, a guide and the CLI
-//! see it. This scans session-ui's sources for what a bypass is made of —
+//! see it. This scans daw-view-kit's sources for what a bypass is made of —
 //! an edit pushed straight at the engine, a fold or a lane opened by hand,
 //! the transport moved behind its actions (`transport_here`; a press is
 //! `engine::transport`, which runs `SESSION_PLAY_STOP`, `SESSION_SEEK`, …),

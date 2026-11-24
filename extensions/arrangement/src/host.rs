@@ -86,7 +86,7 @@ impl Hosted {
             fingers: Vec::new(),
             play_at: Box::new(|| {
                 // Read each frame: the transport is there once the link is.
-                session_ui::engine::Transport::shared().map_or(0.0, |t| t.read().0)
+                daw_view_kit::engine::Transport::shared().map_or(0.0, |t| t.read().0)
             }),
         }
     }
@@ -180,7 +180,7 @@ impl PaintView for Hosted {
                 modifiers: mods,
             } => {
                 if name.eq_ignore_ascii_case("z") {
-                    session_ui::tool::set_zoom_held(*down);
+                    daw_view_kit::tool::set_zoom_held(*down);
                     self.panel(PanelEvent::ZKey {
                         pressed: *down,
                         repeat: false,

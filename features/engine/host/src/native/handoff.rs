@@ -266,14 +266,14 @@ pub fn run_action(id: &str) -> Result<(), String> {
 /// An overlay over the window takes the keyboard (`true`) or gives it
 /// back: Session's keys stand aside while it has it.
 pub fn keys_taken(on: bool) {
-    session_ui::keys::set_overlay(on);
+    daw_view_kit::keys::set_overlay(on);
 }
 
 /// Whether a text field of Session's has the keyboard (a rename, the chart
 /// editor): a plain `?` is its, not the shortcuts sheet's.
 #[must_use]
 pub fn typing() -> bool {
-    session_ui::keys::typing()
+    daw_view_kit::keys::typing()
 }
 
 /// Stop the transport: Session is being left (or replaced) from outside.

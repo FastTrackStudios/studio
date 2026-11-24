@@ -1,5 +1,5 @@
 //! Lyric Sync workspace — loads a keyflow `sync` `TimingMap` sidecar (per-word
-//! forced-alignment timings + confidence) and shows it in session-ui's
+//! forced-alignment timings + confidence) and shows it in daw-view-kit's
 //! editable `LyricSyncView`. Nudges shift a word's start/end and write the
 //! sidecar back to disk, so a manual pass over the aligner's output persists.
 //!

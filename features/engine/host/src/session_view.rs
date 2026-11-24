@@ -1,6 +1,6 @@
 //! Session workspace — the setlist player surface.
 //!
-//! Renders session-ui's `PerformanceLayout` (fed by the global signals
+//! Renders daw-view-kit's `PerformanceLayout` (fed by the global signals
 //! that `session::ui::apply_setlist_event` maintains) plus a minimal
 //! transport strip (play/stop, current song/section, prev/next song)
 //! wired to the in-process `SetlistServiceClient` — which drives the
@@ -30,7 +30,7 @@ async fn engine_when_ready() -> active_engine::ActiveClients {
 }
 
 /// Invisible app-level component: bridges the setlist service's
-/// `#[subscribe]` events hub straight into session-ui's global signals
+/// `#[subscribe]` events hub straight into daw-view-kit's global signals
 /// (the in-process flavor of the desktop/web subscription loop).
 /// Mounted once in `App` so it survives workspace switches.
 #[component]
@@ -330,7 +330,7 @@ fn ConnectToReaper() -> Element {
 
 /// The Session workspace: the full setlist-player surface —
 /// Navigator sidebar (left), performance display (center) and the
-/// transport control bar (bottom), assembled from session-ui's panels.
+/// transport control bar (bottom), assembled from daw-view-kit's panels.
 /// A guide-settings gear floats in the top-right of the main view. All
 /// three panels read the same global signals the `SessionEventBridge`
 /// keeps fed.

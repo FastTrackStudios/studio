@@ -10,7 +10,7 @@
 // The kit, under the paths this code was written against (`crate::tcp`,
 // `crate::skin`, …).
 #[allow(unused_imports)]
-use session_ui::*;
+use daw_view_kit::*;
 
 pub mod arrange_camera;
 pub mod arrange_edit;

@@ -5,7 +5,7 @@
 //! and its edits (hits, comps, fx, automation, timeline), and the engine
 //! with no window (`studio_engine::headless`, what `studio engine` runs).
 //!
-//! Nothing here draws: the window is `session-ui`, which attaches to this
+//! Nothing here draws: the window is `daw-view-kit`, which attaches to this
 //! engine (`window_queue::attach`, `actions::list`) and reads what it
 //! publishes. See docs/design/engine-boundary.md.
 
@@ -78,13 +78,13 @@ pub mod stream_set;
 #[cfg(feature = "native")]
 pub mod page;
 pub use session_engine_client::stream_quality;
-#[cfg(feature = "native")]
-pub mod studio_engine;
 /// The engine with no window, serving windows over its socket: what
 /// `studio engine`, `studio-desktop --session-engine` and Studio's `daw`
 /// extension run.
 #[cfg(all(feature = "native", unix, not(target_os = "ios")))]
 pub mod engine_host;
+#[cfg(feature = "native")]
+pub mod studio_engine;
 pub use session_engine_client::take_colors;
 #[cfg(feature = "native")]
 pub mod task_account;
@@ -159,12 +159,12 @@ pub mod mix_export;
 pub use session_engine_client::notes_actions;
 #[cfg(feature = "native")]
 pub mod perf;
+#[cfg(feature = "native")]
+pub mod perf_meter;
 /// The engine's telemetry on plain `tracing`: the span ring `PERF_RECENT`
 /// reads, OTLP export, the panic hook.
 #[cfg(feature = "native")]
 pub mod telemetry;
-#[cfg(feature = "native")]
-pub mod perf_meter;
 pub use session_engine_client::plan;
 pub mod poi;
 pub mod prepare;

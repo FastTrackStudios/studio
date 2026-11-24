@@ -337,7 +337,7 @@ fn chunks_never_cut_a_run_of_slices() {
 }
 
 #[test]
-#[ignore = "timing, asserts nothing: cargo nextest run -p session-ui --run-ignored only -E 'test(=arrangement::tests::rebuild_after_a_hit_move_timings)' --no-capture"]
+#[ignore = "timing, asserts nothing: cargo nextest run -p daw-view-kit --run-ignored only -E 'test(=arrangement::tests::rebuild_after_a_hit_move_timings)' --no-capture"]
 fn rebuild_after_a_hit_move_timings() {
     let _ = tracing_subscriber::fmt().with_test_writer().try_init();
     let mut song = song(1300);

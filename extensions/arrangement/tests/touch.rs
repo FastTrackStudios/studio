@@ -28,8 +28,8 @@ use architect_workspace::{
 };
 use arrangement_view::panel::ArrangementPanel;
 use arrangement_view::widget::ArrangementWidget;
+use daw_view_kit::studio::StudioSession;
 use dioxus::prelude::*;
-use session_ui::studio::StudioSession;
 use studio_arrangement::host::{Hosted, InScope, Stats};
 
 const W: u32 = 1280;
@@ -39,14 +39,14 @@ fn session() -> StudioSession {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../features/dynamic-template/fixtures/golden/template.rpp");
     session_engine::open::open_silent(&path).expect("open the golden template");
-    let raw = session_ui::studio::fetch().expect("read it back");
-    let planner = session_ui::studio::Planner {
+    let raw = daw_view_kit::studio::fetch().expect("read it back");
+    let planner = daw_view_kit::studio::Planner {
         raw: Arc::new(raw),
         scene: Some("drum-mixing"),
         kinds: Arc::new(session_engine::plan::Kinds::read(&path)),
     };
     let (project, rows) = planner.plan(&planner.raw);
-    let previews = session_ui::studio::previews_of(&project);
+    let previews = daw_view_kit::studio::previews_of(&project);
     StudioSession {
         project,
         rows,

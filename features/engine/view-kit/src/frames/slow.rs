@@ -122,7 +122,7 @@ pub fn painted(frame: &Frame) {
 /// `frame`, `frame.since` before now to now, with `work` (what ran in the
 /// gap) nested under it.
 fn export(frame: &Frame, work: &[Work]) {
-    let tracer = opentelemetry::global::tracer("session-ui");
+    let tracer = opentelemetry::global::tracer("daw-view-kit");
     let end = SystemTime::now();
     let start = end
         .checked_sub(Duration::from_micros(frame.since))

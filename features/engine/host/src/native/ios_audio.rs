@@ -14,6 +14,7 @@
 
 use std::sync::Mutex;
 
+use daw_view_kit::device_audio::{Change, Report};
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2_avf_audio::{
@@ -27,7 +28,6 @@ use objc2_media_player::{
     MPNowPlayingInfoPropertyPlaybackRate, MPRemoteCommand, MPRemoteCommandCenter,
     MPRemoteCommandEvent, MPRemoteCommandHandlerStatus,
 };
-use session_ui::device_audio::{Change, Report};
 
 /// Where the microphone choice is kept (Settings → This device): it applies
 /// as the session is set up, at launch.

@@ -5,8 +5,8 @@
 //! On by default; `FTS_DOCK=0` keeps the old fixed column (TopBar, views,
 //! BottomBar) while the dock settles.
 //!
-//! Every panel here is a component of `session_ui` reading the song's
-//! [`StudioSession`](session_ui::studio::StudioSession) from context, so
+//! Every panel here is a component of `daw_view_kit` reading the song's
+//! [`StudioSession`](daw_view_kit::studio::StudioSession) from context, so
 //! the dock sits under the song (keyed by it, as the views were).
 //! Screensets persist in `utils::prefs` (`dock.screensets.v1`): read and
 //! repaired at start, falling back to the built-ins; written when they
@@ -44,10 +44,10 @@ pub fn run_action(id: &'static str, args: String) {
 }
 
 /// A dock control pressed: its action run through the Action List
-/// (`session_ui::window::press`), which comes back to the dock as a
+/// (`daw_view_kit::window::press`), which comes back to the dock as a
 /// request (`apply`).
 fn press(id: &str, args: &serde_json::Value) {
-    let _ = session_ui::window::press(id, args);
+    let _ = daw_view_kit::window::press(id, args);
 }
 
 /// Where the screensets are kept.
@@ -78,7 +78,7 @@ fn load() -> Screensets {
 
 /// The dock over the current song, under the window's own bars.
 #[component]
-pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) -> Element {
+pub fn SongDock(session: daw_view_kit::studio::StudioSession, class: FormClass) -> Element {
     use_context_provider(|| session);
     let sets = use_signal(load);
     let mut form = use_signal(|| class);
@@ -102,7 +102,7 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
     use_drop(|| session_engine::actions::set_docked(false));
     // The top bar's navigator button, lit while the set is shown: the
     // navigator pin follows the dock's Set panel.
-    let pins = try_use_context::<session_ui::shell::Pins>();
+    let pins = try_use_context::<daw_view_kit::shell::Pins>();
     use_effect(move || {
         let shown = dock.shows(kind::SET);
         if let Some(mut navigator) = pins.map(|p| p.navigator)
@@ -216,7 +216,7 @@ fn DockBar() -> Element {
             }
             div { style: "flex:none; width:1px; height:{height - 20}px; background:{RULE}; margin:0 4px;" }
             div { style: "position:relative; flex:1 1 0; min-width:0; height:100%; display:flex; align-items:center; overflow:hidden;",
-                session_ui::transport_bar::TransportBar { big: touch }
+                daw_view_kit::transport_bar::TransportBar { big: touch }
             }
             // The bottom bar's own parts, flat and the bar's full height
             // as they are there; their pickers open upward, over the dock
@@ -224,12 +224,12 @@ fn DockBar() -> Element {
             div { style: "position:relative; flex:none; height:100%; display:flex; align-items:stretch;",
                 if arrangement || mixer {
                     div { style: "flex:none; width:1px; margin:10px 4px; background:{RULE};" }
-                    session_ui::shell::PanelControls { arrangement, mixer }
+                    daw_view_kit::shell::PanelControls { arrangement, mixer }
                 }
-                session_ui::shell::Jobs {}
+                daw_view_kit::shell::Jobs {}
                 if let Some(mode) = mode {
-                    session_ui::shell::PhaseSwitch { mode }
-                    session_ui::shell::Modes { mode }
+                    daw_view_kit::shell::PhaseSwitch { mode }
+                    daw_view_kit::shell::Modes { mode }
                 }
             }
             div { style: "flex:none; width:1px; height:{height - 20}px; background:{RULE}; margin:0 4px;" }
@@ -388,7 +388,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "CHT",
             Place::Edge(Side::Right),
             |_| {
-                rsx! { Fill { session_ui::chart_panel::Chart { paged: true } } }
+                rsx! { Fill { daw_view_kit::chart_panel::Chart { paged: true } } }
             },
         ),
         k(
@@ -397,7 +397,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "CED",
             Place::Edge(Side::Right),
             |_| {
-                rsx! { Fill { session_ui::chart_editor::ChartEditor {} } }
+                rsx! { Fill { daw_view_kit::chart_editor::ChartEditor {} } }
             },
         ),
         k(
@@ -406,7 +406,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "LYR",
             Place::Edge(Side::Right),
             |_| {
-                rsx! { Fill { session_ui::lyrics_panel::LyricsPanel {} } }
+                rsx! { Fill { daw_view_kit::lyrics_panel::LyricsPanel {} } }
             },
         ),
         k(kind::FX_ROW, "FX", "FX", Place::Edge(Side::Bottom), |_| {
@@ -418,7 +418,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "EDT",
             Place::Edge(Side::Bottom),
             |_| {
-                rsx! { Fill { session_ui::editor_view::EditorPanel {} } }
+                rsx! { Fill { daw_view_kit::editor_view::EditorPanel {} } }
             },
         ),
         k(
@@ -438,7 +438,7 @@ fn catalog(host: HostPanels) -> Catalog {
             |_| {
                 rsx! {
                     div { style: "flex:1; min-width:0; display:flex; align-items:center; padding:4px 8px;",
-                        session_ui::progress::ProgressBar { height: Some("40px".to_owned()), flat: true }
+                        daw_view_kit::progress::ProgressBar { height: Some("40px".to_owned()), flat: true }
                     }
                 }
             },
@@ -468,7 +468,7 @@ fn catalog(host: HostPanels) -> Catalog {
             |_| {
                 rsx! {
                     div { style: "flex:1; min-width:0; display:flex; align-items:flex-start; padding:8px;",
-                        session_ui::versions::Versions {}
+                        daw_view_kit::versions::Versions {}
                     }
                 }
             },
@@ -482,8 +482,8 @@ fn catalog(host: HostPanels) -> Catalog {
                 rsx! {
                     div { style: "flex:1; min-width:0; display:flex; flex-wrap:wrap; align-items:flex-start; \
                                   gap:8px; padding:8px;",
-                        session_ui::collab_bar::CollabBar {}
-                        session_ui::shell::AudioBadge { density: session_ui::shell::Density::Full }
+                        daw_view_kit::collab_bar::CollabBar {}
+                        daw_view_kit::shell::AudioBadge { density: daw_view_kit::shell::Density::Full }
                     }
                 }
             },
@@ -494,7 +494,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "LST",
             Place::Edge(Side::Left),
             |_| {
-                rsx! { Fill { session_ui::setup::SetupView { on_pick: None } } }
+                rsx! { Fill { daw_view_kit::setup::SetupView { on_pick: None } } }
             },
         ),
         k(
@@ -503,7 +503,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "BRW",
             Place::Edge(Side::Left),
             |_| {
-                rsx! { Fill { session_ui::browser::BrowserBody {} } }
+                rsx! { Fill { daw_view_kit::browser::BrowserBody {} } }
             },
         ),
         k(
@@ -563,7 +563,7 @@ fn ArrangementPanel() -> Element {
 fn SetPanel() -> Element {
     rsx! {
         Fill {
-            session_ui::navigator::Navigator {
+            daw_view_kit::navigator::Navigator {
                 on_pick: move |index: usize| {
                     session_engine::actions::off_the_window(
                         "SESSION_SONG",
@@ -585,11 +585,11 @@ fn TransportPanel() -> Element {
             div {
                 style: "flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; \
                         padding:6px 8px; background:{dock::host::tokens::SHEET};",
-                session_ui::progress::TransportButtons { compact: true, height: 48 }
+                daw_view_kit::progress::TransportButtons { compact: true, height: 48 }
             }
         };
     }
-    rsx! { Fill { session_ui::transport_bar::TransportBar { big: true } } }
+    rsx! { Fill { daw_view_kit::transport_bar::TransportBar { big: true } } }
 }
 
 #[component]

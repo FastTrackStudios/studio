@@ -2,7 +2,7 @@
 //! `studio engine` and the CLI do. Nothing here opens an audio device or a
 //! window: a new song is made in the engine, its edit state set and read
 //! back, and the Live roll-on switched. (A window attaching to it is
-//! session-ui's test, `window_attach`.)
+//! daw-view-kit's test, `window_attach`.)
 
 use serde_json::{Value, json};
 

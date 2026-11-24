@@ -1,11 +1,11 @@
 //! The session: a set open for playing, taking the whole window. The
 //! app's other mode beside the launcher (Home, Setlists, the set pages and
 //! the sidebar), as the old app switched from its launcher into Session's
-//! frame (`features/engine/ui/src/shell.rs`).
+//! frame (`features/engine/view-kit/src/shell.rs`).
 //!
 //! Its own layout (`Route::SessionPage`, under the root beside the
 //! launcher's `Shell`): an `AppShell` of its own with no sidebars. Natively
-//! it is the old Session window's, made of the same components: session-ui's
+//! it is the old Session window's, made of the same components: daw-view-kit's
 //! `TopBar` (the navigator, the set's song tabs, Save and the checkpoints)
 //! across the top bar's middle and its `BottomBar` (Setup, the views, the
 //! transport, the modes) as the accessory, fed by the engine the app drives
@@ -270,7 +270,7 @@ pub fn page(slug: String) -> Element {
         View::Overview => rsx! {
             Overview {}
         },
-        // session-ui's own panels over the engine's song, as the old
+        // daw-view-kit's own panels over the engine's song, as the old
         // Session window showed them (no extension of their own yet).
         #[cfg(feature = "native")]
         View::Setup | View::Editor | View::Fx => rsx! {
@@ -325,7 +325,7 @@ fn Overview() -> Element {
     }
 }
 
-/// The session natively: session-ui's bars around the session's layout,
+/// The session natively: daw-view-kit's bars around the session's layout,
 /// whose pane is a hosted extension's view or the app's page.
 #[cfg(feature = "native")]
 mod native {
@@ -334,14 +334,14 @@ mod native {
     use app_shell::Workspace;
     use app_shell::ui::{AppShell, BarSpan, Tabs, TopBar, use_top_bar_span};
     use app_shell_extensions::{ExtensionOverlays, ExtensionUi, use_extension_ui};
+    use daw_view_kit::shell::View as Ui;
     use session_engine_client::setlist::Setlist;
-    use session_ui::shell::View as Ui;
 
     use super::{View, go_to, leave, route};
     use crate::hosted;
     use crate::state::use_app;
 
-    /// The app's view as session-ui names it.
+    /// The app's view as daw-view-kit names it.
     pub(super) const fn to_ui(v: View) -> Ui {
         match v {
             View::Overview => Ui::Overview,
@@ -352,13 +352,13 @@ mod native {
             View::Mixer => Ui::Mixer,
             View::Fx => Ui::Fx,
             View::Setup => Ui::Setup,
-            // No button of its own in session-ui's bar: Performance, which
+            // No button of its own in daw-view-kit's bar: Performance, which
             // this app has none of, stands for it while it shows.
             View::Lighting => Ui::Performance,
         }
     }
 
-    /// session-ui's view as the app's (Performance is the overview here).
+    /// daw-view-kit's view as the app's (Performance is the overview here).
     pub(super) const fn of_ui(v: Ui) -> View {
         match v {
             Ui::Performance => View::Lighting,
@@ -415,7 +415,7 @@ mod native {
         crate::stage::stage(area_now(), &names, page_for(view))
     }
 
-    /// session-ui's Setup, Editor or FX panel over the song the engine has
+    /// daw-view-kit's Setup, Editor or FX panel over the song the engine has
     /// (its session in context, as the old window's `SongViews` gave it).
     #[component]
     pub fn SongPanel(view: View) -> Element {
@@ -428,8 +428,8 @@ mod native {
                 for key in std::iter::once(key) {
                     WithSong { key: "{key}", session: Song(session.clone()),
                         match view {
-                            View::Setup => rsx! { session_ui::setup::SetupView {} },
-                            View::Editor => rsx! { session_ui::editor_view::EditorPanel {} },
+                            View::Setup => rsx! { daw_view_kit::setup::SetupView {} },
+                            View::Editor => rsx! { daw_view_kit::editor_view::EditorPanel {} },
                             _ => rsx! { mixer_view::fx_view::FxPanel { lanes: 4 } },
                         }
                     }
@@ -438,7 +438,7 @@ mod native {
         }
     }
 
-    /// The engine's set, as session-ui's song tabs read it (a signal of
+    /// The engine's set, as daw-view-kit's song tabs read it (a signal of
     /// the setlist, as the old window provided it): followed over the
     /// views' link, changed when the engine's set does.
     fn use_engine_setlist() -> Signal<Setlist> {
@@ -485,7 +485,7 @@ mod native {
             let views = architect_process_view::extension::use_process_views(hosted::host());
             move || views
         });
-        // What session-ui's bars and panels read, as the old Session
+        // What daw-view-kit's bars and panels read, as the old Session
         // window gave it them: the mode, the pins, touch, the set, the
         // mixer's memory, the close-ups, the lyrics' choice, and Back.
         let mode = use_context_provider(|| Signal::new(studio_view_link::mode_from_env()));
@@ -501,12 +501,12 @@ mod native {
                 crate::state::sleep_ms(100).await;
             }
         });
-        session_ui::shell::use_pins();
-        use_context_provider(session_ui::touch::Touch::detect);
+        daw_view_kit::shell::use_pins();
+        use_context_provider(daw_view_kit::touch::Touch::detect);
         use_context_provider(mixer_view::mixer_panel::MixerMemory::new);
         use_context_provider(mixer_view::closeup::Closeups::new);
-        use_context_provider(session_ui::lyrics_panel::LyricsChoice::new);
-        use_context_provider(|| session_ui::shell::Back(Callback::new(move |()| leave(app))));
+        use_context_provider(daw_view_kit::lyrics_panel::LyricsChoice::new);
+        use_context_provider(|| daw_view_kit::shell::Back(Callback::new(move |()| leave(app))));
         use_engine_setlist();
         // Keyflow's chart and Ignition's room follow the engine's song.
         hosted::use_engine_actions();
@@ -600,7 +600,7 @@ mod native {
                         TopBar { title: title.clone() }
                     },
                     accessory: rsx! {
-                        session_ui::shell::BottomBar {
+                        daw_view_kit::shell::BottomBar {
                             view: shown,
                             mode,
                             transport: rsx! { Transport {} },
@@ -615,7 +615,7 @@ mod native {
         }
     }
 
-    /// Puts session-ui's top bar in the shell's top bar's middle (all but
+    /// Puts daw-view-kit's top bar in the shell's top bar's middle (all but
     /// the window's own controls).
     #[component]
     fn SetBar(ui: ExtensionUi) -> Element {
@@ -631,7 +631,7 @@ mod native {
         rsx! {}
     }
 
-    /// session-ui's top bar: the navigator's switch, the set's songs as
+    /// daw-view-kit's top bar: the navigator's switch, the set's songs as
     /// tabs (a pick goes to that song, as the app's set does), Save and
     /// the checkpoints, and the engine's state at the right.
     #[component]
@@ -639,7 +639,7 @@ mod native {
         let app = use_app();
         rsx! {
             div { style: "flex:1 1 0px; min-width:0; height:100%; display:flex; flex-direction:column;",
-                session_ui::shell::TopBar {
+                daw_view_kit::shell::TopBar {
                     lights: 0.0,
                     badges: rsx! { EngineBadge {} },
                     on_pick: move |i: usize| go_to(app, i),
@@ -672,7 +672,7 @@ mod native {
         }
     }
 
-    /// session-ui's transport over the song on show (it reads the song
+    /// daw-view-kit's transport over the song on show (it reads the song
     /// it drives).
     #[component]
     fn Transport() -> Element {
@@ -681,7 +681,7 @@ mod native {
             Some((key, session)) => rsx! {
                 for key in std::iter::once(key) {
                     WithSong { key: "{key}", session: Song(session.clone()),
-                        session_ui::transport_bar::TransportBar { big: true }
+                        daw_view_kit::transport_bar::TransportBar { big: true }
                     }
                 }
             },
@@ -691,7 +691,7 @@ mod native {
 
     /// A song's session as a prop (keyed by its song, so never compared).
     #[derive(Clone)]
-    struct Song(session_ui::song_model::StudioSession);
+    struct Song(daw_view_kit::song_model::StudioSession);
 
     impl PartialEq for Song {
         fn eq(&self, _: &Self) -> bool {

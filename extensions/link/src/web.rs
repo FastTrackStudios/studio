@@ -2,17 +2,17 @@
 //!
 //! There is no process to attach to. The `daw` extension's browser build
 //! opens the page's one engine (`session_engine::web_engine`, hosted by
-//! `session_ui::web_host`: a share link's set, or a member's set from
+//! `daw_view_kit::web_host`: a share link's set, or a member's set from
 //! their org) and every view reads the song it has current from there,
 //! the same `StudioSession` the desktop's window protocol hands a native
 //! view. Actions run on the page's own Action List
 //! (`session_engine::web_actions`).
 
+use daw_view_kit::song_model::StudioSession;
+use daw_view_kit::web_host::{self, HostedState};
 use dioxus::prelude::*;
 use serde_json::Value as Json;
 use session_engine_client::engine::Move;
-use session_ui::song_model::StudioSession;
-use session_ui::web_host::{self, HostedState};
 
 /// Nothing to attach to: the page's engine is the `daw` extension's to
 /// open. Kept so a view's code is the same on every target.
@@ -86,7 +86,7 @@ pub async fn call(id: &str, args: &Json) -> Result<Json, String> {
     }
     match id {
         "SESSION_PLAY_PAUSE" => {
-            session_ui::web_audio::unlock();
+            daw_view_kit::web_audio::unlock();
             session_engine_client::engine::transport(Move::PlayStop, 0.0);
             return Ok(serde_json::json!({ "ok": true }));
         }

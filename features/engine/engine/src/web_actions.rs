@@ -6,7 +6,7 @@
 //! this list: the actions both lists carry (`crate::shared_actions` — one
 //! description and one argument shape per id), carried out here through
 //! the facade, and the arrangement's gestures (`crate::arrange_actions`).
-//! The window adds its own view actions (`session_ui::view_actions`) with
+//! The window adds its own view actions (`daw_view_kit::view_actions`) with
 //! [`extend`].
 //!
 //! A control runs one with [`press`] (in the background: the page has one

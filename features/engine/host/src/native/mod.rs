@@ -1,7 +1,7 @@
 //! The Session app on Blitz (dioxus-native) — see `docs/app-on-blitz.md`.
 //!
 //! The desktop build launches this instead of the WRY app when the `native`
-//! feature is on. It is the app as panels (`session_ui::studio::Arrangement`,
+//! feature is on. It is the app as panels (`daw_view_kit::studio::Arrangement`,
 //! the progress bar, …) composed into views under one top bar, with the
 //! window's own title bar made transparent so the traffic lights sit in ours.
 //!
@@ -29,12 +29,12 @@ mod library;
 /// The welcome screen's Publish to Task card (`SESSION_INGEST`).
 pub mod publish;
 /// The layer that notes what the paint thread runs, for the traces of the
-/// frames that miss 120 Hz (`session_ui::frames::slow`): the app's
+/// frames that miss 120 Hz (`daw_view_kit::frames::slow`): the app's
 /// subscriber takes it.
-pub use session_ui::frames::slow::WorkLayer as FrameWorkLayer;
-/// The limits the window's GPU device asks for (`session_ui::gpu`): the
+pub use daw_view_kit::frames::slow::WorkLayer as FrameWorkLayer;
+/// The limits the window's GPU device asks for (`daw_view_kit::gpu`): the
 /// app's launch hands them to the renderer.
-pub use session_ui::gpu::window_limits;
+pub use daw_view_kit::gpu::window_limits;
 /// The window as a dock: panels laid out by the active screenset.
 pub mod dock;
 mod shell;
@@ -214,7 +214,7 @@ pub fn prepare() -> Option<Prepared> {
     // The global app menu (File, Edit, View, …) for the desktop shell's
     // top bar, on the session bus — on a thread of its own.
     #[cfg(target_os = "linux")]
-    session_ui::app_menu::start();
+    daw_view_kit::app_menu::start();
     // How this app dials a Session engine (Remote on another Session): the
     // connector lives with the app's iroh identity (`crate::remote`).
     #[cfg(feature = "session-domain")]
@@ -473,7 +473,7 @@ fn window_attributes() -> winit::window::WindowAttributes {
         .with_maximized(pos.is_none() && size.is_none())
         .with_surface_size(winit::dpi::LogicalSize::new(w, h))
         // Small enough to be phone-sized: below ~700 wide (or ~500 tall)
-        // the app takes its small-screen layout (`session_ui::compact`).
+        // the app takes its small-screen layout (`daw_view_kit::compact`).
         .with_min_surface_size(winit::dpi::LogicalSize::new(320.0, 300.0));
     if let Some((x, y)) = pos {
         attributes = attributes.with_position(winit::dpi::LogicalPosition::new(x, y));

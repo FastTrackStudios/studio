@@ -1377,7 +1377,7 @@ span.aglogo { overflow: hidden; display: block; }
 .agline > .agarr { flex: none; margin-left: 0; }
 .playset.quiet { color: var(--ink); }
 
-/* The session: a set open for playing, the whole window. session-ui's
+/* The session: a set open for playing, the whole window. daw-view-kit's
    top bar fills the shell's top bar's middle, its bottom bar is the foot;
    the views are the hosted extensions' (src/hosted.rs). */
 .content.session { background: var(--desk); }

@@ -1,6 +1,6 @@
 //! Panel registration for session domain.
 //!
-//! Registers session-ui panels with the dock renderer registry,
+//! Registers daw-view-kit panels with the dock renderer registry,
 //! decoupling panel definitions from the central app binary.
 
 use dock::PanelId;

@@ -36,14 +36,14 @@ use vello::kurbo::Affine;
 
 use arrangement_view::arrangement::{Arrangement, Palette, TCP_WIDTH, Viewport};
 use arrangement_view::widget::{ArrangementWidget, Shared, View};
+use daw_view_kit::headless::{BATCH, Headless};
 use mixer_view::mcp::Mixer;
-use session_ui::headless::{BATCH, Headless};
 
 /// The phase these measurements are taken in — the one the rack was
 /// built for, and the one every reference image was shot in.
 const TONE: session::mix_phases::MixPhase = session::mix_phases::MixPhase::Tone;
 use arrangement_view::ruler::ruler_h;
-use session_ui::profile::{Counts, Stages, Summary};
+use daw_view_kit::profile::{Counts, Stages, Summary};
 
 /// One phase's motion over `0..1`, as (`scroll_x`, `scroll_y`,
 /// `zoom_x`, `zoom_y`) fractions.
@@ -71,7 +71,7 @@ fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "warn,bench=info,session_ui=info".into()),
+                .unwrap_or_else(|_| "warn,bench=info,daw_view_kit=info".into()),
         )
         .init();
 
@@ -95,10 +95,10 @@ fn main() {
 
     let theme = daw_ui::theming::Theme::dark();
     // In the theme's colours, where it names them (FTS_THEME).
-    session_ui::skin::from_env();
-    let palette = session_ui::skin::palette(&Palette::from_theme(&theme));
-    let font = session_ui::text::Font::embedded().expect("the embedded font");
-    let layout = session_ui::layout::Layout::from_env();
+    daw_view_kit::skin::from_env();
+    let palette = daw_view_kit::skin::palette(&Palette::from_theme(&theme));
+    let font = daw_view_kit::text::Font::embedded().expect("the embedded font");
+    let layout = daw_view_kit::layout::Layout::from_env();
 
     if let Ok(out) = std::env::var("FTS_BENCH_KIT") {
         // The audio drum workflow: a tracked kit's mics stacked as role
@@ -442,8 +442,8 @@ fn bench_bars() -> usize {
 /// are markers on the waveforms rather than a solid bar.
 fn kit_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let size = (f64::from(width), f64::from(height));
-    let mut view = session_ui::expression::Expression::audio_kit(bench_bars(), (0.0, 0.0), size);
-    view.set_look(session_ui::expression::look_of(palette));
+    let mut view = daw_view_kit::expression::Expression::audio_kit(bench_bars(), (0.0, 0.0), size);
+    view.set_look(daw_view_kit::expression::look_of(palette));
     view.editor.frame_bars(4);
     view.editor.playhead = Some(view.editor.doc.time_base.units_per_second(view.editor.bpm) * 3.2);
     let mut image = VelloImageRenderer::new(width, height);
@@ -670,20 +670,20 @@ fn set_on_every_folder(
 /// `FTS_BENCH_EXPRESSION_MENU=1` with its context menu open.
 fn expression_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let size = (f64::from(width), f64::from(height));
-    let mut view = session_ui::expression::Expression::demo((0.0, 0.0), size);
+    let mut view = daw_view_kit::expression::Expression::demo((0.0, 0.0), size);
     // `FTS_BENCH_EXPRESSION_MENU=1`: with the context menu open, as a
     // right-click in the roll leaves it.
     if std::env::var_os("FTS_BENCH_EXPRESSION_MENU").is_some() {
         view.press(
             size.0 * 0.4,
             size.1 * 0.3,
-            session_ui::mousemap::Mods::default(),
+            daw_view_kit::mousemap::Mods::default(),
             2,
         );
         view.release(
             size.0 * 0.4,
             size.1 * 0.3,
-            session_ui::mousemap::Mods::default(),
+            daw_view_kit::mousemap::Mods::default(),
         );
     }
     let mut image = VelloImageRenderer::new(width, height);
@@ -728,12 +728,12 @@ fn editor_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32
         tracing::error!("could not read the project back");
         return;
     };
-    let mut song = session_ui::editor_view::Song::of(&project);
+    let mut song = daw_view_kit::editor_view::Song::of(&project);
     let named = std::env::var("FTS_BENCH_EDITOR_TRACK").unwrap_or_else(|_| "Piano".to_owned());
     for t in &mut song.tracks {
         t.selected = t.name == named;
     }
-    let mut view = session_ui::editor_view::EditorView::new(song);
+    let mut view = daw_view_kit::editor_view::EditorView::new(song);
     let deadline = Instant::now() + std::time::Duration::from_secs(60);
     while view.editor().is_none() && Instant::now() < deadline {
         let _ = view.frame(width, height, 1.0);
@@ -742,7 +742,7 @@ fn editor_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32
     // `FTS_BENCH_EDITOR_ALIGN=1`: line the stack's takes up first, and
     // say where each lane's first notes moved.
     if std::env::var_os("FTS_BENCH_EDITOR_ALIGN").is_some() {
-        let firsts = |view: &mut session_ui::editor_view::EditorView| -> Vec<Vec<f64>> {
+        let firsts = |view: &mut daw_view_kit::editor_view::EditorView| -> Vec<Vec<f64>> {
             view.editor().map_or_else(Vec::new, |e| {
                 (0..e.editor.tracks.len())
                     .map(|i| {
@@ -857,7 +857,7 @@ fn fx_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
                 .find(|p| format!("{p:?}").eq_ignore_ascii_case(name.trim()))
         })
         .collect();
-    let Ok(font) = session_ui::text::Font::embedded() else {
+    let Ok(font) = daw_view_kit::text::Font::embedded() else {
         tracing::error!("no embedded font");
         return;
     };
@@ -895,8 +895,8 @@ fn fx_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
 
 fn mixer_shot(
     palette: &Palette,
-    font: &session_ui::text::Font,
-    layout: session_ui::layout::Layout,
+    font: &daw_view_kit::text::Font,
+    layout: daw_view_kit::layout::Layout,
     out: &std::path::Path,
     project_file: &std::path::Path,
     width: u32,
@@ -953,7 +953,7 @@ fn mixer_shot(
     // MEANS: which rows survived the folds, how deep each sits and how
     // wide it opens, in project order. It is the same on every machine,
     // so it is the half of a scene fixture that can be compared byte for
-    // byte (`features/engine/ui/tests/golden_scenes.rs`).
+    // byte (`features/engine/view-kit/tests/golden_scenes.rs`).
     if let Ok(out) = std::env::var("FTS_BENCH_ROWS") {
         let mut text = String::new();
         for (track, depth) in &planned {
@@ -995,16 +995,16 @@ fn mixer_shot(
     let rows = daw_ui::studio::RowsRef(std::sync::Arc::new(planned));
     // `FTS_BENCH_POINTER=row,control[,press]`: the pointer over (or
     // pressing) one control, by its theme name (`mute`, `fader`, `pan`…).
-    let mut pointer = session_ui::pointer::Pointer::default();
+    let mut pointer = daw_view_kit::pointer::Pointer::default();
     if let Ok(spec) = std::env::var("FTS_BENCH_POINTER") {
         let parts: Vec<&str> = spec.split(',').collect();
         if let (Some(row), Some(control)) = (
             parts.first().and_then(|r| r.trim().parse::<usize>().ok()),
             parts
                 .get(1)
-                .and_then(|c| session_ui::skin::control(c.trim())),
+                .and_then(|c| daw_view_kit::skin::control(c.trim())),
         ) {
-            pointer.hover(Some(session_ui::pointer::Spot { row, control }));
+            pointer.hover(Some(daw_view_kit::pointer::Spot { row, control }));
             if parts.get(2).is_some_and(|p| p.trim() == "press") {
                 pointer.press();
             }
@@ -1046,14 +1046,14 @@ fn mixer_shot(
     // landing between two passes would make them differ, and the
     // verify run compares them byte for byte.
     settings.prerender_tails();
-    let frame = session_ui::rails::Frame::new(f64::from(width), f64::from(height));
+    let frame = daw_view_kit::rails::Frame::new(f64::from(width), f64::from(height));
     let live_strips = std::env::var_os("FTS_BENCH_LIVE_STRIPS").is_some_and(|v| v != "0");
     let mixer = Mixer::build(
         palette,
         font,
         &project,
         &rows,
-        mcp_height - session_ui::rails::TOP,
+        mcp_height - daw_view_kit::rails::TOP,
         layout,
         // The shot is of the Tone phase, which is the phase the rack
         // was built for and the one the reference images were taken in.
@@ -1151,8 +1151,10 @@ fn mixer_shot(
             // Pinned to the BOTTOM of the window.
             //
 
-            let at =
-                Affine::translate((session_ui::rails::SIDE - scroll_x, session_ui::rails::TOP));
+            let at = Affine::translate((
+                daw_view_kit::rails::SIDE - scroll_x,
+                daw_view_kit::rails::TOP,
+            ));
             let recorded = mixer.replay(painter, scroll_x, frame.content_width(), at);
             // The live controls, exactly as the window draws them — a
             // shot that skipped them would be a shot of a mixer with no
@@ -1187,8 +1189,8 @@ fn mixer_shot(
             );
             counts.replayed = recorded.replayed + live.replayed;
             counts.submitted = recorded.submitted + live.submitted;
-            let profile = session_ui::rails::profile(
-                session_ui::rails::Surface::Mixer,
+            let profile = daw_view_kit::rails::profile(
+                daw_view_kit::rails::Surface::Mixer,
                 session::modes::Mode::Mix,
                 session::mix_phases::MixPhase::Tone,
                 scene.map(|s| s.slug.as_str()),
@@ -1197,14 +1199,14 @@ fn mixer_shot(
                 // The bench draws the kit's rails.
                 "drums",
             );
-            session_ui::rails::draw(
+            daw_view_kit::rails::draw(
                 painter,
                 palette,
                 font,
                 // Deliberately none: the shot is the reference the
                 // sweep compares against, and it must not depend on
                 // whether this machine has REAPER's resources on disk.
-                &mut session_ui::icons::Icons::none(),
+                &mut daw_view_kit::icons::Icons::none(),
                 // At rest, like every other control in the shot.
                 (None, None),
                 frame,
@@ -1486,7 +1488,7 @@ fn shot(
 /// unless named). One `surface depth folder name` line a row: what the
 /// window shows, without drawing it.
 fn plan_dump(path: &std::path::Path, out: &std::path::Path) {
-    let Some(raw) = session_ui::studio::fetch() else {
+    let Some(raw) = daw_view_kit::studio::fetch() else {
         tracing::error!("could not read the project back");
         return;
     };
@@ -1495,7 +1497,7 @@ fn plan_dump(path: &std::path::Path, out: &std::path::Path) {
         .and_then(|slug| dynamic_template::scenes::scene(&slug))
         .or_else(|| dynamic_template::scenes::scene("drum-mixing"))
         .map(|scene| scene.slug.as_str());
-    let planner = session_ui::studio::Planner {
+    let planner = daw_view_kit::studio::Planner {
         raw: std::sync::Arc::new(raw),
         scene,
         kinds: std::sync::Arc::new(session_engine::plan::Kinds::read(path)),
@@ -1546,7 +1548,7 @@ fn depths() {
 /// The open session, read the way the window reads it.
 ///
 /// The rows are planned by the studio's own planner
-/// (`session_ui::studio::plan_rows` — `FTS_BENCH_SCENE` picks a visual
+/// (`daw_view_kit::studio::plan_rows` — `FTS_BENCH_SCENE` picks a visual
 /// scene, none by default so every track is on screen), the previews are
 /// the studio's (`previews_of`: every MIDI item's notes and every audio
 /// item's peaks), and the arrangement is drawn through the widget the
@@ -1559,7 +1561,7 @@ struct Session {
 
 impl Session {
     fn read(path: &std::path::Path) -> Option<Self> {
-        let raw = session_ui::studio::fetch()?;
+        let raw = daw_view_kit::studio::fetch()?;
         // `FTS_BENCH_OPEN=Kick,Snare`: those folders opened, as a click on
         // their fold buttons would.
         if let Ok(names) = std::env::var("FTS_BENCH_OPEN") {
@@ -1570,10 +1572,10 @@ impl Session {
             }
         }
         let scene = std::env::var("FTS_BENCH_SCENE").ok();
-        let (project, rows) = session_ui::studio::plan_rows(&raw, scene.as_deref(), path);
+        let (project, rows) = daw_view_kit::studio::plan_rows(&raw, scene.as_deref(), path);
         // Read before anything is recorded, not after: a renderer draws
         // and exits, so there is no later for them to arrive in.
-        let previews = session_ui::studio::previews_of(&project);
+        let previews = daw_view_kit::studio::previews_of(&project);
         Some(Self {
             project,
             rows,
@@ -1586,8 +1588,8 @@ impl Session {
     fn scene(
         &self,
         palette: &Palette,
-        font: &session_ui::text::Font,
-        layout: session_ui::layout::Layout,
+        font: &daw_view_kit::text::Font,
+        layout: daw_view_kit::layout::Layout,
     ) -> Arrangement {
         Arrangement::build(
             palette,
@@ -1596,7 +1598,7 @@ impl Session {
             &self.rows,
             layout,
             &self.previews,
-            session_ui::tcp::Tcp::FULL,
+            daw_view_kit::tcp::Tcp::FULL,
         )
     }
 
@@ -1639,8 +1641,8 @@ struct MixerRig {
     settings: mixer_view::tone::Store,
     history: std::collections::HashMap<String, mixer_view::tone::Levels>,
     spectra: std::collections::HashMap<String, mixer_view::tone::Analyser>,
-    pointer: session_ui::pointer::Pointer,
-    frame: session_ui::rails::Frame,
+    pointer: daw_view_kit::pointer::Pointer,
+    frame: daw_view_kit::rails::Frame,
     levels: Vec<daw_proto::TrackLevels>,
     width: f64,
     height: f64,
@@ -1649,8 +1651,8 @@ struct MixerRig {
 impl MixerRig {
     fn new(
         palette: &Palette,
-        font: &session_ui::text::Font,
-        layout: session_ui::layout::Layout,
+        font: &daw_view_kit::text::Font,
+        layout: daw_view_kit::layout::Layout,
         width: u32,
         height: u32,
     ) -> Option<Self> {
@@ -1676,13 +1678,13 @@ impl MixerRig {
         // render landing between two passes would make them differ,
         // and the verify run compares them byte for byte.
         settings.prerender_tails();
-        let frame = session_ui::rails::Frame::new(f64::from(width), f64::from(height));
+        let frame = daw_view_kit::rails::Frame::new(f64::from(width), f64::from(height));
         let mixer = Mixer::build(
             palette,
             font,
             &project,
             &rows,
-            f64::from(height) - session_ui::rails::TOP,
+            f64::from(height) - daw_view_kit::rails::TOP,
             layout,
             mixer_view::tone::panels_for(TONE),
             // The racks are driven here, so they are drawn live and
@@ -1701,7 +1703,7 @@ impl MixerRig {
             settings,
             history: std::collections::HashMap::new(),
             spectra: std::collections::HashMap::new(),
-            pointer: session_ui::pointer::Pointer::default(),
+            pointer: daw_view_kit::pointer::Pointer::default(),
             frame,
             levels: Vec::new(),
             width: f64::from(width),
@@ -1713,11 +1715,11 @@ impl MixerRig {
     /// meters, and (at the engine's own rate) the racks' displays.
     fn drive(&mut self, t: f64, frame_index: usize) {
         // The same on every run — see `animate::drive`.
-        session_ui::animate::drive(&mut self.tracks, t);
+        daw_view_kit::animate::drive(&mut self.tracks, t);
         // Meters arrive on their own subscription, so they are driven
         // separately — and per frame, which is faster than the
         // engine's pump will ever publish them.
-        self.levels = session_ui::animate::meters(self.tracks.len(), t);
+        self.levels = daw_view_kit::animate::meters(self.tracks.len(), t);
         // And the compressor's display, at the rate the ENGINE
         // publishes meter frames — about 30 Hz — rather than at the
         // frame rate. Everything else here is driven per frame on
@@ -1749,7 +1751,7 @@ impl MixerRig {
         &mut self,
         painter: &mut impl PaintScene,
         palette: &Palette,
-        font: &session_ui::text::Font,
+        font: &daw_view_kit::text::Font,
     ) -> Counts {
         painter.reset();
         painter.fill(
@@ -1759,7 +1761,7 @@ impl MixerRig {
             None,
             &vello::kurbo::Rect::new(0.0, 0.0, self.width, self.height),
         );
-        let at = Affine::translate((session_ui::rails::SIDE, session_ui::rails::TOP));
+        let at = Affine::translate((daw_view_kit::rails::SIDE, daw_view_kit::rails::TOP));
         // The recorded chrome, then the live values over it.
         let a = self
             .mixer
@@ -1808,8 +1810,8 @@ impl MixerRig {
 /// under the cost of culling.
 fn animate(
     palette: &Palette,
-    font: &session_ui::text::Font,
-    layout: session_ui::layout::Layout,
+    font: &daw_view_kit::text::Font,
+    layout: daw_view_kit::layout::Layout,
     width: u32,
     height: u32,
 ) {
@@ -1884,7 +1886,7 @@ fn dock_split(width: u32, height: u32) -> (vello::kurbo::Rect, u32) {
 fn paint_dock(
     painter: &mut impl PaintScene,
     palette: &Palette,
-    editor: &mut session_ui::expression::Expression,
+    editor: &mut daw_view_kit::expression::Expression,
     dock: vello::kurbo::Rect,
 ) {
     editor.layout((dock.x0, dock.y0), (dock.width(), dock.height()));
@@ -1912,11 +1914,11 @@ fn paint_dock(
 /// under it.
 fn dock_shot(session: &Session, palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let (dock_box, above) = dock_split(width, height);
-    let mut editor = session_ui::expression::Expression::demo(
+    let mut editor = daw_view_kit::expression::Expression::demo(
         (dock_box.x0, dock_box.y0),
         (dock_box.width(), dock_box.height()),
     );
-    editor.set_look(session_ui::expression::look_of(palette));
+    editor.set_look(daw_view_kit::expression::look_of(palette));
     editor.editor.playhead = Some(editor.editor.doc.end * 0.3);
     let (mut widget, _view) = session.widget();
     let mut image = VelloImageRenderer::new(width, height);
@@ -2031,8 +2033,8 @@ fn studio(
     session: &Session,
     scene: &Arrangement,
     palette: &Palette,
-    font: &session_ui::text::Font,
-    layout: session_ui::layout::Layout,
+    font: &daw_view_kit::text::Font,
+    layout: daw_view_kit::layout::Layout,
     width: u32,
     height: u32,
 ) {
@@ -2061,12 +2063,12 @@ fn studio(
     // lanes, a song's worth of hits, framed four bars at a time the way
     // drums get edited — and paged through as the frames go by.
     let bars = bench_bars();
-    let mut editor = session_ui::expression::Expression::audio_kit(
+    let mut editor = daw_view_kit::expression::Expression::audio_kit(
         bars,
         (dock_box.x0, dock_box.y0),
         (dock_box.width(), dock_box.height()),
     );
-    editor.set_look(session_ui::expression::look_of(palette));
+    editor.set_look(daw_view_kit::expression::look_of(palette));
     editor.editor.frame_bars(4);
     let doc_end = editor.editor.doc.end;
     let (mut widget, view) = session.widget();
@@ -2319,9 +2321,9 @@ fn studio(
 
 /// Write one frame of the Patch List view to a PNG.
 ///
-/// `FTS_BENCH_PATCH_LIST=features/engine/ui/fixtures/patch-list.png`, the
+/// `FTS_BENCH_PATCH_LIST=features/engine/view-kit/fixtures/patch-list.png`, the
 /// fixture album resolved against the fixture room — the picture
-/// `features/engine/ui/tests/patch_list_view.rs` compares byte for byte.
+/// `features/engine/view-kit/tests/patch_list_view.rs` compares byte for byte.
 fn patch_list_shot(out: &std::path::Path, width: u32, height: u32) {
     let table = match arrangement_view::patch_list::Table::fixture() {
         Ok(table) => table,
@@ -2348,9 +2350,9 @@ fn patch_list_shot(out: &std::path::Path, width: u32, height: u32) {
 /// Write one frame of the Patch List view, overridden and stale, to a
 /// PNG.
 ///
-/// `FTS_BENCH_PATCH_LIST_OVERRIDDEN_STALE=features/engine/ui/fixtures/patch-list-overridden-stale.png`
+/// `FTS_BENCH_PATCH_LIST_OVERRIDDEN_STALE=features/engine/view-kit/fixtures/patch-list-overridden-stale.png`
 /// — the fixture album, a session override on Cody's DI, and a stale
-/// banner, the picture `features/engine/ui/tests/patch_list_view.rs`
+/// banner, the picture `features/engine/view-kit/tests/patch_list_view.rs`
 /// compares structurally.
 fn patch_list_shot_overridden_stale(out: &std::path::Path, width: u32, height: u32) {
     let table = match arrangement_view::patch_list::Table::fixture_overridden_stale() {

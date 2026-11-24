@@ -1,6 +1,6 @@
 [package]
 name = "studio-arrangement"
-description = "Studio's arrangement view as a runtime extension: the arrangement panel studio-desktop shows (session-ui's panel, widget and chrome), in an Architect pane, attached to Studio's engine (the daw extension) as studio-desktop's window attaches to `studio engine`."
+description = "Studio's arrangement view as a runtime extension: the arrangement panel studio-desktop shows (daw-view-kit's panel, widget and chrome), in an Architect pane, attached to Studio's engine (the daw extension) as studio-desktop's window attaches to `studio engine`."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -26,7 +26,7 @@ serde_json = { workspace = true }
 architect-scene = { workspace = true, features = ["paint-ui"] }
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest", "paint"] }
-session-ui = { workspace = true, features = ["native"] }
+daw-view-kit = { workspace = true, features = ["native"] }
 arrangement-view = { workspace = true, features = ["native"] }
 session-engine-client = { workspace = true, features = ["native"] }
 session = { workspace = true }
@@ -38,7 +38,7 @@ web-time = { workspace = true }
 
 # The browser: the panel over the page's own engine (`src/web.rs`).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-session-ui = { workspace = true, features = ["web"] }
+daw-view-kit = { workspace = true, features = ["web"] }
 arrangement-view = { workspace = true, features = ["web"] }
 session-engine-client = { workspace = true, features = ["web"] }
 session-engine = { workspace = true, features = ["web"] }
@@ -46,7 +46,7 @@ session-engine = { workspace = true, features = ["web"] }
 [dev-dependencies]
 # The tests open a song on an engine in the test's own process.
 session-engine = { workspace = true, features = ["native"] }
-session-ui = { workspace = true, features = ["native", "engine"] }
+daw-view-kit = { workspace = true, features = ["native", "engine"] }
 arrangement-view = { workspace = true, features = ["native", "engine"] }
 # The tests stand a pane up as the workspace does (`ViewHost`, `Placement`).
 architect-workspace = { workspace = true, features = ["paint-ui"] }

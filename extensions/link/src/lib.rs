@@ -16,7 +16,7 @@
 //!
 //! **In a browser** (`wasm32`, studio-web) the engine is in the page: the
 //! `daw` extension's browser build opens it (`session_engine::web_engine`,
-//! hosted by `session_ui::web_host`) and this crate reads the song it has
+//! hosted by `daw_view_kit::web_host`) and this crate reads the song it has
 //! current from there ([`current`], [`use_song`]) and runs the page's
 //! Action List ([`call`]). The paint panes, the input hand-over and the
 //! engine's value table are the native process's alone.

@@ -76,7 +76,7 @@ pub const WITH_SONG_WORKSPACE: &str = "is a panel of the song workspace (studio#
 
 /// The owner's six, in the bar's order.
 ///
-/// The Studio iPad app's bottom bar's order (`session_ui::shell::BottomBar`:
+/// The Studio iPad app's bottom bar's order (`daw_view_kit::shell::BottomBar`:
 /// Perform, Chart, Lyrics, Arrange, Mixer, FX, Editor) for the four it has,
 /// with its words under them ("Arrange"); the song's two other panels after
 /// the Chart.
@@ -135,7 +135,7 @@ pub struct Tool {
 /// The Arrangement's tools: its toolbar on its left side.
 ///
 /// `extension.toml`'s `arrangement`: what Session's arrangement rail
-/// carries (`session_ui::rails::profile`, `Surface::Arrange`), the mix
+/// carries (`daw_view_kit::rails::profile`, `Surface::Arrange`), the mix
 /// phases (`session::mix_phases::MixPhase::ALL`, in order), then the
 /// arrangement's switch, Takes. The scenes the rail also lists are the
 /// current mode's for the instrument in front: not a fixed list, so not

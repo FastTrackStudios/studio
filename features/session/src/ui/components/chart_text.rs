@@ -6,13 +6,13 @@
 //! pause did.
 //!
 //! The pane alone. What a pause in typing does is the host's: Session's
-//! chart editor (`session_ui::chart_editor`) lays the chart over the song
+//! chart editor (`daw_view_kit::chart_editor`) lays the chart over the song
 //! and saves it; the setlists extension's song workspace re-engraves the
 //! chart beside it and saves the `.kf` back to the song. Both draw this.
 
 use dioxus::prelude::*;
 
-/// The pane's colours: Session's window's (`session_ui::shell`).
+/// The pane's colours: Session's window's (`daw_view_kit::shell`).
 const RULE: &str = "#2a2c31";
 const TEXT: &str = "#e5e7eb";
 const DIM: &str = "#8b9099";

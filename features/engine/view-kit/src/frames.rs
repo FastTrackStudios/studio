@@ -428,7 +428,7 @@ pub(crate) mod metrics {
     /// its telemetry before it opens a window.
     pub fn frame(frame: &Frame) {
         static MADE: OnceLock<Instruments> = OnceLock::new();
-        MADE.get_or_init(|| Instruments::new(&opentelemetry::global::meter("session-ui")))
+        MADE.get_or_init(|| Instruments::new(&opentelemetry::global::meter("daw-view-kit")))
             .record(frame);
     }
 }

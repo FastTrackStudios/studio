@@ -1,6 +1,6 @@
 //! Conditional Dioxus prelude import
 //!
-//! Matches the session-ui / keyflow-ui / signal-ui pattern:
+//! Matches the daw-view-kit / keyflow-ui / signal-ui pattern:
 //! - `web` feature -> dioxus (Wry/WebView)
 //! - `native` feature -> dioxus-native (Blitz/GPU)
 

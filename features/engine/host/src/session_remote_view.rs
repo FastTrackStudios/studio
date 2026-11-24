@@ -5,9 +5,9 @@
 //! daw-standalone player and mounts SetlistService on the shared `/vox`
 //! router). This view dials that engine exactly like the rig views do
 //! (`crate::remote` — same-origin WebSocket by default, saved iroh id for
-//! p2p), installs the `SetlistServiceClient` as session-ui's `Session`
+//! p2p), installs the `SetlistServiceClient` as daw-view-kit's `Session`
 //! singleton (transport buttons / sidebar seeks), and pumps the two
-//! `#[subscribe]` streams (`events` + `active_indices`) into session-ui's
+//! `#[subscribe]` streams (`events` + `active_indices`) into daw-view-kit's
 //! global signals — the network flavor of the desktop app's in-process
 //! `SessionEventBridge`.
 //!
@@ -28,7 +28,7 @@ use crate::remote::{EngineTarget, establish};
 static CONNECTED: GlobalSignal<bool> = Signal::global(|| false);
 
 /// Invisible app-level component: owns the engine connection and folds the
-/// setlist streams into session-ui's global signals. Mounted once in `App`
+/// setlist streams into daw-view-kit's global signals. Mounted once in `App`
 /// (via `SessionChrome`) so the connection and state survive workspace
 /// switches. Reconnects forever: when a stream ends (engine restart,
 /// network drop) it loops back to dialing.
@@ -46,7 +46,7 @@ pub fn SessionRemoteBridge() -> Element {
                 continue;
             };
 
-            // Session singleton for session-ui components. On wasm `init`
+            // Session singleton for daw-view-kit components. On wasm `init`
             // replaces the previous client (reconnect support).
             if let Err(e) = session::ui::Session::init(client.clone()) {
                 tracing::warn!("Session::init: {e:?}");
@@ -135,7 +135,7 @@ pub fn SessionRemoteBridge() -> Element {
 
 /// The Session workspace in the browser: Navigator sidebar (left),
 /// performance display (center), transport control bar (bottom) — the same
-/// session-ui panels the desktop assembles, fed by the global signals
+/// daw-view-kit panels the desktop assembles, fed by the global signals
 /// `SessionRemoteBridge` keeps up to date over the network.
 #[component]
 pub fn SessionWorkspace() -> Element {

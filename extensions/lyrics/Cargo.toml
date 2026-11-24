@@ -1,6 +1,6 @@
 [package]
 name = "studio-lyrics"
-description = "Studio's lyrics panel as an extension: the song's words following the song (Audience, Performer and Confidence Monitor views, session-ui's lyrics panel), in an Architect pane, attached to Studio's engine (the daw extension) as the arrangement and mixer are."
+description = "Studio's lyrics panel as an extension: the song's words following the song (Audience, Performer and Confidence Monitor views, daw-view-kit's lyrics panel), in an Architect pane, attached to Studio's engine (the daw extension) as the arrangement and mixer are."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -24,11 +24,11 @@ serde_json = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest"] }
-session-ui = { workspace = true, features = ["native"] }
+daw-view-kit = { workspace = true, features = ["native"] }
 
 # The browser: the same panel over the page's own engine.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-session-ui = { workspace = true, features = ["web"] }
+daw-view-kit = { workspace = true, features = ["web"] }
 
 [lints]
 workspace = true

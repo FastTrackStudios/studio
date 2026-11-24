@@ -2,13 +2,13 @@
 //! Architect panes.
 //!
 //! Nothing is redrawn: the panes are a Studio window on Studio's engine
-//! (`studio_view_link`) showing `session_ui::progress::ProgressBar` (the
+//! (`studio_view_link`) showing `daw_view_kit::progress::ProgressBar` (the
 //! bar across the top of `studio-desktop`'s window) and
-//! `session_ui::navigator::Navigator` (its left column: the set as a
+//! `daw_view_kit::navigator::Navigator` (its left column: the set as a
 //! vertical progress bar), over the set the engine has.
 //!
 //! **In a browser** (studio-web) the same components draw over the page's
-//! own engine (`session_ui::web_host`): the set it has open, a song
+//! own engine (`daw_view_kit::web_host`): the set it has open, a song
 //! picked there gone to ([`web`]).
 
 use architect_extensions::linked::{Builder, Extension};

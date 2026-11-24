@@ -44,7 +44,7 @@ pub fn claim(handle: Handle) {
     let list = session_engine_client::actions::list();
     let registered = mixer_view::mixer_actions::register_mixer(list).and_then(|()| {
         list.register_async(
-            &session_ui::window::TOGGLE_MIXER,
+            &daw_view_kit::window::TOGGLE_MIXER,
             Effect::Mutating,
             |(): ()| async { toggle().await },
         )

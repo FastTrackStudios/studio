@@ -10,7 +10,7 @@
 //! - Domain types (`Setlist`, `Song`, `Section`, etc.)
 //! - Generated service clients and dispatchers
 //!
-//! For UI components, see the `session-ui` crate.
+//! For UI components, see the `daw-view-kit` crate.
 
 // ─── Typed IDs ─────────────────────────────────────────────────
 

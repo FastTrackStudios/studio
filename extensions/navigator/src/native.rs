@@ -1,10 +1,10 @@
 //! The native process's panes: a Studio window attached to the engine the
 //! `daw` extension runs, over its socket.
 
+use daw_view_kit::song_model::StudioSession;
 use dioxus::prelude::*;
 use serde_json::json;
 use session_engine_client::setlist::Setlist;
-use session_ui::song_model::StudioSession;
 
 /// The set the engine has, as this window shows it.
 pub fn set() -> Option<Setlist> {
@@ -47,7 +47,7 @@ fn Bar(session: Song) -> Element {
     rsx! {
         // A height in pixels: the bar sizes itself, and a percentage of a
         // pane it does not fill by layout comes to nothing.
-        session_ui::progress::ProgressBar { height: "44px".to_owned() }
+        daw_view_kit::progress::ProgressBar { height: "44px".to_owned() }
     }
 }
 
@@ -80,7 +80,7 @@ pub fn SongsPane() -> Element {
     rsx! {
         div { style: "position:relative; width:100%; height:100%; min-height:36px; background:{surface}; \
                      display:flex; align-items:stretch;",
-            session_ui::shell::SongTabs {
+            daw_view_kit::shell::SongTabs {
                 on_pick: move |index: usize| {
                     let _ = session_engine_client::view_client::ask::pick(index);
                 },
@@ -101,7 +101,7 @@ pub fn NavigatorPane() -> Element {
     }
     rsx! {
         div { style: "position:relative; width:100%; height:100%; background:{surface};",
-            session_ui::navigator::Navigator {
+            daw_view_kit::navigator::Navigator {
                 on_pick: move |index: usize| {
                     let _ = session_engine_client::view_client::ask::pick(index);
                 },

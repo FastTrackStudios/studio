@@ -76,7 +76,7 @@ members = [
     "features/engine/client",
     "features/engine/engine",
     "features/engine/runtime",
-    "features/engine/ui",
+    "features/engine/view-kit",
     "features/engine/mixer",
     "features/engine/arrangement",
     "features/engine/tools",
@@ -265,7 +265,7 @@ daw-reaper-dioxus-ext = { path = "features/adapters/reaper/daw-reaper-dioxus-ext
 
 # ── session domain (wave 3) ───────────────────────────────────────────
 # `session` is the facade — the only public API surface for the session
-# domain. session-proto is INTERNAL (session-ui and session-guide are the
+# domain. session-proto is INTERNAL (daw-view-kit and session-guide are the
 # documented exceptions: Dioxus components / the guide engine).
 # Portable guide engine (click / count-in / section guide). Optional `tts`
 # feature adds local Chatterbox TTS (its ort/chatterbox pins live in the
@@ -848,11 +848,11 @@ session-desktop = { path = "features/engine/host", default-features = false }
 song-file = { path = "features/song-file" }
 session-engine = { path = "features/engine/engine", default-features = false }
 # The window's half of the engine (`view`, `view_client`, the read-back
-# model): what session-ui and Studio's views depend on instead of the engine.
+# model): what daw-view-kit and Studio's views depend on instead of the engine.
 session-engine-client = { path = "features/engine/client", default-features = false }
 # Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
 session-runtime = { path = "features/engine/runtime" }
-session-ui = { path = "features/engine/ui", default-features = false }
+daw-view-kit = { path = "features/engine/view-kit", default-features = false }
 mixer-view = { path = "features/engine/mixer", default-features = false }
 arrangement-view = { path = "features/engine/arrangement", default-features = false }
 studio-view-link = { path = "extensions/link" }

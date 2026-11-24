@@ -16,7 +16,7 @@
 //! MCP as every action is.
 //!
 //! **In a browser** (studio-web) the view is the same panel over the
-//! page's own engine (`session_ui::web_host`, the panels under
+//! page's own engine (`daw_view_kit::web_host`, the panels under
 //! dioxus-web with the widget in a WebGL2 canvas): one crate, the host
 //! chosen by the target ([`web`]).
 
@@ -38,10 +38,10 @@ use architect_extensions_dioxus::PaintPane;
 #[cfg(not(target_arch = "wasm32"))]
 use architect_scene::paint::PaintMount;
 #[cfg(not(target_arch = "wasm32"))]
+use daw_view_kit::song_model::StudioSession;
+#[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
 use serde_json::{Value as Json, json};
-#[cfg(not(target_arch = "wasm32"))]
-use session_ui::song_model::StudioSession;
 #[cfg(not(target_arch = "wasm32"))]
 use studio_view_link::InScope;
 use studio_view_link::Stats;
@@ -88,8 +88,8 @@ impl Extension for Arrangement {
                 let on = args
                     .get("on")
                     .and_then(Json::as_bool)
-                    .unwrap_or_else(|| !session_ui::folds::tops());
-                session_ui::folds::set_tops(on);
+                    .unwrap_or_else(|| !daw_view_kit::folds::tops());
+                daw_view_kit::folds::set_tops(on);
                 Ok(json!({ "folded": on }))
             })
             .action("STUDIO_ARRANGEMENT_PANEL", |args| async move {
@@ -115,7 +115,7 @@ fn state() -> Json {
         "problem": studio_view_link::problem(),
         "song": song.as_ref().map(|(k, _)| k.clone()),
         "tracks": song.as_ref().map(|(_, n)| *n),
-        "folded": session_ui::folds::tops(),
+        "folded": daw_view_kit::folds::tops(),
         "compact": COMPACT.load(std::sync::atomic::Ordering::Acquire),
         "frames": stats,
     })
@@ -127,7 +127,7 @@ fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
     return session_engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
-    return session_ui::web_host::hosted_is_open();
+    return daw_view_kit::web_host::hosted_is_open();
 }
 
 /// The pane: the arrangement once the engine has a song, a line saying
@@ -164,7 +164,7 @@ impl PartialEq for Song {
 }
 
 /// Studio's arrangement panel over `session`, hosted in the pane: what
-/// `session_ui::studio::Arrangement` is in the desktop window, with the
+/// `daw_view_kit::studio::Arrangement` is in the desktop window, with the
 /// pane in place of the window.
 #[cfg(not(target_arch = "wasm32"))]
 #[component]
@@ -173,7 +173,7 @@ fn Panel(session: Song) -> Element {
     studio_view_link::use_client_mode();
     // Beside a mixer pane it is not linked to: compact, as docked.
     use_context_provider(|| arrangement_view::panel::StartCompact(true));
-    let applier = use_hook(|| Rc::new(session_ui::engine::Applier::start()));
+    let applier = use_hook(|| Rc::new(daw_view_kit::engine::Applier::start()));
     let engine: arrangement_view::panel::Engine = {
         let applier = Rc::clone(&applier);
         Rc::new(move |edit| {

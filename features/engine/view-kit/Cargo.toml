@@ -1,5 +1,5 @@
 [package]
-name = "session-ui"
+name = "daw-view-kit"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -62,7 +62,7 @@ futures-channel = { workspace = true, optional = true }
 session = { workspace = true, features = ["library", "ui", "web"] }
 # The performance panels (the progress bar), drawn under Blitz — see
 # `src/progress.rs`.
-# The small-screen layout's tab icons (`compact`) — the icon set session-ui's
+# The small-screen layout's tab icons (`compact`) — the icon set daw-view-kit's
 # transport draws with.
 lucide-dioxus = { workspace = true }
 # The chord items' numbers and names — `arrangement::Lettering`.
@@ -256,7 +256,7 @@ test-support = []
 # timer, which is exactly what you want while measuring and nothing you
 # want in a window somebody is using.
 #
-#   cargo run --release -p session-ui --bin blitz_shot --features profile
+#   cargo run --release -p daw-view-kit --bin blitz_shot --features profile
 #
 # with `FTS_BLITZ_PROFILE=/tmp/frame.svg`.
 profile = ["dep:pprof"]
@@ -266,7 +266,7 @@ profile = ["dep:pprof"]
 # window somebody is using; turned on to answer "which half of the
 # frame is this" when the two atomics the shell records are not enough.
 #
-#   cargo run --release -p session-ui --bin blitz_shot --features frame-times
+#   cargo run --release -p daw-view-kit --bin blitz_shot --features frame-times
 #
 # See #119, and anyrender_vello/UPSTREAM.md in FastTrackStudios/vendor.
 frame-times = ["anyrender_vello?/log_frame_times"]

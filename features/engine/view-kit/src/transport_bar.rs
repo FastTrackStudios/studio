@@ -4,7 +4,7 @@
 //! It lives in the bottom bar, beside the views, when the arrangement is
 //! showing ([`crate::shell::BottomBar`]'s context) — big, for a finger
 //! (`big`). The Performance view has its own buttons along its foot
-//! (`session-ui`'s `TransportControlBar`); this one is for editing, where
+//! (`daw-view-kit`'s `TransportControlBar`); this one is for editing, where
 //! the numbers matter as much as the buttons.
 
 use dioxus::prelude::*;

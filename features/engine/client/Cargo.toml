@@ -11,7 +11,7 @@ description = "What a window needs of Session's engine: the view protocol and it
 # The window's half of `session-engine`, split out so an edit to the
 # engine's body (placement, quantize, comping, the set, its actions)
 # rebuilds the engine binary and nothing a window is built from. A window
-# (`session-ui`, Studio's views) depends on this crate only; the engine
+# (`daw-view-kit`, Studio's views) depends on this crate only; the engine
 # (`session-engine`) depends on it too and re-exports every module from
 # its old path.
 #

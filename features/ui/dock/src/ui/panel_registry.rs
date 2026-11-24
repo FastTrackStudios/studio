@@ -16,7 +16,7 @@ type RenderFn = Rc<dyn Fn() -> Element>;
 
 /// Registry that maps `PanelId` to render functions.
 ///
-/// Domain crates (signal-ui, session-ui, daw-ui) register their panels
+/// Domain crates (signal-ui, daw-view-kit, daw-ui) register their panels
 /// at startup, and the dock system uses `render()` to display them.
 /// Unregistered panels get a "Coming soon" fallback.
 pub struct PanelRendererRegistry {

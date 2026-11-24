@@ -11,7 +11,7 @@ fn each_frame_is_a_sample_and_slow_ones_are_counted() {
     let provider = SdkMeterProvider::builder()
         .with_reader(PeriodicReader::builder(exporter.clone()).build())
         .build();
-    let at = Instruments::new(&provider.meter("session-ui"));
+    let at = Instruments::new(&provider.meter("daw-view-kit"));
     // Two frames the shell timed, one inside the 240 Hz budget and one
     // over it; one only the paint timed (no shell), inside it.
     let frame = |paint, shell| Frame {
@@ -84,7 +84,7 @@ fn late_frames_are_counted_against_each_rate_and_rest_is_not_a_frame() {
     let provider = SdkMeterProvider::builder()
         .with_reader(PeriodicReader::builder(exporter.clone()).build())
         .build();
-    let at = Instruments::new(&provider.meter("session-ui"));
+    let at = Instruments::new(&provider.meter("daw-view-kit"));
     let after = |since| Frame {
         since,
         paint: 1_000,

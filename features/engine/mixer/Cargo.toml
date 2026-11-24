@@ -4,10 +4,10 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-description = "Studio's mixer, a view only: strips, racks, the FX view and close-ups over session-ui's base. Moving to FastTrackStudios/mixer-view."
+description = "Studio's mixer, a view only: strips, racks, the FX view and close-ups over daw-view-kit's base. Moving to FastTrackStudios/mixer-view."
 
 [dependencies]
-session-ui = { workspace = true }
+daw-view-kit = { workspace = true }
 utils = { workspace = true }
 session-engine-client = { workspace = true }
 session-engine = { workspace = true, optional = true }
@@ -65,11 +65,11 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 
 [features]
 default = ["native"]
-# session-ui's features, forwarded, with what the mixer's own code needs.
-native = ["session-ui/native", "session-engine-client/native", "dep:dioxus-native", "dep:wgpu_context", "dep:winit", "dep:architect", "dep:builtin", "builtin?/engine", "dsp/eq-native", "dep:tokio"]
-web = ["session-ui/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:architect"]
-engine = ["session-ui/engine", "dep:session-engine"]
-signal = ["native", "session-ui/signal"]
+# daw-view-kit's features, forwarded, with what the mixer's own code needs.
+native = ["daw-view-kit/native", "session-engine-client/native", "dep:dioxus-native", "dep:wgpu_context", "dep:winit", "dep:architect", "dep:builtin", "builtin?/engine", "dsp/eq-native", "dep:tokio"]
+web = ["daw-view-kit/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:architect"]
+engine = ["daw-view-kit/engine", "dep:session-engine"]
+signal = ["native", "daw-view-kit/signal"]
 
 [lints]
 workspace = true

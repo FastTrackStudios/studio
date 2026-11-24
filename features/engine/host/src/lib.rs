@@ -6,7 +6,7 @@
 //! vox at runtime rather than linked in — see the repo README.
 //!
 //! The session engine runs in-process (`session_engine.rs`). The
-//! Session surface embeds `session-ui`'s performance layout; the Charts
+//! Session surface embeds `daw-view-kit`'s performance layout; the Charts
 //! surface is keyflow's home.
 //!
 //! A library as well as the `session-desktop` binary (`main.rs` is
@@ -647,14 +647,14 @@ fn App() -> Element {
                     },
                     #[cfg(all(feature = "session", not(target_arch = "wasm32")))]
                     Some(Workspace::Session) => rsx! {
-                        // The setlist player: session-ui's performance
+                        // The setlist player: daw-view-kit's performance
                         // layout + transport strip over the in-process
                         // daw-standalone engine.
                         session_view::SessionWorkspace {}
                     },
                     #[cfg(all(feature = "session", target_arch = "wasm32"))]
                     Some(Workspace::Session) => rsx! {
-                        // The browser is a remote: the same session-ui
+                        // The browser is a remote: the same daw-view-kit
                         // panels over SetlistService on the network
                         // engine's shared /vox router.
                         session_remote_view::SessionWorkspace {}
@@ -1491,14 +1491,14 @@ fn UpdateCheck() -> Element {
 }
 
 /// The comprehensive Tailwind sheet — built by `just tailwind` from
-/// `input.css`, which scans every UI crate (app src, session-ui,
+/// `input.css`, which scans every UI crate (app src, daw-view-kit,
 /// architect-ui, dock). Inlined rather than loaded as an external
 /// stylesheet so it can't go stale against a committed file.
 #[cfg(feature = "session")]
 const APP_TAILWIND: &str = include_str!("../assets/tailwind-signal.css");
 
 /// App-level chrome the session feature contributes: the compiled
-/// Tailwind sheet session-ui's components style themselves with, and
+/// Tailwind sheet daw-view-kit's components style themselves with, and
 /// the always-mounted event bridge (hub → global signals). Native
 /// bridges the in-process engine's hubs; the browser bridges the
 /// network engine's `#[subscribe]` streams over `/vox`.

@@ -136,7 +136,7 @@ desktop:
 # features/engine/host/web-dist/, which `cargo build -p session-desktop
 # --features embed-web` compiles into the binary (include_dir). On wasm the
 # session feature is only the wire surface (session-proto clients +
-# session-ui); the player itself runs in the engine. web-dist/ is gitignored.
+# daw-view-kit); the player itself runs in the engine. web-dist/ is gitignored.
 web-stage: tailwind
     cd features/engine/host && dx build --platform web --release --no-default-features --features signal,session
     rm -rf features/engine/host/web-dist
@@ -478,7 +478,7 @@ test:
 # apps/desktop) in the build, so cargo unifies
 # the named crates' features with the app's and the tests reuse the window's
 # and engine's artifacts instead of recompiling them another way.
-#   just dev-test session-engine session-ui -- comp
+#   just dev-test session-engine daw-view-kit -- comp
 [positional-arguments]
 dev-test *ARGS:
     #!/usr/bin/env bash
@@ -865,7 +865,7 @@ daw-folder-item-sheet OUT="/tmp/fts-folder-items.png" PROJECT="" WINDOW="" SIZE=
         project="{{GOLDEN_DIR}}/template.rpp"
         [[ -f "$project" ]] || just daw-template
     fi
-    cargo build -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     window="{{WINDOW}}"
     # No window given means the whole project.
     export FTS_BENCH_WINDOW="$window"
@@ -890,7 +890,7 @@ daw-bench PROJECT="" SIZE="5120x1440":
         project="${FTS_DAW_FIXTURE:-/tmp/fts-orchestral.rpp}"
         [[ -f "$project" ]] || just daw-fixture
     fi
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     echo "load before: $(cut -d' ' -f1-3 /proc/loadavg)"
     FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN'
 
@@ -915,7 +915,7 @@ daw-studio PROJECT="" SIZE="5120x1440" MIXER="2560x1440":
         project="${FTS_DAW_FIXTURE:-/tmp/fts-orchestral.rpp}"
         [[ -f "$project" ]] || just daw-fixture
     fi
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     echo "load before: $(cut -d' ' -f1-3 /proc/loadavg)"
     FTS_BENCH_STUDIO=1 FTS_BENCH_SIZE="{{SIZE}}" FTS_BENCH_MIXER_SIZE="{{MIXER}}" \
         ./target/release/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
@@ -929,7 +929,7 @@ daw-dock OUT="/tmp/fts-dock.png" PROJECT="" SIZE="2560x1440":
         project="{{DAW_PROJECT}}"
         [[ -f "$project" ]] || just daw-template
     fi
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     FTS_BENCH_DOCK="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
         ./target/release/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
 
@@ -938,7 +938,7 @@ daw-dock OUT="/tmp/fts-dock.png" PROJECT="" SIZE="2560x1440":
 daw-kit OUT="/tmp/fts-kit.png" SIZE="2560x900" BARS="200":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     FTS_BENCH_KIT="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" FTS_BENCH_BARS="{{BARS}}" \
         ./target/release/bench /dev/null 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
 
@@ -947,27 +947,27 @@ daw-kit OUT="/tmp/fts-kit.png" SIZE="2560x900" BARS="200":
 daw-expression OUT="/tmp/fts-expression.png" SIZE="1600x900":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     FTS_BENCH_EXPRESSION="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
         ./target/release/bench /dev/null 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
 
 # The Patch List view's render fixture: the fixture album resolved
 # against the fixture room, written where its test reads it. Run it when
 # a deliberate change to the view has moved a pixel, and commit the PNG.
-daw-patch-list OUT="features/engine/ui/fixtures/patch-list.png" SIZE="1280x1280":
+daw-patch-list OUT="features/engine/view-kit/fixtures/patch-list.png" SIZE="1280x1280":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     FTS_BENCH_PATCH_LIST="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
         ./target/release/bench /dev/null 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
 
 # The Patch List view's second render fixture: the same fixture album
 # with a session override on Cody's DI and a stale banner (#57). Run it
 # when a deliberate change has moved a pixel, and commit the PNG.
-daw-patch-list-overridden-stale OUT="features/engine/ui/fixtures/patch-list-overridden-stale.png" SIZE="1280x1280":
+daw-patch-list-overridden-stale OUT="features/engine/view-kit/fixtures/patch-list-overridden-stale.png" SIZE="1280x1280":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     FTS_BENCH_PATCH_LIST_OVERRIDDEN_STALE="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
         ./target/release/bench /dev/null 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
 
@@ -989,7 +989,7 @@ daw-scene SCENE="lead-vocal-fx" OUT="" SIZE="2560x1440":
     esac
     [[ -f "$project" ]] || just daw-template
     out="{{OUT}}"; [[ -n "$out" ]] || out="/tmp/fts-scene-{{SCENE}}.png"
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     FTS_BENCH_MIXER="$out" FTS_BENCH_SCENE="{{SCENE}}" FTS_BENCH_SIZE="{{SIZE}}" \
         ./target/release/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN'
 
@@ -1025,7 +1025,7 @@ daw-scene SCENE="lead-vocal-fx" OUT="" SIZE="2560x1440":
 studio MODE="1" SIZE="5120x1440" SCENE="drum-mixing":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build {{dev_build}} -p session-ui --bin blitz_shot
+    cargo build {{dev_build}} -p daw-view-kit --bin blitz_shot
     # Through `env`, not as a bare `VAR=x` prefix: bash decides what is
     # an assignment BEFORE it expands anything, so `${FPS:+FTS_BLITZ_FPS=1}`
     # in that position becomes a command name and the recipe dies with
@@ -1072,7 +1072,7 @@ studio-demo ANIMATE="" SIZE="5120x1440":
 studio-bench GESTURE="pan" SIZE="5120x1440" FRAMES="120" DUMP="":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --release -p session-ui --bin blitz_shot
+    cargo build --release -p daw-view-kit --bin blitz_shot
     env ${DUMP:+FTS_BLITZ_DUMP="{{DUMP}}"} ${FPS:+FTS_BLITZ_FPS=1} \
     FTS_BLITZ_SCENE=drum-mixing \
     FTS_BLITZ_SIZE="{{SIZE}}" \
@@ -1118,7 +1118,7 @@ studio-bench GESTURE="pan" SIZE="5120x1440" FRAMES="120" DUMP="":
 drive SIZE="2560x1440" SCENE="drum-mixing" DISPLAY_NUM="99":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build {{dev_build}} -p session-ui --bin blitz_shot
+    cargo build {{dev_build}} -p daw-view-kit --bin blitz_shot
     just drive-stop "{{DISPLAY_NUM}}"
     # A killed Xvfb leaves its lock behind and the next one refuses to
     # start — silently, as far as anything asking the display is
@@ -1199,7 +1199,7 @@ daw-verify PROJECT="" SIZE="5120x1440":
         project="${FTS_DAW_FIXTURE:-{{DAW_PROJECT}}}"
         [[ -f "$project" ]] || just daw-template
     fi
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     FTS_BENCH_VERIFY=1 FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "$project" 2>&1 \
         | grep -viE 'vulkan|objects:|WARN'
 
@@ -1223,7 +1223,7 @@ daw-animate PROJECT="" SIZE="2560x1440":
         project="${FTS_DAW_FIXTURE:-/tmp/fts-orchestral.rpp}"
         [[ -f "$project" ]] || just daw-fixture
     fi
-    cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
+    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
     FTS_BENCH_ANIMATE=1 FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "$project" 2>&1 \
         | grep -viE 'vulkan|objects:|WARN'
 
@@ -1236,7 +1236,7 @@ daw-animate PROJECT="" SIZE="2560x1440":
 #
 #   just mixer-golden                    at the pictures' 2560x1440
 #   SIMULATE=0 just mixer-golden         silent, as the engine has it
-#   THEME=console just mixer-golden      features/engine/ui/themes/console/ (a folder of layers)
+#   THEME=console just mixer-golden      features/engine/view-kit/themes/console/ (a folder of layers)
 #   THEME=console:~/my-layers just …     a theme over it: each path over the ones before
 mixer-golden SIZE="2560x1440":
     #!/usr/bin/env bash
@@ -1247,8 +1247,8 @@ mixer-golden SIZE="2560x1440":
     theme=""
     IFS=: read -ra layers <<< "${THEME:-dark}"
     for layer in "${layers[@]}"; do
-        if [ -d "features/engine/ui/themes/$layer" ]; then path="$PWD/features/engine/ui/themes/$layer"
-        elif [ -f "features/engine/ui/themes/fts-$layer.frame" ]; then path="$PWD/features/engine/ui/themes/fts-$layer.frame"
+        if [ -d "features/engine/view-kit/themes/$layer" ]; then path="$PWD/features/engine/view-kit/themes/$layer"
+        elif [ -f "features/engine/view-kit/themes/fts-$layer.frame" ]; then path="$PWD/features/engine/view-kit/themes/fts-$layer.frame"
         else path="${layer/#\~/$HOME}"; fi
         theme="${theme:+$theme:}$path"
     done
@@ -1270,10 +1270,10 @@ theme-parity PROJECT="features/dynamic-template/fixtures/golden/template.rpp" SI
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{OUT}}"
-    cargo build -q --release -p session-ui --bin bench --bin theme_diff --bin theme_export
-    ./target/release/theme_export features/engine/ui/themes/fts-dark.frame
+    cargo build -q --release -p daw-view-kit --bin bench --bin theme_diff --bin theme_export
+    ./target/release/theme_export features/engine/view-kit/themes/fts-dark.frame
     FTS_BENCH_MIXER="{{OUT}}/native.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote' || true
-    FTS_THEME=features/engine/ui/themes/fts-dark.frame FTS_BENCH_MIXER="{{OUT}}/themed.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote|theme' || true
+    FTS_THEME=features/engine/view-kit/themes/fts-dark.frame FTS_BENCH_MIXER="{{OUT}}/themed.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote|theme' || true
     ./target/release/theme_diff "{{OUT}}/native.png" "{{OUT}}/themed.png" "{{OUT}}/diff.png"
 
 # The studio window (Blitz + the painted arrangement) on a real session,
@@ -1309,7 +1309,7 @@ app PROJECT="" CHART="" MODE="":
     # output onto an external volume (-10810).
     mkdir -p "$HOME/Library/Logs/Session Dev"
     log="$HOME/Library/Logs/Session Dev/session-dev.log"
-    envs=(--env "RUST_LOG=${RUST_LOG:-warn,session_engine=info,session_ui=info}" --env RUST_BACKTRACE=1)
+    envs=(--env "RUST_LOG=${RUST_LOG:-warn,session_engine=info,daw_view_kit=info}" --env RUST_BACKTRACE=1)
     # quote(): a song title can carry an apostrophe (God, I'm Just Grateful).
     project={{quote(PROJECT)}}
     chart={{quote(CHART)}}
@@ -1426,13 +1426,13 @@ prepare +PROJECTS:
 studio-song PROJECT CHART="" SIZE="2560x1440":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build {{dev_build}} -p session-ui --bin blitz_shot
+    cargo build {{dev_build}} -p daw-view-kit --bin blitz_shot
     prep=()
     if [[ -n "{{CHART}}" ]]; then
         prep=(FTS_BLITZ_ORGANIZE=1 "FTS_BLITZ_CHART={{CHART}}" FTS_BLITZ_GUIDE=1)
     fi
     env FTS_BLITZ_WINDOW=1 FTS_BLITZ_SIZE="{{SIZE}}" ${prep[@]+"${prep[@]}"} \
-        RUST_LOG="${RUST_LOG:-warn,session_engine=info,session_ui=info}" \
+        RUST_LOG="${RUST_LOG:-warn,session_engine=info,daw_view_kit=info}" \
         {{dev_out}}/blitz_shot "{{PROJECT}}" /tmp/fts-studio.png
 
 # Everything CI runs, in CI's order, with one command.
@@ -1877,7 +1877,7 @@ worktree-setup:
 
 # Generate frame's plugin faces (features/ui/plugin-faces/generated: every `.frame`, the
 # catalogs and rig-faces/faces.json) from features/ui/plugin-faces. They are
-# not kept in git; session-ui and signal read them from here at runtime.
+# not kept in git; daw-view-kit and signal read them from here at runtime.
 # Deterministic: unchanged sources rewrite every file byte for byte.
 faces *ONLY:
     cargo run -q --release -p plugin-faces -- features/ui/plugin-faces/generated {{ if ONLY != "" { "--only " + ONLY } else { "" } }}

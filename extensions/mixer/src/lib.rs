@@ -19,7 +19,7 @@
 
 //!
 //! **In a browser** (studio-web) the `mixer` view is the same widget over
-//! the page's own engine (`session_ui::web_host`, [`web`]); the strip and
+//! the page's own engine (`daw_view_kit::web_host`, [`web`]); the strip and
 //! the close-up say they are the desktop's for now.
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -42,12 +42,12 @@ use architect_extensions_dioxus::PaintPane;
 #[cfg(not(target_arch = "wasm32"))]
 use architect_scene::paint::PaintMount;
 #[cfg(not(target_arch = "wasm32"))]
+use daw_view_kit::song_model::StudioSession;
+#[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use mixer_view::mixer_panel::{HostedMixer, Links};
 use serde_json::{Value as Json, json};
-#[cfg(not(target_arch = "wasm32"))]
-use session_ui::song_model::StudioSession;
 #[cfg(not(target_arch = "wasm32"))]
 use studio_view_link::InScope;
 use studio_view_link::Stats;
@@ -139,7 +139,7 @@ fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
     return session_engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
-    return session_ui::web_host::hosted_is_open();
+    return daw_view_kit::web_host::hosted_is_open();
 }
 
 /// Which of the two a pane is.

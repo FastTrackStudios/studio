@@ -1,12 +1,12 @@
 //! The arrangement in a browser.
 //!
 //! The same panel over the page's own engine
-//! (`session_ui::web_host::HostedView`), drawn under dioxus-web with its
+//! (`daw_view_kit::web_host::HostedView`), drawn under dioxus-web with its
 //! widget in a WebGL2 canvas: what the native process's pane is
 //! (`crate::host`), with the page in place of the engine's socket.
 
+use daw_view_kit::web_host::{HostedPanel, HostedView};
 use dioxus::prelude::*;
-use session_ui::web_host::{HostedPanel, HostedView};
 
 /// The pane: the song the page's engine has current, or what it waits
 /// for (`HostedView` says which).

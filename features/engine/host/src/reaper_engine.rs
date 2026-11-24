@@ -97,7 +97,7 @@ fn process_alive(pid: u32) -> bool {
 }
 
 /// A live connection to a REAPER extension's `SetlistService`. Keeps
-/// `session_ui`'s `Session` singleton pointed at real REAPER for the rest
+/// `daw_view_kit`'s `Session` singleton pointed at real REAPER for the rest
 /// of the process — dropping this would close the link, so it's leaked
 /// into a static the same way [`crate::session_engine::SessionEngine`] is.
 pub struct ReaperEngine {
@@ -398,7 +398,7 @@ fn install_daw_singleton(daw: daw::rpc::Daw) {
     daw::init_from_parts(daw, runtime().clone());
 }
 
-/// Connect to REAPER and install the client as session-ui's `Session`
+/// Connect to REAPER and install the client as daw-view-kit's `Session`
 /// singleton, if that hasn't already happened. Idempotent — a no-op once
 /// `engine()` is `Some`, so it's safe to call both at boot (REAPER may
 /// already be running from a previous session) and after

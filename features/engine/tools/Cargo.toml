@@ -10,7 +10,7 @@ description = "The DAW views' headless tools: `bench` (the arrangement's and the
 publish = false
 
 [dependencies]
-session-ui = { workspace = true, features = ["native", "engine"] }
+daw-view-kit = { workspace = true, features = ["native", "engine"] }
 arrangement-view = { workspace = true, features = ["native", "engine"] }
 mixer-view = { workspace = true, features = ["native", "engine"] }
 session-engine = { workspace = true }
@@ -44,7 +44,7 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 pprof = { workspace = true, features = ["flamegraph"], optional = true }
 
 [features]
-profile = ["dep:pprof", "session-ui/profile"]
+profile = ["dep:pprof", "daw-view-kit/profile"]
 
 [[bin]]
 name = "bench"

@@ -35,9 +35,9 @@ pub fn modifiers(mods: &[&str]) -> Modifiers {
 
 /// The same, as the arrangement panel's mouse map reads them.
 #[must_use]
-pub fn panel_mods(mods: &[&str]) -> session_ui::mousemap::Mods {
+pub fn panel_mods(mods: &[&str]) -> daw_view_kit::mousemap::Mods {
     let m = modifiers(mods);
-    session_ui::mousemap::Mods {
+    daw_view_kit::mousemap::Mods {
         shift: m.contains(Modifiers::SHIFT),
         ctrl: m.contains(Modifiers::CONTROL),
         alt: m.contains(Modifiers::ALT),
@@ -52,23 +52,23 @@ pub const fn mouse(
 ) -> (
     MouseEventButton,
     MouseEventButtons,
-    session_ui::panel_input::Button,
+    daw_view_kit::panel_input::Button,
 ) {
     match button {
         Button::Primary => (
             MouseEventButton::Main,
             MouseEventButtons::Primary,
-            session_ui::panel_input::Button::Left,
+            daw_view_kit::panel_input::Button::Left,
         ),
         Button::Middle => (
             MouseEventButton::Auxiliary,
             MouseEventButtons::Auxiliary,
-            session_ui::panel_input::Button::Middle,
+            daw_view_kit::panel_input::Button::Middle,
         ),
         Button::Secondary => (
             MouseEventButton::Secondary,
             MouseEventButtons::Secondary,
-            session_ui::panel_input::Button::Other,
+            daw_view_kit::panel_input::Button::Other,
         ),
     }
 }

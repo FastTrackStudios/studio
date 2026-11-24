@@ -16,10 +16,10 @@
 //!    — one process-wide pump per `#[subscribe]` hub.
 //! 4. An `architect::LocalServer` hosts the setlist RPC behind a
 //!    `LayerRouter`; the resulting `SetlistServiceClient` becomes
-//!    session-ui's `Session` singleton (the same client the desktop app
+//!    daw-view-kit's `Session` singleton (the same client the desktop app
 //!    builds over its REAPER socket — here it's a memory link).
 //! 5. The UI bridge (see `session_view`) attaches straight to the
-//!    service's `events_hub()` and folds events into session-ui's
+//!    service's `events_hub()` and folds events into daw-view-kit's
 //!    global signals — the in-process flavor of the web remote's
 //!    subscription.
 //!
@@ -87,7 +87,7 @@ pub struct SessionEngine {
     /// `events_hub()` directly (in-process, no wire).
     pub setlist: SetlistServiceImpl<Standalone>,
     /// RPC client over the in-process LocalServer — installed as
-    /// session-ui's `Session` singleton for transport commands.
+    /// daw-view-kit's `Session` singleton for transport commands.
     pub client: SetlistServiceClient,
     /// Stream client for the `#[subscribe]` events + active_indices streams.
     /// The UI bridge drives `events(tx)` / `active_indices(tx)` on this so the
@@ -240,7 +240,7 @@ pub fn bootstrap_blocking() -> eyre::Result<()> {
 
     let engine = rt.block_on(bootstrap(rt.handle().clone()))?;
 
-    // Session singleton for session-ui components (transport buttons,
+    // Session singleton for daw-view-kit components (transport buttons,
     // sidebar seeks) — same client type the REAPER desktop installs.
     session::ui::Session::init(engine.client.clone())
         .map_err(|e| eyre::eyre!("Session::init: {e:?}"))?;

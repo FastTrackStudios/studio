@@ -12,7 +12,7 @@ description = "Session's engine — the set, the Action List, opening, streaming
 # its songs (`studio_engine`), the Action List every caller runs
 # (`actions`), opening and saving, streaming a set in, collaboration, and
 # every edit of a song's data. `studio engine` runs it headless; a window
-# (`session-ui`) attaches to it. Nothing here draws — the rule the crate
+# (`daw-view-kit`) attaches to it. Nothing here draws — the rule the crate
 # boundary now holds (docs/design/engine-boundary.md).
 #
 # Some dependencies are still the window's kind (dioxus signals, daw-ui's

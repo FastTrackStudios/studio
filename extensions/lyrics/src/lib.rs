@@ -1,7 +1,7 @@
 //! `studio.lyrics`: Studio's lyrics panel in an Architect pane.
 //!
 //! Nothing is redrawn: the pane is a Studio window on Studio's engine
-//! (`studio_view_link`) showing `session_ui::lyrics_panel::HostedLyrics`,
+//! (`studio_view_link`) showing `daw_view_kit::lyrics_panel::HostedLyrics`,
 //! the panel `studio-desktop`'s Lyrics view shows (its Audience, Performer
 //! and Confidence Monitor views), following the engine's transport.
 //!
@@ -10,9 +10,9 @@
 
 use architect_extensions::linked::{Builder, Extension};
 use architect_extensions_dioxus::BuilderExt as _;
+use daw_view_kit::song_model::StudioSession;
 use dioxus::prelude::*;
 use serde_json::json;
-use session_ui::song_model::StudioSession;
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
 
@@ -29,7 +29,7 @@ impl Extension for Lyrics {
                 let song = studio_view_link::current();
                 let held = song
                     .as_ref()
-                    .map(|(_, session)| session_ui::lyrics_panel::summary(session));
+                    .map(|(_, session)| daw_view_kit::lyrics_panel::summary(session));
                 Ok(json!({
                     "linked": song.is_some(),
                     "problem": studio_view_link::problem(),
@@ -75,5 +75,5 @@ impl PartialEq for Song {
 #[component]
 fn Words(session: Song) -> Element {
     use_context_provider(|| session.0.clone());
-    rsx! { session_ui::lyrics_panel::HostedLyrics {} }
+    rsx! { daw_view_kit::lyrics_panel::HostedLyrics {} }
 }

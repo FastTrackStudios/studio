@@ -95,7 +95,7 @@ description = "Lights the Views toolbar's button of the view the workspace has f
 group = "Views"
 effect = "read_only"
 
-# The Arrangement's tools: Session's arrangement rail (session_ui::rails).
+# The Arrangement's tools: Session's arrangement rail (daw_view_kit::rails).
 
 [[actions]]
 id = "STUDIO_VIEWS_PHASE"

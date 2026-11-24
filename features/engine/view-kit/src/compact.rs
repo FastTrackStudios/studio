@@ -12,7 +12,7 @@
 //!   Arrangement, Mixer.
 //! - **The transport** sits over the tabs: the song's section bar, slim,
 //!   and the performance buttons, compact.
-//! - **Control** is the setlist navigator (`session-ui`'s): each song a
+//! - **Control** is the setlist navigator (`daw-view-kit`'s): each song a
 //!   bar filled as far as the set has got, the one playing opened into its
 //!   sections, each filled as it plays — the vertical progress bar — and
 //!   the place another song is picked.

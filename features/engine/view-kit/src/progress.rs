@@ -4,7 +4,7 @@
 //! Read off the open session rather than the setlist engine for now: the
 //! SONG region (lane 0) is the song's span, the SECTIONS regions (lane 1)
 //! are its parts — the regions `build_from_chart` stamps. The bar and the
-//! buttons are `session-ui`'s, unchanged; what is here is the data and the
+//! buttons are `daw-view-kit`'s, unchanged; what is here is the data and the
 //! transport they drive. The same panels in the desktop app and the web
 //! demo: only how the reading is polled differs.
 

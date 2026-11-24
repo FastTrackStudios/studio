@@ -49,10 +49,10 @@ use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
 use arrangement_view::panel::{ArrangementPanel, PanelEvent};
 use arrangement_view::widget::ArrangementWidget;
+use daw_view_kit::studio::StudioSession;
 use dioxus::prelude::*;
 use peniko::kurbo::Affine;
 use session_engine::engine::{TRACK_PARTS, VALUE_TRACKS, track_value};
-use session_ui::studio::StudioSession;
 use studio_arrangement::host::{Hosted, InScope, Stats};
 
 const W: u32 = 1280;
@@ -68,7 +68,7 @@ fn fixture() -> std::path::PathBuf {
 fn session() -> StudioSession {
     let path = fixture();
     session_engine::open::open_silent(&path).expect("open the golden template");
-    let mut raw = session_ui::studio::fetch().expect("read it back");
+    let mut raw = daw_view_kit::studio::fetch().expect("read it back");
     // Some lit: muted, soloed, both (the buttons lit by the engine's
     // values are what is compared).
     for (i, (mute, solo)) in [
@@ -84,13 +84,13 @@ fn session() -> StudioSession {
             t.soloed = solo;
         }
     }
-    let planner = session_ui::studio::Planner {
+    let planner = daw_view_kit::studio::Planner {
         raw: Arc::new(raw),
         scene: Some("drum-mixing"),
         kinds: Arc::new(session_engine::plan::Kinds::read(&path)),
     };
     let (project, rows) = planner.plan(&planner.raw);
-    let previews = session_ui::studio::previews_of(&project);
+    let previews = daw_view_kit::studio::previews_of(&project);
     StudioSession {
         project,
         rows,

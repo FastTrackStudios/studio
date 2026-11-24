@@ -7,7 +7,7 @@
 //! ```
 //!
 //! Nothing here draws the arrangement. The session is opened and planned
-//! the way the app opens it ([`session_ui::studio::StudioSession`]), and
+//! the way the app opens it ([`daw_view_kit::studio::StudioSession`]), and
 //! the tree is the app's: in a window it is
 //! [`mixer_view::mixer_panel::DawPanels`] — the arrangement panel, its
 //! chrome and the docked mixer, exactly what the desktop shell mounts —
@@ -51,7 +51,7 @@ use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
 
 use arrangement_view::panel::{ArrangementPanel, PanelEvent, Slot};
-use session_ui::studio::{PPS, StudioSession};
+use daw_view_kit::studio::{PPS, StudioSession};
 
 /// The scene the app lays a session out by.
 const SCENE: &str = "drum-mixing";
@@ -70,10 +70,10 @@ fn main() {
         .or_else(|| windowed.as_ref().map(|_| "/tmp/fts-studio.log".to_owned()));
     let filter = || {
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(
-            // `blitz_shot` and not `session_ui`: a binary's tracing target
+            // `blitz_shot` and not `daw_view_kit`: a binary's tracing target
             // is the BINARY's crate name, so a filter naming the library it
             // lives beside silently drops everything this file says.
-            |_| "warn,blitz=info,usvg=error,session_ui=info,blitz_shot=info,daw_ui=info".into(),
+            |_| "warn,blitz=info,usvg=error,daw_view_kit=info,blitz_shot=info,daw_ui=info".into(),
         )
     };
     if let Some(path) = log.as_deref() {
@@ -198,11 +198,11 @@ fn main() {
         // to be the one; this says which function, and it costs a
         // feature flag.
         let profiler = profiler();
-        let from = session_ui::frames::now();
+        let from = daw_view_kit::frames::now();
         pan(&mut document, &panel, width, height, frames);
         report(profiler);
         // The widget's own log of the run: its passes and what it drew.
-        let run = session_ui::frames::Summary::of(&session_ui::frames::since(from));
+        let run = daw_view_kit::frames::Summary::of(&daw_view_kit::frames::since(from));
         println!(
             "  widget        paint p50 {:.2}ms p95 {:.2}ms   lanes {:.2}  titles {:.2}  prep {:.2}  commands {:.0}",
             run.paint.median, run.paint.p95, run.lanes_ms, run.titles_ms, run.prep_ms, run.commands
@@ -322,7 +322,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             parts.get(3)?.parse::<f64>().ok()?,
         ))
     }) {
-        let mut project = session_ui::studio::fetch().expect("read the project back");
+        let mut project = daw_view_kit::studio::fetch().expect("read the project back");
         let folder = project
             .tracks
             .iter()
@@ -346,7 +346,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             })
             .filter(|edit| session_engine::engine::apply_now(edit))
             .count();
-        let back = session_ui::studio::fetch().expect("read it back");
+        let back = daw_view_kit::studio::fetch().expect("read it back");
         let lane = back
             .tracks
             .iter()
@@ -366,7 +366,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             .collect();
         tracing::info!(sent, track = %lane.name, ?comp, ?pieces, "blitz: comp");
     }
-    let raw = session_ui::studio::fetch().expect("read the project back");
+    let raw = daw_view_kit::studio::fetch().expect("read the project back");
     // `FTS_BLITZ_OPEN=Drums,Kick` (or `*`): those folders opened, as a
     // click on each would — the shot of what is under a folder that
     // starts shut.
@@ -396,13 +396,13 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             .collect();
         let _ = session_engine::lanes::set_expanded(&guids, Some(true));
     }
-    let planner = session_ui::studio::Planner {
+    let planner = daw_view_kit::studio::Planner {
         raw: Arc::new(raw),
         scene: Some(scene),
         kinds: Arc::new(session_engine::plan::Kinds::read(path)),
     };
     let (project, rows) = planner.plan(&planner.raw);
-    let previews = session_ui::studio::previews_of(&project);
+    let previews = daw_view_kit::studio::previews_of(&project);
     let chart = prepare.chart.as_deref().and_then(|chart_path| {
         let text = std::fs::read_to_string(chart_path)
             .inspect_err(|e| tracing::error!(error = %e, path = %chart_path.display(), "chart: could not read"))
@@ -843,11 +843,11 @@ fn pan(
         let _ = std::fs::create_dir_all(dir);
     }
     let mut renderer =
-        session_ui::headless::Headless::new(width, height).expect("a headless renderer");
-    let mut stages = session_ui::profile::Stages::with_capacity(frames);
-    let mut diff = session_ui::profile::Samples::with_capacity(frames);
-    let mut solve = session_ui::profile::Samples::with_capacity(frames);
-    let batch = session_ui::headless::BATCH;
+        daw_view_kit::headless::Headless::new(width, height).expect("a headless renderer");
+    let mut stages = daw_view_kit::profile::Stages::with_capacity(frames);
+    let mut diff = daw_view_kit::profile::Samples::with_capacity(frames);
+    let mut solve = daw_view_kit::profile::Samples::with_capacity(frames);
+    let batch = daw_view_kit::headless::BATCH;
 
     // `FTS_BLITZ_WARM=1`: the gesture run once first, slowly, so the
     // zoomed-in waveforms' detail has been read along it — what scrolling

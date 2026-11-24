@@ -43,8 +43,11 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
             engine/      Session, not a primitive but the engine: engine/
                          (`session-engine`: the set, the Action List,
                          `studio engine`; draws nothing), runtime/
-                         (`session-runtime`, host-neutral), ui/
-                         (`session-ui`: the DAW view, a view of the engine),
+                         (`session-runtime`, host-neutral), view-kit/
+                         (`daw-view-kit`: the kit the DAW views draw with),
+                         arrangement/ (`arrangement-view`), mixer/
+                         (`mixer-view`), tools/ (`daw-view-tools`: the
+                         headless bench and screenshot tools),
                          host/ (`session-desktop`: its window, CLI module
                          and engine host, as a library + a binary). Folders
                          moved, package names kept for now.

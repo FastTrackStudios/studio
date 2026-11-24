@@ -2,14 +2,14 @@
 //! docked and alone mixer panels (`mixer_panel`), the Tone racks (`tone`),
 //! the FX view (`fx_view`), close-ups (`closeup`), the plugin faces and
 //! macros, and the mixer's view actions (`mixer_actions`). It draws over
-//! session-ui's base (the controls, the theme, the dock's links) and hands
+//! daw-view-kit's base (the controls, the theme, the dock's links) and hands
 //! the window its views with [`mixer_host::install`]. Moving to
 //! FastTrackStudios/mixer-view.
 
-// session-ui's base, under the paths this code was written against
+// daw-view-kit's base, under the paths this code was written against
 // (`crate::tcp`, `crate::skin`, …).
 #[allow(unused_imports)]
-use session_ui::*;
+use daw_view_kit::*;
 
 pub mod balance;
 pub mod closeup;

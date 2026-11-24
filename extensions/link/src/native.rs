@@ -8,10 +8,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use anyrender::recording::RenderCommand;
 use architect_scene::paint::PaintMount;
 use architect_scene::paint::{Layer, LayerKey, Scene};
+use daw_view_kit::song_model::StudioSession;
 use dioxus::prelude::*;
 use serde_json::Value as Json;
 use session_engine_client::studio_engine::link;
-use session_ui::song_model::StudioSession;
 
 use crate::Stats;
 
@@ -322,9 +322,9 @@ impl SceneLayer {
 
 /// A part's move as the host's animation of it.
 #[must_use]
-pub fn animation(m: &session_ui::overlay::ValueMove) -> Option<architect_scene::anim::Animation> {
+pub fn animation(m: &daw_view_kit::overlay::ValueMove) -> Option<architect_scene::anim::Animation> {
     use architect_scene::anim::{Animation, Input, Linear, Name, Property};
-    use session_ui::overlay::ValueProperty;
+    use daw_view_kit::overlay::ValueProperty;
     let name = Name::new(&m.name).ok()?;
     let property = match m.property {
         ValueProperty::Y => Property::Y,
@@ -337,7 +337,7 @@ pub fn animation(m: &session_ui::overlay::ValueMove) -> Option<architect_scene::
     Some(Animation::linear(property, Input::Value(name), linear))
 }
 
-/// Parts an engine's values move ([`session_ui::overlay::ValueLayer`]) as a
+/// Parts an engine's values move ([`daw_view_kit::overlay::ValueLayer`]) as a
 /// pane's layers, keyed from `first`: a part drawn as last frame keeps its
 /// content, so nothing of it crosses.
 #[derive(Default)]
@@ -351,7 +351,7 @@ impl ValueParts {
     /// part has its own.
     pub fn layers(
         &mut self,
-        parts: &[session_ui::overlay::ValueLayer],
+        parts: &[daw_view_kit::overlay::ValueLayer],
         first: LayerKey,
         (z, over_z): (i32, i32),
         transform: architect_scene::paint::peniko::kurbo::Affine,
