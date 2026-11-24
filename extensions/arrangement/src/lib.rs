@@ -167,7 +167,7 @@ impl PartialEq for Song {
 #[component]
 fn Panel(session: Song) -> Element {
     use_context_provider(|| session.0.clone());
-    use_context_provider(|| Signal::new(studio_view_link::mode_from_env()));
+    studio_view_link::use_client_mode();
     // Beside a mixer pane it is not linked to: compact, as docked.
     use_context_provider(|| session_ui::panel::StartCompact(true));
     let applier = use_hook(|| Rc::new(session_ui::engine::Applier::start()));

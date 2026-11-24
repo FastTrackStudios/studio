@@ -342,7 +342,15 @@ fn text(file_id: &str, id: &str, doc: &LoroDoc, lines: &HashMap<String, String>)
     }
     acts.retain(|(n, s)| n.is_some() || !s.is_empty());
     let title = setlist::info(doc).title;
-    setfile::write(file_id, &format!("{HEAD}{id} · {title}"), &acts)
+    let text = setfile::write(file_id, &format!("{HEAD}{id} · {title}"), &acts);
+    // A studio project stays one when Studio writes its file again.
+    match setfile::kind_of(&title) {
+        setfile::Kind::Studio => match text.split_once('\n') {
+            Some((first, rest)) => format!("{first}\n# kind: studio\n{rest}"),
+            None => text,
+        },
+        setfile::Kind::Live => text,
+    }
 }
 
 /// Read a file into its set: its acts and songs replace the set's

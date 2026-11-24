@@ -11,6 +11,11 @@
 //! - **chart**: Keyflow's chart, its note-input toolbar on its pane (0.67),
 //!   over the lyrics.
 //!
+//! A **studio project** (`# kind: studio` in its setlist file: an album
+//! or a record being made, not a show) needs no lighting: its main window
+//! is the progress bar over the arrangement alone, and the right display's
+//! window, "Mixer — <set>", is the mixer.
+//!
 //! The window manager places them by title (Loft's rules on app id
 //! `studio`).
 
@@ -29,6 +34,8 @@ pub const CUES: &str = "ignition/cues";
 
 /// The lighting's window and the chart's.
 pub const LIGHTING_WINDOW: &str = "lighting";
+/// A studio project's mixer window, where a show has its lighting.
+pub const MIXER_WINDOW: &str = "mixer";
 pub const CHART_WINDOW: &str = "chart";
 /// The launcher's own window during a session, titled "Launcher".
 pub const LAUNCHER_WINDOW: &str = "launcher";
@@ -73,6 +80,8 @@ impl Default for Area {
 pub struct Names {
     pub set: String,
     pub chart_state: String,
+    /// A show or a studio project: which windows it has.
+    pub kind: crate::setfile::Kind,
 }
 
 /// Builds the stage's nodes, numbering groups and splits as it goes.
@@ -124,6 +133,14 @@ impl Builder {
         let progress = self.group(PROGRESS);
         self.split(Axis::Column, progress, work, PROGRESS_HEIGHT / area.h)
     }
+
+    /// A studio project's main window: the progress bar over the
+    /// arrangement alone (its mixer has a window of its own).
+    fn main_alone(&mut self, area: Area) -> Node {
+        let arrangement = self.group(ARRANGEMENT);
+        let progress = self.group(PROGRESS);
+        self.split(Axis::Column, progress, arrangement, PROGRESS_HEIGHT / area.h)
+    }
 }
 
 /// The stage's three windows over `area` (the main window's), its main
@@ -131,13 +148,16 @@ impl Builder {
 /// own pages (its pane given).
 #[must_use]
 pub fn stage(area: Area, names: &Names, page: Option<Pane>) -> Workspace {
+    let studio = names.kind == crate::setfile::Kind::Studio;
     let mut b = Builder { next: 1 };
     let mut panes = vec![
         Pane::new(PROGRESS, PROGRESS, "Progress"),
         Pane::new(ARRANGEMENT, ARRANGEMENT, "Arrangement"),
-        Pane::new(MIXER, MIXER, "Mixer"),
-        Pane::new(SHOW, SHOW, format!("Lighting — {}", names.set)),
-        Pane::new(CUES, CUES, "Cues"),
+        if studio {
+            Pane::new(MIXER, MIXER, format!("Mixer — {}", names.set))
+        } else {
+            Pane::new(MIXER, MIXER, "Mixer")
+        },
         {
             let mut chart = Pane::new(CHART, CHART, format!("Chart — {}", names.set));
             chart.state.clone_from(&names.chart_state);
@@ -145,24 +165,38 @@ pub fn stage(area: Area, names: &Names, page: Option<Pane>) -> Workspace {
         },
         Pane::new(LYRICS, LYRICS, "Lyrics"),
     ];
+    if !studio {
+        panes.push(Pane::new(SHOW, SHOW, format!("Lighting — {}", names.set)));
+        panes.push(Pane::new(CUES, CUES, "Cues"));
+    }
     let main = match &page {
         Some(p) => b.group(&p.id.0),
+        None if studio => b.main_alone(area),
         None => b.main(area),
     };
     if let Some(p) = page {
         panes.push(p);
     }
-    let (show, cues) = (b.group(SHOW), b.group(CUES));
-    let lighting = b.split(Axis::Row, show, cues, 0.8);
+    // The right display: a show's lighting, a studio project's mixer.
+    let right = if studio {
+        Window {
+            bounds: Some(Rect::new(0.0, 0.0, 2560.0, 1440.0)),
+            ..Window::new(WindowId::new(MIXER_WINDOW), b.group(MIXER))
+        }
+    } else {
+        let (show, cues) = (b.group(SHOW), b.group(CUES));
+        let lighting = b.split(Axis::Row, show, cues, 0.8);
+        Window {
+            bounds: Some(Rect::new(0.0, 0.0, 2560.0, 1440.0)),
+            ..Window::new(WindowId::new(LIGHTING_WINDOW), lighting)
+        }
+    };
     let (chart, lyrics) = (b.group(CHART), b.group(LYRICS));
     let chart_window = b.split(Axis::Column, chart, lyrics, 0.67);
     let mut ws = Workspace::new();
     ws.windows = vec![
         Window::new(WindowId::main(), main),
-        Window {
-            bounds: Some(Rect::new(0.0, 0.0, 2560.0, 1440.0)),
-            ..Window::new(WindowId::new(LIGHTING_WINDOW), lighting)
-        },
+        right,
         Window {
             bounds: Some(Rect::new(0.0, 0.0, 1440.0, 2560.0)),
             ..Window::new(WindowId::new(CHART_WINDOW), chart_window)
@@ -190,6 +224,23 @@ mod tests {
             Node::Split(s) => s,
             Node::Group(_) => panic!("a group"),
         }
+    }
+
+    #[test]
+    fn a_studio_project_has_the_mixer_on_the_right_and_no_lighting() {
+        let names = Names {
+            set: "Crescendum".into(),
+            kind: crate::setfile::Kind::Studio,
+            ..Names::default()
+        };
+        let ws = stage(Area::default(), &names, None);
+        let main = ws.windows[0].center.as_ref().unwrap();
+        assert_eq!(views(main), [PROGRESS, ARRANGEMENT]);
+        assert_eq!(ws.windows[1].id, WindowId::new(MIXER_WINDOW));
+        assert_eq!(views(ws.windows[1].center.as_ref().unwrap()), [MIXER]);
+        assert!(ws.panes.iter().all(|p| p.id.0 != SHOW && p.id.0 != CUES));
+        let mixer = ws.panes.iter().find(|p| p.id.0 == MIXER).unwrap();
+        assert_eq!(mixer.title, "Mixer — Crescendum");
     }
 
     #[test]

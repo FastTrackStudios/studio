@@ -207,7 +207,7 @@ impl PartialEq for Song {
 #[component]
 fn Strips(session: Song, shown: Shown) -> Element {
     let session = use_context_provider(|| session.0.clone());
-    use_context_provider(|| Signal::new(studio_view_link::mode_from_env()));
+    studio_view_link::use_client_mode();
     let mixer = use_hook(|| {
         let rows = session
             .planner

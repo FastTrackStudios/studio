@@ -156,6 +156,19 @@ pub fn mode_from_env() -> session::modes::Mode {
         .unwrap_or(session::modes::Mode::Live)
 }
 
+/// The mode this view shows: its host's (the client's, which every one
+/// of its windows shares and `SESSION_MODE` sets), else one of its own from
+/// [`mode_from_env`] for a view hosted alone. A view never makes its own
+/// beside its host's: two would disagree about what is drawn and which
+/// keys do what.
+pub fn use_client_mode() -> dioxus::prelude::Signal<session::modes::Mode> {
+    use dioxus::prelude::*;
+    use_hook(|| {
+        try_consume_context::<Signal<session::modes::Mode>>()
+            .unwrap_or_else(|| provide_context(Signal::new(mode_from_env())))
+    })
+}
+
 /// Whether the `daw` extension's value table carries the tracks' mute and
 /// solo ([`session_engine::engine::track_value`]).
 ///

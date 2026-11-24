@@ -192,6 +192,30 @@ impl Route {
 }
 
 fn main() {
+    // One MCP server: Studio's own, which also carries the engine's
+    // actions (`hosted::forward_engine_actions`). The engine Studio starts
+    // keeps its list as Studio's private line and publishes no discovery
+    // file of its own (`studio_engine::mcp::PRIVATE`). Set before any
+    // thread starts, so every process Studio starts inherits it.
+    #[cfg(feature = "native")]
+    // SAFETY: the first statement of `main`, before any thread exists.
+    unsafe {
+        std::env::set_var("FTS_MCP_PRIVATE", "1");
+        // One engine: the daw extension's launcher looks where Studio
+        // starts its engine (`engine::engine_dir`).
+        if std::env::var_os("FTS_DAW_ENGINE_DIR").is_none()
+            && let Some(dir) = engine::engine_dir()
+        {
+            std::env::set_var("FTS_DAW_ENGINE_DIR", dir);
+        }
+        // Its private line on a port of its own, whichever side starts it:
+        // another engine on the default port must not leave it unreachable.
+        if std::env::var_os("FTS_MCP_PORT").is_none()
+            && let Some(port) = engine::free_port()
+        {
+            std::env::set_var("FTS_MCP_PORT", port.to_string());
+        }
+    }
     storage::init();
     // Natively: stderr and, when OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set,
     // the app's spans to that collector.
@@ -222,6 +246,10 @@ fn main() {
             control: Some("studio".to_owned()),
         },
     );
+    // The window closed: the engine Studio started goes with it, unless
+    // Studio keeps it (a development build, or STUDIO_KEEP_ENGINE=1).
+    #[cfg(feature = "native")]
+    engine::stop_started_engine();
     #[cfg(not(feature = "native"))]
     dioxus::launch(App);
 }

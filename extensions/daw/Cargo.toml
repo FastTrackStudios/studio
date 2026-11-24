@@ -33,6 +33,9 @@ uuid = { workspace = true }
 tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread"] }
 # The engine's own log (engine.log): src/owner.rs.
 tracing-subscriber = { workspace = true }
+# The engine's spans and stage timings exported over OTLP when
+# OTEL_EXPORTER_OTLP_ENDPOINT is set; stages recorded for PERF_RECENT.
+architect-telemetry = { workspace = true, features = ["otel"] }
 # flock (one engine) and setsid (it outlives the window): src/owner.rs.
 libc = { workspace = true }
 architect-scene = { workspace = true }

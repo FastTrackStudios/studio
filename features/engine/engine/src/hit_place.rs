@@ -240,7 +240,15 @@ pub fn place(
             .map(|shift| t - shift)
     };
     let outside = (recorded(from.checked_sub(1)), recorded(Some(to + 1)));
-    let pieces = placement::place_within(&placed, span, cut, outside);
+    // The chosen `daw.edit` algorithm places them (an extension, rhythm's
+    // or another's), else the DAW's own.
+    let pieces = crate::algorithms::place(&daw_edit::PlaceRequest {
+        hits: placed.clone(),
+        span,
+        cut,
+        bounds: outside,
+    })
+    .pieces;
     if let Some(bad) = pieces.iter().find(|p| p.end <= p.start) {
         return Err(format!(
             "a piece would end before it starts ({bad:?}) placing {:?} over {:.3}..{:.3}",

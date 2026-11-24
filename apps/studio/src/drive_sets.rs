@@ -301,6 +301,7 @@ async fn read(
         }
     };
     let parsed = setfile::parse(&text);
+    setfile::note_kind(&setfile::name_of(&name), parsed.kind);
     let dir = path.rsplit_once('/').map_or("", |(d, _)| d);
     // Each song's place: found by its id (on disk, then in Drive), or by
     // an older line's path; `= Title` has none.

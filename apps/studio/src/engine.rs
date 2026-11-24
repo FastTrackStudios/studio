@@ -235,8 +235,68 @@ fn log_file() -> Option<PathBuf> {
     Some(cache.join("fts").join("studio-engine.log"))
 }
 
+/// The engine this Studio started (its program and pid): the one it stops
+/// when it closes. An engine it found running is not in here, and is never
+/// stopped by it.
+static STARTED: std::sync::Mutex<Option<(PathBuf, u32)>> = std::sync::Mutex::new(None);
+
+/// Studio's engine folder (`FTS_DAW_ENGINE_DIR`): the daw extension's
+/// engine keeps one engine per folder (a lock), so Studio's starts beside
+/// one another app runs. Studio's process carries it too (`main`), so the
+/// daw extension's launcher finds this same engine and never starts a
+/// second one.
+#[must_use]
+pub fn engine_dir() -> Option<PathBuf> {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|d| !d.is_empty())
+        .map(|run| PathBuf::from(run).join("fts").join("studio-app-engine"))
+}
+
+/// Keep the engine running when Studio closes (`1`), or stop it (`0`).
+/// Unset: kept by a development build, so a UI rebuild finds the song
+/// still loaded and playing; stopped by a release build, so closing Studio
+/// closes everything it started.
+pub const KEEP_ENGINE: &str = "STUDIO_KEEP_ENGINE";
+
+/// Whether Studio leaves its engine running when it closes.
+#[must_use]
+pub fn keeps_engine() -> bool {
+    match std::env::var(KEEP_ENGINE).as_deref() {
+        Ok("1" | "true" | "yes") => true,
+        Ok("0" | "false" | "no") => false,
+        _ => cfg!(debug_assertions),
+    }
+}
+
+/// Studio is closing: stops the engine it started (`daw-extension
+/// --stop`, its own orderly stop), unless it keeps it ([`keeps_engine`]).
+/// An engine it attached to and did not start is left alone.
+pub fn stop_started_engine() {
+    let started = STARTED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    let Some((bin, pid)) = started else { return };
+    if keeps_engine() {
+        tracing::info!(engine.pid = pid, "studio: closing, the engine keeps running ({KEEP_ENGINE})");
+        return;
+    }
+    let stopped = std::process::Command::new(&bin)
+        .arg("--stop")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    match stopped {
+        Ok(status) if status.success() => {
+            tracing::info!(engine.pid = pid, "studio: closing, the engine it started is stopped");
+        }
+        other => tracing::warn!(engine.pid = pid, outcome = ?other, "studio: closing, the engine did not stop"),
+    }
+}
+
 /// A loopback port nobody holds now.
-fn free_port() -> Option<u16> {
+pub fn free_port() -> Option<u16> {
     std::net::TcpListener::bind("127.0.0.1:0")
         .ok()?
         .local_addr()
@@ -266,12 +326,9 @@ fn spawn(bin: &Path, args: &[String], wait: Duration) -> Result<Found, String> {
     // Studio's own folder, so it starts beside one another app runs.
     if args.iter().any(|a| a == "--engine")
         && std::env::var_os("FTS_DAW_ENGINE_DIR").is_none()
-        && let Some(run) = std::env::var_os("XDG_RUNTIME_DIR").filter(|d| !d.is_empty())
+        && let Some(dir) = engine_dir()
     {
-        cmd.env(
-            "FTS_DAW_ENGINE_DIR",
-            PathBuf::from(run).join("fts").join("studio-app-engine"),
-        );
+        cmd.env("FTS_DAW_ENGINE_DIR", dir);
     }
     if std::env::var_os("FTS_MCP_PORT").is_none()
         && let Some(port) = free_port()
@@ -282,6 +339,9 @@ fn spawn(bin: &Path, args: &[String], wait: Duration) -> Result<Found, String> {
         .spawn()
         .map_err(|e| format!("{} could not start: {e}", bin.display()))?;
     let pid = child.id();
+    // Ours: stopped when Studio closes, unless it keeps its engine.
+    *STARTED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+        Some((bin.to_path_buf(), pid));
     // Reaped when it goes, so it never lingers as a zombie.
     let _ = std::thread::Builder::new()
         .name("engine-child".into())

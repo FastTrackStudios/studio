@@ -86,6 +86,13 @@ effect = "mutating"
 params = '{"type":"object","properties":{"id":{"type":"string"},"args":{},"song":{}},"required":["id"]}'
 
 [[actions]]
+id = "DAW_ACTIONS"
+name = "Studio engine: its actions"
+description = "Every action on the engine's own Action List, as the list describes it (id, name, description, category, group, shortcut, effect, the JSON Schemas of what it takes and gives): what the app puts on its own list, run through DAW_RUN, so one MCP server and one control socket reach the engine too."
+group = "DAW"
+effect = "read_only"
+
+[[actions]]
 id = "DAW_SONGS"
 name = "Studio engine: the set's songs"
 description = "The open set's songs in order: each one's `number` (from 1), `title` and engine `project`, and which is current (`at`). What DAW_RUN's `song` takes."

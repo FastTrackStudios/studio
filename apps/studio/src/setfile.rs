@@ -43,7 +43,52 @@ pub struct SetFile {
     pub id: Option<String>,
     /// The org the set belongs to (`# org: <slug>`), when the file says.
     pub org: Option<String>,
+    /// What kind of set it is (`# kind: studio`): a live show by default.
+    pub kind: Kind,
     pub acts: Vec<Act>,
+}
+
+/// What a set is for, which decides its session's windows (`crate::stage`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Kind {
+    /// A show played live: the lighting on the right display.
+    #[default]
+    Live,
+    /// A studio project (`# kind: studio`), an album or a record being
+    /// made: the mixer on the right display, no lighting.
+    Studio,
+}
+
+impl Kind {
+    fn parse(text: &str) -> Option<Self> {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "live" | "show" => Some(Self::Live),
+            "studio" | "project" | "record" | "album" => Some(Self::Studio),
+            _ => None,
+        }
+    }
+}
+
+static KINDS: std::sync::Mutex<Vec<(String, Kind)>> = std::sync::Mutex::new(Vec::new());
+
+/// Notes the kind of the set named `name`, as its file says, for the
+/// session that opens it.
+pub fn note_kind(name: &str, kind: Kind) {
+    let mut kinds = KINDS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    kinds.retain(|(n, _)| n != name);
+    kinds.push((name.to_owned(), kind));
+}
+
+/// The kind of the set named `name`, as its file said when it was last
+/// read (a live show when it was never read).
+#[must_use]
+pub fn kind_of(name: &str) -> Kind {
+    KINDS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .find(|(n, _)| n == name)
+        .map_or(Kind::Live, |(_, k)| *k)
 }
 
 /// What a song line names.
@@ -111,6 +156,10 @@ pub fn parse(text: &str) -> SetFile {
             }
             if let Some(org) = c.strip_prefix("org:").map(str::trim).filter(|o| is_slug(o)) {
                 out.org = Some(org.to_string());
+                continue;
+            }
+            if let Some(kind) = c.strip_prefix("kind:").and_then(Kind::parse) {
+                out.kind = kind;
                 continue;
             }
             // A commented-out song names nothing.

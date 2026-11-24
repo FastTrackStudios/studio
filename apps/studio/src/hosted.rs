@@ -67,7 +67,11 @@ pub fn close_stage_windows() -> bool {
     let Some(ui) = SESSION_UI.with(std::cell::Cell::get) else {
         return false;
     };
-    for id in [crate::stage::LIGHTING_WINDOW, crate::stage::CHART_WINDOW] {
+    for id in [
+        crate::stage::LIGHTING_WINDOW,
+        crate::stage::MIXER_WINDOW,
+        crate::stage::CHART_WINDOW,
+    ] {
         let window = app_shell::WindowId::new(id);
         let _ = ui.apply(|w| w.close_window(&window));
     }
@@ -398,6 +402,81 @@ async fn run(id: &str, args: serde_json::Value) -> Result<serde_json::Value, Str
         .await
         .map_err(|e| e.to_string())?;
     serde_json::from_slice(&out).map_err(|e| e.to_string())
+}
+
+/// One MCP server: the engine's own actions (`SESSION_*`, `HITS_*`,
+/// `QUANTIZE`, …) put on Studio's list too, each run through the daw
+/// extension's `DAW_RUN`, so Studio's MCP server, its control socket and a
+/// Luau script reach the song with nothing else to find. Asked of the
+/// engine (`DAW_ACTIONS`) until it answers, then once for the app's life;
+/// an id Studio already has keeps Studio's.
+pub fn use_engine_actions() {
+    use_future(|| async {
+        static DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        while !DONE.load(std::sync::atomic::Ordering::Relaxed) {
+            match run("DAW_ACTIONS", serde_json::json!({})).await {
+                Ok(serde_json::Value::Array(actions)) if !actions.is_empty() => {
+                    let added = forward_engine_actions(&actions);
+                    tracing::info!(engine.actions = actions.len(), engine.forwarded = added, "studio: the engine's actions are on Studio's list");
+                    DONE.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                _ => crate::state::sleep_ms(1000).await,
+            }
+        }
+    });
+}
+
+/// Registers each of `actions` (as `DAW_ACTIONS` gives them) on Studio's
+/// list, forwarded through `DAW_RUN`: how many were added.
+fn forward_engine_actions(actions: &[serde_json::Value]) -> usize {
+    use architect::action::{ActionError, ActionInfo, ActionFuture, Effect};
+    let list = crate::actions::list();
+    let text = |a: &serde_json::Value, k: &str| a.get(k).and_then(serde_json::Value::as_str).unwrap_or("").to_owned();
+    let mut added = 0;
+    for a in actions {
+        let id = text(a, "id");
+        if id.is_empty() || list.info(&id).is_some() {
+            continue;
+        }
+        let info = ActionInfo {
+            id: id.clone(),
+            display_name: text(a, "name"),
+            description: text(a, "description"),
+            category: text(a, "category"),
+            group: text(a, "group"),
+            shortcut: text(a, "shortcut"),
+            effect: match text(a, "effect").as_str() {
+                "read_only" => Effect::ReadOnly,
+                "destructive" => Effect::Destructive,
+                _ => Effect::Mutating,
+            },
+            params_schema: a.get("params").and_then(serde_json::Value::as_str).map(str::to_owned),
+            result_schema: a.get("result").and_then(serde_json::Value::as_str).map(str::to_owned),
+            enabled: true,
+            disabled_reason: None,
+            checked: None,
+        };
+        let handler: architect::action::AsyncHandler = std::sync::Arc::new(move |raw: &[u8]| {
+            let args: serde_json::Value = if raw.is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::from_slice(raw).map_err(|e| ActionError::BadArgs {
+                    id: id.clone(),
+                    message: e.to_string(),
+                    expected: None,
+                })?
+            };
+            let call = serde_json::json!({ "id": id, "args": args }).to_string();
+            let future: ActionFuture = Box::pin(async move {
+                crate::actions::list().run_json_async("DAW_RUN", call.as_bytes()).await
+            });
+            Ok(future)
+        });
+        if list.register_forwarded(&info, handler).is_ok() {
+            added += 1;
+        }
+    }
+    added
 }
 
 /// Keyflow's chart and Ignition's room follow the song the engine has:

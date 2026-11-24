@@ -119,13 +119,21 @@ fn serve(
 }
 
 /// Say where the Action List is served: in the discovery file and the log.
+/// Set by an app that starts the engine and serves its actions itself
+/// (Studio, on its own MCP server): the engine's list is then that app's
+/// private line to it, written in the engine's own file
+/// (`<config>/fts/engines/`) and not published for other clients.
+pub const PRIVATE: &str = "FTS_MCP_PRIVATE";
+
 fn announce(serving: &architect_mcp::http::Serving) {
-    if let Err(error) = serving.publish(DISCOVERY_NAME) {
+    let private = std::env::var_os(PRIVATE).is_some_and(|v| !v.is_empty() && v != "0");
+    if !private && let Err(error) = serving.publish(DISCOVERY_NAME) {
         tracing::warn!(error = %error, "mcp: could not write where it is served");
     }
     tracing::info!(
         mcp.url = %serving.url,
         mcp.token = serving.token.is_some(),
+        mcp.private = private,
         mcp.actions = crate::actions::list().len(),
         "mcp: serving the Action List"
     );

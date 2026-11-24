@@ -298,6 +298,40 @@ fn spawn_in_own_session(exe: &Path, log_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// The engine's tracing: its log (`engine.log`, RUST_LOG, `info` by
+/// default) without the stage marks; the stage timings recorded
+/// (`PERF_RECENT`); and, when `OTEL_EXPORTER_OTLP_ENDPOINT` (or its
+/// `_TRACES_` form) is set, every span and stage exported over OTLP as
+/// service `studio-engine` — what a drag, a quantize or an open cost, step
+/// by step. The guard lives for the process.
+fn init_tracing() {
+    use architect_telemetry::timing;
+    use tracing_subscriber::Layer as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+    use tracing_subscriber::util::SubscriberInitExt as _;
+    if let Some(guard) = architect_telemetry::init("studio-engine") {
+        std::mem::forget(guard);
+    }
+    let filter = timing::DIRECTIVES.iter().fold(
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        |filter, directive| match directive.parse() {
+            Ok(d) => filter.add_directive(d),
+            Err(_) => filter,
+        },
+    );
+    let _ = tracing_subscriber::registry()
+        .with(filter)
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_filter(timing::no_marks()),
+        )
+        .with(timing::Recorder::default())
+        .with(architect_telemetry::tracing_layer())
+        .try_init();
+}
+
 /// The engine: holds the lock, runs the engine, serves one host at a time.
 ///
 /// # Errors
@@ -308,13 +342,7 @@ pub fn engine() -> Result<(), String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     // Its output is `engine.log` (the launcher opened it): what it does is
     // read there. A subscriber the engine host installs later wins.
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .with_ansi(false)
-        .try_init();
+    init_tracing();
     let Some(lock) = take_lock(&dir)? else {
         tracing::info!(engine.dir = %dir.display(), "daw: an engine already runs here; this one exits");
         return Ok(());
@@ -334,6 +362,9 @@ pub fn engine() -> Result<(), String> {
     // Nothing in a song stays unsaved: every open song is written to its
     // file shortly after it changes.
     session_engine::autosave::start();
+    // The engine's algorithms (hit placement, …): the extensions that
+    // provide them, and the checkouts run as development copies.
+    session_engine::algorithms::start_now();
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)

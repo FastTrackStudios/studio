@@ -8,6 +8,8 @@ repository.workspace = true
 description = "Editing a recorded performance — timing and dynamics, one engine with a profile per material (drums first)"
 
 [dependencies]
+# Hit placement is the DAW's (daw-edit): re-exported as `placement`.
+daw-edit.workspace = true
 facet.workspace = true
 dsp = { workspace = true, features = ["level"] }
 num-traits.workspace = true

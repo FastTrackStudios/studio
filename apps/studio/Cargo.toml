@@ -82,6 +82,8 @@ ignition-pane = { workspace = true, optional = true }
 studio-view-link = { workspace = true, optional = true }
 session-ui = { workspace = true, optional = true, features = ["native"] }
 session-engine = { workspace = true, optional = true, features = ["native"] }
+# The window's modes (`SESSION_MODE`, this client's own).
+session = { workspace = true, optional = true }
 architect-extensions = { workspace = true, optional = true, features = ["host", "linked", "process"] }
 architect-extensions-dioxus = { workspace = true, optional = true }
 architect-settings = { workspace = true, optional = true }
@@ -134,6 +136,7 @@ native = [
     "dep:studio-view-link",
     "dep:session-ui",
     "dep:session-engine",
+    "dep:session",
     "dep:architect-extensions",
     "dep:architect-extensions-dioxus",
     "dep:architect-settings",

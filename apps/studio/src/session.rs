@@ -129,6 +129,37 @@ pub fn enter(
     navigator().push(route(view));
 }
 
+/// The mode asked for on Studio's Action List, until the session takes it.
+#[cfg(feature = "native")]
+static ASKED_MODE: std::sync::Mutex<Option<session::modes::Mode>> = std::sync::Mutex::new(None);
+
+/// Asks this Studio's windows for mode `name` (`SESSION_MODE`): its name as
+/// the bars show it.
+///
+/// # Errors
+///
+/// No mode is called that.
+#[cfg(feature = "native")]
+pub fn ask_mode(name: &str) -> Result<&'static str, String> {
+    let mode = session::modes::Mode::ALL
+        .into_iter()
+        .find(|m| m.display_name().eq_ignore_ascii_case(name.trim()))
+        .ok_or_else(|| {
+            let names: Vec<&str> = session::modes::Mode::ALL.iter().map(|m| m.display_name()).collect();
+            format!("no mode {name}: one of {names:?}")
+        })?;
+    *ASKED_MODE.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(mode);
+    Ok(mode.display_name())
+}
+
+#[cfg(feature = "native")]
+fn take_asked_mode() -> Option<session::modes::Mode> {
+    ASKED_MODE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+}
+
 /// Back to the launcher, where the session was opened from. The set plays on.
 #[cfg_attr(not(feature = "native"), allow(dead_code))]
 pub fn leave(app: AppState) {
@@ -374,6 +405,7 @@ mod native {
             chart_state: followed
                 .map(|f| format!("session:{}", f.id))
                 .unwrap_or_default(),
+            kind: crate::setfile::kind_of(set),
         };
         crate::stage::stage(area_now(), &names, page_for(view))
     }
@@ -452,6 +484,18 @@ mod native {
         // window gave it them: the mode, the pins, touch, the set, the
         // mixer's memory, the close-ups, the lyrics' choice, and Back.
         let mode = use_context_provider(|| Signal::new(studio_view_link::mode_from_env()));
+        // A mode asked for on Studio's Action List (`SESSION_MODE` over MCP,
+        // a script), taken up within a tenth of a second. The mode is this
+        // client's: the engine never sees it.
+        let mut asked = mode;
+        use_future(move || async move {
+            loop {
+                if let Some(next) = super::take_asked_mode() {
+                    asked.set(next);
+                }
+                crate::state::sleep_ms(100).await;
+            }
+        });
         session_ui::shell::use_pins();
         use_context_provider(session_ui::touch::Touch::detect);
         use_context_provider(session_ui::mixer_panel::MixerMemory::new);
@@ -460,6 +504,7 @@ mod native {
         use_context_provider(|| session_ui::shell::Back(Callback::new(move |()| leave(app))));
         use_engine_setlist();
         // Keyflow's chart and Ignition's room follow the engine's song.
+        hosted::use_engine_actions();
         let followed = hosted::use_follow_session(ui, layout);
         // The mixer beside the arrangement or under it as the main window
         // is wide or not: laid out again when that changes.

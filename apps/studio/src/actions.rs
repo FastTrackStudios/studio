@@ -273,6 +273,13 @@ mod imp {
         "Opens the launcher in a window of its own, titled \"Launcher\" (⌘⇧L), beside the session that plays on."
     );
     meta!(
+        UI_MODE,
+        "SESSION_MODE",
+        "Mode",
+        "View",
+        "Put this Studio's windows in a mode: Organize, Write, Produce, Record, Edit, Mix, Master, Live, Video or Scoring. The mode is the client's, not the engine's: it decides what the views draw (Edit shows every cut and the hit markers on a folder's row; Live and Mix a folder's row whole) and which keys do what. Another client on the same engine keeps its own."
+    );
+    meta!(
         SESSION_VIEW,
         "STUDIO_SESSION_VIEW",
         "Show a session view",
@@ -305,6 +312,11 @@ mod imp {
     #[derive(Facet)]
     struct ViewArgs {
         view: String,
+    }
+
+    #[derive(Facet)]
+    struct ModeArgs {
+        mode: String,
     }
 
     #[derive(Facet)]
@@ -469,6 +481,7 @@ mod imp {
             forward::<()>(&list, &HOME, M, false);
             forward::<()>(&list, &LAUNCHER_WINDOW, M, false);
             forward::<ViewArgs>(&list, &SESSION_VIEW, M, true);
+            forward::<ModeArgs>(&list, &UI_MODE, M, true);
             let scripting = architect_scripting::actions::Scripting::new(
                 list.clone(),
                 architect_scripting::Library::new(architect_scripting::MemoryStore::default()),
@@ -931,6 +944,11 @@ mod imp {
             "STUDIO_SESSION_CLOSE" | "STUDIO_HOME" => {
                 crate::session::leave(app);
                 Ok(json!({ "to": app.session_from.peek().as_ref().map(ToString::to_string) }))
+            }
+            "SESSION_MODE" => {
+                let a: ModeArgs = args(raw)?;
+                let mode = crate::session::ask_mode(&a.mode)?;
+                Ok(json!({ "mode": mode }))
             }
             "STUDIO_SESSION_VIEW" => {
                 let a: ViewArgs = args(raw)?;

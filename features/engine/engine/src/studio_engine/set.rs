@@ -311,6 +311,15 @@ pub fn is_opening() -> bool {
 /// `setlist` as the engine's set from now on, the songs still arriving
 /// behind its first drained into it as they open.
 pub fn install(setlist: Setlist) {
+    // Projects the engine keeps but this set does not have (an earlier
+    // set's, a window that opened the same song again) stop playing: one
+    // engine may hold many projects, but only the set's own may sound.
+    let keep: Vec<String> = Lineup::of(&setlist)
+        .songs
+        .into_iter()
+        .map(|(_, project)| project)
+        .collect();
+    stop_others(keep);
     let mut epoch = 0;
     update(|view| {
         view.epoch += 1;
@@ -325,6 +334,39 @@ pub fn install(setlist: Setlist) {
         "set: installed in the engine"
     );
     drain_arrivals(epoch);
+}
+
+/// Stops the transport of every project the engine has that is not in
+/// `keep` (engine project guids), off the caller's thread. A project that
+/// was playing goes quiet; its state stays, as the engine keeps it.
+fn stop_others(keep: Vec<String>) {
+    let spawned = std::thread::Builder::new()
+        .name("set-stop-others".into())
+        .spawn(move || {
+            let stopped = crate::open::facade_blocking("stop the projects not in the set", |daw| async move {
+                let mut stopped = 0_u32;
+                for project in daw.projects().await? {
+                    let info = project.info().await?;
+                    if keep.iter().any(|k| *k == info.guid) {
+                        continue;
+                    }
+                    let transport = project.transport();
+                    if transport.is_playing().await.unwrap_or(true) {
+                        transport.stop().await?;
+                        stopped += 1;
+                    }
+                }
+                Ok(stopped)
+            });
+            match stopped {
+                Ok(0) => {}
+                Ok(n) => tracing::info!(set.stopped = n, "set: projects outside the set stopped playing"),
+                Err(error) => tracing::warn!(error = %error, "set: the projects outside it were not stopped"),
+            }
+        });
+    if let Err(error) = spawned {
+        tracing::warn!(error = %error, "set: no thread to stop the projects outside it");
+    }
 }
 
 /// No set from now on (its projects stay in the engine, as they did when

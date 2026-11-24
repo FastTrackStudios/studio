@@ -256,6 +256,34 @@ impl Extension for Daw {
                 Some(song) => run_in(&song_project(song)?, id, with),
             }
         })
+        .action("DAW_ACTIONS", |_| async {
+            // Each as the list describes it; the effect by its name, as a
+            // manifest writes it.
+            let infos = session_engine::actions::list().infos();
+            Ok(Json::Array(
+                infos
+                    .iter()
+                    .map(|info| {
+                        let effect = match format!("{:?}", info.effect).as_str() {
+                            "ReadOnly" => "read_only",
+                            "Destructive" => "destructive",
+                            _ => "mutating",
+                        };
+                        json!({
+                            "id": info.id,
+                            "name": info.display_name,
+                            "description": info.description,
+                            "category": info.category,
+                            "group": info.group,
+                            "shortcut": info.shortcut,
+                            "effect": effect,
+                            "params": info.params_schema,
+                            "result": info.result_schema,
+                        })
+                    })
+                    .collect(),
+            ))
+        })
         .action("DAW_SONGS", |_| async {
             let lineup = session_engine::studio_engine::set::lineup();
             Ok(json!({
