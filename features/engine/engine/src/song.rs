@@ -114,7 +114,7 @@ impl Song {
 
     /// Look at its state, under one lock: `None` once it has closed.
     pub fn read<R>(&self, look: impl FnOnce(&ProjectState) -> R) -> Option<R> {
-        self.daw.read_project(self.id.as_str(), look)
+        crate::edit_trace::held(|| self.daw.read_project(self.id.as_str(), look))
     }
 
     /// Apply item edits, in order, under one lock.
@@ -123,7 +123,7 @@ impl Song {
     /// When an op names an item the song does not have (those before it
     /// stand), or the song has closed.
     pub fn apply(&self, ops: &[ItemOp]) -> daw_proto::DawResult<()> {
-        self.daw.apply_items(&self.id, ops)
+        crate::edit_trace::held(|| self.daw.apply_items(&self.id, ops))
     }
 
     /// Run `edit` as one undo step named `label`: everything it does is
