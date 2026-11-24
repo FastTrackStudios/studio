@@ -1,5 +1,5 @@
 //! LISTEN_ALIGN's search: how each mic of a piece should be moved, turned
-//! over or phase-rotated so the piece's sum is fullest — scored on the sum,
+//! over or phase-shaped (all-pass) so the piece's sum is fullest — scored on the sum,
 //! over the hits only.
 //!
 //! REAPER's Phase Alignment (7.40) moves an item and may flip its polarity
@@ -20,11 +20,12 @@
 //! mic changes the sum only by that mic, so for an offset `d` and a
 //! polarity `p` the new sum's power is closed-form:
 //! `E(rest) + E(mic shifted) + 2p·<rest, mic shifted>` — one
-//! cross-correlation over the lags per measure, no render. A rotation of
-//! one band of the mic (centre `hz`, width `q`) by an angle `θ` replaces
-//! that band `b` with `cos θ·b + sin θ·H(b)` (`H` its Hilbert transform):
-//! the sum's power is again closed-form in `θ`, so each centre is solved
-//! exactly.
+//! cross-correlation over the lags per measure, no render. Then the mic's
+//! phase is shaped by all-pass sections — the `align` block's: up to two
+//! RBJ second-order all-pass biquads `{hz, q}` and one first-order `{hz}`,
+//! flat in magnitude and without latency, so what they gain is alignment,
+//! never EQ — chosen one at a time, each the section that raises the
+//! sum's score most, while one gains more than [`CLOSE`].
 //!
 //! Every function here is honest: plain windows in, figures out.
 
@@ -34,43 +35,49 @@ use realfft::RealFftPlanner;
 pub const LOW_HZ: f64 = 150.0;
 /// The attack, from the hit, ms.
 pub const ATTACK_MS: f64 = 10.0;
-/// The band centres a rotation is tried at, Hz.
-pub const ROTATE_AT: [f64; 9] = [40.0, 50.0, 63.0, 80.0, 100.0, 125.0, 160.0, 200.0, 250.0];
-/// A rotated band's width.
-pub const ROTATE_Q: f64 = 1.0;
+/// The frequencies an all-pass section is tried at, Hz.
+pub const ALLPASS_HZ: [f64; 12] = [
+    30.0, 40.0, 50.0, 63.0, 80.0, 100.0, 125.0, 160.0, 200.0, 250.0, 315.0, 400.0,
+];
+/// The widths a second-order section is tried at.
+pub const ALLPASS_Q: [f64; 5] = [0.5, 0.7, 1.0, 1.4, 2.0];
+/// At most this many second-order sections, and one first-order.
+pub const SECOND_ORDER_MOST: usize = 2;
 /// Two candidates whose scores are this close are as good: the smaller
 /// move wins, dB.
 pub const CLOSE: f64 = 0.1;
 
-/// A band rotation: the mic's band around `hz` (width `q`) turned by `deg`.
+/// An all-pass section, as the `align` block runs it: flat in magnitude,
+/// its phase turning through 180° (second order: 360°) around `hz`.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Rotation {
-    pub hz: f64,
-    pub deg: f64,
-    pub q: f64,
+pub enum Section {
+    /// RBJ's second-order all-pass biquad: centre `hz`, width `q`.
+    Second { hz: f64, q: f64 },
+    /// The first-order all-pass: −90° at `hz`.
+    First { hz: f64 },
 }
 
 /// One way to set a mic: how late (samples; negative earlier), whether
-/// turned over, and a band rotation.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// turned over, and its all-pass sections, in order.
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Fix {
     pub delay: i64,
     pub invert: bool,
-    pub rotate: Option<Rotation>,
+    pub allpass: Vec<Section>,
 }
 
 impl Fix {
-    pub const NONE: Self = Self {
-        delay: 0,
-        invert: false,
-        rotate: None,
-    };
+    /// Leaving the mic as it is.
+    #[must_use]
+    pub fn none() -> Self {
+        Self::default()
+    }
 
     /// How big a move it is, for preferring the smaller of two as good.
     fn size(&self) -> f64 {
         self.delay.unsigned_abs() as f64
             + if self.invert { 0.5 } else { 0.0 }
-            + self.rotate.map_or(0.0, |r| r.deg.abs() / 90.0)
+            + self.allpass.len() as f64 * 4.0
     }
 }
 
@@ -91,7 +98,7 @@ impl Gains {
 }
 
 /// A fix and what it does.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Candidate {
     pub fix: Fix,
     pub gains: Gains,
@@ -116,14 +123,33 @@ impl Biquad {
         }
     }
 
-    /// Band-pass, 0 dB at its centre.
-    fn bandpass(hz: f64, q: f64, rate: f64) -> Self {
+    /// RBJ's second-order all-pass.
+    fn allpass(hz: f64, q: f64, rate: f64) -> Self {
         let w = std::f64::consts::TAU * hz / rate;
         let alpha = w.sin() / (2.0 * q);
         let a0 = 1.0 + alpha;
+        let c = -2.0 * w.cos() / a0;
         Self {
-            b: [alpha / a0, 0.0, -alpha / a0],
-            a: [-2.0 * w.cos() / a0, (1.0 - alpha) / a0],
+            b: [(1.0 - alpha) / a0, c, 1.0],
+            a: [c, (1.0 - alpha) / a0],
+        }
+    }
+
+    /// The first-order all-pass, −90° at `hz`.
+    fn allpass_first(hz: f64, rate: f64) -> Self {
+        let t = (std::f64::consts::PI * hz / rate).tan();
+        let k = (t - 1.0) / (t + 1.0);
+        Self {
+            b: [k, 1.0, 0.0],
+            a: [k, 0.0],
+        }
+    }
+
+    /// A section's filter.
+    fn of(section: Section, rate: f64) -> Self {
+        match section {
+            Section::Second { hz, q } => Self::allpass(hz, q, rate),
+            Section::First { hz } => Self::allpass_first(hz, rate),
         }
     }
 
@@ -139,35 +165,6 @@ impl Biquad {
             })
             .collect()
     }
-}
-
-/// The Hilbert transform of one window (its every component turned by
-/// −90°).
-fn hilbert(x: &[f64]) -> Vec<f64> {
-    let n = x.len().next_power_of_two().max(2);
-    let mut planner = RealFftPlanner::<f64>::new();
-    let (fwd, inv) = (planner.plan_fft_forward(n), planner.plan_fft_inverse(n));
-    let mut input = fwd.make_input_vec();
-    input[..x.len()].copy_from_slice(x);
-    let mut spec = fwd.make_output_vec();
-    if fwd.process(&mut input, &mut spec).is_err() {
-        return vec![0.0; x.len()];
-    }
-    let last = spec.len() - 1;
-    for (k, c) in spec.iter_mut().enumerate() {
-        *c = if k == 0 || k == last {
-            realfft::num_complex::Complex::new(0.0, 0.0)
-        } else {
-            // × −i
-            realfft::num_complex::Complex::new(c.im, -c.re)
-        };
-    }
-    let mut out = inv.make_output_vec();
-    if inv.process(&mut spec, &mut out).is_err() {
-        return vec![0.0; x.len()];
-    }
-    out.truncate(x.len());
-    out.iter().map(|v| v / n as f64).collect()
 }
 
 /// One measure's view of the windows: the samples it counts.
@@ -317,7 +314,7 @@ pub fn offsets(
                     fix: Fix {
                         delay: d,
                         invert: p < 0.0,
-                        rotate: None,
+                        allpass: Vec::new(),
                     },
                     gains: Gains {
                         level: gain(0),
@@ -353,119 +350,98 @@ pub fn apply(w: &Windows, mic: &[Vec<f32>], fix: &Fix) -> Vec<Vec<f32>> {
         .map(|x| {
             let x: Vec<f64> = x.iter().map(|v| f64::from(*v) * p).collect();
             let x = shift(&x, fix.delay);
-            let x = match fix.rotate {
-                None => x,
-                Some(r) => {
-                    let b = Biquad::bandpass(r.hz, r.q, w.rate).run(&x);
-                    let h = hilbert(&b);
-                    let (c, s) = (r.deg.to_radians().cos(), r.deg.to_radians().sin());
-                    x.iter()
-                        .zip(&b)
-                        .zip(&h)
-                        .map(|((x, b), h)| x - b + c * b + s * h)
-                        .collect()
-                }
-            };
+            let x = fix
+                .allpass
+                .iter()
+                .fold(x, |x, s| Biquad::of(*s, w.rate).run(&x));
             x.iter().map(|v| *v as f32).collect()
         })
         .collect()
 }
 
-/// The best band rotation of `mic` (already set by `fix`, without one) at
-/// each of [`ROTATE_AT`], scored as [`offsets`] scores: per centre, the
-/// angle solved exactly for the sum's power, then scored on all three
-/// measures. Best first.
+/// All-pass sections for `mic` (already set by `fix`, with none), chosen
+/// one at a time: each stage tries every second-order section of
+/// [`ALLPASS_HZ`] × [`ALLPASS_Q`] (while fewer than
+/// [`SECOND_ORDER_MOST`]) and every first-order one (while there is none),
+/// scored on the sum as [`offsets`] scores, and keeps the best while it
+/// gains more than [`CLOSE`] on the stage before. The fix with them, and
+/// what it does (the stage-0 fix as it was when none gains).
 #[must_use]
-pub fn rotations(w: &Windows, mic: &[Vec<f32>], sum: &[Vec<f32>], fix: &Fix) -> Vec<Candidate> {
+pub fn allpass(w: &Windows, mic: &[Vec<f32>], sum: &[Vec<f32>], fix: &Fix) -> Candidate {
     use rayon::prelude::*;
-    let set = to64(&apply(w, mic, fix));
-    let (mic0, sum) = (to64(mic), to64(sum));
-    // The rest: the sum without the mic as it is.
-    let rest: Vec<Vec<f64>> = sum
+    let rest: Vec<Vec<f32>> = sum
         .iter()
-        .zip(&mic0)
+        .zip(mic)
         .map(|(s, m)| s.iter().zip(m).map(|(a, b)| a - b).collect())
         .collect();
-    let measures = [Measure::Level, Measure::Low, Measure::Attack];
-    let base: Vec<f64> = measures
+    let score_of = |f: &Fix| {
+        let set = apply(w, mic, f);
+        let new_sum: Vec<Vec<f32>> = rest
+            .iter()
+            .zip(&set)
+            .map(|(r, m)| r.iter().zip(m).map(|(a, b)| a + b).collect())
+            .collect();
+        compare(w, sum, &new_sum)
+    };
+    let mut best = Candidate {
+        fix: fix.clone(),
+        gains: score_of(fix),
+    };
+    loop {
+        let seconds = best
+            .fix
+            .allpass
+            .iter()
+            .filter(|s| matches!(s, Section::Second { .. }))
+            .count();
+        let has_first = best
+            .fix
+            .allpass
+            .iter()
+            .any(|s| matches!(s, Section::First { .. }));
+        let mut options: Vec<Section> = Vec::new();
+        if seconds < SECOND_ORDER_MOST {
+            options.extend(
+                ALLPASS_HZ
+                    .iter()
+                    .flat_map(|&hz| ALLPASS_Q.iter().map(move |&q| Section::Second { hz, q })),
+            );
+        }
+        if !has_first {
+            options.extend(ALLPASS_HZ.iter().map(|&hz| Section::First { hz }));
+        }
+        let next = options
+            .par_iter()
+            .map(|s| {
+                let mut f = best.fix.clone();
+                f.allpass.push(*s);
+                let gains = score_of(&f);
+                Candidate { fix: f, gains }
+            })
+            .max_by(|a, b| a.gains.score().total_cmp(&b.gains.score()));
+        match next {
+            Some(n) if n.gains.score() > best.gains.score() + CLOSE => best = n,
+            _ => return best,
+        }
+    }
+}
+
+/// The magnitude of `fix`'s filtering at `hz`, dB: 0 for every section
+/// (all-pass), kept as the check that it is.
+#[must_use]
+pub fn magnitude_db(fix: &Fix, hz: f64, rate: u32) -> f64 {
+    use realfft::num_complex::Complex;
+    let w = std::f64::consts::TAU * hz / f64::from(rate);
+    let z1 = Complex::from_polar(1.0, -w);
+    let z2 = z1 * z1;
+    fix.allpass
         .iter()
-        .map(|&m| {
-            sum.iter()
-                .map(|s| {
-                    let v = w.view(m, s);
-                    dot(&v, &v)
-                })
-                .sum()
+        .map(|s| {
+            let b = Biquad::of(*s, f64::from(rate));
+            let h = (b.b[0] + b.b[1] * z1 + b.b[2] * z2) / (1.0 + b.a[0] * z1 + b.a[1] * z2);
+            20.0 * h.norm().log10()
         })
-        .collect();
-    let mut out: Vec<Candidate> = ROTATE_AT
-        .par_iter()
-        .map(|&hz| {
-            // Per window: u = rest + mic - band, the band, its Hilbert.
-            let parts: Vec<(Vec<f64>, Vec<f64>, Vec<f64>)> = rest
-                .iter()
-                .zip(&set)
-                .map(|(r, x)| {
-                    let b = Biquad::bandpass(hz, ROTATE_Q, w.rate).run(x);
-                    let h = hilbert(&b);
-                    let u = r
-                        .iter()
-                        .zip(x)
-                        .zip(&b)
-                        .map(|((r, x), b)| r + x - b)
-                        .collect();
-                    (u, b, h)
-                })
-                .collect();
-            // E(θ) per measure: E(u) + c²E(b) + s²E(h) + 2c<u,b> + 2s<u,h> + 2cs<b,h>.
-            let terms: Vec<[f64; 6]> = measures
-                .iter()
-                .map(|&m| {
-                    parts.iter().fold([0.0; 6], |mut t, (u, b, h)| {
-                        let (u, b, h) = (w.view(m, u), w.view(m, b), w.view(m, h));
-                        t[0] += dot(&u, &u);
-                        t[1] += dot(&b, &b);
-                        t[2] += dot(&h, &h);
-                        t[3] += dot(&u, &b);
-                        t[4] += dot(&u, &h);
-                        t[5] += dot(&b, &h);
-                        t
-                    })
-                })
-                .collect();
-            let power = |t: &[f64; 6], deg: f64| {
-                let (c, s) = (deg.to_radians().cos(), deg.to_radians().sin());
-                t[0] + c * c * t[1]
-                    + s * s * t[2]
-                    + 2.0 * c * t[3]
-                    + 2.0 * s * t[4]
-                    + 2.0 * c * s * t[5]
-            };
-            let gains_at = |deg: f64| Gains {
-                level: db(power(&terms[0], deg) / base[0].max(1e-30)),
-                low: db(power(&terms[1], deg) / base[1].max(1e-30)),
-                attack: db(power(&terms[2], deg) / base[2].max(1e-30)),
-            };
-            // The angle, to a degree, that scores best.
-            let deg = (-179..=180)
-                .map(f64::from)
-                .max_by(|a, b| gains_at(*a).score().total_cmp(&gains_at(*b).score()))
-                .unwrap_or(0.0);
-            Candidate {
-                fix: Fix {
-                    rotate: Some(Rotation {
-                        hz,
-                        deg,
-                        q: ROTATE_Q,
-                    }),
-                    ..*fix
-                },
-                gains: gains_at(deg),
-            }
-        })
-        .collect();
-    rank(&mut out);
-    out
+        .sum()
 }
 
 /// What `after` (windows) gains over `before` on each measure, dB.
@@ -539,7 +515,7 @@ mod tests {
             .zip(&b)
             .map(|(x, y)| x.iter().zip(y).map(|(p, q)| p + q).collect())
             .collect();
-        let best = offsets(&w, &b, &sum, (48, true))[0];
+        let best = offsets(&w, &b, &sum, (48, true))[0].clone();
         assert_eq!(best.fix.delay, -20, "{best:?}");
         assert!(best.fix.invert, "{best:?}");
         assert!(
@@ -568,34 +544,42 @@ mod tests {
             .iter()
             .map(|x| x.iter().map(|v| v * 2.0).collect())
             .collect();
-        let best = offsets(&w, &a, &sum, (48, true))[0];
-        assert_eq!(best.fix, Fix::NONE, "{best:?}");
+        let best = offsets(&w, &a, &sum, (48, true))[0].clone();
+        assert_eq!(best.fix, Fix::none(), "{best:?}");
     }
 
     #[test]
-    fn a_band_rotated_against_the_rest_is_turned_back() {
+    fn every_all_pass_section_is_flat_and_one_puts_a_phase_shifted_mic_back() {
+        let flat = Fix {
+            allpass: vec![
+                Section::Second { hz: 63.0, q: 0.7 },
+                Section::Second { hz: 200.0, q: 2.0 },
+                Section::First { hz: 100.0 },
+            ],
+            ..Fix::none()
+        };
+        for hz in [20.0, 40.0, 63.0, 100.0, 1_000.0, 10_000.0] {
+            assert!(magnitude_db(&flat, hz, RATE).abs() < 1e-6, "{hz} Hz");
+        }
         let w = Windows::new(RATE, 480);
         let a: Vec<Vec<f32>> = (0..3).map(|_| thump(9_600, 480, 0.5)).collect();
-        // The same thump, its 60 Hz turned by 120°: a rotation near 63 Hz
-        // by about -120° undoes it, the sum gaining.
-        let turn = Fix {
-            delay: 0,
-            invert: false,
-            rotate: Some(Rotation {
-                hz: 63.0,
-                deg: 120.0,
-                q: ROTATE_Q,
-            }),
-        };
-        let b = apply(&w, &a, &turn);
+        // The other mic: the same kick through a 60 Hz second-order
+        // all-pass (its body turned about 180°, cancelling the first).
+        let b = apply(
+            &w,
+            &a,
+            &Fix {
+                allpass: vec![Section::Second { hz: 60.0, q: 1.0 }],
+                ..Fix::none()
+            },
+        );
         let sum: Vec<Vec<f32>> = a
             .iter()
             .zip(&b)
             .map(|(x, y)| x.iter().zip(y).map(|(p, q)| p + q).collect())
             .collect();
-        let best = rotations(&w, &b, &sum, &Fix::NONE)[0];
-        let r = best.fix.rotate.expect("a rotation");
-        assert!(r.deg < -60.0, "{best:?}");
-        assert!(best.gains.low > 0.5, "{best:?}");
+        let best = allpass(&w, &b, &sum, &Fix::none());
+        assert!(!best.fix.allpass.is_empty(), "{best:?}");
+        assert!(best.gains.low > 3.0, "the body back in phase: {best:?}");
     }
 }

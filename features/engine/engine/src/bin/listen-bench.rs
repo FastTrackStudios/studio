@@ -9,8 +9,13 @@
 //! The song opens silent (no audio device, no MCP server). `script` holds
 //! one call a line, `ACTION {json args}` (`#` starts a comment, a blank
 //! line is skipped); `- ` before a line runs it without printing its
-//! answer. Each call prints one JSON line on stdout: the action, its
-//! wall time in ms, and its answer (or its error).
+//! answer. Each call prints one JSON line on stdout: the action, its wall
+//! time in ms, and its answer (or its error).
+//!
+//! Two lines stand in for what a person does in Studio:
+//! `@play <from seconds> <seconds>` plays the song from there on a thread
+//! of its own, block by block at real time — what the audio device's
+//! callback does — and `@wait <seconds>` lets time pass.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -36,8 +41,22 @@ fn main() -> eyre::Result<()> {
         "ms": opening.elapsed().as_secs_f64() * 1e3,
     });
     println!("{out}");
+    let mut players = Vec::new();
     for line in script.lines().map(str::trim) {
         if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("@play ") {
+            let mut words = rest
+                .split_whitespace()
+                .filter_map(|w| w.parse::<f64>().ok());
+            let (from, seconds) = (words.next().unwrap_or(0.0), words.next().unwrap_or(5.0));
+            players.push(play(from, seconds)?);
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("@wait ") {
+            let seconds: f64 = rest.trim().parse().unwrap_or(1.0);
+            std::thread::sleep(std::time::Duration::from_secs_f64(seconds));
             continue;
         }
         let (quiet, line) = match line.strip_prefix("- ") {
@@ -59,5 +78,42 @@ fn main() -> eyre::Result<()> {
         };
         println!("{out}");
     }
+    for p in players {
+        let _ = p.join();
+    }
     Ok(())
+}
+
+/// Play the open song from `from` for `seconds`, block by block at real
+/// time on a thread of its own: the audio callback's renders, with no
+/// device.
+fn play(from: f64, seconds: f64) -> eyre::Result<std::thread::JoinHandle<()>> {
+    use daw::service::ProjectContext;
+    use daw_standalone::audio_engine::render::ProjectRenderer;
+    const RATE: u32 = 48_000;
+    const BLOCK: usize = 512;
+    let song =
+        session_engine::song::Song::named_or_current(None).map_err(|e| eyre::eyre!("{e:?}"))?;
+    let ProjectContext::Project(guid) = song.context() else {
+        eyre::bail!("no song open");
+    };
+    let daw = song.daw();
+    Ok(std::thread::Builder::new()
+        .name("bench-play".into())
+        .spawn(move || {
+            let renderer = ProjectRenderer::new(daw, &guid, RATE);
+            // As the audio callback's: its lane pool, never waiting on a lock.
+            renderer.set_realtime();
+            let began = Instant::now();
+            let start = (from * f64::from(RATE)) as u64;
+            let blocks = (seconds * f64::from(RATE) / BLOCK as f64) as u64;
+            for b in 0..blocks {
+                renderer.render_block(start + b * BLOCK as u64, BLOCK);
+                let due = (b + 1) as f64 * BLOCK as f64 / f64::from(RATE);
+                let ahead = due - began.elapsed().as_secs_f64();
+                if ahead > 0.0 {
+                    std::thread::sleep(std::time::Duration::from_secs_f64(ahead));
+                }
+            }
+        })?)
 }

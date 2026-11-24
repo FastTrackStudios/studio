@@ -19,6 +19,7 @@
 
 pub mod ab;
 pub mod align;
+pub mod live;
 pub mod measure;
 pub mod plot;
 pub mod render;
@@ -103,10 +104,45 @@ static ALIGN: ActionMeta = meta(
     "LISTEN_ALIGN",
     "listen_align",
     "Align a piece's mics",
-    "Find how each mic of a drum piece (`piece`, as LISTEN_HITS: its mics read where they reach the sum, its hits from its hit markers between `from` and `to`) should be moved (an offset within `max_ms`, 3 unless given), turned over (`invert: false` forbids it) and phase-rotated in one band (`rotate: false` forbids it: a band around 40–250 Hz, width Q 1, turned by up to ±180°) so that the piece's sum is fullest — scored on the sum, over the hits only, not on how alike two mics are: `level` (the sum's power), `low` (below 150 Hz) and `attack` (its transients over the first 10 ms: the power of its first difference), each in dB against the sum as it is, added into `score`; within 0.1 dB the smaller move wins. Mics are taken in turn (the most of the sum first, the reference mic left where it is), each against the sum with the ones before it set. Answers per mic: `now` (its offset and polarity against the reference, what it adds to the sum), `candidates` (the best offsets and polarities, and the best rotation, each `{delay_samples, invert, rotate_hz, rotate_deg, rotate_q, gains: {level, low, attack, score}}`), `chosen` (the best, when it gains more than 0.2 dB; else none); and `predicted` (the whole sum's gains with every chosen fix). `apply: true` makes the fixes, confirms them and keeps them only if the sum is better: on a track whose Signal instance has the `align` block, through it (added in its first phase if missing; `delay_samples`, `invert`, `rotate_hz`, `rotate_deg`, `rotate_q`), else only a polarity, through the track's polarity (the rest listed in `not_applied`); then the hits are heard again and `measured` says what the sum gained; worse on `score`, and the mix is put back as it was (as LISTEN_AB puts it back). A PNG of the sum's averaged hit before and after (and each fixed mic) goes under /tmp/listen/. `exact` as LISTEN.",
+    "Find how each mic of a drum piece (`piece`, as LISTEN_HITS: its mics read where they reach the sum, its hits from its hit markers between `from` and `to`) should be moved (an offset within `max_ms`, 3 unless given), turned over (`invert: false` forbids it) and phase-shaped by all-pass sections (`allpass: false` forbids it) — the Signal `align` block's: up to two RBJ second-order all-pass biquads `{hz, q}` (30–400 Hz, Q 0.5–2) and one first-order `{hz}`, flat in magnitude and without latency, chosen one at a time while one gains more than 0.1 dB — so that the piece's sum is fullest — scored on the sum, over the hits only, not on how alike two mics are: `level` (the sum's power), `low` (below 150 Hz) and `attack` (its transients over the first 10 ms: the power of its first difference), each in dB against the sum as it is, added into `score`; within 0.1 dB the smaller move wins. Mics are taken in turn (the most of the sum first, the reference mic left where it is), each against the sum with the ones before it set. Answers per mic: `now` (its offset and polarity against the reference, what it adds to the sum), `candidates` (the best offsets and polarities, and the best rotation, each `{delay_samples, delay_ms, invert, allpass: [{hz, q}] (a first-order section `{hz, order: 1}`), gains: {level, low, attack, score}}`, ready for the align block), `chosen` (the best, when it gains more than 0.2 dB; else none); and `predicted` (the whole sum's gains with every chosen fix). `apply: true` makes the fixes, confirms them and keeps them only if the sum is better: on a track whose Signal instance has the `align` block, through it (added in its first phase if missing; `delay_samples`, `invert`, `allpass.<n>.hz`, `allpass.<n>.q`, `allpass.first.hz` — a parameter it does not have is listed in `not_applied`), else only a polarity, through the track's polarity (the rest listed in `not_applied`); then the hits are heard again and `measured` says what the sum gained; worse on `score`, and the mix is put back as it was (as LISTEN_AB puts it back). A PNG of the sum's averaged hit before and after (and each fixed mic) goes under /tmp/listen/. `exact` as LISTEN.",
     "Mix",
     "",
 );
+
+static LIVE: ActionMeta = meta(
+    "LISTEN_LIVE",
+    "listen_live",
+    "Listen to a point while it plays",
+    "Open (`on: true`) or close (`on: false`) a live tap on one point of `track` (GUID, path or name; `at` as LISTEN — input, pre-fx, fx:<n>:in, fx:<n>:out, post-fx, post-fader; a block inside Signal is not a live point yet): while the song plays (the transport looping a range, say) the audio thread copies each block of the point into a preallocated lock-free ring and nothing else, and a thread of the tap's own keeps its last `keep_s` seconds (10 unless given). LISTEN_LIVE_READ measures them. At most 8 taps at once. Answers the tap's state: `on`, `keep_s`, `heard_s` (audio heard since it opened, seconds), `receiving` (heard in the last 0.5 s: the song is playing through the point), `dropped_blocks` (blocks the ring had no room for). Touches neither playback nor the song.",
+    "Mix",
+    "",
+);
+
+static LIVE_READ: ActionMeta = meta(
+    "LISTEN_LIVE_READ",
+    "listen_live_read",
+    "Read what live taps heard",
+    "What each live tap (LISTEN_LIVE; only the one on `track` and `at` when given) heard in its last `seconds` (3 unless given; at most what it keeps), measured as LISTEN measures: `figures` (`lufs`, `short_term`, `short_max`, `true_peak`, `peak`, `rms`, `crest`, third-octave `bands` at `bands_hz`, `correlation`, `width`, `balance`; null before it has heard anything), with `seconds` (how much was measured), `heard_s`, `receiving`, `dropped_blocks`. Read-only; the analysis runs on the caller's thread, never the audio thread.",
+    "Mix",
+    "",
+);
+
+/// LISTEN_LIVE's arguments.
+#[derive(Facet)]
+struct LiveArg {
+    track: String,
+    at: Option<String>,
+    on: bool,
+    keep_s: Option<f64>,
+}
+
+/// LISTEN_LIVE_READ's arguments.
+#[derive(Facet)]
+struct LiveReadArg {
+    track: Option<String>,
+    at: Option<String>,
+    seconds: Option<f64>,
+}
 
 /// LISTEN_ALIGN's arguments.
 #[derive(Facet)]
@@ -118,7 +154,7 @@ struct AlignArg {
     reference: Option<String>,
     max_ms: Option<f64>,
     invert: Option<bool>,
-    rotate: Option<bool>,
+    allpass: Option<bool>,
     apply: Option<bool>,
     exact: Option<bool>,
     png: Option<bool>,
@@ -1201,13 +1237,20 @@ fn listen_ab(
 
 /// A fix, as answered.
 fn fix_json(c: &align::Candidate) -> Value {
+    let sections: Vec<Value> = c
+        .fix
+        .allpass
+        .iter()
+        .map(|s| match s {
+            align::Section::Second { hz, q } => json!({ "hz": hz, "q": q }),
+            align::Section::First { hz } => json!({ "hz": hz, "order": 1 }),
+        })
+        .collect();
     json!({
         "delay_samples": c.fix.delay,
         "delay_ms": r2(c.fix.delay as f64 * 1e3 / f64::from(RATE)),
         "invert": c.fix.invert,
-        "rotate_hz": c.fix.rotate.map(|r| r.hz),
-        "rotate_deg": c.fix.rotate.map(|r| r.deg),
-        "rotate_q": c.fix.rotate.map(|r| r.q),
+        "allpass": sections,
         "gains": {
             "level": r2(c.gains.level),
             "low": r2(c.gains.low),
@@ -1231,20 +1274,19 @@ fn search(
     w: &align::Windows,
     mic: &[Vec<f32>],
     sum: &[Vec<f32>],
-    (most, invert, rotate): (i64, bool, bool),
+    (most, invert, allpass): (i64, bool, bool),
 ) -> Searched {
     let offsets = align::offsets(w, mic, sum, (most, invert));
-    let mut candidates: Vec<align::Candidate> = offsets.iter().take(3).copied().collect();
-    let mut best = offsets.first().copied();
-    if rotate && let Some(b) = best {
-        if let Some(r) = align::rotations(w, mic, sum, &b.fix).first().copied() {
-            candidates.push(r);
-            if r.gains.score() > b.gains.score() + align::CLOSE {
-                best = Some(r);
-            }
+    let mut candidates: Vec<align::Candidate> = offsets.iter().take(3).cloned().collect();
+    let mut best = offsets.first().cloned();
+    if allpass && let Some(b) = best.clone() {
+        let shaped = align::allpass(w, mic, sum, &b.fix);
+        if !shaped.fix.allpass.is_empty() {
+            candidates.push(shaped.clone());
+            best = Some(shaped);
         }
     }
-    let chosen = best.filter(|b| b.fix != align::Fix::NONE && b.gains.score() > ALIGN_LEAST);
+    let chosen = best.filter(|b| b.fix != align::Fix::none() && b.gains.score() > ALIGN_LEAST);
     Searched { candidates, chosen }
 }
 
@@ -1313,10 +1355,10 @@ fn set_fix(
                 fix.delay
             ));
         }
-        if let Some(r) = fix.rotate {
+        if !fix.allpass.is_empty() {
             left.push(format!(
-                "rotation {:.0}° at {:.0} Hz (no Signal align block on the track)",
-                r.deg, r.hz
+                "{} all-pass section(s) (no Signal align block on the track)",
+                fix.allpass.len()
             ));
         }
         return Ok(left);
@@ -1333,27 +1375,47 @@ fn set_fix(
         };
         Some((format!("@{clap}"), format!("={n:.6}")))
     };
-    let r = fix.rotate.unwrap_or(align::Rotation {
-        hz: 100.0,
-        deg: 0.0,
-        q: align::ROTATE_Q,
-    });
-    let set: serde_json::Map<String, Value> = [
-        value("delay_samples", fix.delay as f64),
-        value("invert", if fix.invert { 1.0 } else { 0.0 }),
-        value("rotate_hz", r.hz),
-        value("rotate_deg", r.deg),
-        value("rotate_q", r.q),
-    ]
-    .into_iter()
-    .flatten()
-    .map(|(k, v)| (k, Value::String(v)))
-    .collect();
+    // The sections, as the block names them (its second-order ones
+    // `allpass.<n>.hz`/`.q`, its first-order one `allpass.first.hz`; a
+    // section's `.on` switch where it has one). What the block does not
+    // name is said, not guessed.
+    let mut wanted: Vec<(String, f64)> = vec![
+        ("delay_samples".into(), fix.delay as f64),
+        ("invert".into(), if fix.invert { 1.0 } else { 0.0 }),
+    ];
+    let mut second = 0;
+    for s in &fix.allpass {
+        match s {
+            align::Section::Second { hz, q } => {
+                second += 1;
+                wanted.push((format!("allpass.{second}.on"), 1.0));
+                wanted.push((format!("allpass.{second}.hz"), *hz));
+                wanted.push((format!("allpass.{second}.q"), *q));
+            }
+            align::Section::First { hz } => {
+                wanted.push(("allpass.first.on".into(), 1.0));
+                wanted.push(("allpass.first.hz".into(), *hz));
+            }
+        }
+    }
+    let mut left = Vec::new();
+    let mut set = serde_json::Map::new();
+    for (id, v) in &wanted {
+        match value(id, *v) {
+            Some((k, n)) => {
+                set.insert(k, Value::String(n));
+            }
+            None if id.ends_with(".on") => {}
+            None => left.push(format!(
+                "{id} = {v} (the align block has no such parameter)"
+            )),
+        }
+    }
     run(
         "FX_SET",
         json!({ "track": track, "fx": "Signal", "set": set }),
     )?;
-    Ok(Vec::new())
+    Ok(left)
 }
 
 /// `LISTEN_ALIGN`.
@@ -1393,7 +1455,7 @@ fn listen_align(
     let hw = hit_windows(daw, project, &hits_arg)?;
     let w = align::Windows::new(RATE, hw.pre);
     let most = (a.max_ms.unwrap_or(3.0).clamp(0.0, 20.0) * f64::from(RATE) / 1e3) as i64;
-    let how = (most, a.invert.unwrap_or(true), a.rotate.unwrap_or(true));
+    let how = (most, a.invert.unwrap_or(true), a.allpass.unwrap_or(true));
     let all = Tracks::all(daw, project.clone());
     let paths = crate::mix_sends::paths(&all);
     let path = |g: &str| paths.get(g).cloned().unwrap_or_else(|| g.to_owned());
@@ -1411,10 +1473,10 @@ fn listen_align(
         let mic = &hw.mic_windows[i];
         let found = search(&w, mic, &sum, how);
         let (without, share) = measure::contribution(mic, &sum);
-        if let Some(c) = found.chosen {
+        if let Some(c) = &found.chosen {
             let fixed = align::apply(&w, mic, &c.fix);
             sum = align::swap(&sum, mic, &fixed);
-            chosen.push((hw.tracks.mics[i].clone(), c.fix));
+            chosen.push((hw.tracks.mics[i].clone(), c.fix.clone()));
             let avg = measure::average(&fixed);
             let env = measure::envelope(&avg, RATE, 5.0);
             let name = path(&hw.tracks.mics[i]);
@@ -1508,7 +1570,75 @@ fn listen_align(
     }))
 }
 
+/// A live point: the track's guid and path, and where in it.
+fn live_point(
+    daw: &Standalone,
+    project: &ProjectContext,
+    track: &str,
+    at: Option<&str>,
+) -> Result<(ProbeAt, String, String), String> {
+    let guid = resolve(daw, project, track)?;
+    let word = at.unwrap_or("post-fader");
+    if word.trim().starts_with("block:") {
+        return Err("a block inside Signal is not a live point yet (it needs Signal's own taps); listen to it offline with LISTEN".to_owned());
+    }
+    let probe = probe_of(daw, project, &guid, word)?;
+    let all = Tracks::all(daw, project.clone());
+    let path = crate::mix_sends::paths(&all)
+        .get(&guid)
+        .cloned()
+        .unwrap_or_else(|| guid.clone());
+    Ok((
+        ProbeAt {
+            track: guid,
+            at: probe,
+        },
+        path,
+        probe_word(probe),
+    ))
+}
+
+/// `LISTEN_LIVE`.
+fn listen_live(daw: &Standalone, project: &ProjectContext, a: &LiveArg) -> Result<Value, String> {
+    let song = crate::fx_actions::project_guid(project)?;
+    let (point, path, at) = live_point(daw, project, &a.track, a.at.as_deref())?;
+    if a.on {
+        live::open(
+            daw,
+            &song,
+            &point,
+            &live::Named {
+                path: &path,
+                at: &at,
+            },
+            a.keep_s.unwrap_or(10.0),
+        )
+    } else {
+        let was = live::close(daw, &point);
+        Ok(json!({ "track": path, "at": at, "on": false, "was_on": was }))
+    }
+}
+
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register_with(&LIVE, Effect::ReadOnly, |_: &ActionCaller, a: LiveArg| {
+        let (daw, project) = song()?;
+        listen_live(daw, &project, &a).map(|v| RawJson::from(v.to_string()))
+    })?;
+    list.register_with(
+        &LIVE_READ,
+        Effect::ReadOnly,
+        |_: &ActionCaller, a: LiveReadArg| {
+            let (daw, project) = song()?;
+            let only = match &a.track {
+                Some(t) => Some(live_point(daw, &project, t, a.at.as_deref())?.0),
+                None => None,
+            };
+            let taps = live::read(only.as_ref(), a.seconds.unwrap_or(3.0).clamp(0.1, 120.0));
+            Ok::<_, String>(RawJson::from(
+                json!({ "taps": taps, "bands_hz": bands_hz() }).to_string(),
+            ))
+        },
+    )?;
     list.register_with(&ALIGN, Effect::Mutating, |_: &ActionCaller, a: AlignArg| {
         let (daw, project) = song()?;
         listen_align(daw, &project, crate::actions::list(), &a)
