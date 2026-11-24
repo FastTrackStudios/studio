@@ -63,6 +63,7 @@ members = [
     "features/ui/daw-ui",
     "features/dynamic-template",
     "features/app/shell",
+    "features/app/panels",
     "features/app/version",
     "features/library",
     "features/account",
@@ -853,6 +854,9 @@ session-engine-client = { path = "features/engine/client", default-features = fa
 # Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
 session-runtime = { path = "features/engine/runtime" }
 daw-view-kit = { path = "features/engine/view-kit", default-features = false }
+# Studio's app panels around the views (the shell, the chart, the lyrics,
+# the transport bar, …), out of daw-view-kit.
+studio-panels = { path = "features/app/panels", default-features = false }
 mixer-view = { path = "features/engine/mixer", default-features = false }
 arrangement-view = { path = "features/engine/arrangement", default-features = false }
 studio-view-link = { path = "extensions/link" }

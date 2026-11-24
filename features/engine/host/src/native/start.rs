@@ -22,7 +22,6 @@
 
 use std::path::PathBuf;
 
-use daw_view_kit::loading::{Loading, Progress, mark_src};
 use dioxus::prelude::*;
 use fts_account::ui::Phase;
 use lucide_dioxus::{
@@ -36,6 +35,7 @@ use session_engine::stream_set::{
     Downloading, LibrarySetlist, LibrarySong, ListKind, with_library,
 };
 use session_engine::task_account::{self, Account, AccountLibrary as _};
+use studio_panels::loading::{Loading, Progress, mark_src};
 
 pub(super) const BG: &str = "#0f1012";
 pub(super) const BAR: &str = "#17181b";
@@ -100,7 +100,7 @@ pub fn App() -> Element {
     // from the palette) still comes back out through the start screen,
     // which opens it behind its loading screen.
     use_context_provider(|| {
-        daw_view_kit::shell::Back(Callback::new(move |()| {
+        studio_panels::shell::Back(Callback::new(move |()| {
             #[cfg(target_os = "ios")]
             super::ios_audio::clear();
             session_engine::view_client::ask::close();
@@ -177,7 +177,7 @@ fn EngineNotice() -> Element {
 /// parent — the body — so without this every view sat 8px right and down
 /// and ran off the right edge. And the canvas takes the page's background,
 /// which is what fills a phone's status bar and home indicator: the bars'
-/// colour (`daw_view_kit::shell::BAR_BG`), so the top bar runs up under the
+/// colour (`studio_panels::shell::BAR_BG`), so the top bar runs up under the
 /// status bar and the bottom bar down under the home indicator, into the
 /// screen's rounded corners, rather than stopping short of a darker strip.
 const ROOT_CSS: &str = "html, body { margin: 0; padding: 0; background: #17181b; }";
@@ -424,7 +424,7 @@ fn Start() -> Element {
     let OpenFirst(first) = use_context();
     use_hook(move || {
         // A version picked from inside a song, which came back out here to
-        // open it (`daw_view_kit::versions`, `SESSION_OPEN`) — or, the
+        // open it (`studio_panels::versions`, `SESSION_OPEN`) — or, the
         // first time only, what the launch chose. Every time, that was
         // reopened whenever the start screen came back: Back from a song
         // the app was launched with went straight back into it.
@@ -760,7 +760,7 @@ fn Start() -> Element {
             _ => ("Opening".to_owned(), String::new(), false),
         };
         return rsx! {
-            daw_view_kit::loading::LoadingFrame { headline, detail, failed,
+            studio_panels::loading::LoadingFrame { headline, detail, failed,
                 button {
                     style: "margin-top:14px; height:44px; padding:0 20px; border:1px solid {RULE}; border-radius:10px; \
                             background:transparent; color:{TEXT}; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer;",
@@ -1654,7 +1654,7 @@ fn OrgSwitcher(
             style: "position:relative; flex:none;",
             if open() {
                 div {
-                    style: "{daw_view_kit::shell::SCRIM} z-index:20;",
+                    style: "{studio_panels::shell::SCRIM} z-index:20;",
                     onclick: move |_| open.set(false),
                 }
                 div {
@@ -1892,7 +1892,7 @@ fn DownloadChoice(downloaded: bool, busy: bool, on_pick: EventHandler<Offline>) 
             }
             if open() {
                 div {
-                    style: "{daw_view_kit::shell::SCRIM} z-index:20;",
+                    style: "{studio_panels::shell::SCRIM} z-index:20;",
                     onclick: move |_| open.set(false),
                 }
                 div {

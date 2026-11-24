@@ -47,7 +47,7 @@ fn Bar(session: Song) -> Element {
     rsx! {
         // A height in pixels: the bar sizes itself, and a percentage of a
         // pane it does not fill by layout comes to nothing.
-        daw_view_kit::progress::ProgressBar { height: "44px".to_owned() }
+        studio_panels::progress::ProgressBar { height: "44px".to_owned() }
     }
 }
 
@@ -80,7 +80,7 @@ pub fn SongsPane() -> Element {
     rsx! {
         div { style: "position:relative; width:100%; height:100%; min-height:36px; background:{surface}; \
                      display:flex; align-items:stretch;",
-            daw_view_kit::shell::SongTabs {
+            studio_panels::shell::SongTabs {
                 on_pick: move |index: usize| {
                     let _ = session_engine_client::view_client::ask::pick(index);
                 },
@@ -101,7 +101,7 @@ pub fn NavigatorPane() -> Element {
     }
     rsx! {
         div { style: "position:relative; width:100%; height:100%; background:{surface};",
-            daw_view_kit::navigator::Navigator {
+            studio_panels::navigator::Navigator {
                 on_pick: move |index: usize| {
                     let _ = session_engine_client::view_client::ask::pick(index);
                 },

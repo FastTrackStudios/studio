@@ -19,7 +19,7 @@
 
 //!
 //! **In a browser** (studio-web) the `mixer` view is the same widget over
-//! the page's own engine (`daw_view_kit::web_host`, [`web`]); the strip and
+//! the page's own engine (`studio_panels::web_host`, [`web`]); the strip and
 //! the close-up say they are the desktop's for now.
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -139,7 +139,7 @@ fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
     return session_engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
-    return daw_view_kit::web_host::hosted_is_open();
+    return studio_panels::web_host::hosted_is_open();
 }
 
 /// Which of the two a pane is.

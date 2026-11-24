@@ -16,7 +16,7 @@
 //! MCP as every action is.
 //!
 //! **In a browser** (studio-web) the view is the same panel over the
-//! page's own engine (`daw_view_kit::web_host`, the panels under
+//! page's own engine (`studio_panels::web_host`, the panels under
 //! dioxus-web with the widget in a WebGL2 canvas): one crate, the host
 //! chosen by the target ([`web`]).
 
@@ -127,7 +127,7 @@ fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
     return session_engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
-    return daw_view_kit::web_host::hosted_is_open();
+    return studio_panels::web_host::hosted_is_open();
 }
 
 /// The pane: the arrangement once the engine has a song, a line saying

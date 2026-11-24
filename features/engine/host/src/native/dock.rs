@@ -102,7 +102,7 @@ pub fn SongDock(session: daw_view_kit::studio::StudioSession, class: FormClass) 
     use_drop(|| session_engine::actions::set_docked(false));
     // The top bar's navigator button, lit while the set is shown: the
     // navigator pin follows the dock's Set panel.
-    let pins = try_use_context::<daw_view_kit::shell::Pins>();
+    let pins = try_use_context::<studio_panels::shell::Pins>();
     use_effect(move || {
         let shown = dock.shows(kind::SET);
         if let Some(mut navigator) = pins.map(|p| p.navigator)
@@ -216,7 +216,7 @@ fn DockBar() -> Element {
             }
             div { style: "flex:none; width:1px; height:{height - 20}px; background:{RULE}; margin:0 4px;" }
             div { style: "position:relative; flex:1 1 0; min-width:0; height:100%; display:flex; align-items:center; overflow:hidden;",
-                daw_view_kit::transport_bar::TransportBar { big: touch }
+                studio_panels::transport_bar::TransportBar { big: touch }
             }
             // The bottom bar's own parts, flat and the bar's full height
             // as they are there; their pickers open upward, over the dock
@@ -224,12 +224,12 @@ fn DockBar() -> Element {
             div { style: "position:relative; flex:none; height:100%; display:flex; align-items:stretch;",
                 if arrangement || mixer {
                     div { style: "flex:none; width:1px; margin:10px 4px; background:{RULE};" }
-                    daw_view_kit::shell::PanelControls { arrangement, mixer }
+                    studio_panels::shell::PanelControls { arrangement, mixer }
                 }
-                daw_view_kit::shell::Jobs {}
+                studio_panels::shell::Jobs {}
                 if let Some(mode) = mode {
-                    daw_view_kit::shell::PhaseSwitch { mode }
-                    daw_view_kit::shell::Modes { mode }
+                    studio_panels::shell::PhaseSwitch { mode }
+                    studio_panels::shell::Modes { mode }
                 }
             }
             div { style: "flex:none; width:1px; height:{height - 20}px; background:{RULE}; margin:0 4px;" }
@@ -388,7 +388,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "CHT",
             Place::Edge(Side::Right),
             |_| {
-                rsx! { Fill { daw_view_kit::chart_panel::Chart { paged: true } } }
+                rsx! { Fill { studio_panels::chart_panel::Chart { paged: true } } }
             },
         ),
         k(
@@ -397,7 +397,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "CED",
             Place::Edge(Side::Right),
             |_| {
-                rsx! { Fill { daw_view_kit::chart_editor::ChartEditor {} } }
+                rsx! { Fill { studio_panels::chart_editor::ChartEditor {} } }
             },
         ),
         k(
@@ -406,7 +406,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "LYR",
             Place::Edge(Side::Right),
             |_| {
-                rsx! { Fill { daw_view_kit::lyrics_panel::LyricsPanel {} } }
+                rsx! { Fill { studio_panels::lyrics_panel::LyricsPanel {} } }
             },
         ),
         k(kind::FX_ROW, "FX", "FX", Place::Edge(Side::Bottom), |_| {
@@ -438,7 +438,7 @@ fn catalog(host: HostPanels) -> Catalog {
             |_| {
                 rsx! {
                     div { style: "flex:1; min-width:0; display:flex; align-items:center; padding:4px 8px;",
-                        daw_view_kit::progress::ProgressBar { height: Some("40px".to_owned()), flat: true }
+                        studio_panels::progress::ProgressBar { height: Some("40px".to_owned()), flat: true }
                     }
                 }
             },
@@ -468,7 +468,7 @@ fn catalog(host: HostPanels) -> Catalog {
             |_| {
                 rsx! {
                     div { style: "flex:1; min-width:0; display:flex; align-items:flex-start; padding:8px;",
-                        daw_view_kit::versions::Versions {}
+                        studio_panels::versions::Versions {}
                     }
                 }
             },
@@ -482,8 +482,8 @@ fn catalog(host: HostPanels) -> Catalog {
                 rsx! {
                     div { style: "flex:1; min-width:0; display:flex; flex-wrap:wrap; align-items:flex-start; \
                                   gap:8px; padding:8px;",
-                        daw_view_kit::collab_bar::CollabBar {}
-                        daw_view_kit::shell::AudioBadge { density: daw_view_kit::shell::Density::Full }
+                        studio_panels::collab_bar::CollabBar {}
+                        studio_panels::shell::AudioBadge { density: studio_panels::shell::Density::Full }
                     }
                 }
             },
@@ -494,7 +494,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "LST",
             Place::Edge(Side::Left),
             |_| {
-                rsx! { Fill { daw_view_kit::setup::SetupView { on_pick: None } } }
+                rsx! { Fill { studio_panels::setup::SetupView { on_pick: None } } }
             },
         ),
         k(
@@ -503,7 +503,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "BRW",
             Place::Edge(Side::Left),
             |_| {
-                rsx! { Fill { daw_view_kit::browser::BrowserBody {} } }
+                rsx! { Fill { studio_panels::browser::BrowserBody {} } }
             },
         ),
         k(
@@ -563,7 +563,7 @@ fn ArrangementPanel() -> Element {
 fn SetPanel() -> Element {
     rsx! {
         Fill {
-            daw_view_kit::navigator::Navigator {
+            studio_panels::navigator::Navigator {
                 on_pick: move |index: usize| {
                     session_engine::actions::off_the_window(
                         "SESSION_SONG",
@@ -585,11 +585,11 @@ fn TransportPanel() -> Element {
             div {
                 style: "flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; \
                         padding:6px 8px; background:{dock::host::tokens::SHEET};",
-                daw_view_kit::progress::TransportButtons { compact: true, height: 48 }
+                studio_panels::progress::TransportButtons { compact: true, height: 48 }
             }
         };
     }
-    rsx! { Fill { daw_view_kit::transport_bar::TransportBar { big: true } } }
+    rsx! { Fill { studio_panels::transport_bar::TransportBar { big: true } } }
 }
 
 #[component]

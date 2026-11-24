@@ -1,11 +1,11 @@
 //! The mixer in a browser.
 //!
 //! The same widget over the page's own engine
-//! (`daw_view_kit::web_host::HostedView`), drawn under dioxus-web with its
+//! (`studio_panels::web_host::HostedView`), drawn under dioxus-web with its
 //! widget in a WebGL2 canvas.
 
-use daw_view_kit::web_host::{HostedPanel, HostedView};
 use dioxus::prelude::*;
+use studio_panels::web_host::{HostedPanel, HostedView};
 
 /// Every strip of the song the page's engine has current.
 #[component]

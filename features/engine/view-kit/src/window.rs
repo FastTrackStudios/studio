@@ -182,7 +182,7 @@ pub(crate) fn dock_request(action: &Action) -> Option<crate::actions::DockReques
 /// The list's id for a window action that takes nothing — what a key
 /// bound to it runs, and what a menu item for it runs.
 #[must_use]
-pub(crate) fn plain_id(action: &Action) -> Option<&'static str> {
+pub fn plain_id(action: &Action) -> Option<&'static str> {
     id_and_args(action).and_then(|(id, args)| args.is_empty().then_some(id))
 }
 
@@ -247,7 +247,7 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::CopyItems | Action::PasteItems => return None,
         Action::ToggleEditor => (TOGGLE_EDITOR.id, String::new()),
         Action::ToggleFx => (TOGGLE_FX.id, String::new()),
-        Action::ToggleBrowser => (crate::browser::BROWSER.id, String::new()),
+        Action::ToggleBrowser => (crate::browser_toggle::BROWSER.id, String::new()),
         Action::ToggleDocks => (crate::actions::DOCKS.id, String::new()),
         Action::BarStep(n) => (crate::bar_step::STEP_ACTION.id, by(*n)),
         Action::PoiStep(n) => (crate::poi::STEP.id, by(*n)),
@@ -799,14 +799,18 @@ fn register_window(list: &ActionList) -> Result<(), architect::action::ActionErr
             Action::Visibility(crate::keys::Visibility::ShowAll),
         ),
     ];
-    list.register(&crate::browser::BROWSER, Effect::Mutating, |(): ()| {
-        if !crate::actions::if_docked(crate::actions::DockRequest::TogglePanel(
-            "browser".to_owned(),
-        )) {
-            crate::browser::request_toggle();
-        }
-        Ok(())
-    })?;
+    list.register(
+        &crate::browser_toggle::BROWSER,
+        Effect::Mutating,
+        |(): ()| {
+            if !crate::actions::if_docked(crate::actions::DockRequest::TogglePanel(
+                "browser".to_owned(),
+            )) {
+                crate::browser_toggle::request_toggle();
+            }
+            Ok(())
+        },
+    )?;
     for (meta, effect, action) in plain {
         list.register(meta, effect, move |(): ()| {
             // In a dock, a pane is its panel.

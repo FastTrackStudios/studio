@@ -219,9 +219,9 @@ pub fn MainToolbar(
             .collect::<Vec<_>>()
     });
     let mut metronome = use_signal(|| !click_muted);
-    let pins = try_use_context::<crate::shell::Pins>();
+    let pins = try_use_context::<crate::chrome::Pins>();
     // The window's one way to open the mixer, when it has one.
-    let switch = try_use_context::<crate::shell::MixerToggle>();
+    let switch = try_use_context::<crate::chrome::MixerToggle>();
     let mut following = use_signal(|| follow.get());
     let mut open = use_signal(|| false);
     let is_on = move |t: Toggle| match t {
@@ -318,7 +318,7 @@ pub fn MainToolbar(
                     // A press outside closes it: the whole screen, from
                     // this corner (`shell::SCRIM`).
                     div {
-                        style: "{crate::shell::SCRIM} z-index:21;",
+                        style: "{crate::chrome::SCRIM} z-index:21;",
                         onclick: move |_| open.set(false),
                     }
                     div {

@@ -52,36 +52,18 @@ dioxus-native-dom = { workspace = true }
 dioxus-native = { workspace = true, optional = true }
 daw-control = { workspace = true }
 daw-proto = { workspace = true }
-# The Organize view's keyflow editor.
-editor-view = { workspace = true, optional = true }
-editor-state = { workspace = true, optional = true }
-keyflow-editor-lang = { workspace = true, optional = true }
-# The chart editor's worker replies over it (what `use_coroutine` hands out).
-futures-channel = { workspace = true, optional = true }
 # The mix phases the mixer's left rail lists.
 session = { workspace = true, features = ["library", "ui", "web"] }
-# The performance panels (the progress bar), drawn under Blitz — see
-# `src/progress.rs`.
-# The small-screen layout's tab icons (`compact`) — the icon set daw-view-kit's
-# transport draws with.
+# The Editor's placeholder icon (`chrome::EditorComing`).
 lucide-dioxus = { workspace = true }
-# The chord items' numbers and names — `arrangement::Lettering`.
-keyflow = { workspace = true, features = ["text", "engraver"] }
 # The guide engine the Click / Count / Guide MIDI tracks play through —
 # see `src/guide_instrument.rs`.
 # The visual presets. Which tracks a preset shows, and how large, is a
 # rule resolved against the session's own taxonomy — not a list of GUIDs
 # this window keeps. See `src/plan.rs`.
 dynamic-template = { workspace = true }
-# The shared performer screen (the iPad's Performance view, `performer`):
-# its frame, panels and registry, the playback and rig traits.
-app-shell = { workspace = true, features = ["ui"] }
 # The hit detector (native: it reads whole recordings and runs on cores).
 dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
-# The album's plan and the room's profile, behind the Patch List view —
-# see `src/patch_list.rs`. The window reads them; applying one to a
-# session is the session's job, not this window's.
-patch-list = { workspace = true, optional = true }
 # The mouse-modifier contexts a hit reports, so bindings stay
 # configurable rather than being hard-coded per widget.
 architect-input = { workspace = true }
@@ -158,11 +140,9 @@ cursor-icon = { workspace = true }
 web-time = { workspace = true }
 
 eyre = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
-# Collaboration (collab.rs, native): hosting/joining over iroh, and the
-# chart editor's remote edits and carets.
+# The Action List the window registers on (`window`), and the platform's
+# timers in a browser (`pause`).
 architect = { workspace = true, optional = true, features = ["vox", "platform", "action-list"] }
-editor-crdt = { workspace = true, optional = true }
 futures-timer = { workspace = true, optional = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
@@ -196,13 +176,11 @@ web-sys = { workspace = true, optional = true, features = [
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 # The web demo fetches the guide library's files together (`web_engine`).
-futures-util = { workspace = true, optional = true }
 js-sys = { workspace = true, optional = true }
 anyrender_vello_hybrid = { workspace = true, optional = true, features = ["webgl"] }
 vello_gpu = { workspace = true, optional = true }
 vello_common = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
-gloo-timers = { workspace = true, optional = true }
 # The FTS processors as built-in FX (desktop: they are nice-plug plugins).
 builtin = { workspace = true, optional = true, features = ["engine"] }
 num-traits = { workspace = true }
@@ -211,16 +189,6 @@ serde_json = { workspace = true }
 # What an engine action answers, read back (`browser`'s `RIG_BROWSE`).
 facet-json = { workspace = true }
 
-# The browser's tokio: channels and `select!` for the live session's loop
-# (collab.rs), no runtime — tasks and timers there are the page's
-# (`architect::platform`).
-# The global app menu (`app_menu`): served on the session bus, which is
-# Linux's. Behind `native`.
-[target.'cfg(target_os = "linux")'.dependencies]
-zbus = { workspace = true, optional = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { version = "1.48", default-features = false, features = ["sync", "macros"] }
 
 [features]
 default = ["native"]
@@ -229,14 +197,14 @@ default = ["native"]
 signal = ["native", "session-engine?/signal"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["dep:opentelemetry", "session-engine-client/native", "session-engine?/native", "dep:dioxus-native", "dep:zbus", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu_context", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dsp/hits", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "dep:builtin", "builtin?/engine", "session/library", "session/project-sync"]
+native = ["dep:opentelemetry", "session-engine-client/native", "session-engine?/native", "dep:dioxus-native", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu_context", "dep:pollster", "dep:dirs", "dep:winit", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "dynamic-template/reaper", "dsp/hits", "dep:architect", "dep:futures-timer", "dep:builtin", "builtin?/engine"]
 # A show recorded as one Live set, split into its songs (src/show.rs,
 # the `show-split` bin): the Live-set reader and the .als → .RPP converter.
 show = ["native", "engine", "session-engine/show"]
 # The browser: the same widgets, hosted in <canvas> elements under
 # dioxus-web and drawn with vello_hybrid's WebGL renderer (keyflow-ui's
 # `wasm-graphics` pattern). See `web_host`.
-web = ["engine", "session-engine-client/web", "session-engine/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:anyrender_vello_hybrid", "dep:vello_gpu", "dep:vello_common", "dep:gloo-timers", "dep:futures-util", "daw/standalone-session-file", "session/collab", "dep:architect", "dep:futures-channel"]
+web = ["engine", "session-engine-client/web", "session-engine/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:anyrender_vello_hybrid", "dep:vello_gpu", "dep:vello_common", "daw/standalone-session-file", "dep:architect"]
 # The `#[]` suites, which need a REAPER to talk to. Behind a
 # feature so an ordinary `cargo nextest run --workspace` does not try to
 # reach one that is not running — `just reaper-test` turns it on, via
@@ -276,8 +244,6 @@ frame-times = ["anyrender_vello?/log_frame_times"]
 # The metrics, read back through an in-memory exporter.
 opentelemetry_sdk = { workspace = true, features = ["metrics", "testing"] }
 builtin = { workspace = true, features = ["engine"] }
-# The app menu's test serves it over a socket pair, not a bus.
-zbus = { workspace = true, features = ["p2p"] }
 
 [lints]
 workspace = true

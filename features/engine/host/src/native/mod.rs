@@ -214,7 +214,7 @@ pub fn prepare() -> Option<Prepared> {
     // The global app menu (File, Edit, View, …) for the desktop shell's
     // top bar, on the session bus — on a thread of its own.
     #[cfg(target_os = "linux")]
-    daw_view_kit::app_menu::start();
+    studio_panels::app_menu::start();
     // How this app dials a Session engine (Remote on another Session): the
     // connector lives with the app's iroh identity (`crate::remote`).
     #[cfg(feature = "session-domain")]
@@ -473,7 +473,7 @@ fn window_attributes() -> winit::window::WindowAttributes {
         .with_maximized(pos.is_none() && size.is_none())
         .with_surface_size(winit::dpi::LogicalSize::new(w, h))
         // Small enough to be phone-sized: below ~700 wide (or ~500 tall)
-        // the app takes its small-screen layout (`daw_view_kit::compact`).
+        // the app takes its small-screen layout (`studio_panels::compact`).
         .with_min_surface_size(winit::dpi::LogicalSize::new(320.0, 300.0));
     if let Some((x, y)) = pos {
         attributes = attributes.with_position(winit::dpi::LogicalPosition::new(x, y));

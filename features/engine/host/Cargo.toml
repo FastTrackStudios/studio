@@ -70,10 +70,10 @@ cli = [
 # The app on Blitz (dioxus-native): the panels-and-views shell with our own
 # title bar — see docs/app-on-blitz.md. Desktop only for now (iOS follows);
 # without it the desktop build launches the WRY app as before.
-native = ["session-domain", "dep:dock", "dep:dioxus-native", "app-shell/native", "dep:daw-view-kit", "daw-view-kit?/engine", "dep:mixer-view", "mixer-view?/engine", "dep:arrangement-view", "arrangement-view?/engine", "dep:session-engine", "dep:winit", "dep:rfd", "dep:dirs", "dep:lucide-dioxus", "dep:serde_json"]
+native = ["session-domain", "dep:dock", "dep:dioxus-native", "app-shell/native", "dep:daw-view-kit", "daw-view-kit?/engine", "dep:studio-panels", "studio-panels?/engine", "dep:mixer-view", "mixer-view?/engine", "dep:arrangement-view", "arrangement-view?/engine", "dep:session-engine", "dep:winit", "dep:rfd", "dep:dirs", "dep:lucide-dioxus", "dep:serde_json"]
 # signal's rigs in the session engine: the bass rig, the kit's sampled
 # voices (daw-view-kit's `signal`; NAM's C++ and the sampler build with it).
-signal = ["native", "daw-view-kit/signal", "mixer-view/signal", "arrangement-view/signal"]
+signal = ["native", "daw-view-kit/signal", "studio-panels/signal", "mixer-view/signal", "arrangement-view/signal"]
 # Session on the web build is a REMOTE: the wasm target compiles only the
 # wire surface (session-proto's SetlistService clients + daw-view-kit) and
 # talks to the network engine's SetlistService over the shared `/vox` link
@@ -202,6 +202,7 @@ dioxus-native = { workspace = true, optional = true }
 mixer-view = { workspace = true, optional = true, features = ["native"] }
 arrangement-view = { workspace = true, optional = true, features = ["native"] }
 daw-view-kit = { workspace = true, optional = true, features = ["native"] }
+studio-panels = { workspace = true, optional = true, features = ["native"] }
 # `studio ingest` (cli/ingest.rs): the engine's ingest, and its Live-set
 # splitter (`show`).
 session-engine = { workspace = true, optional = true, features = ["native"] }

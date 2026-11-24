@@ -130,35 +130,6 @@ pub fn readable_failure(detail: &str) -> String {
     line.to_owned()
 }
 
-/// Why a canvas cannot be drawn: the browser gave it no WebGL2.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NoWebGl2;
-
-impl std::fmt::Display for NoWebGl2 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(
-            "this browser gave the page no WebGL2 (hardware acceleration is off or unsupported)",
-        )
-    }
-}
-
-impl std::error::Error for NoWebGl2 {}
-
-/// A renderer over a canvas's WebGL2 context: `context` asks the browser
-/// for it (`None` when there is none), `make` builds the renderer once it
-/// is there. The renderer is only made once the context is known to
-/// exist, so it is asked for with the options the page wants.
-///
-/// # Errors
-///
-/// [`NoWebGl2`]: the browser gave no WebGL2 context.
-pub fn init_renderer<C, R>(
-    context: impl FnOnce() -> Option<C>,
-    make: impl FnOnce(C) -> R,
-) -> Result<R, NoWebGl2> {
-    context().map(make).ok_or(NoWebGl2)
-}
-
 /// What the page shows where it cannot draw: the views are drawn on the
 /// GPU, and this browser has none to give.
 #[component]

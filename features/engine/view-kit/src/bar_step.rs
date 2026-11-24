@@ -233,7 +233,7 @@ fn grid_here() -> String {
 /// instrument (a menu), the next page. `big` for a finger.
 #[component]
 pub fn Stepper(big: bool) -> Element {
-    use crate::shell::{DIM, RULE, SCRIM, TEXT};
+    use crate::chrome::{DIM, RULE, SCRIM, TEXT};
     use dioxus::prelude::*;
     let mut step = use_signal(get);
     let mut grid = use_signal(grid_here);

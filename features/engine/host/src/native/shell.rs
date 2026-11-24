@@ -37,7 +37,7 @@ const TEXT: &str = "#e5e7eb";
 /// The whole window.
 #[component]
 pub fn Shell() -> Element {
-    use daw_view_kit::shell::{TopBar, View};
+    use studio_panels::shell::{TopBar, View};
 
     // `FTS_SESSION_VIEW` opens on a view other than the DAW.
     let view = use_signal(|| match std::env::var("FTS_SESSION_VIEW").as_deref() {
@@ -51,7 +51,7 @@ pub fn Shell() -> Element {
         _ => View::Daw,
     });
     // The Mixer button, `x` and the toolbar's mixer: one toggle.
-    daw_view_kit::shell::use_mixer_toggle(view);
+    studio_panels::shell::use_mixer_toggle(view);
     // Live unless `FTS_SESSION_MODE` names another (`organize`, …): the
     // docked mixer's compact strips are the Live ones.
     let mode = use_signal(|| {
@@ -73,7 +73,7 @@ pub fn Shell() -> Element {
     // A mode asked for on the Action List (`SESSION_MODE`, a model over
     // MCP): taken up within a tenth of a second.
     let mut asked = mode;
-    let back = try_use_context::<daw_view_kit::shell::Back>();
+    let back = try_use_context::<studio_panels::shell::Back>();
     use_future(move || async move {
         loop {
             if let Some(next) = session_engine::actions::take_mode_request() {
@@ -86,7 +86,7 @@ pub fn Shell() -> Element {
             // (`SESSION_OPEN`): out of this one, and the start screen
             // opens it.
             if session_engine::projects::take_back()
-                && let Some(daw_view_kit::shell::Back(back)) = back
+                && let Some(studio_panels::shell::Back(back)) = back
             {
                 back.call(());
             }
@@ -108,9 +108,9 @@ pub fn Shell() -> Element {
     // What is shown full screen, if anything, and the racks' settings
     // every view of them shares (`mixer_view::closeup`).
     use_context_provider(mixer_view::closeup::Closeups::new);
-    daw_view_kit::shell::use_pins();
+    studio_panels::shell::use_pins();
     // The lyrics' Audience / Performer and layer, held across songs.
-    use_context_provider(daw_view_kit::lyrics_panel::LyricsChoice::new);
+    use_context_provider(studio_panels::lyrics_panel::LyricsChoice::new);
     // The songs, as the launch opened them — a signal from here on, which
     // the tabs read and a pick or a recolour writes.
     let opened: session_engine::setlist::Setlist = use_context();
@@ -118,7 +118,7 @@ pub fn Shell() -> Element {
     // Each song in the mode it was last worked in.
     session_engine::song_modes::use_song_modes(setlist, mode);
     // In Mix mode, the guide folder muted.
-    daw_view_kit::mix_guide::use_mix_guide(setlist, mode);
+    studio_panels::mix_guide::use_mix_guide(setlist, mode);
     // The set is the engine's, followed over the link: the songs arriving
     // behind the first, a pick from the CLI or a model, a reorder — each
     // changes it there, and the window follows. A new set remounts the
@@ -185,7 +185,7 @@ pub fn Shell() -> Element {
             }
         });
     }
-    daw_view_kit::collab_bar::use_follow_song(setlist);
+    studio_panels::collab_bar::use_follow_song(setlist);
     // `FTS_SESSION_SONG=<n>` (1-based): open the set on its n-th song — to
     // start somewhere other than the top, or (the collaboration demo) to
     // put a second window on a different song from the first.
@@ -216,7 +216,7 @@ pub fn Shell() -> Element {
             size.set((s.width, s.height));
         }
     });
-    use_context_provider(|| daw_view_kit::shell::WindowSize(size));
+    use_context_provider(|| studio_panels::shell::WindowSize(size));
     // A phone on its side is drawn to both edges (`BLITZ_SAFE_AREA_SIDES=0`
     // in main): the view runs under the camera housing, and only the
     // controls on its side get out of its way — the views' rail moving to the
@@ -224,12 +224,12 @@ pub fn Shell() -> Element {
     // it is on the right — while the top rows keep clear of the rounded
     // corners.
     #[cfg_attr(not(target_os = "ios"), allow(unused_variables, unused_mut))]
-    let mut sides = use_context_provider(|| Signal::new(daw_view_kit::compact::Sides::default()));
+    let mut sides = use_context_provider(|| Signal::new(studio_panels::compact::Sides::default()));
     #[cfg(target_os = "ios")]
     {
         let reading = window.clone();
         dioxus_native::use_window_event(move |event, _| {
-            use daw_view_kit::compact::Sides;
+            use studio_panels::compact::Sides;
             /// The housing and the gap beside it: less than the inset the
             /// system reports, which pads for the rounded corners too.
             const HOUSING: f64 = 50.0;
@@ -258,7 +258,7 @@ pub fn Shell() -> Element {
         });
     }
     let width = move || size().0;
-    let form = use_memo(move || daw_view_kit::compact::Form::from_screen(&screen()));
+    let form = use_memo(move || studio_panels::compact::form_from_screen(&screen()));
     let mut form_signal = use_context_provider(|| Signal::new(*form.peek()));
     use_effect(move || {
         let now = form();
@@ -269,7 +269,7 @@ pub fn Shell() -> Element {
     // On a phone, `FTS_SESSION_VIEW` names the tab it opens on, as it
     // names the view on a wider screen; the chart otherwise.
     let phone_view = use_signal(|| {
-        use daw_view_kit::compact::PhoneView;
+        use studio_panels::compact::PhoneView;
         match std::env::var("FTS_SESSION_VIEW").as_deref() {
             Ok("daw") => PhoneView::Arrangement,
             Ok("performance") => PhoneView::Control,
@@ -287,7 +287,7 @@ pub fn Shell() -> Element {
         }
     };
     // The record view's song menu picks the same way.
-    use_context_provider(|| daw_view_kit::record_view::PickSong(Callback::new(pick)));
+    use_context_provider(|| studio_panels::record_view::PickSong(Callback::new(pick)));
     // On iOS: the device's audio session, for Settings → This device.
     #[cfg(target_os = "ios")]
     use_context_provider(|| daw_view_kit::device_audio::DeviceAudio {
@@ -347,7 +347,7 @@ pub fn Shell() -> Element {
     let touch = daw_view_kit::touch::use_touch();
     // The song's history and the environment's session start with the
     // window, whether or not the collaboration panel is shown.
-    daw_view_kit::collab_bar::use_collab_start();
+    studio_panels::collab_bar::use_collab_start();
     if super::dock::enabled() {
         let class = super::dock::class_of(form().compact(), touch, size());
         // A phone keeps the whole screen for the dock: the song tabs and
@@ -360,14 +360,14 @@ pub fn Shell() -> Element {
                         flex-direction:column; overflow:hidden; background:#09090b; color:{TEXT}; \
                         font-family:system-ui, sans-serif;",
                 onmousedown: move |_| daw_view_kit::keys::set_editing(false),
-                daw_view_kit::collab_pointers::CollabPointers {}
+                studio_panels::collab_pointers::CollabPointers {}
                 if bar {
                     TopBar {
                         lights: LIGHTS_W,
                         // As the column's bar: the navigator (the dock's
                         // Set panel), the tabs, Save and the checkpoints,
                         // and who is here. Each is a panel too.
-                        badges: rsx! { daw_view_kit::collab_bar::CollabBar {} },
+                        badges: rsx! { studio_panels::collab_bar::CollabBar {} },
                         on_navigator: move |()| {
                             let _ = daw_view_kit::window::press(
                                 "SESSION_PANEL",
@@ -397,8 +397,8 @@ pub fn Shell() -> Element {
     if form().compact() {
         return rsx! {
             style { {TAILWIND} }
-            daw_view_kit::collab_pointers::CollabPointers {}
-            daw_view_kit::compact::CompactShell {
+            studio_panels::collab_pointers::CollabPointers {}
+            studio_panels::compact::CompactShell {
                 form: form(),
                 view: phone_view,
                 on_pick: pick,
@@ -406,8 +406,8 @@ pub fn Shell() -> Element {
                 more: rsx! {
                     div {
                         style: "display:flex; align-items:center; gap:8px; flex-wrap:wrap;",
-                        daw_view_kit::collab_bar::CollabBar {}
-                        daw_view_kit::shell::AudioBadge { density: daw_view_kit::shell::Density::Full }
+                        studio_panels::collab_bar::CollabBar {}
+                        studio_panels::shell::AudioBadge { density: studio_panels::shell::Density::Full }
                     }
                 },
                 body: rsx! {
@@ -430,12 +430,12 @@ pub fn Shell() -> Element {
             // the keyboard back to the transport.
             onmousedown: move |_| daw_view_kit::keys::set_editing(false),
             // Everyone else's mouse, over everything (collab_pointers).
-            daw_view_kit::collab_pointers::CollabPointers {}
+            studio_panels::collab_pointers::CollabPointers {}
             TopBar {
                 lights: LIGHTS_W,
                 // Once, not per song: it is the whole set's session, and
                 // mounting it starts one from the environment.
-                badges: rsx! { daw_view_kit::collab_bar::CollabBar {} },
+                badges: rsx! { studio_panels::collab_bar::CollabBar {} },
                 width: width(),
                 // Anywhere on the bar that is not a control drags the
                 // window; a double click zooms it.
@@ -457,8 +457,8 @@ pub fn Shell() -> Element {
             // beside it.
             div {
                 style: "flex:1; min-height:0; display:flex;",
-                daw_view_kit::shell::NavigatorColumn { on_pick: pick }
-                daw_view_kit::browser::BrowserColumn {}
+                studio_panels::shell::NavigatorColumn { on_pick: pick }
+                studio_panels::browser::BrowserColumn {}
                 div {
                     style: "position:relative; flex:1; min-width:0; display:flex; flex-direction:column;",
                     if let Some(song) = current.clone() {
@@ -472,7 +472,7 @@ pub fn Shell() -> Element {
             // The views, across the foot of the window, and each view's
             // own controls beside them — the arrangement's the transport,
             // which reads the song it drives, so it is mounted per song.
-            daw_view_kit::shell::BottomBar {
+            studio_panels::shell::BottomBar {
                 view,
                 mode,
                 width: width(),
@@ -481,7 +481,7 @@ pub fn Shell() -> Element {
                         WithSong {
                             key: "{song.project}",
                             session: song.session.clone(),
-                            daw_view_kit::transport_bar::TransportBar { big: true }
+                            studio_panels::transport_bar::TransportBar { big: true }
                         }
                     }
                 },
@@ -499,16 +499,16 @@ pub fn Shell() -> Element {
 #[component]
 fn PhoneViews(
     session: daw_view_kit::studio::StudioSession,
-    view: Signal<daw_view_kit::compact::PhoneView>,
+    view: Signal<studio_panels::compact::PhoneView>,
 ) -> Element {
-    use daw_view_kit::compact::PhoneView;
+    use studio_panels::compact::PhoneView;
     use_context_provider(|| session);
     let mode: Signal<Mode> = use_context();
     match view() {
         // The shell's own pages (`compact::CompactShell`).
         PhoneView::Control | PhoneView::More | PhoneView::Setup | PhoneView::Editor => rsx! {},
-        PhoneView::Chart => rsx! { daw_view_kit::chart_panel::Chart { paged: true } },
-        PhoneView::Lyrics => rsx! { daw_view_kit::lyrics_panel::LyricsPanel {} },
+        PhoneView::Chart => rsx! { studio_panels::chart_panel::Chart { paged: true } },
+        PhoneView::Lyrics => rsx! { studio_panels::lyrics_panel::LyricsPanel {} },
         // Keyed apart: the same component in the same place would otherwise
         // be kept and handed the other view's props.
         PhoneView::Arrangement => rsx! {
@@ -531,21 +531,21 @@ fn WithSong(session: daw_view_kit::studio::StudioSession, children: Element) -> 
 #[component]
 fn SongViews(
     session: daw_view_kit::studio::StudioSession,
-    view: Signal<daw_view_kit::shell::View>,
+    view: Signal<studio_panels::shell::View>,
     editor_open: Signal<bool>,
 ) -> Element {
-    use daw_view_kit::chart_editor::{ChartEditor, EditorToggle};
-    use daw_view_kit::shell::{OverviewLayout, View};
+    use studio_panels::chart_editor::{ChartEditor, EditorToggle};
+    use studio_panels::shell::{OverviewLayout, View};
     use_context_provider(|| session);
     let mode: Signal<session::modes::Mode> = use_context();
     let record_mode = move || mode() == session::modes::Mode::Record;
     // The FX, pinned under the arrangement or the mixer: the view gives
     // up its bottom to it.
-    let fx = try_use_context::<daw_view_kit::shell::FxToggle>();
+    let fx = try_use_context::<studio_panels::shell::FxToggle>();
     let fx_docked = fx.is_some_and(|f| (f.docked)() && (f.open)() && f.hosts.contains(&view()));
     // The Editor, pinned under the arrangement (above the FX when both
     // are): the lower part of the window, the arrangement keeping the top.
-    let editor = try_use_context::<daw_view_kit::shell::EditorPane>();
+    let editor = try_use_context::<studio_panels::shell::EditorPane>();
     let editor_docked =
         editor.is_some_and(|e| (e.docked)() && (e.open)() && e.hosts.contains(&view()));
     let fx_h = if fx_docked { FX_DOCK_H } else { 0.0 };
@@ -555,23 +555,23 @@ fn SongViews(
         format!("{fx_h}px")
     };
     rsx! {
-        daw_view_kit::shell::PinnedProgress { view: view() }
+        studio_panels::shell::PinnedProgress { view: view() }
         div {
             style: "position:relative; flex:1; min-height:0;",
             div {
             style: "position:absolute; left:0; right:0; top:0; bottom:{view_bottom};",
             match view() {
-                View::Setup => rsx! { daw_view_kit::setup::SetupView {} },
+                View::Setup => rsx! { studio_panels::setup::SetupView {} },
                 View::Daw => rsx! { Arrangement {} },
                 View::Performance => rsx! {
                     if record_mode() {
-                        daw_view_kit::record_view::RecordView {}
+                        studio_panels::record_view::RecordView {}
                     } else {
                         PerformanceView {}
                     }
                 },
-                View::Chart => rsx! { daw_view_kit::chart_panel::Chart { paged: true } },
-                View::Lyrics => rsx! { daw_view_kit::lyrics_panel::LyricsPanel {} },
+                View::Chart => rsx! { studio_panels::chart_panel::Chart { paged: true } },
+                View::Lyrics => rsx! { studio_panels::lyrics_panel::LyricsPanel {} },
                 View::Editor => rsx! { daw_view_kit::editor_view::EditorPanel {} },
                 View::Mixer => rsx! {
                     mixer_view::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true }
@@ -580,11 +580,11 @@ fn SongViews(
                 View::Fx => rsx! { mixer_view::fx_view::FxPanel { lanes: 4 } },
                 View::Overview => rsx! {
                     OverviewLayout {
-                        progress: rsx! { daw_view_kit::progress::ProgressBar {} },
+                        progress: rsx! { studio_panels::progress::ProgressBar {} },
                         editor: editor_open().then(|| rsx! { ChartEditor {} }),
-                        chart: rsx! { daw_view_kit::chart_panel::Chart { paged: true } },
+                        chart: rsx! { studio_panels::chart_panel::Chart { paged: true } },
                         chart_corner: rsx! { EditorToggle { open: editor_open } },
-                        under_chart: rsx! { daw_view_kit::lyrics_panel::LyricsPanel {} },
+                        under_chart: rsx! { studio_panels::lyrics_panel::LyricsPanel {} },
                         panels: rsx! { Arrangement { docked: true } },
                     }
                 },
@@ -605,7 +605,7 @@ fn SongViews(
                 }
             }
         }
-        daw_view_kit::shell::PinnedTransport { view: view() }
+        studio_panels::shell::PinnedTransport { view: view() }
     }
 }
 
@@ -662,13 +662,13 @@ fn Arrangement(#[props(default)] docked: bool) -> Element {
 #[component]
 fn PerformanceView() -> Element {
     // The iPad (a finger, room for the wide layout): the shared performer
-    // screen (`daw_view_kit::performer`, STA-360).
+    // screen (`studio_panels::performer`, STA-360).
     let touch = daw_view_kit::touch::use_touch();
-    let form = daw_view_kit::compact::use_form();
-    if daw_view_kit::performer::wants_performer(touch, form) {
+    let form = studio_panels::compact::use_form();
+    if studio_panels::performer::wants_performer(touch, form) {
         return rsx! {
             div { style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex;",
-                daw_view_kit::performer::SessionPerformer {}
+                studio_panels::performer::SessionPerformer {}
             }
         };
     }
@@ -676,21 +676,21 @@ fn PerformanceView() -> Element {
         div {
             style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; \
                     flex-direction:column; gap:16px; padding:16px;",
-            daw_view_kit::progress::ProgressBar {}
+            studio_panels::progress::ProgressBar {}
             div {
                 style: "position:relative; flex:1; min-height:0; display:flex; gap:16px;",
                 div {
                     style: "position:relative; flex:1; min-width:0; height:100%; border-radius:8px; \
                             overflow:hidden; border:1px solid {RULE};",
-                    daw_view_kit::chart_panel::Chart { paged: true }
+                    studio_panels::chart_panel::Chart { paged: true }
                 }
                 div {
                     style: "position:relative; width:38%; min-width:320px; height:100%; border-radius:8px; \
                             overflow:hidden; border:1px solid {RULE};",
-                    daw_view_kit::lyrics_panel::LyricsPanel {}
+                    studio_panels::lyrics_panel::LyricsPanel {}
                 }
             }
-            daw_view_kit::progress::TransportButtons {}
+            studio_panels::progress::TransportButtons {}
         }
     }
 }

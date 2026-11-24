@@ -183,7 +183,7 @@ pub fn Arrangement() -> Element {
 }
 
 #[cfg(feature = "web")]
-impl crate::web_host::Hosted for crate::widget::ArrangementWidget {
+impl crate::web_canvas::Hosted for crate::widget::ArrangementWidget {
     fn paint(&mut self, width: u32, height: u32, scale: f64) -> anyrender::Scene {
         self.paint_scene(width, height, scale)
     }
@@ -213,13 +213,13 @@ pub fn WebArrangement(engine: crate::web_engine::EngineRef) -> Element {
         Rc::new(move |edit| engine.send(edit))
     };
     let (panel, widget) = crate::panel::use_arrangement_panel(Some(sink), to_engine, |w| {
-        crate::web_host::HostedRef(Rc::new(RefCell::new(w)))
+        crate::web_canvas::HostedRef(Rc::new(RefCell::new(w)))
     });
     let colors = daw_ui::studio::lanes::Colors::from_theme(&daw_ui::theming::Theme::dark());
     let surface = colors.surface.clone();
     let mounted = Rc::clone(&panel.mounted);
     let (on_panel, on_frame) = (panel.clone(), panel.clone());
-    let focus = crate::web_host::FocusSlot(Rc::clone(&panel.focus_node));
+    let focus = crate::web_canvas::FocusSlot(Rc::clone(&panel.focus_node));
     let playhead = engine.clone();
     rsx! {
         div {
@@ -228,12 +228,12 @@ pub fn WebArrangement(engine: crate::web_engine::EngineRef) -> Element {
             onmounted: move |event| {
                 *mounted.borrow_mut() = Some(event.data());
             },
-            crate::web_host::WidgetCanvas {
+            crate::web_canvas::WidgetCanvas {
                 widget,
                 panel: move |e| on_panel.handle(e),
                 frame: move |()| on_frame.handle(crate::panel_input::PanelEvent::Frame { play_at: playhead.position() }),
                 focus,
-                element: Some(crate::web_host::ElementSlot(Rc::clone(&element))),
+                element: Some(crate::web_canvas::ElementSlot(Rc::clone(&element))),
             }
             crate::panel::PanelChrome { panel: panel.clone() }
         }

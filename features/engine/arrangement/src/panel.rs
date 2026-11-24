@@ -121,7 +121,7 @@ pub struct ArrangementPanel {
     mixer: Option<crate::dock::Links>,
     /// The shell's pins, when there is a shell: what a quantize panel
     /// asked for from the Action List turns.
-    pins: Option<crate::shell::Pins>,
+    pins: Option<crate::chrome::Pins>,
     /// The panel's shape, toggled by the toolbar and read by the widget.
     pub compact: Rc<Cell<bool>>,
     /// Whether the window is in Record mode (from its mode, each render).
@@ -233,7 +233,7 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     let session: StudioSession = use_context();
     // The docked mixer's, when the view has one beside this panel.
     let mixer: Option<crate::dock::Links> = try_use_context();
-    let pins: Option<crate::shell::Pins> = try_use_context();
+    let pins: Option<crate::chrome::Pins> = try_use_context();
     // The rows' height at zoom 1: showing or hiding tracks (the visibility
     // manager) changes it, and the widget reports the new one here.
     let content_h = use_hook(|| {
@@ -254,7 +254,7 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     // docked beside more (the Overview) or the screen is small (a phone),
     // full in the DAW view.
     let docked = mixer.as_ref().is_some_and(|links| links.docked);
-    let small = crate::compact::use_form().compact();
+    let small = crate::form::use_form().compact();
     let touch = crate::touch::use_touch();
     // A finger's screen starts compact too: at touch size the full panel
     // would take half an iPad's width from the lanes.

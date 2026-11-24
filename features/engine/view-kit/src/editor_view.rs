@@ -278,7 +278,7 @@ fn picked_since(seen: u64) -> Option<(u64, String)> {
 #[component]
 pub fn EditorPanel() -> Element {
     let Some(session) = try_use_context::<crate::song_model::StudioSession>() else {
-        return rsx! { crate::shell::EditorComing {} };
+        return rsx! { crate::chrome::EditorComing {} };
     };
     let song = Song::of(&session.project.0);
     #[cfg(feature = "native")]
@@ -297,7 +297,7 @@ pub fn EditorPanel() -> Element {
     #[cfg(not(feature = "native"))]
     {
         let _ = song;
-        rsx! { crate::shell::EditorComing {} }
+        rsx! { crate::chrome::EditorComing {} }
     }
 }
 

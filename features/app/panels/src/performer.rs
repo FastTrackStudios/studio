@@ -333,13 +333,12 @@ pub fn SessionPerformer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compact::Form;
 
     #[test]
     fn the_ipad_gets_the_performer_view_and_a_phone_does_not() {
-        let ipad = Form::of(1194.0, 834.0);
-        let upright = Form::of(834.0, 1194.0);
-        let phone = Form::of(390.0, 844.0);
+        let ipad = crate::compact::form_of(1194.0, 834.0);
+        let upright = crate::compact::form_of(834.0, 1194.0);
+        let phone = crate::compact::form_of(390.0, 844.0);
         assert!(wants_performer(true, ipad));
         assert!(wants_performer(true, upright));
         assert!(!wants_performer(true, phone), "a phone keeps its shell");
