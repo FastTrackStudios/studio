@@ -1329,7 +1329,7 @@ fn check_against_midi(
             (piece, times)
         })
         .collect();
-    let map = crate::drum_reference::learn_map(&notes, &named, ON_NOTE);
+    let map = crate::drum_map_set::map_for(daw, project, &notes, &named, ON_NOTE);
     let pitches = |piece: &str| -> BTreeSet<u8> {
         map.iter()
             .filter(|m| m.piece.as_deref() == Some(piece))
@@ -1464,6 +1464,9 @@ fn recording_origin(
 pub struct HitRow {
     pub id: String,
     pub piece: String,
+    /// The take it was played in: its recording pass (`260907_1321-01`),
+    /// as COMP_CANDIDATES and COMP_CHOOSE name takes.
+    pub take: String,
     /// When it was played, project seconds, as recorded.
     pub time: f64,
     /// Where the song plays it now (an edit has moved it), project
@@ -1541,6 +1544,7 @@ pub fn hits(
                     HitRow {
                         id: m.id,
                         piece: h.piece,
+                        take: r.pass.clone(),
                         time,
                         now: plays,
                         bar,
@@ -3413,7 +3417,7 @@ static LIST: ActionMeta = meta(
     "HITS_LIST",
     "hits_list",
     "Drum hits found",
-    "The hit markers: each hit's id, piece, `time` (project seconds, as recorded), `now` (where the song plays it now, after any edit; none when no slice plays it), bar and beat (where it plays now), peak (dBFS), confidence, what heard it (both, trigger, mic), flags (ghost, flam, bleed, unsure) and who placed it (auto, manual, approved). `pieces`, `from`/`to` (where it plays now), `flag` (only hits with it), `origin`, `heard` (both, trigger, mic) narrow it; paged by `offset`/`limit`.",
+    "The hit markers: each hit's id, piece, `time` (project seconds, as recorded), `now` (where the song plays it now, after any edit; none when no slice plays it), bar and beat (where it plays now), `take` (the take it was played in: its pass, as COMP_CANDIDATES and COMP_CHOOSE name takes), peak (dBFS), confidence, what heard it (both, trigger, mic), flags (ghost, flam, bleed, unsure) and who placed it (auto, manual, approved). `pieces`, `from`/`to` (where it plays now), `playing` (true: only the hits a slice plays now — not the other takes'), `bars` (`[first, last]`, where they play now), `take`, `flag` (only hits with it), `origin`, `heard` (both, trigger, mic) narrow it; paged by `offset`/`limit` (100, at most 500; `next` is the page after). `compact`: `cols` (id, piece, take, time, now, bar, beat, peak_db, heard, flags) and a row per hit, 1000 a page (at most 2000) — a whole song's playing hits in a page or two.",
     "Drums",
     "",
 );
@@ -3485,7 +3489,7 @@ static ZONES_LIST: ActionMeta = meta(
     "ZONES_LIST",
     "zones_list",
     "Edit zones",
-    "The song's edit zones, on the ruler's Drums lane: fills (left as played by a quantize unless asked) and no-quantize exceptions — each one's guid, start and end (project seconds), kind, and who put it there (Auto: found, not yet looked at; Manual; Approved; Rejected: found and turned down, holding nothing).",
+    "The song's edit zones, on the ruler's Drums lane: fills (left as played by a quantize unless asked) and no-quantize exceptions — each one's guid, start and end (project seconds), kind, and who put it there (Auto: found, not yet looked at; Manual; Approved; Rejected: found and turned down, holding nothing). The no-quantize exceptions that hold are listed apart, first (`exceptions`): every quantize leaves the hits under one as played, whatever is asked of the fills — delete one (ZONES_EDIT `remove`) to let a quantize in; the fills and any turned-down zones are `zones`.",
     "Drums",
     "",
 );
@@ -3544,27 +3548,6 @@ struct DetectArg {
     /// Settings for this run alone: none given is none changed.
     #[facet(flatten, default)]
     settings: HitPatch,
-}
-
-#[derive(Facet, Default)]
-struct ListArg {
-    #[facet(default)]
-    pieces: Vec<String>,
-    from: Option<f64>,
-    to: Option<f64>,
-    flag: Option<String>,
-    origin: Option<String>,
-    /// Only hits heard so: `both`, `trigger` or `mic`.
-    heard: Option<String>,
-    offset: Option<u32>,
-    limit: Option<u32>,
-}
-
-#[derive(Facet)]
-struct ListPage {
-    total: u32,
-    offset: u32,
-    hits: Vec<HitRow>,
 }
 
 #[derive(Facet)]
@@ -3649,43 +3632,14 @@ fn register_reads(list: &ActionList) -> Result<(), architect::action::ActionErro
         renewed.checkpoint = net.name();
         Ok::<_, String>(renewed)
     })?;
-    list.register(&LIST, Effect::ReadOnly, |a: ListArg| {
-        let (daw, project) = song()?;
-        let (from, to) = (
-            a.from.unwrap_or(f64::NEG_INFINITY),
-            a.to.unwrap_or(f64::INFINITY),
-        );
-        let all: Vec<HitRow> = hits(daw, &project, &a.pieces)
-            .into_iter()
-            .filter(|h| h.at() >= from && h.at() <= to)
-            .filter(|h| {
-                a.flag
-                    .as_ref()
-                    .is_none_or(|f| h.flags.iter().any(|x| x.eq_ignore_ascii_case(f)))
-            })
-            .filter(|h| {
-                a.origin
-                    .as_ref()
-                    .is_none_or(|o| h.origin.eq_ignore_ascii_case(o))
-            })
-            .filter(|h| {
-                a.heard
-                    .as_ref()
-                    .is_none_or(|w| h.heard.eq_ignore_ascii_case(w))
-            })
-            .collect();
-        let offset = a.offset.unwrap_or(0);
-        let limit = a.limit.unwrap_or(100).min(500);
-        Ok(ListPage {
-            total: u32::try_from(all.len()).unwrap_or(u32::MAX),
-            offset,
-            hits: all
-                .into_iter()
-                .skip(usize::try_from(offset).unwrap_or(usize::MAX))
-                .take(usize::try_from(limit).unwrap_or(usize::MAX))
-                .collect(),
-        })
-    })?;
+    // Objects or a compact table: a raw answer, so through `register_with`.
+    list.register_with(
+        &LIST,
+        Effect::ReadOnly,
+        |_: &architect::action::ActionCaller, a: crate::edit_reads::ListArg| {
+            crate::edit_reads::hits_list(&a)
+        },
+    )?;
     list.register(&EXPLAIN, Effect::ReadOnly, |a: ExplainArg| {
         let (daw, project) = song()?;
         let (piece, time) = match (&a.id, &a.piece, a.time) {
@@ -3726,7 +3680,7 @@ fn register_zones(list: &ActionList) -> Result<(), architect::action::ActionErro
     })?;
     list.register(&ZONES_LIST, Effect::ReadOnly, |(): ()| {
         let (daw, project) = song()?;
-        Ok(zones(daw, &project))
+        Ok(crate::edit_reads::zones_out(zones(daw, &project)))
     })?;
     list.register(&ZONES_ADD, Effect::Mutating, |a: ZoneAddArg| {
         let (daw, project) = song()?;

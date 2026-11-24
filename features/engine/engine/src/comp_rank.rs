@@ -161,7 +161,7 @@ pub fn written(
             (piece.to_owned(), times)
         })
         .collect();
-    let map = crate::drum_reference::learn_map(&notes, &named, 0.030);
+    let map = crate::drum_map_set::map_for(daw, project, &notes, &named, 0.030);
     notes
         .iter()
         .filter(|n| n.time >= from && n.time < to)
