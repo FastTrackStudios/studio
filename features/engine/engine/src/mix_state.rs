@@ -415,7 +415,14 @@ fn state(daw: &Standalone, project: &ProjectContext, a: &StateArg) -> Result<Val
             let receives: Vec<Value> =
                 Routing::receives(daw, project.clone(), TrackRef::Guid(t.guid.clone()))
                     .iter()
-                    .map(|r| route_json(r, &path_of(&r.source_track_guid)))
+                    .map(|r| {
+                        let other = if r.source_track_guid == t.guid {
+                            r.dest_track_guid.as_deref().unwrap_or_default()
+                        } else {
+                            r.source_track_guid.as_str()
+                        };
+                        route_json(r, &path_of(other))
+                    })
                     .collect();
             json!({
                 "path": p,
