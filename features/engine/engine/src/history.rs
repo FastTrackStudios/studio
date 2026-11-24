@@ -25,18 +25,34 @@ use session_format::store::{MomentKind, MomentRef};
 thread_local! {
     /// The actions running on this thread, the innermost last: what a step
     /// finished here was made by.
-    static RUNNING: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    /// Each with its call's run number (`history_marks::next_run`).
+    static RUNNING: RefCell<Vec<(String, u64)>> = const { RefCell::new(Vec::new()) };
 }
 
 /// The action running on this thread, the innermost, if any: read where a
 /// step finishes, so the history says what made it.
 #[must_use]
 pub fn running_action() -> Option<String> {
-    RUNNING.with(|r| r.borrow().last().cloned())
+    RUNNING.with(|r| r.borrow().last().map(|(id, _)| id.clone()))
 }
 
-/// An action's id, kept on its span.
-struct ActionId(String);
+/// The run number of the outermost action running on this thread, if any:
+/// every step made under one call (an action it runs included) is that
+/// call's, and the recorder never makes two calls' steps one commit.
+#[must_use]
+pub fn running_run() -> Option<u64> {
+    RUNNING.with(|r| r.borrow().first().map(|(_, run)| *run))
+}
+
+/// Whether the action running on this thread was run by another (an
+/// action's own `run_json`): its steps are its caller's.
+#[must_use]
+pub fn nested() -> bool {
+    RUNNING.with(|r| r.borrow().len() > 1)
+}
+
+/// An action's id and its call's run number, kept on its span.
+struct ActionId(String, u64);
 
 /// Reads the Action List's span (`action`, its `action.id`) as actions
 /// run, so [`running_action`] can say which one a step was made by. Added
@@ -77,25 +93,26 @@ where
         let mut found = FindId::default();
         attrs.record(&mut found);
         if let (Some(action), Some(span)) = (found.0, ctx.span(id)) {
-            span.extensions_mut().insert(ActionId(action));
+            span.extensions_mut()
+                .insert(ActionId(action, crate::history_marks::next_run()));
         }
     }
 
     fn on_enter(&self, id: &tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
         if let Some(span) = ctx.span(id)
-            && let Some(ActionId(action)) = span.extensions().get::<ActionId>()
+            && let Some(ActionId(action, run)) = span.extensions().get::<ActionId>()
         {
-            RUNNING.with(|r| r.borrow_mut().push(action.clone()));
+            RUNNING.with(|r| r.borrow_mut().push((action.clone(), *run)));
         }
     }
 
     fn on_exit(&self, id: &tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
         if let Some(span) = ctx.span(id)
-            && let Some(ActionId(action)) = span.extensions().get::<ActionId>()
+            && let Some(ActionId(action, run)) = span.extensions().get::<ActionId>()
         {
             RUNNING.with(|r| {
                 let mut running = r.borrow_mut();
-                if running.last() == Some(action) {
+                if running.last().is_some_and(|(a, n)| a == action && n == run) {
                     running.pop();
                 }
             });
@@ -207,13 +224,24 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             (None, Some(name)) => MomentRef::Mark(name),
             _ => return Err("say one of `step` or `mark`".to_owned()),
         };
+        let traced = crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!(
+            "SESSION_HISTORY_RESTORE"
+        ));
         let guid = open_song()?;
-        let moment = crate::project_file::restore(&guid, which)?;
+        let stage = tracing::info_span!("history.restore").entered();
+        let moment = crate::project_file::restore(&guid, which);
+        drop(stage);
+        traced.outcome(&moment);
+        let moment = moment?;
         let (daw, project) = crate::actions::song()?;
+        let stage = tracing::info_span!("history.follow").entered();
         crate::actions::samples_follow(daw, &project, crate::hits_midi::Mode::Follow);
+        drop(stage);
+        let stage = tracing::info_span!("history.resync").entered();
         crate::changes::announce(crate::changes::Change::Marks);
         crate::song_model::request_resync();
         crate::actions::list().changed("items", "history");
+        drop(stage);
         Ok(format!(
             "went back to {} ({}), as a step of its own: SESSION_UNDO takes it back",
             moment.label,

@@ -36,7 +36,7 @@ static QUANTIZE: ActionMeta = crate::actions::meta(
     "EDIT_QUANTIZE",
     "edit_quantize",
     "Quantize the selection",
-    "Quantize what is selected — the arrangement's selection, or the call's `tracks` (names, paths or guids; a folder stands for what is under it), `spans` / `from`/`to` (seconds; none: the whole song) or `sections` — with the profile its tracks are edited with. Drums: the whole kit, every mic of every piece cut as one from its hit markers (HITS_DETECT first), over the selected stretches, as QUANTIZE does; the settings are QUANTIZE's (`grid`, `target`, `strength`, `fills`, `lead`, …; the sticky ones when left out), with `lock`, `dry_run` and `brief`. Says the profile, what it acted on and QUANTIZE's answer, its check included.",
+    "Quantize what is selected — the arrangement's selection, or the call's `tracks` (names, paths or guids; a folder stands for what is under it), `spans` / `from`/`to` (seconds; none: the whole song) or `sections` — with the profile its tracks are edited with. Drums: the whole kit, every mic of every piece cut as one from its hit markers (HITS_DETECT first), over the selected stretches, as QUANTIZE does; the settings are QUANTIZE's (`grid`, `target`, `strength`, `fills`, `lead`, …; the sticky ones when left out), with `lock`, `dry_run` and `brief`. Says the profile, what it acted on and QUANTIZE's answer, its check included. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Edit",
     "",
 );
@@ -45,7 +45,7 @@ static REVERT: ActionMeta = crate::actions::meta(
     "EDIT_REVERT",
     "edit_revert",
     "Put the selection back as played",
-    "Put what is selected back as recorded — the selection, or the call's `tracks`, `spans` / `from`/`to` or `sections` — with the profile its tracks are edited with. Drums: every mic of the kit over each stretch made what it was recorded as (its EDIT lanes made its COMP lanes again there: every slip, stretch and hand placement gone), the hit markers kept. `keep_manual`: the hits a hand placed (HITS_PLACE) put back where it placed them — only the automated edit taken off; otherwise they are forgotten there. `hold` (on unless false): a no-quantize zone over it, so a later quantize leaves it. A stretch of time is needed: the whole song is not put back by accident. What a key runs over a selection (Alt+Q, Backspace): no checkpoint is forked — undo covers it, and a keypress never waits on a save.",
+    "Put what is selected back as recorded — the selection, or the call's `tracks`, `spans` / `from`/`to` or `sections` — with the profile its tracks are edited with. Drums: every mic of the kit over each stretch made what it was recorded as (its EDIT lanes made its COMP lanes again there: every slip, stretch and hand placement gone), the hit markers kept. `keep_manual`: the hits a hand placed (HITS_PLACE) put back where it placed them — only the automated edit taken off; otherwise they are forgotten there. `hold` (off unless true): a no-quantize zone over it, so a later quantize leaves it — none is laid unless asked (`held` says how many were). Returns at once: put back on the engine directly (`path: direct`), every mic in one step; only a kit without COMP and EDIT lanes waits on the window (`path: window`). `mark`: a mark of that name set on the song first, a restore point for SESSION_HISTORY_RESTORE. A stretch of time is needed: the whole song is not put back by accident. What a key runs over a selection (Alt+Q, Backspace): no checkpoint is forked — undo covers it, and a keypress never waits on a save.",
     "Edit",
     "",
 );
@@ -216,6 +216,8 @@ struct QuantizeArg {
     lock: Option<String>,
     dry_run: Option<bool>,
     brief: Option<bool>,
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
 }
 
 #[derive(Facet)]
@@ -228,12 +230,15 @@ struct Quantized {
 struct RevertArg {
     #[facet(flatten, default)]
     on: On,
-    /// A no-quantize zone over it, so a later quantize leaves it (on
-    /// unless false).
+    /// A no-quantize zone over it, so a later quantize leaves it (off
+    /// unless true: a zone nobody asked for hid the stretch from every
+    /// quantize after).
     hold: Option<bool>,
     /// The hits a hand placed (`HITS_PLACE`) put back where it placed
     /// them: only the automated edit taken off (off unless true).
     keep_manual: Option<bool>,
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
 }
 
 /// What putting a stretch back did.
@@ -246,6 +251,13 @@ struct Reverted {
     /// Hand placements put back (`keep_manual`), and forgotten.
     placed_back: u32,
     forgotten: u32,
+    /// The no-quantize zones laid over it (`hold`): none unless asked.
+    held: u32,
+    /// `direct`: put back on the engine at once; `window`: queued for the
+    /// window that follows it (a kit without COMP and EDIT lanes).
+    path: String,
+    /// The mark set first (`mark`).
+    mark: Option<String>,
 }
 
 #[derive(Facet)]
@@ -338,6 +350,7 @@ fn quantize(a: QuantizeArg) -> Result<Quantized, String> {
                 lock: a.lock,
                 brief: a.brief,
                 plan,
+                mark: a.mark,
             })?;
             Ok(Quantized {
                 on: on.said(),
@@ -349,6 +362,17 @@ fn quantize(a: QuantizeArg) -> Result<Quantized, String> {
 
 /// `EDIT_REVERT`: see its description.
 fn revert(a: RevertArg) -> Result<Reverted, String> {
+    let traced = crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("EDIT_REVERT"));
+    let done = revert_traced(a, &traced);
+    traced.outcome(&done);
+    done
+}
+
+fn revert_traced(a: RevertArg, traced: &crate::edit_trace::Traced) -> Result<Reverted, String> {
+    let begun = crate::history_marks::begin(REVERT.id, a.mark.as_deref())?;
+    if let Some(mark) = &begun.mark {
+        traced.record("edit.mark", mark.as_str());
+    }
     let (daw, project) = crate::actions::song()?;
     let step = tracing::info_span!("edit.read").entered();
     let on = target(daw, &project, &a.on)?;
@@ -368,6 +392,7 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                         .to_owned(),
                 );
             }
+            traced.count("edit.spans", spans.len());
             let keep_manual = a.keep_manual.unwrap_or(false);
             let placed = crate::hits::placed(daw, &project);
             let inside = |t: f64| spans.iter().any(|&(from, to)| t >= from && t < to);
@@ -386,36 +411,62 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                 .filter(|h| inside(h.time) && h.now.is_some())
                 .map(|h| h.id)
                 .collect();
+            traced.count("edit.hits", playing.len());
+            let song = crate::song::Song::current()?;
+            let direct = crate::hit_place::ready(&song);
             drop(step);
             // Alt+Q / Backspace over a selection: undo covers it, no
             // checkpoint (no save on a key).
             let _key = crate::safety_net::on_a_key();
             let mut restored = true;
-            for &(from, to) in &spans {
-                let step = tracing::info_span!("edit.slip").entered();
-                let us = |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
-                let ticket = crate::engine::ticket();
-                // The window carries the restore out; with none following
-                // the engine there is nothing to wait for.
-                let asked = crate::window_queue::ask(crate::window_queue::Asked::RestoreDrums {
-                    from_us: us(from),
-                    to_us: us(to),
-                    ticket,
-                });
-                if !asked {
-                    return Err(
-                        "no window follows the engine to put the drums back in: open the song in Session first"
-                            .to_owned(),
-                    );
-                }
-                drop(step);
-                let step = tracing::info_span!("edit.land").entered();
-                crate::actions::landed(ticket);
+            if direct {
+                // On the engine, every stretch in one batch: nothing queued
+                // for a window, nothing waited on.
+                let step = tracing::info_span!("edit.restore").entered();
+                let settings = crate::drum_settings::current();
+                let made = crate::edit_revert::restore(&song, &spans, settings.xfade_ms / 1_000.0)?;
+                traced.count("edit.tracks", made.tracks);
+                traced.count("edit.slices", made.cleared);
+                traced.count("edit.items_written", made.items_written);
+                traced.count("edit.crossfades", made.crossfades);
+                crate::song_model::request_resync_items();
                 drop(step);
                 let step = tracing::info_span!("edit.check").entered();
-                restored &= as_recorded(daw, &project, (from, to), &playing);
+                for &span in &spans {
+                    restored &= as_recorded(daw, &project, span, &playing);
+                }
                 drop(step);
-                if a.hold.unwrap_or(true) {
+            } else {
+                for &(from, to) in &spans {
+                    let step = tracing::info_span!("edit.window_queue").entered();
+                    let us =
+                        |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
+                    let ticket = crate::engine::ticket();
+                    // The window carries the restore out; with none following
+                    // the engine there is nothing to wait for.
+                    let asked =
+                        crate::window_queue::ask(crate::window_queue::Asked::RestoreDrums {
+                            from_us: us(from),
+                            to_us: us(to),
+                            ticket,
+                        });
+                    if !asked {
+                        return Err(
+                            "the kit has no COMP and EDIT lanes to put back from (DRUMS_EDIT_LANES), and no window follows the engine to do it"
+                                .to_owned(),
+                        );
+                    }
+                    drop(step);
+                    crate::actions::landed(ticket);
+                    let step = tracing::info_span!("edit.check").entered();
+                    restored &= as_recorded(daw, &project, (from, to), &playing);
+                    drop(step);
+                }
+            }
+            let mut held = 0_u32;
+            if crate::edit_revert::holds(a.hold) {
+                let step = tracing::info_span!("edit.hold").entered();
+                for &(from, to) in &spans {
                     crate::hits::add_zone(
                         daw,
                         &project,
@@ -426,8 +477,11 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                             "put back as played: edit by hand",
                         ),
                     )?;
+                    held = held.saturating_add(1);
                 }
+                drop(step);
             }
+            traced.count("edit.held", usize::try_from(held).unwrap_or(usize::MAX));
             let step = tracing::info_span!("edit.place_back").entered();
             let (mut placed_back, mut forgotten) = (0_u32, 0_u32);
             if keep_manual {
@@ -452,6 +506,9 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                 restored,
                 placed_back,
                 forgotten,
+                held,
+                path: if direct { "direct" } else { "window" }.to_owned(),
+                mark: begun.mark,
             })
         }
     }

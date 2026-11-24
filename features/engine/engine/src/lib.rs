@@ -119,8 +119,20 @@ pub mod drum_reference;
 pub mod drum_samples;
 pub use session_engine_client::drum_settings;
 #[cfg(feature = "native")]
+pub mod backup;
+#[cfg(feature = "native")]
+pub mod drum_map_set;
+#[cfg(feature = "native")]
 pub mod edit_actions;
+#[cfg(feature = "native")]
+pub mod edit_reads;
+#[cfg(feature = "native")]
+pub mod edit_revert;
+#[cfg(feature = "native")]
+pub mod edit_trace;
 pub mod fundamental;
+#[cfg(feature = "native")]
+pub mod history_marks;
 pub use editing::groove;
 #[cfg(any(feature = "native", feature = "web"))]
 pub use session_engine_client::arrange_actions;

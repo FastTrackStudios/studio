@@ -328,7 +328,7 @@ static SEAMS: architect::action::ActionMeta = crate::actions::meta(
     "COMP_SEAMS",
     "comp_seams",
     "Comp seams where they are heard least",
-    "Every seam of the kit's comp — where it switches from one take to another — and where it is heard least: just before an attack of any take within 0.4 s (never past the seams either side), the one that covers the switch best, every mic of the kit compared as the take before and the take after play there (how much the two disagree across the cut and how much the wash under it jumps, over how loud what follows is). Per seam: `at`, the takes `before`/`after`, `heard` there (about 1: as loud as what covers it), `best_at` and `heard_best`, and `moves`. Unless `dry_run`, each that is better elsewhere is moved there — the stretch between comped from the take that now plays it and the kit's edit made again over it — as one undo step. `from`/`to` (seconds) narrow it. Unless a dry run, sets a mark on the song first, in its history (`Before COMP_SEAMS <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made.",
+    "Every seam of the kit's comp — where it switches from one take to another — and where it is heard least: just before an attack of any take within 0.4 s (never past the seams either side), the one that covers the switch best, every mic of the kit compared as the take before and the take after play there (how much the two disagree across the cut and how much the wash under it jumps, over how loud what follows is). Per seam: `at`, the takes `before`/`after`, `heard` there (about 1: as loud as what covers it), `best_at` and `heard_best`, and `moves`. Unless `dry_run`, each that is better elsewhere is moved there — the stretch between comped from the take that now plays it and the kit's edit made again over it — as one undo step. `from`/`to` (seconds) narrow it. Unless a dry run, sets a mark on the song first, in its history (`Before COMP_SEAMS <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Comp",
     "",
 );
@@ -339,6 +339,8 @@ struct SeamsArg {
     from: Option<f64>,
     to: Option<f64>,
     dry_run: Option<bool>,
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
 }
 
 /// One seam.
@@ -369,21 +371,42 @@ pub fn register(
         &SEAMS,
         architect::action::Effect::Mutating,
         |a: SeamsArg| {
+            let traced = crate::edit_trace::edit_span!("COMP_SEAMS");
+            let mark = a.mark.clone();
+            crate::edit_trace::run_edit(traced, (SEAMS.id, mark.as_deref()), |traced| {
+                seams_traced(&a, traced)
+            })
+        },
+    )?;
+    Ok(())
+}
+
+/// `COMP_SEAMS`, under its span.
+fn seams_traced(a: &SeamsArg, traced: &crate::edit_trace::Traced) -> Result<SeamsOut, String> {
+    {
+        {
             let (daw, project) = crate::actions::song()?;
             let span = (
                 a.from.unwrap_or(f64::NEG_INFINITY),
                 a.to.unwrap_or(f64::INFINITY),
             );
+            let stage = tracing::info_span!("seams.survey").entered();
             let seams = survey(daw, &project, span);
+            drop(stage);
+            traced.count("edit.spans", seams.len());
+            let stage = tracing::info_span!("edit.checkpoint").entered();
             let net = crate::safety_net::before(
                 SEAMS.id,
                 crate::safety_net::Reach::song_unless(a.dry_run.unwrap_or(false)),
             )?;
+            drop(stage);
             let moved = if a.dry_run.unwrap_or(false) {
                 0
             } else {
+                let _stage = crate::edit_trace::stage_span!("seams.apply").entered();
                 apply(daw, &project, &seams)?
             };
+            traced.count("edit.moved", moved);
             let round = |v: f64| (v * 1_000.0).round() / 1_000.0;
             let name =
                 |v: &crate::hits::TakeVersion| v.lane.clone().unwrap_or_else(|| v.pass.clone());
@@ -403,7 +426,6 @@ pub fn register(
                 moved: u32::try_from(moved).unwrap_or(u32::MAX),
                 checkpoint: net.name(),
             })
-        },
-    )?;
-    Ok(())
+        }
+    }
 }

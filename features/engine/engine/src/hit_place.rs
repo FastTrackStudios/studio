@@ -88,7 +88,19 @@ impl Slice {
 /// # Errors
 /// When the kit has no mic with both lanes, a hit is not on an EDIT
 /// slice, or the engine refuses an edit.
-#[tracing::instrument(name = "hits.place", skip_all, fields(hits.moves = moves.len()))]
+#[tracing::instrument(
+    name = "hits.place",
+    skip_all,
+    fields(
+        hits.moves = moves.len(),
+        edit.moved = tracing::field::Empty,
+        edit.hits = tracing::field::Empty,
+        edit.tracks = tracing::field::Empty,
+        edit.slices = tracing::field::Empty,
+        edit.crossfades = tracing::field::Empty,
+        edit.items_written = tracing::field::Empty,
+    )
+)]
 pub fn place(
     song: &crate::song::Song,
     moves: &[(f64, f64)],
@@ -119,7 +131,10 @@ pub fn place(
     if moved.is_empty() {
         return Ok(0);
     }
+    let call = tracing::Span::current();
+    call.record("edit.moved", moved.len());
     let mics = mics(song);
+    call.record("edit.tracks", mics.len());
     drop(step);
     let step = tracing::info_span!("hits.place.hits").entered();
     if mics.is_empty() {
@@ -248,6 +263,9 @@ pub fn place(
     let outside = (recorded(from.checked_sub(1)), recorded(Some(to + 1)));
     // The chosen `daw.edit` algorithm places them (an extension: rhythm's,
     // or another's); the engine has no placement of its own.
+    call.record("edit.hits", placed.len());
+    let provider =
+        tracing::info_span!("hits.place.provider", edit.slices = tracing::field::Empty).entered();
     let pieces = crate::algorithms::place(&daw_edit::PlaceRequest {
         hits: placed.clone(),
         span,
@@ -255,6 +273,9 @@ pub fn place(
         bounds: outside,
     })?
     .pieces;
+    provider.record("edit.slices", pieces.len());
+    drop(provider);
+    let render = tracing::info_span!("hits.place.render").entered();
     if let Some(bad) = pieces.iter().find(|p| p.end <= p.start) {
         return Err(format!(
             "a piece would end before it starts ({bad:?}) placing {:?} over {:.3}..{:.3}",
@@ -267,11 +288,26 @@ pub fn place(
         .iter()
         .flat_map(|lanes| render_ops(lanes, &pieces, span, joins))
         .collect();
+    drop(render);
     drop(step);
-    let step = tracing::info_span!("hits.place.apply").entered();
-
+    // Every seam between two pieces is crossfaded, on every mic.
+    call.record("edit.slices", pieces.len().saturating_mul(kit.len()));
+    call.record(
+        "edit.crossfades",
+        pieces.len().saturating_sub(1).saturating_mul(kit.len()),
+    );
+    call.record("edit.items_written", ops.len());
+    let step =
+        tracing::info_span!("hits.place.apply", edit.lock_ms = tracing::field::Empty).entered();
+    let lock_at = crate::edit_trace::lock_us();
     song.undo_step("Place a drum hit", |song| song.apply(&ops))
         .map_err(|e| e.to_string())?;
+    step.record(
+        "edit.lock_ms",
+        num_traits::ToPrimitive::to_f64(&crate::edit_trace::lock_us().saturating_sub(lock_at))
+            .unwrap_or(0.0)
+            / 1e3,
+    );
     drop(step);
     Ok(ops.len())
 }

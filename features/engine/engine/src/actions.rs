@@ -649,6 +649,8 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::trigger_from_mics::register(list)?;
     crate::safety_net::register(list)?;
     crate::history::register(list)?;
+    crate::edit_reads::register(list)?;
+    crate::backup::register(list)?;
     crate::comp_rank::register(list)?;
     crate::comp_song::register(list)?;
     crate::poi::register(list)?;
@@ -663,7 +665,7 @@ static REFERENCE_MAP: ActionMeta = meta(
     "DRUMS_REFERENCE_MAP",
     "drum_reference_map",
     "Drum MIDI map",
-    "The song's drum MIDI (the part as written) mapped to the kit: each note number, how many notes it has, and the piece whose trigger hits its notes land on — learned from the recording, since a drum library's map is its own. Unmapped: a cymbal, an articulation, a piece with no trigger.",
+    "The song's drum MIDI (the part as written) mapped to the kit: each note number, how many notes it has, and the piece whose trigger hits its notes land on — learned from the recording, since a drum library's map is its own. Unmapped: a cymbal, an articulation, a piece with no trigger. `set` sets pieces by hand, a note number each (`{\"Kick\": 24, \"Snare\": 26, \"Tom 1\": 48}`; 0 takes one out), kept with the song on the drum MIDI track: a piece set is on that note alone (agreement 1), any other note the learning gave it unmapped — and every read of the MIDI (QUANTIZE's targets, DRUMS_REFERENCE, DRUMS_BARS, COMP_CANDIDATES) goes through it. `clear` lets go of the hand's map first. Says the map as it then is.",
     "Drums",
     "",
 );
@@ -684,11 +686,16 @@ static COMPARE: ActionMeta = meta(
     "",
 );
 
-/// Which drum MIDI.
+/// Which drum MIDI, and any of its map set by hand.
 #[derive(Facet)]
 struct MapArg {
     /// The drum MIDI track; found by name (`DRUM MIDI`) when left out.
     track: Option<String>,
+    /// Pieces set by hand to a note number each (`{"Kick": 24}`; 0 takes
+    /// one out of the hand's map), kept with the song.
+    set: Option<std::collections::HashMap<String, i64>>,
+    /// The hand's map let go of first (back to the learned one).
+    clear: Option<bool>,
 }
 
 /// One note number's place.
@@ -820,7 +827,7 @@ fn reference(
         .iter()
         .map(|(n, _, h)| (n.clone(), h.clone()))
         .collect();
-    let map = crate::drum_reference::learn_map(&notes, &named, NOTE_WINDOW);
+    let map = crate::drum_map_set::map_for(daw, project, &notes, &named, NOTE_WINDOW);
     Ok((notes, pieces, map))
 }
 
@@ -997,7 +1004,7 @@ fn register_review(list: &ActionList) -> Result<(), architect::action::ActionErr
             .iter()
             .map(|(n, _, h)| (n.clone(), h.iter().map(|h| h.time).collect()))
             .collect();
-        let map = crate::drum_reference::learn_map(&notes, &named, NOTE_WINDOW);
+        let map = crate::drum_map_set::map_for(daw, &project, &notes, &named, NOTE_WINDOW);
         let of_piece = |name: &str| piece_notes(&notes, &map, Some(name));
         let all = piece_notes(&notes, &map, None);
         let nearest = nearest_of;
@@ -1187,7 +1194,7 @@ static EDIT_LANES: ActionMeta = meta(
     "DRUMS_EDIT_LANES",
     "drums_edit_lanes",
     "Comp and edit lanes",
-    "Set the kit up to be edited, every drum track alike: its comping lane (the comp that plays) named COMP, and a new lane EDIT holding a copy of it, playing — so edits land on EDIT and COMP stays the comp they were made from (DRUMS_PLAY_LANE to hear either). The takes and their comp areas are untouched: EDIT is added after the last lane. A track already set up is left — unless `reset`, which starts the edit over: each EDIT lane's slices dropped and its COMP copied onto it again (one undo step). `dry_run` says what it would do. Sets a mark on the song first, in its history (`Before DRUMS_EDIT_LANES <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made.",
+    "Set the kit up to be edited, every drum track alike: its comping lane (the comp that plays) named COMP, and a new lane EDIT holding a copy of it, playing — so edits land on EDIT and COMP stays the comp they were made from (DRUMS_PLAY_LANE to hear either). The takes and their comp areas are untouched: EDIT is added after the last lane. A track already set up is left — unless `reset`, which starts the edit over: each EDIT lane's slices dropped and its COMP copied onto it again (one undo step). `dry_run` says what it would do. Sets a mark on the song first, in its history (`Before DRUMS_EDIT_LANES <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -1203,6 +1210,8 @@ static PLAY_LANE: ActionMeta = meta(
 /// Whether to only say.
 #[derive(Facet)]
 struct LanesArg {
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
     dry_run: Option<bool>,
     /// Start the edit over: each EDIT lane's slices dropped and its COMP
     /// copied onto it again.
@@ -1936,6 +1945,18 @@ fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError
             .collect::<Vec<_>>())
     })?;
     list.register(&SAVE, Effect::Mutating, |a: SaveArg| {
+        let traced =
+            crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("SESSION_SAVE"));
+        let out = save(a);
+        traced.outcome(&out);
+        out
+    })?;
+    register_check_saved(list)
+}
+
+/// `SESSION_SAVE`: see its description.
+fn save(a: SaveArg) -> Result<String, String> {
+    {
         let (daw, project) = song()?;
         let ProjectContext::Project(guid) = &project else {
             return Err("no song open".to_owned());
@@ -1961,7 +1982,9 @@ fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError
             }
         };
         let own = a.to.is_none() || untitled;
+        let stage = tracing::info_span!("save.write").entered();
         let at = crate::session_file::save_session(daw, guid, &dir)?;
+        drop(stage);
         if untitled {
             crate::project_new::named(daw, guid, &dir, &at);
         }
@@ -1971,7 +1994,11 @@ fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError
             crate::projects::mark_saved(daw, guid);
         }
         Ok(format!("saved to {}", at.display()))
-    })?;
+    }
+}
+
+/// `SESSION_CHECK_SAVED`.
+fn register_check_saved(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&CHECK_SAVED, Effect::ReadOnly, |a: CheckSavedArg| {
         let (daw, project) = song()?;
         let ProjectContext::Project(guid) = &project else {
@@ -1991,7 +2018,7 @@ static REMOVE: ActionMeta = meta(
     "DRUMS_REMOVE",
     "drums_remove",
     "Remove from the drums",
-    "Take `from`..`to` (seconds) out of the kit's edited takes (its EDIT lane, once it has one): cut at both ends, the stretch between deleted, a 2 ms fade on each edge. `tracks` (paths or GUIDs) names which — a Trig, to take a stray or doubled trigger spike out so it fires no gate and no sample; left out, the whole kit, for a hit that should not be there at all. One undo step. Look first: AUDIO_PEAKS on the Trig and its mics, and the drum MIDI (DRUMS_REFERENCE). Sets a mark on the song first, in its history (`Before DRUMS_REMOVE <date time>`, named in the result's `checkpoint`), and is refused if one cannot be made.",
+    "Take `from`..`to` (seconds) out of the kit's edited takes (its EDIT lane, once it has one): cut at both ends, the stretch between deleted, a 2 ms fade on each edge. `tracks` (paths or GUIDs) names which — a Trig, to take a stray or doubled trigger spike out so it fires no gate and no sample; left out, the whole kit, for a hit that should not be there at all. One undo step. Look first: AUDIO_PEAKS on the Trig and its mics, and the drum MIDI (DRUMS_REFERENCE). Sets a mark on the song first, in its history (`Before DRUMS_REMOVE <date time>`, named in the result's `checkpoint`), and is refused if one cannot be made. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -2008,6 +2035,8 @@ struct RemoveArg {
     from: f64,
     to: f64,
     tracks: Option<Vec<String>>,
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
 }
 
 fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionError> {
@@ -2018,6 +2047,18 @@ fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionErr
         if a.to - a.from > 2.0 {
             return Err("more than two seconds: this takes out a hit, not a passage".to_owned());
         }
+        let span = crate::edit_trace::edit_span!("DRUMS_REMOVE");
+        let mark = a.mark.clone();
+        crate::edit_trace::run_edit(span, (REMOVE.id, mark.as_deref()), |traced| {
+            remove_range(a, traced)
+        })
+    })?;
+    Ok(())
+}
+
+/// `DRUMS_REMOVE`, under its span: queued for the window (not waited on).
+fn remove_range(a: RemoveArg, traced: &crate::edit_trace::Traced) -> Result<Removed, String> {
+    {
         let (daw, project) = song()?;
         let tracks = a
             .tracks
@@ -2025,18 +2066,22 @@ fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionErr
             .flatten()
             .map(|t| resolve(daw, &project, t))
             .collect::<Result<Vec<String>, String>>()?;
+        traced.count("edit.tracks", tracks.len());
+        let stage = tracing::info_span!("edit.checkpoint").entered();
         let net = crate::safety_net::before(REMOVE.id, crate::safety_net::Reach::Song)?;
+        drop(stage);
+        let stage = tracing::info_span!("edit.window_queue").entered();
         let us = |s: f64| num_traits::ToPrimitive::to_i64(&(s * 1_000_000.0).round()).unwrap_or(0);
         crate::window_queue::ask(crate::window_queue::Asked::RemoveRange {
             tracks,
             from_us: us(a.from),
             to_us: us(a.to),
         });
+        drop(stage);
         Ok(Removed {
             checkpoint: net.name(),
         })
-    })?;
-    Ok(())
+    }
 }
 
 #[cfg(feature = "signal")]
@@ -2325,25 +2370,35 @@ fn register_items(list: &ActionList) -> Result<(), architect::action::ActionErro
 
 fn register_lanes(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&EDIT_LANES, Effect::Mutating, |a: LanesArg| {
-        let (daw, project) = song()?;
-        let dry = a.dry_run.unwrap_or(false);
-        let net = crate::safety_net::before(
-            EDIT_LANES.id,
-            if dry {
-                crate::safety_net::Reach::Nothing
+        let span = crate::edit_trace::edit_span!("DRUMS_EDIT_LANES");
+        let mark = a.mark.clone();
+        crate::edit_trace::run_edit(span, (EDIT_LANES.id, mark.as_deref()), |traced| {
+            let (daw, project) = song()?;
+            let dry = a.dry_run.unwrap_or(false);
+            traced.record("edit.dry_run", dry);
+            let stage = tracing::info_span!("edit.checkpoint").entered();
+            let net = crate::safety_net::before(
+                EDIT_LANES.id,
+                if dry {
+                    crate::safety_net::Reach::Nothing
+                } else {
+                    crate::safety_net::Reach::Song
+                },
+            )?;
+            drop(stage);
+            let stage = crate::edit_trace::stage_span!("edit.lanes").entered();
+            let tracks = if a.reset == Some(true) {
+                crate::drum_lanes::reset_edit(daw, &project, dry)?
             } else {
-                crate::safety_net::Reach::Song
-            },
-        )?;
-        let tracks = if a.reset == Some(true) {
-            crate::drum_lanes::reset_edit(daw, &project, dry)?
-        } else {
-            crate::drum_lanes::set_up(daw, &project, dry)?
-        };
-        Ok(LanesOut {
-            tracks,
-            applied: !dry,
-            checkpoint: net.name(),
+                crate::drum_lanes::set_up(daw, &project, dry)?
+            };
+            drop(stage);
+            traced.count("edit.tracks", tracks.len());
+            Ok(LanesOut {
+                tracks,
+                applied: !dry,
+                checkpoint: net.name(),
+            })
         })
     })?;
     list.register(&PLAY_LANE, Effect::Mutating, |a: PlayLaneArg| {
@@ -2354,9 +2409,24 @@ fn register_lanes(list: &ActionList) -> Result<(), architect::action::ActionErro
 }
 
 fn register_reference_map(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&REFERENCE_MAP, Effect::ReadOnly, |a: MapArg| {
+    list.register(&REFERENCE_MAP, Effect::Mutating, |a: MapArg| {
+        let traced =
+            crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("DRUMS_REFERENCE_MAP"));
         let (daw, project) = song()?;
+        if a.set.is_some() || a.clear.unwrap_or(false) {
+            let step = tracing::info_span!("map.set").entered();
+            let hand = crate::drum_map_set::merged(
+                &crate::drum_map_set::read(daw, &project),
+                &a.set.clone().unwrap_or_default(),
+                a.clear.unwrap_or(false),
+            );
+            crate::drum_map_set::write(daw, &project, &hand)?;
+            traced.count("edit.pieces", hand.pieces.len());
+            drop(step);
+        }
+        let step = tracing::info_span!("map.read").entered();
         let (_, _, map) = reference(daw, &project, a.track.as_deref())?;
+        drop(step);
         Ok(map
             .into_iter()
             .map(|m| MapRow {
@@ -3013,20 +3083,35 @@ struct Prepared {
 
 impl Prepared {
     fn read(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Self {
+        let _prepare = tracing::info_span!("edit.prepare").entered();
+        let stage = crate::edit_trace::stage_span!("prepare.kit").entered();
         let kit = kit(daw, project);
+        crate::edit_trace::count_here("edit.hits", kit.iter().map(|(_, _, h)| h.len()).sum());
+        drop(stage);
         let written = crate::drum_reference::find_track(daw, project).map(|midi| {
+            let stage = tracing::info_span!("prepare.written_midi").entered();
             let notes = crate::drum_reference::notes(daw, project, &midi);
+            drop(stage);
             let named: Vec<(String, Vec<f64>)> = kit
                 .iter()
                 .map(|(n, _, h)| (n.clone(), h.iter().map(|h| h.time).collect()))
                 .collect();
-            let map = crate::drum_reference::learn_map(&notes, &named, NOTE_WINDOW);
+            let stage = tracing::info_span!("prepare.learn_map").entered();
+            let map = crate::drum_map_set::map_for(daw, project, &notes, &named, NOTE_WINDOW);
+            drop(stage);
             (notes, map)
         });
+        let stage = tracing::info_span!("prepare.parts").entered();
+        let parts = crate::track_regions::PartGrids::of(daw, project);
+        let overrides = Overrides::of(daw, project);
+        drop(stage);
+        let stage = tracing::info_span!("prepare.zones").entered();
+        let zones = crate::hits::zones(daw, project);
+        drop(stage);
         Self {
-            parts: crate::track_regions::PartGrids::of(daw, project),
-            overrides: Overrides::of(daw, project),
-            zones: crate::hits::zones(daw, project),
+            parts,
+            overrides,
+            zones,
             kit,
             written,
         }
@@ -3352,7 +3437,7 @@ fn groove_of(
             .iter()
             .map(|(n, _, h)| (n.clone(), h.iter().map(|h| h.time).collect()))
             .collect();
-        let map = crate::drum_reference::learn_map(&notes, &named, NOTE_WINDOW);
+        let map = crate::drum_map_set::map_for(daw, project, &notes, &named, NOTE_WINDOW);
         let written: Vec<crate::groove::Hit> = notes
             .iter()
             .filter(|n| n.time >= from - 1.0 && n.time < to + 1.0)
@@ -3421,7 +3506,7 @@ static QUANTIZE: ActionMeta = meta(
     "QUANTIZE",
     "quantize",
     "Quantize the drums",
-    "Quantize the kit from its hit markers (HITS_DETECT first): every drum track cut `lead_ms` before each hit and moved together so the HIT lands on its target — the item starts before the beat, the attack is on it — the seams crossfaded (`xfade_ms`). Over `sections` (by name, from the SECTIONS lane: `Verse 1`, `Chorus`) or `from`/`to` (seconds), each with these settings — so a verse and a chorus can each be quantized their own way. The edit zones (ZONES_LIST) are left as played — `fills: Include` edits them too (a fill that keeps a grid, on that grid: `grid: 12` for 8th triplets, 24 for 16th triplets), `Only` edits only them; the drum-edit settings (grid, strength, target, tolerance, lead, crossfade…) can be given for this call alone. `target: Pattern` places each hit by the section's own groove (DRUMS_GROOVE): a hit in a slot the section plays bar after bar goes to that slot's line, however far it drifted, and `by_groove` lists each sent to a line other than the nearest. `dry_run` says what it would do; `brief` leaves out the lists of moves and keeps three of each span's calls. After an edit, a check from the markers: hits lost, hits doubled (a double attack), and how far the moved hits landed from where they were sent. Unless a dry run, sets a mark on the song first, in its history (`Before QUANTIZE <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made.",
+    "Quantize the kit from its hit markers (HITS_DETECT first): every drum track cut `lead_ms` before each hit and moved together so the HIT lands on its target — the item starts before the beat, the attack is on it — the seams crossfaded (`xfade_ms`). Over `sections` (by name, from the SECTIONS lane: `Verse 1`, `Chorus`) or `from`/`to` (seconds), each with these settings — so a verse and a chorus can each be quantized their own way. The edit zones (ZONES_LIST) are left as played — `fills: Include` edits them too (a fill that keeps a grid, on that grid: `grid: 12` for 8th triplets, 24 for 16th triplets), `Only` edits only them; the drum-edit settings (grid, strength, target, tolerance, lead, crossfade…) can be given for this call alone. `target: Pattern` places each hit by the section's own groove (DRUMS_GROOVE): a hit in a slot the section plays bar after bar goes to that slot's line, however far it drifted, and `by_groove` lists each sent to a line other than the nearest. `dry_run` says what it would do. Each span's `detail`: every move (`moves`: a header and a row each — time, bar, beat, to, off_ms, shift_ms; not only the `biggest` 30), the hits held and why (`held`, by reason: exception zone, fill, outside the fills, written fill not in the chart, no line in reach — `window_ms`/`sure_ms` —, not the locked piece, within tolerance, span edge), and the zones that held hits (`zones_held`). `brief` leaves out the lists of moves and held hits (their counts stay) and keeps three of each span's calls. After an edit, a check from the markers: hits lost, hits doubled (a double attack), and how far the moved hits landed from where they were sent. Unless a dry run, sets a mark on the song first, in its history (`Before QUANTIZE <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -3592,6 +3677,9 @@ pub struct QuantizeArg {
     /// edited as one slip, every seam closed with its neighbours.
     #[facet(default)]
     pub plan: Vec<PlanStep>,
+    /// A mark of this name set on the song first (`history_marks`): a
+    /// restore point SESSION_HISTORY_RESTORE `mark` goes back to.
+    pub mark: Option<String>,
 }
 
 /// How many of a span's groove and MIDI calls a brief answer keeps:
@@ -3634,6 +3722,9 @@ pub struct QuantizeSpan {
     /// `safety_net`), on the first span only: none for a dry run or a
     /// stretch too small to need one.
     pub checkpoint: Option<String>,
+    /// Every move, the hits held and why, and the zones that held them
+    /// (`edit_reads`); with `brief`, their counts only.
+    pub detail: crate::edit_reads::SpanDetail,
 }
 
 /// One hit the groove placed against the nearest line.
@@ -3762,12 +3853,8 @@ const SLIP_LANDS: u64 = 30;
 /// the engine has applied every edit of it ([`crate::engine::Edit::Done`]).
 /// No polling: woken the moment it lands.
 pub fn landed(ticket: u64) {
-    if !crate::engine::wait_done(ticket, std::time::Duration::from_secs(SLIP_LANDS)) {
-        tracing::warn!(
-            edit.ticket = ticket,
-            "an edit queued for the window did not land in time"
-        );
-    }
+    // Traced (`edit.window_wait`), with a warn line when it waits long.
+    crate::edit_trace::landed(ticket, std::time::Duration::from_secs(SLIP_LANDS));
 }
 
 /// The moments' targets with `piece` locked in order over `span`: a
@@ -3952,19 +4039,23 @@ fn quantize_span(
         })
     };
     let overrides = &prepared.overrides;
-    let held = |h: f64| {
-        excepted(h)
-            || match settings.fills {
-                crate::drum_settings::Fills::Skip => {
-                    in_fill(h)
-                        && !in_written_fill(h)
-                        && !overrides.figure_over_fill(daw, project, h)
-                        && overrides.fill_grid(daw, project, h).is_none()
-                }
-                crate::drum_settings::Fills::Include => false,
-                crate::drum_settings::Fills::Only => !in_fill(h),
-            }
+    // Why a hit stays as played, if it does: what the answer says of it.
+    let why_held = |h: f64| {
+        use crate::edit_reads::Held;
+        if excepted(h) {
+            return Some(Held::Exception);
+        }
+        match settings.fills {
+            crate::drum_settings::Fills::Skip => (in_fill(h)
+                && !in_written_fill(h)
+                && !overrides.figure_over_fill(daw, project, h)
+                && overrides.fill_grid(daw, project, h).is_none())
+            .then_some(Held::Fill),
+            crate::drum_settings::Fills::Include => None,
+            crate::drum_settings::Fills::Only => (!in_fill(h)).then_some(Held::OutsideFills),
+        }
     };
+    let held = |h: f64| why_held(h).is_some();
     let mut targets = match lock {
         Some(piece) => locked_targets(daw, project, settings, &found, (piece, (from, to)))?,
         None => found.targets.clone(),
@@ -3972,10 +4063,12 @@ fn quantize_span(
     drop(step);
     let step = tracing::info_span!("span.held").entered();
     // In a written fill, a hit the chart does not have stays as played.
+    let mut unwritten: Vec<f64> = Vec::new();
     if settings.fills == crate::drum_settings::Fills::Skip {
         for ((h, to), by) in targets.iter_mut().zip(&found.placed_by) {
             if *by != Placed::Written && in_written_fill(*h) {
                 *to = None;
+                unwritten.push(*h);
             }
         }
     }
@@ -4005,6 +4098,16 @@ fn quantize_span(
     if settings.fills == crate::drum_settings::Fills::Skip {
         result.in_fills = in_fills;
     }
+    let step = tracing::info_span!("span.detail").entered();
+    let detail = span_detail(
+        daw,
+        project,
+        settings,
+        (&targets, &pairs, &unwritten),
+        (lock.is_some(), (lo, hi, to)),
+        (&why_held, zones),
+    );
+    drop(step);
     Ok((
         QuantizeSpan {
             name: name.to_owned(),
@@ -4025,16 +4128,64 @@ fn quantize_span(
             ),
             check: None,
             checkpoint: None,
+            detail,
         },
         Planned { cuts, sent: pairs },
     ))
+}
+
+/// What one span of a quantize moved and held, every hit
+/// ([`crate::edit_reads::detail`]): `targets` (every moment's), `pairs`
+/// (those it judged), `unwritten` (a written fill's hits the chart does not
+/// have); whether a piece is locked, the span as judged (`lo..hi`) and its
+/// last edge (`hi..to`, the next span's hits); why a hit is held, and the
+/// zones.
+fn span_detail(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    settings: &crate::drum_settings::Settings,
+    (targets, pairs, unwritten): (&[(f64, Option<f64>)], &[(f64, Option<f64>)], &[f64]),
+    (locked, (lo, hi, to)): (bool, (f64, f64, f64)),
+    (why_held, zones): (
+        &dyn Fn(f64) -> Option<crate::edit_reads::Held>,
+        &[crate::hits::Zone],
+    ),
+) -> crate::edit_reads::SpanDetail {
+    use crate::edit_reads::Held;
+    let tolerance = settings.tolerance_ms / 1_000.0;
+    let mut moves: Vec<(f64, f64)> = Vec::new();
+    let mut held: Vec<(f64, Held)> = Vec::new();
+    for &(h, t) in pairs {
+        match t {
+            Some(t) if (t - h).abs() > tolerance => moves.push((h, t)),
+            Some(_) => held.push((h, Held::Tolerance)),
+            None if unwritten.iter().any(|u| (u - h).abs() < 1e-9) => {
+                held.push((h, Held::WrittenFill));
+            }
+            None if locked => held.push((h, Held::NotLocked)),
+            None => held.push((h, Held::NoLine)),
+        }
+    }
+    for &(h, _) in targets {
+        if h >= lo && h < hi {
+            if let Some(why) = why_held(h) {
+                held.push((h, why));
+            }
+        } else if h >= hi && h < to {
+            held.push((h, Held::SpanEdge));
+        }
+    }
+    crate::edit_reads::detail((&moves, &held), settings.strength, zones, |t| {
+        let (bar, beat, frac) = crate::song_bars::musical(daw, project, t);
+        (bar, f64::from(beat) + frac)
+    })
 }
 
 static PLACE: ActionMeta = meta(
     "HITS_PLACE",
     "hits_place",
     "Place a drum hit",
-    "Move the hit `id` so it plays at `to` (project seconds, as the song plays now) or `by_ms` later: the whole kit cut a lead before it and moved together — every mic, in phase — the hits either side left where they play, the seams crossfaded. `snap` (the default) puts it on the nearest thirty-second or sixteenth triplet within 12 ms of where it is dropped. A hand fixing one hit the quantize placed wrong — what dragging a hit's flag does. Says the check, as QUANTIZE does.",
+    "Move the hit `id` so it plays at `to` (project seconds, as the song plays now) or `by_ms` later: the whole kit cut a lead before it and moved together — every mic, in phase — the hits either side left where they play, the seams crossfaded. `snap` (the default) puts it on the nearest thirty-second or sixteenth triplet within 12 ms of where it is dropped. A hand fixing one hit the quantize placed wrong — what dragging a hit's flag does. Says the check, as QUANTIZE does. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -4042,6 +4193,8 @@ static PLACE: ActionMeta = meta(
 /// Which hit, and where.
 #[derive(Facet)]
 struct PlaceArg {
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
     id: Option<String>,
     /// Several hits, moved together (a fill taken earlier): `to`/`by_ms`
     /// say where the earliest goes.
@@ -4237,7 +4390,7 @@ static REVERT: ActionMeta = meta(
     "DRUMS_REVERT",
     "drums_revert",
     "Put the drums back as played",
-    "Undo the drum edit over a stretch — `from`/`to` (seconds, as the song plays now) or `sections` — without undoing anything else: every hit there moved back to where it was played, the whole kit together, the seams crossfaded as a quantize closes them, so the stretch plays as recorded. The hit markers stay, to drag (HITS_PLACE) or quantize again. With `hold` (the default) a no-quantize zone goes over it, so a later quantize leaves it as played; delete the zone (ZONES_REMOVE) to let one in. Says the check, as QUANTIZE does. Sets a mark on the song first, in its history (`Before DRUMS_REVERT <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made.",
+    "Undo the drum edit over a stretch — `from`/`to` (seconds, as the song plays now) or `sections` — without undoing anything else: every hit there moved back to where it was played, the whole kit together, the seams crossfaded as a quantize closes them, so the stretch plays as recorded. The hit markers stay, to drag (HITS_PLACE) or quantize again. With `hold: true` a no-quantize zone goes over it, so a later quantize leaves it as played (ZONES_LIST lists it under `exceptions`; ZONES_EDIT `remove` lets one in); none is laid unless asked. `mark`: a mark of that name set first. Says the check, as QUANTIZE does. Sets a mark on the song first, in its history (`Before DRUMS_REVERT <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -4249,7 +4402,10 @@ pub struct RevertArg {
     pub sections: Vec<String>,
     pub from: Option<f64>,
     pub to: Option<f64>,
+    /// A no-quantize zone over it (off unless true).
     pub hold: Option<bool>,
+    /// A mark of this name set on the song first (`history_marks`).
+    pub mark: Option<String>,
 }
 
 /// The kit's moments in `lo..hi` (`moments`, as they play now — the hits
@@ -4286,7 +4442,23 @@ fn as_played(
 ///
 /// A section that is not there, a zone that would not save, or no engine.
 pub fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
+    let traced = crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("DRUMS_REVERT"));
+    let out = revert_traced(a, &traced);
+    traced.outcome(&out);
+    out
+}
+
+/// [`revert`], under its span.
+fn revert_traced(
+    a: RevertArg,
+    traced: &crate::edit_trace::Traced,
+) -> Result<Vec<QuantizeSpan>, String> {
+    let begun = crate::history_marks::begin(REVERT.id, a.mark.as_deref())?;
+    if let Some(mark) = &begun.mark {
+        traced.record("edit.mark", mark.as_str());
+    }
     let (daw, project) = song()?;
+    let step = tracing::info_span!("edit.read").entered();
     let settings = crate::drum_settings::current();
     let mut out: Vec<QuantizeSpan> = Vec::new();
     let before = crate::hits::playback(daw, &project);
@@ -4299,10 +4471,15 @@ pub fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
     let mut sent: Vec<(f64, Option<f64>)> = Vec::new();
     let mut whole = (f64::INFINITY, f64::NEG_INFINITY);
     let stretches = spans(daw, &project, &a.sections, (a.from, a.to))?;
+    drop(step);
+    let step = tracing::info_span!("edit.checkpoint").entered();
     let net = crate::safety_net::before(
         REVERT.id,
         crate::safety_net::Reach::of_spans(stretches.iter().map(|(_, from, to)| (*from, *to))),
     )?;
+    drop(step);
+    let step = tracing::info_span!("edit.plan").entered();
+    let mut held = 0_usize;
     for (name, from, to) in stretches {
         let (lo, hi) = (
             from - edge(daw, &project, from),
@@ -4321,7 +4498,8 @@ pub fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
         cuts.extend(planned);
         sent.extend(pairs);
         whole = (whole.0.min(lo), whole.1.max(hi));
-        if a.hold.unwrap_or(true) {
+        if crate::edit_revert::holds(a.hold) {
+            held = held.saturating_add(1);
             crate::hits::add_zone(
                 daw,
                 &project,
@@ -4342,14 +4520,24 @@ pub fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
             by_written: Vec::new(),
             check: None,
             checkpoint: None,
+            detail: crate::edit_reads::SpanDetail::default(),
         });
     }
+    drop(step);
+    traced.count("edit.spans", out.len());
+    traced.count("edit.held", held);
+    traced.count("edit.hits", sent.len());
+    traced.count("edit.moved", cuts.iter().filter(|c| c.1 != 0).count());
     if let Some(first) = out.first_mut() {
         first.checkpoint = net.name();
     }
     if cuts.iter().any(|c| c.1 != 0) {
+        let step = crate::edit_trace::stage_span!("edit.place").entered();
         apply_cuts(daw, &project, &settings, cuts)?;
+        drop(step);
+        let step = tracing::info_span!("edit.check").entered();
         let check = checked(daw, &project, (&settings, &sent), &before, whole);
+        drop(step);
         if let Some(last) = out.last_mut() {
             last.check = Some(check);
         }
@@ -4370,6 +4558,24 @@ fn register_revert(list: &ActionList) -> Result<(), architect::action::ActionErr
 // r[impl hits.place]
 fn register_place(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&PLACE, Effect::Mutating, |a: PlaceArg| {
+        let traced = crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("HITS_PLACE"));
+        let out = place_traced(a, &traced);
+        traced.outcome(&out);
+        out
+    })?;
+    Ok(())
+}
+
+/// `HITS_PLACE`, under its span.
+fn place_traced(
+    a: PlaceArg,
+    traced: &crate::edit_trace::Traced,
+) -> Result<crate::hits::Check, String> {
+    {
+        let begun = crate::history_marks::begin(PLACE.id, a.mark.as_deref())?;
+        if let Some(mark) = &begun.mark {
+            traced.record("edit.mark", mark.as_str());
+        }
         let (daw, project) = song()?;
         let step = tracing::info_span!("edit.read").entered();
         let before = crate::hits::playback(daw, &project);
@@ -4428,9 +4634,14 @@ fn register_place(list: &ActionList) -> Result<(), architect::action::ActionErro
         let step = tracing::info_span!("edit.judge").entered();
         let (result, cuts) = judge(daw, &project, &settings, (&pairs, &neighbours), false);
         drop(step);
+        traced.count("edit.hits", pairs.len());
+        traced.count(
+            "edit.moved",
+            usize::try_from(result.moved).unwrap_or(usize::MAX),
+        );
         let span = (earliest.min(to) - 1.0, (latest + shift).max(latest) + 1.0);
         if result.applied {
-            let step = tracing::info_span!("edit.place").entered();
+            let step = crate::edit_trace::stage_span!("edit.place").entered();
             for id in &ids {
                 crate::hits::mark_placed(daw, &project, id);
             }
@@ -4441,15 +4652,14 @@ fn register_place(list: &ActionList) -> Result<(), architect::action::ActionErro
         let out = checked(daw, &project, (&settings, &pairs), &before, span);
         drop(step);
         Ok(out)
-    })?;
-    Ok(())
+    }
 }
 
 static REQUANTIZE: ActionMeta = meta(
     "DRUMS_REQUANTIZE",
     "drums_requantize",
     "Start the drum edit over and quantize it",
-    "Clear every drum edit (the EDIT lanes copied from COMP again) and quantize the whole song fresh, as QUANTIZE does with `plan` (each step its sections or span and settings — the snare leading in a breakdown) — the plan kept with the song, so a call without one uses the last given (none: the whole song on the sticky settings). The parts', figures' and fills' grids and the zones are read as always. `keep_manual`: the hits a hand placed (HITS_PLACE) are put back where they were placed afterwards. Says the quantize's check and how many hand placements were put back. Sets a mark on the song first, in its history (`Before DRUMS_REQUANTIZE <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made.",
+    "Clear every drum edit (the EDIT lanes copied from COMP again) and quantize the whole song fresh, as QUANTIZE does with `plan` (each step its sections or span and settings — the snare leading in a breakdown) — the plan kept with the song, so a call without one uses the last given (none: the whole song on the sticky settings). The parts', figures' and fills' grids and the zones are read as always. `keep_manual`: the hits a hand placed (HITS_PLACE) are put back where they were placed afterwards. Says the quantize's check and how many hand placements were put back. Sets a mark on the song first, in its history (`Before DRUMS_REQUANTIZE <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -4457,6 +4667,8 @@ static REQUANTIZE: ActionMeta = meta(
 /// How to start the drum edit over.
 #[derive(Facet)]
 struct RequantizeArg {
+    /// A mark of this name set on the song first (`history_marks`).
+    mark: Option<String>,
     keep_manual: Option<bool>,
     #[facet(default)]
     plan: Vec<PlanStep>,
@@ -4484,6 +4696,16 @@ const PLAN_KEY: &str = "fts.quantize_plan";
 
 fn register_requantize(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REQUANTIZE, Effect::Mutating, |a: RequantizeArg| {
+        let span = crate::edit_trace::edit_span!("DRUMS_REQUANTIZE");
+        let mark = a.mark.clone();
+        crate::edit_trace::run_edit(span, (REQUANTIZE.id, mark.as_deref()), |_| requantize(a))
+    })?;
+    Ok(())
+}
+
+/// `DRUMS_REQUANTIZE`: see its description.
+fn requantize(a: RequantizeArg) -> Result<Requantized, String> {
+    {
         let (daw, project) = song()?;
         let folder = crate::track_regions::kit_folder(daw, &project).ok_or("no kit")?;
         // Every drum edit is cleared: a way back first, or nothing done.
@@ -4551,8 +4773,7 @@ fn register_requantize(list: &ActionList) -> Result<(), architect::action::Actio
             placed_back,
             checkpoint: net.name(),
         })
-    })?;
-    Ok(())
+    }
 }
 
 /// `QUANTIZE`: the kit, over `a`'s spans or plan, from its hit markers —
@@ -4562,13 +4783,31 @@ fn register_requantize(list: &ActionList) -> Result<(), architect::action::Actio
 ///
 /// No hit markers, a section that is not there, or no engine.
 pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
+    let traced = crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("QUANTIZE"));
+    let out = quantize_traced(a, &traced);
+    traced.outcome(&out);
+    out
+}
+
+/// [`quantize`], under its span.
+fn quantize_traced(
+    a: QuantizeArg,
+    traced: &crate::edit_trace::Traced,
+) -> Result<Vec<QuantizeSpan>, String> {
+    let dry = a.dry_run.unwrap_or(false);
+    traced.record("edit.dry_run", dry);
+    if !dry {
+        let begun = crate::history_marks::begin(QUANTIZE.id, a.mark.as_deref())?;
+        if let Some(mark) = &begun.mark {
+            traced.record("edit.mark", mark.as_str());
+        }
+    }
     let (daw, project) = song()?;
     let step = tracing::info_span!("edit.read").entered();
     if crate::hits::kit_from_markers(daw, &project).is_none() {
         return Err("no hit markers: find the hits first (HITS_DETECT)".to_owned());
     }
     let base = crate::drum_settings::current().with(&a.with);
-    let dry = a.dry_run.unwrap_or(false);
     // The steps: the plan's, each with its own settings over the
     // call's, or the call itself as one.
     let steps: Vec<PlanOf<'_>> = if a.plan.is_empty() {
@@ -4598,8 +4837,12 @@ pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
                 .flat_map(|(_, spans, _)| spans.iter().map(|(_, from, to)| (*from, *to))),
         )
     };
+    let stage = tracing::info_span!("edit.checkpoint").entered();
     let net = crate::safety_net::before(QUANTIZE.id, reach)?;
+    drop(stage);
+    let stage = tracing::info_span!("edit.playback").entered();
     let before = crate::hits::playback(daw, &project);
+    drop(stage);
     let prepared = Prepared::read(daw, &project);
     drop(step);
     let step = tracing::info_span!("edit.plan").entered();
@@ -4626,8 +4869,21 @@ pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
         }
     }
     drop(step);
+    let count = |f: &dyn Fn(&QuantizeSpan) -> u32| {
+        usize::try_from(out.iter().map(f).sum::<u32>()).unwrap_or(usize::MAX)
+    };
+    traced.count("edit.spans", out.len());
+    traced.count("edit.hits", count(&|s| s.result.hits));
+    traced.count("edit.moved", count(&|s| s.result.moved));
+    traced.count(
+        "edit.held",
+        out.iter()
+            .flat_map(|s| s.detail.held.iter())
+            .map(|g| usize::try_from(g.count).unwrap_or(usize::MAX))
+            .sum(),
+    );
     if !dry && cuts.iter().any(|c| c.1 != 0) {
-        let step = tracing::info_span!("edit.place").entered();
+        let step = crate::edit_trace::stage_span!("edit.place").entered();
         apply_cuts(daw, &project, &base, cuts)?;
         drop(step);
         // One edit, one check: every hit sent, held up to where it
@@ -4651,6 +4907,7 @@ pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
             span.result.to_check.clear();
             span.by_groove.truncate(BRIEF_CALLS);
             span.by_written.truncate(BRIEF_CALLS);
+            span.detail.brief();
         }
     }
     Ok(out)
@@ -4827,7 +5084,8 @@ fn apply_cuts(
                     .to_owned(),
             );
         }
-        let step = tracing::info_span!("cuts.slip").entered();
+        // The older way: queued for the window, and waited on.
+        let step = tracing::info_span!("cuts.slip", edit.moved = cuts.len()).entered();
         landed(slip_now(daw, project, settings, cuts));
         drop(step);
         return Ok(());
@@ -4835,7 +5093,7 @@ fn apply_cuts(
     let step = tracing::info_span!("cuts.samples").entered();
     follow_samples(daw, project, settings, &cuts);
     drop(step);
-    let step = tracing::info_span!("cuts.place").entered();
+    let step = crate::edit_trace::stage_span!("cuts.place").entered();
     let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
     let moves: Vec<(f64, f64)> = cuts
         .iter()
@@ -4845,7 +5103,12 @@ fn apply_cuts(
         lead: settings.lead_ms / 1_000.0,
         crossfade: settings.xfade_ms / 1_000.0,
     };
-    crate::hit_place::place(&song, &moves, joins)?;
+    let written = crate::hit_place::place(&song, &moves, joins)?;
+    crate::edit_trace::count_here("edit.items_written", written);
+    crate::edit_trace::count_here(
+        "edit.moved",
+        moves.iter().filter(|m| m.1.abs() > 1e-6).count(),
+    );
     drop(step);
     let step = tracing::info_span!("cuts.refresh").entered();
     crate::song_model::request_resync_items();
