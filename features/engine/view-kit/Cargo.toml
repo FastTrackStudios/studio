@@ -124,6 +124,10 @@ image = { workspace = true }
 dirs = { workspace = true, optional = true }
 skrifa = { workspace = true }
 timeline = { workspace = true, features = ["actions", "paint"] }
+# Keys, as the key track names them (`key_track`).
+keyflow = { workspace = true }
+# The session primitive: presence (the ghosts' roster) and its store.
+fts-session = { workspace = true, features = ["store"] }
 # Razor areas, the same ones the expression editor uses — see the
 # `razor` crate for why the rectangle is shared and the operations on
 # its contents are not.

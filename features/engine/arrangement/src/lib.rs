@@ -30,8 +30,7 @@ pub mod instrument_rail;
 pub mod lane_stack;
 pub mod marks_strip;
 pub mod notice;
-#[cfg(feature = "native")]
-pub mod organize;
+
 pub mod panel;
 pub mod poi_paint;
 pub mod rename;

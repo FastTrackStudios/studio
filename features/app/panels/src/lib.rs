@@ -35,6 +35,8 @@ pub mod lyrics_panel;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod mix_guide;
 pub mod navigator;
+#[cfg(feature = "native")]
+pub mod organize;
 /// The Patch List view: the album's plan in the room it is played in
 /// (moved from arrangement-view: a Studio feature, not the arrangement's).
 #[cfg(feature = "native")]
@@ -44,6 +46,7 @@ pub mod progress;
 pub mod record_view;
 pub mod setup;
 pub mod shell;
+pub mod shows;
 pub mod transport_bar;
 #[cfg(feature = "native")]
 pub mod versions;

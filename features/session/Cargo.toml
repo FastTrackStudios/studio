@@ -76,6 +76,8 @@ keyflow = { workspace = true, features = ["text", "engraver"] }
 keyflow-daw-analysis = { workspace = true }
 links-proto = { workspace = true, optional = true }
 loro = { workspace = true }
+# The session primitive: presence and the section and marker kinds are its.
+fts-session = { workspace = true }
 lucide-dioxus = { workspace = true, optional = true }
 monarchy = { workspace = true }
 music-catalog = { workspace = true }

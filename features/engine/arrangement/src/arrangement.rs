@@ -3431,7 +3431,7 @@ fn chart_marks(
     let mut marks = ChartMarks::default();
     for track in &project.tracks {
         let name = track.name.trim();
-        let is_key = name.eq_ignore_ascii_case(session::key::KEY_TRACK);
+        let is_key = name.eq_ignore_ascii_case(crate::key_track::KEY_TRACK);
         if !is_key && !name.eq_ignore_ascii_case(CHORD_TRACK) {
             continue;
         }
@@ -3441,7 +3441,7 @@ fn chart_marks(
             };
             let x0 = item.position.as_seconds();
             if is_key {
-                if session::key::parse_key(written).is_some() {
+                if crate::key_track::parse_key(written).is_some() {
                     marks.keys.push(KeyMark {
                         at: x0,
                         name: written.to_owned(),
@@ -3473,10 +3473,14 @@ fn keys_of(project: &daw_ui::studio::project::Project) -> Vec<(f64, keyflow::key
     let mut keys: Vec<(f64, keyflow::key::Key)> = project
         .tracks
         .iter()
-        .filter(|t| t.name.trim().eq_ignore_ascii_case(session::key::KEY_TRACK))
+        .filter(|t| {
+            t.name
+                .trim()
+                .eq_ignore_ascii_case(crate::key_track::KEY_TRACK)
+        })
         .flat_map(|t| project.lane(&t.guid))
         .filter_map(|item| {
-            let key = session::key::parse_key(project.title(item)?)?;
+            let key = crate::key_track::parse_key(project.title(item)?)?;
             Some((item.position.as_seconds(), key))
         })
         .collect();
@@ -3496,7 +3500,7 @@ fn spell(
     keys: &[(f64, keyflow::key::Key)],
 ) -> Option<Spelled> {
     let track = track.trim();
-    if track.eq_ignore_ascii_case(session::key::KEY_TRACK) {
+    if track.eq_ignore_ascii_case(crate::key_track::KEY_TRACK) {
         return Some(Spelled {
             numbers: written.to_owned(),
             chords: written.to_owned(),

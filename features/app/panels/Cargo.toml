@@ -33,6 +33,9 @@ blitz-traits = { workspace = true }
 dioxus-native-dom = { workspace = true }
 dioxus-native = { workspace = true, optional = true }
 daw-proto = { workspace = true }
+# The Organize toolbar's inserts (`organize`): the facade, and its errors.
+daw-control = { workspace = true }
+eyre = { workspace = true }
 daw = { workspace = true }
 # The chart editor (`chart_editor`): the keyflow editor on the song's chart.
 editor-view = { workspace = true, optional = true }

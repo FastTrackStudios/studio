@@ -56,7 +56,8 @@ pub mod comping;
 pub mod count_in;
 pub mod reference;
 pub mod review;
-pub mod section_kinds;
+/// What a section region or a marker is: the session primitive's.
+pub use fts_session::section_kinds;
 pub mod setlist;
 pub mod song;
 pub mod strip_width;

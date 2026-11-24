@@ -30,6 +30,8 @@ architect-input = { workspace = true }
 keybinds = { workspace = true }
 # The drum roles a folded kit is read by, and the edit scope.
 daw-edit = { workspace = true }
+# The session primitive: presence (the ghosts).
+fts-session = { workspace = true, features = ["store"] }
 frame = { workspace = true, features = ["host-scene", "live", "theme"] }
 daw = { workspace = true }
 anyrender = { workspace = true }

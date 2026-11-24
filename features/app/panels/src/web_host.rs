@@ -93,6 +93,7 @@ fn DemoView(
     let view = use_signal(|| View::Daw);
     let mode = use_signal(|| Mode::Live);
     use_context_provider(|| mode);
+    crate::shows::provide(mode);
     use_context_provider(|| crate::setlist::ReadOnlySet(read_only));
     // The lyrics' Audience / Performer and layer, held across songs.
     use_context_provider(crate::lyrics_panel::LyricsChoice::new);
@@ -732,6 +733,7 @@ fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Eleme
     use_hook(crate::web_audio::unlock_on_first_gesture);
     let mode = use_signal(|| Mode::Live);
     use_context_provider(|| mode);
+    crate::shows::provide(mode);
     use_context_provider(|| crate::setlist::ReadOnlySet(true));
     use_context_provider(crate::lyrics_panel::LyricsChoice::new);
     let mut setlist = use_context_provider(|| Signal::new(hosted_songs()));

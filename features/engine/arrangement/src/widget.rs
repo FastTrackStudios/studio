@@ -6093,7 +6093,13 @@ impl ArrangementWidget {
             crate::edit_actions::publish(scope.clone());
             crate::view_client::show_edit(self.editor.cursor, Some(scope));
         }
-        crate::ghosts::local_selection(self.editor.selected.as_set(), &self.rows);
+        crate::ghosts::local_selection(
+            self.editor.selected.as_set(),
+            self.rows
+                .iter()
+                .filter(|(t, _)| t.selected)
+                .map(|(t, _)| t.guid.clone()),
+        );
         crate::ghosts::local_shown(&self.rows, || {
             self.scene
                 .item_boxes()

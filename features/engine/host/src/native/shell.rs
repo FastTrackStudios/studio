@@ -65,8 +65,9 @@ pub fn Shell() -> Element {
             .unwrap_or(Mode::Live)
     });
     // The mode, for the panels that change with it (the mixer's strips
-    // are live-mode strips in Live).
+    // are live-mode strips in Live), and what it asks the views to show.
     use_context_provider(|| mode);
+    studio_panels::shows::provide(mode);
     // What the window shows, for SESSION_WINDOW (a model checking what a
     // key or a click did).
     use_effect(move || session_engine::actions::note_shown_mode(mode()));
@@ -640,7 +641,7 @@ fn Arrangement(#[props(default)] docked: bool) -> Element {
         div {
             style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column;",
             if mode() == Mode::Organize {
-                arrangement_view::organize::OrganizeToolbar {}
+                studio_panels::organize::OrganizeToolbar {}
             }
             div {
                 style: "position:relative; flex:1; min-height:0; display:flex;",

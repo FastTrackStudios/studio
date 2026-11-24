@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use session::sync::presence::Pointer;
+use fts_session::presence::Pointer;
 
-pub use crate::presence::*;
+pub use fts_session::presence::store::*;
 
 // ── panels: where each named part of the window is ──────────────────────
 

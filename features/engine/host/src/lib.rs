@@ -1312,6 +1312,7 @@ fn mode_toolbar_actions(
     mode: session::modes::Mode,
     mut current: Signal<Option<Workspace>>,
 ) -> Vec<daw_ui::ToolbarAction> {
+    use session::keyflow::actions::SectionKindKeyflow as _;
     use session::keyflow::actions::{KeyflowAction, dispatch};
     use session::keyflow::time_signature::{TIME_SIGNATURES, insert_time_signature};
     use session::modes::Mode;

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use session::sync::presence::{PeerState, Pointer};
+use fts_session::presence::{PeerState, Pointer};
 use vello::kurbo::{Affine, BezPath, Point, Rect, RoundedRect, Stroke};
 use vello::peniko::{Color, Fill};
 

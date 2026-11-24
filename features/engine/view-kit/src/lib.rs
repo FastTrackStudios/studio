@@ -51,6 +51,7 @@ pub use session_engine::instrument_tracks;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::instrument_tracks;
 pub use session_engine_client::jobs;
+pub mod key_track;
 pub mod keys;
 pub use session_engine_client::lanes;
 pub mod layout;
@@ -74,6 +75,8 @@ pub use session_engine_client::options;
 pub use session_engine_client::organize_edit;
 pub use session_engine_client::play_return;
 pub mod popup;
+/// Presence held for the process: the session primitive's store.
+pub use fts_session::presence::store as presence;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::actions;
 #[cfg(all(not(feature = "native"), feature = "engine"))]
@@ -92,7 +95,6 @@ pub use session_engine::track_regions;
 pub use session_engine_client::actions;
 #[cfg(all(not(feature = "native"), not(feature = "engine")))]
 pub use session_engine_client::open;
-pub use session_engine_client::presence;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::projects;
 pub use session_engine_client::song_modes;
@@ -152,6 +154,7 @@ pub use session_engine::setlist;
 #[cfg(not(feature = "engine"))]
 pub use session_engine_client::setlist;
 pub use session_engine_client::settings;
+pub mod shows;
 pub mod skin;
 pub mod song_left;
 pub use session_engine_client::song_model;

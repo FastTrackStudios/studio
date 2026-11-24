@@ -263,23 +263,17 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     // one starts: [`StartCompact`].
     let start_compact = try_use_context::<StartCompact>().is_some_and(|c| c.0);
     let compact = use_hook(|| Rc::new(Cell::new(docked || small || touch || start_compact)));
-    // The window's mode, read every render (so a change re-renders):
-    // the track panel's arm only in Record mode. No mode to read — a
-    // panel outside the window's shell — and it stays as it was.
+    // What the app asks the arrangement to show, read every render (so a
+    // change re-renders): the track panel's arm buttons, every item in its
+    // track's colour, and every cut on a folder's row with what the drum
+    // detection found drawn over the kit and the comp strip.
+    let shows = crate::shows::use_shows();
     let recording = use_hook(|| Rc::new(Cell::new(true)));
-    let mode = try_use_context::<Signal<session::modes::Mode>>().map(|mode| mode());
-    recording.set(mode.is_none_or(|mode| mode == session::modes::Mode::Record));
-    // And Mix mode: every item in its track's colour.
+    recording.set(shows.arm);
     let mixing = use_hook(|| Rc::new(Cell::new(false)));
-    mixing.set(mode == Some(session::modes::Mode::Mix));
-    // And Edit mode — and Record mode, where takes are comped as they
-    // come in: every cut on a folder's row, what the drum detection found
-    // drawn over the kit, and the comp strip to pick takes on.
+    mixing.set(shows.item_colors);
     let editing = use_hook(|| Rc::new(Cell::new(false)));
-    editing.set(matches!(
-        mode,
-        Some(session::modes::Mode::Edit | session::modes::Mode::Record)
-    ));
+    editing.set(shows.cuts);
     crate::folds::show_cuts(editing.get());
     let ui = use_hook(|| Rc::new(Cell::new(crate::touch::arrange_zoom(touch, 0.0))));
     let painted = use_hook(|| Rc::new(Cell::new((0.0_f64, 0.0_f64))));

@@ -27,6 +27,7 @@
 //! the guide by `FTS_SESSION_GUIDE_GENERATE_GUIDE_TRACKS`.
 
 use dioxus::prelude::*;
+use session::keyflow::actions::SectionKindKeyflow as _;
 use session::section_kinds::{MarkerKind, SectionKind};
 
 use crate::chrome::{DIM, RULE, TEXT};

@@ -115,11 +115,15 @@ pub fn key_at(project: &daw_ui::studio::project::Project, at: f64) -> Option<Str
     let mut keys: Vec<(f64, &str)> = project
         .tracks
         .iter()
-        .filter(|t| t.name.trim().eq_ignore_ascii_case(session::key::KEY_TRACK))
+        .filter(|t| {
+            t.name
+                .trim()
+                .eq_ignore_ascii_case(crate::key_track::KEY_TRACK)
+        })
         .flat_map(|t| project.lane(&t.guid))
         .filter_map(|item| {
             let name = project.title(item)?;
-            session::key::parse_key(name).map(|_| (item.position.as_seconds(), name))
+            crate::key_track::parse_key(name).map(|_| (item.position.as_seconds(), name))
         })
         .collect();
     keys.sort_by(|a, b| a.0.total_cmp(&b.0));

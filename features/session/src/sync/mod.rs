@@ -28,7 +28,8 @@ pub mod hold;
 pub mod model;
 #[cfg(feature = "net")]
 pub mod net;
-pub mod presence;
+/// Who else is here: the session primitive's.
+pub use fts_session::presence;
 pub mod relay;
 pub mod slug;
 pub mod transport;
