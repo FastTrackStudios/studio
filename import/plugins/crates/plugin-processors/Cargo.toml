@@ -10,7 +10,7 @@ description = "The plugins' effects, headless: parameter tables and dsp engines 
 workspace = true
 
 [features]
-default = ["std", "files", "gate", "saturate", "eq", "comp", "delay", "reverb"]
+default = ["std", "files", "gate", "saturate", "eq", "comp", "delay", "reverb", "trigger"]
 # `std::error::Error`, and the algorithm registry. The engines below that
 # need the dsp crate's `std` features turn it on.
 std = []
@@ -22,6 +22,8 @@ eq = ["std", "dsp/eq", "dsp-core/audio"]
 comp = ["std", "dsp/comp"]
 delay = ["std", "dsp/delay", "dsp-core/audio"]
 reverb = ["std", "dsp/reverb", "dsp-core/audio"]
+# Drum hit detection (a kit's trigger lanes).
+trigger = ["std", "dsp/trigger", "dsp-core/audio"]
 
 [dependencies]
 dsp = { workspace = true }

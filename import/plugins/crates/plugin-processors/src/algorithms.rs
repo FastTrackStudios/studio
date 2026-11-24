@@ -430,6 +430,14 @@ impl BlockProcessor for FamilyBlock {
         self.engine.midi(event);
     }
 
+    fn set_key(&mut self, left: &[f32], right: &[f32]) {
+        self.engine.set_key(left, right);
+    }
+
+    fn hit(&mut self, offset: u32, velocity: f32) {
+        self.engine.hit(offset, velocity);
+    }
+
     fn mod_sources(&self) -> &'static [ModSourceSpec] {
         self.engine.mod_sources()
     }

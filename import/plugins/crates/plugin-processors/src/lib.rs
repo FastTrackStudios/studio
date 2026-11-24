@@ -43,6 +43,8 @@ pub mod expr;
 pub mod gate;
 #[cfg(feature = "saturate")]
 pub mod saturate;
+#[cfg(feature = "trigger")]
+pub mod trigger;
 
 pub use param::{ParamSpec, Unit, ValueText};
 
@@ -130,6 +132,19 @@ pub trait BlockProcessor: Send {
     /// sampler). Effects ignore it.
     fn midi(&mut self, event: Midi) {
         let _ = event;
+    }
+
+    /// The key (sidechain) for the next piece: another channel the block
+    /// listens to, as a drum gate keys from the piece's trigger mic rather
+    /// than its own, bleeding one. Effects without a key ignore it.
+    fn set_key(&mut self, left: &[f32], right: &[f32]) {
+        let _ = (left, right);
+    }
+
+    /// A drum hit in the next piece, `offset` frames in, at `velocity`
+    /// (0–1): what a sample block plays. Effects ignore it.
+    fn hit(&mut self, offset: u32, velocity: f32) {
+        let _ = (offset, velocity);
     }
 
     /// The modulation sources it exposes, in index order.

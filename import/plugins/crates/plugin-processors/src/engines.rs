@@ -110,7 +110,10 @@ pub fn build(
     let built: Result<Box<dyn BlockProcessor>, BuildError> = match id {
         "gain@1" => Ok(Box::new(crate::Gain::new())),
         #[cfg(feature = "gate")]
-        "gate.drum@1" => Ok(Box::new(crate::gate::Gate::new(sample_rate))),
+        "gate.drum@1" => Ok(Box::new(crate::gate::Gate::with_max_block(
+            sample_rate,
+            max_block,
+        ))),
         #[cfg(feature = "saturate")]
         "saturate.preamp@1" => Ok(Box::new(crate::saturate::Drive::new(sample_rate))),
         #[cfg(feature = "comp")]
