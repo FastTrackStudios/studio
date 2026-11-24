@@ -1,0 +1,23 @@
+[package]
+name = "block-eq"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "FTS EQ Block: Signal's eq block as its own CLAP"
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+# `nice_export_clap!` expands to `::nice_plug::…` paths.
+nice-plug = { workspace = true }
+block-clap = { workspace = true }
+
+[features]
+default = []
+# The CLAP entry point, only for the bundle build (two in one binary collide).
+export = []
