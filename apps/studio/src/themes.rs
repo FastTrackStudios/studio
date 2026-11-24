@@ -290,11 +290,7 @@ fn register<A: Facet<'static>>(
 ) {
     let id = meta.id;
     let handler = Arc::new(move |args: &[u8]| -> Result<ActionFuture, ActionError> {
-        let args = if args.is_empty() {
-            b"{}".as_slice()
-        } else {
-            args
-        };
+        let args = decoded(takes, args);
         let a: A = facet_json::from_slice(args).map_err(|e| ActionError::BadArgs {
             id: id.to_owned(),
             message: e.to_string(),
@@ -366,6 +362,15 @@ fn gallery(a: GalleryArgs) -> Result<Value, String> {
 #[derive(Facet)]
 struct NoArgs {}
 
+/// The bytes an action's arguments are read from. The Action List hands an
+/// action that takes nothing `null` (and a caller may send `null` or nothing
+/// to one whose arguments all have defaults): both read as `{}`, never as a
+/// struct made of a scalar.
+fn decoded(takes: bool, args: &[u8]) -> &[u8] {
+    let blank = args.iter().all(u8::is_ascii_whitespace) || args.trim_ascii() == b"null";
+    if !takes || blank { b"{}" } else { args }
+}
+
 /// The theme actions, on the app's list.
 pub fn install_actions(list: &ActionList) {
     register::<NoArgs>(list, &LIST, Effect::ReadOnly, false, |_| list_packs());
@@ -378,6 +383,111 @@ pub fn install_actions(list: &ActionList) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::future::Future as _;
+
+    /// Run `id` the way MCP and the control socket do: through the Action
+    /// List, which normalizes the arguments first. The theme actions answer
+    /// at once, so one poll finishes the future.
+    fn run(list: &ActionList, id: &str, args: &[u8]) -> Result<Value, ActionError> {
+        let mut work = std::pin::pin!(list.run_json_async(id, args));
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+        match work.as_mut().poll(&mut cx) {
+            std::task::Poll::Ready(out) => {
+                out.map(|bytes| serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+            }
+            std::task::Poll::Pending => panic!("{id} did not answer at once"),
+        }
+    }
+
+    /// The decoder's own complaint: arguments read as the wrong shape, the
+    /// bug where `THEME_LIST` could not be called at all.
+    fn misread(e: &ActionError) -> bool {
+        let text = e.to_string();
+        text.contains("got scalar") || text.contains("expected struct start")
+    }
+
+    fn list() -> ActionList {
+        let list = ActionList::new();
+        install_actions(&list);
+        list
+    }
+
+    #[test]
+    fn theme_list_runs_with_no_args_empty_args_or_null() {
+        let list = list();
+        for args in [&b""[..], b"{}", b"null", b" "] {
+            let got = run(&list, "THEME_LIST", args);
+            match got {
+                Ok(v) => assert_eq!(v["spec"], json!(daw_theme::spec::VERSION)),
+                Err(e) => panic!("THEME_LIST with {:?}: {e}", String::from_utf8_lossy(args)),
+            }
+        }
+    }
+
+    #[test]
+    fn every_theme_action_reads_its_args_whatever_the_caller_sends() {
+        let list = list();
+        for id in [
+            "THEME_LIST",
+            "THEME_SET",
+            "THEME_INSTALL",
+            "THEME_CHECK",
+            "THEME_GALLERY",
+        ] {
+            for args in [&b""[..], b"{}", b"null"] {
+                if let Err(e) = run(&list, id, args) {
+                    assert!(
+                        !misread(&e),
+                        "{id} with {:?} misread its arguments: {e}",
+                        String::from_utf8_lossy(args)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_action_with_defaults_runs_on_no_args() {
+        // Nothing shown and no pack named: the action ran and said so,
+        // rather than refusing its arguments.
+        let list = list();
+        for args in [&b""[..], b"{}", b"null"] {
+            match run(&list, "THEME_CHECK", args) {
+                Err(ActionError::BadArgs { message, .. }) => panic!(
+                    "THEME_CHECK refused {:?}: {message}",
+                    String::from_utf8_lossy(args)
+                ),
+                Ok(_) | Err(_) => {}
+            }
+        }
+    }
+
+    #[test]
+    fn a_required_arg_left_out_is_named_not_misread() {
+        let list = list();
+        for (id, field) in [
+            ("THEME_SET", "pack"),
+            ("THEME_INSTALL", "link"),
+            ("THEME_GALLERY", "pack"),
+        ] {
+            match run(&list, id, b"{}") {
+                Err(e @ ActionError::BadArgs { .. }) => {
+                    assert!(!misread(&e), "{id}: {e}");
+                    assert!(e.to_string().contains(field), "{id} names `{field}`: {e}");
+                }
+                other => panic!("{id} with no `{field}` answered {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn decoded_args() {
+        assert_eq!(decoded(false, b"null"), b"{}");
+        assert_eq!(decoded(false, br#"{"x":1}"#), b"{}");
+        assert_eq!(decoded(true, b""), b"{}");
+        assert_eq!(decoded(true, b" null "), b"{}");
+        assert_eq!(decoded(true, br#"{"pack":"fts"}"#), br#"{"pack":"fts"}"#);
+    }
 
     #[test]
     fn a_gallery_call_is_the_command_line_the_tool_takes() {
