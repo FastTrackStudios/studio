@@ -354,6 +354,12 @@ impl BlockProcessor for FamilyBlock {
     }
 
     fn process(&mut self, left: &mut [f32], right: &mut [f32]) {
+        // An empty piece (a host splitting a block at an event at its very
+        // start) must not move the engine: some advance their modulators
+        // per call, not per sample.
+        if left.is_empty() || right.is_empty() {
+            return;
+        }
         self.engine.process(left, right);
     }
 
