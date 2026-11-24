@@ -23,6 +23,7 @@
 //! and balance groups (`crate::balance`, whose rule is implemented and
 //! tested but not wired to a fader here yet).
 
+use session_engine_client::song_model::TemplatePlanner as _;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 

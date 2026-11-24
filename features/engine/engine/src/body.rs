@@ -1,28 +1,14 @@
-//! The engine's body, as the window modules reach it
-//! (`session_engine_client::body`): installed by [`install`] as the engine
+//! The engine's body, as the window modules reach it (`daw_view::body`,
+//! and Studio's half, `session_engine_client::body::StudioBody`):
+//! installed by [`install`] as the engine
 //! comes up in a process — its first open, its runtime, its Action List.
 
-use session_engine_client::body::Body;
+use session_engine_client::body::{Body, StudioBody};
 
 /// The engine in this process.
 struct EngineBody;
 
 impl Body for EngineBody {
-    #[cfg(feature = "native")]
-    fn switch_local(&self, project: &str) {
-        crate::open::switch_local(project);
-    }
-
-    #[cfg(feature = "native")]
-    fn start_engine(&self) -> eyre::Result<()> {
-        crate::open::start_engine().map(|_| ())
-    }
-
-    #[cfg(feature = "native")]
-    fn cue_start(&self) {
-        crate::stream_in::start();
-    }
-
     fn poi_refresh(&self) {
         crate::poi::refresh();
     }
@@ -64,7 +50,7 @@ impl Body for EngineBody {
     }
 
     #[cfg(feature = "native")]
-    fn readiness(&self, project: &str) -> Option<crate::stream_set::Readiness> {
+    fn readiness(&self, project: &str) -> Option<session_engine_client::body::Readiness> {
         crate::stream_set::readiness(project)
     }
 
@@ -103,17 +89,6 @@ impl Body for EngineBody {
         crate::vocal_level::leveled(daw, project, track)
     }
 
-    #[cfg(feature = "native")]
-    fn chart_context(
-        &self,
-    ) -> Option<(
-        session::sync::SessionDoc,
-        std::sync::Arc<dyn session::sync::net::PresenceSink>,
-        String,
-    )> {
-        crate::collab::chart_context()
-    }
-
     #[cfg(feature = "web")]
     fn web_run(
         &self,
@@ -138,6 +113,34 @@ impl Body for EngineBody {
             )
         })
     }
+}
+
+impl StudioBody for EngineBody {
+    #[cfg(feature = "native")]
+    fn switch_local(&self, project: &str) {
+        crate::open::switch_local(project);
+    }
+
+    #[cfg(feature = "native")]
+    fn start_engine(&self) -> eyre::Result<()> {
+        crate::open::start_engine().map(|_| ())
+    }
+
+    #[cfg(feature = "native")]
+    fn cue_start(&self) {
+        crate::stream_in::start();
+    }
+
+    #[cfg(feature = "native")]
+    fn chart_context(
+        &self,
+    ) -> Option<(
+        session::sync::SessionDoc,
+        std::sync::Arc<dyn session::sync::net::PresenceSink>,
+        String,
+    )> {
+        crate::collab::chart_context()
+    }
 
     #[cfg(feature = "web")]
     fn web_kinds_of(&self, project: &str) -> Option<crate::plan::Kinds> {
@@ -159,6 +162,7 @@ pub fn install() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         session_engine_client::body::install(&BODY);
+        session_engine_client::body::install_studio(&BODY);
         #[cfg(feature = "native")]
         session_engine_client::actions::fill_with(crate::actions::fill);
     });

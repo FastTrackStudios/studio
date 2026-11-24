@@ -227,6 +227,10 @@ daw-edit = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2f
 # The timeline state every view and the engine share (the cursors, the
 # time selection, what is selected, the clipboard).
 daw-timeline = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+# The contract the views are built on (daw#51): the EngineView protocol and
+# a window's link, the song model, transport, selection and overlays. Each
+# consumer picks native or web (and the engine's app, local).
+daw-view = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f", default-features = false }
 daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
@@ -1450,6 +1454,7 @@ dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.
 daw                = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-edit           = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-timeline       = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-view           = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-standalone     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 session-format     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 dawfile-reaper     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }

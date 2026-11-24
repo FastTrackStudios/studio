@@ -3,22 +3,9 @@
 //! told it (`crate::view_client`), or as this process's own engine keeps it
 //! (`session_engine::stream_set`, which streams them).
 
-/// How far a streamed song can play from where it is, every recording it
-/// plays there.
-#[derive(Clone, Debug, PartialEq, facet::Facet)]
-pub struct Readiness {
-    /// The song (its engine project).
-    pub project: String,
-    /// Where it would play from, seconds.
-    pub playhead: f64,
-    /// Seconds from the playhead every playing recording has (up to
-    /// [`LOOK_AHEAD`]).
-    pub buffered: f64,
-    /// It may play: [`READY_AHEAD`] seconds of everything are here.
-    pub ready: bool,
-    /// Recordings missing something in the next [`READY_AHEAD`] seconds.
-    pub waiting_on: u32,
-}
+/// How far a streamed song can play from where it is: the engine's body
+/// answers it (`daw_view::body::Readiness`).
+pub use daw_view::body::Readiness;
 
 /// What the window shows of each streaming song, refreshed every half
 /// second ([`watch`]): how much of the recording each playing item reads

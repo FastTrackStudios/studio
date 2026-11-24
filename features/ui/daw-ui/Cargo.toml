@@ -54,7 +54,13 @@ image = { workspace = true }
 resvg = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
+# The song model the views draw and the level scale (daw-view, the views'
+# contract): natively over a tokio link, in a page over the page's.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+daw-view = { workspace = true, features = ["native"] }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+daw-view = { workspace = true, features = ["web"] }
 wasm-bindgen = { workspace = true }
 web-sys = { workspace = true, features = ["Window", "Document", "MouseEvent", "EventTarget", "Location"] }
 

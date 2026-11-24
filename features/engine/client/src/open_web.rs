@@ -8,23 +8,14 @@ pub use session_runtime::open_core::{
     project_text_in,
 };
 
-/// Never constructed: [`runtime`] has none to give.
-pub struct Runtime(());
-
-impl Runtime {
-    pub fn block_on<F: core::future::Future>(&self, _future: F) -> F::Output {
-        unreachable!("no runtime is ever handed out on the web")
-    }
-}
-
-#[must_use]
-pub fn runtime() -> Option<&'static Runtime> {
-    None
-}
+/// A page's runtime stand-in and the song on screen: the views' contract's
+/// (`daw_view::open`), whose song on screen is the page's ([`page_song`],
+/// through Studio's host).
+pub use daw_view::open::{Runtime, current_song, in_song, runtime};
 
 /// The song on screen: a page shows one ([`set_current_song`]).
 #[must_use]
-pub fn current_song() -> Option<String> {
+pub(crate) fn page_song() -> Option<String> {
     CURRENT.read().ok().and_then(|slot| slot.clone())
 }
 
@@ -32,6 +23,7 @@ static CURRENT: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None)
 
 /// The page shows `project` now.
 pub fn set_current_song(project: &str) {
+    crate::host::install();
     if let Ok(mut slot) = CURRENT.write() {
         *slot = Some(project.to_owned());
     }
@@ -41,7 +33,7 @@ pub fn set_current_song(project: &str) {
 /// does; on a page, [`crate::web_engine::switch_song`].
 pub fn switch_song(project_guid: &str) {
     #[cfg(feature = "web")]
-    crate::body::body().web_switch_song(project_guid);
+    crate::body::studio_body().web_switch_song(project_guid);
     #[cfg(not(feature = "web"))]
     set_current_song(project_guid);
 }

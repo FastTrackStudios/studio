@@ -16,15 +16,22 @@
 //! module needs of the body when the engine runs in the same process goes
 //! through [`body`].
 
+/// What a window is built from that is any DAW's, not Studio's: the
+/// views' contract (`daw-view`), under the paths this crate always had.
+pub use daw_view::{
+    automation, changes, edit_state, engine, folds, hit_overlay, jobs, kit_gate, lanes, leveler,
+    midi, num, open_progress, options, play_return, poi, routes, scale, stretch, track_regions,
+    view, wake, wave_detail, window_queue,
+};
+#[cfg(feature = "native")]
+pub use daw_view::{page, wave_pool};
 pub mod actions;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod arrange_actions;
 pub mod audio_mode;
-pub mod automation;
 #[cfg(feature = "native")]
 pub mod automation_actions;
 pub mod body;
-pub mod changes;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod collab;
 #[cfg(feature = "native")]
@@ -33,22 +40,13 @@ pub mod drum_edit;
 pub mod drum_settings;
 #[cfg(feature = "native")]
 pub mod edit_actions;
-pub mod edit_state;
-pub mod engine;
 pub use session_runtime::folder;
-pub mod folds;
 pub mod gain_stage;
+pub mod host;
 pub use session_runtime::guide_instrument;
-pub mod hit_overlay;
 pub mod instrument_tracks;
-pub mod jobs;
-pub mod kit_gate;
-pub mod lanes;
-pub mod leveler;
-pub mod midi;
 #[cfg(feature = "native")]
 pub mod notes_actions;
-pub mod num;
 /// Opening's window half: the process's engine runtime and handle, the
 /// song on screen, the audio mode, and attaching to an engine or a REAPER.
 #[cfg(feature = "native")]
@@ -57,20 +55,13 @@ pub mod open;
 #[cfg(not(feature = "native"))]
 #[path = "open_web.rs"]
 pub mod open;
-pub mod open_progress;
-pub mod options;
 pub mod organize_edit;
-#[cfg(feature = "native")]
-pub mod page;
 pub mod plan;
-pub mod play_return;
-pub mod poi;
 pub mod prepare;
 pub mod presence;
 pub mod projects;
 #[cfg(feature = "native")]
 pub mod render_ahead;
-pub mod routes;
 pub use session_runtime::section_colors;
 pub mod setlist;
 pub mod settings;
@@ -81,24 +72,14 @@ pub mod song_model;
 pub mod song_modes;
 pub mod stream_quality;
 pub mod stream_set;
-pub mod stretch;
 #[cfg(feature = "native")]
 pub mod studio_engine;
 pub mod take_colors;
-pub mod track_regions;
-/// The engine as a window sees it: one vox service beside the daw facade.
-pub mod view;
 /// A window's link to its engine: replicas and calls.
 #[cfg(feature = "native")]
 pub mod view_client;
-/// Asking the windows for a frame when the engine changed what they draw.
-pub mod wake;
-pub mod wave_detail;
-#[cfg(feature = "native")]
-pub mod wave_pool;
-#[cfg(feature = "web")]
-pub use session_runtime::web_audio;
-pub mod window_queue;
 pub use editing::groove;
 pub use editing::written;
+#[cfg(feature = "web")]
+pub use session_runtime::web_audio;
 pub mod zoom;

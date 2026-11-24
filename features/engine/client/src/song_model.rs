@@ -10,6 +10,16 @@ use std::sync::Arc;
 
 use daw_ui::studio::{ProjectRef, RowsRef};
 
+/// The song as a view reads it and the read-back an engine asks for after
+/// an edit: the views' contract's (`daw_view::song`).
+pub use daw_view::song::{
+    Planner, Plans, Resync, SongView, patch_with, previews_of, request_resync, request_resync_here,
+    request_resync_items, request_resync_items_here, resync_pending, take_resync,
+    take_resync_scope,
+};
+#[cfg(feature = "native")]
+pub use daw_view::song::{fetch, mark_seen, patch_items};
+
 /// The opened session, as the panels read it.
 ///
 /// Cheap to clone: everything in it is shared.
@@ -32,46 +42,88 @@ pub struct StudioSession {
     pub planner: Planner,
 }
 
-/// The row plan's inputs: the project as the engine had it (before the
-/// plan folds anything), the scene it was laid out by, and the track kinds
-/// the template wrote into the file (read once, at open).
-#[derive(Clone)]
-pub struct Planner {
-    pub raw: Arc<daw_ui::studio::project::Project>,
-    pub scene: Option<&'static str>,
+/// How Studio plans a panel's rows: by its template's scenes, over the
+/// track kinds the template wrote into the song (read once, at open).
+pub struct TemplatePlans {
     pub kinds: Arc<crate::plan::Kinds>,
 }
 
-impl Planner {
-    /// Plan the rows for `raw`: [`plan_rows`] with this planner's scene
-    /// and file.
-    #[must_use]
-    pub fn plan(&self, raw: &daw_ui::studio::project::Project) -> (ProjectRef, RowsRef) {
-        plan_rows_with(raw, self.scene, &self.kinds)
+impl Plans for TemplatePlans {
+    fn rows(
+        &self,
+        raw: &daw_ui::studio::project::Project,
+        scene: Option<&str>,
+    ) -> (ProjectRef, RowsRef) {
+        plan_rows_with(raw, scene, &self.kinds)
     }
 
-    /// The mixer's strips for `raw` outside Mix mode — docked under the
-    /// arrangement or on its own: the scene's MIXER rows (a folder the
-    /// scene hides from the mixer is gone, one it folds only in the
-    /// arrangement keeps every strip), and the folders the window shut
-    /// (`crate::folds`), which both panels share. Each strip is the track
-    /// as the engine has it: the scene decides which strips, not how wide
-    /// a strip is outside Mix mode.
-    ///
-    /// Not the arrangement's rows: the two panels answer different
-    /// questions, and the scene says so per surface.
-    #[must_use]
-    pub fn plan_strips(&self, raw: &daw_ui::studio::project::Project) -> RowsRef {
-        RowsRef(Arc::new(plan_strips_with(raw, self.scene, &self.kinds)))
+    fn strips(&self, raw: &daw_ui::studio::project::Project, scene: Option<&str>) -> RowsRef {
+        RowsRef(Arc::new(plan_strips_with(raw, scene, &self.kinds)))
     }
+
+    fn scene_name(&self, slug: &str) -> Option<&'static str> {
+        dynamic_template::scenes::scene(slug).map(|s| s.name.as_str())
+    }
+
+    fn groups(
+        &self,
+        names: Vec<String>,
+    ) -> Result<std::collections::HashMap<String, Vec<String>>, String> {
+        dynamic_template::visibility::groups(names).map_err(|e| e.to_string())
+    }
+
+    fn group_key(&self, group: &str) -> String {
+        dynamic_template::visibility::normalize_key(group)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+/// A planner over `raw` that plans by Studio's template ([`TemplatePlans`]).
+#[must_use]
+pub fn template_planner(
+    raw: Arc<daw_ui::studio::project::Project>,
+    scene: Option<&'static str>,
+    kinds: Arc<crate::plan::Kinds>,
+) -> Planner {
+    Planner::new(raw, scene, Arc::new(TemplatePlans { kinds }))
+}
+
+/// What Studio plans that a view does not ask of every app: the mixer laid
+/// out by a scene, and the track kinds.
+pub trait TemplatePlanner {
+    /// The track kinds the planner plans with (none when it does not plan
+    /// by Studio's template).
+    fn kinds(&self) -> Arc<crate::plan::Kinds>;
 
     /// The mixer's rows for `raw`: the scene laid out for the mixer — each
     /// track as wide as the scene opens it, the one it focuses selected —
     /// and every folder as the scene leaves it, the way the scene renders
     /// (`tests/golden_scenes.rs`), then as the window's folds leave it.
     /// `extent` is the panel's height.
-    #[must_use]
-    pub fn plan_mixer(
+    fn plan_mixer(
+        &self,
+        raw: &daw_ui::studio::project::Project,
+        scene: Option<&str>,
+        settings: crate::settings::Settings,
+        extent: f64,
+    ) -> RowsRef;
+}
+
+impl TemplatePlanner for Planner {
+    fn kinds(&self) -> Arc<crate::plan::Kinds> {
+        self.plans()
+            .as_any()
+            .downcast_ref::<TemplatePlans>()
+            .map_or_else(
+                || Arc::new(crate::plan::Kinds::default()),
+                |t| Arc::clone(&t.kinds),
+            )
+    }
+
+    fn plan_mixer(
         &self,
         raw: &daw_ui::studio::project::Project,
         scene: Option<&str>,
@@ -92,7 +144,7 @@ impl Planner {
         // opened or shut on a strip in Mix mode is.
         RowsRef(Arc::new(crate::folds::apply(crate::plan::apply_scene(
             &planned,
-            &self.kinds,
+            &self.kinds(),
             scene,
             crate::plan::Panel {
                 surface: crate::plan::Surface::Mixer,
@@ -112,6 +164,18 @@ impl PartialEq for StudioSession {
 }
 
 impl StudioSession {
+    /// The song as a view reads it: what Studio hands the arrangement, the
+    /// mixer and the editor.
+    #[must_use]
+    pub fn song(&self) -> SongView {
+        SongView {
+            project: self.project.clone(),
+            rows: self.rows.clone(),
+            previews: self.previews.clone(),
+            planner: self.planner.clone(),
+        }
+    }
+
     /// The song that opened as `project` in the engine — current or not —
     /// read back as the studio lays it out, by the project rather than
     /// whichever is current, so a song opening behind the one on screen
@@ -178,10 +242,10 @@ impl StudioSession {
         let automation_ms = at.elapsed().as_secs_f64() * 1e3;
         let at = web_time::Instant::now();
         let step = tracing::info_span!("read.kinds").entered();
-        let planner = Planner {
-            raw: Arc::new(raw),
-            scene: Some(SCENE),
-            kinds: Arc::new({
+        let planner = template_planner(
+            Arc::new(raw),
+            Some(SCENE),
+            Arc::new({
                 // A project file has no text to read them from: the engine
                 // holds them, as it does for the song on screen.
                 let from_text = crate::plan::Kinds::from_text(rpp_text);
@@ -195,7 +259,7 @@ impl StudioSession {
                 };
                 #[cfg(all(feature = "web", not(feature = "native")))]
                 let from_text = if from_text.is_empty() {
-                    crate::body::body()
+                    crate::body::studio_body()
                         .web_kinds_of(project)
                         .unwrap_or(from_text)
                 } else {
@@ -203,7 +267,7 @@ impl StudioSession {
                 };
                 from_text
             }),
-        };
+        );
         drop(step);
         let kinds_ms = at.elapsed().as_secs_f64() * 1e3;
         let at = web_time::Instant::now();
@@ -327,11 +391,11 @@ impl StudioSession {
         if let Some(read) = automation {
             crate::automation::adopt_read(read);
         }
-        let planner = Planner {
-            raw: Arc::new(raw),
-            scene: Some(SCENE),
-            kinds: Arc::new(crate::plan::Kinds::from_entries(facts.kinds)),
-        };
+        let planner = template_planner(
+            Arc::new(raw),
+            Some(SCENE),
+            Arc::new(crate::plan::Kinds::from_entries(facts.kinds)),
+        );
         let (studio, rows) = planner.plan(&planner.raw);
         drop(step);
         let plan_ms = at.elapsed().as_secs_f64() * 1e3;
@@ -461,10 +525,10 @@ impl StudioSession {
                 )
             )
         })?;
-        let planner = Planner {
-            raw: Arc::new(raw),
-            scene: Some(SCENE),
-            kinds: Arc::new({
+        let planner = template_planner(
+            Arc::new(raw),
+            Some(SCENE),
+            Arc::new({
                 let engine = crate::open::local_engine()
                     .zip(crate::open::current_song())
                     .map(|(daw, song)| crate::plan::Kinds::from_engine(daw, &song))
@@ -478,7 +542,7 @@ impl StudioSession {
                     engine
                 }
             }),
-        };
+        );
         let planning = web_time::Instant::now();
         let (project, rows) = planner.plan(&planner.raw);
         let planned = planning.elapsed();
@@ -518,228 +582,6 @@ pub fn read_back(
     project_path: &std::path::Path,
 ) -> Option<(ProjectRef, RowsRef)> {
     Some(plan_rows(&fetch()?, scene, project_path))
-}
-
-/// Asked for when something changed the session in the ENGINE rather
-/// than through the arrangement — a toolbar action, an edited chart laid
-/// over the song — so the arrangement reads it back on its next frame.
-static RESYNC: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Whether the read-back asked for must cover everything (the engine
-/// changed something nobody named) or only items (the engine's journal
-/// says which).
-static ALL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Where the window has read the engine's journal up to
-/// ([`daw::standalone::journal::now`] when it last read the song).
-#[cfg(feature = "native")]
-static SEEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
-/// What a read-back must cover.
-#[derive(Debug)]
-pub enum Resync {
-    /// The whole song: something changed that nobody named.
-    All,
-    /// Only items: those the engine's journal says changed.
-    Items,
-}
-
-/// Ask the arrangement to read the session back from the engine — all of
-/// it: the safe ask, for a change that does not say what it touched.
-pub fn request_resync() {
-    request_resync_here();
-    // And every window on the engine, over its link.
-    #[cfg(feature = "native")]
-    crate::body::body().view_changed(None, crate::view::Change::All);
-}
-
-/// [`request_resync`] for this window alone — what its link does when the
-/// engine says something changed.
-pub fn request_resync_here() {
-    ALL.store(true, std::sync::atomic::Ordering::Release);
-    RESYNC.store(true, std::sync::atomic::Ordering::Release);
-}
-
-/// Ask for the items that changed to be read back: an edit that changed
-/// only items (moved, cut, made, removed, re-laned, their takes) and
-/// nothing else of the song — not the tracks, not the ruler. Which items,
-/// the engine's journal says.
-pub fn request_resync_items() {
-    request_resync_items_here();
-    #[cfg(feature = "native")]
-    crate::body::body().view_changed(None, crate::view::Change::Items);
-}
-
-/// [`request_resync_items`] for this window alone.
-pub fn request_resync_items_here() {
-    RESYNC.store(true, std::sync::atomic::Ordering::Release);
-}
-
-/// Whether a read-back is asked for; asking clears it.
-#[must_use]
-pub fn take_resync() -> bool {
-    take_resync_scope().is_some()
-}
-
-/// Whether one is waiting, without taking it — what a panel's
-/// `needs_redraw` asks.
-#[must_use]
-pub fn resync_pending() -> bool {
-    RESYNC.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// The read-back asked for, if one is; asking clears it.
-#[must_use]
-pub fn take_resync_scope() -> Option<Resync> {
-    if !RESYNC.swap(false, std::sync::atomic::Ordering::AcqRel) {
-        return None;
-    }
-    if ALL.swap(false, std::sync::atomic::Ordering::AcqRel) {
-        Some(Resync::All)
-    } else {
-        Some(Resync::Items)
-    }
-}
-
-/// The window has read the whole song as of now: the journal from here.
-/// Taken BEFORE the read, so a write during it is read again next time.
-#[cfg(feature = "native")]
-pub fn mark_seen() {
-    // The engine's journal, over the window's link: none, and every edit
-    // reads the whole song back.
-    SEEN.store(
-        crate::view_client::journal_now().unwrap_or(0),
-        std::sync::atomic::Ordering::Release,
-    );
-}
-
-/// The items the engine's journal says changed since the window last
-/// read, read again into `raw` in place: each where it now is (or gone),
-/// its lane in order, its take's name and whether it is MIDI. The guids
-/// of those still in the song, or `None` when the journal cannot say or
-/// there is no engine here (read the whole song back instead).
-#[cfg(feature = "native")]
-#[must_use]
-pub fn patch_items(raw: &mut daw_ui::studio::project::Project) -> Option<Vec<String>> {
-    let song = crate::open::current_song()?;
-    let seen = SEEN.load(std::sync::atomic::Ordering::Acquire);
-    // Never read whole yet: nowhere to read on from.
-    if seen == 0 {
-        return None;
-    }
-    let changes = crate::view_client::item_changes(&song, seen)?;
-    let changed = changes.changed?;
-    SEEN.store(changes.cursor, std::sync::atomic::Ordering::Release);
-    Some(patch_with(raw, changed, &changes.gone))
-}
-
-/// `raw` with `changed` (each item as it is now) put where it is and
-/// `gone` taken out: each where it was, taken out; then each where it is,
-/// put back, its lane in order, its take's name and whether it is MIDI.
-/// The guids of those still in the song.
-#[must_use]
-pub fn patch_with(
-    raw: &mut daw_ui::studio::project::Project,
-    changed: Vec<crate::view::ItemNow>,
-    gone: &[String],
-) -> Vec<String> {
-    if changed.is_empty() && gone.is_empty() {
-        return Vec::new();
-    }
-    let named: std::collections::HashSet<&str> = changed
-        .iter()
-        .map(|c| c.item.guid.as_str())
-        .chain(gone.iter().map(String::as_str))
-        .collect();
-    let mut lanes: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for (track, items) in &mut raw.items {
-        let before = items.len();
-        items.retain(|i| !named.contains(i.guid.as_str()));
-        if items.len() != before {
-            lanes.insert(track.clone());
-        }
-    }
-    for guid in &named {
-        raw.names.remove(*guid);
-        raw.midi.remove(*guid);
-    }
-    let mut now = Vec::new();
-    for crate::view::ItemNow {
-        item,
-        take_name,
-        midi,
-    } in changed
-    {
-        let guid = item.guid.clone();
-        if let Some(name) = take_name {
-            raw.names.insert(guid.clone(), name);
-        }
-        if midi {
-            raw.midi.insert(guid.clone());
-        }
-        lanes.insert(item.track_guid.clone());
-        raw.items
-            .entry(item.track_guid.clone())
-            .or_default()
-            .push(item);
-        now.push(guid);
-    }
-    for track in &lanes {
-        if let Some(items) = raw.items.get_mut(track) {
-            daw_ui::studio::project::sort_lane(items);
-            if items.is_empty() {
-                raw.items.remove(track);
-            }
-        }
-    }
-    raw.item_count = raw.items.values().map(Vec::len).sum();
-    let reach = raw
-        .items
-        .values()
-        .flatten()
-        .map(|i| i.position.as_seconds() + i.length.as_seconds())
-        .fold(0.0_f64, f64::max);
-    raw.length_secs = reach.max(60.0);
-    now
-}
-
-/// The open project, as the engine has it.
-///
-/// It blocks on a runtime of its own: on a thread that is driving one
-/// already (an Architect process view paints inside its runtime), it
-/// reads on a thread of its own, which it waits for.
-#[cfg(feature = "native")]
-#[must_use]
-pub fn fetch() -> Option<daw_ui::studio::project::Project> {
-    if tokio::runtime::Handle::try_current().is_ok() {
-        return std::thread::scope(|s| s.spawn(fetch_here).join().ok().flatten());
-    }
-    fetch_here()
-}
-
-/// [`fetch`], on a thread driving no runtime.
-#[cfg(feature = "native")]
-fn fetch_here() -> Option<daw_ui::studio::project::Project> {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .ok()?;
-    let step = tracing::info_span!("fetch.read").entered();
-    mark_seen();
-    let project = rt.block_on(daw_ui::studio::project::fetch())?;
-    drop(step);
-    let step = tracing::info_span!("fetch.automation").entered();
-    // The lanes as the engine reads them (the leveler's among them), over
-    // the window's link; a REAPER driven has its lanes on the facade.
-    match crate::open::current_song().and_then(|song| crate::view_client::automation(&song)) {
-        Some(read) => crate::automation::adopt_read(read),
-        None => {
-            let (lanes, takes) = rt.block_on(crate::automation::read_remote(&project.tracks));
-            crate::automation::adopt_remote(lanes, takes);
-        }
-    }
-    drop(step);
-    Some(project)
 }
 
 /// No engine in a page's process to write a chart from.
@@ -889,44 +731,4 @@ pub fn plan_strips_with(
             })
             .collect(),
     )
-}
-
-/// Every MIDI item's notes, read before anything is drawn — an item drawn
-/// from a waveform it does not have is why a chord track once looked like
-/// a shaker.
-#[must_use]
-pub fn previews_of(project: &ProjectRef) -> crate::midi::Previews {
-    let previews = crate::midi::Previews::default();
-    previews.fill_blocking(
-        project
-            .0
-            .items
-            .values()
-            .flatten()
-            .filter(|item| project.0.is_midi(&item.guid))
-            .map(|item| (item.guid.clone(), item.length.as_seconds()))
-            .collect(),
-    );
-    let waves: Vec<String> = project
-        .0
-        .items
-        .values()
-        .flatten()
-        .filter(|item| !project.0.is_midi(&item.guid))
-        .map(|item| item.guid.clone())
-        .collect();
-    // The waveforms behind the window, each item drawn as it arrives (and
-    // the bottom bar showing how far): reading them first held the window
-    // still while a song of thousands of items opened.
-    #[cfg(feature = "native")]
-    {
-        // Read as the song it is now: a set opening songs one after
-        // another has moved on to the next by the time this runs.
-        let song = crate::open::current_song();
-        let reading = previews.clone();
-        crate::wave_pool::spawn(move || reading.fill_waves_blocking_in(song, waves));
-    }
-    #[cfg(not(feature = "native"))]
-    previews.fill_waves_blocking(waves);
-    previews
 }
