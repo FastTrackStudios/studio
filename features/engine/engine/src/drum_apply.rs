@@ -9,13 +9,16 @@
 //! without a choice (`conflicts`), and writes the rest as one placement
 //! of the kit ([`crate::hit_place::plan`]), one undo step under a mark.
 //!
-//! The stretch limit: a slice is never drawn out slower than
-//! [`MIN_RATE`] (the owner's rule after a slice played at 0.11×, bar
-//! 128). Where hits moving apart would need more, what follows is moved
-//! up to meet it (`moved_up`) instead. A placement only shortens a slice
-//! by cutting it, never by speeding it up, so [`MAX_RATE`] holds by
-//! construction; the report reads every slice's rate back from the lanes
-//! and says any outside either.
+//! Every hit lands exactly where it is sent. A gap the edit opens is the
+//! placement algorithm's to fill (`daw.edit` 0.3, rhythm's rule: the
+//! slice before plays on, the slice after reaches back into its own take,
+//! they crossfade, and only what is left is stretched — its last span, no
+//! slower than [`MIN_RATE`], the owner's rule after a slice played at
+//! 0.11×, bar 128 — the rest left silent); the result says each fill
+//! (`fills`). A placement only shortens a slice by cutting it, never by
+//! speeding it up, so [`MAX_RATE`] holds by construction; the report
+//! reads every slice's rate back from the lanes and says any outside
+//! either.
 //!
 //! The pure part ([`solve`]) is tested on its own and timed by
 //! `drum-bench`; the rest reads the song, writes it and checks it.
@@ -43,9 +46,6 @@ const DISAGREE: f64 = 0.002;
 /// How long a slice's attack plays as recorded before a draw-out slows
 /// it ([`crate::stretch::STRETCH_KEEP`]), s.
 const KEEP: f64 = crate::stretch::STRETCH_KEEP;
-/// How far after its leader a rider is looked for when the leader is
-/// moved up, s.
-const RIDE_REACH: f64 = 0.5;
 /// How many landing errors a result lists unless asked for all.
 const LANDINGS: usize = 60;
 /// A landing nearer its target than this is not listed, ms.
@@ -144,15 +144,6 @@ pub struct Conflict {
     pub why: String,
 }
 
-/// A moment moved up to keep the slice before it from playing slower
-/// than [`MIN_RATE`].
-#[derive(Facet, Clone, Debug, PartialEq)]
-pub struct MovedUp {
-    pub id: String,
-    /// How much earlier than asked it lands, ms.
-    pub by_ms: f64,
-}
-
 /// The whole set solved.
 #[derive(Clone, Debug, Default)]
 pub struct Solution {
@@ -160,12 +151,8 @@ pub struct Solution {
     /// By time, the deleted ones among them.
     pub moments: Vec<Moment>,
     pub conflicts: Vec<Conflict>,
-    pub moved_up: Vec<MovedUp>,
     /// Ids the edit names that play nowhere now.
     pub unknown: Vec<String>,
-    /// Each slice the placement must draw out: its moment's first hit and
-    /// the rate it plays at (below 1: slower).
-    pub drawn: Vec<(String, f64)>,
 }
 
 impl Solution {
@@ -246,7 +233,6 @@ pub fn solve(strokes: &[Stroke], edit: &Edit, limits: Limits) -> Solution {
     rides(&mut out, &riders);
     deletes(&mut out, edit);
     order(&mut out, edit, &riders, limits);
-    stretch_limit(&mut out, &riders, limits.guard);
     out
 }
 
@@ -515,60 +501,9 @@ pub fn farthest(natural: f64) -> f64 {
 
 /// [`farthest`], no slower than `least`.
 #[must_use]
-pub fn farthest_at(natural: f64, least: f64) -> f64 {
+fn farthest_at(natural: f64, least: f64) -> f64 {
     let keep = KEEP.min(natural / 2.0);
     keep + (natural - keep) / least
-}
-
-/// The stretch limit on a placement's pieces (`daw.edit`'s answer, in
-/// timeline order): a piece drawn out past what [`MIN_RATE`] reaches is
-/// drawn no further, and the piece after it starts earlier to meet it —
-/// playing its own recording before its attack, back to no nearer than
-/// `guard` after the attack before (`attacks`, recording times, sorted),
-/// where `joined` says that stretch of recording is one take's. Each
-/// piece still drawn out: its start and the rate it plays at.
-pub fn limit_draws(
-    pieces: &mut [daw_edit::placement::Piece],
-    attacks: &[f64],
-    joined: &dyn Fn(f64, f64) -> bool,
-    (guard, least): (f64, f64),
-) -> Vec<(f64, f64)> {
-    let mut out = Vec::new();
-    for k in 0..pieces.len() {
-        let (Some(p), Some(n)) = (pieces.get(k).copied(), pieces.get(k + 1).copied()) else {
-            continue;
-        };
-        let Some(reach) = p.drawn_to else { continue };
-        let natural = (p.end - p.start).max(1e-6);
-        let most = p.start + farthest_at(natural, least);
-        let mut reach_to = reach;
-        if reach > most + 1e-6 {
-            let start_rec = n.start - n.shift;
-            // Its own attack, and the one before it in the recording.
-            let own = attacks.partition_point(|a| *a < start_rec - 1e-6);
-            let before = own
-                .checked_sub(1)
-                .and_then(|i| attacks.get(i))
-                .copied()
-                .unwrap_or(f64::NEG_INFINITY);
-            let earliest = before + guard + n.shift;
-            let start = most.max(earliest);
-            if start < n.start - 1e-6 && joined(start - n.shift, start_rec) {
-                if let Some(next) = pieces.get_mut(k + 1) {
-                    next.start = start;
-                }
-                reach_to = start;
-            }
-            if let Some(piece) = pieces.get_mut(k) {
-                piece.drawn_to = (reach_to > piece.end + 1e-9).then_some(reach_to);
-            }
-        }
-        let r = rate(natural, reach_to - p.start);
-        if r < 1.0 - 1e-6 {
-            out.push((p.start, r));
-        }
-    }
-    out
 }
 
 /// The rate a slice whose recording runs `natural` seconds plays at over
@@ -580,98 +515,6 @@ pub fn rate(natural: f64, length: f64) -> f64 {
     }
     let keep = KEEP.min(natural / 2.0);
     (natural - keep) / (length - keep).max(1e-9)
-}
-
-/// The stretch limit: in the order they play, the slice before a moment
-/// is drawn out no slower than [`MIN_RATE`]; past that the moment's own
-/// slice starts earlier to meet it (its recording before its attack, one
-/// take's, back to `guard` after the attack before it: [`limit_draws`]
-/// does it to the placement); and only past that too is the moment (and
-/// what rides it) moved up.
-fn stretch_limit(out: &mut Solution, riders: &HashMap<usize, usize>, guard: f64) {
-    let n = out.moments.len();
-    for i in 0..n {
-        let Some(a) = out.moments.get(i).filter(|m| !m.deleted).cloned() else {
-            continue;
-        };
-        // The recording runs to the next moment's attack, deleted or not.
-        let Some(next_recorded) = out.moments.get(i + 1).map(|m| m.recorded) else {
-            continue;
-        };
-        let Some(j) = (i + 1..n).find(|j| out.moments.get(*j).is_some_and(|m| !m.deleted)) else {
-            continue;
-        };
-        let natural = next_recorded - a.recorded;
-        let Some(b) = out.moments.get(j) else {
-            continue;
-        };
-        let length = b.lands() - a.lands();
-        if natural <= 0.0 {
-            continue;
-        }
-        let most = farthest(natural);
-        // How far back the next slice may reach in its own recording.
-        let back = out.moments.get(j - 1).map_or(0.0, |p| {
-            let same = take_of_moment(&out.strokes, p) == take_of_moment(&out.strokes, b);
-            if same {
-                (b.recorded - p.recorded - guard).max(0.0)
-            } else {
-                0.0
-            }
-        });
-        if length > most + back + 1e-6 {
-            let delta = length - most - back;
-            let leader: Vec<usize> = b.hits.clone();
-            let first = leader
-                .first()
-                .and_then(|k| out.strokes.get(*k))
-                .map(|s| s.id.clone())
-                .unwrap_or_default();
-            // It and the later moments riding it (a ride is near) move up
-            // together.
-            let reach = b.now + RIDE_REACH;
-            for (k, m) in out
-                .moments
-                .iter_mut()
-                .enumerate()
-                .skip(j)
-                .take_while(|(_, m)| m.now <= reach)
-            {
-                let rides_it = k == j
-                    || m.hits
-                        .iter()
-                        .any(|h| riders.get(h).is_some_and(|l| leader.contains(l)));
-                if rides_it {
-                    m.by -= delta;
-                }
-            }
-            out.moved_up.push(MovedUp {
-                id: first,
-                by_ms: (delta * 10_000.0).round() / 10.0,
-            });
-        }
-        let Some(b) = out.moments.get(j) else {
-            continue;
-        };
-        let r = rate(natural, (b.lands() - a.lands()).min(most));
-        if r < 1.0 - 1e-6 {
-            let id = a
-                .hits
-                .first()
-                .and_then(|k| out.strokes.get(*k))
-                .map(|s| s.id.clone())
-                .unwrap_or_default();
-            out.drawn.push((id, (r * 1_000.0).round() / 1_000.0));
-        }
-    }
-}
-
-/// The take a moment's first hit is of (its id's code after `~`).
-fn take_of_moment<'a>(strokes: &'a [Stroke], m: &Moment) -> &'a str {
-    m.hits
-        .first()
-        .and_then(|k| strokes.get(*k))
-        .map_or("", |s| crate::edit_list::take_of(&s.id))
 }
 
 /// A synthetic song's edit for timing the solve (`drum-bench`, the
@@ -737,7 +580,7 @@ pub static APPLY: ActionMeta = meta(
     "DRUMS_APPLY",
     "drums_apply",
     "Apply a whole drum edit",
-    "Write a whole drum edit in one step. `targets` {hit id: seconds}: where each hit plays (project seconds, as the song plays now); `remove` [ids]: their markers go (no cut there, the sound rides the slice before); `delete` [ids]: their sound goes (the slice cut out, the slice before drawn out to the next); `rides` {id: leader id}: the hit keeps its played distance from its leader (a flam's grace, a unison kick beside a snare, a second take at a comp seam; a flam marked with HITS_MARK rides by itself). Or `list`: a change list (DRUMS_EDIT_EXPORT, `studio.drum-edit/1`) matched to the markers by drum, take and recorded time (±2 ms) — a detected hit with no match is removed. The whole set is solved at once: hits struck together (15 ms) move together, nothing is sent past or onto another hit, and no slice is drawn out slower than 0.8× (what follows is moved up instead: `moved_up`). Refused, saying each `conflicts` entry, where two hits of one drum land on one line, a hit is sent onto another's attack or past it, or hits struck together are sent apart — unless a ride or a delete covers it. One undo step; `mark` names a restore point first (SESSION_HISTORY_RESTORE `mark`), else `Before DRUMS_APPLY <date time>`. `dry_run` solves and says, writing nothing. Says the check (doubled, lost, gaps), each hit's landing error over 0.5 ms (`all_landings` for every one), every slice drawn out and its rate, and the time of each stage.",
+    "Write a whole drum edit in one step. `targets` {hit id: seconds}: where each hit plays (project seconds, as the song plays now); `remove` [ids]: their markers go (no cut there, the sound rides the slice before); `delete` [ids]: their sound goes (the slice cut out, the slice before drawn out to the next); `rides` {id: leader id}: the hit keeps its played distance from its leader (a flam's grace, a unison kick beside a snare, a second take at a comp seam; a flam marked with HITS_MARK rides by itself). Or `list`: a change list (DRUMS_EDIT_EXPORT, `studio.drum-edit/1`) matched to the markers by drum, take and recorded time (±2 ms) — a detected hit with no match is removed. The whole set is solved at once: hits struck together (15 ms) move together, nothing is sent past or onto another hit, and every hit lands exactly where it is sent. A gap the edit opens is filled by the placement algorithm (daw.edit 0.3, rhythm): the slice before plays on to just before the next attack in its recording, the slice after reaches back into its own take, they crossfade, and only what is left is stretched — its last span, never slower than 0.8× — the rest left silent; `fills` says how many of each, the slowest stretch, the silence left, and each gap that was stretched or left a silence. Refused, saying each `conflicts` entry, where two hits of one drum land on one line, a hit is sent onto another's attack or past it, or hits struck together are sent apart — unless a ride or a delete covers it. One undo step; `mark` names a restore point first (SESSION_HISTORY_RESTORE `mark`), else `Before DRUMS_APPLY <date time>`. `dry_run` solves and says, writing nothing. Says the check (doubled, lost, gaps), each hit's landing error over 0.5 ms (`all_landings` for every one), every slice drawn out and its rate, and the time of each stage.",
     "Drums",
     "",
 );
@@ -805,6 +648,95 @@ pub struct Stages {
     pub total: f64,
 }
 
+/// How the gaps an edit opened were filled (`daw.edit` 0.3's fills).
+#[derive(Facet, Default, Debug)]
+pub struct Fills {
+    /// Gaps: hits moved later than the slice before could reach.
+    pub gaps: u32,
+    /// Of them: the slice before played on past its old cut, the slice
+    /// after reached back into its own take, the two crossfaded, the last
+    /// span stretched, a silence left.
+    pub extended: u32,
+    pub reached_back: u32,
+    pub crossfaded: u32,
+    pub stretched: u32,
+    pub left: u32,
+    /// A side stopped at a take switch, or played through the comp's own.
+    pub take_stopped: u32,
+    pub take_crossed: u32,
+    /// The slowest stretch's rate, and the silence left in all, ms.
+    pub slowest: Option<f64>,
+    pub left_ms: f64,
+    /// Each gap stretched or left a silence (first 60).
+    pub each: Vec<FillAt>,
+}
+
+/// One gap's fill.
+#[derive(Facet, Default, Debug)]
+pub struct FillAt {
+    /// The hit after it, where it plays, project seconds.
+    pub at: f64,
+    pub gap_ms: f64,
+    pub extended_ms: f64,
+    pub reached_back_ms: f64,
+    pub crossfade_ms: f64,
+    /// The span stretched, how long it plays, and its rate.
+    pub stretch_ms: Option<f64>,
+    pub rate: Option<f64>,
+    pub left_ms: f64,
+    /// `none`, `stopped` or `crossed`.
+    pub take_switch: String,
+}
+
+fn round(x: f64, places: i32) -> f64 {
+    let k = 10_f64.powi(places);
+    (x * k).round() / k
+}
+
+/// The fills, counted and listed.
+fn fills_of(fills: &[editing::placement::Filled]) -> Fills {
+    use editing::placement::TakeSwitch;
+    let of = |f: &dyn Fn(&editing::placement::Filled) -> bool| {
+        count(fills.iter().filter(|x| f(x)).count())
+    };
+    Fills {
+        gaps: count(fills.len()),
+        extended: of(&|f| f.extended > 0.0),
+        reached_back: of(&|f| f.reached_back > 0.0),
+        crossfaded: of(&|f| f.crossfade > 0.0),
+        stretched: of(&|f| f.stretched.is_some()),
+        left: of(&|f| f.left > 0.0),
+        take_stopped: of(&|f| f.take_switch == TakeSwitch::Stopped),
+        take_crossed: of(&|f| f.take_switch == TakeSwitch::Crossed),
+        slowest: fills
+            .iter()
+            .filter_map(|f| f.stretched.map(|s| round(s.rate, 3)))
+            .reduce(f64::min),
+        left_ms: round(fills.iter().map(|f| f.left).sum::<f64>() * 1e3, 1),
+        each: fills
+            .iter()
+            .filter(|f| f.stretched.is_some() || f.left > 0.0)
+            .take(LANDINGS)
+            .map(|f| FillAt {
+                at: round(f.at, 4),
+                gap_ms: round(f.gap * 1e3, 1),
+                extended_ms: round(f.extended * 1e3, 1),
+                reached_back_ms: round(f.reached_back * 1e3, 1),
+                crossfade_ms: round(f.crossfade * 1e3, 1),
+                stretch_ms: f.stretched.map(|s| round(s.over * 1e3, 1)),
+                rate: f.stretched.map(|s| round(s.rate, 3)),
+                left_ms: round(f.left * 1e3, 1),
+                take_switch: match f.take_switch {
+                    TakeSwitch::None => "none",
+                    TakeSwitch::Stopped => "stopped",
+                    TakeSwitch::Crossed => "crossed",
+                }
+                .to_owned(),
+            })
+            .collect(),
+    }
+}
+
 /// What a list matched.
 #[derive(Facet, Default, Debug)]
 pub struct Matched {
@@ -827,11 +759,12 @@ pub struct Applied {
     pub removed: u32,
     pub deleted: u32,
     pub conflicts: Vec<Conflict>,
-    pub moved_up: Vec<MovedUp>,
     /// Ids that play nowhere now.
     pub unknown: Vec<String>,
-    /// Slices the solve draws out: their moment's first hit and rate.
+    /// Gaps whose fill stretched a slice's last span.
     pub drawn: u32,
+    /// How each gap the edit opened was filled.
+    pub fills: Fills,
     pub landing: Landings,
     pub rates: Rates,
     pub check: Option<crate::hits::Check>,
@@ -926,7 +859,9 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
         slices = tracing::field::Empty,
         stretched = tracing::field::Empty,
         conflicts = tracing::field::Empty,
-        moved_up = tracing::field::Empty,
+        fill.gaps = tracing::field::Empty,
+        fill.stretched = tracing::field::Empty,
+        fill.left = tracing::field::Empty,
         lock_ms = tracing::field::Empty,
         dry_run = a.dry_run.unwrap_or(false),
         applied = tracing::field::Empty,
@@ -981,16 +916,13 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
     );
     out.deleted = count(solution.moments.iter().filter(|m| m.deleted).count());
     out.conflicts.clone_from(&solution.conflicts);
-    out.moved_up.clone_from(&solution.moved_up);
     out.unknown.clone_from(&solution.unknown);
-    out.drawn = count(solution.drawn.len());
     out.list = matched;
     span.record("hits", out.hits);
     span.record("moved", out.moved);
     span.record("removed", out.removed);
     span.record("deleted", out.deleted);
     span.record("conflicts", solution.conflicts.len());
-    span.record("moved_up", solution.moved_up.len());
     let sent = solution.sent(&edit);
     if dry || !solution.conflicts.is_empty() {
         if !solution.conflicts.is_empty() {
@@ -1033,12 +965,16 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
     let moves = solution.moves();
     let cut_on = solution.cut_on();
     let planned = if solution.moments.iter().any(|m| m.by.abs() > NO_MOVE) {
-        crate::hit_place::plan(&song, &moves, joins, (Some(&cut_on), Some(MIN_RATE)))?
+        crate::hit_place::plan(&song, &moves, joins, Some(&cut_on))?
     } else {
         crate::hit_place::Plan::default()
     };
     let ops = planned.ops;
-    out.drawn = count(planned.drawn.len());
+    out.fills = fills_of(&planned.fills);
+    out.drawn = out.fills.stretched;
+    span.record("fill.gaps", out.fills.gaps);
+    span.record("fill.stretched", out.fills.stretched);
+    span.record("fill.left", out.fills.left);
     step.record("ops", ops.len());
     out.ms.cut = ms(t);
     drop(step);
@@ -1277,7 +1213,7 @@ struct Gone {
 
 /// One mic's slice at `gone.at` (an attack) cut out, the one before
 /// drawn out to meet the slice after — no slower than [`MIN_RATE`], the
-/// slice after starting earlier for the rest, as [`limit_draws`] does.
+/// slice after starting earlier for the rest.
 fn close_one(
     lane: &[crate::hit_place::Slice],
     gone: Gone,

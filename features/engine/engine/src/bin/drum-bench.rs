@@ -107,12 +107,9 @@ fn main() -> eyre::Result<()> {
     row("solve", solving);
     if let Some((_, _, _, s)) = last {
         println!(
-            "moments {}, moved {}, moved up {}, drawn {} (slowest {:.3}), conflicts {}",
+            "moments {}, moved {}, conflicts {}",
             s.moments.len(),
             s.moved(),
-            s.moved_up.len(),
-            s.drawn.len(),
-            s.drawn.iter().map(|d| d.1).fold(1.0, f64::min),
             s.conflicts.len()
         );
         let mut kinds: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
@@ -122,9 +119,6 @@ fn main() -> eyre::Result<()> {
         println!("conflicts by kind: {kinds:?}");
         for c in s.conflicts.iter().take(12) {
             println!("  {} at {:.3}: {:?} — {}", c.kind, c.at, c.ids, c.why);
-        }
-        for m in s.moved_up.iter().take(8) {
-            println!("  moved up {} by {} ms", m.id, m.by_ms);
         }
     }
     Ok(())

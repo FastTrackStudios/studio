@@ -106,7 +106,7 @@ pub fn place(
     moves: &[(f64, f64)],
     joins: Joins,
 ) -> Result<usize, String> {
-    let ops = plan(song, moves, joins, (None, None))?.ops;
+    let ops = plan(song, moves, joins, None)?.ops;
     if ops.is_empty() {
         return Ok(0);
     }
@@ -125,21 +125,22 @@ pub fn place(
     Ok(ops.len())
 }
 
-/// A placement planned: its item edits, and each piece still drawn out
-/// (where it starts, timeline seconds, and the rate it plays at).
+/// A placement planned: its item edits, and what the algorithm did at
+/// each gap (`daw.edit` 0.3's fills: played on, reached back,
+/// crossfaded, the last span stretched and its rate, what is left).
 #[derive(Debug, Default)]
 pub struct Plan {
     pub ops: Vec<ItemOp>,
-    pub drawn: Vec<(f64, f64)>,
+    pub fills: Vec<placement::Filled>,
 }
 
 /// The item edits [`place`] makes, not yet applied: for a caller that
 /// writes them with edits of its own as one undo step (`DRUMS_APPLY`).
 /// `cut_on`, when given, are the hits (where they play now) a piece
 /// starts at — the kit's markers otherwise: a hit left out rides in the
-/// piece before it. `least`, when given, is the slowest a piece may be
-/// drawn out: past it the piece after starts earlier to meet it
-/// ([`crate::drum_apply::limit_draws`]).
+/// piece before it. Every hit lands exactly where it is sent: a gap a move
+/// opens is the algorithm's to fill (`daw.edit` 0.3), from the takes the
+/// COMP lane is made of, never by moving a hit.
 ///
 /// # Errors
 /// As [`place`].
@@ -147,7 +148,7 @@ pub fn plan(
     song: &crate::song::Song,
     moves: &[(f64, f64)],
     joins: Joins,
-    (cut_on, least): (Option<&[f64]>, Option<f64>),
+    cut_on: Option<&[f64]>,
 ) -> Result<Plan, String> {
     // Each step its own span under `hits.place`: the trace says where the
     // time went.
@@ -312,34 +313,42 @@ pub fn plan(
     // The chosen `daw.edit` algorithm places them (an extension: rhythm's,
     // or another's); the engine has no placement of its own.
     call.record("edit.hits", placed.len());
-    let provider =
-        tracing::info_span!("hits.place.provider", edit.slices = tracing::field::Empty).entered();
-    let mut pieces = crate::algorithms::place(&daw_edit::PlaceRequest {
+    let provider = tracing::info_span!(
+        "hits.place.provider",
+        edit.slices = tracing::field::Empty,
+        edit.takes = tracing::field::Empty,
+        fill.gaps = tracing::field::Empty,
+        fill.reached_back = tracing::field::Empty,
+        fill.crossfaded = tracing::field::Empty,
+        fill.stretched = tracing::field::Empty,
+        fill.slowest = tracing::field::Empty,
+        fill.left = tracing::field::Empty,
+        fill.left_ms = tracing::field::Empty,
+    )
+    .entered();
+    // The takes the COMP lane is made of, on the reference mic: a fill
+    // reaches no further than its own take.
+    let takes = kit
+        .first()
+        .map_or_else(Vec::new, |lanes| takes_of(&lanes.comp));
+    provider.record("edit.takes", takes.len());
+    let answer = crate::algorithms::place(&daw_edit::PlaceRequest {
         hits: placed.clone(),
         span,
         cut,
         bounds: outside,
-    })?
-    .pieces;
+        takes,
+        fill: placement::Fill {
+            crossfade: joins.crossfade,
+            ..placement::Fill::default()
+        },
+    })?;
+    let pieces = answer.pieces;
+    let fills = answer.fills;
     provider.record("edit.slices", pieces.len());
+    record_fills(&provider, &fills);
     drop(provider);
     let render = tracing::info_span!("hits.place.render").entered();
-    let drawn = least.map_or_else(Vec::new, |least| {
-        let attacks: Vec<f64> = placed.iter().map(|h| h.at).collect();
-        // One take's recording from `a` to `b` (COMP time): the same file
-        // under both on the reference mic's COMP lane.
-        let file_at = |t: f64| {
-            kit.first().and_then(|lanes| {
-                lanes
-                    .comp
-                    .iter()
-                    .find(|c| c.start() <= t && t < c.end())
-                    .and_then(|c| c.file.clone())
-            })
-        };
-        let joined = |a: f64, b: f64| file_at(a).is_some() && file_at(a) == file_at(b);
-        crate::drum_apply::limit_draws(&mut pieces, &attacks, &joined, (cut.guard, least))
-    });
     if let Some(bad) = pieces.iter().find(|p| p.end <= p.start) {
         return Err(format!(
             "a piece would end before it starts ({bad:?}) placing {:?} over {:.3}..{:.3}",
@@ -361,7 +370,59 @@ pub fn plan(
         pieces.len().saturating_sub(1).saturating_mul(kit.len()),
     );
     call.record("edit.items_written", ops.len());
-    Ok(Plan { ops, drawn })
+    Ok(Plan { ops, fills })
+}
+
+/// The fills' counts on `span`: how many gaps, how each was filled, the
+/// slowest stretch and the silence left.
+fn record_fills(span: &tracing::Span, fills: &[placement::Filled]) {
+    let count = |f: &dyn Fn(&placement::Filled) -> bool| fills.iter().filter(|x| f(x)).count();
+    span.record("fill.gaps", fills.len());
+    span.record("fill.reached_back", count(&|f| f.reached_back > 0.0));
+    span.record("fill.crossfaded", count(&|f| f.crossfade > 0.0));
+    span.record("fill.stretched", count(&|f| f.stretched.is_some()));
+    span.record("fill.left", count(&|f| f.left > 0.0));
+    span.record(
+        "fill.left_ms",
+        fills.iter().map(|f| f.left).sum::<f64>() * 1_000.0,
+    );
+    if let Some(slowest) = fills
+        .iter()
+        .filter_map(|f| f.stretched.map(|s| s.rate))
+        .reduce(f64::min)
+    {
+        span.record("fill.slowest", slowest);
+    }
+}
+
+/// The takes a COMP lane is made of, recording (COMP) time, in order: its
+/// items, those of one file played on at one alignment joined into one.
+fn takes_of(comp: &[Slice]) -> Vec<placement::Take> {
+    let mut out: Vec<(placement::Take, Option<&str>, f64)> = Vec::new();
+    for c in comp {
+        // Where its file's time 0 is on the timeline: one alignment.
+        let origin = c.start() - c.item.start_offset.as_seconds();
+        let file = c.file.as_deref();
+        match out.last_mut() {
+            Some((take, f, o))
+                if *f == file
+                    && file.is_some()
+                    && (*o - origin).abs() < 1e-6
+                    && c.start() <= take.to + 1e-3 =>
+            {
+                take.to = take.to.max(c.end());
+            }
+            _ => out.push((
+                placement::Take {
+                    from: c.start(),
+                    to: c.end(),
+                },
+                file,
+                origin,
+            )),
+        }
+    }
+    out.into_iter().map(|(take, _, _)| take).collect()
 }
 
 /// How far past the hits around a move its lanes are read, seconds: a
@@ -510,18 +571,29 @@ fn render_ops(
     }) {
         clear_ops(&slice.item, (start, end), &mut ops);
     }
+    // A seam the algorithm crossfades (`daw.edit` 0.3) is that long, the
+    // piece after starting where it says; one it leaves to the host (0.2)
+    // reaches back by the crossfade. A seam with a gap left (no overlap)
+    // fades each side within itself.
+    let seam_fade = |next: &Piece| match next.crossfade {
+        Some(x) if x > 1e-4 => x,
+        _ => joins.crossfade,
+    };
     for (k, piece) in pieces.iter().enumerate() {
         let fade_in = if k == 0 {
             edge_fade_in
         } else {
-            joins.crossfade
+            seam_fade(piece)
         };
-        let fade_out = if k + 1 == pieces.len() {
-            edge_fade_out
+        let fade_out = match pieces.get(k + 1) {
+            None => edge_fade_out,
+            Some(next) => seam_fade(next),
+        };
+        let reach_back = if k == 0 || piece.crossfade.is_some() {
+            0.0
         } else {
-            joins.crossfade
+            fade_in
         };
-        let reach_back = if k == 0 { 0.0 } else { fade_in };
         let (from, to) = (
             piece.start - reach_back - piece.shift,
             piece.end - piece.shift,
@@ -550,8 +622,20 @@ fn render_ops(
             };
             let mut length = b - a;
             let mut markers = Vec::new();
-            // The last resort: the decay drawn out to meet the next piece.
-            if last && let Some(reach) = piece.drawn_to {
+            // The last resort: only the decay's last span drawn out to meet
+            // the next piece, as the algorithm says.
+            if last && let (Some(reach), Some(from)) = (piece.drawn_to, piece.drawn_from) {
+                let at = a + piece.shift;
+                let from = (from - at).clamp(0.0, length);
+                if reach - at > length + 1e-9 {
+                    markers = vec![StretchMarker::new(0.0, offset)];
+                    if from > 1e-6 {
+                        markers.push(StretchMarker::new(from, offset + from));
+                    }
+                    markers.push(StretchMarker::new(reach - at, offset + length));
+                    length = reach - at;
+                }
+            } else if last && let Some(reach) = piece.drawn_to {
                 let mut shape = source.item.clone();
                 shape.position = daw_proto::PositionInSeconds::from_seconds(a + piece.shift);
                 shape.length = daw_proto::Duration::from_seconds(length);
@@ -640,5 +724,115 @@ fn clear_ops(item: &daw_proto::Item, (start, end): (f64, f64), ops: &mut Vec<Ite
         });
     } else if !tail {
         ops.push(ItemOp::Delete { item: id });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn slice(guid: &str, file: &str, (at, length, offset): (f64, f64, f64)) -> Slice {
+        Slice {
+            item: daw_proto::Item {
+                guid: guid.to_owned(),
+                position: daw_proto::PositionInSeconds::from_seconds(at),
+                length: daw_proto::Duration::from_seconds(length),
+                start_offset: daw_proto::Duration::from_seconds(offset),
+                ..daw_proto::Item::default()
+            },
+            file: Some(file.to_owned()),
+            markers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_comps_takes_are_its_items_one_file_at_one_alignment_joined() {
+        let comp = [
+            slice("a", "t1.wav", (0.0, 2.0, 10.0)),
+            // The same take split, played on at the same alignment.
+            slice("b", "t1.wav", (2.0, 1.0, 12.0)),
+            // Another take.
+            slice("c", "t2.wav", (2.99, 2.0, 3.0)),
+            // The first take again, elsewhere in it.
+            slice("d", "t1.wav", (4.99, 1.0, 40.0)),
+        ];
+        let takes = takes_of(&comp);
+        let spans: Vec<(f64, f64)> = takes.iter().map(|t| (t.from, t.to)).collect();
+        assert_eq!(spans, vec![(0.0, 3.0), (2.99, 4.99), (4.99, 5.99)]);
+    }
+
+    #[test]
+    fn a_fill_is_rendered_as_the_algorithm_says_on_every_mic() {
+        // The kick's piece stretched over its last 216 ms only; the
+        // snare's crossfading over it for 4 ms, starting where it says.
+        let lanes = Lanes {
+            edit_lane: 1,
+            edit: Vec::new(),
+            comp: vec![slice("comp", "t1.wav", (0.0, 3.0, 0.0))],
+        };
+        let pieces = [
+            Piece {
+                start: 0.995,
+                end: 1.295,
+                shift: 0.0,
+                drawn_to: Some(1.349),
+                drawn_from: Some(1.079),
+                crossfade: None,
+            },
+            Piece {
+                start: 1.345,
+                end: 2.0,
+                shift: 0.33,
+                drawn_to: None,
+                drawn_from: None,
+                crossfade: Some(0.004),
+            },
+        ];
+        let joins = Joins {
+            lead: 0.005,
+            crossfade: 0.004,
+        };
+        let ops = render_ops(&lanes, &pieces, (0.995, 2.0), joins);
+        let places: Vec<(f64, f64, f64)> = ops
+            .iter()
+            .filter_map(|op| match op {
+                ItemOp::Place {
+                    at, length, offset, ..
+                } => Some((*at, *length, *offset)),
+                _ => None,
+            })
+            .collect();
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        // The kick: placed from its start, as long as it now sounds.
+        assert!(near(places[0].0, 0.995) && near(places[0].1, 1.349 - 0.995));
+        // The snare: from where it says, not a crossfade earlier.
+        assert!(near(places[1].0, 1.345) && near(places[1].2, 1.345 - 0.33));
+        let markers: Vec<&Vec<StretchMarker>> = ops
+            .iter()
+            .filter_map(|op| match op {
+                ItemOp::Stretch { markers, .. } => Some(markers),
+                _ => None,
+            })
+            .collect();
+        let [kick] = markers.as_slice() else {
+            panic!("{markers:?}")
+        };
+        // As recorded up to the stretch, then its last span drawn at 0.8.
+        assert_eq!(kick.len(), 3);
+        assert!(near(kick[1].position, 1.079 - 0.995));
+        assert!(near(kick[1].source_position, 0.995 + (1.079 - 0.995)));
+        let rate = (kick[2].source_position - kick[1].source_position)
+            / (kick[2].position - kick[1].position);
+        assert!(near(rate, (1.295 - 1.079) / (1.349 - 1.079)));
+        let fades: Vec<(f64, f64)> = ops
+            .iter()
+            .filter_map(|op| match op {
+                ItemOp::Fades {
+                    fade_in, fade_out, ..
+                } => Some((*fade_in, *fade_out)),
+                _ => None,
+            })
+            .collect();
+        assert!(near(fades[0].1, 0.004) && near(fades[1].0, 0.004));
     }
 }

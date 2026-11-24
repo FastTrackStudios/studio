@@ -147,93 +147,6 @@ fn a_unison_partner_rides_its_leader() {
 }
 
 #[test]
-fn no_slice_is_drawn_out_slower_than_the_limit_the_next_reaches_back() {
-    // Bar 128: neighbours moved apart drew a slice out to 0.11×. A
-    // sixteenth's slice (0.1 s) is drawn no further than `farthest`; the
-    // slice after starts earlier to meet it, its hit where it was sent.
-    let hits = vec![
-        stroke("a~t", "Snare", 1.0),
-        stroke("b~t", "Kick", 1.1),
-        stroke("c~t", "Kick", 1.3),
-    ];
-    let s = solve(&hits, &targets(&[("a~t", 0.95)]), Limits::default());
-    assert!(s.moved_up.is_empty(), "{:?}", s.moved_up);
-    assert!(approx(by_of(&s, "b~t"), 0.0));
-    assert_eq!(s.drawn.len(), 1);
-    assert!(approx(s.drawn[0].1, MIN_RATE));
-}
-
-#[test]
-fn past_what_reaching_back_covers_what_follows_moves_up() {
-    let hits = vec![
-        stroke("a~t", "Snare", 1.0),
-        stroke("b~t", "Kick", 1.1),
-        stroke("c~t", "Kick", 1.3),
-    ];
-    let guard = Limits::default().guard;
-    // 150 ms early: past the draw (117.5 ms) and the reach back (80 ms).
-    let s = solve(&hits, &targets(&[("a~t", 0.85)]), Limits::default());
-    let short = 0.25 - farthest(0.1) - (0.1 - guard);
-    assert_eq!(s.moved_up.len(), 1);
-    assert_eq!(s.moved_up[0].id, "b~t");
-    assert!(approx(by_of(&s, "b~t"), -short));
-    // At a take switch the slice after has no recording of its own take
-    // to reach back into: moved up by all the draw does not cover.
-    let mut seam = hits;
-    seam[1].id = "b~other".to_owned();
-    seam[2].id = "c~other".to_owned();
-    let s = solve(&seam, &targets(&[("a~t", 0.95)]), Limits::default());
-    assert!(approx(by_of(&s, "b~other"), (0.95 + farthest(0.1)) - 1.1));
-}
-
-#[test]
-fn a_placements_draw_is_limited_and_the_next_piece_starts_earlier() {
-    use daw_edit::placement::Piece;
-    // A piece of 0.1 s drawn to 0.15: past the limit (0.1175).
-    let mut pieces = vec![
-        Piece {
-            start: 0.995,
-            end: 1.095,
-            shift: 0.0,
-            drawn_to: Some(1.145),
-        },
-        Piece {
-            start: 1.145,
-            end: 1.5,
-            shift: 0.05,
-            drawn_to: None,
-        },
-    ];
-    // Recorded attacks: 1.0, and 1.1 (the second piece's, shifted 0.05):
-    // it may reach back to 1.02 in its recording, 1.07 on the timeline.
-    let attacks = [1.0, 1.1];
-    let drawn = super::limit_draws(&mut pieces, &attacks, &|_, _| true, (0.02, MIN_RATE));
-    let most = 0.995 + farthest(0.1);
-    assert!(approx(pieces[0].drawn_to.unwrap_or(0.0), most));
-    assert!(approx(pieces[1].start, most));
-    assert_eq!(drawn.len(), 1);
-    assert!(approx(drawn[0].1, MIN_RATE));
-    // Another take's recording before it: nothing to reach back into.
-    let mut apart = vec![
-        Piece {
-            start: 0.995,
-            end: 1.095,
-            shift: 0.0,
-            drawn_to: Some(1.145),
-        },
-        Piece {
-            start: 1.145,
-            end: 1.5,
-            shift: 0.05,
-            drawn_to: None,
-        },
-    ];
-    let drawn = super::limit_draws(&mut apart, &attacks, &|_, _| false, (0.02, MIN_RATE));
-    assert!(approx(apart[1].start, 1.145));
-    assert!(drawn[0].1 < MIN_RATE);
-}
-
-#[test]
 fn a_slice_cut_short_plays_at_its_own_speed() {
     assert!(approx(rate(0.1, 0.05), 1.0));
     assert!(rate(0.1, 0.11) < 1.0);
@@ -253,13 +166,9 @@ fn a_deleted_stroke_goes_and_the_slice_before_reaches_the_next() {
     assert!(s.conflicts.is_empty());
     let d = s.moments.iter().find(|m| m.deleted).expect("deleted");
     assert!(approx(d.now, 1.05));
-    // The kick's slice runs to the deleted attack (50 ms) and is drawn
-    // toward the snare (100 ms): the snare's slice reaches back to the
-    // deleted attack and a guard, and past that the snare moves up.
-    let guard = Limits::default().guard;
-    let covered = farthest(0.05) + (0.05 - guard);
-    assert_eq!(s.moved_up.len(), 1);
-    assert!(approx(by_of(&s, "b"), covered - 0.1));
+    // The snare stays where it plays: a hit is never moved to close a
+    // gap.
+    assert!(approx(by_of(&s, "b"), 0.0));
     // Its cut stays, to cut it out after.
     assert!(s.cut_on().contains(&1.05));
 }
@@ -287,7 +196,7 @@ fn a_removed_marker_is_no_cut_and_unknown_ids_are_said() {
 fn a_whole_song_solves_well_inside_a_second() {
     let (strokes, edit) = synthetic(1_400);
     assert_eq!(strokes.len(), 1_400);
-    let t = std::time::Instant::now();
+    let t = web_time::Instant::now();
     let s = solve(&strokes, &edit, Limits::default());
     let took = t.elapsed();
     assert!(s.moved() > 500, "moved {}", s.moved());

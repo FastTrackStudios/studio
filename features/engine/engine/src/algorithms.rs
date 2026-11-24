@@ -34,8 +34,9 @@ static EXTENSIONS: OnceLock<Option<Extensions>> = OnceLock::new();
 /// How long an algorithm may take to answer before the built-in answers.
 const ANSWER_WITHIN: Duration = Duration::from_secs(20);
 
-/// The `daw.edit` contract the engine speaks (0.2: `PLAN`).
-const WANTED: &str = "^0.2";
+/// The `daw.edit` contract the engine speaks (0.2: `PLAN`; 0.3: the gap
+/// fill — takes in, crossfading pieces and their fills out).
+const WANTED: &str = "^0.3";
 
 /// The engine's algorithm extensions, started the first time they are
 /// asked for (`None` where they cannot run: no config folder).
@@ -157,11 +158,11 @@ pub fn place(request: &daw_edit::PlaceRequest) -> Result<daw_edit::PlaceAnswer, 
 ///
 /// # Errors
 ///
-/// No extension provides `daw.edit` 0.2, or the provider failed or did not
+/// No extension provides `daw.edit` 0.3, or the provider failed or did not
 /// answer in time.
 pub fn plan(request: &daw_edit::PlanRequest) -> Result<daw_edit::PlanAnswer, String> {
     ask(daw_edit::METHOD_PLAN, request)?.ok_or_else(|| {
-        "no edit algorithm is loaded: planning a drum edit needs an extension providing daw.edit 0.2 (rhythm: ENGINE_EXT_DEV {\"folder\": \"<rhythm>/crates/rhythm-ext\"})".to_owned()
+        "no edit algorithm is loaded: planning a drum edit needs an extension providing daw.edit 0.3 (rhythm: ENGINE_EXT_DEV {\"folder\": \"<rhythm>/crates/rhythm-ext\"})".to_owned()
     })
 }
 
