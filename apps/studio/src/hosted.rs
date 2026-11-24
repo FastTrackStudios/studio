@@ -543,7 +543,43 @@ async fn current_song_title() -> Option<String> {
         .get(at.checked_sub(1)?)?
         .get("title")?
         .as_str()?;
-    Some(title.split(" - ").next().unwrap_or(title).trim().to_owned())
+    Some(display_title(title))
+}
+
+/// A set's song title as a chart heads it: the artist left off
+/// (`Title - Artist`) and a file variant's suffix dropped
+/// (`Unbreakable.comped` → `Unbreakable`): a final `.` followed by one
+/// lowercase word and nothing else. A dot inside a title (`Mr. Blue Sky`)
+/// stays.
+fn display_title(raw: &str) -> String {
+    let title = raw.split(" - ").next().unwrap_or(raw).trim();
+    match title.rsplit_once('.') {
+        Some((head, variant))
+            if !head.is_empty()
+                && !variant.is_empty()
+                && variant.bytes().all(|b| b.is_ascii_lowercase()) =>
+        {
+            head.trim_end().to_owned()
+        }
+        _ => title.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod display_title_tests {
+    use super::display_title;
+
+    #[test]
+    fn the_artist_and_a_variant_suffix_are_left_off() {
+        assert_eq!(
+            display_title("Unbreakable.comped - Crescendum"),
+            "Unbreakable"
+        );
+        assert_eq!(display_title("Unbreakable - Crescendum"), "Unbreakable");
+        assert_eq!(display_title("Mr. Blue Sky - ELO"), "Mr. Blue Sky");
+        assert_eq!(display_title("Song 2.0"), "Song 2.0");
+        assert_eq!(display_title("Track.Final"), "Track.Final");
+    }
 }
 
 async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
