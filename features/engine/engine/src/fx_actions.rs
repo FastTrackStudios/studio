@@ -41,7 +41,7 @@ static SET: ActionMeta = meta(
     "FX_SET",
     "fx_set",
     "Set FX parameters",
-    "Set parameters of one FX on `track` (`fx` its name or `#place`). `set` maps each parameter (name — `Post Freq 6` for the sixth of a repeated one — or `#index`) to a value: the plugin's own words for an FTS processor or any choice (`-18 dB`, `4:1`, `Plate`, `1/2`, `On`), or `=0.42` for a normalized value on any plugin. Says what each now reads, or why not. One undo step.",
+    "Set parameters of one FX on `track` (`fx` its name or `#place`). `set` maps each parameter (name — `Post Freq 6` for the sixth of a repeated one — or `#index`) to a value: the plugin's own words for an FTS processor, a hosted CLAP (its text-to-value) or any choice (`-18 dB`, `4:1`, `Plate`, `1/2`, `On`), or `=0.42` for a normalized value on any plugin. Says what each now reads, or why not. One undo step.",
     "FX",
     "",
 );
@@ -59,7 +59,7 @@ static ADD: ActionMeta = meta(
     "FX_ADD",
     "fx_add",
     "Add an FX",
-    "Put one of the FTS processors (`fx`: `FTS Mic`, `FTS EQ`, `FTS Comp`, …) on `track`, at place `at` in its chain (1 is first; the end when not given) — on, or bypassed with `on: false` — and `set` its parameters as FX_SET does, in the plugin's own words. Says its place and what each setting now reads. One undo step.",
+    "Put an FX on `track`: one of the FTS processors (`fx`: `FTS Mic`, `FTS EQ`, `FTS Comp`, …), or a CLAP plugin by its bundle (`fx`: a path to a `.clap`, or a bundle's name in ~/.clap or the CLAP search path — `Signal Dev`, `DragonflyRoomReverb.clap`) — at place `at` in its chain (1 is first; the end when not given) — on, or bypassed with `on: false` — and `set` its parameters as FX_SET does, in the plugin's own words (a CLAP's through its own text-to-value). Says its place and what each setting now reads. One undo step.",
     "FX",
     "",
 );
@@ -90,6 +90,84 @@ static UNAUTOMATE: ActionMeta = meta(
     "FX",
     "",
 );
+
+static STATE: ActionMeta = meta(
+    "FX_STATE",
+    "fx_state",
+    "An FX's state",
+    "The state one FX on `track` (`fx` its name or `#place`) holds, as the plugin saves it: `state_b64` (base64), `bytes` (its size), `plugin`. What FX_STATE_SET loads back, and what a save of the song keeps. Read-only.",
+    "FX",
+    "",
+);
+
+static STATE_SET: ActionMeta = meta(
+    "FX_STATE_SET",
+    "fx_state_set",
+    "Load an FX's state",
+    "Load a state into one FX on `track` (`fx` its name or `#place`): `state_file` (a file holding the plugin's state blob) or `state_b64` (the blob, base64 — FX_STATE's). The plugin is then set as the state has it (values held over it by FX_SET are let go). Kept with the song when it is saved. One undo step.",
+    "FX",
+    "",
+);
+
+static RELOAD: ActionMeta = meta(
+    "FX_RELOAD",
+    "fx_reload",
+    "Reload a rebuilt CLAP",
+    "When the CLAP bundle at `path` (or a bundle's name, as FX_ADD takes it) was rebuilt on disk: every instance of it on the song is swapped, in place, for one of the new build, each keeping its state, its place, its switches and its set values — while the transport keeps running. A library once loaded is never unloaded, so the new build is loaded from a copy of the bundle under a temp path (`copy`); the chain still names the bundle. Says how many were reloaded, which failed and why.",
+    "FX",
+    "",
+);
+
+/// One FX on a track.
+#[derive(Facet)]
+struct FxArg {
+    track: String,
+    fx: String,
+}
+
+/// A state to load into one FX: a file of it, or the blob as base64.
+#[derive(Facet)]
+struct StateSetArg {
+    track: String,
+    fx: String,
+    state_file: Option<String>,
+    state_b64: Option<String>,
+}
+
+/// A bundle rebuilt on disk.
+#[derive(Facet)]
+struct ReloadArg {
+    path: String,
+}
+
+/// An FX's state, read.
+#[derive(Facet)]
+struct StateRow {
+    fx: String,
+    plugin: String,
+    bytes: u32,
+    state_b64: String,
+}
+
+/// A state loaded.
+#[derive(Facet)]
+struct StateSetRow {
+    fx: String,
+    bytes: u32,
+    ms: f64,
+}
+
+/// A bundle reloaded under its instances.
+#[derive(Facet)]
+struct ReloadRow {
+    path: String,
+    copy: String,
+    instances: u32,
+    reloaded: u32,
+    failed: Vec<String>,
+    state_bytes: u64,
+    ms: f64,
+}
 
 /// A track.
 #[derive(Facet)]
@@ -227,7 +305,10 @@ pub fn target(
         let lower = which.to_lowercase();
         let named: Vec<&daw_proto::fx::Fx> = chain
             .iter()
-            .filter(|fx| fx.name.to_lowercase().contains(&lower))
+            .filter(|fx| {
+                fx.name.to_lowercase().contains(&lower)
+                    || fx.plugin_name.to_lowercase().contains(&lower)
+            })
             .collect();
         match named.as_slice() {
             [] => None,
@@ -235,13 +316,16 @@ pub fn target(
             many => {
                 // An exact name wins over the others it is part of.
                 many.iter()
-                    .find(|fx| fx.name.eq_ignore_ascii_case(which))
+                    .find(|fx| {
+                        fx.name.eq_ignore_ascii_case(which)
+                            || fx.plugin_name.eq_ignore_ascii_case(which)
+                    })
                     .map(|fx| (*fx).clone())
                     .ok_or_else(|| {
                         format!(
                             "{which:?} could be any of {} — name one, or its #place",
                             many.iter()
-                                .map(|fx| fx.name.as_str())
+                                .map(|fx| crate::clap_fx::display_name(fx))
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
@@ -255,7 +339,7 @@ pub fn target(
             "no {which:?} on the track — it has {}",
             chain
                 .iter()
-                .map(|fx| fx.name.as_str())
+                .map(crate::clap_fx::display_name)
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -343,6 +427,35 @@ pub fn value_of(fx: &str, param: &daw_proto::fx::FxParameter, text: &str) -> Res
                 fx, param.name
             )
         })
+}
+
+/// [`value_of`] for the FX `fx` itself: a plugin hosted from a CLAP bundle
+/// reads the words with its own text-to-value; the rest as `value_of`.
+pub fn value_for(
+    daw: &daw::standalone::Standalone,
+    fx: &daw_proto::fx::Fx,
+    param: &daw_proto::fx::FxParameter,
+    text: &str,
+) -> Result<f64, String> {
+    let words = text.trim();
+    if !words.starts_with('=')
+        && !param
+            .step_labels
+            .iter()
+            .any(|(_, label)| label.eq_ignore_ascii_case(words))
+        && crate::clap_fx::is_hosted_clap(daw, fx)
+    {
+        return crate::clap_fx::text_to_normalized(daw, &fx.guid, param.index, words).ok_or_else(
+            || {
+                format!(
+                    "{} does not read {words:?} for {} — use its own words, or `=0..1`",
+                    crate::clap_fx::display_name(fx),
+                    param.name
+                )
+            },
+        );
+    }
+    value_of(&fx.name, param, text)
 }
 
 /// Where `text` is, seconds: a bar (`33`, `33:2`, `33:2.5` — beat 2 and a
@@ -568,7 +681,7 @@ fn automate(a: &AutomateArg) -> Result<String, String> {
         .map(|p| {
             Ok((
                 moment(daw, &project, &p.at)?,
-                value_of(&fx.name, param, &p.value)?,
+                value_for(daw, &fx, param, &p.value)?,
                 shape_of(p.shape.as_deref())?,
             ))
         })
@@ -641,12 +754,12 @@ fn unautomate(a: &UnautomateArg) -> Result<String, String> {
     ))
 }
 
-/// `set` (parameter → the plugin's words) on the FX `target` (named
-/// `name`), in name order: what each now reads, or why not.
+/// `set` (parameter → the plugin's words) on the FX `target` (`fx`), in
+/// name order: what each now reads, or why not.
 fn settle(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
-    (target, name): (&FxTarget, &str),
+    (target, fx): (&FxTarget, &daw_proto::fx::Fx),
     set: &std::collections::HashMap<String, String>,
 ) -> Vec<String> {
     let params = Effects::parameters(daw, project.clone(), target.clone());
@@ -657,7 +770,7 @@ fn settle(
         .map(|(which, text)| {
             param_of(&params, which)
                 .and_then(|param| {
-                    let value = value_of(name, param, text)?;
+                    let value = value_for(daw, fx, param, text)?;
                     Effects::set_parameter(
                         daw,
                         project.clone(),
@@ -676,6 +789,263 @@ fn settle(
                 .unwrap_or_else(|e| format!("{which}: {e}"))
         })
         .collect()
+}
+
+/// What `fx` names to add: one of the FTS processors (by its name), or a
+/// CLAP bundle (its path, or its name in the CLAP folders).
+enum Addable {
+    Builtin(String),
+    Clap(std::path::PathBuf),
+}
+
+fn addable(fx: &str) -> Result<Addable, String> {
+    if daw_standalone::plugin::FxFactory::provides(&builtin::engine::BuiltinFx, fx) {
+        return Ok(Addable::Builtin(fx.to_owned()));
+    }
+    crate::clap_fx::bundle(fx).map(Addable::Clap).ok_or_else(|| {
+        format!(
+            "{fx} is neither one of the FTS processors (FTS Mic, FTS EQ, FTS Comp, …) nor a CLAP bundle (a path to a .clap, or a bundle's name in {})",
+            crate::clap_fx::search_path()
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })
+}
+
+/// `FX_ADD`.
+fn add(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    a: &AddArg,
+) -> Result<Vec<String>, String> {
+    let span = tracing::info_span!(
+        "FX_ADD",
+        fx.kind = tracing::field::Empty,
+        fx.added = tracing::field::Empty,
+        fx.ms = tracing::field::Empty,
+    );
+    let _in = span.enter();
+    let began = web_time::Instant::now();
+    let what = addable(&a.fx)?;
+    let guid = resolve(daw, project, &a.track)?;
+    let context = FxChainContext::Track(guid);
+    let index = a.at.unwrap_or(u32::MAX).saturating_sub(1);
+    let label = format!("Add {}", a.fx);
+    daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
+    let added = match &what {
+        Addable::Builtin(name) => {
+            span.record("fx.kind", "builtin");
+            Effects::add_at(
+                daw,
+                project.clone(),
+                daw_proto::fx::AddFxAtRequest {
+                    context: context.clone(),
+                    name: name.clone(),
+                    index,
+                },
+            )
+            .ok_or_else(|| format!("{} could not be added", a.fx))
+        }
+        Addable::Clap(bundle) => {
+            span.record("fx.kind", "clap");
+            crate::clap_fx::add(daw, project, &context, bundle, index)
+        }
+    };
+    let out = added.and_then(|fx_guid| {
+        let target = FxTarget {
+            context: context.clone(),
+            fx: FxRef::Guid(fx_guid.clone()),
+        };
+        if !a.on.unwrap_or(true) {
+            Effects::set_enabled(daw, project.clone(), target.clone(), false)
+                .map_err(|e| e.to_string())?;
+        }
+        let fx = Effects::get(daw, project.clone(), target.clone())
+            .ok_or_else(|| format!("{} is not on the track", a.fx))?;
+        let mut said = settle(daw, project, (&target, &fx), &a.set);
+        let place = Effects::list(daw, project.clone(), context.clone())
+            .iter()
+            .position(|f| f.guid == fx_guid)
+            .map_or(0, |i| i.saturating_add(1));
+        said.insert(
+            0,
+            format!(
+                "{} at #{place}{}",
+                crate::clap_fx::display_name(&fx),
+                if a.on.unwrap_or(true) {
+                    ""
+                } else {
+                    ", bypassed"
+                }
+            ),
+        );
+        crate::actions::list().changed("fx", &fx_guid);
+        Ok(said)
+    });
+    daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
+    span.record("fx.added", out.is_ok());
+    span.record("fx.ms", began.elapsed().as_secs_f64() * 1e3);
+    out
+}
+
+/// The song's guid in `project`.
+pub(crate) fn project_guid(project: &ProjectContext) -> Result<String, String> {
+    match project {
+        ProjectContext::Project(guid) => Ok(guid.clone()),
+        ProjectContext::Current => Err("no song open".to_owned()),
+    }
+}
+
+/// The size of a blob, as a row says it.
+fn size_of(bytes: &[u8]) -> u32 {
+    u32::try_from(bytes.len()).unwrap_or(u32::MAX)
+}
+
+/// `FX_STATE`.
+fn state(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    a: &FxArg,
+) -> Result<StateRow, String> {
+    use base64::Engine as _;
+    let span = tracing::info_span!("FX_STATE", fx.state_bytes = tracing::field::Empty);
+    let _in = span.enter();
+    let (target, fx) = target(daw, project, &a.track, &a.fx)?;
+    let bytes = match daw.save_plugin_state(&fx.guid) {
+        Ok(bytes) => bytes,
+        Err(_) => Effects::state_chunk(daw, project.clone(), target).unwrap_or_default(),
+    };
+    span.record("fx.state_bytes", bytes.len());
+    Ok(StateRow {
+        fx: crate::clap_fx::display_name(&fx),
+        plugin: fx.plugin_name.clone(),
+        bytes: size_of(&bytes),
+        state_b64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+    })
+}
+
+/// The blob a state set names: its file's bytes, or its base64 decoded.
+fn state_bytes(file: Option<&str>, b64: Option<&str>) -> Result<Vec<u8>, String> {
+    use base64::Engine as _;
+    match (file, b64) {
+        (Some(file), None) => std::fs::read(file).map_err(|e| format!("{file}: {e}")),
+        (None, Some(b64)) => base64::engine::general_purpose::STANDARD
+            .decode(b64.trim())
+            .map_err(|e| format!("state_b64 is not base64: {e}")),
+        (Some(_), Some(_)) => Err("give `state_file` or `state_b64`, not both".to_owned()),
+        (None, None) => Err("give `state_file` or `state_b64`".to_owned()),
+    }
+}
+
+/// `FX_STATE_SET`.
+fn state_set(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    a: &StateSetArg,
+) -> Result<StateSetRow, String> {
+    let span = tracing::info_span!(
+        "FX_STATE_SET",
+        fx.state_bytes = tracing::field::Empty,
+        fx.ms = tracing::field::Empty,
+    );
+    let _in = span.enter();
+    let began = web_time::Instant::now();
+    let song = project_guid(project)?;
+    let bytes = state_bytes(a.state_file.as_deref(), a.state_b64.as_deref())?;
+    span.record("fx.state_bytes", bytes.len());
+    let (_, fx) = target(daw, project, &a.track, &a.fx)?;
+    let name = crate::clap_fx::display_name(&fx);
+    let label = format!("Load {name} state");
+    daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
+    let loaded = crate::clap_fx::load_state(daw, &song, &fx.guid, &bytes);
+    daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
+    loaded.map_err(|e| format!("{name}: {e}"))?;
+    crate::actions::list().changed("fx", &fx.guid);
+    let ms = began.elapsed().as_secs_f64() * 1e3;
+    span.record("fx.ms", ms);
+    Ok(StateSetRow {
+        fx: name,
+        bytes: size_of(&bytes),
+        ms,
+    })
+}
+
+/// Whether the FX named `name` in its chain is the bundle at `bundle`.
+pub(crate) fn is_bundle(name: &str, bundle: &std::path::Path) -> bool {
+    let path = std::path::Path::new(name);
+    path == bundle || std::fs::canonicalize(path).is_ok_and(|p| p == bundle)
+}
+
+/// `FX_RELOAD`: [`crate::clap_fx::swap_instance`] under every instance of
+/// the bundle on the song.
+fn reload(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    a: &ReloadArg,
+) -> Result<ReloadRow, String> {
+    let span = tracing::info_span!(
+        "FX_RELOAD",
+        fx.instances = tracing::field::Empty,
+        fx.reloaded = tracing::field::Empty,
+        fx.failed = tracing::field::Empty,
+        fx.state_bytes = tracing::field::Empty,
+        fx.ms = tracing::field::Empty,
+    );
+    let _in = span.enter();
+    let began = web_time::Instant::now();
+    let song = project_guid(project)?;
+    let bundle = crate::clap_fx::bundle(&a.path)
+        .ok_or_else(|| format!("{} is not a CLAP bundle", a.path))?;
+    let instances: Vec<(String, String)> = daw
+        .read_project(&song, |p| {
+            p.fx_chains
+                .values()
+                .flatten()
+                .filter(|e| is_bundle(&e.fx.name, &bundle))
+                .map(|e| (e.fx.guid.clone(), e.fx.plugin_name.clone()))
+                .collect()
+        })
+        .unwrap_or_default();
+    span.record("fx.instances", instances.len());
+    if instances.is_empty() {
+        return Err(format!("no instance of {} on the song", bundle.display()));
+    }
+    let copy = crate::clap_fx::fresh_copy(&bundle)?;
+    let mut row = ReloadRow {
+        path: bundle.display().to_string(),
+        copy: copy.display().to_string(),
+        instances: u32::try_from(instances.len()).unwrap_or(u32::MAX),
+        reloaded: 0,
+        failed: Vec::new(),
+        state_bytes: 0,
+        ms: 0.0,
+    };
+    for (fx_guid, plugin) in &instances {
+        match crate::clap_fx::swap_instance(daw, fx_guid, &copy) {
+            Ok(bytes) => {
+                row.reloaded = row.reloaded.saturating_add(1);
+                row.state_bytes = row
+                    .state_bytes
+                    .saturating_add(u64::try_from(bytes).unwrap_or(u64::MAX));
+                crate::actions::list().changed("fx", fx_guid);
+            }
+            Err(e) => row.failed.push(format!("{plugin} ({fx_guid}): {e}")),
+        }
+    }
+    row.ms = began.elapsed().as_secs_f64() * 1e3;
+    span.record("fx.reloaded", row.reloaded);
+    span.record("fx.failed", row.failed.len());
+    span.record("fx.state_bytes", row.state_bytes);
+    span.record("fx.ms", row.ms);
+    if !row.failed.is_empty() {
+        tracing::warn!(
+            fx.failed = row.failed.len(),
+            "some instances kept the old build"
+        );
+    }
+    Ok(row)
 }
 
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
@@ -700,7 +1070,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                     .len(),
                 )
                 .unwrap_or(u32::MAX),
-                name: fx.name,
+                name: crate::clap_fx::display_name(&fx),
                 on: fx.enabled,
             })
             .collect::<Vec<_>>())
@@ -728,65 +1098,25 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     list.register(&SET, Effect::Mutating, |a: SetArg| {
         let (daw, project) = song()?;
         let (target, fx) = target(daw, &project, &a.track, &a.fx)?;
-        let said = settle(daw, &project, (&target, &fx.name), &a.set);
+        let said = settle(daw, &project, (&target, &fx), &a.set);
         crate::actions::list().changed("fx", &fx.guid);
         Ok(said)
     })?;
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let (daw, project) = song()?;
-        if !daw_standalone::plugin::FxFactory::provides(&builtin::engine::BuiltinFx, &a.fx) {
-            return Err(format!(
-                "{} is not one of the FTS processors (FTS Mic, FTS EQ, FTS Comp, …)",
-                a.fx
-            ));
-        }
-        let guid = resolve(daw, &project, &a.track)?;
-        let context = FxChainContext::Track(guid);
-        let index = a.at.unwrap_or(u32::MAX).saturating_sub(1);
-        let label = format!("Add {}", a.fx);
-        daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
-        let added = Effects::add_at(
-            daw,
-            project.clone(),
-            daw_proto::fx::AddFxAtRequest {
-                context: context.clone(),
-                name: a.fx.clone(),
-                index,
-            },
-        );
-        let out = added
-            .ok_or_else(|| format!("{} could not be added", a.fx))
-            .and_then(|fx_guid| {
-                let target = FxTarget {
-                    context: context.clone(),
-                    fx: FxRef::Guid(fx_guid.clone()),
-                };
-                if !a.on.unwrap_or(true) {
-                    Effects::set_enabled(daw, project.clone(), target.clone(), false)
-                        .map_err(|e| e.to_string())?;
-                }
-                let mut said = settle(daw, &project, (&target, &a.fx), &a.set);
-                let place = Effects::list(daw, project.clone(), context.clone())
-                    .iter()
-                    .position(|f| f.guid == fx_guid)
-                    .map_or(0, |i| i.saturating_add(1));
-                said.insert(
-                    0,
-                    format!(
-                        "{} at #{place}{}",
-                        a.fx,
-                        if a.on.unwrap_or(true) {
-                            ""
-                        } else {
-                            ", bypassed"
-                        }
-                    ),
-                );
-                crate::actions::list().changed("fx", &fx_guid);
-                Ok(said)
-            });
-        daw::service::Projects::end_undo_block(daw, project, &label, None);
-        out
+        add(daw, &project, &a)
+    })?;
+    list.register(&STATE, Effect::ReadOnly, |a: FxArg| {
+        let (daw, project) = song()?;
+        state(daw, &project, &a)
+    })?;
+    list.register(&STATE_SET, Effect::Mutating, |a: StateSetArg| {
+        let (daw, project) = song()?;
+        state_set(daw, &project, &a)
+    })?;
+    list.register(&RELOAD, Effect::Mutating, |a: ReloadArg| {
+        let (daw, project) = song()?;
+        reload(daw, &project, &a)
     })?;
     list.register(&AUTOMATION, Effect::ReadOnly, |a: AutomationArg| {
         automation(&a)
@@ -807,3 +1137,6 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     })?;
     Ok(())
 }
+
+#[cfg(test)]
+mod clap_tests;

@@ -677,6 +677,22 @@ fn write_snapshot_later(
 /// doc's write of them may still run: [`WRITING`]).
 static PENDING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+/// [`PENDING`], song by song: what a song's own undo and going back read —
+/// another song's step waiting to be recorded is not one of its own.
+fn pending_songs() -> &'static Mutex<HashMap<String, usize>> {
+    static SONGS: std::sync::OnceLock<Mutex<HashMap<String, usize>>> = std::sync::OnceLock::new();
+    SONGS.get_or_init(Mutex::default)
+}
+
+/// Whether the song `guid` has steps the recorder has not recorded yet.
+fn song_pending(guid: &str) -> bool {
+    pending_songs()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(guid)
+        .is_some_and(|n| *n > 0)
+}
+
 /// Steps read whose doc write is still running on the writer thread —
 /// changed with the songs held, so what holds them sees it settled.
 static WRITING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -931,6 +947,11 @@ pub fn record_steps() {
                     ))
                     .is_ok()
             {
+                *pending_songs()
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .entry(project.to_owned())
+                    .or_default() += 1;
                 PENDING.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
         }));
@@ -943,6 +964,10 @@ pub fn record_steps() {
                     let finished: Vec<Finished> =
                         std::iter::once(first).chain(rx.try_iter()).collect();
                     let mut taken = finished.len();
+                    let mut by_song: HashMap<String, usize> = HashMap::new();
+                    for (project, ..) in &finished {
+                        *by_song.entry(project.clone()).or_default() += 1;
+                    }
                     let steps = crate::history_marks::gather(finished);
                     for (project, labels, (made_in, action)) in steps {
                         // The steps' recording, under the action that made
@@ -984,6 +1009,19 @@ pub fn record_steps() {
                         // these steps' commit (its write runs on).
                         PENDING.fetch_sub(labels.len(), std::sync::atomic::Ordering::SeqCst);
                         taken = taken.saturating_sub(labels.len());
+                    }
+                    {
+                        let mut songs = pending_songs()
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        for (project, n) in by_song {
+                            if let Some(left) = songs.get_mut(&project) {
+                                *left = left.saturating_sub(n);
+                                if *left == 0 {
+                                    songs.remove(&project);
+                                }
+                            }
+                        }
                     }
                     PENDING.fetch_sub(taken, std::sync::atomic::Ordering::SeqCst);
                 }
@@ -1117,16 +1155,20 @@ fn through_doc(daw: &Standalone, project_guid: &str, back: bool) -> Result<Undon
         let Some(open) = songs.get_mut(&guid) else {
             return Ok(Undone::NotOpen);
         };
-        let done = step_back(open, &pending, back).await;
+        let done = step_back(open, (&guid, &pending), back).await;
         drop(songs);
         done
     })?
 }
 
-async fn step_back(open: &mut Open, pending: &str, back: bool) -> Result<Undone, String> {
-    // A step the recorder has not reached yet is recorded first, so it is
-    // the one undone; with none waiting, nothing to read.
-    if PENDING.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+async fn step_back(
+    open: &mut Open,
+    (guid, pending): (&str, &str),
+    back: bool,
+) -> Result<Undone, String> {
+    // A step of this song the recorder has not reached yet is recorded
+    // first, so it is the one undone; with none waiting, nothing to read.
+    if song_pending(guid) {
         open.name_next(pending);
         if open
             .bridge
@@ -1522,9 +1564,9 @@ pub fn restore(guid: &str, which: MomentRef) -> Result<Moment, String> {
             session::sync::loro::Frontiers::decode(&moment.frontiers).map_err(|e| e.to_string())?;
         let past = doc.fork_at(&at).map_err(|e| e.to_string())?;
         let model = SessionDoc::from_loro(past).read();
-        // A step the recorder has not reached yet is recorded first, so
-        // the going back is a step of its own after it.
-        if PENDING.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+        // A step of this song the recorder has not reached yet is recorded
+        // first, so the going back is a step of its own after it.
+        if song_pending(&guid) {
             open.name_next("Edits");
             if open
                 .bridge
