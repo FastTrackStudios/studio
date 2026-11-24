@@ -40,6 +40,10 @@ pub struct Racks<'a> {
     /// same height on every track. Per-track is the setting for when
     /// you are working one track rather than comparing them.
     pub folded: &'a crate::tone::Fold,
+    /// Every Signal FX the mixer shows (`crate::signal`): a track with one
+    /// shows its phases and blocks in its rack box, as inserts. `None`:
+    /// no track does.
+    pub signal: Option<&'a mut crate::signal::Inserts>,
 }
 
 impl Racks<'_> {
@@ -66,6 +70,7 @@ impl Racks<'_> {
             spectra: Box::leak(Box::default()),
             lit: None,
             panels: &[],
+            signal: None,
         }
     }
 }
@@ -283,6 +288,21 @@ pub fn controls(
             mixer.themed(row).is_some(),
             apart.as_deref_mut(),
         );
+        // A Signal FX's blocks, as inserts, over the rack box.
+        if let (Some(inserts), Some(rack)) = (
+            racks.signal.as_deref_mut(),
+            mixer.strip(row).and_then(|s| s.rack_rect()),
+        ) && let Some(strip) = inserts.strip_mut(&track.guid)
+        {
+            crate::signal::paint::over_rack(
+                &mut scene,
+                palette,
+                font,
+                strip,
+                crate::tone::Panel::of(rack, left),
+                rack_scroll,
+            );
+        }
         // A theme's strip: its live parts, over its recording.
         if let Some(theme) = mixer.themed(row) {
             let on = |spot: Option<Spot>| spot.filter(|s| s.row == row).map(|s| s.control);
