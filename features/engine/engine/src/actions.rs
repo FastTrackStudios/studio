@@ -633,6 +633,8 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     #[cfg(feature = "native")]
     crate::mix_measure::register(list)?;
     #[cfg(feature = "native")]
+    crate::mix_state::register(list)?;
+    #[cfg(feature = "native")]
     crate::mix_snapshot::register(list)?;
     crate::vocal_level::register(list)?;
     crate::automation_actions::register(list)?;

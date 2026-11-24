@@ -522,7 +522,7 @@ pub fn shape_of(word: Option<&str>) -> Result<daw::service::automation::Envelope
 }
 
 /// A shape's word.
-const fn shape_word(shape: daw::service::automation::EnvelopeShape) -> &'static str {
+pub(crate) const fn shape_word(shape: daw::service::automation::EnvelopeShape) -> &'static str {
     use daw::service::automation::EnvelopeShape;
     match shape {
         EnvelopeShape::Linear => "linear",
@@ -552,7 +552,7 @@ pub fn mode_of(word: &str) -> Result<daw::service::AutomationMode, String> {
 }
 
 /// A mode's word.
-const fn mode_word(mode: daw::service::AutomationMode) -> &'static str {
+pub(crate) const fn mode_word(mode: daw::service::AutomationMode) -> &'static str {
     use daw::service::AutomationMode;
     match mode {
         AutomationMode::Read => "read",
