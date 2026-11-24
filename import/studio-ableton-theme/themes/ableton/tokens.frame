@@ -1,67 +1,68 @@
 <Document>
-  <!-- Flat, low-contrast greys in two modes. Every colour the views paint
+  <!-- Two modes of one look. `light` is the mid-grey one; `dark` keeps the
+       same hues and controls on dark greys. Every colour the views paint
        natively (the arrangement, the rack, the rails) and every colour the
        pages below draw comes from here; `local.*` are this pack's own. -->
   <Variables modes="dark light">
-    <!-- ink -->
-    <Var name="text" dark="#d2d2d2" light="#1c1c1c" />
-    <Var name="text.dim" dark="#9c9c9c" light="#4a4a4a" />
-    <Var name="text.faint" dark="#6c6c6c" light="#7c7c7c" />
-    <Var name="text.bright" dark="#f0f0f0" light="#000000" />
-    <Var name="accent" dark="#ffa53a" light="#e8831c" />
-    <Var name="selected" dark="#8cb4d4" light="#3d7fb3" />
-    <!-- surfaces: one ladder, a step apart, outlined thin and dark -->
-    <Var name="surface" dark="#2a2a2a" light="#c9c9c9" />
-    <Var name="surface.raised" dark="#363636" light="#d6d6d6" />
-    <Var name="surface.sunken" dark="#1d1d1d" light="#b5b5b5" />
-    <Var name="border" dark="#141414" light="#959595" />
-    <Var name="hardware" dark="#3e3e3e" light="#dedede" />
-    <Var name="hardware.edge" dark="#141414" light="#8f8f8f" />
-    <Var name="hardware.mark" dark="#b4b4b4" light="#2c2c2c" />
-    <Var name="plate" dark="#1d1d1d" light="#bcbcbc" />
+    <!-- ink: black glyphs on the light greys, light ones on the dark -->
+    <Var name="text" dark="#d4d4d4" light="#000000" />
+    <Var name="text.dim" dark="#9a9a9a" light="#545454" />
+    <Var name="text.faint" dark="#6e6e6e" light="#6e6e6e" />
+    <Var name="text.bright" dark="#f2f2f2" light="#000000" />
+    <Var name="accent" dark="#ffb100" light="#ffb100" />
+    <Var name="selected" dark="#0b7d91" light="#096879" />
+    <!-- surfaces: one ladder, a step apart, every edge one dark pixel -->
+    <Var name="surface" dark="#2a2a2a" light="#7f7f7f" />
+    <Var name="surface.raised" dark="#383838" light="#8d8d8d" />
+    <Var name="surface.sunken" dark="#1e1e1e" light="#646464" />
+    <Var name="border" dark="#121212" light="#4e4e4e" />
+    <Var name="hardware" dark="#4a4a4a" light="#b7b7b7" />
+    <Var name="hardware.edge" dark="#141414" light="#404040" />
+    <Var name="hardware.mark" dark="#dcdcdc" light="#000000" />
+    <Var name="plate" dark="#1e1e1e" light="#646464" />
     <Var name="sheen" dark="#ffffff00" light="#ffffff00" />
-    <Var name="field" dark="#1d1d1d" light="#e8e8e8" />
-    <Var name="combo" dark="#1d1d1d" light="#e8e8e8" />
-    <!-- states. A track is lit when it plays (its activator), so a muted
-         one is the dim one: `mute` is the activator switched off. -->
-    <Var name="mute" dark="#4a4a4a" light="#a8a8a8" />
-    <Var name="solo" dark="#4fa6e3" light="#2f86c8" />
-    <Var name="rec" dark="#e5543e" light="#d8402a" />
-    <Var name="pan" dark="#ffa53a" light="#e8831c" />
-    <Var name="monitor.tape" dark="#ffa53a" light="#e8831c" />
-    <Var name="route.out" dark="#8cb4d4" light="#3d7fb3" />
-    <Var name="route.send" dark="#c9b458" light="#9c8424" />
-    <Var name="route.recv" dark="#d97a5a" light="#b85a3a" />
-    <!-- meters: flat segments, no glow -->
-    <Var name="meter.safe" dark="#5fcf5f" light="#36a836" />
-    <Var name="meter.warn" dark="#e3cf4d" light="#c4a91c" />
-    <Var name="meter.danger" dark="#ef5a45" light="#d8402a" />
-    <Var name="meter.well" dark="#151515" light="#a3a3a3" />
+    <Var name="field" dark="#555555" light="#dadada" />
+    <Var name="combo" dark="#555555" light="#dad9d9" />
+    <!-- states. The activator is lit (amber) while the track plays, so a
+         muted track is the grey one: `mute` is the activator switched off. -->
+    <Var name="mute" dark="#5c5c5c" light="#dcdcdc" />
+    <Var name="solo" dark="#3873ff" light="#3873ff" />
+    <Var name="rec" dark="#ff563f" light="#ff563f" />
+    <Var name="pan" dark="#53dcf4" light="#53dcf4" />
+    <Var name="monitor.tape" dark="#53dcf4" light="#53dcf4" />
+    <Var name="route.out" dark="#53dcf4" light="#096879" />
+    <Var name="route.send" dark="#ffb100" light="#b27c00" />
+    <Var name="route.recv" dark="#ff563f" light="#c63a26" />
+    <!-- meters: green, yellow at the top, red over -->
+    <Var name="meter.safe" dark="#4fd843" light="#59e44b" />
+    <Var name="meter.warn" dark="#f2f22a" light="#ffff08" />
+    <Var name="meter.danger" dark="#ff2200" light="#ff2200" />
+    <Var name="meter.well" dark="#181818" light="#242424" />
     <!-- the track panel and the rails -->
-    <Var name="tcp.tint" dark="#323232" light="#d0d0d0" />
-    <Var name="tcp.column" dark="#262626" light="#c2c2c2" />
-    <Var name="rail.ground" dark="#262626" light="#c2c2c2" />
-    <Var name="rail.rule" dark="#141414" light="#959595" />
-    <Var name="rail.button" dark="#363636" light="#d6d6d6" />
-    <Var name="rack.well" dark="#1d1d1d" light="#b5b5b5" />
-    <Var name="tint.strength" value="0.06" />
+    <Var name="tcp.tint" dark="#363636" light="#b6b6b6" />
+    <Var name="tcp.column" dark="#2e2e2e" light="#adadad" />
+    <Var name="rail.ground" dark="#2a2a2a" light="#7f7f7f" />
+    <Var name="rail.rule" dark="#121212" light="#4e4e4e" />
+    <Var name="rail.button" dark="#4a4a4a" light="#b7b7b7" />
+    <Var name="rack.well" dark="#1e1e1e" light="#646464" />
+    <Var name="tint.strength" value="0.04" />
     <!-- the arrangement -->
-    <Var name="arrange.ground" dark="#232323" light="#bdbdbd" />
-    <Var name="arrange.row" dark="#2b2b2b" light="#c6c6c6" />
-    <Var name="arrange.row_alt" dark="#282828" light="#c2c2c2" />
-    <Var name="arrange.divider" dark="#1a1a1a" light="#a6a6a6" />
-    <Var name="grid.bar" dark="#3d3d3d" light="#9e9e9e" />
-    <Var name="grid.beat" dark="#333333" light="#adadad" />
-    <Var name="grid.sub" dark="#2e2e2e" light="#b6b6b6" />
-    <Var name="ruler.ground" dark="#2f2f2f" light="#d2d2d2" />
-    <Var name="ruler.ink" dark="#b4b4b4" light="#2c2c2c" />
-    <Var name="ruler.ink_dim" dark="#6c6c6c" light="#7c7c7c" />
-    <Var name="playhead" dark="#f0f0f0" light="#111111" />
-    <Var name="cursor.edit" dark="#8cb4d4" light="#3d7fb3" />
-    <Var name="clip.edge" dark="#111111" light="#5c5c5c" />
-    <Var name="clip.alpha" dark="0.62" light="0.66" />
-    <!-- The clip palette: sixteen fixed hues, softened for long sessions.
-         A track's own colour snaps to the nearest. -->
+    <Var name="arrange.ground" dark="#262626" light="#a8a8a8" />
+    <Var name="arrange.row" dark="#303030" light="#b6b6b6" />
+    <Var name="arrange.row_alt" dark="#2c2c2c" light="#adadad" />
+    <Var name="arrange.divider" dark="#1c1c1c" light="#a6a6a6" />
+    <Var name="grid.bar" dark="#454545" light="#a09d9d" />
+    <Var name="grid.beat" dark="#393939" light="#a09d9d" />
+    <Var name="grid.sub" dark="#333333" light="#a6a4a4" />
+    <Var name="ruler.ground" dark="#303030" light="#a8a8a8" />
+    <Var name="ruler.ink" dark="#d4d4d4" light="#000000" />
+    <Var name="ruler.ink_dim" dark="#7c7c7c" light="#545454" />
+    <Var name="playhead" dark="#f2f2f2" light="#000000" />
+    <Var name="cursor.edit" dark="#ff3a3a" light="#dd0000" />
+    <Var name="clip.edge" dark="#101010" light="#4e4e4e" />
+    <Var name="clip.alpha" dark="0.62" light="0.7" />
+    <!-- The clip palette: sixteen fixed hues. A track's own colour snaps to
+         the nearest, on its clips, its header and its strip. -->
     <Var name="clip.0" value="#e2725b" />
     <Var name="clip.1" value="#ee9a45" />
     <Var name="clip.2" value="#e6c64c" />
@@ -78,22 +79,22 @@
     <Var name="clip.13" value="#9db09e" />
     <Var name="clip.14" value="#98a6b8" />
     <Var name="clip.15" value="#bdbdbd" />
-    <!-- sizes and type: compact -->
+    <!-- sizes and type: compact, bold -->
     <Var name="radius.control" value="0" />
-    <Var name="size.label" value="10" />
-    <Var name="size.small" value="8" />
+    <Var name="size.label" value="11" />
+    <Var name="size.small" value="9" />
     <Var name="font.ui" value="\"Inter\"" />
     <!-- this pack's own -->
-    <Var name="local.strip" dark="#303030" light="#cdcdcd" />
-    <Var name="local.strip_selected" dark="#3b3b3b" light="#dadada" />
-    <Var name="local.button" dark="#3e3e3e" light="#dedede" />
-    <Var name="local.button_hover" dark="#474747" light="#e8e8e8" />
-    <Var name="local.active" dark="#ffa53a" light="#f0952e" />
-    <Var name="local.active_ink" dark="#1c1c1c" light="#1c1c1c" />
-    <Var name="local.lit_ink" dark="#101010" light="#ffffff" />
-    <Var name="local.slider" dark="#5c7d96" light="#7fa6c4" />
-    <Var name="local.fader" dark="#d2d2d2" light="#2a2a2a" />
-    <Var name="local.ink_on_light" value="#141414" />
-    <Var name="local.ink_on_dark" value="#f0f0f0" />
+    <Var name="local.strip" dark="#333333" light="#8d8d8d" />
+    <Var name="local.strip_selected" dark="#424242" light="#a8a8a8" />
+    <Var name="local.button" dark="#4a4a4a" light="#b7b7b7" />
+    <Var name="local.button_hover" dark="#555555" light="#c4c4c4" />
+    <Var name="local.glyph" dark="#dcdcdc" light="#000000" />
+    <Var name="local.active" dark="#ffb100" light="#ffb100" />
+    <Var name="local.lit_glyph" value="#000000" />
+    <Var name="local.slider" dark="#53dcf4" light="#53dcf4" />
+    <Var name="local.knob_track" dark="#141414" light="#171717" />
+    <Var name="local.fader" dark="#e0e0e0" light="#000000" />
+    <Var name="local.title_ink" value="#000000" />
   </Variables>
 </Document>
