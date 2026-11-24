@@ -55,7 +55,7 @@ pub fn mixer_zoom(touch: bool, width: f64) -> f64 {
     if !touch {
         return 1.0;
     }
-    let across = STRIPS_ACROSS * (crate::mcp::STRIP_W + crate::mcp::STRIP_GAP);
+    let across = STRIPS_ACROSS * (crate::controls::STRIP_W + crate::controls::STRIP_GAP);
     (width / across).clamp(MIXER_ZOOM_MIN, ZOOM)
 }
 

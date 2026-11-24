@@ -17,7 +17,7 @@
 
 use daw_ui::art::mixer_controls::Interaction;
 
-use crate::mcp::Control;
+use crate::controls::Control;
 
 /// A control on a particular strip.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

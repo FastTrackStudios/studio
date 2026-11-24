@@ -1041,11 +1041,11 @@ pub(crate) fn FolderSwitch() -> Element {
 }
 
 /// The mixer's FX racks over its faders, shown or hidden
-/// (`crate::mixer_panel::racks_shown`, kept across launches): hidden, the
+/// (`crate::dock::racks_shown`, kept across launches): hidden, the
 /// faders have the whole height. Follows `SESSION_MIXER_FX` too.
 #[component]
 pub(crate) fn RackSwitch() -> Element {
-    use crate::mixer_panel::racks_shown;
+    use crate::dock::racks_shown;
     let mut shown = use_signal(racks_shown);
     // Switched on the Action List (a key, a model): followed here.
     use_future(move || async move {

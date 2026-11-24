@@ -90,6 +90,8 @@ pub mod macros;
 pub mod marks_strip;
 pub mod mcp;
 pub use session_engine_client::midi;
+pub mod controls;
+pub mod dock;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod mix_guide;
 pub mod mixer_panel;
@@ -167,6 +169,7 @@ pub use session_engine::mix_chains;
 pub use session_engine_client::hit_overlay;
 pub use session_engine_client::kit_gate;
 pub mod overlay;
+pub mod strip_overlay;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::page;
 #[cfg(all(feature = "native", not(feature = "engine")))]

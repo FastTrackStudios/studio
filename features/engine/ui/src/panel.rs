@@ -191,7 +191,7 @@ pub struct ArrangementPanel {
     edits: Rc<RefCell<Vec<crate::engine::Edit>>>,
     input: Rc<RefCell<Input>>,
     engine: Engine,
-    mixer: Option<crate::mixer_panel::Links>,
+    mixer: Option<crate::dock::Links>,
     /// The shell's pins, when there is a shell: what a quantize panel
     /// asked for from the Action List turns.
     pins: Option<crate::shell::Pins>,
@@ -312,7 +312,7 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
 ) -> (ArrangementPanel, H) {
     let session: StudioSession = use_context();
     // The docked mixer's, when the view has one beside this panel.
-    let mixer: Option<crate::mixer_panel::Links> = try_use_context();
+    let mixer: Option<crate::dock::Links> = try_use_context();
     let pins: Option<crate::shell::Pins> = try_use_context();
     // The rows' height at zoom 1: showing or hiding tracks (the visibility
     // manager) changes it, and the widget reports the new one here.

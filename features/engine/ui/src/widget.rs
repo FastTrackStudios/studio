@@ -66,7 +66,7 @@ use crate::profile::Counts;
 use crate::ruler::{self, Bars};
 
 /// What the arrangement shares with a docked mixer — see
-/// `crate::mixer_panel::Links`.
+/// `crate::dock::Links`.
 #[derive(Clone)]
 pub struct MixerLinks {
     pub toggle: Rc<std::cell::Cell<bool>>,
@@ -74,7 +74,7 @@ pub struct MixerLinks {
     /// The mixer's edits, to apply here as well.
     pub echo: Rc<RefCell<Vec<crate::engine::Edit>>>,
     /// Keys pressed while the mixer had the focus, to handle here.
-    pub keys: Rc<RefCell<Vec<crate::mixer_panel::Key>>>,
+    pub keys: Rc<RefCell<Vec<crate::dock::Key>>>,
 }
 
 /// The finest grid division the ruler will draw.
@@ -518,7 +518,7 @@ pub struct ArrangementWidget {
     /// The rows' height at zoom 1, for the panel's scroll range, which
     /// changes when rows are shown or hidden.
     content_h: Rc<std::cell::Cell<f64>>,
-    /// The docked mixer's links (`crate::mixer_panel::Links`): asking for
+    /// The docked mixer's links (`crate::dock::Links`): asking for
     /// it to toggle, the rows it shows, and the edits it made, to apply
     /// here too. `None` with no mixer beside this arrangement.
     mixer: Option<MixerLinks>,
@@ -3299,16 +3299,16 @@ impl ArrangementWidget {
     fn echoes(&mut self) {
         let Some(links) = &self.mixer else { return };
         let echoed: Vec<crate::engine::Edit> = links.echo.borrow_mut().drain(..).collect();
-        let keys: Vec<crate::mixer_panel::Key> = links.keys.borrow_mut().drain(..).collect();
+        let keys: Vec<crate::dock::Key> = links.keys.borrow_mut().drain(..).collect();
         for edit in &echoed {
             self.assume(edit);
         }
         for key in &keys {
             match key {
-                crate::mixer_panel::Key::Down(e) => {
+                crate::dock::Key::Down(e) => {
                     self.typed(e);
                 }
-                crate::mixer_panel::Key::Up(e) => {
+                crate::dock::Key::Up(e) => {
                     self.released(e);
                 }
             }
@@ -4707,14 +4707,14 @@ impl ArrangementWidget {
             return;
         };
         let control = match turn.spot.control {
-            crate::row::Control::Volume => crate::mcp::Control::Volume,
-            crate::row::Control::Pan => crate::mcp::Control::Pan,
+            crate::row::Control::Volume => crate::controls::Control::Volume,
+            crate::row::Control::Pan => crate::controls::Control::Pan,
             _ => return,
         };
         let dy = y - turn.from;
         let dy = if fine { dy * crate::gesture::FINE } else { dy };
         let fraction = crate::gesture::drag_fraction(dy, KNOB_TRAVEL);
-        let Some(edit) = crate::mcp::drag(control, &turn.was.guid, &turn.was, fraction) else {
+        let Some(edit) = crate::controls::drag(control, &turn.was.guid, &turn.was, fraction) else {
             return;
         };
         self.assume(&edit);

@@ -58,7 +58,7 @@ impl<S: PaintScene> Canvas for Host<'_, S> {
     }
 
     fn text(&mut self, transform: Affine, run: &TextRun) -> bool {
-        let size = crate::mcp::f64_to_f32(run.size);
+        let size = crate::controls::f64_to_f32(run.size);
         let glyphs = self.font.layout(&run.text, size);
         if glyphs.is_empty() {
             return true;

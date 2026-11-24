@@ -1218,7 +1218,7 @@ impl DeviceRow {
         let at = Affine::translate((x, top));
         mixer.replay(scene, 0.0, width, at);
         let tracks = [track.clone()];
-        crate::overlay::controls(
+        crate::strip_overlay::controls(
             scene,
             &self.palette,
             &self.font,
@@ -1227,9 +1227,9 @@ impl DeviceRow {
             &crate::plan::Rows::of(&rows, &tracks),
             &crate::pointer::Pointer::default(),
             &[],
-            &crate::overlay::Clips::default(),
+            &crate::strip_overlay::Clips::default(),
             0.0,
-            &mut crate::overlay::Racks::none(),
+            &mut crate::strip_overlay::Racks::none(),
             0.0,
             width,
             at,

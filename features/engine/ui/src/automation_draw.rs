@@ -873,7 +873,7 @@ pub fn headers(
             // The dial: how far the stage goes, 0 to twice as made, and
             // under it the amount.
             let centre = (mx - KNOB_W / 2.0 - 1.0, p.top + 5.0 + KNOB_R);
-            crate::tone::knob_arc(
+            crate::controls::knob_arc(
                 painter,
                 palette,
                 centre,

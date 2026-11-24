@@ -516,7 +516,7 @@ fn GroupMixer(strips: Vec<Strip>) -> Element {
                 (arm.guid != track.guid).then(|| (track.guid.clone(), arm.clone()))
             })
             .collect();
-        let mut links = crate::mixer_panel::Links::alone(rows, arm_of);
+        let mut links = crate::dock::Links::alone(rows, arm_of);
         links.fill = true;
         links
     });

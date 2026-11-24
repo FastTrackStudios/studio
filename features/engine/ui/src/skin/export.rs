@@ -388,13 +388,13 @@ impl Gen<'_> {
         )
     }
 
-    fn step(&self, control: crate::mcp::Control) -> String {
+    fn step(&self, control: crate::controls::Control) -> String {
         let spread = format!("(({} || !{}) ? 4 : 0)", self.full(), self.head());
         let mute = format!("({} + {spread})", n(f64::from(g::RECMON_FROM_ARM)));
         let solo = format!("({mute} + {} + {spread})", n(f64::from(g::SOLO_FROM_MUTE)));
         match control {
-            crate::mcp::Control::Mute => mute,
-            crate::mcp::Control::Solo => solo,
+            crate::controls::Control::Mute => mute,
+            crate::controls::Control::Solo => solo,
             _ => format!("({solo} + {} + {spread})", n(f64::from(g::IO_FROM_SOLO))),
         }
     }
@@ -426,7 +426,7 @@ impl Gen<'_> {
             self.full(),
             self.band_bottom(),
             self.arm_top(),
-            self.step(crate::mcp::Control::Solo),
+            self.step(crate::controls::Control::Solo),
             n(f64::from(g::BUTTON_H)),
             self.band_bottom()
         )
@@ -435,7 +435,7 @@ impl Gen<'_> {
     fn name_top(&self) -> String {
         format!(
             "(h - {} - {})",
-            n(crate::mcp::INDENT_STEP),
+            n(crate::controls::INDENT_STEP),
             n(f64::from(g::NAME_PLATE))
         )
     }
@@ -503,7 +503,7 @@ impl Gen<'_> {
             fx: Spot::new("7", "9", "max(w - 14, 36)", "24", head.clone()),
             routing: Spot::new(
                 format!("{col} - {}", n(art::ROUTING_INSET_V)),
-                step(crate::mcp::Control::Routing),
+                step(crate::controls::Control::Routing),
                 n(art::ROUTING_CELL_V.0),
                 n(art::ROUTING_CELL_V.1),
                 full.clone(),
@@ -529,8 +529,14 @@ impl Gen<'_> {
                 "20",
                 format!("{full} && track.armed"),
             ),
-            mute: Spot::new(col.clone(), step(crate::mcp::Control::Mute), "21", "20", ""),
-            solo: Spot::new(col, step(crate::mcp::Control::Solo), "21", "20", ""),
+            mute: Spot::new(
+                col.clone(),
+                step(crate::controls::Control::Mute),
+                "21",
+                "20",
+                "",
+            ),
+            solo: Spot::new(col, step(crate::controls::Control::Solo), "21", "20", ""),
             fader_x: self.fader_x(),
             fader_top: self.fader_top(),
             scale_x: format!("max({} - 24, 1)", self.fader_x()),
@@ -837,7 +843,7 @@ impl Gen<'_> {
             ),
         );
         let ink = hex(to_theme(p.text_dim));
-        let (cx, cy, arm) = (f64::from(crate::mcp::FOLD_W) / 2.0, 6.0, 3.0);
+        let (cx, cy, arm) = (f64::from(crate::controls::FOLD_W) / 2.0, 6.0, 3.0);
         let open = format!(
             "M {} {} L {} {} L {} {} Z",
             n(cx - arm),
@@ -869,8 +875,8 @@ impl Gen<'_> {
         self.arm(&spots.arm_mixer, art::Arm::Mixer);
         self.arm(&spots.arm_panel, art::Arm::Panel);
         self.monitor(&spots.monitor);
-        self.button(crate::mcp::Control::Mute, &spots.mute);
-        self.button(crate::mcp::Control::Solo, &spots.solo);
+        self.button(crate::controls::Control::Mute, &spots.mute);
+        self.button(crate::controls::Control::Solo, &spots.solo);
         self.name_plate();
         self.fader();
     }
@@ -1070,9 +1076,9 @@ impl Gen<'_> {
     }
 
     /// Mute or solo.
-    fn button(&mut self, control: crate::mcp::Control, spot: &Spot) {
+    fn button(&mut self, control: crate::controls::Control, spot: &Spot) {
         let p = self.palette;
-        let (label, field, lit) = if control == crate::mcp::Control::Mute {
+        let (label, field, lit) = if control == crate::controls::Control::Mute {
             ("M", "track.mute", crate::tcp::mute_lit(p))
         } else {
             ("S", "track.solo", crate::tcp::solo_lit(p))
@@ -1504,7 +1510,7 @@ impl Gen<'_> {
                 "folder",
                 "0".into(),
                 "h - 12".into(),
-                n(f64::from(crate::mcp::FOLD_W)),
+                n(f64::from(crate::controls::FOLD_W)),
                 "12".into(),
                 String::new(),
             ),
@@ -1605,8 +1611,8 @@ fn level_brush(chrome: &daw_ui::theme::Chrome, zones: [Tc; 3]) -> Vec<(f32, Tc)>
 fn zone_at(zones: [Tc; 3], at: f64) -> Tc {
     let at = at.clamp(0.0, 1.0);
     if at <= 0.75 {
-        zones[0].mix(zones[1], crate::mcp::f64_to_f32(at / 0.75))
+        zones[0].mix(zones[1], crate::controls::f64_to_f32(at / 0.75))
     } else {
-        zones[1].mix(zones[2], crate::mcp::f64_to_f32((at - 0.75) / 0.25))
+        zones[1].mix(zones[2], crate::controls::f64_to_f32((at - 0.75) / 0.25))
     }
 }

@@ -304,10 +304,8 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
 pub fn register_mixer(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&MIXER_VIEW, Effect::Mutating, mixer_view)?;
     list.register(&MIXER_FX, Effect::Mutating, |a: MixerFxArg| {
-        let on = a
-            .shown
-            .unwrap_or_else(|| !crate::mixer_panel::racks_shown());
-        crate::mixer_panel::set_racks_shown(on);
+        let on = a.shown.unwrap_or_else(|| !crate::dock::racks_shown());
+        crate::dock::set_racks_shown(on);
         Ok(if on {
             "the mixer's FX racks shown"
         } else {

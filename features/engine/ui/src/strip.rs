@@ -24,7 +24,7 @@ use vello::kurbo::Rect;
 
 use daw_ui::art::paint::tcp as art;
 
-use crate::mcp::{Columns, Control, Squeeze};
+use crate::controls::{Columns, Control, Squeeze};
 
 /// How far the pan knob sits in from the strip's left edge.
 ///
@@ -123,7 +123,7 @@ pub fn shape_for(height: f64, live: bool, touch: bool) -> Collapse {
 /// every pixel they gave up handed to the fader. The FX row stays.
 #[must_use]
 pub fn shape(height: f64, live: bool) -> Collapse {
-    let mut c = Collapse::at(crate::mcp::f64_to_f32(height.max(1.0)));
+    let mut c = Collapse::at(crate::controls::f64_to_f32(height.max(1.0)));
     if live {
         let band = daw_ui::art::collapse::PAN_SECTION_UNLABELLED;
         let freed = c.input_band + c.pan_band - band;
@@ -196,7 +196,7 @@ impl Strip {
         column: bool,
         live: bool,
     ) -> Self {
-        let layout = if column && rack_h > 0.0 && width >= crate::tone::FOCUSED + COLUMN_W {
+        let layout = if column && rack_h > 0.0 && width >= crate::controls::FOCUSED + COLUMN_W {
             Layout::Column
         } else {
             Layout::Stacked
@@ -248,7 +248,7 @@ impl Strip {
 
     /// Whether this strip has the touchscreen's button row: touch mode, on
     /// a strip wide enough for mute and solo side by side — a touchscreen's
-    /// thinner strip ([`crate::mcp::TOUCH_STRIP_W`]) included (a rail's
+    /// thinner strip ([`crate::controls::TOUCH_STRIP_W`]) included (a rail's
     /// centred buttons stay as they are, with no room either side).
     #[must_use]
     pub fn big_buttons(&self) -> bool {
@@ -481,7 +481,7 @@ impl Strip {
                 COLUMN_W + EDGE,
                 EDGE,
                 self.width - EDGE,
-                self.height - crate::mcp::INDENT_STEP - EDGE,
+                self.height - crate::controls::INDENT_STEP - EDGE,
             ),
         })
     }
@@ -680,13 +680,16 @@ impl Strip {
             // shared with the Dioxus mixer, so it stays 47.
             Control::Name => {
                 let plate = f64::from(g::NAME_PLATE);
-                Some(top(self.height - crate::mcp::INDENT_STEP - plate, plate))
+                Some(top(
+                    self.height - crate::controls::INDENT_STEP - plate,
+                    plate,
+                ))
             }
             // The fold, at the left of the number band under the name.
             Control::Folder => Some(Rect::new(
                 0.0,
-                self.height - crate::mcp::INDENT_STEP,
-                f64::from(crate::mcp::FOLD_W),
+                self.height - crate::controls::INDENT_STEP,
+                f64::from(crate::controls::FOLD_W),
                 self.height,
             )),
         }

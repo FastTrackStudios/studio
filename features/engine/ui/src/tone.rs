@@ -46,6 +46,7 @@ use vello::kurbo::{Affine, BezPath, Line, Rect, Shape, Stroke};
 use vello::peniko::{Color, Fill};
 
 use crate::arrangement::Palette;
+use crate::controls::{FOCUSED, knob_arc};
 use crate::live::Meters;
 use crate::text::Font;
 
@@ -1188,20 +1189,6 @@ pub const SHAPE: f64 = 80.0;
 /// The narrowest rack that still draws indicators: a rail's own width
 /// less its edges.
 pub const MINIMAL: f64 = 16.0;
-
-/// The narrowest rack that gives the panel over to the plugin's own
-/// editing surface.
-///
-/// Below this the plugin's grid crowds, its labels collide and its
-/// nodes — authored for a graph eight hundred pixels wide — overlap
-/// each other. Above it there is room for all three, and the rack stops
-/// abbreviating.
-///
-/// Well under a focus width (618 on a 1440p panel), because a focused
-/// strip is not the only way to get here: two of them side by side on
-/// an ultrawide, or a mixer of six tracks, land in the same place and
-/// should get the same panel.
-pub const FOCUSED: f64 = 260.0;
 
 /// The width a strip opens to when you go to WORK on it.
 ///
@@ -5234,49 +5221,6 @@ fn knobs(
             );
         }
     }
-}
-
-/// One knob: its track, its travel, its pointer. The vocal leveler's
-/// stage dials are these too.
-pub(crate) fn knob_arc(
-    scene: &mut impl PaintScene,
-    palette: &Palette,
-    centre: (f64, f64),
-    r: f64,
-    value: f64,
-    tint: Color,
-    held: bool,
-) {
-    use std::f64::consts::PI;
-    // Seven o'clock to five o'clock, clockwise: 270 degrees of travel.
-    let start = PI * 0.75;
-    let sweep = PI * 1.5;
-    let arc = |from: f64, to: f64| vello::kurbo::Arc::new(centre, (r, r), from, to - from, 0.0);
-    scene.stroke(
-        &Stroke::new(if held { 2.4 } else { 1.6 }),
-        Affine::IDENTITY,
-        palette.grid_beat,
-        None,
-        &arc(start, start + sweep),
-    );
-    let to = value.clamp(0.0, 1.0).mul_add(sweep, start);
-    if value > 0.005 {
-        scene.stroke(
-            &Stroke::new(if held { 2.4 } else { 1.6 }),
-            Affine::IDENTITY,
-            tint,
-            None,
-            &arc(start, to),
-        );
-    }
-    let (px, py) = (to.cos().mul_add(r, centre.0), to.sin().mul_add(r, centre.1));
-    scene.stroke(
-        &Stroke::new(1.2),
-        Affine::IDENTITY,
-        if held { palette.text } else { palette.text_dim },
-        None,
-        &Line::new(centre, (px, py)),
-    );
 }
 
 /// The widener: the stereo field as a fan, as wide as the setting.

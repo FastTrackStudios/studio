@@ -32,7 +32,7 @@ use daw_proto::Track;
 use frame::theme::runtime::{Fields, Rgba, Schema, Theme, Value};
 
 use crate::arrangement::Palette;
-use crate::mcp::Control;
+use crate::controls::Control;
 
 pub mod canvas;
 pub mod export;
@@ -393,9 +393,9 @@ pub fn fields(palette: &Palette, track: &Track, shown: Shown<'_>) -> StripFields
     set("track.input", Value::text(&input));
     set(
         "track.ground",
-        color(crate::mcp::strip_ground(palette, track)),
+        color(crate::controls::strip_ground(palette, track)),
     );
-    let edge = crate::mcp::strip_edge(palette, track);
+    let edge = crate::controls::strip_edge(palette, track);
     set("track.has_edge", Value::Bool(edge.is_some()));
     set("track.edge", edge.map_or(Value::Missing, color));
     set("track.tint", color(crate::tcp::row_tint(palette, track)));

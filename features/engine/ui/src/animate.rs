@@ -65,7 +65,7 @@ pub fn meters(n: usize, t: f64) -> Vec<daw_proto::TrackLevels> {
             // a meter that tracked its own fader would let the GPU
             // predict both from one gradient.
             let wave = (std::f64::consts::TAU * (t * 7.0 + phase)).sin();
-            let peak = crate::mcp::f64_to_f32(((wave + 1.0) / 2.0).clamp(0.0, 1.0));
+            let peak = crate::controls::f64_to_f32(((wave + 1.0) / 2.0).clamp(0.0, 1.0));
             daw_proto::TrackLevels {
                 peak_left: peak,
                 // The right channel lags, so the two are never equal
