@@ -1,8 +1,8 @@
-# fts-daw-theme
+# studio-fts-theme
 
-FastTrackStudio's theme pack for Studio's views: the [arrangement](https://github.com/FastTrackStudios/arrangement-view), the [mixer](https://github.com/FastTrackStudios/mixer-view) and the [MIDI editor](https://github.com/FastTrackStudios/midi-editor). It is [Frame](https://github.com/FastTrackStudios/frame) documents that implement daw's theme spec (FastTrackStudios/daw, `daw-theme`). Every view loads the same pack, so a mute or solo button looks the same in the track panel as on a mixer strip.
+FastTrackStudio's own theme for Studio's views: the [arrangement](https://github.com/FastTrackStudios/arrangement-view), the [mixer](https://github.com/FastTrackStudios/mixer-view) and the [MIDI editor](https://github.com/FastTrackStudios/midi-editor). It is [Frame](https://github.com/FastTrackStudios/frame) documents that implement daw's theme spec ([daw#52](https://github.com/FastTrackStudios/daw/issues/52), `daw-theme`). Every view loads the same pack, so a mute or solo button looks the same in the track panel as on a mixer strip.
 
-Anyone can make a pack. Studio installs one from a GitHub link.
+It's one of the `studio-*-theme` packs (`studio-reaper-theme` is REAPER's look, others such as `studio-protools-theme` to come). Anyone can make a pack, and Studio installs one from a GitHub link.
 
 ## What's in it
 
@@ -14,7 +14,6 @@ Anyone can make a pack. Studio installs one from a GitHub link.
 | `themes/console/strip.frame` | one mixer channel strip, placing the controls by name | mixer |
 | `themes/console/rack.frame`, `rails.frame` | the FX rack and the mixer's rails | mixer |
 | `themes/console/editor.frame` | the editor's keys and lanes | MIDI editor |
-| `themes/fts-dark.frame` | REAPER's layout, generated (`theme_export` in the studio repo); the reference the native painters are held to | mixer |
 
 ## How a theme is built
 
