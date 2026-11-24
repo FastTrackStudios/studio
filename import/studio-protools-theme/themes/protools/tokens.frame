@@ -1,0 +1,190 @@
+<Document>
+  <!-- Two modes of one look. `dark` is the current grey-on-charcoal one;
+       `classic` the lighter grey of the versions before it. The mixer is
+       nearly the same in both (a charcoal upper section, a mid-grey lower
+       one); the edit window is where they part: dark playlists in `dark`,
+       light grey ones in `classic`. `local.*` are this pack's own. -->
+  <Variables modes="dark classic">
+    <!-- ink -->
+    <Var name="text" dark="#d8d8d8" classic="#0d0d0d" />
+    <Var name="text.dim" dark="#939393" classic="#3c3c3c" />
+    <Var name="text.faint" dark="#6e6e6e" classic="#5e5e5e" />
+    <Var name="text.bright" dark="#ffffff" classic="#000000" />
+    <Var name="accent" dark="#4a8fe7" classic="#2f6fcf" />
+    <Var name="selected" dark="#7fb2ff" classic="#1e53df" />
+    <!-- surfaces: charcoal window, grey panels, black readouts -->
+    <Var name="surface" dark="#282828" classic="#464646" />
+    <Var name="surface.raised" dark="#3a3a3a" classic="#8d8d8d" />
+    <Var name="surface.sunken" dark="#1c1c1c" classic="#3b3b3b" />
+    <Var name="border" dark="#161616" classic="#2c2c2c" />
+    <Var name="hardware" dark="#636363" classic="#666666" />
+    <Var name="hardware.edge" dark="#1c1c1c" classic="#262626" />
+    <Var name="hardware.mark" dark="#f0f0f0" classic="#f0f0f0" />
+    <Var name="plate" dark="#00000040" classic="#00000030" />
+    <Var name="sheen" dark="#ffffff1a" classic="#ffffff26" />
+    <Var name="field" dark="#1c1c1c" classic="#d6d6d6" />
+    <Var name="combo" dark="#454545" classic="#b4b4b4" />
+    <!-- states: the lit faces -->
+    <Var name="mute" dark="#ce6c25" classic="#ce6c25" />
+    <Var name="solo" dark="#cab824" classic="#cab824" />
+    <Var name="rec" dark="#ce3225" classic="#ce3225" />
+    <Var name="pan" dark="#96da12" classic="#96da12" />
+    <Var name="monitor.tape" dark="#4cbc2a" classic="#4cbc2a" />
+    <Var name="route.out" dark="#4a8fe7" classic="#2f6fcf" />
+    <Var name="route.send" dark="#e5994c" classic="#c87a2c" />
+    <Var name="route.recv" dark="#ce3225" classic="#ae2a1f" />
+    <!-- meters: green, yellow near 0 dB, red over, in an olive well -->
+    <Var name="meter.safe" dark="#2fb526" classic="#2fb526" />
+    <Var name="meter.warn" dark="#e3d02a" classic="#e3d02a" />
+    <Var name="meter.danger" dark="#e8331f" classic="#e8331f" />
+    <Var name="meter.well" dark="#202b03" classic="#202b03" />
+    <!-- the track panel and the rails -->
+    <Var name="tcp.tint" dark="#3a3a3a" classic="#8d8d8d" />
+    <Var name="tcp.column" dark="#333333" classic="#858585" />
+    <Var name="rail.ground" dark="#282828" classic="#464646" />
+    <Var name="rail.rule" dark="#1e1e1e" classic="#3b3b3b" />
+    <Var name="rail.button" dark="#4a4a4a" classic="#8a8a8a" />
+    <Var name="rack.well" dark="#1c1c1c" classic="#3b3b3b" />
+    <!-- Pro Tools never tints a header by its track: the colour is a bar. -->
+    <Var name="tint.strength" value="0" />
+    <Var name="strip.live" value="false" />
+    <Var name="strip.touch" value="false" />
+    <!-- the edit window -->
+    <Var name="arrange.ground" dark="#292929" classic="#868686" />
+    <Var name="arrange.row" dark="#4e4e4e" classic="#b6b6b6" />
+    <Var name="arrange.row_alt" dark="#4a4a4a" classic="#b0b0b0" />
+    <Var name="arrange.divider" dark="#2f2f2f" classic="#6e6e6e" />
+    <Var name="grid.bar" dark="#2b2b2b" classic="#8a8a8a" />
+    <Var name="grid.beat" dark="#424242" classic="#9e9e9e" />
+    <Var name="grid.sub" dark="#484848" classic="#a8a8a8" />
+    <Var name="ruler.ground" dark="#242424" classic="#505050" />
+    <Var name="ruler.ink" dark="#d0d0d0" classic="#e2e2e2" />
+    <Var name="ruler.ink_dim" dark="#737373" classic="#b7b7b7" />
+    <Var name="playhead" dark="#ffffff" classic="#000000" />
+    <Var name="cursor.edit" dark="#d24a3a" classic="#b8402e" />
+    <Var name="clip.edge" dark="#1a1a1a" classic="#4a4a4a" />
+    <!-- dark: a deep body under a bright waveform; classic: a pale one
+         under a saturated waveform -->
+    <Var name="clip.alpha" dark="0.62" classic="0.42" />
+    <!-- The clip palette: sixteen hues from the bright row of Pro Tools'
+         track colour palette, red round to magenta. A track's own colour
+         snaps to the nearest. -->
+    <Var name="clip.0" value="#bc170b" />
+    <Var name="clip.1" value="#bc510c" />
+    <Var name="clip.2" value="#bf8911" />
+    <Var name="clip.3" value="#bcc414" />
+    <Var name="clip.4" value="#88c30e" />
+    <Var name="clip.5" value="#2dc70d" />
+    <Var name="clip.6" value="#1dc553" />
+    <Var name="clip.7" value="#1ec48a" />
+    <Var name="clip.8" value="#27c3c0" />
+    <Var name="clip.9" value="#32c1fe" />
+    <Var name="clip.10" value="#3083fb" />
+    <Var name="clip.11" value="#2f30fb" />
+    <Var name="clip.12" value="#5533f9" />
+    <Var name="clip.13" value="#8737fd" />
+    <Var name="clip.14" value="#bb3afb" />
+    <Var name="clip.15" value="#bd248a" />
+    <!-- sizes and type -->
+    <Var name="radius.control" value="2" />
+    <Var name="size.label" value="11" />
+    <Var name="size.small" value="9" />
+    <Var name="font.ui" value="\"Inter\"" />
+    <!-- The MIDI editor. Its note area stays light grey in both modes, as
+         Pro Tools' does; the chrome around it follows the mode. -->
+    <Var name="editor.bg" dark="#b0b0b0" classic="#bcbcbc" />
+    <Var name="editor.row_a" dark="#b7b7b7" classic="#c4c4c4" />
+    <Var name="editor.row_b" dark="#a7a9a3" classic="#b4b6b0" />
+    <Var name="editor.grid_beat" dark="#7f98b0" classic="#7e99ab" />
+    <Var name="editor.grid_sub" dark="#a1a5aa" classic="#adb1b5" />
+    <Var name="editor.panel" dark="#3a3a3a" classic="#8d8d8d" />
+    <Var name="editor.panel_border" dark="#1e1e1e" classic="#4a4a4a" />
+    <Var name="editor.border_strong" dark="#111111" classic="#2c2c2c" />
+    <Var name="editor.surface_inset" dark="#262626" classic="#7a7a7a" />
+    <Var name="editor.surface_bar" dark="#3c3c3c" classic="#8c8e8e" />
+    <Var name="editor.gutter_bg" dark="#2d2d2d" classic="#6d6d6d" />
+    <Var name="editor.key_white" dark="#e1e1e1" classic="#e8e8e8" />
+    <Var name="editor.key_black" dark="#333333" classic="#3a3a3a" />
+    <Var name="editor.key_label" dark="#2a2a2a" classic="#2a2a2a" />
+    <Var name="editor.text" dark="#d8d8d8" classic="#0d0d0d" />
+    <Var name="editor.text_dim" dark="#939393" classic="#3c3c3c" />
+    <Var name="editor.text_bright" dark="#ffffff" classic="#000000" />
+    <Var name="editor.text_faint" dark="#6e6e6e" classic="#5e5e5e" />
+    <Var name="editor.accent" dark="#4a8fe7" classic="#2f6fcf" />
+    <Var name="editor.selected" dark="#dcdce4" classic="#dcdce4" />
+    <Var name="editor.playhead" dark="#101010" classic="#000000" />
+    <Var name="editor.razor" dark="#4a8fe755" classic="#2f6fcf55" />
+    <Var name="editor.gold" dark="#ffc219" classic="#ffc219" />
+    <Var name="editor.zone" dark="#4a8fe722" classic="#2f6fcf22" />
+    <Var name="editor.reference" dark="#8a8a8a" classic="#6a6a6a" />
+    <Var name="editor.handle" dark="#f0f0f0" classic="#1a1a1a" />
+    <Var name="editor.control" dark="#636363" classic="#666666" />
+    <Var name="editor.control_active" dark="#2f6fcf" classic="#2f6fcf" />
+    <Var name="editor.control_hover" dark="#707070" classic="#757575" />
+    <Var name="editor.control_selected" dark="#3d7fd9" classic="#3d7fd9" />
+    <Var name="editor.octave_line" dark="#7c7e80" classic="#8a8c8e" />
+    <Var name="editor.peaks" dark="#00000033" classic="#00000033" />
+    <!-- Notes: Pro Tools draws a track's notes in the track's colour, one
+         hue for every pitch. The spec colours them by pitch class, so all
+         twelve are that one blue here (see the README's spec proposal for
+         colouring by velocity). -->
+    <Var name="editor.pitch_0" value="#253cf1" />
+    <Var name="editor.pitch_1" value="#253cf1" />
+    <Var name="editor.pitch_2" value="#253cf1" />
+    <Var name="editor.pitch_3" value="#253cf1" />
+    <Var name="editor.pitch_4" value="#253cf1" />
+    <Var name="editor.pitch_5" value="#253cf1" />
+    <Var name="editor.pitch_6" value="#253cf1" />
+    <Var name="editor.pitch_7" value="#253cf1" />
+    <Var name="editor.pitch_8" value="#253cf1" />
+    <Var name="editor.pitch_9" value="#253cf1" />
+    <Var name="editor.pitch_10" value="#253cf1" />
+    <Var name="editor.pitch_11" value="#253cf1" />
+    <!-- A drum kit's pieces keep apart, in hues from the same palette. -->
+    <Var name="editor.drum_kick" value="#bc170b" />
+    <Var name="editor.drum_snare" value="#bf8911" />
+    <Var name="editor.drum_tom" value="#88c30e" />
+    <Var name="editor.drum_hat" value="#27c3c0" />
+    <Var name="editor.drum_ride" value="#3083fb" />
+    <Var name="editor.drum_cymbal" value="#8737fd" />
+    <Var name="editor.drum_other" value="#bd248a" />
+    <!-- this pack's own -->
+    <Var name="local.strip_upper" dark="#313131" classic="#323232" />
+    <Var name="local.strip_section" dark="#3a3a3a" classic="#3b3b3b" />
+    <Var name="local.strip_lower" dark="#6f6f6f" classic="#6b6b6b" />
+    <Var name="local.strip_edge" dark="#2e2e2e" classic="#3b3b3b" />
+    <Var name="local.slot" dark="#4d4d4b" classic="#464646" />
+    <Var name="local.slot_full" dark="#b2b2b2" classic="#b0b0b0" />
+    <Var name="local.slot_ink" dark="#000000" classic="#000000" />
+    <Var name="local.section_ink" dark="#ededed" classic="#e8e8e8" />
+    <Var name="local.dropdown" dark="#b3b3b3" classic="#b5b5b5" />
+    <Var name="local.dropdown_ink" dark="#000000" classic="#000000" />
+    <Var name="local.readout" dark="#0f1602" classic="#11160f" />
+    <Var name="local.readout_ink" dark="#9be31d" classic="#9bdf11" />
+    <Var name="local.readout_peak" dark="#3d7be0" classic="#3d7be0" />
+    <Var name="local.plate" dark="#9a9a9a" classic="#9a9a9a" />
+    <Var name="local.plate_ink" dark="#080808" classic="#000000" />
+    <Var name="local.plate_selected" dark="#fbfcfd" classic="#fbfcfd" />
+    <Var name="local.plate_selected_ink" dark="#1e53df" classic="#1e53df" />
+    <Var name="local.name" dark="#252525" classic="#a8a8a8" />
+    <Var name="local.name_ink" dark="#e6e6e6" classic="#000000" />
+    <Var name="local.name_selected" dark="#d3d3d3" classic="#e6e6e6" />
+    <Var name="local.button_ink" dark="#f0f0f0" classic="#f0f0f0" />
+    <Var name="local.lit_ink" dark="#141414" classic="#141414" />
+    <Var name="local.rec_off" dark="#4d3835" classic="#4d3835" />
+    <Var name="local.rec_dot" dark="#c9a6a1" classic="#c9a6a1" />
+    <Var name="local.monitor_auto" dark="#e5994c" classic="#e5994c" />
+    <Var name="local.knob" dark="#2a2a2a" classic="#2a2a2a" />
+    <Var name="local.knob_rim" dark="#9a9a9a" classic="#8e8e8e" />
+    <Var name="local.fader_slot" dark="#2a2a2a" classic="#2a2a2a" />
+    <Var name="local.fader_cap" dark="#d5d7d6" classic="#dcdddd" />
+    <Var name="local.fader_cap_shade" dark="#7d7f7e" classic="#747575" />
+    <Var name="local.scale_ink" dark="#1c1c1c" classic="#1c1c1c" />
+    <Var name="local.no_color" dark="#13355f" classic="#13355f" />
+    <Var name="local.editor_ruler" dark="#5d646d" classic="#767d86" />
+    <Var name="local.editor_ruler_label" dark="#2a2a2a" classic="#5a5a5a" />
+    <Var name="local.editor_lane" dark="#c0c0c0" classic="#c8c8c8" />
+    <Var name="local.editor_lane_label" dark="#5a5a5a" classic="#7a7a7a" />
+    <Var name="local.menu" dark="#2b2b2b" classic="#3a3a3a" />
+  </Variables>
+</Document>
