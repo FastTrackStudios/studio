@@ -1781,3 +1781,35 @@ const fn mods_of(m: Mods) -> tools::Mods {
         alt: m.alt,
     }
 }
+
+/// The editor's colours as theme tokens (`editor.<name>`, a hex value
+/// each), as it draws itself from `palette`, and its notes' palettes as
+/// they are: what daw-view-kit's theme export writes for it
+/// (`skin::export::install_editor_tokens`, installed by [`crate::install`]).
+#[must_use]
+pub fn theme_tokens(palette: &crate::palette::Palette) -> Vec<(String, String)> {
+    use crate::skin::export::hex;
+    use crate::tcp::to_theme;
+    let mut look = base_look(palette);
+    let mut vars: Vec<(String, String)> = look_fields(&mut look)
+        .into_iter()
+        .map(|(name, c)| (format!("editor.{name}"), hex(to_theme(*c))))
+        .collect();
+    vars.push(("sheen".to_owned(), "#ffffff12".to_owned()));
+    for (i, c) in editor::paint::theme::PITCH_CLASS.iter().enumerate() {
+        vars.push((format!("editor.pitch_{i}"), (*c).to_owned()));
+    }
+    use editor::rows as kit;
+    for (name, c) in [
+        ("kick", kit::DRUM_KICK_COLOR),
+        ("snare", kit::DRUM_SNARE_COLOR),
+        ("tom", kit::DRUM_TOM_COLOR),
+        ("hat", kit::DRUM_HAT_COLOR),
+        ("ride", kit::DRUM_RIDE_COLOR),
+        ("cymbal", kit::DRUM_CYMBAL_COLOR),
+        ("other", kit::DRUM_OTHER_COLOR),
+    ] {
+        vars.push((format!("editor.drum_{name}"), c.to_owned()));
+    }
+    vars
+}

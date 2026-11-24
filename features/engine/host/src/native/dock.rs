@@ -418,7 +418,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "EDT",
             Place::Edge(Side::Bottom),
             |_| {
-                rsx! { Fill { daw_view_kit::editor_view::EditorPanel {} } }
+                rsx! { Fill { midi_editor::editor_view::EditorPanel {} } }
             },
         ),
         k(

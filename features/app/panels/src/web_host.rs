@@ -21,7 +21,7 @@ pub fn WebDemo(
 ) -> Element {
     use crate::web_engine::Progress;
     // The page's Editor follows what its arrangement picks.
-    use_hook(crate::editor_view::install);
+    use_hook(midi_editor::install);
     // The page's controls run named actions: the window's own join the
     // page's list before anything is drawn (`crate::press`).
     #[cfg(not(feature = "native"))]
@@ -457,7 +457,7 @@ fn SongViews(
                 View::Daw => rsx! { DawPanels { engine: engine.clone() } },
                 View::Chart => rsx! { crate::chart_panel::WebChart { paged: true } },
                 View::Lyrics => rsx! { crate::lyrics_panel::LyricsPanel {} },
-                View::Editor => rsx! { crate::editor_view::EditorPanel {} },
+                View::Editor => rsx! { midi_editor::editor_view::EditorPanel {} },
                 View::Mixer => rsx! {
                     DawPanels { engine: engine.clone(), mixer_only: true }
                 },

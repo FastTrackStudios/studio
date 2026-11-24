@@ -145,7 +145,12 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         1,
         "fold every folder: SESSION_FOLD_TOPS",
     ),
-    ("shell.rs", "options::LOCKING.set(", 1, "lock: SESSION_LOCK"),
+    (
+        "chrome.rs",
+        "options::LOCKING.set(",
+        1,
+        "lock: SESSION_LOCK",
+    ),
     (
         "transport_bar.rs",
         "play_return::set(",

@@ -572,7 +572,7 @@ fn SongViews(
                 },
                 View::Chart => rsx! { studio_panels::chart_panel::Chart { paged: true } },
                 View::Lyrics => rsx! { studio_panels::lyrics_panel::LyricsPanel {} },
-                View::Editor => rsx! { daw_view_kit::editor_view::EditorPanel {} },
+                View::Editor => rsx! { midi_editor::editor_view::EditorPanel {} },
                 View::Mixer => rsx! {
                     mixer_view::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true }
                 },
@@ -594,7 +594,7 @@ fn SongViews(
                 div {
                     style: "position:absolute; left:0; right:0; bottom:{fx_h}px; \
                             height:{EDITOR_DOCK_SHARE}%; border-top:1px solid #000;",
-                    daw_view_kit::editor_view::EditorPanel {}
+                    midi_editor::editor_view::EditorPanel {}
                 }
             }
             if fx_docked {

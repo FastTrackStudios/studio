@@ -23,6 +23,8 @@ description = "Studio's app panels around the DAW views: the shell and its bars,
 
 [dependencies]
 daw-view-kit = { workspace = true }
+# The Editor view the page shows (`web_host`).
+midi-editor = { workspace = true }
 session-engine-client = { workspace = true }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }
@@ -105,11 +107,11 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 [features]
 default = ["native"]
 # daw-view-kit's features, forwarded, with what the panels' own code needs.
-native = ["daw-view-kit/native", "dep:patch-list", "dep:anyrender_vello", "session-engine-client/native", "dep:dioxus-native", "dep:zbus", "dep:dirs", "dep:winit", "dep:tokio", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:futures-channel", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "session/library", "session/project-sync"]
-web = ["daw-view-kit/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "session/collab", "dep:architect", "dep:futures-channel"]
+native = ["daw-view-kit/native", "midi-editor/native", "dep:patch-list", "dep:anyrender_vello", "session-engine-client/native", "dep:dioxus-native", "dep:zbus", "dep:dirs", "dep:winit", "dep:tokio", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:futures-channel", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "session/library", "session/project-sync"]
+web = ["daw-view-kit/web", "midi-editor/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "session/collab", "dep:architect", "dep:futures-channel"]
 # The engine in this process (daw-view-kit's `engine`): the chart editor,
 # the hosted page.
-engine = ["daw-view-kit/engine"]
+engine = ["daw-view-kit/engine", "midi-editor/engine"]
 signal = ["native", "daw-view-kit/signal"]
 
 [dev-dependencies]

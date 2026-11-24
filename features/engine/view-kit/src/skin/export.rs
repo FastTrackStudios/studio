@@ -140,7 +140,23 @@ fn n(v: f64) -> String {
     format!("{v}")
 }
 
-fn hex(c: Tc) -> String {
+/// What the editor's colours are as theme tokens (`editor.<name>`, a
+/// hex value each), from a palette: the editor's own
+/// (midi-editor's `expression::theme_tokens`), installed by the app.
+pub type EditorTokens = fn(&Palette) -> Vec<(String, String)>;
+
+static EDITOR_TOKENS: std::sync::OnceLock<EditorTokens> = std::sync::OnceLock::new();
+
+/// Write `tokens` into every theme this exports: the editor's colours.
+/// Once per process; a second install keeps the first.
+pub fn install_editor_tokens(tokens: EditorTokens) {
+    let _ = EDITOR_TOKENS.set(tokens);
+}
+
+/// A theme colour as markup writes it: `#rrggbb`, or `#rrggbbaa` when it
+/// is not opaque.
+#[must_use]
+pub fn hex(c: Tc) -> String {
     if c.a == 255 {
         format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
     } else {
@@ -305,33 +321,15 @@ impl Gen<'_> {
         self.line(1, "</Variables>");
     }
 
-    /// The editor's colours as tokens (`editor.<name>`), as it draws
-    /// itself from this palette, and its notes' palettes as they are —
-    /// so this theme draws the editor's chrome exactly as the editor
-    /// would without it.
+    /// The editor's colours as tokens (`editor.<name>`), as the installed
+    /// editor ([`install_editor_tokens`]) draws itself from this palette,
+    /// so this theme draws the editor's chrome exactly as the editor would
+    /// without it. None with no editor installed.
     fn editor_tokens(&mut self) {
-        let mut look = crate::expression::base_look(self.palette);
-        let mut vars: Vec<(String, String)> = crate::expression::look_fields(&mut look)
-            .into_iter()
-            .map(|(name, c)| (format!("editor.{name}"), hex(to_theme(*c))))
-            .collect();
-        vars.push(("sheen".to_owned(), "#ffffff12".to_owned()));
-        for (i, c) in editor::paint::theme::PITCH_CLASS.iter().enumerate() {
-            vars.push((format!("editor.pitch_{i}"), (*c).to_owned()));
-        }
-        use editor::rows as kit;
-        for (name, c) in [
-            ("kick", kit::DRUM_KICK_COLOR),
-            ("snare", kit::DRUM_SNARE_COLOR),
-            ("tom", kit::DRUM_TOM_COLOR),
-            ("hat", kit::DRUM_HAT_COLOR),
-            ("ride", kit::DRUM_RIDE_COLOR),
-            ("cymbal", kit::DRUM_CYMBAL_COLOR),
-            ("other", kit::DRUM_OTHER_COLOR),
-        ] {
-            vars.push((format!("editor.drum_{name}"), c.to_owned()));
-        }
-        for (name, value) in vars {
+        let Some(tokens) = EDITOR_TOKENS.get() else {
+            return;
+        };
+        for (name, value) in tokens(self.palette) {
             self.line(2, &format!("<Var name=\"{name}\" value=\"{value}\" />"));
         }
     }

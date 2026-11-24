@@ -442,8 +442,8 @@ fn bench_bars() -> usize {
 /// are markers on the waveforms rather than a solid bar.
 fn kit_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let size = (f64::from(width), f64::from(height));
-    let mut view = daw_view_kit::expression::Expression::audio_kit(bench_bars(), (0.0, 0.0), size);
-    view.set_look(daw_view_kit::expression::look_of(palette));
+    let mut view = midi_editor::expression::Expression::audio_kit(bench_bars(), (0.0, 0.0), size);
+    view.set_look(midi_editor::expression::look_of(palette));
     view.editor.frame_bars(4);
     view.editor.playhead = Some(view.editor.doc.time_base.units_per_second(view.editor.bpm) * 3.2);
     let mut image = VelloImageRenderer::new(width, height);
@@ -670,7 +670,7 @@ fn set_on_every_folder(
 /// `FTS_BENCH_EXPRESSION_MENU=1` with its context menu open.
 fn expression_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let size = (f64::from(width), f64::from(height));
-    let mut view = daw_view_kit::expression::Expression::demo((0.0, 0.0), size);
+    let mut view = midi_editor::expression::Expression::demo((0.0, 0.0), size);
     // `FTS_BENCH_EXPRESSION_MENU=1`: with the context menu open, as a
     // right-click in the roll leaves it.
     if std::env::var_os("FTS_BENCH_EXPRESSION_MENU").is_some() {
@@ -728,12 +728,12 @@ fn editor_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32
         tracing::error!("could not read the project back");
         return;
     };
-    let mut song = daw_view_kit::editor_view::Song::of(&project);
+    let mut song = midi_editor::editor_view::Song::of(&project);
     let named = std::env::var("FTS_BENCH_EDITOR_TRACK").unwrap_or_else(|_| "Piano".to_owned());
     for t in &mut song.tracks {
         t.selected = t.name == named;
     }
-    let mut view = daw_view_kit::editor_view::EditorView::new(song);
+    let mut view = midi_editor::editor_view::EditorView::new(song);
     let deadline = Instant::now() + std::time::Duration::from_secs(60);
     while view.editor().is_none() && Instant::now() < deadline {
         let _ = view.frame(width, height, 1.0);
@@ -742,7 +742,7 @@ fn editor_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32
     // `FTS_BENCH_EDITOR_ALIGN=1`: line the stack's takes up first, and
     // say where each lane's first notes moved.
     if std::env::var_os("FTS_BENCH_EDITOR_ALIGN").is_some() {
-        let firsts = |view: &mut daw_view_kit::editor_view::EditorView| -> Vec<Vec<f64>> {
+        let firsts = |view: &mut midi_editor::editor_view::EditorView| -> Vec<Vec<f64>> {
             view.editor().map_or_else(Vec::new, |e| {
                 (0..e.editor.tracks.len())
                     .map(|i| {
@@ -1886,7 +1886,7 @@ fn dock_split(width: u32, height: u32) -> (vello::kurbo::Rect, u32) {
 fn paint_dock(
     painter: &mut impl PaintScene,
     palette: &Palette,
-    editor: &mut daw_view_kit::expression::Expression,
+    editor: &mut midi_editor::expression::Expression,
     dock: vello::kurbo::Rect,
 ) {
     editor.layout((dock.x0, dock.y0), (dock.width(), dock.height()));
@@ -1914,11 +1914,11 @@ fn paint_dock(
 /// under it.
 fn dock_shot(session: &Session, palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let (dock_box, above) = dock_split(width, height);
-    let mut editor = daw_view_kit::expression::Expression::demo(
+    let mut editor = midi_editor::expression::Expression::demo(
         (dock_box.x0, dock_box.y0),
         (dock_box.width(), dock_box.height()),
     );
-    editor.set_look(daw_view_kit::expression::look_of(palette));
+    editor.set_look(midi_editor::expression::look_of(palette));
     editor.editor.playhead = Some(editor.editor.doc.end * 0.3);
     let (mut widget, _view) = session.widget();
     let mut image = VelloImageRenderer::new(width, height);
@@ -2063,12 +2063,12 @@ fn studio(
     // lanes, a song's worth of hits, framed four bars at a time the way
     // drums get edited — and paged through as the frames go by.
     let bars = bench_bars();
-    let mut editor = daw_view_kit::expression::Expression::audio_kit(
+    let mut editor = midi_editor::expression::Expression::audio_kit(
         bars,
         (dock_box.x0, dock_box.y0),
         (dock_box.width(), dock_box.height()),
     );
-    editor.set_look(daw_view_kit::expression::look_of(palette));
+    editor.set_look(midi_editor::expression::look_of(palette));
     editor.editor.frame_bars(4);
     let doc_end = editor.editor.doc.end;
     let (mut widget, view) = session.widget();

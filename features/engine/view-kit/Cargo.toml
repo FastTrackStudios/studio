@@ -15,9 +15,8 @@ description = "Session's window — the arrangement, the mixer and the panels, a
 # headless tools that draw them (`bin/bench`, `bin/blitz_shot`). The
 # arrangement is painted by ONE thing, `widget::ArrangementWidget`.
 #
-# The expression editor is a view this window mounts — see
-# `src/expression.rs`. It arrived once the arrangement held its frame
-# rate with a real session open.
+# The expression editor is a view this window mounts — midi-editor's
+# (features/midi-editor), on this crate.
 
 [dependencies]
 # The process-wide keyboard switch (`utils::keyboard`) the keys honour.
@@ -69,9 +68,10 @@ dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturat
 architect-input = { workspace = true }
 keybinds = { workspace = true }
 
-# The expression editor: its engine, its painter and gestures (no
-# dioxus), and the take-to-document conversion.
-editor = { workspace = true, features = ["audio", "audio-daw", "daw", "paint"] }
+# The editor's pointer glyphs (`tool`, `window_cursor`), its pending text
+# entry (`keys`): its painter only. The expression editor itself is
+# midi-editor's, which sits on this crate.
+editor = { workspace = true, features = ["paint"] }
 
 # The Tone rack's response math — the plugins' own, not a copy. See the
 # `signal` block in the root manifest for why these are core-only.

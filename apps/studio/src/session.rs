@@ -429,7 +429,7 @@ mod native {
                     WithSong { key: "{key}", session: Song(session.clone()),
                         match view {
                             View::Setup => rsx! { studio_panels::setup::SetupView {} },
-                            View::Editor => rsx! { daw_view_kit::editor_view::EditorPanel {} },
+                            View::Editor => rsx! { midi_editor::editor_view::EditorPanel {} },
                             _ => rsx! { mixer_view::fx_view::FxPanel { lanes: 4 } },
                         }
                     }

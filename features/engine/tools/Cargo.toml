@@ -15,6 +15,9 @@ arrangement-view = { workspace = true, features = ["native", "engine"] }
 mixer-view = { workspace = true, features = ["native", "engine"] }
 # The Patch List view, rendered to its fixtures (`bench`).
 studio-panels = { workspace = true, features = ["native", "engine"] }
+# The expression editor and the Editor panel (`bench`), and its theme
+# tokens (`theme_export`).
+midi-editor = { workspace = true, features = ["native", "engine"] }
 session-engine = { workspace = true }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }
@@ -51,6 +54,10 @@ profile = ["dep:pprof", "daw-view-kit/profile"]
 [[bin]]
 name = "bench"
 path = "src/bin/bench.rs"
+
+[[bin]]
+name = "theme_export"
+path = "src/bin/theme_export.rs"
 
 [[bin]]
 name = "blitz_shot"
