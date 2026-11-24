@@ -4,8 +4,8 @@
 
 use dioxus::prelude::*;
 
+use crate::chrome::{DIM, RULE, TEXT};
 use crate::instrument_tracks::Instrument;
-use crate::shell::{DIM, RULE, TEXT};
 
 /// Organize mode's instruments, down the left of the arrangement: each
 /// button adds its instrument to the song (`TRACK_ADD_INSTRUMENT`).

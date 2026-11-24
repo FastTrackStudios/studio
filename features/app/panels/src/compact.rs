@@ -17,7 +17,7 @@
 //!   sections, each filled as it plays — the vertical progress bar — and
 //!   the place another song is picked.
 //!
-//! A host decides which layout by the window's shape ([`Form::of`]) and
+//! A host decides which layout by the window's shape ([`form_of`]) and
 //! passes what is host-shaped: the other four views' panels, and what goes
 //! in the drawer.
 
@@ -26,71 +26,31 @@ use dioxus::prelude::*;
 use crate::setlist::Setlist;
 use crate::shell::{BAR_BG, DIM, RULE, TEXT};
 
-/// The window's shape, and so which layout the app takes.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Form {
-    /// Room for the wide layout: the top bar and the docked views.
-    Wide,
-    /// A phone held upright, or a window that narrow.
-    Portrait,
-    /// A phone on its side, or a window that short.
-    Landscape,
-}
+// The window's form and sides, the kit's: re-exported so
+// `compact::Form`, `compact::use_form`, … read as before.
+pub use daw_view_kit::form::*;
 
-impl Form {
-    /// Narrower than this (and taller than wide) is a phone held upright.
-    pub const NARROW: f64 = app_shell::ui::FormFactor::NARROW;
-    /// Shorter than this (and wider than tall) is a phone on its side.
-    pub const SHORT: f64 = app_shell::ui::FormFactor::SHORT;
+/// Narrower than this (and taller than wide) is a phone held upright.
+pub const NARROW: f64 = app_shell::ui::FormFactor::NARROW;
+/// Shorter than this (and wider than tall) is a phone on its side.
+pub const SHORT: f64 = app_shell::ui::FormFactor::SHORT;
 
-    /// The form of a window `width` × `height` logical pixels: the shared
-    /// classification ([`app_shell::ui::FormFactor::of`]).
-    #[must_use]
-    pub fn of(width: f64, height: f64) -> Self {
-        Self::from_screen(&app_shell::ui::Screen::desk(width, height))
-    }
-
-    /// The layout a [`app_shell::ui::Screen`] takes: a phone's by its
-    /// orientation, a tablet's and a desk's the wide one.
-    #[must_use]
-    pub fn from_screen(screen: &app_shell::ui::Screen) -> Self {
-        match (screen.phone(), screen.landscape()) {
-            (false, _) => Self::Wide,
-            (true, false) => Self::Portrait,
-            (true, true) => Self::Landscape,
-        }
-    }
-
-    /// Whether this is the small-screen layout.
-    #[must_use]
-    pub const fn compact(self) -> bool {
-        !matches!(self, Self::Wide)
-    }
-}
-
-/// The window's form, as the host measured it (wide when it did not say).
+/// The form of a window `width` × `height` logical pixels: the shared
+/// classification ([`app_shell::ui::FormFactor::of`]).
 #[must_use]
-pub fn use_form() -> Form {
-    try_use_context::<Signal<Form>>().map_or(Form::Wide, |form| form())
+pub fn form_of(width: f64, height: f64) -> Form {
+    form_from_screen(&app_shell::ui::Screen::desk(width, height))
 }
 
-/// Where a phone on its side has its camera housing, and how far the controls
-/// beside it keep clear: `right`, the inspector's strip moving in from that
-/// edge; `left`, the views' rail moving to the right edge instead (no gap
-/// kept — the view runs under the housing) — and how far the top rows keep
-/// clear of the screen's rounded corners (`corner`). Nothing upright, or with no host saying. In
-/// logical pixels; the host provides it as a `Signal<Sides>`.
-#[derive(Clone, Copy, PartialEq, Debug, Default)]
-pub struct Sides {
-    pub left: f64,
-    pub right: f64,
-    pub corner: f64,
-}
-
-/// The sides, as the host measured them (none when it did not say).
+/// The layout a [`app_shell::ui::Screen`] takes: a phone's by its
+/// orientation, a tablet's and a desk's the wide one.
 #[must_use]
-pub fn use_sides() -> Sides {
-    try_use_context::<Signal<Sides>>().map_or_else(Sides::default, |sides| sides())
+pub fn form_from_screen(screen: &app_shell::ui::Screen) -> Form {
+    match (screen.phone(), screen.landscape()) {
+        (false, _) => Form::Wide,
+        (true, false) => Form::Portrait,
+        (true, true) => Form::Landscape,
+    }
 }
 
 /// The views of the small-screen layout: the five in the tab bar, and
@@ -705,15 +665,15 @@ fn ViewIcon(view: PhoneView, color: &'static str) -> Element {
 
 #[cfg(test)]
 mod tests {
-    use super::Form;
+    use super::{Form, form_of};
 
     /// The layout follows the window's size alone: a desk window made
     /// phone-sized takes the phone's, and widened takes the wide one back.
     #[test]
     fn a_phone_sized_window_takes_the_phone_layout() {
-        assert_eq!(Form::of(390.0, 844.0), Form::Portrait);
-        assert_eq!(Form::of(874.0, 402.0), Form::Landscape);
-        assert_eq!(Form::of(1440.0, 900.0), Form::Wide);
-        assert_eq!(Form::of(1194.0, 834.0), Form::Wide);
+        assert_eq!(form_of(390.0, 844.0), Form::Portrait);
+        assert_eq!(form_of(874.0, 402.0), Form::Landscape);
+        assert_eq!(form_of(1440.0, 900.0), Form::Wide);
+        assert_eq!(form_of(1194.0, 834.0), Form::Wide);
     }
 }

@@ -95,6 +95,10 @@ pub fn run() {
     // The arrangement's, for every window that shows it.
     #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
     ::arrangement_view::arrangement_host::install();
+    // The Editor follows what the arrangement picks, and writes its tokens
+    // into the themes the kit exports.
+    #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
+    ::midi_editor::install();
     // iPhone: the page is drawn to the left and right edges, and minds the
     // camera housing itself (`native::ios_scene::island_on_left`) — a phone
     // on its side reports the housing's inset on both sides.

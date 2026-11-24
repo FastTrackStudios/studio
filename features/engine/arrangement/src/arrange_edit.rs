@@ -2641,7 +2641,7 @@ pub fn kit_items(project: &Project, only: &[String]) -> Vec<String> {
         }
         inside.insert(track.guid.clone());
         // A piece's Sample track plays notes made from the hits
-        // (`crate::drum_samples`): they follow the edit as notes, written
+        // (`session_engine::drum_samples`): they follow the edit as notes, written
         // where the hits go — cut and moved as audio too, they moved twice.
         let derived = track.name.trim().to_ascii_lowercase().ends_with("sample");
         if !track.is_folder && !derived && (only.is_empty() || only.contains(&track.guid)) {

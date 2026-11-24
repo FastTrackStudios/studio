@@ -24,7 +24,6 @@ dynamic-template = { workspace = true }
 dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
 fts-audio-ui = { workspace = true }
 frame = { workspace = true, features = ["host-scene", "live", "theme"] }
-studio = { workspace = true }
 anyrender = { workspace = true }
 wgpu_context = { workspace = true, optional = true }
 vello = "0.11"

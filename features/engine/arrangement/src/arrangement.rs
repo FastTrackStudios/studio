@@ -2650,7 +2650,7 @@ pub(crate) fn take_mark(
     at - x
 }
 
-/// Every item's take ranks and notes on it ([`crate::take_rank`]): a
+/// Every item's take ranks and notes on it (`session_engine::take_rank`): a
 /// marker's stars or X (and note) where it is, along the item's top; a
 /// take region tinted from its start to its end.
 pub fn take_marks_overlay<'a>(

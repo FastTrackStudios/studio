@@ -510,10 +510,10 @@ pub fn use_window_transport_keys() {
     // The window's panes, when the shell has them: `x` and `f` press them
     // here, whatever has the focus — the mixer alone has no arrangement
     // to hand its keys to.
-    let mixer = dioxus::prelude::try_use_context::<crate::shell::MixerToggle>();
-    let fx = dioxus::prelude::try_use_context::<crate::shell::FxToggle>();
-    let editor = dioxus::prelude::try_use_context::<crate::shell::EditorPane>();
-    let pins = dioxus::prelude::try_use_context::<crate::shell::Pins>();
+    let mixer = dioxus::prelude::try_use_context::<crate::chrome::MixerToggle>();
+    let fx = dioxus::prelude::try_use_context::<crate::chrome::FxToggle>();
+    let editor = dioxus::prelude::try_use_context::<crate::chrome::EditorPane>();
+    let pins = dioxus::prelude::try_use_context::<crate::chrome::Pins>();
     let held = dioxus::prelude::use_hook(|| Rc::new(Cell::new(Modifiers::NONE)));
     dioxus_native::use_window_event(move |event, _| match event {
         WindowEvent::ModifiersChanged(modifiers) => {

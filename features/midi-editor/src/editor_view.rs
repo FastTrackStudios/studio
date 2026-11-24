@@ -244,8 +244,14 @@ impl Song {
 
 /// The item last clicked in the arrangement, and how many clicks there
 /// have been: the Editor opens what you click, as REAPER's does. Written
-/// by the arrangement ([`picked`]), read by the Editor each frame.
+/// by the arrangement (through its edit target, [`install`]), read by the Editor each frame.
 static PICKED: std::sync::Mutex<(u64, Option<String>)> = std::sync::Mutex::new((0, None));
+
+/// Make this editor the arrangement's edit target
+/// (`daw_view_kit::edit_target`): the Editor opens what you click.
+pub fn install() {
+    crate::edit_target::install(picked);
+}
 
 /// The arrangement picked `item` (a plain click selects it alone).
 pub fn picked(item: &str) {
@@ -278,7 +284,7 @@ fn picked_since(seen: u64) -> Option<(u64, String)> {
 #[component]
 pub fn EditorPanel() -> Element {
     let Some(session) = try_use_context::<crate::song_model::StudioSession>() else {
-        return rsx! { crate::shell::EditorComing {} };
+        return rsx! { crate::chrome::EditorComing {} };
     };
     let song = Song::of(&session.project.0);
     #[cfg(feature = "native")]
@@ -297,7 +303,7 @@ pub fn EditorPanel() -> Element {
     #[cfg(not(feature = "native"))]
     {
         let _ = song;
-        rsx! { crate::shell::EditorComing {} }
+        rsx! { crate::chrome::EditorComing {} }
     }
 }
 

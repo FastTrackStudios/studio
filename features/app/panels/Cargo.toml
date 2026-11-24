@@ -1,0 +1,123 @@
+[package]
+name = "studio-panels"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Studio's app panels around the DAW views: the shell and its bars, the chart, the lyrics, the performer screen, the transport bar, the setlist navigator, collaboration, Setup, the record view, the browser, the web page and the app menu"
+
+# What this is. The panels Studio (and the old Session window,
+# session-desktop) shows around the arrangement and the mixer: the app's
+# chrome, not the DAW views' kit. They came out of daw-view-kit so the kit
+# depends on daw's contracts and not on Studio's app (app-shell, the
+# setlist, collaboration, the chart editor): daw-view-kit/docs/
+# extraction-plan.md, step 3.
+#
+# The modules were written as daw-view-kit's and still read the kit at
+# `crate::` (`crate::tcp`, `crate::actions`, …): the kit is glob-imported
+# at this crate's root, as arrangement-view does. What the views
+# themselves need of the chrome (which view is showing, the pinned panes,
+# the window's form, the canvas host in a browser) stays in the kit
+# (`chrome`, `form`, `web_canvas`, `browser_toggle`), re-exported here
+# under the old paths (`shell::View`, `compact::Form`, `web_host::WidgetCanvas`).
+
+[dependencies]
+daw-view-kit = { workspace = true }
+# The Editor view the page shows (`web_host`).
+midi-editor = { workspace = true }
+session-engine-client = { workspace = true }
+dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
+daw-ui = { workspace = true, features = ["studio"] }
+blitz-dom = { workspace = true }
+blitz-traits = { workspace = true }
+dioxus-native-dom = { workspace = true }
+dioxus-native = { workspace = true, optional = true }
+daw-proto = { workspace = true }
+daw = { workspace = true }
+# The chart editor (`chart_editor`): the keyflow editor on the song's chart.
+editor-view = { workspace = true, optional = true }
+editor-state = { workspace = true, optional = true }
+# The chart editor's worker replies over it (what `use_coroutine` hands out).
+futures-channel = { workspace = true, optional = true }
+# The modes, the lyrics, the setlist's components the panels draw.
+session = { workspace = true, features = ["library", "ui", "web"] }
+# The bars' icons.
+lucide-dioxus = { workspace = true }
+# The chart's numbers and names, the key.
+keyflow = { workspace = true, features = ["text", "engraver"] }
+# The shared performer screen (the iPad's Performance view, `performer`):
+# its frame, panels and registry, the playback and rig traits; the form
+# factor (`compact::form_of`).
+app-shell = { workspace = true, features = ["ui"] }
+architect-input = { workspace = true }
+anyrender = { workspace = true }
+# The Patch List view (`patch_list`): the album's plan and the room's
+# profile, read; applying one to a session is the session's job. Its
+# picture (`patch_list::shot`) is rendered off screen by Vello.
+patch-list = { workspace = true, optional = true }
+anyrender_vello = { workspace = true, optional = true }
+vello = "0.11"
+# Finding REAPER's resource path, for the toolbar icons it installs.
+dirs = { workspace = true, optional = true }
+winit = { version = "0.31.0-beta.4", optional = true }
+web-time = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+# Collaboration (`collab_bar`): hosting/joining over iroh, and the chart
+# editor's remote edits and carets.
+architect = { workspace = true, optional = true, features = ["vox", "platform", "action-list"] }
+editor-crdt = { workspace = true, optional = true }
+futures-timer = { workspace = true, optional = true }
+tracing = { workspace = true }
+web-sys = { workspace = true, optional = true, features = [
+    "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement",
+    "DomRect", "CssStyleDeclaration", "console", "Response", "Headers", "PointerEvent",
+    "EventTarget",
+    # The audio out (`web_audio`): a worklet the page posts rendered blocks to.
+    "AudioContext", "AudioContextOptions", "BaseAudioContext", "AudioContextState",
+    "AudioWorklet", "AudioWorkletNode", "AudioWorkletNodeOptions",
+    "AudioNode", "AudioDestinationNode", "MessagePort", "MessageEvent",
+    "Blob", "BlobPropertyBag", "Url", "Worklet", "WorkletOptions",
+    "KeyboardEvent", "Event", "AddEventListenerOptions",
+    # The live session card's invite, onto the clipboard.
+    "Navigator", "Clipboard", "UrlSearchParams",
+    # A shared song's proxies, kept off the wasm heap and across reloads
+    # (`song_stream::CachedFetch`).
+    "CacheStorage", "Cache",
+    # Whether this viewer chose the multitracks, kept across a set's resets.
+    "Storage",
+    # Touch mode's default: whether the page's pointer is a finger.
+    "MediaQueryList",
+] }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true }
+num-traits = { workspace = true }
+serde_json = { workspace = true }
+facet-json = { workspace = true }
+
+# The global app menu (`app_menu`): served on the session bus, which is
+# Linux's. Behind `native`.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.48", default-features = false, features = ["sync", "macros"] }
+
+[features]
+default = ["native"]
+# daw-view-kit's features, forwarded, with what the panels' own code needs.
+native = ["daw-view-kit/native", "midi-editor/native", "dep:patch-list", "dep:anyrender_vello", "session-engine-client/native", "dep:dioxus-native", "dep:zbus", "dep:dirs", "dep:winit", "dep:tokio", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:futures-channel", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "session/library", "session/project-sync"]
+web = ["daw-view-kit/web", "midi-editor/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "session/collab", "dep:architect", "dep:futures-channel"]
+# The engine in this process (daw-view-kit's `engine`): the chart editor,
+# the hosted page.
+engine = ["daw-view-kit/engine", "midi-editor/engine"]
+signal = ["native", "daw-view-kit/signal"]
+
+[dev-dependencies]
+daw-view-kit = { workspace = true, features = ["test-support"] }
+# The app menu's test serves it over a socket pair, not a bus.
+zbus = { workspace = true, features = ["p2p"] }
+
+[lints]
+workspace = true

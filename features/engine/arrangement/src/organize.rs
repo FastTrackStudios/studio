@@ -29,8 +29,8 @@
 use dioxus::prelude::*;
 use session::section_kinds::{MarkerKind, SectionKind};
 
+use crate::chrome::{DIM, RULE, TEXT};
 pub use crate::organize_edit::Button;
-use crate::shell::{DIM, RULE, TEXT};
 
 /// The structure buttons, as the REAPER toolbar has them.
 const STRUCTURE: [(Button, &str); 12] = [

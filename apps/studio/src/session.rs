@@ -334,8 +334,8 @@ mod native {
     use app_shell::Workspace;
     use app_shell::ui::{AppShell, BarSpan, Tabs, TopBar, use_top_bar_span};
     use app_shell_extensions::{ExtensionOverlays, ExtensionUi, use_extension_ui};
-    use daw_view_kit::shell::View as Ui;
     use session_engine_client::setlist::Setlist;
+    use studio_panels::shell::View as Ui;
 
     use super::{View, go_to, leave, route};
     use crate::hosted;
@@ -428,8 +428,8 @@ mod native {
                 for key in std::iter::once(key) {
                     WithSong { key: "{key}", session: Song(session.clone()),
                         match view {
-                            View::Setup => rsx! { daw_view_kit::setup::SetupView {} },
-                            View::Editor => rsx! { daw_view_kit::editor_view::EditorPanel {} },
+                            View::Setup => rsx! { studio_panels::setup::SetupView {} },
+                            View::Editor => rsx! { midi_editor::editor_view::EditorPanel {} },
                             _ => rsx! { mixer_view::fx_view::FxPanel { lanes: 4 } },
                         }
                     }
@@ -501,12 +501,12 @@ mod native {
                 crate::state::sleep_ms(100).await;
             }
         });
-        daw_view_kit::shell::use_pins();
+        studio_panels::shell::use_pins();
         use_context_provider(daw_view_kit::touch::Touch::detect);
         use_context_provider(mixer_view::mixer_panel::MixerMemory::new);
         use_context_provider(mixer_view::closeup::Closeups::new);
-        use_context_provider(daw_view_kit::lyrics_panel::LyricsChoice::new);
-        use_context_provider(|| daw_view_kit::shell::Back(Callback::new(move |()| leave(app))));
+        use_context_provider(studio_panels::lyrics_panel::LyricsChoice::new);
+        use_context_provider(|| studio_panels::shell::Back(Callback::new(move |()| leave(app))));
         use_engine_setlist();
         // Keyflow's chart and Ignition's room follow the engine's song.
         hosted::use_engine_actions();
@@ -600,7 +600,7 @@ mod native {
                         TopBar { title: title.clone() }
                     },
                     accessory: rsx! {
-                        daw_view_kit::shell::BottomBar {
+                        studio_panels::shell::BottomBar {
                             view: shown,
                             mode,
                             transport: rsx! { Transport {} },
@@ -639,7 +639,7 @@ mod native {
         let app = use_app();
         rsx! {
             div { style: "flex:1 1 0px; min-width:0; height:100%; display:flex; flex-direction:column;",
-                daw_view_kit::shell::TopBar {
+                studio_panels::shell::TopBar {
                     lights: 0.0,
                     badges: rsx! { EngineBadge {} },
                     on_pick: move |i: usize| go_to(app, i),
@@ -681,7 +681,7 @@ mod native {
             Some((key, session)) => rsx! {
                 for key in std::iter::once(key) {
                     WithSong { key: "{key}", session: Song(session.clone()),
-                        daw_view_kit::transport_bar::TransportBar { big: true }
+                        studio_panels::transport_bar::TransportBar { big: true }
                     }
                 }
             },

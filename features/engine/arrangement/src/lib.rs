@@ -33,8 +33,6 @@ pub mod notice;
 #[cfg(feature = "native")]
 pub mod organize;
 pub mod panel;
-#[cfg(feature = "native")]
-pub mod patch_list;
 pub mod poi_paint;
 pub mod rename;
 pub mod ruler;

@@ -19,24 +19,11 @@ const READ_EVERY_MS: u64 = 400;
 /// How often it looks for a toggle asked for on the Action List, ms.
 const TOGGLE_EVERY_MS: u64 = 100;
 
-/// Show or hide the browser: what to load on the selected track.
+// The browser's action and its toggle, the kit's (the window's Action List
+// registers it): re-exported so `browser::BROWSER` reads as before.
 #[cfg(feature = "native")]
-pub static BROWSER: architect::action::ActionMeta = crate::actions::meta(
-    "SESSION_BROWSER",
-    "browser",
-    "Browser",
-    "Show or hide the browser down the window's left: what to load on the selected track — signal's rig on a guitar or a bass (its profiles, its stacks' patches: a click plays one, a Shift-click switches to it at the cursor).",
-    "View",
-    "B",
-);
-
-/// Toggles asked for on the Action List and not yet carried out.
-static ASKED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
-/// Ask the window to show or hide the browser ([`BROWSER`]).
-pub fn request_toggle() {
-    ASKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-}
+pub use daw_view_kit::browser_toggle::BROWSER;
+pub use daw_view_kit::browser_toggle::request_toggle;
 
 /// What the browser shows: the selected track, and its rig as the browser
 /// lists it.
@@ -129,7 +116,7 @@ pub fn BrowserColumn() -> Element {
     // A toggle asked for on the Action List (a model, a menu).
     use_future(move || async move {
         loop {
-            if ASKED.swap(0, std::sync::atomic::Ordering::Relaxed) % 2 == 1
+            if daw_view_kit::browser_toggle::take_toggles() % 2 == 1
                 && let Some(pins) = pins
             {
                 let mut browser = pins.browser;

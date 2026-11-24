@@ -2,8 +2,8 @@
 //! pixel, the reference the native strip is checked against.
 //!
 //! ```sh
-//! cargo run -r -p session-daw --bin theme_export              # to features/engine/view-kit/themes/fts-dark.frame
-//! cargo run -r -p session-daw --bin theme_export -- out.frame # elsewhere
+//! cargo run -r -p daw-view-tools --bin theme_export              # to features/engine/view-kit/themes/fts-dark.frame
+//! cargo run -r -p daw-view-tools --bin theme_export -- out.frame # elsewhere
 //! ```
 //!
 //! The console theme (`features/engine/view-kit/themes/console/`) is not written
@@ -11,6 +11,8 @@
 //! `daw_view_kit::skin::export`.
 
 fn main() {
+    // The editor's `editor.*` tokens, as the app writes them.
+    midi_editor::install();
     let palette = daw_view_kit::palette::Palette::from_theme(&daw_ui::theming::Theme::dark());
     let out = std::env::args()
         .nth(1)

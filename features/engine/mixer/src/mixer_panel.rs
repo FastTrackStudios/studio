@@ -119,7 +119,7 @@ pub fn DawPanels(
     let memory = try_use_context::<MixerMemory>();
     // The arrangement's own (not the Overview's pair, not the mixer
     // alone): the window's mixer toggle is what opens it.
-    let switch = try_use_context::<crate::shell::MixerToggle>().filter(|_| !docked && !mixer_only);
+    let switch = try_use_context::<crate::chrome::MixerToggle>().filter(|_| !docked && !mixer_only);
     let links = use_context_provider(|| {
         let mut links = Links::new(
             session
@@ -178,13 +178,13 @@ pub fn DawPanels(
     // Read before the condition, never inside it: `try_use_context` is a
     // hook, and a hook skipped on one render (the mixer alone) and called
     // on the next panicked — "unable to retrieve the hook".
-    let pins = try_use_context::<crate::shell::Pins>();
+    let pins = try_use_context::<crate::chrome::Pins>();
     let inspecting = !mixer_only && !docked && pins.is_some_and(|pins| (pins.inspector)());
     let quantizing = !mixer_only && pins.is_some_and(|pins| (pins.quantize)());
     let strips = use_context_provider(|| InspectorStrips(Signal::new(1)));
     // A phone on its side with the camera housing on the right: the strip
     // moves left of it, its column still reaching the edge.
-    let housing = crate::compact::use_sides().right;
+    let housing = crate::form::use_sides().right;
     let inspector_w = if inspecting {
         inspector_width((strips.0)())
     } else {
@@ -487,9 +487,9 @@ pub fn WebMixer(hidden: bool) -> Element {
             widget.tone = Rc::clone(&closeups.tone);
             widget.closeups = Some(closeups);
         }
-        crate::web_host::HostedRef(Rc::new(RefCell::new(widget)))
+        crate::web_canvas::HostedRef(Rc::new(RefCell::new(widget)))
     });
-    let slot = crate::web_host::ElementSlot(Rc::clone(&element));
+    let slot = crate::web_canvas::ElementSlot(Rc::clone(&element));
     let arrange_node = Rc::clone(&links.arrange_node);
     let on_input = move |event: PanelEvent| match event {
         PanelEvent::Wheel { dx, dy } => {
@@ -514,7 +514,7 @@ pub fn WebMixer(hidden: bool) -> Element {
         div {
             style: "position:absolute; top:0; left:0; right:0; bottom:0; overflow:hidden; \
                     background:{colors.surface};",
-            crate::web_host::WidgetCanvas {
+            crate::web_canvas::WidgetCanvas {
                 widget,
                 panel: on_input,
                 element: Some(slot),
@@ -612,7 +612,7 @@ impl HostedMixer {
 }
 
 #[cfg(feature = "web")]
-impl crate::web_host::Hosted for MixerWidget {
+impl crate::web_canvas::Hosted for MixerWidget {
     fn paint(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         self.paint_scene(width, height, scale)
     }

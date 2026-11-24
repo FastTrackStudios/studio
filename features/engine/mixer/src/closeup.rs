@@ -364,7 +364,7 @@ fn RackCloseup(guid: String, which: Which) -> Element {
     #[cfg(all(feature = "web", not(feature = "native")))]
     {
         let widget = use_hook(|| {
-            crate::web_host::HostedRef(Rc::new(RefCell::new(RackWidget::new(
+            crate::web_canvas::HostedRef(Rc::new(RefCell::new(RackWidget::new(
                 Rc::clone(&closeups.tone),
                 guid.clone(),
                 which,
@@ -372,7 +372,7 @@ fn RackCloseup(guid: String, which: Which) -> Element {
             ))))
         });
         rsx! {
-            crate::web_host::WidgetCanvas { widget, hidden: false }
+            crate::web_canvas::WidgetCanvas { widget, hidden: false }
         }
     }
     #[cfg(not(any(feature = "native", feature = "web")))]
@@ -624,7 +624,7 @@ impl blitz_dom::node::Widget for RackWidget {
 }
 
 #[cfg(feature = "web")]
-impl crate::web_host::Hosted for RackWidget {
+impl crate::web_canvas::Hosted for RackWidget {
     fn paint(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         self.paint_scene(width, height, scale)
     }

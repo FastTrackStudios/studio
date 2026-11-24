@@ -59,10 +59,12 @@ members = [
     "features/ui/lyrics-ui",
     "features/adapters/web/worklet",
     "features/editor",
+    "features/midi-editor",
     "features/session",
     "features/ui/daw-ui",
     "features/dynamic-template",
     "features/app/shell",
+    "features/app/panels",
     "features/app/version",
     "features/library",
     "features/account",
@@ -150,6 +152,9 @@ lyrics-ui = { path = "features/ui/lyrics-ui", default-features = false }
 frame = { git = "https://github.com/FastTrackStudios/frame", rev = "1f6311abc5eeef87c5226155a4838a6f58984410" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
 editor = { path = "features/editor" }
+# The MIDI editor as a Studio view (expression, the Editor panel), over
+# daw-view-kit and editor.
+midi-editor = { path = "features/midi-editor", default-features = false }
 session = { path = "features/session" }
 synth = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 sampler = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
@@ -853,6 +858,9 @@ session-engine-client = { path = "features/engine/client", default-features = fa
 # Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
 session-runtime = { path = "features/engine/runtime" }
 daw-view-kit = { path = "features/engine/view-kit", default-features = false }
+# Studio's app panels around the views (the shell, the chart, the lyrics,
+# the transport bar, …), out of daw-view-kit.
+studio-panels = { path = "features/app/panels", default-features = false }
 mixer-view = { path = "features/engine/mixer", default-features = false }
 arrangement-view = { path = "features/engine/arrangement", default-features = false }
 studio-view-link = { path = "extensions/link" }

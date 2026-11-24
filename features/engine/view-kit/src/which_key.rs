@@ -68,7 +68,7 @@ pub fn Panel(showing: Option<WhichKey>, colors: daw_ui::studio::lanes::Colors) -
             (entry.key, label, ink)
         })
         .collect();
-    let bottom = crate::shell::BOTTOM_H + 16.0;
+    let bottom = crate::chrome::BOTTOM_H + 16.0;
     rsx! {
         div {
             "data-testid": "which-key",

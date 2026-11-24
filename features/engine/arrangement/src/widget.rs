@@ -4455,7 +4455,7 @@ impl ArrangementWidget {
                 Effect::Edit(edit) => {
                     // A plain click on an item: the Editor follows it.
                     if let crate::engine::Edit::SelectItem(item, true) = &edit {
-                        crate::editor_view::picked(item);
+                        crate::edit_target::picked(item);
                     }
                     edits.push(edit);
                 }

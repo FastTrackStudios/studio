@@ -30,8 +30,8 @@ pub struct Links {
     /// panel once a frame, since a widget cannot set a signal.
     pub toggle: Rc<Cell<bool>>,
     /// The window's one way to open the mixer, when the shell has one:
-    /// what `x` presses (`crate::shell::MixerToggle`).
-    pub switch: Option<crate::shell::MixerToggle>,
+    /// what `x` presses (`crate::chrome::MixerToggle`).
+    pub switch: Option<crate::chrome::MixerToggle>,
     /// The arrangement's rows, with a generation that goes up on every
     /// change, so the mixer knows to re-record.
     pub rows: Rc<RefCell<(u64, Rows)>>,

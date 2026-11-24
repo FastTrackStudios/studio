@@ -145,7 +145,12 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         1,
         "fold every folder: SESSION_FOLD_TOPS",
     ),
-    ("shell.rs", "options::LOCKING.set(", 1, "lock: SESSION_LOCK"),
+    (
+        "chrome.rs",
+        "options::LOCKING.set(",
+        1,
+        "lock: SESSION_LOCK",
+    ),
     (
         "transport_bar.rs",
         "play_return::set(",
@@ -184,16 +189,26 @@ fn squeezed(source: &str) -> String {
 
 /// How often each pattern is written in each file.
 fn found() -> BTreeMap<(String, &'static str), usize> {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut files = Vec::new();
-    sources(&src, &mut files);
+    // The kit's sources and the app panels' that came out of it
+    // (studio-panels, features/app/panels): one window, one rule.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut out = BTreeMap::new();
+    for src in [root.join("src"), root.join("../../app/panels/src")] {
+        let mut files = Vec::new();
+        sources(&src, &mut files);
+        scan(&src, &files, &mut out);
+    }
+    out
+}
+
+/// Count each pattern in `files`, keyed by the file's path under `src`.
+fn scan(src: &Path, files: &[PathBuf], out: &mut BTreeMap<(String, &'static str), usize>) {
     for file in files {
-        let Ok(text) = std::fs::read_to_string(&file) else {
+        let Ok(text) = std::fs::read_to_string(file) else {
             continue;
         };
         let rel = file
-            .strip_prefix(&src)
+            .strip_prefix(src)
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_default();
         let text = squeezed(&text);
@@ -204,7 +219,6 @@ fn found() -> BTreeMap<(String, &'static str), usize> {
             }
         }
     }
-    out
 }
 
 #[test]

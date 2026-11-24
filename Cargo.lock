@@ -5853,7 +5853,6 @@ dependencies = [
  "dioxus-native",
  "dioxus-ssr",
  "dioxus-test",
- "dock",
  "eyre",
  "facet",
  "facet-styx",
