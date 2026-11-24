@@ -146,6 +146,29 @@ pub struct Block {
     pub key: Option<Key>,
     pub params: Vec<Param>,
     pub meters: Vec<Meter>,
+    /// An offline block's analysis (addition 8); `None` for a realtime
+    /// block.
+    pub offline: Option<Offline>,
+}
+
+/// Where an offline block's analysis stands, as the row says it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Offline {
+    pub state: AnalysisState,
+    /// When it was made, Unix seconds.
+    pub at: Option<f64>,
+    /// Its lanes are the host's automation (`host`) or Signal plays them.
+    pub host_lanes: bool,
+    /// The user redrew one of its lanes.
+    pub edited: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AnalysisState {
+    None,
+    Fresh,
+    Stale,
+    Running,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -438,6 +461,23 @@ fn block(v: &Value) -> Result<Block, ChainError> {
             },
         }),
         params: array(v, "params").iter().map(param).collect(),
+        offline: (v.get("mode").and_then(Value::as_str) == Some("offline")).then(|| {
+            let a = v.get("analysis").unwrap_or(&Value::Null);
+            Offline {
+                state: match a.get("state").and_then(Value::as_str) {
+                    Some("fresh") => AnalysisState::Fresh,
+                    Some("stale") => AnalysisState::Stale,
+                    Some("running") => AnalysisState::Running,
+                    _ => AnalysisState::None,
+                },
+                at: a.get("at").and_then(Value::as_f64),
+                host_lanes: a.get("playback").and_then(Value::as_str) == Some("host"),
+                edited: array(a, "lanes").iter().any(|l| {
+                    l.get("edited")
+                        .is_some_and(|e| e.as_array().is_some_and(|e| !e.is_empty()))
+                }),
+            }
+        }),
         meters: meters(v),
     })
 }

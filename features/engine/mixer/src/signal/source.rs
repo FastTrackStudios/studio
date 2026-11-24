@@ -648,5 +648,6 @@ fn new_block(chain: &Chain, phase: &PhaseId, kind: &str) -> Block {
         key: None,
         params: Vec::new(),
         meters: Vec::new(),
+        offline: None,
     }
 }

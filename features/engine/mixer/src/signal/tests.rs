@@ -768,3 +768,47 @@ fn a_moved_value_revision_reads_the_chain_again_at_the_same_revision() {
     inserts.follow();
     assert_eq!(reads(&fixture), 2, "and only once");
 }
+
+#[test]
+fn an_offline_block_says_where_its_analysis_stands() {
+    let doc = |analysis: serde_json::Value| {
+        json!({
+            "schema": "signal.chain/1",
+            "phases": [{"id": "rescue", "name": "Rescue", "blocks": [
+                {"id": "rescue.level", "kind": "level", "name": "Level", "mode": "offline", "analysis": analysis},
+                {"id": "rescue.gate", "kind": "gate", "name": "Gate", "mode": "realtime"}
+            ]}]
+        })
+    };
+    let line = |analysis: serde_json::Value| {
+        let chain = Chain::from_value(&doc(analysis)).expect("a chain");
+        let (_, block) = chain.block("rescue.level").expect("the block");
+        super::paint::second_line(block).0
+    };
+    assert_eq!(line(json!({"state": "running"})), "offline: analysing…");
+    assert_eq!(
+        line(
+            json!({"state": "stale", "lanes": [{"param": "ride", "edited": [{"from": 1.0, "to": 2.0}]}]})
+        ),
+        "offline: stale · redrawn"
+    );
+    assert_eq!(
+        line(json!({"state": "fresh", "at": 1_795_478_400.0, "playback": "host"})),
+        "offline: 2026-11-24 00:00"
+    );
+    assert_eq!(
+        line(json!({"state": "fresh", "at": 1_795_478_400.0, "playback": "self"})),
+        "offline: 2026-11-24 00:00 · self"
+    );
+    assert_eq!(line(serde_json::Value::Null), "offline: not analysed");
+    let chain = Chain::from_value(&doc(json!({}))).expect("a chain");
+    assert!(
+        chain
+            .block("rescue.gate")
+            .expect("gate")
+            .1
+            .offline
+            .is_none(),
+        "a realtime block has none"
+    );
+}

@@ -389,11 +389,62 @@ fn block_row(
     switch(scene, palette, view::switch_box(at), !block.bypass);
 }
 
-/// A block's second line: its trouble, or else where its key comes from.
+/// `unix` seconds as `YYYY-MM-DD HH:MM` UTC.
+fn date_of(unix: f64) -> String {
+    #[allow(clippy::cast_possible_truncation)]
+    let secs = unix.max(0.0) as i64;
+    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    // Civil from days (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}-{m:02}-{d:02} {:02}:{:02}",
+        rem / 3600,
+        rem % 3600 / 60
+    )
+}
+
+/// An offline block's analysis, as its second line says it.
+fn offline_line(o: &super::chain::Offline) -> (String, Color) {
+    use super::chain::AnalysisState;
+    let edited = if o.edited { " · redrawn" } else { "" };
+    match o.state {
+        AnalysisState::Running => (
+            "offline: analysing…".into(),
+            Color::from_rgb8(0x60, 0xa5, 0xfa),
+        ),
+        AnalysisState::Stale => (
+            format!("offline: stale{edited}"),
+            trouble_ink(&Status::Unavailable),
+        ),
+        AnalysisState::Fresh => (
+            format!(
+                "offline: {}{}{edited}",
+                o.at.map_or_else(|| "fresh".to_owned(), date_of),
+                if o.host_lanes { "" } else { " · self" }
+            ),
+            trouble_ink(&Status::Ok),
+        ),
+        AnalysisState::None => ("offline: not analysed".into(), trouble_ink(&Status::Ok)),
+    }
+}
+
+/// A block's second line: its trouble, else an offline block's analysis,
+/// else where its key comes from.
 #[must_use]
 pub fn second_line(block: &Block) -> (String, Color) {
     if block.status.is_trouble() {
         return (block.status.label().to_owned(), trouble_ink(&block.status));
+    }
+    if let Some(o) = &block.offline {
+        return offline_line(o);
     }
     let Some(key) = &block.key else {
         return (String::new(), trouble_ink(&Status::Ok));
