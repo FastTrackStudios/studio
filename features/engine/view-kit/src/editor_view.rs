@@ -244,8 +244,14 @@ impl Song {
 
 /// The item last clicked in the arrangement, and how many clicks there
 /// have been: the Editor opens what you click, as REAPER's does. Written
-/// by the arrangement ([`picked`]), read by the Editor each frame.
+/// by the arrangement (through its edit target, [`install`]), read by the Editor each frame.
 static PICKED: std::sync::Mutex<(u64, Option<String>)> = std::sync::Mutex::new((0, None));
+
+/// Make this editor the arrangement's edit target
+/// (`daw_view_kit::edit_target`): the Editor opens what you click.
+pub fn install() {
+    crate::edit_target::install(picked);
+}
 
 /// The arrangement picked `item` (a plain click selects it alone).
 pub fn picked(item: &str) {

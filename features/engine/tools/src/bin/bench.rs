@@ -2321,18 +2321,18 @@ fn studio(
 
 /// Write one frame of the Patch List view to a PNG.
 ///
-/// `FTS_BENCH_PATCH_LIST=features/engine/view-kit/fixtures/patch-list.png`, the
+/// `FTS_BENCH_PATCH_LIST=features/app/panels/fixtures/patch-list.png`, the
 /// fixture album resolved against the fixture room — the picture
 /// `features/engine/view-kit/tests/patch_list_view.rs` compares byte for byte.
 fn patch_list_shot(out: &std::path::Path, width: u32, height: u32) {
-    let table = match arrangement_view::patch_list::Table::fixture() {
+    let table = match studio_panels::patch_list::Table::fixture() {
         Ok(table) => table,
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(2);
         }
     };
-    let Some(buffer) = arrangement_view::patch_list::shot(&table, (width, height)) else {
+    let Some(buffer) = studio_panels::patch_list::shot(&table, (width, height)) else {
         eprintln!("no gpu: the patch list picture needs a real device");
         std::process::exit(2);
     };
@@ -2350,19 +2350,19 @@ fn patch_list_shot(out: &std::path::Path, width: u32, height: u32) {
 /// Write one frame of the Patch List view, overridden and stale, to a
 /// PNG.
 ///
-/// `FTS_BENCH_PATCH_LIST_OVERRIDDEN_STALE=features/engine/view-kit/fixtures/patch-list-overridden-stale.png`
+/// `FTS_BENCH_PATCH_LIST_OVERRIDDEN_STALE=features/app/panels/fixtures/patch-list-overridden-stale.png`
 /// — the fixture album, a session override on Cody's DI, and a stale
 /// banner, the picture `features/engine/view-kit/tests/patch_list_view.rs`
 /// compares structurally.
 fn patch_list_shot_overridden_stale(out: &std::path::Path, width: u32, height: u32) {
-    let table = match arrangement_view::patch_list::Table::fixture_overridden_stale() {
+    let table = match studio_panels::patch_list::Table::fixture_overridden_stale() {
         Ok(table) => table,
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(2);
         }
     };
-    let Some(buffer) = arrangement_view::patch_list::shot(&table, (width, height)) else {
+    let Some(buffer) = studio_panels::patch_list::shot(&table, (width, height)) else {
         eprintln!("no gpu: the patch list picture needs a real device");
         std::process::exit(2);
     };

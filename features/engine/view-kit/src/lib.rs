@@ -30,6 +30,7 @@ pub use session_engine_client::collab;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::comp;
 pub use session_engine_client::edit_state;
+pub mod edit_target;
 pub mod editor_view;
 pub use session_engine_client::engine;
 pub mod expression;

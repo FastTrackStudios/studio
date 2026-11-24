@@ -35,6 +35,10 @@ pub mod lyrics_panel;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod mix_guide;
 pub mod navigator;
+/// The Patch List view: the album's plan in the room it is played in
+/// (moved from arrangement-view: a Studio feature, not the arrangement's).
+#[cfg(feature = "native")]
+pub mod patch_list;
 pub mod performer;
 pub mod progress;
 pub mod record_view;

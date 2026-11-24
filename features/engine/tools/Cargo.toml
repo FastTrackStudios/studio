@@ -13,6 +13,8 @@ publish = false
 daw-view-kit = { workspace = true, features = ["native", "engine"] }
 arrangement-view = { workspace = true, features = ["native", "engine"] }
 mixer-view = { workspace = true, features = ["native", "engine"] }
+# The Patch List view, rendered to its fixtures (`bench`).
+studio-panels = { workspace = true, features = ["native", "engine"] }
 session-engine = { workspace = true }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }

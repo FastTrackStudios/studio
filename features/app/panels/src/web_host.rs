@@ -20,6 +20,8 @@ pub fn WebDemo(
     guide: Option<String>,
 ) -> Element {
     use crate::web_engine::Progress;
+    // The page's Editor follows what its arrangement picks.
+    use_hook(crate::editor_view::install);
     // The page's controls run named actions: the window's own join the
     // page's list before anything is drawn (`crate::press`).
     #[cfg(not(feature = "native"))]

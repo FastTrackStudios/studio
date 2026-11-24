@@ -49,6 +49,12 @@ keyflow = { workspace = true, features = ["text", "engraver"] }
 app-shell = { workspace = true, features = ["ui"] }
 architect-input = { workspace = true }
 anyrender = { workspace = true }
+# The Patch List view (`patch_list`): the album's plan and the room's
+# profile, read; applying one to a session is the session's job. Its
+# picture (`patch_list::shot`) is rendered off screen by Vello.
+patch-list = { workspace = true, optional = true }
+anyrender_vello = { workspace = true, optional = true }
+vello = "0.11"
 # Finding REAPER's resource path, for the toolbar icons it installs.
 dirs = { workspace = true, optional = true }
 winit = { version = "0.31.0-beta.4", optional = true }
@@ -99,7 +105,7 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 [features]
 default = ["native"]
 # daw-view-kit's features, forwarded, with what the panels' own code needs.
-native = ["daw-view-kit/native", "session-engine-client/native", "dep:dioxus-native", "dep:zbus", "dep:dirs", "dep:winit", "dep:tokio", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:futures-channel", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "session/library", "session/project-sync"]
+native = ["daw-view-kit/native", "dep:patch-list", "dep:anyrender_vello", "session-engine-client/native", "dep:dioxus-native", "dep:zbus", "dep:dirs", "dep:winit", "dep:tokio", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:futures-channel", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "session/library", "session/project-sync"]
 web = ["daw-view-kit/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "session/collab", "dep:architect", "dep:futures-channel"]
 # The engine in this process (daw-view-kit's `engine`): the chart editor,
 # the hosted page.
