@@ -1,0 +1,18 @@
+/// The Tape echo: its own DSP (`delay.tape@1`), controls by id.
+id tape
+family delay
+name Tape
+engine "delay.tape@1"
+author fasttrackstudio
+version 1
+look tape
+controls (
+    {id time, name Time, unit ms, min 20, max 2000, default 375, skew 0.5}
+    {id feedback, name Repeats, unit percent, min 0, max 0.98, default 0.35}
+    {id drive, name Saturation, unit percent, min 0, max 1, default 0.3}
+    {id wow, name Wow, unit percent, min 0, max 1, default 0.15}
+    {id flutter, name Flutter, unit percent, min 0, max 1, default 0.1}
+    {id high_cut, name Tone, unit hz, min 1000, max 20000, default 6000, skew 0.25}
+    {id low_cut, name "Low Cut", unit hz, min 20, max 1000, default 80, skew 0.25}
+    {id mix, name Mix, unit percent, min 0, max 1, default 0.25}
+)

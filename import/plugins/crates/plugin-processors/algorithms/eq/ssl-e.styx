@@ -1,0 +1,64 @@
+/// An E-Series console EQ face (black knob), on the FTS EQ engine: four
+/// bands and the filters, mapped the way that console behaves. The mids'
+/// Q narrows as their gain rises (proportional Q); the LF and HF bands
+/// switch between shelf and bell.
+///
+/// Signal's reading of the console, not a model of its circuit: the
+/// curves are the canonical engine's.
+id ssl-e
+family eq
+name "E-Series"
+engine "eq.canonical@1"
+author fasttrackstudio
+version 1
+look console-e
+controls (
+    {id hpf, name HPF, unit hz, min 16, max 350, default 16, skew 0.5}
+    {id lpf, name LPF, unit hz, min 3000, max 22000, default 22000, skew 0.5}
+    {id lf_gain, name LF, unit db, min -16.5, max 16.5, default 0}
+    {id lf_freq, name "LF Freq", unit hz, min 30, max 450, default 100, skew 0.5}
+    {id lf_bell, name "LF Bell", toggle true}
+    {id lmf_gain, name LMF, unit db, min -16.5, max 16.5, default 0}
+    {id lmf_freq, name "LMF Freq", unit hz, min 200, max 2500, default 600, skew 0.5}
+    {id lmf_q, name "LMF Q", min 0.5, max 2.5, default 1, decimals 2}
+    {id hmf_gain, name HMF, unit db, min -16.5, max 16.5, default 0}
+    {id hmf_freq, name "HMF Freq", unit hz, min 600, max 7000, default 2500, skew 0.5}
+    {id hmf_q, name "HMF Q", min 0.5, max 2.5, default 1, decimals 2}
+    {id hf_gain, name HF, unit db, min -16.5, max 16.5, default 0}
+    {id hf_freq, name "HF Freq", unit hz, min 1500, max 16000, default 8000, skew 0.5}
+    {id hf_bell, name "HF Bell", toggle true}
+)
+curves {
+    /// Proportional Q: how much the mids narrow at full boost or cut.
+    prop_q (0 0.6 6 0.85 16.5 1.35)
+}
+map {
+    band.1.used "hpf > 16.5"
+    band.1.shape low_cut
+    band.1.freq hpf
+    band.1.slope "3"
+    band.2.used "lpf < 21900"
+    band.2.shape high_cut
+    band.2.freq lpf
+    band.2.slope "2"
+    band.3.used "abs(lf_gain) > 0.01"
+    band.3.shape "lf_bell ? bell : low_shelf"
+    band.3.freq lf_freq
+    band.3.gain lf_gain
+    band.3.q "lf_bell ? 0.8 : 0.707"
+    band.4.used "abs(lmf_gain) > 0.01"
+    band.4.shape bell
+    band.4.freq lmf_freq
+    band.4.gain lmf_gain
+    band.4.q "lmf_q * curve(abs(lmf_gain), prop_q)"
+    band.5.used "abs(hmf_gain) > 0.01"
+    band.5.shape bell
+    band.5.freq hmf_freq
+    band.5.gain hmf_gain
+    band.5.q "hmf_q * curve(abs(hmf_gain), prop_q)"
+    band.6.used "abs(hf_gain) > 0.01"
+    band.6.shape "hf_bell ? bell : high_shelf"
+    band.6.freq hf_freq
+    band.6.gain hf_gain
+    band.6.q "hf_bell ? 0.8 : 0.707"
+}

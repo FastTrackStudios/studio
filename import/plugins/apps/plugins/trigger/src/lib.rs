@@ -30,6 +30,7 @@
 //! `(block_index, velocity)` entry per detected hit.
 
 use nice_plug::prelude::*;
+use nice_plug::midi::{Channel, Key, VoiceID};
 use nice_plug_dioxus::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -298,11 +299,11 @@ impl Plugin for FtsTrigger {
         for slot in &mut self.pending_offs {
             if let Some(off) = *slot {
                 if off.remaining < block_len {
-                    context.send_event(NoteEvent::NoteOff {
+                    send(context, NoteEvent::NoteOff {
                         timing: off.remaining,
-                        voice_id: None,
-                        channel: 0,
-                        note: off.note,
+                        voice_id: VoiceID::Wildcard,
+                        channel: Channel::Number(0),
+                        key: Key::Number(off.note),
                         velocity: 0.0,
                     });
                     *slot = None;
@@ -325,20 +326,20 @@ impl Plugin for FtsTrigger {
             if let Some(vel) = self.chain.detect_tick(l, r) {
                 let onset = (i as u32).saturating_sub(confirm_samples);
                 let velocity = (VelocityMapper::to_midi(vel) as f32 / 127.0).clamp(0.0, 1.0);
-                context.send_event(NoteEvent::NoteOn {
+                send(context, NoteEvent::NoteOn {
                     timing: onset,
-                    voice_id: None,
-                    channel: 0,
-                    note,
+                    voice_id: VoiceID::Wildcard,
+                    channel: Channel::Number(0),
+                    key: Key::Number(note),
                     velocity,
                 });
                 let off_at = onset + self.note_len_samples;
                 if off_at < block_len {
-                    context.send_event(NoteEvent::NoteOff {
+                    send(context, NoteEvent::NoteOff {
                         timing: off_at,
-                        voice_id: None,
-                        channel: 0,
-                        note,
+                        voice_id: VoiceID::Wildcard,
+                        channel: Channel::Number(0),
+                        key: Key::Number(note),
                         velocity: 0.0,
                     });
                 } else {
@@ -404,3 +405,9 @@ impl Vst3Plugin for FtsTrigger {
 nice_export_clap!(FtsTrigger);
 #[cfg(feature = "export")]
 nice_export_vst3!(FtsTrigger);
+
+/// Send a note to the host. A full output buffer drops the event: a
+/// trigger that can't be heard this block is no worse than a late one.
+fn send<P: Plugin>(context: &mut impl ProcessContext<P>, event: PluginNoteEvent<P>) {
+    let _ = context.try_send_event(event);
+}

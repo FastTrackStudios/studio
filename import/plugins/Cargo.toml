@@ -23,8 +23,10 @@ members = [
     "apps/plugins/saturate",
     "apps/plugins/trigger",
     "apps/plugins/unison",
+    "crates/family-clap",
     "crates/fts-audio-ui",
     "crates/plugin-core",
+    "crates/plugin-processors",
     "crates/plugin-ui",
     "crates/preset-browser",
     "xtask/plugins",
@@ -42,6 +44,8 @@ repository = "https://github.com/FastTrackStudios/plugins"
 # ── This repo's crates ────────────────────────────────────────────────
 fts-audio-ui = { path = "crates/fts-audio-ui" }
 plugin-core = { path = "crates/plugin-core" }
+family-clap = { path = "crates/family-clap" }
+plugin-processors = { path = "crates/plugin-processors", default-features = false }
 plugin-ui = { path = "crates/plugin-ui" }
 preset-browser = { path = "crates/preset-browser" }
 
@@ -50,8 +54,14 @@ preset-browser = { path = "crates/preset-browser" }
 # [patch."https://github.com/FastTrackStudios/dsp"]
 # dsp = { path = "../dsp/crates/dsp" }
 # dsp-core = { path = "../dsp/crates/dsp-core" }
-dsp = { git = "https://github.com/FastTrackStudios/dsp", branch = "main" }
-dsp-core = { git = "https://github.com/FastTrackStudios/dsp", branch = "main" }
+# Pinned by rev, the one Signal and Studio take: a branch here and a rev
+# there are two sources to cargo, and two copies of every dsp crate.
+dsp = { git = "https://github.com/FastTrackStudios/dsp", rev = "75d475b01e96eed4a5ddad8ad6799396f220dd82" }
+dsp-core = { git = "https://github.com/FastTrackStudios/dsp", rev = "75d475b01e96eed4a5ddad8ad6799396f220dd82" }
+
+# FastTrackStudio's CLAP extensions (signal/1 for the family CLAPs), from
+# the daw repo.
+daw-clap-ext = { git = "https://github.com/FastTrackStudios/daw", rev = "acd3f395e06fd6090593e5bbc7dd8af630ac3fd3" }
 
 # ── Other repos, pinned as Studio pins them ───────────────────────────
 architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
@@ -67,6 +77,11 @@ nice-plug-dioxus = { git = "https://github.com/FastTrackStudios/nice-plug.git", 
 nice-plug-xtask = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 
 # ── crates.io ─────────────────────────────────────────────────────────
+# Algorithm files (plugin-processors), at the fleet's pins.
+facet = { version = "0.50.0-rc.5" }
+facet-styx = { version = "5.0.0-rc.7" }
+# Float maths without `std` (plugin-processors).
+libm = { version = "0.2", default-features = false }
 anyhow = "1.0"
 anyrender = "0.14"
 anyrender_vello = "0.15"
