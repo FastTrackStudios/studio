@@ -145,10 +145,15 @@ pub fn ask_mode(name: &str) -> Result<&'static str, String> {
         .into_iter()
         .find(|m| m.display_name().eq_ignore_ascii_case(name.trim()))
         .ok_or_else(|| {
-            let names: Vec<&str> = session::modes::Mode::ALL.iter().map(|m| m.display_name()).collect();
+            let names: Vec<&str> = session::modes::Mode::ALL
+                .iter()
+                .map(|m| m.display_name())
+                .collect();
             format!("no mode {name}: one of {names:?}")
         })?;
-    *ASKED_MODE.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(mode);
+    *ASKED_MODE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(mode);
     Ok(mode.display_name())
 }
 
@@ -425,7 +430,7 @@ mod native {
                         match view {
                             View::Setup => rsx! { session_ui::setup::SetupView {} },
                             View::Editor => rsx! { session_ui::editor_view::EditorPanel {} },
-                            _ => rsx! { session_ui::fx_view::FxPanel { lanes: 4 } },
+                            _ => rsx! { mixer_view::fx_view::FxPanel { lanes: 4 } },
                         }
                     }
                 }
@@ -498,8 +503,8 @@ mod native {
         });
         session_ui::shell::use_pins();
         use_context_provider(session_ui::touch::Touch::detect);
-        use_context_provider(session_ui::mixer_panel::MixerMemory::new);
-        use_context_provider(session_ui::closeup::Closeups::new);
+        use_context_provider(mixer_view::mixer_panel::MixerMemory::new);
+        use_context_provider(mixer_view::closeup::Closeups::new);
         use_context_provider(session_ui::lyrics_panel::LyricsChoice::new);
         use_context_provider(|| session_ui::shell::Back(Callback::new(move |()| leave(app))));
         use_engine_setlist();

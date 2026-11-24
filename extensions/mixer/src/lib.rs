@@ -3,7 +3,7 @@
 //!
 //! Nothing is redrawn or re-modelled. The process is a Studio window on
 //! Studio's engine (`studio_view_link`), and each pane hosts the mixer's
-//! own widget (`session_ui::mixer_panel::HostedMixer`, the widget the
+//! own widget (`mixer_view::mixer_panel::HostedMixer`, the widget the
 //! window's `Mixer` and the browser's `WebMixer` mount) over the song's
 //! strips as the window plans them (`Planner::plan_strips`):
 //!
@@ -43,9 +43,9 @@ use architect_extensions_dioxus::PaintPane;
 use architect_scene::paint::PaintMount;
 #[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
-use serde_json::{Value as Json, json};
 #[cfg(not(target_arch = "wasm32"))]
-use session_ui::mixer_panel::{HostedMixer, Links};
+use mixer_view::mixer_panel::{HostedMixer, Links};
+use serde_json::{Value as Json, json};
 #[cfg(not(target_arch = "wasm32"))]
 use session_ui::song_model::StudioSession;
 #[cfg(not(target_arch = "wasm32"))]
@@ -73,7 +73,7 @@ impl Extension for Mixer {
     fn build(&self, ext: &mut Builder) {
         // The mixer's views and actions, for the window's views that show
         // one (a close-up, the FX view, the browser's DAW panels).
-        session_ui::mixer_host::install();
+        mixer_view::mixer_host::install();
         #[cfg(not(target_arch = "wasm32"))]
         {
             claim::claim(ext.handle());
@@ -90,8 +90,8 @@ impl Extension for Mixer {
                 let on = args
                     .get("on")
                     .and_then(Json::as_bool)
-                    .unwrap_or_else(|| !session_ui::mixer_panel::racks_shown());
-                session_ui::mixer_panel::set_racks_shown(on);
+                    .unwrap_or_else(|| !mixer_view::mixer_panel::racks_shown());
+                mixer_view::mixer_panel::set_racks_shown(on);
                 Ok(json!({ "racks": on }))
             });
     }
@@ -126,7 +126,7 @@ fn state() -> Json {
         "problem": studio_view_link::problem(),
         "song": song.as_ref().map(|(k, _)| k.clone()),
         "tracks": song.as_ref().map(|(_, n)| *n),
-        "racks": session_ui::mixer_panel::racks_shown(),
+        "racks": mixer_view::mixer_panel::racks_shown(),
         "frames": frames,
     })
 }
@@ -204,7 +204,7 @@ impl PartialEq for Song {
 }
 
 /// The mixer's widget over `session`'s strips, hosted in the pane: what
-/// `session_ui::mixer_panel::Mixer` is in the desktop window, with the
+/// `mixer_view::mixer_panel::Mixer` is in the desktop window, with the
 /// pane in place of the window.
 #[cfg(not(target_arch = "wasm32"))]
 #[component]

@@ -24,7 +24,6 @@ pub mod automation_draw;
 pub mod automation_edit;
 #[cfg(feature = "native")]
 pub mod automation_menu;
-pub mod balance;
 pub mod bar_step;
 pub mod beats;
 /// The chart editor, editing the song's chart on the engine in this
@@ -34,7 +33,6 @@ pub mod beats;
 pub mod chart_editor;
 pub use session_engine_client::changes;
 pub mod chart_panel;
-pub mod closeup;
 #[cfg(all(any(feature = "native", feature = "web"), feature = "engine"))]
 pub use session_engine::collab;
 #[cfg(all(any(feature = "native", feature = "web"), not(feature = "engine")))]
@@ -54,12 +52,10 @@ pub use session_engine_client::edit_state;
 pub mod editor_view;
 pub use session_engine_client::engine;
 pub mod expression;
-pub mod faces;
 pub mod folder_item;
 pub use session_engine_client::folds;
 pub mod fps;
 pub mod frames;
-pub mod fx_view;
 pub mod gesture;
 pub mod ghosts;
 /// What the window's GPU device asks for: buffers as large as the adapter has.
@@ -80,23 +76,17 @@ pub mod keys;
 pub mod lane_stack;
 pub use session_engine_client::lanes;
 pub mod layout;
-pub use session_engine_client::leveler;
-pub mod live;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::live_host;
+pub use session_engine_client::leveler;
 pub mod loading;
 pub mod lyrics_panel;
-pub mod macros;
 pub mod marks_strip;
-pub mod mcp;
 pub use session_engine_client::midi;
 pub mod controls;
 pub mod dock;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod mix_guide;
-pub mod mixer_actions;
-pub mod mixer_host;
-pub mod mixer_panel;
 pub mod mousemap;
 pub mod navigator;
 pub mod notice;
@@ -114,14 +104,9 @@ pub use session_engine::organize_edit;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::organize_edit;
 pub use session_engine_client::play_return;
-pub mod plugin_faces;
 pub mod popup;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::projects;
-pub use session_engine_client::presence;
-#[cfg(all(feature = "native", not(feature = "engine")))]
-pub use session_engine_client::projects;
-pub mod rig;
 #[cfg(all(feature = "signal", feature = "engine"))]
 pub use session_engine::rig_actions;
 #[cfg(all(feature = "native", feature = "engine"))]
@@ -130,6 +115,9 @@ pub use session_engine::stream_set;
 pub use session_engine::studio_engine;
 #[cfg(feature = "engine")]
 pub use session_engine::track_regions;
+pub use session_engine_client::presence;
+#[cfg(all(feature = "native", not(feature = "engine")))]
+pub use session_engine_client::projects;
 pub use session_engine_client::song_modes;
 pub use session_engine_client::stream_quality;
 #[cfg(all(feature = "native", not(feature = "engine")))]
@@ -171,7 +159,6 @@ pub use session_engine::mix_chains;
 pub use session_engine_client::hit_overlay;
 pub use session_engine_client::kit_gate;
 pub mod overlay;
-pub mod strip_overlay;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::page;
 #[cfg(all(feature = "native", not(feature = "engine")))]
@@ -216,7 +203,6 @@ pub use session_engine_client::setlist;
 pub use session_engine_client::settings;
 pub mod setup;
 pub mod shell;
-pub mod simulate;
 pub mod skin;
 pub use session_engine_client::song_model;
 pub use session_engine_client::stretch;
@@ -231,10 +217,6 @@ pub mod tcp;
 #[cfg(test)]
 pub(crate) mod test_song;
 pub mod text;
-pub mod tone;
-#[cfg(feature = "native")]
-pub mod tone_bind;
-pub mod tone_read;
 pub mod tool;
 pub mod toolbar;
 pub mod touch;

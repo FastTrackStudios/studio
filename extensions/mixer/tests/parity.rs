@@ -3,7 +3,7 @@
 //! through Architect's layer protocol.
 //!
 //! One song (the golden template), the mixer's own widget
-//! (`session_ui::mixer_panel::MixerWidget`, over the strips the window
+//! (`mixer_view::mixer_panel::MixerWidget`, over the strips the window
 //! plans), drawn twice: `paint_scene`, what the widget hands Blitz in
 //! `studio-desktop`'s window, meters and all; and the extension's paint
 //! view (`studio_mixer::host`): the picture with its meters fully lit, the
@@ -46,11 +46,11 @@ use architect_scene::ops::{Receiver, Sender};
 use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
 use dioxus::prelude::*;
+use mixer_view::mixer_panel::{HostedMixer, Links};
 use peniko::kurbo::Affine;
 use session_engine::engine::{
     METER_PARTS, METER_TRACKS, TRACK_PARTS, VALUE_TRACKS, meter_fraction, meter_value, track_value,
 };
-use session_ui::mixer_panel::{HostedMixer, Links};
 use session_ui::studio::StudioSession;
 use studio_mixer::host::Hosted;
 use studio_view_link::{InScope, Stats};

@@ -410,7 +410,7 @@ fn catalog(host: HostPanels) -> Catalog {
             },
         ),
         k(kind::FX_ROW, "FX", "FX", Place::Edge(Side::Bottom), |_| {
-            rsx! { Fill { session_ui::fx_view::FxPanel {} } }
+            rsx! { Fill { mixer_view::fx_view::FxPanel {} } }
         }),
         k(
             kind::EDITOR,
@@ -554,7 +554,7 @@ fn Fill(children: Element) -> Element {
 #[component]
 fn ArrangementPanel() -> Element {
     let mode: Signal<Mode> = use_context();
-    rsx! { Fill { session_ui::mixer_panel::DawPanels { mode: Some(mode()) } } }
+    rsx! { Fill { mixer_view::mixer_panel::DawPanels { mode: Some(mode()) } } }
 }
 
 /// The set as a vertical progress bar (Session's navigator): a song
@@ -595,7 +595,7 @@ fn TransportPanel() -> Element {
 #[component]
 fn MixerPanel() -> Element {
     let mode: Signal<Mode> = use_context();
-    rsx! { Fill { session_ui::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true } } }
+    rsx! { Fill { mixer_view::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true } } }
 }
 
 /// A place held for a panel not on the dock yet, saying so.

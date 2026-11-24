@@ -3,7 +3,7 @@
 //! protocol.
 //!
 //! One song (the golden template) and one track's panels, each drawn by
-//! Studio's own `session_ui::closeup::RackWidget` twice: `paint_scene`,
+//! Studio's own `mixer_view::closeup::RackWidget` twice: `paint_scene`,
 //! what the widget hands Blitz in `studio-desktop`'s close-up; and the
 //! extension's paint view (`studio_mixer::closeup::HostedRack`), sent as a
 //! process sends it (`architect_scene::ops::Sender`) and composed by the
@@ -34,10 +34,10 @@ use architect_scene::ops::{Receiver, Sender};
 use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
 use dioxus::prelude::*;
+use mixer_view::closeup::RackWidget;
+use mixer_view::tone::Which;
 use peniko::kurbo::Affine;
-use session_ui::closeup::RackWidget;
 use session_ui::studio::StudioSession;
-use session_ui::tone::Which;
 use studio_mixer::closeup::HostedRack;
 use studio_view_link::{InScope, Stats};
 

@@ -25,6 +25,7 @@ serde_json = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest", "paint"] }
+mixer-view = { workspace = true, features = ["native"] }
 session-ui = { workspace = true, features = ["native"] }
 session-engine-client = { workspace = true, features = ["native"] }
 blitz-traits = { workspace = true }
@@ -36,12 +37,14 @@ tracing = { workspace = true }
 
 # The browser: the widget over the page's own engine (`src/web.rs`).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+mixer-view = { workspace = true, features = ["web"] }
 session-ui = { workspace = true, features = ["web"] }
 session-engine-client = { workspace = true, features = ["web"] }
 
 [dev-dependencies]
 # The tests open a song on an engine in the test's own process.
 session-engine = { workspace = true, features = ["native"] }
+mixer-view = { workspace = true, features = ["native", "engine"] }
 session-ui = { workspace = true, features = ["native", "engine"] }
 # The tests stand a pane up as the workspace does (`ViewHost`, `Placement`).
 architect-workspace = { workspace = true, features = ["paint-ui"] }

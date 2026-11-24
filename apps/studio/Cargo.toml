@@ -80,6 +80,7 @@ studio-navigator = { workspace = true, optional = true }
 keyflow-extension = { workspace = true, optional = true }
 ignition-pane = { workspace = true, optional = true }
 studio-view-link = { workspace = true, optional = true }
+mixer-view = { workspace = true, optional = true, features = ["native"] }
 session-ui = { workspace = true, optional = true, features = ["native"] }
 session-engine-client = { workspace = true, optional = true, features = ["native"] }
 # The window's modes (`SESSION_MODE`, this client's own).
@@ -135,6 +136,7 @@ native = [
     "dep:ignition-pane",
     "dep:studio-view-link",
     "dep:session-ui",
+    "dep:mixer-view",
     "dep:session-engine-client",
     "dep:session",
     "dep:architect-extensions",

@@ -90,7 +90,8 @@ mod session_chart_pane;
 /// The Session app, start to finish: what the `session-desktop` binary runs.
 pub fn run() {
     // The mixer's views and actions, for every window that shows one.
-    session_ui::mixer_host::install();
+    #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
+    ::mixer_view::mixer_host::install();
     // iPhone: the page is drawn to the left and right edges, and minds the
     // camera housing itself (`native::ios_scene::island_on_left`) — a phone
     // on its side reports the housing's inset on both sides.

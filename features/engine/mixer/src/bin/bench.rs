@@ -34,9 +34,9 @@ use anyrender::{ImageRenderer, PaintScene};
 use anyrender_vello::VelloImageRenderer;
 use vello::kurbo::Affine;
 
+use mixer_view::mcp::Mixer;
 use session_ui::arrangement::{Arrangement, Palette, TCP_WIDTH, Viewport};
 use session_ui::headless::{BATCH, Headless};
-use session_ui::mcp::Mixer;
 use session_ui::widget::{ArrangementWidget, Shared, View};
 
 /// The phase these measurements are taken in — the one the rack was
@@ -832,7 +832,7 @@ fn fx_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let mut rows: Vec<(daw_proto::Track, u32)> = visible.into_iter().zip(depths).collect();
     // `FTS_BENCH_FX_TRACK` selected (Kick unless named), or the first
     // track with a rack to show: the FX starts there.
-    let mut store = session_ui::tone::Store::default();
+    let mut store = mixer_view::tone::Store::default();
     store.seed(&rows);
     let named = std::env::var("FTS_BENCH_FX_TRACK").unwrap_or_else(|_| "Kick".to_owned());
     let first = rows
@@ -851,7 +851,7 @@ fn fx_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
         .unwrap_or_default()
         .split(',')
         .filter_map(|name| {
-            session_ui::tone::RACK_PHASES
+            mixer_view::tone::RACK_PHASES
                 .iter()
                 .copied()
                 .find(|p| format!("{p:?}").eq_ignore_ascii_case(name.trim()))
@@ -865,7 +865,7 @@ fn fx_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
         .unwrap_or_default()
         .split(',')
         .any(|name| name.trim().eq_ignore_ascii_case("returns"));
-    let scene = session_ui::fx_view::shot(
+    let scene = mixer_view::fx_view::shot(
         rows,
         store,
         lanes,
@@ -1040,7 +1040,7 @@ fn mixer_shot(
     // The rack's settings, seeded from the placeholder — see
     // `tone::Store`. The shot and the stress test both want the same
     // racks the window draws.
-    let mut settings = session_ui::tone::Store::default();
+    let mut settings = mixer_view::tone::Store::default();
     settings.seed(rows.as_slice());
     // The reverb tails, rendered before a frame is measured: a render
     // landing between two passes would make them differ, and the
@@ -1058,7 +1058,7 @@ fn mixer_shot(
         // The shot is of the Tone phase, which is the phase the rack
         // was built for and the one the reference images were taken in.
         if tone && !live_strips {
-            session_ui::tone::panels_for(TONE)
+            mixer_view::tone::panels_for(TONE)
         } else {
             &[]
         },
@@ -1078,9 +1078,9 @@ fn mixer_shot(
     // The signal, when the shot is live: seventy-two meter frames of
     // history per track ending at one instant, the way the window has
     // them after two and a half seconds of playback.
-    let mut history: std::collections::HashMap<String, session_ui::tone::Levels> =
+    let mut history: std::collections::HashMap<String, mixer_view::tone::Levels> =
         std::collections::HashMap::new();
-    let mut spectra: std::collections::HashMap<String, session_ui::tone::Analyser> =
+    let mut spectra: std::collections::HashMap<String, mixer_view::tone::Analyser> =
         std::collections::HashMap::new();
     let mut levels: Vec<daw_proto::TrackLevels> = Vec::new();
     if live {
@@ -1091,11 +1091,11 @@ fn mixer_shot(
             };
             let entry = history.entry(track.guid.clone()).or_default();
             let mut last = None;
-            for k in 0..session_ui::tone::HISTORY {
+            for k in 0..mixer_view::tone::HISTORY {
                 let t = AT
-                    - (session_ui::tone::HISTORY - 1 - k) as f64
-                        / f64::from(session_ui::tone::PUBLISH_HZ);
-                let meters = session_ui::simulate::meters(i, t, tone);
+                    - (mixer_view::tone::HISTORY - 1 - k) as f64
+                        / f64::from(mixer_view::tone::PUBLISH_HZ);
+                let meters = mixer_view::simulate::meters(i, t, tone);
                 entry.push(meters.sat_peak);
                 entry.push_fire(meters.deess_deepest());
                 entry.push_ess(meters.ess_db, meters.ess_ref_db);
@@ -1119,16 +1119,16 @@ fn mixer_shot(
         }
     }
     let mut racks = if live {
-        session_ui::strip_overlay::Racks {
+        mixer_view::strip_overlay::Racks {
             settings: &settings,
             history: &mut history,
             spectra: &mut spectra,
             lit: None,
-            panels: session_ui::tone::panels_for(TONE),
-            folded: Box::leak(Box::new(session_ui::tone::Fold::rest())),
+            panels: mixer_view::tone::panels_for(TONE),
+            folded: Box::leak(Box::new(mixer_view::tone::Fold::rest())),
         }
     } else {
-        session_ui::strip_overlay::Racks::none()
+        mixer_view::strip_overlay::Racks::none()
     };
     // The bench applies no preset, so the map is the identity — built
     // rather than skipped so the shot exercises the same lookup the
@@ -1158,7 +1158,7 @@ fn mixer_shot(
             // shot that skipped them would be a shot of a mixer with no
             // faders, and the whole point of the shot is to be the same
             // frame the window shows.
-            let live = session_ui::strip_overlay::controls(
+            let live = mixer_view::strip_overlay::controls(
                 painter,
                 palette,
                 font,
@@ -1174,7 +1174,7 @@ fn mixer_shot(
                 // Nothing has clipped in a still frame, and a latch in
                 // the reference image would be a difference nobody
                 // asked for.
-                &session_ui::strip_overlay::Clips::default(),
+                &mixer_view::strip_overlay::Clips::default(),
                 // At the top: a shot is the reference every viewport is
                 // compared against, and a scrolled rack in it would be
                 // a difference nobody asked for.
@@ -1636,9 +1636,9 @@ struct MixerRig {
     mixer: Mixer,
     tracks: Vec<daw_proto::Track>,
     map: session_engine::plan::Rows,
-    settings: session_ui::tone::Store,
-    history: std::collections::HashMap<String, session_ui::tone::Levels>,
-    spectra: std::collections::HashMap<String, session_ui::tone::Analyser>,
+    settings: mixer_view::tone::Store,
+    history: std::collections::HashMap<String, mixer_view::tone::Levels>,
+    spectra: std::collections::HashMap<String, mixer_view::tone::Analyser>,
     pointer: session_ui::pointer::Pointer,
     frame: session_ui::rails::Frame,
     levels: Vec<daw_proto::TrackLevels>,
@@ -1670,7 +1670,7 @@ impl MixerRig {
         // The rack's settings, seeded from the placeholder — see
         // `tone::Store`. The shot and the stress test both want the
         // same racks the window draws.
-        let mut settings = session_ui::tone::Store::default();
+        let mut settings = mixer_view::tone::Store::default();
         settings.seed(rows.as_slice());
         // The reverb tails, rendered before a frame is measured: a
         // render landing between two passes would make them differ,
@@ -1684,7 +1684,7 @@ impl MixerRig {
             &rows,
             f64::from(height) - session_ui::rails::TOP,
             layout,
-            session_ui::tone::panels_for(TONE),
+            mixer_view::tone::panels_for(TONE),
             // The racks are driven here, so they are drawn live and
             // the recording reserves their space without filling it —
             // which is what the window does the moment anything feeds
@@ -1731,7 +1731,7 @@ impl MixerRig {
                 let Some(tone) = self.settings.get(&track.guid) else {
                     continue;
                 };
-                let meters = session_ui::simulate::meters(i, t * 8.0, tone);
+                let meters = mixer_view::simulate::meters(i, t * 8.0, tone);
                 let entry = self.history.entry(track.guid.clone()).or_default();
                 entry.push(meters.sat_peak);
                 entry.push_fire(meters.deess_deepest());
@@ -1764,7 +1764,7 @@ impl MixerRig {
         let a = self
             .mixer
             .replay(painter, 0.0, self.frame.content_width(), at);
-        let b = session_ui::strip_overlay::controls(
+        let b = mixer_view::strip_overlay::controls(
             painter,
             palette,
             font,
@@ -1773,15 +1773,15 @@ impl MixerRig {
             &self.map,
             &self.pointer,
             &self.levels,
-            &session_ui::strip_overlay::Clips::default(),
+            &mixer_view::strip_overlay::Clips::default(),
             0.0,
-            &mut session_ui::strip_overlay::Racks {
-                folded: &session_ui::tone::Fold::default(),
+            &mut mixer_view::strip_overlay::Racks {
+                folded: &mixer_view::tone::Fold::default(),
                 settings: &self.settings,
                 history: &mut self.history,
                 spectra: &mut self.spectra,
                 lit: None,
-                panels: session_ui::tone::panels_for(TONE),
+                panels: mixer_view::tone::panels_for(TONE),
             },
             0.0,
             self.frame.content_width(),

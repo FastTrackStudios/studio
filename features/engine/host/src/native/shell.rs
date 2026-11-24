@@ -101,13 +101,13 @@ pub fn Shell() -> Element {
     use_effect(move || editor_open.set(mode() == Mode::Organize));
     // Whether the mixer is open, per mode (Organize starts closed) — above
     // the songs, so it holds across them.
-    use_context_provider(session_ui::mixer_panel::MixerMemory::new);
+    use_context_provider(mixer_view::mixer_panel::MixerMemory::new);
     // Touch mode: on where the screen is the pointer, switched in the
     // record view's menu.
     use_context_provider(session_ui::touch::Touch::detect);
     // What is shown full screen, if anything, and the racks' settings
-    // every view of them shares (`session_ui::closeup`).
-    use_context_provider(session_ui::closeup::Closeups::new);
+    // every view of them shares (`mixer_view::closeup`).
+    use_context_provider(mixer_view::closeup::Closeups::new);
     session_ui::shell::use_pins();
     // The lyrics' Audience / Performer and layer, held across songs.
     use_context_provider(session_ui::lyrics_panel::LyricsChoice::new);
@@ -390,7 +390,7 @@ pub fn Shell() -> Element {
                 if let Some(song) = current {
                     super::dock::SongDock { key: "{song.project}", session: song.session.clone(), class }
                 }
-                session_ui::closeup::CloseupLayer { landscape: size().0 > size().1 }
+                mixer_view::closeup::CloseupLayer { landscape: size().0 > size().1 }
             }
         };
     }
@@ -416,7 +416,7 @@ pub fn Shell() -> Element {
                     }
                 },
             }
-            session_ui::closeup::CloseupLayer { landscape: size().0 > size().1 }
+            mixer_view::closeup::CloseupLayer { landscape: size().0 > size().1 }
             // The performance meter, over everything while it is open.
             session_ui::perf_meter::PerfMeter {}
         };
@@ -487,7 +487,7 @@ pub fn Shell() -> Element {
                 },
             }
             // Whatever is zoomed into, over all of it.
-            session_ui::closeup::CloseupLayer { landscape: size().0 > size().1 }
+            mixer_view::closeup::CloseupLayer { landscape: size().0 > size().1 }
             // The performance meter, over everything while it is open.
             session_ui::perf_meter::PerfMeter {}
         }
@@ -512,10 +512,10 @@ fn PhoneViews(
         // Keyed apart: the same component in the same place would otherwise
         // be kept and handed the other view's props.
         PhoneView::Arrangement => rsx! {
-            session_ui::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()) }
+            mixer_view::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()) }
         },
         PhoneView::Mixer => rsx! {
-            session_ui::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()), mixer_only: true }
+            mixer_view::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()), mixer_only: true }
         },
     }
 }
@@ -574,10 +574,10 @@ fn SongViews(
                 View::Lyrics => rsx! { session_ui::lyrics_panel::LyricsPanel {} },
                 View::Editor => rsx! { session_ui::editor_view::EditorPanel {} },
                 View::Mixer => rsx! {
-                    session_ui::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true }
+                    mixer_view::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true }
                 },
                 // Its own view: four tracks' chains at once.
-                View::Fx => rsx! { session_ui::fx_view::FxPanel { lanes: 4 } },
+                View::Fx => rsx! { mixer_view::fx_view::FxPanel { lanes: 4 } },
                 View::Overview => rsx! {
                     OverviewLayout {
                         progress: rsx! { session_ui::progress::ProgressBar {} },
@@ -601,7 +601,7 @@ fn SongViews(
                 div {
                     style: "position:absolute; left:0; right:0; bottom:0; height:{FX_DOCK_H}px; \
                             border-top:1px solid #000;",
-                    session_ui::fx_view::FxPanel {}
+                    mixer_view::fx_view::FxPanel {}
                 }
             }
         }
@@ -614,7 +614,7 @@ const EDITOR_DOCK_SHARE: f64 = 45.0;
 
 /// How tall the FX is, pinned under the arrangement or the mixer: one
 /// lane of its full-size view, so a track's chain is the same in both.
-const FX_DOCK_H: f64 = session_ui::fx_view::LANE_H;
+const FX_DOCK_H: f64 = mixer_view::fx_view::LANE_H;
 
 /// Live mode runs the set: when the song playing reaches its end, the next
 /// one plays. The roll-on is the engine's
@@ -650,7 +650,7 @@ fn Arrangement(#[props(default)] docked: bool) -> Element {
                 }
                 div {
                     style: "position:relative; flex:1; min-width:0;",
-                    session_ui::mixer_panel::DawPanels { docked, mode: Some(mode()) }
+                    mixer_view::mixer_panel::DawPanels { docked, mode: Some(mode()) }
                 }
             }
         }

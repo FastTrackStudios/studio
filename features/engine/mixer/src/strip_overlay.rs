@@ -14,18 +14,6 @@ use crate::mcp::{Control, Mixer};
 use crate::pointer::Spot;
 use crate::text::Font;
 
-/// The routing widget's state, from the track.
-///
-/// All three lanes are real now. Sends and receives used to draw as
-/// unlit slots whatever the session did, because the counts were not on
-/// `Track` and a strip cannot afford to ask the routing service per
-/// track — so a session full of sends showed none, which is a lane
-/// saying the opposite of the truth rather than saying nothing.
-///
-/// The widget wants to know WHETHER, not how many: it lights a lane. A
-/// strip that drew the number would be drawing a thing that changes
-/// under it for reasons it has no other way to see.
-#[must_use]
 use crate::overlay::*;
 
 /// Everything the live pass needs about the racks.

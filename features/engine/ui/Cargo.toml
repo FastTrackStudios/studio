@@ -272,16 +272,6 @@ frame-times = ["anyrender_vello?/log_frame_times"]
 
 # Every binary is a desktop one.
 
-[[bin]]
-name = "bench"
-path = "src/bin/bench.rs"
-required-features = ["native", "engine"]
-
-[[bin]]
-name = "blitz_shot"
-path = "src/bin/blitz_shot.rs"
-required-features = ["native", "engine"]
-
 [dev-dependencies]
 # The metrics, read back through an in-memory exporter.
 opentelemetry_sdk = { workspace = true, features = ["metrics", "testing"] }

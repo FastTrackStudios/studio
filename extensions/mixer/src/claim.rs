@@ -42,7 +42,7 @@ pub fn claim(handle: Handle) {
         return;
     }
     let list = session_engine_client::actions::list();
-    let registered = session_ui::mixer_actions::register_mixer(list).and_then(|()| {
+    let registered = mixer_view::mixer_actions::register_mixer(list).and_then(|()| {
         list.register_async(
             &session_ui::window::TOGGLE_MIXER,
             Effect::Mutating,
@@ -50,9 +50,9 @@ pub fn claim(handle: Handle) {
         )
         .and_then(|()| {
             list.register_async(
-                &session_ui::mixer_actions::CLOSEUP,
+                &mixer_view::mixer_actions::CLOSEUP,
                 Effect::Mutating,
-                |a: session_ui::mixer_actions::CloseupArg| async move { closeup(a).await },
+                |a: mixer_view::mixer_actions::CloseupArg| async move { closeup(a).await },
             )
         })
     });
@@ -184,7 +184,7 @@ const CLOSEUP_PANE: &str = "studio.mixer/closeup";
 /// close-up pane (opened, or moved to it), or the pane closed. What the
 /// window's close-up layer does over the window; here the pane is its
 /// own, and a strip's expand mark asks for it as in the window.
-async fn closeup(a: session_ui::mixer_actions::CloseupArg) -> Result<String, String> {
+async fn closeup(a: mixer_view::mixer_actions::CloseupArg) -> Result<String, String> {
     if a.close {
         if run("WORKSPACE_PANE_GET", json!({ "pane": CLOSEUP_PANE }))
             .await
@@ -196,14 +196,14 @@ async fn closeup(a: session_ui::mixer_actions::CloseupArg) -> Result<String, Str
     }
     let track = a.track.ok_or("`track` (its GUID), or `close`")?;
     let panel = a.panel.as_deref().unwrap_or("eq");
-    let which = session_ui::tone::Which::from_slug(panel).ok_or_else(|| {
-        let all: Vec<String> = session_ui::tone::Which::ALL
+    let which = mixer_view::tone::Which::from_slug(panel).ok_or_else(|| {
+        let all: Vec<String> = mixer_view::tone::Which::ALL
             .iter()
             .map(|w| w.slug())
             .collect();
         format!("no panel {panel:?}: one of {all:?}")
     })?;
-    let state = session_ui::closeup::rack_state(&track, which);
+    let state = mixer_view::closeup::rack_state(&track, which);
     // The pane shows what was asked last, told in this process (a process
     // view does not take up a state its pane is given once open:
     // architect#896); the pane keeps it too, so a saved layout opens on it.

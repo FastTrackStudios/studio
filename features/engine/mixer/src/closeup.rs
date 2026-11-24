@@ -17,7 +17,7 @@
 //! grips — the same settings the strip shows, so an edit here is an
 //! edit there.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
 
 use anyrender::Scene;

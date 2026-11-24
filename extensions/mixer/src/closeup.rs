@@ -1,9 +1,9 @@
 //! `closeup`: one rack panel of a track (its EQ, its compressor, …) in a
 //! pane of its own, the close-up `studio-desktop` lays over its window.
 //!
-//! The pane hosts Studio's own `session_ui::closeup::RackWidget`, the
+//! The pane hosts Studio's own `mixer_view::closeup::RackWidget`, the
 //! widget the window's close-up layer mounts: nothing redrawn. Its state
-//! names the track and the panel (`session_ui::closeup::rack_state`,
+//! names the track and the panel (`mixer_view::closeup::rack_state`,
 //! `<GUID>/<panel>`). The rack's settings are seeded from the song as the
 //! mixer's are, and its edits go to the engine as the window's do.
 //!
@@ -19,9 +19,9 @@ use architect_scene::paint::{Layer, LayerKey, PaintMount, PaintView, Scene};
 use architect_scene::view::{ViewCtx, ViewInput};
 use blitz_traits::events::{MouseEventButton, MouseEventButtons, UiEvent};
 use dioxus::prelude::*;
-use session_ui::closeup::RackWidget;
+use mixer_view::closeup::RackWidget;
+use mixer_view::tone::Which;
 use session_ui::song_model::StudioSession;
-use session_ui::tone::Which;
 use studio_view_link::{InScope, SceneLayer, Stats, input};
 
 /// The panel's picture: the pane's one layer.
@@ -40,7 +40,7 @@ pub struct HostedRack {
     fingers: Vec<u64>,
     /// The racks' settings a panel asked for later is drawn over, and the
     /// asks seen ([`ask`]): `None`, the pane keeps its panel.
-    follows: Option<(Rc<session_ui::tone::Shared>, u64)>,
+    follows: Option<(Rc<mixer_view::tone::Shared>, u64)>,
 }
 
 impl HostedRack {
@@ -59,7 +59,7 @@ impl HostedRack {
     /// From now on the pane shows the panel `SESSION_CLOSEUP` asks for
     /// ([`ask`]), over `tone`, from the frame after the ask.
     #[must_use]
-    pub fn following_asks(mut self, tone: Rc<session_ui::tone::Shared>) -> Self {
+    pub fn following_asks(mut self, tone: Rc<mixer_view::tone::Shared>) -> Self {
         self.follows = Some((tone, asked().0));
         self
     }
@@ -153,8 +153,8 @@ impl PaintView for HostedRack {
 
 /// The racks' settings for `session`'s tracks, as the mixer seeds them.
 #[must_use]
-pub fn settings(session: &StudioSession) -> Rc<session_ui::tone::Shared> {
-    let tone = Rc::new(session_ui::tone::Shared::default());
+pub fn settings(session: &StudioSession) -> Rc<mixer_view::tone::Shared> {
+    let tone = Rc::new(mixer_view::tone::Shared::default());
     let rows = session.planner.plan_strips(&session.planner.raw);
     tone.store.borrow_mut().seed(rows.as_slice());
     tone
@@ -194,7 +194,7 @@ pub fn CloseupPane() -> Element {
     let rack = use_hook(asked).1.or_else(|| {
         state
             .as_deref()
-            .and_then(session_ui::closeup::rack_of_state)
+            .and_then(mixer_view::closeup::rack_of_state)
     });
     match (song(), rack) {
         (Some((key, session)), Some((guid, which))) => rsx! {

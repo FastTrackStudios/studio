@@ -9,7 +9,7 @@
 //! Nothing here draws the arrangement. The session is opened and planned
 //! the way the app opens it ([`session_ui::studio::StudioSession`]), and
 //! the tree is the app's: in a window it is
-//! [`session_ui::mixer_panel::DawPanels`] — the arrangement panel, its
+//! [`mixer_view::mixer_panel::DawPanels`] — the arrangement panel, its
 //! chrome and the docked mixer, exactly what the desktop shell mounts —
 //! and in a headless document it is [`session_ui::panel::NativeTree`],
 //! the same panel and chrome without the winit bridge a headless document
@@ -539,7 +539,7 @@ fn Window(props: WindowProps) -> Element {
         Ground {}
         div {
             style: "position:relative; width:{width}px; height:{height}px; overflow:hidden;",
-            session_ui::mixer_panel::DawPanels { docked: props.docked }
+            mixer_view::mixer_panel::DawPanels { docked: props.docked }
         }
         Driver { size, animate: props.animate, slot }
     }

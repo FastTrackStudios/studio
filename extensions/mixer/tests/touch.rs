@@ -26,7 +26,7 @@ use architect_workspace::{
     FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost, ViewInput,
 };
 use dioxus::prelude::*;
-use session_ui::mixer_panel::{HostedMixer, Links};
+use mixer_view::mixer_panel::{HostedMixer, Links};
 use session_ui::studio::StudioSession;
 use studio_mixer::host::Hosted;
 use studio_view_link::{InScope, Stats};
@@ -116,7 +116,7 @@ const fn touch(id: u64, (x, y): (f32, f32), phase: &'static str) -> ViewInput {
 #[test]
 fn a_finger_dragged_sideways_scrolls_the_strips() {
     // The faders the whole height: no rack under the finger.
-    session_ui::mixer_panel::set_racks_shown(false);
+    mixer_view::mixer_panel::set_racks_shown(false);
     let got = Got::default();
     let mut vdom = VirtualDom::new_with_props(
         Root,

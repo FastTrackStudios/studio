@@ -21,7 +21,7 @@ use anyrender::recording::RenderCommand;
 use architect_scene::paint::{Layer, LayerKey, PaintView, Scene};
 use architect_scene::view::{ViewCtx, ViewInput};
 use blitz_traits::events::{KeyState, MouseEventButton, MouseEventButtons, UiEvent};
-use session_ui::mixer_panel::HostedMixer;
+use mixer_view::mixer_panel::HostedMixer;
 use studio_view_link::{InScope, SceneLayer, Stats, input};
 
 /// The picture: the strips with their meters fully lit.
