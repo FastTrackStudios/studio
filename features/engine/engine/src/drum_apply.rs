@@ -656,6 +656,8 @@ pub struct Stages {
     pub write: f64,
     pub crossfade: f64,
     pub check: f64,
+    /// Waiting for its own step to be read into the song's history.
+    pub recorded: f64,
     /// The time the song's state was held for writing.
     pub lock: f64,
     pub total: f64,
@@ -1130,6 +1132,11 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
     drop(step);
     out.applied = true;
     span.record("applied", true);
+    // Its step read before it returns: the next action's mark waits on
+    // nothing of this one's (the doc write runs on).
+    let t = web_time::Instant::now();
+    crate::history_marks::settle(crate::history_marks::SETTLE);
+    out.ms.recorded = ms(t);
     out.ms.total = ms(began);
     crate::actions::list().changed("items", "drums applied");
     Ok(out)
