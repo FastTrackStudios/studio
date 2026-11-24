@@ -70,5 +70,9 @@ web = ["daw-view-kit/web", "session-engine-client/web", "dioxus/web", "dep:web-s
 engine = ["daw-view-kit/engine", "dep:session-engine"]
 signal = ["native", "daw-view-kit/signal"]
 
+[dev-dependencies]
+# The Action List guard (tests/actions_everywhere.rs).
+daw-view-kit = { workspace = true, features = ["test-support"] }
+
 [lints]
 workspace = true

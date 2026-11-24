@@ -198,12 +198,12 @@ fn an_edit_of_items_draws_them_without_planning_the_rows_again() {
         panic!("a planner");
     };
     // Three of a mic's slices moved later, as the engine says.
-    let moved: Vec<session_engine::view::ItemNow> =
+    let moved: Vec<session_engine_client::view::ItemNow> =
         crate::test_song::on_lane(&raw.borrow(), &song.mics[2], 0)
             .into_iter()
             .skip(5)
             .take(3)
-            .map(|item| session_engine::view::ItemNow {
+            .map(|item| session_engine_client::view::ItemNow {
                 item: daw_proto::Item {
                     position: daw_proto::PositionInSeconds::from_seconds(
                         item.position.as_seconds() + 0.01,

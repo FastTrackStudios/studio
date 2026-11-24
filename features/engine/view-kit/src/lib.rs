@@ -19,6 +19,8 @@ pub use session_engine_client::automation_actions;
 pub mod bar_step;
 pub mod beats;
 pub mod browser_toggle;
+#[cfg(any(test, feature = "test-support"))]
+pub mod bypass_guard;
 pub use session_engine_client::changes;
 pub mod chrome;
 #[cfg(all(any(feature = "native", feature = "web"), feature = "engine"))]

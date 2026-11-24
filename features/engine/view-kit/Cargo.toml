@@ -241,6 +241,8 @@ frame-times = ["anyrender_vello?/log_frame_times"]
 # Every binary is a desktop one.
 
 [dev-dependencies]
+# Its own integration tests read `bypass_guard` (test-support).
+daw-view-kit = { path = ".", features = ["test-support"] }
 # The metrics, read back through an in-memory exporter.
 opentelemetry_sdk = { workspace = true, features = ["metrics", "testing"] }
 builtin = { workspace = true, features = ["engine"] }
