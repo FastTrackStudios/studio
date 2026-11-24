@@ -41,7 +41,7 @@ pub fn claim(handle: Handle) {
     if HANDLE.set(handle).is_err() {
         return;
     }
-    let list = session_engine::actions::list();
+    let list = session_engine_client::actions::list();
     let registered = session_ui::view_actions::register_mixer(list).and_then(|()| {
         list.register_async(
             &session_ui::window::TOGGLE_MIXER,
@@ -62,9 +62,9 @@ pub fn claim(handle: Handle) {
     }
     // Enabled here as they are: this process is the window that runs them
     // (the engine lists them enabled while a window follows it).
-    session_engine::window_queue::claim_as(WINDOW);
-    session_engine::window_queue::window_actions(CLAIMED.map(str::to_owned).to_vec());
-    session_engine::view_client::offer_window_actions();
+    session_engine_client::window_queue::claim_as(WINDOW);
+    session_engine_client::window_queue::window_actions(CLAIMED.map(str::to_owned).to_vec());
+    session_engine_client::view_client::offer_window_actions();
 }
 
 /// Run the app action `action` with `args`: its answer.

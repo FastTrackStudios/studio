@@ -10,7 +10,7 @@ use architect_scene::paint::PaintMount;
 use architect_scene::paint::{Layer, LayerKey, Scene};
 use dioxus::prelude::*;
 use serde_json::Value as Json;
-use session_engine::studio_engine::link;
+use session_engine_client::studio_engine::link;
 use session_ui::song_model::StudioSession;
 
 use crate::Stats;
@@ -46,7 +46,7 @@ pub fn attach() {
         return;
     }
     // On a phone the engine is in this process (the `daw` extension links
-    // the views to it, `session_engine::open::link_window_here`): nothing
+    // the views to it, `session_engine_client::open::link_window_here`): nothing
     // to find.
     if cfg!(target_os = "ios") {
         return;
@@ -98,14 +98,14 @@ pub fn attach_at(pid: u32, socket: std::path::PathBuf, mcp: String) -> Result<()
 }
 
 fn attach_to(found: &link::Found) -> Result<(), String> {
-    let target = session_engine::open::RemoteTarget::Engine {
+    let target = session_engine_client::open::RemoteTarget::Engine {
         socket: found.socket.clone(),
     };
-    session_engine::open::set_mode(session_engine::open::ModeState::remote(
+    session_engine_client::open::set_mode(session_engine_client::open::ModeState::remote(
         target.clone(),
         false,
     ));
-    session_engine::open::attach(&target).map_err(|e| e.to_string())?;
+    session_engine_client::open::attach(&target).map_err(|e| e.to_string())?;
     link::set_linked(found.clone());
     Ok(())
 }
@@ -114,7 +114,7 @@ fn attach_to(found: &link::Found) -> Result<(), String> {
 /// names it (a new song or a new set mounts a view again).
 #[must_use]
 pub fn current() -> Option<(String, StudioSession)> {
-    session_engine::view_client::peek_set(|view| {
+    session_engine_client::view_client::peek_set(|view| {
         let set = view.setlist.as_ref()?;
         let song = set.songs.get(set.at)?;
         Some((
@@ -170,14 +170,14 @@ pub fn use_client_mode() -> dioxus::prelude::Signal<session::modes::Mode> {
 }
 
 /// Whether the `daw` extension's value table carries the tracks' mute and
-/// solo ([`session_engine::engine::track_value`]).
+/// solo ([`session_engine_client::engine::track_value`]).
 ///
 /// Then a pane draws their lit state from it, apart, and lights them in
 /// the same frame as every other pane. One `stat` a call.
 #[must_use]
 pub fn engine_lights_buttons() -> bool {
     let Ok(name) =
-        architect_scene::anim::Name::new(&session_engine::engine::track_value(0, "mute"))
+        architect_scene::anim::Name::new(&session_engine_client::engine::track_value(0, "mute"))
     else {
         return false;
     };
@@ -206,7 +206,7 @@ pub fn engine_lights_buttons_here() -> bool {
 /// song).
 #[must_use]
 pub fn with_engine_values(mount: PaintMount) -> PaintMount {
-    if session_engine::actions::is_in_host()
+    if session_engine_client::actions::is_in_host()
         && let Some(table) = architect_scene::engine::shared::open_engine("daw")
     {
         return mount.with_engine(table);
@@ -220,7 +220,7 @@ pub fn with_engine_values(mount: PaintMount) -> PaintMount {
 ///
 /// The engine refused it, or is not linked.
 pub fn run(id: &str, args: &Json) -> Result<Json, String> {
-    let out = session_engine::view_client::run(id, args.to_string().as_bytes())?;
+    let out = session_engine_client::view_client::run(id, args.to_string().as_bytes())?;
     Ok(serde_json::from_str(&out).unwrap_or(Json::String(out)))
 }
 

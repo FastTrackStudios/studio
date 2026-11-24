@@ -3,12 +3,12 @@
 
 use dioxus::prelude::*;
 use serde_json::json;
-use session_engine::setlist::Setlist;
+use session_engine_client::setlist::Setlist;
 use session_ui::song_model::StudioSession;
 
 /// The set the engine has, as this window shows it.
 pub fn set() -> Option<Setlist> {
-    session_engine::view_client::peek_set(|view| view.setlist.clone())
+    session_engine_client::view_client::peek_set(|view| view.setlist.clone())
 }
 
 /// A song's session as a prop (keyed by the pane, so never compared).
@@ -82,7 +82,7 @@ pub fn SongsPane() -> Element {
                      display:flex; align-items:stretch;",
             session_ui::shell::SongTabs {
                 on_pick: move |index: usize| {
-                    let _ = session_engine::view_client::ask::pick(index);
+                    let _ = session_engine_client::view_client::ask::pick(index);
                 },
                 max_shown: 0,
             }
@@ -103,7 +103,7 @@ pub fn NavigatorPane() -> Element {
         div { style: "position:relative; width:100%; height:100%; background:{surface};",
             session_ui::navigator::Navigator {
                 on_pick: move |index: usize| {
-                    let _ = session_engine::view_client::ask::pick(index);
+                    let _ = session_engine_client::view_client::ask::pick(index);
                 },
             }
         }

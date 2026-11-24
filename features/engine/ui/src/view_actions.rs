@@ -9,7 +9,7 @@
 use architect::action::{ActionList, ActionMeta, Effect};
 use facet::Facet;
 
-use session_engine::shared_actions::meta;
+use session_engine_client::actions::meta;
 
 pub static OPTION: ActionMeta = meta(
     "SESSION_OPTION",

@@ -29,7 +29,7 @@ use lucide_dioxus::{
     FileMusic, HardDriveDownload, House, Library, LibraryBig, Link, ListMusic, LogOut, Pencil,
     Play, Plus, Radio, Search, Trash, X,
 };
-use session_engine::setlist::Setlist;
+use session_engine::setlist::{Setlist, SetlistOpen as _};
 use session_engine::song_stream::Offline;
 use session_engine::stream_set::{
     Downloading, LibrarySetlist, LibrarySong, ListKind, with_library,

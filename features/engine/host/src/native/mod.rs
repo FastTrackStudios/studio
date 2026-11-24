@@ -43,6 +43,8 @@ mod start;
 use std::any::Any;
 use std::path::{Path, PathBuf};
 
+use session_engine::setlist::SetlistOpen as _;
+
 use dioxus::prelude::*;
 
 /// The developer's example session, used when it is there and nothing

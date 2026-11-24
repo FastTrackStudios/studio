@@ -3,7 +3,7 @@
 //! in it, played, paused and moved, and its transport read back to drive
 //! Now Playing and the playheads.
 //!
-//! **Finding it** is `session_engine::studio_engine::link`'s protocol, kept
+//! **Finding it** is `session_engine_client::studio_engine::link`'s protocol, kept
 //! here rather than linked (session-engine brings the whole DAW, its DSP
 //! and its own Blitz with it): an engine says where it is in
 //! `<config>/fts/engines/studio-<pid>.json` (its facade's socket, its

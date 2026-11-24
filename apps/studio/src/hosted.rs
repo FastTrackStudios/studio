@@ -87,7 +87,7 @@ pub fn extensions() -> &'static Extensions {
     EXTENSIONS.get_or_init(|| {
         // The views' windows run inside this app's process, on its thread:
         // an async window action is started, never waited for.
-        session_engine::actions::in_host(true);
+        session_engine_client::actions::in_host(true);
         // The views attach to the engine the app links (use_engine_link),
         // never to whichever engine answers first.
         studio_view_link::attach_by_host();

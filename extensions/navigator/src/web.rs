@@ -5,7 +5,7 @@
 //! (`web_host::hosted_pick`: the app's playhead moves, the engine with it).
 
 use dioxus::prelude::*;
-use session_engine::setlist::Setlist;
+use session_engine_client::setlist::Setlist;
 use session_ui::song_model::StudioSession;
 use session_ui::web_host;
 

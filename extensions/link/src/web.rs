@@ -10,7 +10,7 @@
 
 use dioxus::prelude::*;
 use serde_json::Value as Json;
-use session_engine::engine::Move;
+use session_engine_client::engine::Move;
 use session_ui::song_model::StudioSession;
 use session_ui::web_host::{self, HostedState};
 
@@ -87,11 +87,11 @@ pub async fn call(id: &str, args: &Json) -> Result<Json, String> {
     match id {
         "SESSION_PLAY_PAUSE" => {
             session_ui::web_audio::unlock();
-            session_engine::engine::transport(Move::PlayStop, 0.0);
+            session_engine_client::engine::transport(Move::PlayStop, 0.0);
             return Ok(serde_json::json!({ "ok": true }));
         }
         "SESSION_STOP" => {
-            session_engine::engine::transport(Move::Stop, 0.0);
+            session_engine_client::engine::transport(Move::Stop, 0.0);
             return Ok(serde_json::json!({ "ok": true }));
         }
         _ => {}
