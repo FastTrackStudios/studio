@@ -135,6 +135,9 @@ pub struct Shared {
     mailbox: Mailbox,
     sources: &'static [ModSourceSpec],
     source_values: Vec<AtomicU32>,
+    /// Each control's value as the block last ran it (f32 bits): what the
+    /// views show, and what a test compares with the compiled-in block.
+    values: Vec<AtomicU32>,
     revision: AtomicU64,
     /// The `clap_plugin` the host knows this instance by (seen on its first
     /// `signal/1` call), for rescans.
@@ -186,7 +189,10 @@ impl Shared {
             "engine": a.engine,
             "author": a.author,
             "look": a.look,
-            "controls": a.controls.iter().enumerate().map(|(i, c)| serde_json::json!({"id": c.id, "name": c.name, "slot": slot_id(i)})).collect::<Vec<_>>(),
+            "controls": a.controls.iter().enumerate().map(|(i, c)| {
+                let value = self.values.get(i).map(|v| f32::from_bits(v.load(Ordering::Acquire)));
+                serde_json::json!({"id": c.id, "name": c.name, "slot": slot_id(i), "value": value})
+            }).collect::<Vec<_>>(),
         })
     }
 }
@@ -352,6 +358,7 @@ impl<D: FamilyDef> Default for FamilyPlugin<D> {
             mailbox: Mailbox::default(),
             sources,
             source_values: sources.iter().map(|_| AtomicU32::new(0)).collect(),
+            values: (0..SLOTS).map(|_| AtomicU32::new(0)).collect(),
             revision: AtomicU64::new(0),
             plugin: AtomicPtr::new(std::ptr::null_mut()),
             rescan: rescan_fn::<D>,
@@ -434,6 +441,9 @@ impl<D: FamilyDef> Plugin for FamilyPlugin<D> {
             if v.to_bits() != *applied {
                 *applied = v.to_bits();
                 block.set_param(i, v);
+                if let Some(slot) = self.shared.values.get(i) {
+                    slot.store(v.to_bits(), Ordering::Release);
+                }
             }
         }
         if let [l, r, ..] = buffer.as_slice() {
