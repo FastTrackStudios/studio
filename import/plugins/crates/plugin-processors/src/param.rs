@@ -23,6 +23,22 @@ pub enum Unit {
     Toggle,
 }
 
+/// How a parameter's 0–1 (normalized) position maps to its range: the
+/// curve a knob travels, a host's automation lane draws, and a modulation
+/// offset moves along. The formulas are nice-plug's `FloatRange`, exactly,
+/// so a block's CLAP form and the block compiled in agree on what a
+/// normalized value and an offset mean.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Taper {
+    Linear,
+    /// `normalized = proportion^factor`. nice-plug's
+    /// `FloatRange::skew_factor(x)` is `2^x`: `-2.0` is `0.25`, `-1.0` is
+    /// `0.5` (the usual frequency and time knobs).
+    Skewed(f32),
+    /// Skewed either side of `center`, which sits at 0.5.
+    SymmetricalSkewed { factor: f32, center: f32 },
+}
+
 /// One parameter.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ParamSpec {
@@ -33,6 +49,7 @@ pub struct ParamSpec {
     pub min: f32,
     pub max: f32,
     pub default: f32,
+    pub taper: Taper,
 }
 
 impl ParamSpec {
@@ -52,7 +69,23 @@ impl ParamSpec {
             min,
             max,
             default,
+            taper: Taper::Linear,
         }
+    }
+
+    /// This parameter on a skewed taper (see [`Taper::Skewed`]).
+    #[must_use]
+    pub const fn skewed(mut self, factor: f32) -> Self {
+        self.taper = Taper::Skewed(factor);
+        self
+    }
+
+    /// This parameter skewed around `center` (see
+    /// [`Taper::SymmetricalSkewed`]).
+    #[must_use]
+    pub const fn symmetrical_skewed(mut self, factor: f32, center: f32) -> Self {
+        self.taper = Taper::SymmetricalSkewed { factor, center };
+        self
     }
 
     /// A choice among `names`, defaulting to the first.
@@ -80,33 +113,62 @@ impl ParamSpec {
         }
     }
 
-    /// The value as 0–1 along the range.
+    /// The value as 0–1 along the range, on its taper.
     #[must_use]
     pub fn normalize(&self, value: f32) -> f32 {
-        let span = self.max - self.min;
+        let (min, max) = (self.min, self.max);
+        let span = max - min;
         if span <= 0.0 {
-            0.0
-        } else {
-            ((self.clamp(value) - self.min) / span).clamp(0.0, 1.0)
+            return 0.0;
         }
+        let p = (self.clamp(value) - min) / span;
+        match self.taper {
+            Taper::Linear => p,
+            Taper::Skewed(factor) => libm::powf(p, factor),
+            Taper::SymmetricalSkewed { factor, center } => {
+                let c = (center - min) / span;
+                if p > c {
+                    (libm::powf((p - c) * (1.0 - c).recip(), factor) * 0.5) + 0.5
+                } else {
+                    (1.0 - libm::powf((c - p) * c.recip(), factor)) * 0.5
+                }
+            }
+        }
+        .clamp(0.0, 1.0)
     }
 
-    /// The plain value at `normalized` (0–1) along the range.
+    /// The plain value at `normalized` (0–1) along the range, on its taper
+    /// (and on a step for choices and toggles).
     #[must_use]
     pub fn denormalize(&self, normalized: f32) -> f32 {
-        self.clamp(normalized.clamp(0.0, 1.0) * (self.max - self.min) + self.min)
+        let n = normalized.clamp(0.0, 1.0);
+        let (min, max) = (self.min, self.max);
+        let span = max - min;
+        let plain = match self.taper {
+            Taper::Linear => (n * span) + min,
+            Taper::Skewed(factor) => (libm::powf(n, factor.recip()) * span) + min,
+            Taper::SymmetricalSkewed { factor, center } => {
+                let c = (center - min) / span;
+                let skewed = if n > 0.5 {
+                    (libm::powf((n - 0.5) * 2.0, factor.recip()) * (1.0 - c)) + c
+                } else {
+                    (1.0 - libm::powf((0.5 - n) * 2.0, factor.recip())) * c
+                };
+                (skewed * span) + min
+            }
+        };
+        self.clamp(plain)
     }
 
-    /// The value a parameter runs at under modulation: `base` (plain)
-    /// offset by `modulation` in normalized units, clamped to the range.
-    /// This is `CLAP_EVENT_PARAM_MOD`'s meaning in nice-plug, so a block
-    /// modulated in Signal and its CLAP form modulated by Signal's host run
-    /// at the same value.
+    /// The value a parameter runs at: `base` (plain) offset by `modulation`
+    /// in normalized units, along the taper, clamped to the range. This is
+    /// `CLAP_EVENT_PARAM_MOD`'s meaning in nice-plug.
+    ///
+    /// Always through the normalized domain, offset or not: that is where a
+    /// CLAP form holds its values, so computing it the same way here is what
+    /// makes the two forms land on the same bits.
     #[must_use]
     pub fn modulated(&self, base: f32, modulation: f32) -> f32 {
-        if modulation == 0.0 {
-            return self.clamp(base);
-        }
         self.denormalize(self.normalize(base) + modulation)
     }
 
@@ -256,11 +318,31 @@ mod tests {
     #[test]
     fn modulation_offsets_in_normalized_units_and_clamps() {
         let freq = ParamSpec::new("f", "Freq", Unit::Hz, 20.0, 20_020.0, 1000.0);
-        assert!((freq.modulated(1000.0, 0.0) - 1000.0).abs() < 1e-3);
+        assert!((freq.modulated(1000.0, 0.0) - 1000.0).abs() < 1e-2);
         // +0.25 of the range is +5000 Hz.
         assert!((freq.modulated(1000.0, 0.25) - 6000.0).abs() < 1e-2);
         assert!((freq.modulated(19_000.0, 0.5) - 20_020.0).abs() < 1e-3);
         assert!((freq.modulated(1000.0, -1.0) - 20.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn tapers_are_nice_plugs() {
+        // FloatRange::Skewed { min: 20, max: 20000, factor: skew_factor(-2.0) }.
+        let f = ParamSpec::new("f", "Freq", Unit::Hz, 20.0, 20_000.0, 1000.0).skewed(0.25);
+        // nice-plug: ((1000-20)/19980)^0.25.
+        let want = libm::powf((1000.0 - 20.0) / 19_980.0, 0.25);
+        assert_eq!(f.normalize(1000.0), want);
+        assert!((f.denormalize(want) - 1000.0).abs() < 0.05);
+        assert_eq!(f.denormalize(0.0), 20.0);
+        assert_eq!(f.denormalize(1.0), 20_000.0);
+        // Symmetrical around 0 on -24..24: the center is exactly halfway.
+        let g = ParamSpec::new("g", "Gain", Unit::Db, -24.0, 24.0, 0.0).symmetrical_skewed(0.5, 0.0);
+        assert_eq!(g.normalize(0.0), 0.5);
+        assert_eq!(g.denormalize(0.5), 0.0);
+        for n in [0.0_f32, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0] {
+            assert!((g.normalize(g.denormalize(n)) - n).abs() < 1e-5, "{n}");
+            assert!((f.normalize(f.denormalize(n)) - n).abs() < 1e-5, "{n}");
+        }
     }
 
     #[test]

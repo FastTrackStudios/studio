@@ -1,0 +1,44 @@
+/// A channel strip: a low cut, three bands and a high cut, on the FTS EQ
+/// engine. Its control ids are the ones Signal's channel-strip EQ block
+/// always had, so presets made with it keep their settings.
+id channel
+family eq
+name "Channel Strip"
+engine "eq.canonical@1"
+author fasttrackstudio
+version 1
+look channel-strip
+controls (
+    {id low_cut, name "Low Cut", unit hz, min 20, max 1000, default 20, skew 0.25}
+    {id low_freq, name "Low Freq", unit hz, min 30, max 1000, default 120, skew 0.25}
+    {id low_gain, name "Low Gain", unit db, min -18, max 18, default 0}
+    {id mid_freq, name "Mid Freq", unit hz, min 100, max 10000, default 1000, skew 0.25}
+    {id mid_gain, name "Mid Gain", unit db, min -18, max 18, default 0}
+    {id mid_q, name "Mid Q", min 0.1, max 10, default 0.7, decimals 2, skew 0.35}
+    {id high_freq, name "High Freq", unit hz, min 1000, max 16000, default 6000, skew 0.25}
+    {id high_gain, name "High Gain", unit db, min -18, max 18, default 0}
+    {id high_cut, name "High Cut", unit hz, min 1000, max 20000, default 20000, skew 0.25}
+)
+map {
+    band.1.used "low_cut > 20.5"
+    band.1.shape low_cut
+    band.1.freq low_cut
+    band.1.slope "2"
+    band.2.used "abs(low_gain) > 0.01"
+    band.2.shape low_shelf
+    band.2.freq low_freq
+    band.2.gain low_gain
+    band.3.used "abs(mid_gain) > 0.01"
+    band.3.shape bell
+    band.3.freq mid_freq
+    band.3.gain mid_gain
+    band.3.q mid_q
+    band.4.used "abs(high_gain) > 0.01"
+    band.4.shape high_shelf
+    band.4.freq high_freq
+    band.4.gain high_gain
+    band.5.used "high_cut < 19999.5"
+    band.5.shape high_cut
+    band.5.freq high_cut
+    band.5.slope "2"
+}

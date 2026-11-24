@@ -1,0 +1,21 @@
+/// The Plate: its own DSP (`reverb.plate@1`). Its controls are the
+/// engine's own, by id; the file names and orders them for its face.
+id plate
+family reverb
+name Plate
+engine "reverb.plate@1"
+author fasttrackstudio
+version 1
+look plate
+controls (
+    {id decay, name Decay, unit percent, min 0, max 1, default 0.55}
+    {id predelay, name "Pre-delay", unit ms, min 0, max 250, default 12, skew 0.5}
+    {id damping, name Damping, unit percent, min 0, max 1, default 0.35}
+    {id tone, name Tone, min -1, max 1, default 0, decimals 2}
+    {id size, name "Plate Size", unit percent, min 0, max 1, default 0.5}
+    {id modulation, name Movement, unit percent, min 0, max 1, default 0.2}
+    {id low_cut, name "Low Cut", unit hz, min 20, max 1000, default 80, skew 0.25}
+    {id high_cut, name "High Cut", unit hz, min 1000, max 20000, default 14000, skew 0.25}
+    {id width, name Width, unit percent, min 0, max 1, default 1}
+    {id mix, name Mix, unit percent, min 0, max 1, default 0.2}
+)

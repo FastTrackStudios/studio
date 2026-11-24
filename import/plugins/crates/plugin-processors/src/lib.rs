@@ -34,16 +34,13 @@ use core::fmt;
 
 pub mod param;
 
+pub mod algorithms;
 #[cfg(feature = "comp")]
 pub mod comp;
-#[cfg(feature = "delay")]
-pub mod delay;
-#[cfg(feature = "eq")]
-pub mod eq;
+pub mod engines;
+pub mod expr;
 #[cfg(feature = "gate")]
 pub mod gate;
-#[cfg(feature = "reverb")]
-pub mod reverb;
 #[cfg(feature = "saturate")]
 pub mod saturate;
 
@@ -160,7 +157,8 @@ impl fmt::Display for BuildError {
 #[cfg(feature = "std")]
 impl std::error::Error for BuildError {}
 
-/// Every effect this build has, by name.
+/// Every block family this build has, by name: what Signal's block kinds
+/// are (`eq`, `reverb`, `delay`, `comp`, `drive`, `gate`, `gain`).
 pub const NAMES: &[&str] = &[
     "gain",
     #[cfg(feature = "gate")]
@@ -177,69 +175,43 @@ pub const NAMES: &[&str] = &[
     "reverb",
 ];
 
-/// Build effect `name` for `sample_rate` and blocks of up to `max_block`,
-/// at its parameters' defaults. `None` for a name this build doesn't have.
+/// Family `name`'s block on its default algorithm, at the controls'
+/// defaults. `None` for a family this build doesn't have.
 ///
 /// # Errors
 ///
 /// [`BuildError`] when the engine refuses the rate or block size.
-pub fn build(
+#[cfg(feature = "std")]
+pub fn build(name: &str, sample_rate: f32, max_block: usize) -> Option<Result<Box<dyn BlockProcessor>, BuildError>> {
+    build_algorithm(name, None, sample_rate, max_block)
+}
+
+/// Family `name`'s block on algorithm `algorithm` (the default when
+/// `None`).
+///
+/// # Errors
+///
+/// [`BuildError`] when the engine refuses the rate or block size.
+#[cfg(feature = "std")]
+pub fn build_algorithm(
     name: &str,
+    algorithm: Option<&str>,
     sample_rate: f32,
     max_block: usize,
 ) -> Option<Result<Box<dyn BlockProcessor>, BuildError>> {
-    let _ = max_block;
-    let built: Result<Box<dyn BlockProcessor>, BuildError> = match name {
-        "gain" => Ok(Box::new(Gain::new())),
-        #[cfg(feature = "gate")]
-        "gate" => Ok(Box::new(gate::Gate::new(sample_rate))),
-        #[cfg(feature = "saturate")]
-        "drive" => Ok(Box::new(saturate::Drive::new(sample_rate))),
-        #[cfg(feature = "eq")]
-        "eq" => Ok(Box::new(eq::Eq::new(sample_rate))),
-        #[cfg(feature = "comp")]
-        "comp" => {
-            comp::Comp::new(sample_rate, max_block).map(|c| Box::new(c) as Box<dyn BlockProcessor>)
-        }
-        #[cfg(feature = "delay")]
-        "delay" => Ok(Box::new(delay::Delay::new(sample_rate))),
-        #[cfg(feature = "reverb")]
-        "reverb" => Ok(Box::new(reverb::Reverb::new(sample_rate, max_block))),
-        _ => return None,
-    };
-    let _ = sample_rate;
-    Some(built.map(|mut p| {
-        for (i, spec) in p.params().iter().enumerate() {
-            p.set_param(i, spec.default);
-        }
-        p.reset();
-        p
-    }))
+    algorithms::build(name, algorithm, sample_rate, max_block)
+        .map(|r| r.map(|b| Box::new(b) as Box<dyn BlockProcessor>))
 }
 
-/// Effect `name`'s parameter schema, without building it: what a CLAP
-/// backend standing in for the compiled-in block runs (the same ids).
+/// Family `name`'s parameters on its default algorithm, without building
+/// it.
+#[cfg(feature = "std")]
 #[must_use]
 pub fn params_of(name: &str) -> Option<&'static [ParamSpec]> {
-    Some(match name {
-        "gain" => GAIN_PARAMS,
-        #[cfg(feature = "gate")]
-        "gate" => gate::PARAMS,
-        #[cfg(feature = "saturate")]
-        "drive" => saturate::PARAMS,
-        #[cfg(feature = "eq")]
-        "eq" => eq::PARAMS,
-        #[cfg(feature = "comp")]
-        "comp" => comp::PARAMS,
-        #[cfg(feature = "delay")]
-        "delay" => delay::PARAMS,
-        #[cfg(feature = "reverb")]
-        "reverb" => reverb::PARAMS,
-        _ => return None,
-    })
+    algorithms::find(name, None).map(|a| a.controls)
 }
 
-/// Effect `name`'s modulation sources, without building it.
+/// Family `name`'s modulation sources (its engine's).
 #[must_use]
 pub fn sources_of(name: &str) -> &'static [ModSourceSpec] {
     match name {
@@ -249,6 +221,12 @@ pub fn sources_of(name: &str) -> &'static [ModSourceSpec] {
         "comp" => comp::SOURCES,
         _ => &[],
     }
+}
+
+/// A count as `f32`.
+#[must_use]
+pub(crate) const fn util_f32(n: usize) -> f32 {
+    dsp_core::num::count_to_f32(n)
 }
 
 /// Decibels to a linear gain.

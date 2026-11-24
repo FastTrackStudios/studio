@@ -9724,6 +9724,8 @@ version = "0.1.0"
 dependencies = [
  "dsp",
  "dsp-core",
+ "facet",
+ "facet-styx",
  "libm",
 ]
 
