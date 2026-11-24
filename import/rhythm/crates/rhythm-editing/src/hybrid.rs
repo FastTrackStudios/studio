@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::placement::{Cut, Hit, place};
+use crate::placement::{Cut, Hit, Piece, place};
 
 /// Global editing strategy chosen by the user, agent, or material profile.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -194,6 +194,13 @@ pub fn plan_hybrid(
     let mut max_stretch_ratio = 1.0_f64;
 
     for (idx, p) in pieces.iter().enumerate() {
+        // A piece that crossfades over the one before (the gap fill's
+        // overlap) starts here where that one ends: the plan's segments
+        // butt, each with its own fades.
+        let p = &Piece {
+            start: p.start + p.crossfade.unwrap_or(0.0),
+            ..*p
+        };
         let src_start = p.start - p.shift;
         let src_end = p.end - p.shift;
         let has_prev = idx > 0;

@@ -240,33 +240,72 @@ fn render_wav(req: RenderRequest) -> Result<Json, String> {
 }
 
 /// `daw.edit`'s `PLACE`: where the pieces of the recording go once its
-/// hits are moved, by rhythm's placement (`rhythm_editing::placement`).
+/// hits are moved, each gap filled by rhythm's rule
+/// (`rhythm_editing::placement`: the piece before plays on, the piece after
+/// reaches back, they crossfade, only what is left is stretched, never a
+/// hit moved), and what was done at each gap.
 ///
 /// # Errors
 ///
 /// The request is not a `daw_edit::PlaceRequest`.
 pub fn place(params: Json) -> Result<Json, String> {
+    let span = tracing::info_span!(
+        "RHYTHM_PLACE",
+        hits = tracing::field::Empty,
+        takes = tracing::field::Empty,
+        pieces = tracing::field::Empty,
+        "fill.gaps" = tracing::field::Empty,
+        "fill.extended" = tracing::field::Empty,
+        "fill.reached_back" = tracing::field::Empty,
+        "fill.crossfaded" = tracing::field::Empty,
+        "fill.stretched" = tracing::field::Empty,
+        "fill.slowest" = tracing::field::Empty,
+        "fill.left" = tracing::field::Empty,
+        "fill.take_stopped" = tracing::field::Empty,
+        "fill.take_crossed" = tracing::field::Empty,
+    );
+    let _in = span.enter();
     let request: daw_edit::PlaceRequest =
         serde_json::from_value(params).map_err(|e| format!("invalid PLACE request: {e}"))?;
-    let hits: Vec<rhythm_editing::placement::Hit> = request
-        .hits
+    span.record("hits", request.hits.len());
+    span.record("takes", request.takes.len());
+    let placed = rhythm_editing::placement::place_filled(
+        &request.hits,
+        request.span,
+        request.cut,
+        request.bounds,
+        (&request.takes, request.fill),
+    );
+    let fills = &placed.fills;
+    let count =
+        |f: &dyn Fn(&daw_edit::placement::Filled) -> bool| fills.iter().filter(|x| f(x)).count();
+    span.record("pieces", placed.pieces.len());
+    span.record("fill.gaps", fills.len());
+    span.record("fill.extended", count(&|f| f.extended > 0.0));
+    span.record("fill.reached_back", count(&|f| f.reached_back > 0.0));
+    span.record("fill.crossfaded", count(&|f| f.crossfade > 0.0));
+    span.record("fill.stretched", count(&|f| f.stretched.is_some()));
+    span.record("fill.left", count(&|f| f.left > 0.0));
+    span.record(
+        "fill.take_stopped",
+        count(&|f| f.take_switch == daw_edit::placement::TakeSwitch::Stopped),
+    );
+    span.record(
+        "fill.take_crossed",
+        count(&|f| f.take_switch == daw_edit::placement::TakeSwitch::Crossed),
+    );
+    if let Some(slowest) = fills
         .iter()
-        .map(|h| rhythm_editing::placement::Hit { at: h.at, shift: h.shift })
-        .collect();
-    let cut = rhythm_editing::placement::Cut {
-        lead: request.cut.lead,
-        guard: request.cut.guard,
-    };
-    let pieces = rhythm_editing::placement::place_within(&hits, request.span, cut, request.bounds)
-        .into_iter()
-        .map(|p| daw_edit::placement::Piece {
-            start: p.start,
-            end: p.end,
-            shift: p.shift,
-            drawn_to: p.drawn_to,
-        })
-        .collect();
-    serde_json::to_value(daw_edit::PlaceAnswer { pieces }).map_err(|e| e.to_string())
+        .filter_map(|f| f.stretched.map(|s| s.rate))
+        .reduce(f64::min)
+    {
+        span.record("fill.slowest", slowest);
+    }
+    serde_json::to_value(daw_edit::PlaceAnswer {
+        pieces: placed.pieces,
+        fills: placed.fills,
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// `daw.edit`'s `PLAN`: a target for every played hit of a kit, with why,
@@ -276,7 +315,11 @@ pub fn place(params: Json) -> Result<Json, String> {
 ///
 /// The request is not a `daw_edit::PlanRequest`.
 pub fn plan(params: Json) -> Result<Json, String> {
-    let span = tracing::info_span!("RHYTHM_PLAN", hits = tracing::field::Empty, ms = tracing::field::Empty);
+    let span = tracing::info_span!(
+        "RHYTHM_PLAN",
+        hits = tracing::field::Empty,
+        ms = tracing::field::Empty
+    );
     let _in = span.enter();
     let request: daw_edit::PlanRequest =
         serde_json::from_value(params).map_err(|e| format!("invalid PLAN request: {e}"))?;
@@ -390,12 +433,39 @@ mod tests {
         let answer: daw_edit::PlanAnswer = serde_json::from_value(out).unwrap();
         assert!((answer.targets["k"] - 1.5).abs() < 1e-9);
         assert!((answer.targets["s"] - 1.875).abs() < 1e-9);
-        assert!(dispatch(&DetectorRegistry::default(), "RHYTHM_PLAN", json!({"hits": 3})).is_err());
+        assert!(
+            dispatch(
+                &DetectorRegistry::default(),
+                "RHYTHM_PLAN",
+                json!({"hits": 3})
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn the_manifest_provides_plan() {
         assert!(MANIFEST.contains("id = \"RHYTHM_PLAN\""));
-        assert!(MANIFEST.contains("\"daw.edit\" = \"0.2.0\""));
+        assert!(MANIFEST.contains(&format!("\"daw.edit\" = \"{}\"", daw_edit::VERSION)));
+    }
+
+    #[test]
+    fn place_answers_with_its_fills() {
+        // The snare 330 ms later after 300: reached back, the last of the
+        // kick's decay stretched at 0.8, said in `fills`.
+        let request = json!({
+            "hits": [{"at": 1.0, "shift": 0.0}, {"at": 1.3, "shift": 0.33}],
+            "span": [0.995, 2.5],
+            "takes": [{"from": 0.0, "to": 3.0}]
+        });
+        let out = dispatch(&DetectorRegistry::default(), "RHYTHM_PLACE", request).unwrap();
+        let answer: daw_edit::PlaceAnswer = serde_json::from_value(out).unwrap();
+        assert_eq!(answer.pieces.len(), 2);
+        let [fill] = answer.fills.as_slice() else {
+            panic!("{:?}", answer.fills)
+        };
+        assert!((fill.stretched.unwrap().rate - 0.8).abs() < 1e-9);
+        assert!(fill.reached_back > 0.0);
+        assert!((answer.pieces[1].start - 1.345).abs() < 1e-9);
     }
 }
