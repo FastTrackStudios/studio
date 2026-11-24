@@ -39,6 +39,13 @@ pub enum Closeup {
         name: String,
         which: Which,
     },
+    /// One block of a track's Signal FX: its parameters and meters
+    /// (`crate::signal::closeup`).
+    SignalBlock {
+        guid: String,
+        name: String,
+        block: String,
+    },
 }
 
 impl Closeup {
@@ -47,7 +54,7 @@ impl Closeup {
     #[must_use]
     pub fn subject(&self) -> &str {
         match self {
-            Self::Rack { name, .. } => name,
+            Self::Rack { name, .. } | Self::SignalBlock { name, .. } => name,
         }
     }
 }
@@ -63,6 +70,9 @@ pub struct Closeups {
     /// The racks' settings: the mixer's strips and a close-up of one
     /// panel edit the same ones.
     pub tone: Rc<Shared>,
+    /// Every Signal FX's chain, meters and fold: the strips and a block's
+    /// close-up read and edit the same ones.
+    pub signal: crate::signal::closeup::Shared,
 }
 
 impl Closeups {
@@ -72,6 +82,7 @@ impl Closeups {
             current: Signal::new(None),
             seen: Signal::new(0),
             tone: Rc::default(),
+            signal: std::sync::Arc::new(std::sync::Mutex::new(crate::signal::Inserts::installed())),
         }
     }
 
@@ -126,11 +137,15 @@ impl CloseupHandle {
 
     /// Show `closeup`, through `SESSION_CLOSEUP`, and show it at once.
     pub fn show(self, closeup: &Closeup) {
-        let Closeup::Rack { guid, name, which } = closeup;
-        let _ = crate::press::press(
-            crate::mixer_actions::CLOSEUP.id,
-            &serde_json::json!({ "track": guid, "panel": which.slug(), "name": name }),
-        );
+        let args = match closeup {
+            Closeup::Rack { guid, name, which } => {
+                serde_json::json!({ "track": guid, "panel": which.slug(), "name": name })
+            }
+            Closeup::SignalBlock { guid, name, block } => {
+                serde_json::json!({ "track": guid, "block": block, "name": name })
+            }
+        };
+        let _ = crate::press::press(crate::mixer_actions::CLOSEUP.id, &args);
         self.take_actions();
     }
 }
@@ -209,7 +224,7 @@ pub fn CloseupLayer(landscape: bool) -> Element {
     // The close-ups beside this one: a rack's other panels, as tabs, so
     // going from its EQ to its compressor is one tap rather than out
     // and back in.
-    let tabs: Vec<(Closeup, &'static str, bool)> = match &shown {
+    let tabs: Vec<(Closeup, String, bool)> = match &shown {
         Closeup::Rack { guid, name, which } => {
             let store = closeups.tone.store.borrow();
             let chain = crate::tone::panels_for(fts_session::mix_phases::MixPhase::Tone);
@@ -223,9 +238,32 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                         name: name.clone(),
                         which: w,
                     };
-                    (to, w.name(), w == *which)
+                    (to, w.name().to_owned(), w == *which)
                 })
                 .collect()
+        }
+        // A Signal block's tabs are the other blocks of its chain.
+        Closeup::SignalBlock { guid, name, block } => {
+            let inserts = crate::signal::closeup::lock(&closeups.signal);
+            inserts
+                .strip(guid)
+                .map(|strip| {
+                    strip
+                        .chain
+                        .phases
+                        .iter()
+                        .flat_map(|p| &p.blocks)
+                        .map(|b| {
+                            let to = Closeup::SignalBlock {
+                                guid: guid.clone(),
+                                name: name.clone(),
+                                block: b.id.0.clone(),
+                            };
+                            (to, b.name.clone(), b.id.as_str() == block)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
         }
     };
     let tab_style = move |on: bool| {
@@ -245,16 +283,19 @@ pub fn CloseupLayer(landscape: bool) -> Element {
              letter-spacing:0.04em; white-space:nowrap;"
         )
     };
-    let tab_buttons = tabs.into_iter().map(move |(to, label, on)| {
-        rsx! {
-            button {
-                key: "{label}",
-                style: tab_style(on),
-                onclick: move |_| shower.show(&to),
-                "{label}"
+    let tab_buttons = tabs
+        .into_iter()
+        .enumerate()
+        .map(move |(i, (to, label, on))| {
+            rsx! {
+                button {
+                    key: "{i}-{label}",
+                    style: tab_style(on),
+                    onclick: move |_| shower.show(&to),
+                    "{label}"
+                }
             }
-        }
-    });
+        });
     let (row_tabs, column_tabs) = if landscape {
         (None, Some(tab_buttons))
     } else {
@@ -314,6 +355,13 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                     match shown {
                         Closeup::Rack { guid, which, .. } => rsx! {
                             RackCloseup { key: "{guid}-{which:?}", guid, which }
+                        },
+                        Closeup::SignalBlock { guid, block, .. } => rsx! {
+                            crate::signal::closeup::SignalBlockCloseup {
+                                key: "{guid}-{block}",
+                                track: guid,
+                                block,
+                            }
                         },
                     }
                 }

@@ -287,6 +287,7 @@ pub fn Mixer() -> Element {
         // widget asks for one.
         if let Some(closeups) = try_consume_context::<crate::closeup::Closeups>() {
             widget.tone = Rc::clone(&closeups.tone);
+            widget.signal = std::sync::Arc::clone(&closeups.signal);
             widget.closeups = Some(closeups);
         }
         dioxus_native_dom::CustomWidgetAttr::new(widget)
@@ -481,6 +482,7 @@ pub fn WebMixer(hidden: bool) -> Element {
         );
         if let Some(closeups) = try_consume_context::<crate::closeup::Closeups>() {
             widget.tone = Rc::clone(&closeups.tone);
+            widget.signal = std::sync::Arc::clone(&closeups.signal);
             widget.closeups = Some(closeups);
         }
         crate::web_canvas::HostedRef(Rc::new(RefCell::new(widget)))
@@ -657,6 +659,14 @@ enum Hold {
     },
     /// A finger on a rack where no grip is: the chain scrolls under it.
     RackScroll { from_y: f64, was: f64 },
+    /// A Signal phase's make-up, dragged up or down from what it `was`;
+    /// sent through `SIGNAL_SET` when let go.
+    SignalMakeup {
+        track: String,
+        phase: crate::signal::chain::PhaseId,
+        from_y: f64,
+        was: f64,
+    },
     /// A finger scrolling the strips, from where it and the scroll were,
     /// and how fast it is going (to throw the strips when it lets go).
     Pan {
@@ -712,6 +722,13 @@ pub struct MixerWidget {
     tone_seen: u64,
     /// Where a close-up is asked for ([`crate::closeup`]).
     closeups: Option<crate::closeup::Closeups>,
+    /// Every Signal FX's chain, fold and meters (`crate::signal`), shared
+    /// with a block's close-up.
+    signal: crate::signal::closeup::Shared,
+    /// The Signal rows' generation last painted, and the last
+    /// `SIGNAL_INSERTS` ask taken up.
+    signal_seen: std::cell::Cell<u64>,
+    signal_asks_seen: u64,
     /// Each rack's cached picture and live meters, one per track: every
     /// rack is drawn live (so a fold or a scroll applies to all of them),
     /// from a cache an edit invalidates.
@@ -880,6 +897,9 @@ impl MixerWidget {
             tone: Rc::default(),
             tone_seen: 0,
             closeups: None,
+            signal: std::sync::Arc::new(std::sync::Mutex::new(crate::signal::Inserts::installed())),
+            signal_seen: std::cell::Cell::new(0),
+            signal_asks_seen: 0,
             spectra: std::collections::HashMap::new(),
             levels: std::collections::HashMap::new(),
             simulated: std::env::var_os("FTS_SIMULATE")
@@ -1499,6 +1519,104 @@ impl MixerWidget {
         }
     }
 
+    /// The Signal rows of the strip under a content point: its row, its
+    /// track and what the point presses there.
+    fn signal_hit_at(&self, x: f64, y: f64) -> Option<(usize, String, crate::signal::view::Hit)> {
+        let (cx, cy) = self.content(x, y);
+        let mixer = self.mixer.as_ref()?;
+        let row = mixer.strip_at(cx)?;
+        let (left, _, _) = mixer.strip_box(row)?;
+        let rack = mixer.strip(row)?.rack_rect()?;
+        if !rack.contains((cx - left, cy)) {
+            return None;
+        }
+        let track = self.track_at(row)?.guid.clone();
+        let inserts = crate::signal::closeup::lock(&self.signal);
+        let strip = inserts.strip(&track)?;
+        let at = crate::tone::Panel::of(rack, left).up(self.rack_scroll);
+        let rows = crate::signal::view::rows(&strip.chain, strip.fold);
+        let laid = crate::signal::view::layout(&rows, at);
+        let hit = crate::signal::view::hit(&laid, cx, cy)?;
+        Some((row, track, hit))
+    }
+
+    /// A press on a strip's Signal rows: its header opens or shuts it
+    /// (`SIGNAL_INSERTS`), a switch flips (`SIGNAL_RUN`), a make-up is taken
+    /// hold of, a block opens close up (`SESSION_CLOSEUP {block}`). `false`
+    /// where the press is not Signal's.
+    fn signal_pressed_at(&mut self, id: BlitzPointerId, x: f64, y: f64) -> bool {
+        use crate::signal::view::Hit;
+        let Some((row, track, hit)) = self.signal_hit_at(x, y) else {
+            return false;
+        };
+        let hold = match &hit {
+            Hit::Fold => {
+                let args = serde_json::json!({ "track": track });
+                let _ = crate::press::press(crate::signal::INSERTS.id, &args);
+                self.follow_signal();
+                None
+            }
+            Hit::PhaseBypass(_) | Hit::BlockBypass(_) => {
+                let mut inserts = crate::signal::closeup::lock(&self.signal);
+                let edit = inserts
+                    .strip(&track)
+                    .and_then(|s| crate::signal::view::toggle_edit(&s.chain, &hit));
+                if let Some(edit) = edit
+                    && let Err(e) = inserts.run(&track, &edit)
+                {
+                    tracing::warn!(signal.action = edit.action().0, error = %e, "a Signal switch was refused");
+                }
+                None
+            }
+            Hit::Makeup(phase) => {
+                let inserts = crate::signal::closeup::lock(&self.signal);
+                let was = inserts
+                    .strip(&track)
+                    .and_then(|s| s.chain.phase(phase.as_str()))
+                    .map_or(0.0, |p| p.makeup_db);
+                let (_, cy) = self.content(x, y);
+                Some(Hold::SignalMakeup {
+                    track: track.clone(),
+                    phase: phase.clone(),
+                    from_y: cy,
+                    was,
+                })
+            }
+            Hit::Open(block) => {
+                let name = self.track_at(row).map(|t| t.name.clone());
+                let args =
+                    serde_json::json!({ "track": track, "block": block.as_str(), "name": name });
+                let _ = crate::press::press(crate::mixer_actions::CLOSEUP.id, &args);
+                if let Some(closeups) = &self.closeups {
+                    closeups.take_ask();
+                }
+                None
+            }
+        };
+        let hold = hold.unwrap_or(Hold::Press {
+            spot: None,
+            from: (x, y),
+            select: None,
+        });
+        self.holds.push((id, hold));
+        self.dirty.set(true);
+        self.redraw();
+        true
+    }
+
+    /// Take up `SIGNAL_INSERTS`, re-read the chains whose revision moved
+    /// and read the meters when due: once a frame, before painting.
+    fn follow_signal(&mut self) {
+        let mut inserts = crate::signal::closeup::lock(&self.signal);
+        crate::signal::take_asks(&mut inserts, &mut self.signal_asks_seen);
+        let followed = inserts.follow();
+        for (track, e) in &followed.failed {
+            tracing::warn!(signal.track = track.as_str(), error = %e, "a Signal chain could not be read");
+        }
+        inserts.read_meters(web_time::Instant::now());
+        self.signal_seen.set(inserts.generation());
+    }
+
     /// The rack grip under a widget point, with its strip and track.
     fn rack_grip_at(&self, x: f64, y: f64) -> Option<(usize, crate::tone::Grip, String)> {
         let (cx, cy) = self.content(x, y);
@@ -2032,6 +2150,9 @@ impl MixerWidget {
         }
         // The rack sits over the strip's own controls, so it answers
         // first: a press lands on what it looks like it landed on.
+        if y >= self.band.get() && self.signal_pressed_at(id, x, y) {
+            return;
+        }
         if y >= self.band.get() && self.rack_pressed_at(id, finger, x, y, mods) {
             return;
         }
@@ -2081,7 +2202,11 @@ impl MixerWidget {
         let shown = match &hold {
             Hold::Turn(turn) => Some(turn.spot),
             Hold::Press { spot, .. } => *spot,
-            Hold::Pan { .. } | Hold::Overview | Hold::Rack { .. } | Hold::RackScroll { .. } => None,
+            Hold::Pan { .. }
+            | Hold::Overview
+            | Hold::Rack { .. }
+            | Hold::RackScroll { .. }
+            | Hold::SignalMakeup { .. } => None,
         };
         self.pointer.hover(shown);
         self.pointer.press();
@@ -2113,6 +2238,19 @@ impl MixerWidget {
                 for analyser in self.spectra.values_mut() {
                     analyser.invalidate();
                 }
+                true
+            }
+            Hold::SignalMakeup {
+                track,
+                phase,
+                from_y,
+                was,
+            } => {
+                let to = crate::signal::view::dragged_makeup(*was, cy - *from_y);
+                let (track, phase) = (track.clone(), phase.clone());
+                // Shown as it moves; sent once, when let go.
+                let mut inserts = crate::signal::closeup::lock(&self.signal);
+                inserts.preview_makeup(&track, &phase, to);
                 true
             }
             Hold::Turn(turn) => {
@@ -2189,6 +2327,22 @@ impl MixerWidget {
                 self.redraw();
             }
             Hold::Overview => self.commit_scroll(),
+            Hold::SignalMakeup {
+                track,
+                phase,
+                from_y,
+                was,
+            } => {
+                let (_, cy) = self.content(x, y);
+                let db = crate::signal::view::dragged_makeup(was, cy - from_y);
+                let edit = crate::signal::Edit::Makeup { phase, db };
+                let mut inserts = crate::signal::closeup::lock(&self.signal);
+                if let Err(e) = inserts.run(&track, &edit) {
+                    tracing::warn!(signal.action = "SIGNAL_SET", error = %e, "a Signal make-up was refused");
+                }
+                drop(inserts);
+                self.dirty.set(true);
+            }
             Hold::RackScroll { .. } => {
                 let view = crate::mixer_actions::MixerView {
                     rack_scroll: Some(self.rack_scroll),
@@ -2382,6 +2536,7 @@ impl MixerWidget {
     pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         self.follow_phase();
         self.take_view();
+        self.follow_signal();
         self.dirty.set(false);
         self.racks_seen.set(racks_shown());
         self.flush_drag();
@@ -2616,6 +2771,7 @@ impl MixerWidget {
                     .or(self.rack_hover),
                 panels: rack_panels(),
                 folded: &self.folds,
+                signal: Some(&mut crate::signal::closeup::lock(&self.signal)),
             },
             scroll,
             w,
@@ -2675,6 +2831,10 @@ impl Widget for MixerWidget {
             || racks_shown() != self.racks_seen.get()
             // A `MIXER_VIEW` asked of it.
             || crate::view_actions::pending(&crate::mixer_actions::MIXER_ASKS, self.view_seen)
+            // A Signal chain moved, its meters are due, or `SIGNAL_INSERTS`.
+            || crate::view_actions::pending(&crate::signal::INSERTS_ASKS, self.signal_asks_seen)
+            || crate::signal::closeup::lock(&self.signal)
+                .due(web_time::Instant::now(), self.signal_seen.get())
     }
 
     fn paint(

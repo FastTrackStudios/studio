@@ -88,7 +88,7 @@ pub static CLOSEUP: ActionMeta = meta(
     "SESSION_CLOSEUP",
     "closeup",
     "Close-up",
-    "Show one panel of a track's rack over the whole window — `track` (its GUID), `panel` (`eq`, `comp`, `sat`, `gate`, `rescue_eq`, `reverb`, `delay`, …), `name` the title (the track's name) — or `close` it. A rack's zoom button, the close-up's tabs and its Back.",
+    "Show one panel of a track's rack over the whole window — `track` (its GUID), `panel` (`eq`, `comp`, `sat`, `gate`, `rescue_eq`, `reverb`, `delay`, …), `name` the title (the track's name) — or one block of the track's Signal FX, `block` (its id, `rescue.gate`: its parameters and meters) — or `close` it. A rack's zoom button, the close-up's tabs and its Back.",
     "View",
     "",
 );
@@ -102,6 +102,10 @@ pub struct CloseupArg {
     pub panel: Option<String>,
     #[facet(default)]
     pub name: Option<String>,
+    /// A block of the track's Signal FX (`rescue.gate`), in place of a
+    /// rack panel.
+    #[facet(default)]
+    pub block: Option<String>,
     #[facet(default)]
     pub close: bool,
 }
@@ -167,6 +171,21 @@ fn closeup(a: CloseupArg) -> Result<String, String> {
         return Ok("closed".to_owned());
     }
     let track = a.track.ok_or("`track` (its GUID), or `close`")?;
+    if let Some(block) = a.block {
+        if block.trim().is_empty() {
+            return Err("`block` is a Signal block's id (`rescue.gate`)".to_owned());
+        }
+        let name = a.name.unwrap_or_else(|| track.clone());
+        post(
+            &CLOSEUP_ASKS,
+            Some(crate::closeup::Closeup::SignalBlock {
+                guid: track,
+                name,
+                block: block.clone(),
+            }),
+        );
+        return Ok(format!("Signal block {block} close up"));
+    }
     let panel = a.panel.as_deref().unwrap_or("eq");
     let which = crate::tone::Which::from_slug(panel).ok_or_else(|| {
         let all: Vec<String> = crate::tone::Which::ALL.iter().map(|w| w.slug()).collect();
@@ -192,6 +211,7 @@ fn closeup(a: CloseupArg) -> Result<String, String> {
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&FX_VIEW, Effect::Mutating, fx_view)?;
     list.register(&CLOSEUP, Effect::Mutating, closeup)?;
+    crate::signal::register(list)?;
     register_mixer(list)
 }
 
@@ -213,6 +233,8 @@ pub fn register_mixer(list: &ActionList) -> Result<(), architect::action::Action
         }
         .to_owned())
     })?;
+    // A track's Signal FX as its blocks or one insert.
+    crate::signal::register(list)?;
     Ok(())
 }
 

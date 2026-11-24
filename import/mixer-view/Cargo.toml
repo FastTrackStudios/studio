@@ -15,6 +15,8 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/FastTrackStudios/mixer-view"
 
 [workspace.dependencies]
+# The theme spec the views implement (daw#52).
+daw-theme = { git = "https://github.com/FastTrackStudios/daw", rev = "5f2b06d985f85b2d69974cdfc802ee0864507694" }
 # This repo's own crates.
 mixer-view = { path = "crates/mixer-view", default-features = false }
 # Across repos (pinned by rev; a local checkout patches them in with paths,
