@@ -70,7 +70,7 @@ mod tests {
     use nice_plug::prelude::Param;
 
     use super::*;
-    use crate::time::{Flavour, NoteValue};
+    use dsp_core::time::{Flavour, NoteValue};
 
     /// Every label the picker can print has to come back as the same choice —
     /// this is the parameter a host's text field is editing.

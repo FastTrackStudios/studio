@@ -22,6 +22,7 @@ members = [
     "apps/plugins/reverb",
     "apps/plugins/saturate",
     "apps/plugins/trigger",
+    "apps/plugins/tune",
     "apps/plugins/unison",
     "crates/family-clap",
     "crates/fts-audio-ui",
@@ -57,6 +58,7 @@ preset-browser = { path = "crates/preset-browser" }
 # Pinned by rev, the one Signal and Studio take: a branch here and a rev
 # there are two sources to cargo, and two copies of every dsp crate.
 dsp = { git = "https://github.com/FastTrackStudios/dsp", rev = "75d475b01e96eed4a5ddad8ad6799396f220dd82" }
+pitch-core = { git = "https://github.com/FastTrackStudios/pitch", rev = "94f8ecba5c83fff581df65707d9adf984f2cd137" }
 dsp-core = { git = "https://github.com/FastTrackStudios/dsp", rev = "75d475b01e96eed4a5ddad8ad6799396f220dd82" }
 
 # FastTrackStudio's CLAP extensions (signal/1 for the family CLAPs), from
