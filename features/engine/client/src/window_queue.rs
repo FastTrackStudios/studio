@@ -748,6 +748,10 @@ mod tests {
 mod window_action_tests {
     use super::{Asked, answered, ask_window_action, set_linked_windows, take_asked};
 
+    /// The queue and the window count are the process's: the tests that
+    /// set them run one at a time.
+    static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     /// The ticket of the one `Run` asked so far, taken.
     fn asked_ticket() -> u64 {
         match take_asked("main").as_slice() {
@@ -758,6 +762,7 @@ mod window_action_tests {
 
     #[tokio::test]
     async fn a_window_action_is_asked_of_the_window_and_its_answer_comes_back() {
+        let _serial = SERIAL.lock().await;
         // No window follows the engine: nobody to ask.
         set_linked_windows(0);
         assert!(
@@ -807,6 +812,7 @@ mod window_action_tests {
 
     #[tokio::test]
     async fn a_claimed_action_is_asked_of_the_window_that_claimed_it_alone() {
+        let _serial = SERIAL.lock().await;
         set_linked_windows(2);
         super::set_owner("MIXER_VIEW", "studio.mixer");
         let mixer = tokio::spawn(ask_window_action("MIXER_VIEW".into(), "{}".into()));

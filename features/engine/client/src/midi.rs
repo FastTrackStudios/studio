@@ -69,7 +69,7 @@ static STALE: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 pub fn mark_stale(items: impl IntoIterator<Item = String>) {
     let items: Vec<String> = items.into_iter().collect();
     #[cfg(feature = "native")]
-    crate::studio_engine::view_host::changed_items(None, crate::view::Change::Waves, items.clone());
+    crate::body::body().view_changed_items(None, crate::view::Change::Waves, items.clone());
     mark_stale_here(items);
 }
 
@@ -914,7 +914,7 @@ fn stream_version() -> u64 {
 /// playhead, silent everywhere else), or one with no audio attached yet (a
 /// streamed song's takes before their streams are).
 #[cfg(any(feature = "native", feature = "web"))]
-fn streaming_partial(
+pub fn streaming_partial(
     daw: &daw_standalone::sync::Standalone,
     project: &daw::service::ProjectContext,
     guid: &str,
@@ -942,13 +942,7 @@ fn streaming_partial(
 /// process (a page's own) — `false` with none here.
 fn partial_here(song: &str, guid: &str) -> bool {
     #[cfg(feature = "web")]
-    if let Some(partial) = crate::web_engine::with_engine(|daw| {
-        streaming_partial(
-            daw,
-            &daw::service::ProjectContext::Project(song.to_owned()),
-            guid,
-        )
-    }) {
+    if let Some(partial) = crate::body::body().web_partial(song, guid) {
         return partial;
     }
     #[cfg(feature = "native")]

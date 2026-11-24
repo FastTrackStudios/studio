@@ -27,8 +27,8 @@ use daw_proto::primitives::AutomationMode;
 use daw_proto::primitives::PositionInSeconds;
 use facet::Facet;
 
+use crate::actions::meta;
 use crate::engine::Edit;
-use crate::shared_actions::meta;
 
 /// One edit of an arrangement gesture. Items by GUID (`item`); `into`
 /// is the name the window gave the item a split or a copy makes.
@@ -789,7 +789,7 @@ async fn carry_out(arg: GestureArg) -> Result<Carried, String> {
     if items {
         crate::hit_overlay::refresh();
         #[cfg(feature = "native")]
-        crate::studio_engine::view_host::changed(None, crate::view::Change::Items);
+        crate::body::body().view_changed(None, crate::view::Change::Items);
     }
     Ok(carried)
 }

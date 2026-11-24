@@ -18,6 +18,8 @@
 
 use std::path::{Path, PathBuf};
 
+pub use session_engine_client::projects::Version;
+
 /// How many songs the list keeps.
 const KEPT: usize = 30;
 
@@ -310,15 +312,4 @@ pub fn ago(at: u64) -> String {
         86_400..172_800 => "yesterday".to_owned(),
         _ => format!("{} days ago", secs / 86_400),
     }
-}
-
-/// One of the song's versions: the song's own, or a checkpoint.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Version {
-    pub name: String,
-    /// When it was saved ("5 min ago"); empty for the song's own.
-    pub when: String,
-    pub path: std::path::PathBuf,
-    /// Whether it is the one open now.
-    pub open: bool,
 }

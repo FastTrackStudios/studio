@@ -11,13 +11,13 @@
 
 #[cfg(feature = "native")]
 pub mod audio_health;
-pub mod audio_mode;
-pub mod automation;
+pub use session_engine_client::audio_mode;
+pub use session_engine_client::automation;
 #[cfg(feature = "native")]
 pub mod automation_actions;
 #[cfg(feature = "native")]
 pub mod autosave;
-pub mod changes;
+pub use session_engine_client::changes;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod collab;
 #[cfg(feature = "native")]
@@ -26,10 +26,10 @@ pub mod comp;
 pub mod comp_rank;
 #[cfg(feature = "native")]
 pub mod drum_group;
-pub mod edit_state;
-pub mod engine;
+pub use session_engine_client::edit_state;
+pub use session_engine_client::engine;
+pub use session_engine_client::folds;
 pub use session_runtime::folder;
-pub mod folds;
 #[cfg(feature = "native")]
 pub mod fx_actions;
 #[cfg(feature = "native")]
@@ -39,22 +39,22 @@ pub use session_runtime::guide_instrument;
 pub mod ingest;
 #[cfg(feature = "native")]
 pub mod instrument_tracks;
-pub mod jobs;
-pub mod lanes;
-pub mod leveler;
+pub use session_engine_client::jobs;
+pub use session_engine_client::lanes;
+pub use session_engine_client::leveler;
 #[cfg(feature = "native")]
 pub mod live_host;
-pub mod midi;
-pub mod num;
+pub use session_engine_client::midi;
+pub use session_engine_client::num;
 #[cfg(feature = "native")]
 pub mod open;
 pub mod open_core;
-pub mod open_progress;
-pub mod options;
+pub use session_engine_client::open_progress;
+pub use session_engine_client::options;
 #[cfg(feature = "native")]
 pub mod organize_edit;
-pub mod play_return;
-pub mod presence;
+pub use session_engine_client::play_return;
+pub use session_engine_client::presence;
 #[cfg(feature = "native")]
 pub mod project_file;
 #[cfg(feature = "native")]
@@ -65,8 +65,8 @@ pub mod projects;
 pub mod rig_actions;
 #[cfg(feature = "show")]
 pub mod show;
-pub mod slices;
-pub mod song_modes;
+pub use session_engine_client::slices;
+pub use session_engine_client::song_modes;
 pub mod song_stream;
 #[cfg(feature = "native")]
 pub mod stream_in;
@@ -77,108 +77,51 @@ pub mod stream_set;
 /// A page of bars, as a window steps through the song (`SESSION_PAGE`).
 #[cfg(feature = "native")]
 pub mod page;
-pub mod stream_quality;
+pub use session_engine_client::stream_quality;
 #[cfg(feature = "native")]
 pub mod studio_engine;
-pub mod take_colors;
+pub use session_engine_client::take_colors;
 #[cfg(feature = "native")]
 pub mod task_account;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod task_set;
 pub mod track_regions;
 /// The engine as a window sees it: one vox service beside the daw facade.
-pub mod view;
+pub use session_engine_client::view;
 /// A window's link to its engine: replicas and calls.
 #[cfg(feature = "native")]
-pub mod view_client;
+pub use session_engine_client::view_client;
 #[cfg(feature = "native")]
 pub mod vocal_level;
-#[cfg(feature = "native")]
-pub mod wave_pool;
 /// On the web there is no in-process tokio runtime: the engine clients
 /// (`engine::Transport`, `Applier`, `Meters`, …) find none and run
 /// read-only, the way they do natively before a session is open. The web
 /// host drives the engine its own way (`web_host`).
 #[cfg(not(feature = "native"))]
-pub mod open {
-    pub use crate::open_core::*;
-
-    /// Never constructed: [`runtime`] has none to give.
-    pub struct Runtime(());
-
-    impl Runtime {
-        pub fn block_on<F: core::future::Future>(&self, _future: F) -> F::Output {
-            unreachable!("no runtime is ever handed out on the web")
-        }
-    }
-
-    #[must_use]
-    pub fn runtime() -> Option<&'static Runtime> {
-        None
-    }
-
-    /// The song on screen: a page shows one ([`set_current_song`]).
-    #[must_use]
-    pub fn current_song() -> Option<String> {
-        CURRENT.read().ok().and_then(|slot| slot.clone())
-    }
-
-    static CURRENT: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
-
-    /// The page shows `project` now.
-    pub fn set_current_song(project: &str) {
-        if let Ok(mut slot) = CURRENT.write() {
-            *slot = Some(project.to_owned());
-        }
-    }
-
-    /// Make `project_guid` the song on screen — what picking a setlist tab
-    /// does; on a page, [`crate::web_engine::switch_song`].
-    pub fn switch_song(project_guid: &str) {
-        #[cfg(feature = "web")]
-        crate::web_engine::switch_song(project_guid);
-        #[cfg(not(feature = "web"))]
-        set_current_song(project_guid);
-    }
-
-    /// What needs the local engine's own handle (as natively).
-    #[derive(Clone, Copy, Debug)]
-    pub enum LocalOnly {
-        ChartRebuild,
-        SessionSave,
-        /// daw-transport-sync's per-buffer backend: a page's audio loop has
-        /// none yet, so it follows a shared transport by the coarse
-        /// commands (a play, a seek) rather than to the sample.
-        TransportSync,
-    }
-
-    /// The local engine's handle, for what needs it — none on a page yet.
-    pub(crate) fn with_local_engine<R>(
-        _what: LocalOnly,
-        _f: impl FnOnce(&daw::standalone::Standalone) -> R,
-    ) -> Option<R> {
-        None
-    }
-}
+pub use session_engine_client::open;
+#[cfg(feature = "native")]
+pub use session_engine_client::wave_pool;
 #[cfg(feature = "native")]
 pub mod actions;
 #[cfg(feature = "signal")]
 pub mod bass_rig;
-pub mod drum_edit;
+pub use session_engine_client::drum_edit;
 #[cfg(feature = "native")]
 pub mod drum_lanes;
 pub mod drum_level;
 pub mod drum_reference;
 #[cfg(feature = "signal")]
 pub mod drum_samples;
-pub mod drum_settings;
+pub use session_engine_client::drum_settings;
 #[cfg(feature = "native")]
 pub mod edit_actions;
 pub mod fundamental;
-pub mod gain_stage;
 pub use editing::groove;
 #[cfg(any(feature = "native", feature = "web"))]
-pub mod arrange_actions;
+pub use session_engine_client::arrange_actions;
+pub use session_engine_client::gain_stage;
+#[cfg(feature = "native")]
+pub mod algorithms;
 #[cfg(feature = "native")]
 pub mod audio_device;
 #[cfg(feature = "native")]
@@ -188,12 +131,10 @@ pub mod comp_keep;
 #[cfg(feature = "native")]
 pub mod comp_song;
 #[cfg(feature = "native")]
-pub mod algorithms;
-#[cfg(feature = "native")]
 pub mod history;
 #[cfg(feature = "native")]
 pub mod hit_index;
-pub mod hit_overlay;
+pub use session_engine_client::hit_overlay;
 #[cfg(feature = "native")]
 pub mod hit_place;
 #[cfg(feature = "native")]
@@ -204,18 +145,18 @@ pub mod hits_midi;
 pub mod item_actions;
 #[cfg(feature = "native")]
 pub mod key_change;
-pub mod kit_gate;
+pub use session_engine_client::kit_gate;
 #[cfg(feature = "native")]
 pub mod library_actions;
 pub mod mix_chains;
 pub mod mix_export;
 #[cfg(feature = "native")]
-pub mod notes_actions;
+pub use session_engine_client::notes_actions;
 #[cfg(feature = "native")]
 pub mod perf;
 #[cfg(feature = "native")]
 pub mod perf_meter;
-pub mod plan;
+pub use session_engine_client::plan;
 pub mod poi;
 pub mod prepare;
 #[cfg(feature = "native")]
@@ -225,7 +166,7 @@ pub mod reference;
 pub mod reference_play;
 #[cfg(feature = "native")]
 pub mod render_ahead;
-pub mod routes;
+pub use session_engine_client::routes;
 #[cfg(feature = "native")]
 pub mod safety_net;
 #[cfg(feature = "native")]
@@ -236,33 +177,40 @@ pub use session_runtime::section_colors;
 #[cfg(feature = "native")]
 pub mod session_file;
 pub mod setlist;
-pub mod settings;
+pub use session_engine_client::settings;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod shared_actions;
 #[cfg(feature = "native")]
 pub mod song;
-pub mod song_bars;
-pub mod song_chart;
-pub mod song_model;
-pub mod stages;
-pub mod stretch;
+pub use session_engine_client::song_bars;
+pub use session_engine_client::song_chart;
+pub use session_engine_client::song_model;
+pub use session_engine_client::stages;
+pub use session_engine_client::stretch;
 #[cfg(feature = "native")]
 pub mod take_rank;
 #[cfg(feature = "native")]
 pub mod timeline_actions;
 #[cfg(feature = "native")]
 pub mod trigger_from_mics;
-pub mod wave_detail;
+pub use session_engine_client::wave_detail;
 #[cfg(all(feature = "web", not(feature = "native")))]
 pub mod web_actions;
 #[cfg(feature = "web")]
 pub use session_runtime::web_audio;
 #[cfg(feature = "web")]
 pub mod web_engine;
-pub mod window_queue;
 pub use editing::written;
-pub mod zoom;
+pub use session_engine_client::window_queue;
+pub use session_engine_client::zoom;
 
 // The library reads a clock a browser has (#235).
+/// The engine's body, installed for the window modules
+/// (`session_engine_client::body`).
+mod body;
+#[cfg(feature = "native")]
+pub mod song_open;
+pub use body::install;
+
 #[cfg(test)]
 mod web_clock_tests;

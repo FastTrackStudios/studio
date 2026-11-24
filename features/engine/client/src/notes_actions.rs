@@ -8,7 +8,7 @@ use architect::action::{ActionList, Effect};
 use daw::service::midi::{MidiTakeContent, WriteMode};
 use facet::Facet;
 
-use crate::shared_actions::meta;
+use crate::actions::meta;
 
 pub static NOTES_WRITE: architect::action::ActionMeta = meta(
     "NOTES_WRITE",

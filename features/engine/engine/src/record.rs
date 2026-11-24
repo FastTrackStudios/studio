@@ -20,14 +20,7 @@ use daw_proto::RecordInput;
 use daw_proto::transport::service::Transport as TransportService;
 use facet::Facet;
 
-pub static TRANSPORT_RECORD: architect::action::ActionMeta = crate::actions::meta(
-    "TRANSPORT_RECORD",
-    "transport_record",
-    "Record",
-    "Start recording the armed tracks from where the transport is, or stop: `on` true or false, toggled when left out. Stopping puts each armed track's recording on it as a new take, on the lowest take lane free over what was recorded (else a new lane), the newest take playing unless a comp holds something there. Says whether it records now and, on stop, the takes it placed.",
-    "Transport",
-    "",
-);
+pub use crate::actions::TRANSPORT_RECORD;
 
 /// Start or stop recording; toggled when `on` is left out.
 #[derive(Facet)]
