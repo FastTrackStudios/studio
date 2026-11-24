@@ -31,6 +31,9 @@ pub enum Topic {
     /// A piece of the kit, by its track path.
     Hits(String),
     Job,
+    /// A user's edit of one of the plugin's own lanes (host-automation/1),
+    /// queued for that plugin alone.
+    Automation,
 }
 
 impl Topic {
@@ -41,6 +44,7 @@ impl Topic {
             "transport" => Some(Self::Transport),
             "tempo" => Some(Self::Tempo),
             "job" => Some(Self::Job),
+            "automation" => Some(Self::Automation),
             other => other
                 .strip_prefix("hits:")
                 .map(str::trim)
@@ -56,6 +60,7 @@ impl Topic {
             Self::Transport => "transport".into(),
             Self::Tempo => "tempo".into(),
             Self::Job => "job".into(),
+            Self::Automation => "automation".into(),
             Self::Hits(path) => format!("hits:{path}"),
         }
     }
@@ -130,6 +135,20 @@ pub fn job_finished(event: String) {
     });
 }
 
+/// A user edited one of `plugin`'s lanes: `event` to its `automation`
+/// subscriptions.
+pub fn automation_edited(plugin: daw::standalone::clap_ext::automation::Caller, event: &str) {
+    with_subs(|s| {
+        for sub in s
+            .by_id
+            .values_mut()
+            .filter(|s| s.topic == Topic::Automation && s.sink.plugin_key() == plugin)
+        {
+            sub.queued.push(event.to_owned());
+        }
+    });
+}
+
 /// The events of one turn of the pump, each for its plugin.
 #[derive(Default)]
 pub struct Outbox {
@@ -146,7 +165,7 @@ impl Outbox {
         let wanted: Vec<(u64, Topic, Option<u64>)> = with_subs(|s| {
             s.by_id
                 .iter()
-                .filter(|(_, sub)| sub.topic != Topic::Job)
+                .filter(|(_, sub)| !matches!(sub.topic, Topic::Job | Topic::Automation))
                 .map(|(id, sub)| (*id, sub.topic.clone(), sub.sent))
                 .collect()
         });
@@ -219,7 +238,7 @@ fn event_of(daw: &Standalone, project: &ProjectContext, topic: &Topic) -> String
         Topic::Transport => transport(daw, project),
         Topic::Tempo => tempo(daw, project),
         Topic::Hits(path) => hits(daw, project, path),
-        Topic::Job => Value::Null,
+        Topic::Job | Topic::Automation => Value::Null,
     }
     .to_string()
 }
