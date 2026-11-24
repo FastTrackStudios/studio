@@ -37,5 +37,6 @@ pub mod ruler;
 pub mod swipe;
 pub mod take_window;
 pub mod tcp_live;
+pub mod theme;
 pub mod theme_tokens;
 pub mod widget;
