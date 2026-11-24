@@ -10,14 +10,15 @@
 //! of the kit ([`crate::hit_place::plan`]), one undo step under a mark.
 //!
 //! Every hit lands exactly where it is sent. A gap the edit opens is the
-//! placement algorithm's to fill (`daw.edit` 0.3.1, rhythm's rule: the
+//! placement algorithm's to fill (`daw.edit` 0.3.2, rhythm's rule: the
 //! slice before plays on, the slice after reaches back into its own take,
 //! they crossfade, and only what is left is stretched — its last span, no
 //! slower than [`MIN_RATE`], the owner's rule after a slice played at
 //! 0.11×, bar 128; what that leaves the slice after fills by replaying
 //! the previous stroke's decay, then a slower stretch down to
-//! [`MIN_LEFTOVER_RATE`], and only past both a faded dip); the result
-//! says each fill (`fills`). A placement only shortens a slice by cutting it, never by
+//! [`MIN_LEFTOVER_RATE`], then the replay nearer the attack (never its
+//! transient) and a stretch at whatever rate fills, flagged forced: never
+//! a silence); the result says each fill (`fills`). A placement only shortens a slice by cutting it, never by
 //! speeding it up, so [`MAX_RATE`] holds by construction; the report
 //! reads every slice's rate back from the lanes and says any outside
 //! either.
@@ -37,8 +38,9 @@ use crate::actions::meta;
 
 /// The slowest a slice may be drawn out: 0.8 of its speed.
 pub const MIN_RATE: f64 = 0.8;
-/// The slowest a gap fill may stretch what the replay of the previous
-/// stroke's decay leaves (`daw.edit` 0.3.1's `least_rate_leftover`).
+/// The slowest a gap fill prefers to stretch what the replay of the
+/// previous stroke's decay leaves (`daw.edit`'s `least_rate_leftover`);
+/// slower only forced, so that no silence is left.
 pub const MIN_LEFTOVER_RATE: f64 = 0.5;
 /// The fastest a slice may play: 1.25 times.
 pub const MAX_RATE: f64 = 1.25;
@@ -585,7 +587,7 @@ pub static APPLY: ActionMeta = meta(
     "DRUMS_APPLY",
     "drums_apply",
     "Apply a whole drum edit",
-    "Write a whole drum edit in one step. `targets` {hit id: seconds}: where each hit plays (project seconds, as the song plays now); `remove` [ids]: their markers go (no cut there, the sound rides the slice before); `delete` [ids]: their sound goes (the slice cut out, the slice before drawn out to the next); `rides` {id: leader id}: the hit keeps its played distance from its leader (a flam's grace, a unison kick beside a snare, a second take at a comp seam; a flam marked with HITS_MARK rides by itself). Or `list`: a change list (DRUMS_EDIT_EXPORT, `studio.drum-edit/1`) matched to the markers by drum, take and recorded time (±2 ms) — a detected hit with no match is removed. The whole set is solved at once: hits struck together (15 ms) move together, nothing is sent past or onto another hit, and every hit lands exactly where it is sent. A gap the edit opens is filled by the placement algorithm (daw.edit 0.3, rhythm): the slice before plays on to just before the next attack in its recording, the slice after reaches back into its own take, they crossfade, and only what is left is stretched — its last span, never slower than 0.8×; what that leaves the slice after fills by replaying the previous stroke's decay (never its first 30 ms), then a slower stretch down to 0.5×, and only past both a dip each side fades into, never a hard cut; `fills` says how many of each (`replayed_decay`), the slowest stretch and the slowest below 0.8 (`slowest_leftover`), the dips left (`left_ms`), and each gap that was stretched, replayed or left a dip (`replayed_decay_ms`). Refused, saying each `conflicts` entry, where two hits of one drum land on one line, a hit is sent onto another's attack or past it, or hits struck together are sent apart — unless a ride or a delete covers it. One undo step; `mark` names a restore point first (SESSION_HISTORY_RESTORE `mark`), else `Before DRUMS_APPLY <date time>`. `dry_run` solves and says, writing nothing. Says the check (doubled, lost, gaps), each hit's landing error over 0.5 ms (`all_landings` for every one), every slice drawn out and its rate, and the time of each stage.",
+    "Write a whole drum edit in one step. `targets` {hit id: seconds}: where each hit plays (project seconds, as the song plays now); `remove` [ids]: their markers go (no cut there, the sound rides the slice before); `delete` [ids]: their sound goes (the slice cut out, the slice before drawn out to the next); `rides` {id: leader id}: the hit keeps its played distance from its leader (a flam's grace, a unison kick beside a snare, a second take at a comp seam; a flam marked with HITS_MARK rides by itself). Or `list`: a change list (DRUMS_EDIT_EXPORT, `studio.drum-edit/1`) matched to the markers by drum, take and recorded time (±2 ms) — a detected hit with no match is removed. The whole set is solved at once: hits struck together (15 ms) move together, nothing is sent past or onto another hit, and every hit lands exactly where it is sent. A gap the edit opens is filled by the placement algorithm (daw.edit 0.3, rhythm): the slice before plays on to just before the next attack in its recording, the slice after reaches back into its own take, they crossfade, and only what is left is stretched — its last span, never slower than 0.8×; what that leaves the slice after fills by replaying the previous stroke's decay (never its first 30 ms), then a slower stretch down to 0.5×, then the replay nearer the attack (never nearer than 10 ms, never its transient) and a stretch at whatever rate fills it, flagged `forced`: no silence is ever left; `fills` says how many of each (`replayed_decay`, `forced`), the slowest stretch and the slowest below 0.8 (`slowest_leftover`), any silence left (`left_ms`, 0), and each gap that was stretched or replayed (`replayed_decay_ms`, `replay_from_attack_ms`, `forced`). Refused, saying each `conflicts` entry, where two hits of one drum land on one line, a hit is sent onto another's attack or past it, or hits struck together are sent apart — unless a ride or a delete covers it. One undo step; `mark` names a restore point first (SESSION_HISTORY_RESTORE `mark`), else `Before DRUMS_APPLY <date time>`. `dry_run` solves and says, writing nothing. Says the check (doubled, lost, gaps), each hit's landing error over 0.5 ms (`all_landings` for every one), every slice drawn out and its rate, and the time of each stage.",
     "Drums",
     "",
 );
@@ -662,10 +664,13 @@ pub struct Fills {
     /// the hit after was played out of order: its old cut is the next
     /// attack), the slice after reached back into its own take, of those
     /// replaying the previous stroke's decay past the guard, the two
-    /// crossfaded, the last span stretched, a dip left.
+    /// crossfaded, the last span stretched, stretched slower than
+    /// [`MIN_LEFTOVER_RATE`] because nothing else filled it (`forced`), a
+    /// silence left (none since `daw.edit` 0.3.2).
     pub extended: u32,
     pub reached_back: u32,
     pub replayed_decay: u32,
+    pub forced: u32,
     pub crossfaded: u32,
     pub stretched: u32,
     pub left: u32,
@@ -678,7 +683,7 @@ pub struct Fills {
     pub slowest: Option<f64>,
     pub slowest_leftover: Option<f64>,
     pub left_ms: f64,
-    /// Each gap stretched, replayed or left a dip (first 60).
+    /// Each gap stretched, replayed or left a silence (first 60).
     pub each: Vec<FillAt>,
 }
 
@@ -690,8 +695,13 @@ pub struct FillAt {
     pub gap_ms: f64,
     pub extended_ms: f64,
     pub reached_back_ms: f64,
-    /// Of the reach back, the previous stroke's decay replayed.
+    /// Of the reach back, the previous stroke's decay replayed, and how
+    /// far past that stroke's attack the slice after starts.
     pub replayed_decay_ms: f64,
+    pub replay_from_attack_ms: Option<f64>,
+    /// The stretch is slower than [`MIN_LEFTOVER_RATE`]: nothing else
+    /// filled the gap.
+    pub forced: bool,
     pub crossfade_ms: f64,
     /// The span stretched, how long it plays, and its rate.
     pub stretch_ms: Option<f64>,
@@ -717,6 +727,7 @@ fn fills_of(fills: &[editing::placement::Filled]) -> Fills {
         extended: of(&|f| f.extended > 0.0),
         reached_back: of(&|f| f.reached_back > 0.0),
         replayed_decay: of(&|f| f.replayed_decay > 0.0),
+        forced: of(&|f| f.forced_rate),
         crossfaded: of(&|f| f.crossfade > 0.0),
         stretched: of(&|f| f.stretched.is_some()),
         left: of(&|f| f.left > 0.0),
@@ -743,6 +754,8 @@ fn fills_of(fills: &[editing::placement::Filled]) -> Fills {
                 extended_ms: round(f.extended * 1e3, 1),
                 reached_back_ms: round(f.reached_back * 1e3, 1),
                 replayed_decay_ms: round(f.replayed_decay * 1e3, 1),
+                replay_from_attack_ms: f.replay_from_attack.map(|d| round(d * 1e3, 1)),
+                forced: f.forced_rate,
                 crossfade_ms: round(f.crossfade * 1e3, 1),
                 stretch_ms: f.stretched.map(|s| round(s.over * 1e3, 1)),
                 rate: f.stretched.map(|s| round(s.rate, 3)),
@@ -884,6 +897,7 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
         fill.stretched = tracing::field::Empty,
         fill.replayed_decay = tracing::field::Empty,
         fill.slowest_leftover = tracing::field::Empty,
+        fill.forced = tracing::field::Empty,
         fill.left = tracing::field::Empty,
         lock_ms = tracing::field::Empty,
         dry_run = a.dry_run.unwrap_or(false),
@@ -998,6 +1012,7 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
     span.record("fill.gaps", out.fills.gaps);
     span.record("fill.stretched", out.fills.stretched);
     span.record("fill.replayed_decay", out.fills.replayed_decay);
+    span.record("fill.forced", out.fills.forced);
     if let Some(rate) = out.fills.slowest_leftover {
         span.record("fill.slowest_leftover", rate);
     }

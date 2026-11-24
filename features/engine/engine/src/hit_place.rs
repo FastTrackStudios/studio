@@ -324,6 +324,7 @@ pub fn plan(
         fill.stretched = tracing::field::Empty,
         fill.slowest = tracing::field::Empty,
         fill.slowest_leftover = tracing::field::Empty,
+        fill.forced = tracing::field::Empty,
         fill.left = tracing::field::Empty,
         fill.left_ms = tracing::field::Empty,
     )
@@ -377,12 +378,13 @@ pub fn plan(
 
 /// The fills' counts on `span`: how many gaps, how each was filled, the
 /// slowest stretch (and the slowest below 0.8, what the replay left) and
-/// the dips left.
+/// any silence left (none since `daw.edit` 0.3.2), and how many were forced.
 fn record_fills(span: &tracing::Span, fills: &[placement::Filled]) {
     let count = |f: &dyn Fn(&placement::Filled) -> bool| fills.iter().filter(|x| f(x)).count();
     span.record("fill.gaps", fills.len());
     span.record("fill.reached_back", count(&|f| f.reached_back > 0.0));
     span.record("fill.replayed_decay", count(&|f| f.replayed_decay > 0.0));
+    span.record("fill.forced", count(&|f| f.forced_rate));
     span.record("fill.crossfaded", count(&|f| f.crossfade > 0.0));
     span.record("fill.stretched", count(&|f| f.stretched.is_some()));
     span.record("fill.left", count(&|f| f.left > 0.0));
