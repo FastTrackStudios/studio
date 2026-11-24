@@ -9,8 +9,9 @@ description = "Studio's mixer, a view only: strips, racks, the FX view and close
 [dependencies]
 daw-view-kit = { workspace = true }
 utils = { workspace = true }
-session-engine-client = { workspace = true }
-session-engine = { workspace = true, optional = true }
+daw-view = { workspace = true }
+# The session primitive: the mix phases.
+fts-session = { workspace = true }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }
 blitz-dom = { workspace = true }
@@ -18,9 +19,7 @@ blitz-traits = { workspace = true }
 dioxus-native-dom = { workspace = true }
 dioxus-native = { workspace = true, optional = true }
 daw-proto = { workspace = true }
-session = { workspace = true, features = ["library", "ui", "web"] }
 lucide-dioxus = { workspace = true }
-dynamic-template = { workspace = true }
 dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
 fts-audio-ui = { workspace = true }
 frame = { workspace = true, features = ["host-scene", "live", "theme"] }
@@ -65,9 +64,8 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 [features]
 default = ["native"]
 # daw-view-kit's features, forwarded, with what the mixer's own code needs.
-native = ["daw-view-kit/native", "session-engine-client/native", "dep:dioxus-native", "dep:wgpu_context", "dep:winit", "dep:architect", "dep:builtin", "builtin?/engine", "dsp/eq-native", "dep:tokio"]
-web = ["daw-view-kit/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:architect"]
-engine = ["daw-view-kit/engine", "dep:session-engine"]
+native = ["daw-view-kit/native", "daw-view/native", "dep:dioxus-native", "dep:wgpu_context", "dep:winit", "dep:architect", "dep:builtin", "builtin?/engine", "dsp/eq-native", "dep:tokio"]
+web = ["daw-view-kit/web", "daw-view/web", "dioxus/web", "dep:web-sys", "dep:architect"]
 signal = ["native", "daw-view-kit/signal"]
 
 [dev-dependencies]

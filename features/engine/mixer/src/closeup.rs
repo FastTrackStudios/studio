@@ -212,7 +212,7 @@ pub fn CloseupLayer(landscape: bool) -> Element {
     let tabs: Vec<(Closeup, &'static str, bool)> = match &shown {
         Closeup::Rack { guid, name, which } => {
             let store = closeups.tone.store.borrow();
-            let chain = crate::tone::panels_for(session::mix_phases::MixPhase::Tone);
+            let chain = crate::tone::panels_for(fts_session::mix_phases::MixPhase::Tone);
             let panels = store.get(guid).map_or(chain, |tone| tone.panels(chain));
             panels
                 .iter()

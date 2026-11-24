@@ -85,11 +85,11 @@ pub fn redraw_hook() -> Option<std::rc::Rc<dyn Fn()>> {
 }
 
 /// How the engine's link asks this window for a frame when what it draws
-/// changed (`session_engine_client::wake`): the window's `request_redraw`
+/// changed (`daw_view::wake`): the window's `request_redraw`
 /// under Blitz, from any thread; nothing on a page, which paints every
 /// frame anyway. Read from context, as [`redraw_hook`] is.
 #[must_use]
-pub fn wake_hook() -> Option<session_engine_client::wake::Waker> {
+pub fn wake_hook() -> Option<daw_view::wake::Waker> {
     #[cfg(feature = "native")]
     {
         let window = try_consume_context::<std::sync::Arc<dyn winit::window::Window>>()?;
@@ -99,12 +99,10 @@ pub fn wake_hook() -> Option<session_engine_client::wake::Waker> {
     None
 }
 
-/// `window`'s [`session_engine_client::wake::Waker`]: a redraw request.
+/// `window`'s [`daw_view::wake::Waker`]: a redraw request.
 #[cfg(feature = "native")]
 #[must_use]
-pub fn waker_for(
-    window: std::sync::Arc<dyn winit::window::Window>,
-) -> session_engine_client::wake::Waker {
+pub fn waker_for(window: std::sync::Arc<dyn winit::window::Window>) -> daw_view::wake::Waker {
     std::sync::Arc::new(move || window.request_redraw())
 }
 
@@ -112,9 +110,8 @@ pub fn waker_for(
 /// markers, the marks, a song read back, the waveform's detail), for as
 /// long as the component that called it is mounted.
 pub fn use_engine_wake() {
-    let _registration = use_hook(|| {
-        wake_hook().map(|waker| std::rc::Rc::new(session_engine_client::wake::register(waker)))
-    });
+    let _registration =
+        use_hook(|| wake_hook().map(|waker| std::rc::Rc::new(daw_view::wake::register(waker))));
 }
 
 /// How far a finger may wander, in CSS pixels, and still be a tap. Past

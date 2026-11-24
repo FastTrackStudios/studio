@@ -103,7 +103,7 @@ pub fn FxPanel(#[props(default = 1)] lanes: usize) -> Element {
     // with no song yet) shows an empty row rather than failing.
     let (Some(closeups), Some(session)) = (
         try_use_context::<crate::closeup::Closeups>(),
-        try_use_context::<crate::song_model::StudioSession>(),
+        try_use_context::<crate::song_model::SongView>(),
     ) else {
         return rsx! {};
     };
@@ -159,7 +159,7 @@ pub fn FxPanel(#[props(default = 1)] lanes: usize) -> Element {
     }
 }
 
-use session::mix_phases::MixPhase;
+use fts_session::mix_phases::MixPhase;
 
 /// How wide one stage may run at most: a whole stage on a 16:9 1440p
 /// screen (2560 wide) beside the track's strip — an ultrawide then shows

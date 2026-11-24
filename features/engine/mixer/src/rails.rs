@@ -30,15 +30,9 @@ use vello::peniko::ImageBrush;
 use crate::palette::Palette;
 use crate::text::Font;
 
-/// How wide the side rails are.
-///
-/// Enough for a 22-pixel icon with a margin either side, which is the
-/// size REAPER's own toolbar buttons are and the size the ported art is
-/// authored at. A rail narrower than its buttons is a rail you miss.
-pub const SIDE: f64 = 44.0;
-
-/// And how tall the top one is.
-pub const TOP: f64 = 30.0;
+/// How wide a side rail is and how tall the top one is: the kit's
+/// (`daw_view_kit::rail`), which the arrangement lays out by too.
+pub use daw_view_kit::rail::{SIDE, TOP};
 
 /// What pressing a rail button does.
 ///
@@ -52,9 +46,9 @@ pub enum Action {
     /// Recall a scene by slug — which tracks are showing, and how wide.
     Scene(&'static str),
     /// Move to a mix phase.
-    Phase(session::mix_phases::MixPhase),
-    /// Switch DAW mode.
-    Mode(session::modes::Mode),
+    Phase(fts_session::mix_phases::MixPhase),
+    /// Switch the app's mode (its slug).
+    Mode(&'static str),
     /// Whether selecting a track opens it wide enough to work on.
     FocusSelected,
     /// Whether a focused track's width comes OUT of its neighbours.
@@ -466,31 +460,31 @@ impl<P: PaintScene> Pen<'_, P> {
 #[must_use]
 pub fn phases_and_scenes(
     shown: Option<&str>,
-    mode: session::modes::Mode,
-    current: session::mix_phases::MixPhase,
+    mode: &str,
+    current: fts_session::mix_phases::MixPhase,
     instrument: &str,
 ) -> Vec<Item<'static>> {
-    let mut items: Vec<Item<'static>> = dynamic_template::scenes::follow::in_mode(
-        dynamic_template::scenes::scenes(),
-        mode.slug(),
-        instrument,
-    )
-    .into_iter()
-    .map(|scene| Item {
-        label: scene.short.as_str(),
-        on: shown == Some(scene.slug.as_str()),
-        act: Action::Scene(scene.slug.as_str()),
-        // The scenes have no icons of their own yet — they are
-        // this window's idea, not a REAPER toolbar's.
-        icon: None,
-    })
-    .collect();
-    items.extend(session::mix_phases::MixPhase::ALL.iter().map(|phase| Item {
-        label: phase.display_name(),
-        on: *phase == current,
-        act: Action::Phase(*phase),
-        icon: phase.icon(),
-    }));
+    let mut items: Vec<Item<'static>> = crate::app::scenes(mode, instrument)
+        .into_iter()
+        .map(|scene| Item {
+            label: scene.short,
+            on: shown == Some(scene.slug),
+            act: Action::Scene(scene.slug),
+            // The scenes have no icons of their own yet — they are
+            // this window's idea, not a REAPER toolbar's.
+            icon: None,
+        })
+        .collect();
+    items.extend(
+        fts_session::mix_phases::MixPhase::ALL
+            .iter()
+            .map(|phase| Item {
+                label: phase.display_name(),
+                on: *phase == current,
+                act: Action::Phase(*phase),
+                icon: phase.icon(),
+            }),
+    );
     items
 }
 
@@ -522,11 +516,11 @@ pub struct Profile {
 #[must_use]
 pub fn profile(
     surface: Surface,
-    mode: session::modes::Mode,
-    phase: session::mix_phases::MixPhase,
+    mode: &str,
+    phase: fts_session::mix_phases::MixPhase,
     shown: Option<&str>,
     settings: crate::settings::Settings,
-    audience: dynamic_template::scenes::Audience,
+    audience: crate::app::Audience,
     instrument: &str,
 ) -> Profile {
     // The left rail is the one thing both surfaces share: which layout
@@ -566,7 +560,7 @@ pub fn arrange_right(settings: crate::settings::Settings) -> Vec<Item<'static>> 
 #[must_use]
 pub fn mixer_right(
     settings: crate::settings::Settings,
-    audience: dynamic_template::scenes::Audience,
+    audience: crate::app::Audience,
 ) -> Vec<Item<'static>> {
     vec![
         Item {
@@ -586,7 +580,7 @@ pub fn mixer_right(
         // as a mode you are always in.
         Item {
             label: "Player",
-            on: audience == dynamic_template::scenes::Audience::Player,
+            on: audience == crate::app::Audience::Player,
             act: Action::Audience,
             icon: None,
         },
@@ -616,9 +610,9 @@ pub fn main_toolbar(
     font: &Font,
     icons: &mut crate::icons::Icons,
     at: (Option<Action>, Option<Action>),
-    current: session::modes::Mode,
+    current: &str,
 ) {
-    let modes = session::modes::Mode::ALL;
+    let modes = crate::app::modes();
     let corner = Rect::new(
         SIDE,
         TOP,
@@ -636,15 +630,15 @@ pub fn main_toolbar(
         theme: theme.as_deref(),
         at,
     };
-    for (i, mode) in modes.iter().enumerate() {
+    for (i, &(slug, name)) in modes.iter().enumerate() {
         let x = corner.x0 + crate::num::coord(i) * each;
         let slot = Rect::new(x + 1.0, corner.y0 + 2.0, x + each - 1.0, corner.y1 - 2.0);
         pen.button(
             slot,
             Item {
-                label: abbreviate(mode.display_name()),
-                on: *mode == current,
-                act: Action::Mode(*mode),
+                label: abbreviate(name),
+                on: slug == current,
+                act: Action::Mode(slug),
                 icon: None,
             },
         );
@@ -655,7 +649,7 @@ pub fn main_toolbar(
 ///
 /// Three letters is what fits. It is a placeholder for an icon, not a
 /// naming decision — which is why it is derived rather than written out
-/// as a table someone would have to keep in step with `Mode::ALL`.
+/// as a table someone would have to keep in step with the app's modes.
 fn abbreviate(name: &'static str) -> &'static str {
     name.char_indices()
         .nth(3)

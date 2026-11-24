@@ -499,10 +499,12 @@ pub fn Shell() -> Element {
 /// same panels as the wide layout's, over one song.
 #[component]
 fn PhoneViews(
-    session: daw_view_kit::studio::StudioSession,
+    session: session_engine::song_model::StudioSession,
     view: Signal<studio_panels::compact::PhoneView>,
 ) -> Element {
     use studio_panels::compact::PhoneView;
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.song());
     use_context_provider(|| session);
     let mode: Signal<Mode> = use_context();
     match view() {
@@ -513,17 +515,19 @@ fn PhoneViews(
         // Keyed apart: the same component in the same place would otherwise
         // be kept and handed the other view's props.
         PhoneView::Arrangement => rsx! {
-            mixer_view::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()) }
+            mixer_view::mixer_panel::DawPanels { key: "{view():?}" }
         },
         PhoneView::Mixer => rsx! {
-            mixer_view::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()), mixer_only: true }
+            mixer_view::mixer_panel::DawPanels { key: "{view():?}", mixer_only: true }
         },
     }
 }
 
 /// Whatever it holds, over one song: that song's session, as context.
 #[component]
-fn WithSong(session: daw_view_kit::studio::StudioSession, children: Element) -> Element {
+fn WithSong(session: session_engine::song_model::StudioSession, children: Element) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.song());
     use_context_provider(|| session);
     children
 }
@@ -531,12 +535,14 @@ fn WithSong(session: daw_view_kit::studio::StudioSession, children: Element) -> 
 /// The views, over one song: its session is what every panel below reads.
 #[component]
 fn SongViews(
-    session: daw_view_kit::studio::StudioSession,
+    session: session_engine::song_model::StudioSession,
     view: Signal<studio_panels::shell::View>,
     editor_open: Signal<bool>,
 ) -> Element {
     use studio_panels::chart_editor::{ChartEditor, EditorToggle};
     use studio_panels::shell::{OverviewLayout, View};
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.song());
     use_context_provider(|| session);
     let mode: Signal<session::modes::Mode> = use_context();
     let record_mode = move || mode() == session::modes::Mode::Record;
@@ -575,7 +581,7 @@ fn SongViews(
                 View::Lyrics => rsx! { studio_panels::lyrics_panel::LyricsPanel {} },
                 View::Editor => rsx! { midi_editor::editor_view::EditorPanel {} },
                 View::Mixer => rsx! {
-                    mixer_view::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true }
+                    mixer_view::mixer_panel::DawPanels { mixer_only: true }
                 },
                 // Its own view: four tracks' chains at once.
                 View::Fx => rsx! { mixer_view::fx_view::FxPanel { lanes: 4 } },
@@ -647,11 +653,11 @@ fn Arrangement(#[props(default)] docked: bool) -> Element {
                 style: "position:relative; flex:1; min-height:0; display:flex;",
                 // Organize's instruments down the left: Drums, Bass, Guitar.
                 if mode() == Mode::Organize {
-                    arrangement_view::instrument_rail::InstrumentRail {}
+                    studio_panels::instrument_rail::InstrumentRail {}
                 }
                 div {
                     style: "position:relative; flex:1; min-width:0;",
-                    mixer_view::mixer_panel::DawPanels { docked, mode: Some(mode()) }
+                    mixer_view::mixer_panel::DawPanels { docked }
                 }
             }
         }

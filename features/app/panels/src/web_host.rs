@@ -25,7 +25,7 @@ pub fn WebDemo(
     // The page's controls run named actions: the window's own join the
     // page's list before anything is drawn (`crate::press`).
     #[cfg(not(feature = "native"))]
-    use_hook(crate::press::register_page_actions);
+    use_hook(register_page_actions);
     // The views are drawn with WebGL2: without it, say what is needed
     // rather than open a set nothing can be drawn for. Asked once; the
     // answer does not change while the page is up.
@@ -315,6 +315,8 @@ fn PhoneViews(
     view: Signal<crate::compact::PhoneView>,
 ) -> Element {
     use crate::compact::PhoneView;
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.song());
     use_context_provider(|| session);
     match view() {
         // The shell's own pages (`compact::CompactShell`).
@@ -428,6 +430,8 @@ fn LoadMultitracks(listening: crate::web_engine::Listening, asking: Signal<bool>
 /// Whatever it holds, over one song: that song's session, as context.
 #[component]
 fn WithSong(session: crate::song_model::StudioSession, children: Element) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.song());
     use_context_provider(|| session);
     children
 }
@@ -440,6 +444,8 @@ fn SongViews(
     view: Signal<crate::shell::View>,
 ) -> Element {
     use crate::shell::{OverviewLayout, View};
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.song());
     use_context_provider(|| session);
     let mode: Signal<session::modes::Mode> = use_context();
     rsx! {
@@ -638,7 +644,7 @@ pub fn open_hosted(source: crate::web_engine::WebSource, guide: Option<String>) 
         retry: None,
     }));
     #[cfg(not(feature = "native"))]
-    crate::press::register_page_actions();
+    register_page_actions();
     wasm_bindgen_futures::spawn_local(async move {
         let opened = crate::web_engine::open(&source, guide.as_deref(), |step| {
             set_hosted(HostedState::Opening(step));
@@ -870,9 +876,37 @@ fn DawPanels(
     #[props(default)] docked: bool,
     #[props(default)] mixer_only: bool,
 ) -> Element {
+    let engine = daw_view_kit::page_engine::PageEngineRef(std::rc::Rc::new(Page(engine)));
     match crate::dock::mixer_views() {
         Some(mixer) => (mixer.web_daw_panels)(engine, docked, mixer_only),
         None if mixer_only => rsx! {},
         None => crate::dock::web_arrangement(engine),
+    }
+}
+
+/// The page's engine, as the views reach it.
+struct Page(crate::web_engine::EngineRef);
+
+impl daw_view_kit::page_engine::PageEngine for Page {
+    fn send(&self, edit: crate::engine::Edit) {
+        self.0.send(edit);
+    }
+
+    fn position(&self) -> f64 {
+        self.0.position()
+    }
+}
+
+/// Put the window's view actions (`daw_view_kit::view_actions`) on the
+/// page's list, once.
+fn register_page_actions() {
+    thread_local! {
+        static DONE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    if DONE.with(|d| d.replace(true)) {
+        return;
+    }
+    if let Err(error) = session_engine::web_actions::extend(daw_view_kit::view_actions::register) {
+        tracing::error!(%error, "page: the window's actions stopped registering");
     }
 }

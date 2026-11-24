@@ -38,10 +38,10 @@ use architect_extensions_dioxus::PaintPane;
 #[cfg(not(target_arch = "wasm32"))]
 use architect_scene::paint::PaintMount;
 #[cfg(not(target_arch = "wasm32"))]
-use daw_view_kit::song_model::StudioSession;
-#[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
 use serde_json::{Value as Json, json};
+#[cfg(not(target_arch = "wasm32"))]
+use session_engine_client::song_model::StudioSession;
 #[cfg(not(target_arch = "wasm32"))]
 use studio_view_link::InScope;
 use studio_view_link::Stats;
@@ -73,6 +73,9 @@ impl Extension for Arrangement {
         // The arrangement's views, for the window's views that show it
         // (the mixer's docked pair, the browser's DAW panels).
         arrangement_view::arrangement_host::install();
+        // The views' keys: Studio's input profile.
+        #[cfg(not(target_arch = "wasm32"))]
+        studio_panels::hooks::install();
         #[cfg(not(target_arch = "wasm32"))]
         ext.view("arrangement", ArrangementPane);
         #[cfg(target_arch = "wasm32")]
@@ -169,6 +172,8 @@ impl PartialEq for Song {
 #[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn Panel(session: Song) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.0.song());
     use_context_provider(|| session.0.clone());
     // The client's mode, and what it asks the arrangement to show.
     studio_panels::shows::provide(studio_view_link::use_client_mode());

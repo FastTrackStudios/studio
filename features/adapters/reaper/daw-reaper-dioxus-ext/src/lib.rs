@@ -6,7 +6,7 @@
 //! 2. Builds a `daw-extension-runtime::ExtensionRuntime` (tokio runtime,
 //!    main-thread task queue, in-process daw service).
 //! 3. Registers the FTS UI Native + Desktop demo actions and panels shipped
-//!    from `daw_ui::test_panels`.
+//!    from `test_panels`.
 //! 4. Drives `reaper_dioxus::service::tick()` from the REAPER timer.
 //! 5. Bumps REAPER's misc timer (id 666) to 60Hz so the renderer cadence
 //!    matches a typical UI frame budget. See issue #17 / #11.
@@ -18,6 +18,7 @@
 //!
 //! Copy `reaper_daw_dioxus.so` into REAPER's `UserPlugins/` directory.
 
+mod test_panels;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -67,7 +68,7 @@ impl App {
         // each fired action on the main thread (handlers touch the
         // thread-local PANELS registry — running them on a tokio worker
         // would silently no-op).
-        let action_defs: Vec<daw_module::ActionDef> = daw_ui::test_panels::action_defs().into();
+        let action_defs: Vec<daw_module::ActionDef> = crate::test_panels::action_defs().into();
         let mut handlers: HashMap<String, Arc<dyn Fn() + Send + Sync>> = HashMap::new();
         for def in &action_defs {
             handlers.insert(def.command_id.clone(), def.handler.clone());
@@ -106,7 +107,7 @@ impl App {
         // globals, which the caller (plugin_main) already installed.
         reaper_dioxus::service::init();
         reaper_dioxus::dock::init(LowReaper::get(), Swell::get());
-        for panel in daw_ui::test_panels::panel_defs() {
+        for panel in crate::test_panels::panel_defs() {
             reaper_dioxus::dock::register_panel_from_service(&panel);
         }
         // Auto-restoring previously-open panels is disabled while the

@@ -153,7 +153,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             step.bars = bars;
         }
         if let Some(group) = a.group {
-            step.group = dynamic_template::visibility::normalize_key(&group);
+            step.group = group_key(&group);
         }
         // The page as the engine works it out (`SESSION_PAGE`): it has the
         // tempo map, the markers and the tracks.
@@ -339,4 +339,26 @@ pub fn Stepper(big: bool) -> Element {
             }
         }
     }
+}
+
+/// A track group's name as a key: lower case, letters and digits, a single
+/// `_` between words (`"Lead Vox"` → `lead_vox`) — the keys an app's
+/// visibility groups are named by.
+#[must_use]
+pub fn group_key(value: &str) -> String {
+    let mut key = String::new();
+    let mut last_was_sep = false;
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            key.push(ch.to_ascii_lowercase());
+            last_was_sep = false;
+        } else if !last_was_sep && !key.is_empty() {
+            key.push('_');
+            last_was_sep = true;
+        }
+    }
+    while key.ends_with('_') {
+        key.pop();
+    }
+    key
 }

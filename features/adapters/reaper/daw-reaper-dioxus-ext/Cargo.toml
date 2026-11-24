@@ -22,7 +22,9 @@ studio = { workspace = true, features = ["reaper", "reaper-ui"] }
 daw-extension-runtime.workspace = true
 daw-module = { workspace = true }
 reaper-dioxus = { workspace = true }
-daw-ui = { workspace = true, features = ["reaper-test-panels"] }
+# The test panels it registers render daw-ui's components.
+daw-ui = { workspace = true, features = ["web"] }
+architect-ui = { workspace = true }
 crossbeam-channel = { workspace = true }
 eyre = { workspace = true }
 fragile.workspace = true

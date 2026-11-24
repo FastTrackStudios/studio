@@ -19,8 +19,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use daw_view::view::{PerfFrame, TrackPerf};
 use dioxus::prelude::*;
-use session_engine_client::view::{PerfFrame, TrackPerf};
 
 /// Whether the meter is shown, as asked from anywhere.
 static OPEN: AtomicBool = AtomicBool::new(false);
@@ -422,7 +422,7 @@ pub fn PerfMeter() -> Element {
 
 #[cfg(test)]
 mod tests {
-    use session_engine_client::view::TrackPerf;
+    use daw_view::view::TrackPerf;
 
     use super::{Column, Sort, Summary, sorted, summary};
 

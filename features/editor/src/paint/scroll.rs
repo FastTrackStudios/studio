@@ -39,17 +39,8 @@ static TABLE: std::sync::OnceLock<ScrollBindingTable> = std::sync::OnceLock::new
 /// the editor with no scroll at all — a config typo should cost you your
 /// customisation, not the ability to scroll.
 fn build() -> ScrollBindingTable {
-    let mut config = match keybinds::load_default_config() {
-        Ok(c) => c,
-        // The defaults are `include_str!`d and tested, so this is
-        // unreachable short of a bad edit to the crate itself.
-        Err(_) => KeymapConfig::default(),
-    };
-
-    // User overrides are a filesystem read, which a browser build has no
-    // business attempting.
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Ok(Some(user)) = keybinds::load_user_config() {
+    let mut config = super::keymap::defaults();
+    if let Some(user) = super::keymap::user() {
         config = KeymapConfig::merge(config, user);
     }
 
@@ -66,11 +57,8 @@ static USER: std::sync::OnceLock<Option<ScrollBindingTable>> = std::sync::OnceLo
 
 fn user_table() -> Option<&'static ScrollBindingTable> {
     USER.get_or_init(|| {
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Ok(Some(user)) = keybinds::load_user_config() {
-            return architect_input::table_for_surface(&user, SURFACE).ok();
-        }
-        None
+        super::keymap::user()
+            .and_then(|user| architect_input::table_for_surface(&user, SURFACE).ok())
     })
     .as_ref()
 }

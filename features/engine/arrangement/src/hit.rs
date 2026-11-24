@@ -28,7 +28,7 @@
 //! `Columns`, `Frame`, the row offsets — which has the useful property
 //! that a hit and a draw cannot disagree unless the arithmetic does.
 
-use keybinds::proto::MouseModifierContext as Context;
+use crate::mouse_context::MouseContext as Context;
 
 /// What the pointer is over.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -95,7 +95,7 @@ pub fn arrangement(
     x: f64,
     y: f64,
 ) -> Hit {
-    let (rail_x, rail_y) = (crate::rails::SIDE, crate::rails::TOP);
+    let (rail_x, rail_y) = (crate::rail::SIDE, crate::rail::TOP);
     // Where the lanes start — the view says, in the panel's shape.
     let panel_w = view.panel_w;
 

@@ -32,7 +32,7 @@
 use daw_module::{ActionDef, DockPosition, PanelComponent, PanelDef, PanelRenderer};
 use reaper_dioxus::prelude::*;
 
-const TAILWIND_CSS: &str = include_str!("../assets/tailwind.css");
+const TAILWIND_CSS: &str = daw_ui::TAILWIND_CSS;
 const FTS_THEME_CSS: &str = architect_ui::THEME_CSS;
 
 const BLITZ_FIXES: &str = r#"
@@ -88,7 +88,7 @@ pub fn MixerStripPanel() -> Element {
         document::Style { {TAILWIND_CSS} }
         document::Style { {BLITZ_FIXES} }
 
-        crate::components::mixer::MixerPanel {}
+        daw_ui::components::mixer::MixerPanel {}
     }
 }
 

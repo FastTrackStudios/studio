@@ -10,7 +10,7 @@
 //! single track its own), the painters' arc when no theme is loaded.
 
 use anyrender::{PaintScene, Scene};
-use session::mix_phases::MixPhase;
+use fts_session::mix_phases::MixPhase;
 use vello::kurbo::{Affine, Arc, Stroke};
 use vello::peniko::Color;
 

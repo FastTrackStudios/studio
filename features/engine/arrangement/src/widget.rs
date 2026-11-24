@@ -379,7 +379,7 @@ fn run_comp(args: String) {
     #[cfg(feature = "native")]
     if let Some(runtime) = crate::open::runtime() {
         crate::open::traced_blocking(runtime, move || {
-            let id = crate::comp::SWIPE_COMP.id;
+            let id = "TRACK_COMP_FROM_LANE";
             if let Err(e) = crate::actions::run(id, args.as_bytes()) {
                 tracing::warn!(comp.action = id, comp.error = %e, "a swipe comp was refused");
             }
@@ -2447,6 +2447,7 @@ impl ArrangementWidget {
                 to,
                 color: takes
                     .and_then(|t| t.color_of(&take))
+                    .map(|[r, g, b]| vello::peniko::Color::from_rgb8(r, g, b))
                     .unwrap_or_else(|| crate::arrangement::take_color(&take)),
                 name: takes.and_then(|t| t.name_of(&take)).unwrap_or(take),
             })
@@ -2820,64 +2821,39 @@ impl ArrangementWidget {
         true
     }
 
-    /// Shift+G: gain stage the session ([`crate::gain_stage::stage_live`]);
+    /// Shift+G: gain stage the session (the app's [`GAIN_STAGE_RUN`]);
     /// Alt+G (`clear`): every staged item back at an item volume of 1. Off
     /// the frame; [`Self::settle_stage`] reads the result back.
     fn gain_stage(&self, clear: bool) -> bool {
         let out = std::sync::Arc::clone(&self.staged);
-        let work = async move {
-            let Some(daw) = daw::rpc::Daw::try_get() else {
-                return;
-            };
-            let Ok(project) = daw.current_project().await else {
-                return;
-            };
-            let said = if clear {
-                match crate::gain_stage::clear_live(&project).await {
-                    Ok(cleared) => {
-                        tracing::info!(stage.cleared = cleared.len(), "gain staging cleared");
-                        "gain staging cleared"
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, "gain staging could not be cleared");
-                        "gain staging could not be cleared"
-                    }
-                }
-            } else {
-                match crate::gain_stage::stage_live(&project).await {
-                    Ok(report) => {
-                        tracing::info!(
-                            stage.staged = report.staged.len(),
-                            stage.silent = report.silent.len(),
-                            stage.silent_tracks = %report.silent.join(", "),
-                            stage.levels = %report
-                                .staged
-                                .iter()
-                                .map(|s| format!("{} {:.1}→{:+.1}", s.name, s.level, s.gain_db))
-                                .collect::<Vec<_>>()
-                                .join(", "),
-                            "gain staged"
-                        );
-                        "gain staged"
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, "gain staging failed");
-                        "gain staging failed"
-                    }
-                }
-            };
-            *out.lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(said);
+        let args = serde_json::json!({ "clear": clear }).to_string();
+        let said = move |ran: Result<(), String>| match (clear, ran) {
+            (true, Ok(())) => "gain staging cleared",
+            (true, Err(_)) => "gain staging could not be cleared",
+            (false, Ok(())) => "gain staged",
+            (false, Err(_)) => "gain staging failed",
         };
         #[cfg(feature = "native")]
         {
             let Some(runtime) = crate::open::runtime() else {
                 return false;
             };
-            runtime.spawn(work);
+            crate::open::traced_blocking(runtime, move || {
+                let ran = crate::actions::run(GAIN_STAGE_RUN, args.as_bytes()).map(|_| ());
+                if let Err(error) = &ran {
+                    tracing::warn!(%error, "gain staging was refused");
+                }
+                *out.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(said(ran));
+            });
         }
         #[cfg(not(feature = "native"))]
-        wasm_bindgen_futures::spawn_local(work);
+        {
+            let _ = crate::press::press(GAIN_STAGE_RUN, &serde_json::json!({ "clear": clear }));
+            let _ = args;
+            *out.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(said(Ok(())));
+        }
         true
     }
 
@@ -2928,8 +2904,8 @@ impl ArrangementWidget {
         };
         planner.scene = now;
         let name: &'static str = now
-            .and_then(dynamic_template::scenes::scene)
-            .map_or("Default view", |s| s.name.as_str());
+            .and_then(|slug| planner.plans().scene_name(slug))
+            .unwrap_or("Default view");
         let (project, rows) = planner.plan(&raw.borrow());
         self.notice = Some(crate::notice::Notice::new(name, None));
         self.restructure((*project.0).clone(), rows.as_slice().to_vec());
@@ -2948,7 +2924,7 @@ impl ArrangementWidget {
         let mut guard = shared.borrow_mut();
         let raw = &mut *guard;
         let names: Vec<String> = raw.tracks.iter().map(|t| t.name.clone()).collect();
-        let groups = match dynamic_template::visibility::groups(names) {
+        let groups = match planner.plans().groups(names) {
             Ok(groups) => groups,
             Err(e) => {
                 tracing::warn!(error = %e, "visibility: the tracks could not be grouped");
@@ -2965,7 +2941,7 @@ impl ArrangementWidget {
             Visibility::ShowAll => (raw.tracks.iter().map(|t| t.name.clone()).collect(), true),
             Visibility::HideAll => (groups.values().flatten().cloned().collect(), false),
             Visibility::Toggle(group) => {
-                let targets = in_group(&dynamic_template::visibility::normalize_key(group));
+                let targets = in_group(&planner.plans().group_key(group));
                 // Shown again only when all of it is hidden; any of it on
                 // screen, and the toggle hides it — REAPER's rule.
                 let any_shown = raw
@@ -3916,8 +3892,8 @@ impl ArrangementWidget {
             0,
             &self.sections,
             &self.markers,
-            x + crate::rails::SIDE,
-            y + crate::rails::TOP,
+            x + crate::rail::SIDE,
+            y + crate::rail::TOP,
         ))
     }
 
@@ -4493,7 +4469,7 @@ impl ArrangementWidget {
     /// order with the edits queued before it ([`Self::commit`]); `label`
     /// the undo step they make.
     fn commit_edits(&self, label: Option<&str>, edits: Vec<crate::engine::Edit>) {
-        match session_engine_client::arrange_actions::gesture(label, &edits) {
+        match crate::arrange_actions::gesture(label, &edits) {
             Some((id, args)) => self.commit(id, args),
             // Not an arrangement edit (nothing a gesture makes today):
             // sent as it is, said once so it is found and named.
@@ -6293,14 +6269,15 @@ impl ArrangementWidget {
         // Items whose recording is still on its way: veiled, a bar filling.
         #[cfg(feature = "native")]
         {
-            self.streams_seen.set(crate::stream_set::version());
+            let (streams, arriving) = crate::host::host().streaming();
+            self.streams_seen.set(streams);
             crate::arrangement::stream_overlay(
                 &mut out,
                 &self.palette,
                 &self.scene,
                 view,
                 lanes_at,
-                &crate::stream_set::shown().items,
+                &arriving,
             );
         }
         if crate::options::OUTLINED.get() && comping {
@@ -6398,7 +6375,7 @@ impl ArrangementWidget {
         // the kit's default, a part's, a fill's.
         crate::grid_in_force::set(self.editing.get().then(|| {
             crate::grid_in_force::in_force(
-                crate::drum_settings::current().grid,
+                crate::host::host().edit_grid(),
                 &crate::marks_strip::quantize_regions(&edited),
             )
         }));
@@ -6888,7 +6865,7 @@ fn ms(micros: u128) -> f64 {
 /// Whether what is streaming in changed since it was drawn (`seen`).
 #[cfg(feature = "native")]
 fn streams_changed(seen: &Cell<u64>) -> bool {
-    crate::stream_set::version() != seen.get()
+    crate::host::host().streaming().0 != seen.get()
 }
 
 /// Nothing streams through `stream_set` in a browser.
@@ -6923,3 +6900,6 @@ fn action_kind(action: &crate::keys::Action) -> String {
 
 #[cfg(test)]
 mod tests;
+
+/// The app's action that gain stages the song (`{"clear": bool}`).
+const GAIN_STAGE_RUN: &str = "SESSION_GAIN_STAGE_RUN";

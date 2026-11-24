@@ -163,6 +163,8 @@ pub fn install() {
     ONCE.call_once(|| {
         session_engine_client::body::install(&BODY);
         session_engine_client::body::install_studio(&BODY);
+        // And Studio behind the window modules in this process.
+        session_engine_client::host::install();
         #[cfg(feature = "native")]
         session_engine_client::actions::fill_with(crate::actions::fill);
     });

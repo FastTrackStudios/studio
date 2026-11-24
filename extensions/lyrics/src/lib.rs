@@ -10,9 +10,9 @@
 
 use architect_extensions::linked::{Builder, Extension};
 use architect_extensions_dioxus::BuilderExt as _;
-use daw_view_kit::song_model::StudioSession;
 use dioxus::prelude::*;
 use serde_json::json;
+use session_engine_client::song_model::StudioSession;
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
 
@@ -74,6 +74,8 @@ impl PartialEq for Song {
 
 #[component]
 fn Words(session: Song) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.0.song());
     use_context_provider(|| session.0.clone());
     rsx! { studio_panels::lyrics_panel::HostedLyrics {} }
 }

@@ -25,8 +25,7 @@ pub mod cursor;
 pub mod folder_item;
 pub mod ghost_paint;
 pub mod hit;
-#[cfg(feature = "native")]
-pub mod instrument_rail;
+
 pub mod lane_stack;
 pub mod marks_strip;
 pub mod notice;

@@ -196,7 +196,7 @@ impl crate::web_canvas::Hosted for crate::widget::ArrangementWidget {
 /// The arrangement panel in a browser: [`crate::panel`]'s behaviour, the
 /// widget in a canvas, the shared chrome over it.
 #[component]
-pub fn WebArrangement(engine: crate::web_engine::EngineRef) -> Element {
+pub fn WebArrangement(engine: crate::page_engine::PageEngineRef) -> Element {
     let element = use_hook(|| Rc::new(RefCell::new(None::<web_sys::HtmlElement>)));
     let sink: crate::tool::Sink = {
         let element = Rc::clone(&element);

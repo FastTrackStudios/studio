@@ -21,7 +21,7 @@ use dioxus::prelude::*;
 
 use crate::arrange_camera::ArrangeCamera;
 pub use crate::panel_input::*;
-use crate::studio::{PPS, StudioSession};
+use crate::studio::{PPS, SongView};
 
 /// What the pointer and the keyboard are doing to the view.
 #[derive(Default)]
@@ -230,7 +230,7 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     engine: Engine,
     host: impl FnOnce(crate::widget::ArrangementWidget) -> H,
 ) -> (ArrangementPanel, H) {
-    let session: StudioSession = use_context();
+    let session: SongView = use_context();
     // The docked mixer's, when the view has one beside this panel.
     let mixer: Option<crate::dock::Links> = try_use_context();
     let pins: Option<crate::chrome::Pins> = try_use_context();

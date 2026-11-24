@@ -15,6 +15,10 @@ pub fn of(mode: Mode) -> Shows {
         arm: mode == Mode::Record,
         item_colors: mode == Mode::Mix,
         cuts: matches!(mode, Mode::Edit | Mode::Record),
+        mode: Some(mode.slug()),
+        mixer_open: mode != Mode::Organize,
+        mix: mode == Mode::Mix,
+        record: mode == Mode::Record,
     }
 }
 
@@ -37,7 +41,11 @@ mod tests {
             Shows {
                 arm: false,
                 item_colors: false,
-                cuts: false
+                cuts: false,
+                mode: Some(Mode::Live.slug()),
+                mixer_open: true,
+                mix: false,
+                record: false,
             }
         );
     }

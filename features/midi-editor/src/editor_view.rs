@@ -283,7 +283,7 @@ fn picked_since(seen: u64) -> Option<(u64, String)> {
 /// The Editor view, on the session's selected track.
 #[component]
 pub fn EditorPanel() -> Element {
-    let Some(session) = try_use_context::<crate::song_model::StudioSession>() else {
+    let Some(session) = try_use_context::<crate::song_model::SongView>() else {
         return rsx! { crate::chrome::EditorComing {} };
     };
     let song = Song::of(&session.project.0);
@@ -498,7 +498,7 @@ fn saver() -> Option<std::sync::mpsc::Sender<(String, Content)>> {
                     .ok_or_else(|| "the take would not say itself".to_owned())
                     .and_then(|args| {
                         crate::actions::run(
-                            session_engine_client::notes_actions::NOTES_WRITE.id,
+                            crate::notes_actions::NOTES_WRITE.id,
                             args.as_bytes(),
                         )
                     });

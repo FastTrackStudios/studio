@@ -7,7 +7,7 @@
 use architect::action::{ActionList, ActionMeta, Effect};
 use facet::Facet;
 
-use session_engine_client::actions::meta;
+use daw_view::actions::meta;
 
 use crate::view_actions::{Asks, MIXER_FX, post};
 
@@ -118,9 +118,7 @@ pub static CLOSEUP_ASKS: std::sync::Mutex<Asks<Option<crate::closeup::Closeup>>>
 
 fn mixer_view(a: MixerView) -> Result<String, String> {
     if let Some(scene) = &a.scene
-        && !dynamic_template::scenes::scenes()
-            .iter()
-            .any(|s| s.slug.as_str() == scene)
+        && crate::app::scene(scene).is_none()
     {
         return Err(format!("no scene {scene:?}"));
     }
@@ -132,7 +130,7 @@ fn mixer_view(a: MixerView) -> Result<String, String> {
         ));
     }
     if let Some(fold) = &a.rack_fold
-        && session::mix_phases::MixPhase::from_slug(&fold.phase).is_none()
+        && fts_session::mix_phases::MixPhase::from_slug(&fold.phase).is_none()
     {
         return Err(format!("no mix phase {:?}", fold.phase));
     }

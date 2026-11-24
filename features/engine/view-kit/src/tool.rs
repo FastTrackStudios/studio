@@ -26,7 +26,7 @@ use crate::window_cursor::{Glyph, Shape};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use keybinds::proto::MouseModifierContext as Context;
+use crate::mouse_context::MouseContext as Context;
 
 use crate::mousemap::{self, Action, Gesture, Mods};
 

@@ -36,15 +36,15 @@ pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
             // The docks hidden or brought back, here in the window: a
             // chord, which the window's own keys may not see the
             // modifier of.
-            Some(_) if action == Action::ToggleDocks && crate::actions::docked() => {
-                crate::actions::request_dock(crate::actions::DockRequest::ToggleDocks);
+            Some(_) if action == Action::ToggleDocks && crate::app::docked() => {
+                crate::app::request_dock(crate::app::DockAsk::ToggleDocks);
             }
             Some((id, args)) if behind_the_window(id) => crate::actions::off_the_window(id, args),
             // A dock's panel, which the window's own keys toggled already
             // (`keys::use_window_transport_keys`): once is a toggle.
             #[cfg(feature = "native")]
             Some(_)
-                if crate::actions::docked()
+                if crate::app::docked()
                     && dock_request(&action).is_some()
                     && crate::keys::window_has_transport() => {}
             // The window's own transport keys took this press already
@@ -166,9 +166,9 @@ pub fn press_behind(id: &'static str, args: &serde_json::Value) {
 /// What a pane action asks of the dock when the window is a dock: its
 /// panel toggled, or every edge dock hidden or brought back.
 #[must_use]
-pub(crate) fn dock_request(action: &Action) -> Option<crate::actions::DockRequest> {
-    use crate::actions::DockRequest;
-    let panel = |kind: &str| Some(DockRequest::TogglePanel(kind.to_owned()));
+pub(crate) fn dock_request(action: &Action) -> Option<crate::app::DockAsk> {
+    use crate::app::DockAsk as DockRequest;
+    let panel = |kind: &'static str| Some(DockRequest::TogglePanel(kind));
     match action {
         Action::ToggleMixer => panel("mixer"),
         Action::ToggleEditor => panel("editor"),
@@ -200,7 +200,7 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::RevertDrums => (REVERT_DRUMS.id, String::new()),
         Action::LevelDrums => (LEVEL_DRUMS.id, String::new()),
         // The lanes button's own action, on the selected track.
-        Action::ShowLanes => (crate::comp::SHOW_LANES.id, "{}".to_owned()),
+        Action::ShowLanes => (SHOW_LANES, "{}".to_owned()),
         Action::CompCycle(by) if *by < 0 => (COMP_PREV.id, String::new()),
         Action::CompCycle(_) => (COMP_NEXT.id, String::new()),
         Action::CompBest => (COMP_BEST_KEY.id, String::new()),
@@ -248,11 +248,11 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::ToggleEditor => (TOGGLE_EDITOR.id, String::new()),
         Action::ToggleFx => (TOGGLE_FX.id, String::new()),
         Action::ToggleBrowser => (crate::browser_toggle::BROWSER.id, String::new()),
-        Action::ToggleDocks => (crate::actions::DOCKS.id, String::new()),
+        Action::ToggleDocks => (crate::app::DOCKS_ACTION, String::new()),
         Action::BarStep(n) => (crate::bar_step::STEP_ACTION.id, by(*n)),
         Action::PoiStep(n) => (crate::poi::STEP.id, by(*n)),
         Action::PoiToggle => (crate::poi::TOGGLE.id, String::new()),
-        Action::Mode(name) => (crate::actions::MODE.id, format!(r#"{{"mode":"{name}"}}"#)),
+        Action::Mode(name) => (crate::app::MODE_ACTION, format!(r#"{{"mode":"{name}"}}"#)),
         Action::FxFull => (FX_FULL.id, String::new()),
         Action::ToggleScene(slug) => (SCENE.id, format!(r#"{{"scene":"{slug}"}}"#)),
         Action::Visibility(crate::keys::Visibility::Toggle(group)) => (
@@ -705,19 +705,19 @@ enum Zoom {
     OutVertical,
 }
 
+/// The action that shows every lane of the selected track (the lanes
+/// button's).
+const SHOW_LANES: &str = "TRACK_SHOW_LANES";
+
 /// The scenes a scene action can name: the window's `&'static` slugs.
 const SCENES: &[&str] = &["overview", "overview-top"];
 
 fn register_window(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&WINDOW_STATE, Effect::ReadOnly, |(): ()| {
-        let mode = crate::actions::shown_mode();
+        let (mode, phase) = crate::app::shown();
         Ok(WindowState {
-            mode: mode
-                .map(|m| m.display_name().to_owned())
-                .unwrap_or_default(),
-            phase: mode
-                .and_then(session::mode_phases::current)
-                .map(|p| p.slug.to_owned()),
+            mode: mode.unwrap_or_default(),
+            phase,
         })
     })?;
     list.register(&QUANTIZE_PANEL, Effect::Mutating, |(): ()| {
@@ -803,9 +803,7 @@ fn register_window(list: &ActionList) -> Result<(), architect::action::ActionErr
         &crate::browser_toggle::BROWSER,
         Effect::Mutating,
         |(): ()| {
-            if !crate::actions::if_docked(crate::actions::DockRequest::TogglePanel(
-                "browser".to_owned(),
-            )) {
+            if !crate::app::if_docked(crate::app::DockAsk::TogglePanel("browser")) {
                 crate::browser_toggle::request_toggle();
             }
             Ok(())
@@ -814,7 +812,7 @@ fn register_window(list: &ActionList) -> Result<(), architect::action::ActionErr
     for (meta, effect, action) in plain {
         list.register(meta, effect, move |(): ()| {
             // In a dock, a pane is its panel.
-            if !dock_request(&action).is_some_and(crate::actions::if_docked) {
+            if !dock_request(&action).is_some_and(crate::app::if_docked) {
                 queue(action.clone());
             }
             Ok(())

@@ -1,10 +1,10 @@
 //! The native process's panes: a Studio window attached to the engine the
 //! `daw` extension runs, over its socket.
 
-use daw_view_kit::song_model::StudioSession;
 use dioxus::prelude::*;
 use serde_json::json;
 use session_engine_client::setlist::Setlist;
+use session_engine_client::song_model::StudioSession;
 
 /// The set the engine has, as this window shows it.
 pub fn set() -> Option<Setlist> {
@@ -43,6 +43,8 @@ pub fn ProgressPane() -> Element {
 
 #[component]
 fn Bar(session: Song) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.0.song());
     use_context_provider(|| session.0.clone());
     rsx! {
         // A height in pixels: the bar sizes itself, and a percentage of a

@@ -15,6 +15,48 @@
 // `crate::actions`, …).
 #[allow(unused_imports)]
 use daw_view_kit::*;
+// Studio's own half of what a window is built from (the kit is any DAW's),
+// under the paths the panels were written against: the engine's, where
+// it runs in this process (`engine`), else the window's.
+#[cfg(all(any(feature = "native", feature = "web"), feature = "engine"))]
+#[allow(unused_imports)]
+use session_engine::collab;
+#[cfg(any(feature = "web", feature = "engine"))]
+#[allow(unused_imports)]
+use session_engine::live_host;
+#[cfg(all(feature = "signal", feature = "engine"))]
+#[allow(unused_imports)]
+use session_engine::rig_actions;
+#[cfg(feature = "web")]
+#[allow(unused_imports)]
+use session_engine::web_engine;
+#[cfg(feature = "engine")]
+#[allow(unused_imports)]
+use session_engine::{
+    actions, instrument_tracks, open, organize_edit, prepare, projects, setlist, stream_set,
+};
+#[cfg(all(feature = "native", feature = "engine"))]
+#[allow(unused_imports)]
+use session_engine::{render_ahead, studio_engine};
+#[cfg(all(any(feature = "native", feature = "web"), not(feature = "engine")))]
+#[allow(unused_imports)]
+use session_engine_client::collab;
+#[cfg(feature = "native")]
+#[allow(unused_imports)]
+use session_engine_client::view_client;
+#[cfg(feature = "web")]
+#[allow(unused_imports)]
+use session_engine_client::web_audio;
+#[cfg(not(feature = "engine"))]
+#[allow(unused_imports)]
+use session_engine_client::{
+    actions, instrument_tracks, open, organize_edit, prepare, projects, setlist, stream_set,
+};
+#[allow(unused_imports)]
+use session_engine_client::{audio_mode, song_model, song_modes, stream_quality};
+#[cfg(all(feature = "native", not(feature = "engine")))]
+#[allow(unused_imports)]
+use session_engine_client::{render_ahead, studio_engine};
 
 #[cfg(all(feature = "native", target_os = "linux"))]
 pub mod app_menu;
@@ -30,6 +72,10 @@ pub mod collab_bar;
 #[cfg(feature = "native")]
 pub mod collab_pointers;
 pub mod compact;
+pub mod hooks;
+#[cfg(feature = "native")]
+pub mod instrument_rail;
+pub mod key_profile;
 pub mod loading;
 pub mod lyrics_panel;
 #[cfg(any(feature = "native", feature = "web"))]

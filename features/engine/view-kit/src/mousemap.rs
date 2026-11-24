@@ -13,7 +13,7 @@
 //! overrides will load into once the profile system reaches this
 //! window; the contexts are already its contexts.
 
-use keybinds::proto::MouseModifierContext as Context;
+use crate::mouse_context::MouseContext as Context;
 
 /// The keys held during a gesture: the Editor's too.
 pub use timeline::input::Mods;

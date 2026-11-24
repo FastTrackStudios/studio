@@ -691,7 +691,7 @@ mod native {
 
     /// A song's session as a prop (keyed by its song, so never compared).
     #[derive(Clone)]
-    struct Song(daw_view_kit::song_model::StudioSession);
+    struct Song(session_engine_client::song_model::StudioSession);
 
     impl PartialEq for Song {
         fn eq(&self, _: &Self) -> bool {
@@ -701,6 +701,8 @@ mod native {
 
     #[component]
     fn WithSong(session: Song, children: Element) -> Element {
+        // The song as the views read it (daw-view's), beside Studio's session.
+        use_context_provider(|| session.0.song());
         use_context_provider(|| session.0.clone());
         children
     }

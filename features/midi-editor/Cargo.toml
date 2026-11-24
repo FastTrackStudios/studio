@@ -16,7 +16,7 @@ description = "Studio's MIDI editor view: the expression editor drawn with daw-v
 
 [dependencies]
 daw-view-kit = { workspace = true }
-session-engine-client = { workspace = true }
+daw-view = { workspace = true }
 # The expression editor: its engine, its painter and gestures, and the
 # take-to-document conversion.
 editor = { workspace = true, features = ["audio", "audio-daw", "daw", "paint"] }
@@ -40,9 +40,8 @@ facet-json = { workspace = true }
 [features]
 default = ["native"]
 # daw-view-kit's features, forwarded.
-native = ["daw-view-kit/native", "session-engine-client/native"]
-web = ["daw-view-kit/web", "session-engine-client/web", "dioxus/web"]
-engine = ["daw-view-kit/engine"]
+native = ["daw-view-kit/native", "daw-view/native"]
+web = ["daw-view-kit/web", "daw-view/web", "dioxus/web"]
 
 [dev-dependencies]
 daw-view-kit = { workspace = true, features = ["test-support"] }

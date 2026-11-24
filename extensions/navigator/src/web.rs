@@ -4,9 +4,9 @@
 //! there gone to as a pick in the page's own views is
 //! (`web_host::hosted_pick`: the app's playhead moves, the engine with it).
 
-use daw_view_kit::song_model::StudioSession;
 use dioxus::prelude::*;
 use session_engine_client::setlist::Setlist;
+use session_engine_client::song_model::StudioSession;
 use studio_panels::web_host;
 
 /// The set the page's engine has open, once it has one.
@@ -44,6 +44,8 @@ pub fn ProgressPane() -> Element {
 
 #[component]
 fn Bar(session: Song) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.0.song());
     use_context_provider(|| session.0.clone());
     rsx! {
         studio_panels::progress::ProgressBar { height: "44px".to_owned() }

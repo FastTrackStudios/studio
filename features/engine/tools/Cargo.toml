@@ -10,14 +10,14 @@ description = "The DAW views' headless tools: `bench` (the arrangement's and the
 publish = false
 
 [dependencies]
-daw-view-kit = { workspace = true, features = ["native", "engine"] }
-arrangement-view = { workspace = true, features = ["native", "engine"] }
-mixer-view = { workspace = true, features = ["native", "engine"] }
+daw-view-kit = { workspace = true, features = ["native"] }
+arrangement-view = { workspace = true, features = ["native"] }
+mixer-view = { workspace = true, features = ["native"] }
 # The Patch List view, rendered to its fixtures (`bench`).
 studio-panels = { workspace = true, features = ["native", "engine"] }
 # The expression editor and the Editor panel (`bench`), and its theme
 # tokens (`theme_export`).
-midi-editor = { workspace = true, features = ["native", "engine"] }
+midi-editor = { workspace = true, features = ["native"] }
 session-engine = { workspace = true }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }

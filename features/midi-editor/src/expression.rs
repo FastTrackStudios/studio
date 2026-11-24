@@ -1168,7 +1168,7 @@ pub fn notes_write_args(
     item_guid: &str,
     content: daw::service::midi::MidiTakeContent,
 ) -> Option<String> {
-    let arg = session_engine_client::notes_actions::NotesArg {
+    let arg = crate::notes_actions::NotesArg {
         item: item_guid.to_owned(),
         content: to_quarters(content),
     };

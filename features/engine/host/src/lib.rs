@@ -99,6 +99,9 @@ pub fn run() {
     // into the themes the kit exports.
     #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
     ::midi_editor::install();
+    // The views' keys: Studio's input profile.
+    #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
+    ::studio_panels::hooks::install();
     // iPhone: the page is drawn to the left and right edges, and minds the
     // camera housing itself (`native::ios_scene::island_on_left`) — a phone
     // on its side reports the housing's inset on both sides.

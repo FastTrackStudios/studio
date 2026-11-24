@@ -1547,6 +1547,8 @@ fn region(id: &str, event: &Event<MountedData>) {
 /// every panel below it reads.
 #[component]
 pub fn WithSong(session: crate::song_model::StudioSession, children: Element) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.song());
     use_context_provider(|| session);
     children
 }

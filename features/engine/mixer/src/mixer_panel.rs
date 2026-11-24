@@ -23,7 +23,6 @@
 //! and balance groups (`crate::balance`, whose rule is implemented and
 //! tested but not wired to a fader here yet).
 
-use session_engine_client::song_model::TemplatePlanner as _;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -39,7 +38,7 @@ pub use crate::dock::{Key, Links, MixerMemory, racks_shown, set_racks_shown};
 use crate::engine::Edit;
 use crate::mcp::Control;
 use crate::pointer::{Pointer, Spot};
-use crate::song_model::StudioSession;
+use crate::song_model::SongView;
 
 /// How tall the docked mixer is: the strip height the mixer was designed
 /// at.
@@ -77,9 +76,9 @@ fn split(open: bool, mixer_only: bool, docked: bool, touch: bool) -> (String, St
 #[derive(Clone, Copy, Debug)]
 struct RailState {
     scene: Option<&'static str>,
-    phase: session::mix_phases::MixPhase,
+    phase: fts_session::mix_phases::MixPhase,
     settings: crate::settings::Settings,
-    audience: dynamic_template::scenes::Audience,
+    audience: crate::app::Audience,
     /// The rail button under the pointer, and the one it is pressing.
     hover: Option<crate::rails::Action>,
     pressed: Option<crate::rails::Action>,
@@ -89,9 +88,9 @@ impl Default for RailState {
     fn default() -> Self {
         Self {
             scene: None,
-            phase: session::mix_phases::MixPhase::Tone,
+            phase: fts_session::mix_phases::MixPhase::Tone,
             settings: crate::settings::Settings::default(),
-            audience: dynamic_template::scenes::Audience::Engineer,
+            audience: crate::app::Audience::Engineer,
             hover: None,
             pressed: None,
         }
@@ -107,16 +106,16 @@ pub fn DawPanels(
     /// docked pair rather than a panel `x` summons.
     #[props(default)]
     docked: bool,
-    /// The mode the panels are shown in, for [`MixerMemory`]: whether the
-    /// mixer is open is remembered per mode, and Organize starts closed.
-    #[props(default)]
-    mode: Option<session::modes::Mode>,
     /// The mixer alone, filling the panel — the small-screen layout's
     /// Mixer view.
     #[props(default)]
     mixer_only: bool,
 ) -> Element {
-    let session: StudioSession = use_context();
+    let session: SongView = use_context();
+    // What the app shows: the mode the mixer's open state is remembered
+    // by, whether it opens by default, Mix's and Record's strips.
+    let shows = crate::shows::use_shows();
+    let mode = shows.mode;
     let memory = try_use_context::<MixerMemory>();
     // The arrangement's own (not the Overview's pair, not the mixer
     // alone): the window's mixer toggle is what opens it.
@@ -130,7 +129,7 @@ pub fn DawPanels(
                 .to_vec(),
         );
         links.open = switch.map_or_else(
-            || Signal::new(MixerMemory::wanted(memory, docked, mode)),
+            || Signal::new(MixerMemory::wanted(memory, docked, mode, shows.mixer_open)),
             |s| s.open,
         );
         links.docked = docked;
@@ -143,20 +142,16 @@ pub fn DawPanels(
     // docked; otherwise it is the Mixer view, and this pane is the
     // arrangement alone.
     let memory = memory.filter(|_| switch.is_none());
-    links
-        .mix
-        .set(mixer_only && mode == Some(session::modes::Mode::Mix));
-    links
-        .recording
-        .set(mode == Some(session::modes::Mode::Record));
-    links.mixing.set(mode == Some(session::modes::Mode::Mix));
+    links.mix.set(mixer_only && shows.mix);
+    links.recording.set(shows.record);
+    links.mixing.set(shows.mix);
     // Into another mode: the mixer as that mode last had it.
     let mut open_sig = links.open;
     let mut shown_in = use_signal(|| mode);
     use_effect(use_reactive!(|mode| {
         if *shown_in.peek() != mode {
             shown_in.set(mode);
-            let want = MixerMemory::wanted(memory, docked, mode);
+            let want = MixerMemory::wanted(memory, docked, mode, shows.mixer_open);
             if *open_sig.peek() != want {
                 open_sig.set(want);
             }
@@ -414,7 +409,7 @@ pub fn Mixer() -> Element {
 #[cfg(feature = "web")]
 #[component]
 pub fn WebDawPanels(
-    engine: crate::web_engine::EngineRef,
+    engine: crate::page_engine::PageEngineRef,
     /// Open the mixer from the start — the Overview, where the two are one
     /// docked pair rather than a panel `x` summons.
     #[props(default)]
@@ -424,7 +419,7 @@ pub fn WebDawPanels(
     #[props(default)]
     mixer_only: bool,
 ) -> Element {
-    let session: StudioSession = use_context();
+    let session: SongView = use_context();
     let links = use_context_provider(|| {
         let mut links = Links::new(
             session
@@ -1187,7 +1182,7 @@ impl MixerWidget {
     fn rail_profile(&self) -> crate::rails::Profile {
         crate::rails::profile(
             crate::rails::Surface::Mixer,
-            session::modes::Mode::Mix,
+            crate::app::MIX,
             self.rails.phase,
             self.rails
                 .scene
@@ -1244,17 +1239,16 @@ impl MixerWidget {
             return;
         }
         if self.phase_seen == u64::MAX {
-            session::mode_phases::choose(session::modes::Mode::Mix, self.rails.phase.slug());
-            self.phase_seen = session::mode_phases::version();
+            crate::app::choose_phase(self.rails.phase.slug());
+            self.phase_seen = crate::app::phase().1;
             return;
         }
-        let now = session::mode_phases::version();
+        let (chosen, now) = crate::app::phase();
         if now == self.phase_seen {
             return;
         }
         self.phase_seen = now;
-        let chosen = session::mode_phases::current(session::modes::Mode::Mix)
-            .and_then(|p| session::mix_phases::MixPhase::from_slug(p.slug));
+        let chosen = chosen.and_then(fts_session::mix_phases::MixPhase::from_slug);
         if let Some(phase) = chosen
             && phase != self.rails.phase
         {
@@ -1263,8 +1257,8 @@ impl MixerWidget {
     }
 
     fn rail_act(&mut self, act: crate::rails::Action) {
+        use crate::app::Audience;
         use crate::rails::Action;
-        use dynamic_template::scenes::Audience;
         // A rail of the mixer's own view: `MIXER_VIEW`, taken up at once
         // (and by any other mixer on its next frame).
         let view = match act {
@@ -1313,7 +1307,7 @@ impl MixerWidget {
                         preview: Edit::Done(0),
                     };
                     crate::mcp::run(&press);
-                    self.phase_seen = session::mode_phases::version();
+                    self.phase_seen = crate::app::phase().1;
                 }
                 self.rails.phase = phase;
                 self.folds.focus(phase);
@@ -1342,16 +1336,16 @@ impl MixerWidget {
 
     /// What `MIXER_VIEW` asked since the last look, shown.
     fn take_view(&mut self) {
-        use dynamic_template::scenes::Audience;
+        use crate::app::Audience;
         for view in
             crate::view_actions::since(&crate::mixer_actions::MIXER_ASKS, &mut self.view_seen)
         {
-            if let Some(scene) = view.scene.as_deref().and_then(|wanted| {
-                dynamic_template::scenes::scenes()
-                    .iter()
-                    .find(|s| s.slug.as_str() == wanted)
-                    .map(|s| s.slug.as_str())
-            }) {
+            if let Some(scene) = view
+                .scene
+                .as_deref()
+                .and_then(crate::app::scene)
+                .map(|s| s.slug)
+            {
                 self.rails.scene = Some(scene);
                 self.mix_seen = None;
             }
@@ -1379,7 +1373,7 @@ impl MixerWidget {
                 self.rack_scroll = at.clamp(0.0, self.rack_span());
             }
             if let Some(fold) = view.rack_fold
-                && let Some(phase) = session::mix_phases::MixPhase::from_slug(&fold.phase)
+                && let Some(phase) = fts_session::mix_phases::MixPhase::from_slug(&fold.phase)
             {
                 self.folds.toggle(&fold.track, phase);
                 for analyser in self.spectra.values_mut() {
@@ -2280,7 +2274,7 @@ impl MixerWidget {
 /// The panels a rack shows: the Tone phase's — EQ, compression and
 /// saturation, with the rest of the chain around them.
 fn rack_panels() -> &'static [crate::tone::Which] {
-    crate::tone::panels_for(session::mix_phases::MixPhase::Tone)
+    crate::tone::panels_for(fts_session::mix_phases::MixPhase::Tone)
 }
 
 /// An inspector's strips, out of the session's `rows`: the selected track

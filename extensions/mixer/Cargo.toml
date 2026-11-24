@@ -48,10 +48,10 @@ session-engine-client = { workspace = true, features = ["web"] }
 [dev-dependencies]
 # The tests open a song on an engine in the test's own process.
 session-engine = { workspace = true, features = ["native"] }
-mixer-view = { workspace = true, features = ["native", "engine"] }
-daw-view-kit = { workspace = true, features = ["native", "engine"] }
+mixer-view = { workspace = true, features = ["native"] }
+daw-view-kit = { workspace = true, features = ["native"] }
 studio-panels = { workspace = true, features = ["native", "engine"] }
-arrangement-view = { workspace = true, features = ["native", "engine"] }
+arrangement-view = { workspace = true, features = ["native"] }
 # The tests stand a pane up as the workspace does (`ViewHost`, `Placement`).
 architect-workspace = { workspace = true, features = ["paint-ui"] }
 anyrender_vello_cpu = { workspace = true }

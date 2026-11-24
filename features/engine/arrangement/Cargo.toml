@@ -10,8 +10,7 @@ description = "Studio's arrangement, a view only: the recorded scene, its widget
 # The kit the arrangement is drawn with (`crate::tcp`, `crate::skin`, …,
 # re-exported at this crate's root).
 daw-view-kit = { workspace = true }
-session-engine-client = { workspace = true }
-session-engine = { workspace = true, optional = true }
+daw-view = { workspace = true }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }
 blitz-dom = { workspace = true }
@@ -20,14 +19,11 @@ dioxus-native-dom = { workspace = true }
 dioxus-native = { workspace = true, optional = true }
 daw-control = { workspace = true }
 daw-proto = { workspace = true }
-session = { workspace = true, features = ["library", "ui", "web"] }
 # The chord items' numbers and names — `arrangement::Lettering`.
 keyflow = { workspace = true, features = ["text", "engraver"] }
-dynamic-template = { workspace = true }
 # The rides an automation lane edits (`automation_edit`).
 dsp = { workspace = true, features = ["level"] }
 architect-input = { workspace = true }
-keybinds = { workspace = true }
 # The drum roles a folded kit is read by, and the edit scope.
 daw-edit = { workspace = true }
 # The session primitive: presence (the ghosts).
@@ -52,9 +48,8 @@ facet-json = { workspace = true }
 default = ["native"]
 # daw-view-kit's features, forwarded, with what the arrangement's own code
 # needs.
-native = ["daw-view-kit/native", "session-engine-client/native", "dep:dioxus-native", "dep:winit"]
-web = ["daw-view-kit/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures"]
-engine = ["daw-view-kit/engine", "dep:session-engine"]
+native = ["daw-view-kit/native", "daw-view/native", "dep:dioxus-native", "dep:winit"]
+web = ["daw-view-kit/web", "daw-view/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures"]
 signal = ["native", "daw-view-kit/signal"]
 
 [dev-dependencies]

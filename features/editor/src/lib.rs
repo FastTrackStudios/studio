@@ -57,8 +57,6 @@ pub mod host;
 pub mod ops;
 #[cfg(feature = "paint")]
 pub mod paint;
-#[cfg(feature = "reaper")]
-pub mod reaper;
 #[cfg(feature = "standalone")]
 pub mod standalone;
 #[cfg(feature = "ui")]

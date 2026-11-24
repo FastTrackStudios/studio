@@ -321,15 +321,15 @@ pub struct KeybindProfile {
 
 #[cfg(feature = "web")]
 impl KeybindProfile {
-    /// Every profile `keybinds` compiles in (`keybinds::embedded::list`),
+    /// Every profile the app offers (`crate::keymaps::list`),
     /// sorted by name.
     pub fn embedded() -> Vec<Self> {
-        keybinds::embedded::list()
+        crate::keymaps::list()
             .into_iter()
-            .map(|(slug, cfg)| Self {
-                slug,
-                name: cfg.name,
-                description: cfg.description,
+            .map(|p| Self {
+                slug: p.slug,
+                name: p.name,
+                description: p.description,
             })
             .collect()
     }

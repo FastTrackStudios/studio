@@ -81,7 +81,8 @@ pub mod load_selection;
 // non-attribute line between this and any gated module added above.
 pub mod keyflow;
 pub mod lyrics;
-pub mod mix_phases;
+/// The phases a mix goes through: the session primitive's.
+pub use fts_session::mix_phases;
 pub mod mode_phases;
 pub mod modes;
 pub mod open_link;

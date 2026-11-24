@@ -49,10 +49,10 @@ use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
 use arrangement_view::panel::{ArrangementPanel, PanelEvent};
 use arrangement_view::widget::ArrangementWidget;
-use daw_view_kit::studio::StudioSession;
 use dioxus::prelude::*;
 use peniko::kurbo::Affine;
 use session_engine::engine::{TRACK_PARTS, VALUE_TRACKS, track_value};
+use session_engine_client::song_model::StudioSession;
 use studio_arrangement::host::{Hosted, InScope, Stats};
 
 const W: u32 = 1280;

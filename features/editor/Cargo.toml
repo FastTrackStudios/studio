@@ -20,12 +20,11 @@ guitarpro = ["dep:guitarpro"]
 host = ["audio", "audio-daw", "dep:daw", "dep:tracing", "ops"]
 host-standalone = ["daw/standalone-save"]
 ops = ["dep:rand", "dep:tracing"]
-paint = ["timeline/paint", "dep:anyrender", "dep:daw-ui", "dep:architect-input", "dep:keybinds", "dep:kurbo", "dep:parley", "dep:peniko", "dep:tracing"]
+paint = ["timeline/paint", "dep:anyrender", "dep:daw-ui", "dep:architect-input", "dep:kurbo", "dep:parley", "dep:peniko", "dep:tracing"]
 pitch = ["dep:dsp", "dsp/tune"]
-reaper = ["audio", "audio-daw", "daw", "dep:daw", "dep:studio", "studio/reaper", "studio/reaper-ui", "dep:dioxus", "dep:tracing", "host", "render", "ui", "ui-host"]
 render = ["dep:dsp", "dsp/tune", "dsp/tune-world"]
 standalone = ["audio", "audio-daw", "daw", "dep:daw", "dep:daw-control", "dep:daw-ui", "dep:dioxus", "dep:dioxus-mcp-probe", "dep:dioxus-native", "dep:eyre", "dep:futures-timer", "dep:regex", "dep:serde_json", "dep:tempfile", "dep:tokio", "dep:tracing", "dep:tracing-subscriber", "guitarpro", "host", "host-standalone", "render", "ui", "ui-host"]
-ui = ["dep:anyrender", "dep:daw-ui", "dep:dioxus", "dep:architect-input", "dep:keybinds", "dep:kurbo", "dep:dsp", "dsp/level", "dep:parley", "dep:peniko", "dep:tracing", "host", "ops", "paint"]
+ui = ["dep:anyrender", "dep:daw-ui", "dep:dioxus", "dep:architect-input", "dep:kurbo", "dep:dsp", "dsp/level", "dep:parley", "dep:peniko", "dep:tracing", "host", "ops", "paint"]
 ui-host = ["host"]
 ui-webview = ["dep:anyrender_vello_cpu", "dep:base64", "dep:futures-timer", "dep:png", "dep:serde_json", "dioxus/desktop"]
 webview = ["dioxus/desktop", "dioxus/launch", "ui", "ui-webview"]
@@ -43,7 +42,6 @@ architect-ui = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 daw = { workspace = true, optional = true, features = ["standalone", "standalone-bootstrap", "standalone-rpp", "standalone-save"] }
-studio = { workspace = true, optional = true }
 daw-control = { workspace = true, optional = true }
 daw-proto = { workspace = true, optional = true }
 daw-ui = { workspace = true, optional = true, features = ["web"] }
@@ -59,7 +57,6 @@ futures-timer = { workspace = true, optional = true }
 guitarpro = { workspace = true, optional = true }
 hound = { workspace = true, optional = true }
 architect-input = { workspace = true, optional = true }
-keybinds = { workspace = true, optional = true }
 keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
 keyflow-proto = { workspace = true }
 kurbo = { workspace = true, optional = true }
@@ -85,7 +82,6 @@ base64 = { workspace = true }
 blitz-traits = { workspace = true }
 daw = { workspace = true, features = ["standalone", "standalone-audio"] }
 daw-proto = { workspace = true }
-studio = { workspace = true, features = ["reaper", "reaper-ui", "test-harness"] }
 daw-test-macro = { workspace = true }
 dawfile-reaper = { workspace = true }
 dioxus = { workspace = true, default-features = true, features = ["desktop", "launch"] }

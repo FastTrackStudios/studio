@@ -11,6 +11,7 @@
 #[allow(unused_imports)]
 use daw_view_kit::*;
 
+pub mod app;
 pub mod balance;
 pub mod closeup;
 pub mod faces;
@@ -22,6 +23,7 @@ pub mod mixer_actions;
 pub mod mixer_host;
 pub mod mixer_panel;
 pub mod plugin_faces;
+pub mod rails;
 pub mod rig;
 pub mod simulate;
 pub mod strip_overlay;

@@ -18,6 +18,15 @@ pub struct Shows {
     /// Every cut on a folder's row, what the drum detection found drawn
     /// over the kit, and the comp strip to pick takes on.
     pub cuts: bool,
+    /// The app's way of working, by name: what a view remembers its own
+    /// choices by (whether the mixer was open). `None` with no app.
+    pub mode: Option<&'static str>,
+    /// Whether a docked mixer opens by default.
+    pub mixer_open: bool,
+    /// The mixer's mixing strips (the phases, the racks wide).
+    pub mix: bool,
+    /// The mixer's recording strips (inputs and arming).
+    pub record: bool,
 }
 
 impl Default for Shows {
@@ -27,6 +36,10 @@ impl Default for Shows {
             arm: true,
             item_colors: false,
             cuts: false,
+            mode: None,
+            mixer_open: true,
+            mix: false,
+            record: false,
         }
     }
 }

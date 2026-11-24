@@ -1,26 +1,22 @@
 //! The keyboard, through the FTS keybind profile.
 //!
-//! The profile is the one REAPER runs on (`reaper-input`'s
-//! `fasttrackstudio` — `transport.styx`, `editing.styx`,
-//! `navigation.styx`, …), read by studio's `keybinds` into an
-//! `architect_input::InputProcessor`, so a key means the same thing in this window
-//! as it does in REAPER with the extension loaded. The bindings name
+//! The profile is the app's ([`install_profile`]; Studio's is the one
+//! REAPER runs on, `fasttrackstudio`, read with its `keybinds`), run by an
+//! `architect_input::InputProcessor`, so a key means the same thing in this
+//! window as it does in REAPER with the extension loaded. The bindings name
 //! REAPER actions by number; [`Action`] is the subset this window can
 //! do, and [`action_of`] is the table from one to the other. A bound
 //! action the window cannot do yet comes back as [`Action::Unbound`]
 //! with its id, so it is logged rather than silently dropped.
 //!
-//! Where the profile is found: `FTS_INPUT_PROFILE` (a profile
-//! directory), else the copy `keybinds` compiles in (so an
-//! installed app, started from anywhere, has the same keys), else a
-//! built-in copy of the bindings this window needs.
+//! With no profile from the app, a built-in copy of the bindings this
+//! window needs ([`builtin`]).
 //!
 //! A sequence's first key (`z`, "Zoom") leaves a pending prefix, and
 //! [`Keys::which_key`] lists what can follow it, with the profile's own
 //! labels, for the which-key popup ([`crate::which_key`]).
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use architect_input::{
     InputCommand, InputContext, InputEvent, InputProcessor, KeyChord, KeyCode, KeyTrie,
@@ -194,31 +190,18 @@ impl Keys {
     /// Load the FTS profile, or fall back to the built-in bindings.
     #[must_use]
     pub fn load() -> Self {
-        let (profile, source) = profile_dir()
-            .and_then(|dir| {
-                keybinds::load_profile_dir(&dir).map(|p| (p, dir.display().to_string()))
-            })
-            .or_else(|| {
-                keybinds::embedded::fasttrackstudio()
-                    .map(|p| (p, "fasttrackstudio (embedded)".to_owned()))
-            })
-            .or_else(|| {
-                KeymapConfig::from_json_str(BUILTIN).ok().map(|keymap| {
-                    let profile = keybinds::Profile {
-                        keymap,
-                        labels: HashMap::new(),
-                    };
-                    (profile, "built-in".to_owned())
-                })
-            })
-            .unwrap_or_else(|| (keybinds::Profile::default(), "none".to_owned()));
+        let Profile {
+            keymap,
+            labels,
+            source,
+        } = PROFILE.get().map_or_else(builtin, |load| load());
         let processor =
-            InputProcessor::from_config(profile.keymap).unwrap_or_else(|_| InputProcessor::new());
+            InputProcessor::from_config(keymap).unwrap_or_else(|_| InputProcessor::new());
         Self {
             processor,
             context: InputContext::new(),
             source,
-            labels: profile.labels,
+            labels,
         }
     }
 
@@ -353,11 +336,39 @@ fn chord_label(chord: &KeyChord) -> String {
     s
 }
 
-/// A profile directory named by the environment, for trying out a
-/// profile being edited without rebuilding.
-fn profile_dir() -> Option<PathBuf> {
-    let dir = PathBuf::from(std::env::var_os("FTS_INPUT_PROFILE")?);
-    dir.join("profile.styx").exists().then_some(dir)
+/// The bindings a window's keys run: a keymap, its which-key labels, and
+/// where they came from (for the status line).
+pub struct Profile {
+    pub keymap: KeymapConfig,
+    pub labels: WhichKeyLabels,
+    pub source: String,
+}
+
+/// Where the app's bindings come from ([`install_profile`]).
+static PROFILE: std::sync::OnceLock<fn() -> Profile> = std::sync::OnceLock::new();
+
+/// Say where the window's key bindings come from: the app reads its
+/// profile (Studio's `keybinds`) and the kit runs it. Once per process;
+/// with none, the kit's built-in bindings.
+pub fn install_profile(load: fn() -> Profile) {
+    let _ = PROFILE.set(load);
+}
+
+/// The kit's own bindings, for a window whose app gave it none.
+#[must_use]
+pub fn builtin() -> Profile {
+    KeymapConfig::from_json_str(BUILTIN).map_or_else(
+        |_| Profile {
+            keymap: KeymapConfig::default(),
+            labels: WhichKeyLabels::default(),
+            source: "none".to_owned(),
+        },
+        |keymap| Profile {
+            keymap,
+            labels: WhichKeyLabels::default(),
+            source: "built-in".to_owned(),
+        },
+    )
 }
 
 /// A winit key as the processor's, with the shift folded out of the
@@ -590,7 +601,7 @@ pub fn use_window_transport_keys() {
                 // Not the docks' chord: that is the keymap's, in
                 // `window::through_list`.
                 if action != Action::ToggleDocks
-                    && crate::window::dock_request(&action).is_some_and(crate::actions::if_docked)
+                    && crate::window::dock_request(&action).is_some_and(crate::app::if_docked)
                 {
                     continue;
                 }

@@ -366,7 +366,7 @@ impl Editor {
     /// hit's own, unless a razor area already drawn is under it, which
     /// answers for itself (the same rule [`Self::press`] follows).
     #[must_use]
-    pub fn context_at(&self, hit: Hit) -> keybinds::proto::MouseModifierContext {
+    pub fn context_at(&self, hit: Hit) -> crate::mouse_context::MouseContext {
         let Some((at, row)) = Self::where_in_lanes(hit.target) else {
             return hit.context;
         };
@@ -2655,7 +2655,7 @@ pub fn kit_items(project: &Project, only: &[String]) -> Vec<String> {
                 .get(&track.guid)
                 .into_iter()
                 .flatten()
-                .filter(|item| crate::drum_edit::is_edited(track, item))
+                .filter(|item| crate::lanes::is_edited(track, item))
                 .map(|item| item.guid.clone())
         })
         .collect()

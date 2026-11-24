@@ -44,9 +44,8 @@ thread_local! {
 }
 
 fn config() -> KeymapConfig {
-    let mut config = keybinds::load_default_config().unwrap_or_default();
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Ok(Some(user)) = keybinds::load_user_config() {
+    let mut config = super::keymap::defaults();
+    if let Some(user) = super::keymap::user() {
         config = KeymapConfig::merge(config, user);
     }
     config

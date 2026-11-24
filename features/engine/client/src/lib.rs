@@ -19,18 +19,16 @@
 /// What a window is built from that is any DAW's, not Studio's: the
 /// views' contract (`daw-view`), under the paths this crate always had.
 pub use daw_view::{
-    automation, changes, edit_state, engine, folds, hit_overlay, jobs, kit_gate, lanes, leveler,
-    midi, num, open_progress, options, play_return, poi, routes, scale, stretch, track_regions,
-    view, wake, wave_detail, window_queue,
+    automation, automation_actions, changes, edit_actions, edit_state, engine, folds, hit_overlay,
+    jobs, kit_gate, lanes, leveler, midi, num, open_progress, options, play_return, poi, routes,
+    scale, stretch, take_colors, track_regions, view, wake, wave_detail, window_queue,
 };
 #[cfg(feature = "native")]
 pub use daw_view::{page, wave_pool};
 pub mod actions;
 #[cfg(any(feature = "native", feature = "web"))]
-pub mod arrange_actions;
+pub use daw_view::arrange_actions;
 pub mod audio_mode;
-#[cfg(feature = "native")]
-pub mod automation_actions;
 pub mod body;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod collab;
@@ -38,15 +36,13 @@ pub mod collab;
 pub mod comp;
 pub mod drum_edit;
 pub mod drum_settings;
-#[cfg(feature = "native")]
-pub mod edit_actions;
 pub use session_runtime::folder;
 pub mod gain_stage;
 pub mod host;
 pub use session_runtime::guide_instrument;
 pub mod instrument_tracks;
 #[cfg(feature = "native")]
-pub mod notes_actions;
+pub use daw_view::notes_actions;
 /// Opening's window half: the process's engine runtime and handle, the
 /// song on screen, the audio mode, and attaching to an engine or a REAPER.
 #[cfg(feature = "native")]
@@ -74,7 +70,6 @@ pub mod stream_quality;
 pub mod stream_set;
 #[cfg(feature = "native")]
 pub mod studio_engine;
-pub mod take_colors;
 /// A window's link to its engine: replicas and calls.
 #[cfg(feature = "native")]
 pub mod view_client;

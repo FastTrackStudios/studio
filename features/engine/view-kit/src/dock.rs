@@ -135,7 +135,7 @@ impl Links {
 /// Unremembered, the Overview's docked mixer is open except in Organize,
 /// where the room goes to the arrangement; the DAW view's is closed.
 #[derive(Clone, Copy, PartialEq)]
-pub struct MixerMemory(pub Signal<std::collections::HashMap<(bool, session::modes::Mode), bool>>);
+pub struct MixerMemory(pub Signal<std::collections::HashMap<(bool, &'static str), bool>>);
 
 impl MixerMemory {
     #[must_use]
@@ -145,8 +145,13 @@ impl MixerMemory {
 
     /// Open or closed, for panels `docked` or not, shown in `mode`.
     #[must_use]
-    pub fn wanted(memory: Option<Self>, docked: bool, mode: Option<session::modes::Mode>) -> bool {
-        let fallback = docked && mode != Some(session::modes::Mode::Organize);
+    pub fn wanted(
+        memory: Option<Self>,
+        docked: bool,
+        mode: Option<&'static str>,
+        by_default: bool,
+    ) -> bool {
+        let fallback = docked && by_default;
         match (memory, mode) {
             (Some(memory), Some(mode)) => memory
                 .0
@@ -158,7 +163,7 @@ impl MixerMemory {
         }
     }
 
-    pub fn remember(mut self, docked: bool, mode: session::modes::Mode, open: bool) {
+    pub fn remember(mut self, docked: bool, mode: &'static str, open: bool) {
         if self.0.peek().get(&(docked, mode)) != Some(&open) {
             self.0.write().insert((docked, mode), open);
         }
@@ -212,7 +217,7 @@ pub struct MixerViews {
     /// mixer alone (`mixer_only`).
     #[cfg(feature = "web")]
     pub web_daw_panels:
-        fn(engine: crate::web_engine::EngineRef, docked: bool, mixer_only: bool) -> Element,
+        fn(engine: crate::page_engine::PageEngineRef, docked: bool, mixer_only: bool) -> Element,
     /// A hook: the close-ups' state, for every view of them under it.
     pub use_closeups: fn(),
     /// What is shown close up, over everything (`landscape`: the screen's
@@ -254,7 +259,7 @@ pub struct ArrangementViews {
     pub arrangement: fn() -> Element,
     /// The arrangement panel in a browser, over the page's engine.
     #[cfg(feature = "web")]
-    pub web_arrangement: fn(engine: crate::web_engine::EngineRef) -> Element,
+    pub web_arrangement: fn(engine: crate::page_engine::PageEngineRef) -> Element,
 }
 
 static ARRANGEMENT_VIEWS: std::sync::OnceLock<ArrangementViews> = std::sync::OnceLock::new();
@@ -284,6 +289,6 @@ pub fn arrangement() -> Element {
 /// otherwise.
 #[cfg(feature = "web")]
 #[must_use]
-pub fn web_arrangement(engine: crate::web_engine::EngineRef) -> Element {
+pub fn web_arrangement(engine: crate::page_engine::PageEngineRef) -> Element {
     arrangement_views().map_or_else(|| rsx! {}, |views| (views.web_arrangement)(engine))
 }

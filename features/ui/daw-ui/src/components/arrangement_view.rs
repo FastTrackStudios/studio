@@ -203,9 +203,7 @@ pub const ENVELOPE_LANE_MIN_H: f32 = 27.0;
 /// rather than erroring, matching `KeybindProfile::embedded`'s own quiet-skip
 /// behavior.
 fn load_keymap(slug: &str) -> architect_input::KeymapConfig {
-    keybinds::embedded::profile(slug)
-        .map(|profile| profile.keymap)
-        .unwrap_or_default()
+    crate::keymaps::keymap(slug).unwrap_or_default()
 }
 
 /// The ruler's band, above the lanes.

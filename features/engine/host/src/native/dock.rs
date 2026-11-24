@@ -6,7 +6,7 @@
 //! BottomBar) while the dock settles.
 //!
 //! Every panel here is a component of `daw_view_kit` reading the song's
-//! [`StudioSession`](daw_view_kit::studio::StudioSession) from context, so
+//! [`StudioSession`](session_engine::song_model::StudioSession) from context, so
 //! the dock sits under the song (keyed by it, as the views were).
 //! Screensets persist in `utils::prefs` (`dock.screensets.v1`): read and
 //! repaired at start, falling back to the built-ins; written when they
@@ -78,7 +78,9 @@ fn load() -> Screensets {
 
 /// The dock over the current song, under the window's own bars.
 #[component]
-pub fn SongDock(session: daw_view_kit::studio::StudioSession, class: FormClass) -> Element {
+pub fn SongDock(session: session_engine::song_model::StudioSession, class: FormClass) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.song());
     use_context_provider(|| session);
     let sets = use_signal(load);
     let mut form = use_signal(|| class);
@@ -553,8 +555,7 @@ fn Fill(children: Element) -> Element {
 /// The arrangement, its toolbar and its track headers: one canvas.
 #[component]
 fn ArrangementPanel() -> Element {
-    let mode: Signal<Mode> = use_context();
-    rsx! { Fill { mixer_view::mixer_panel::DawPanels { mode: Some(mode()) } } }
+    rsx! { Fill { mixer_view::mixer_panel::DawPanels {} } }
 }
 
 /// The set as a vertical progress bar (Session's navigator): a song
@@ -594,8 +595,7 @@ fn TransportPanel() -> Element {
 
 #[component]
 fn MixerPanel() -> Element {
-    let mode: Signal<Mode> = use_context();
-    rsx! { Fill { mixer_view::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true } } }
+    rsx! { Fill { mixer_view::mixer_panel::DawPanels { mixer_only: true } } }
 }
 
 /// A place held for a panel not on the dock yet, saying so.

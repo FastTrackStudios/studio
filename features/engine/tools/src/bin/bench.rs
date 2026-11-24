@@ -74,6 +74,10 @@ fn main() {
                 .unwrap_or_else(|_| "warn,bench=info,daw_view_kit=info".into()),
         )
         .init();
+    // Studio behind the views, as the app installs it: its host, its
+    // hooks (keys, docks, the mixer's scenes and phases).
+    session_engine::install();
+    studio_panels::hooks::install();
 
     let path = std::env::args()
         .nth(1)
@@ -1046,14 +1050,14 @@ fn mixer_shot(
     // landing between two passes would make them differ, and the
     // verify run compares them byte for byte.
     settings.prerender_tails();
-    let frame = daw_view_kit::rails::Frame::new(f64::from(width), f64::from(height));
+    let frame = mixer_view::rails::Frame::new(f64::from(width), f64::from(height));
     let live_strips = std::env::var_os("FTS_BENCH_LIVE_STRIPS").is_some_and(|v| v != "0");
     let mixer = Mixer::build(
         palette,
         font,
         &project,
         &rows,
-        mcp_height - daw_view_kit::rails::TOP,
+        mcp_height - mixer_view::rails::TOP,
         layout,
         // The shot is of the Tone phase, which is the phase the rack
         // was built for and the one the reference images were taken in.
@@ -1151,10 +1155,8 @@ fn mixer_shot(
             // Pinned to the BOTTOM of the window.
             //
 
-            let at = Affine::translate((
-                daw_view_kit::rails::SIDE - scroll_x,
-                daw_view_kit::rails::TOP,
-            ));
+            let at =
+                Affine::translate((mixer_view::rails::SIDE - scroll_x, mixer_view::rails::TOP));
             let recorded = mixer.replay(painter, scroll_x, frame.content_width(), at);
             // The live controls, exactly as the window draws them — a
             // shot that skipped them would be a shot of a mixer with no
@@ -1189,17 +1191,17 @@ fn mixer_shot(
             );
             counts.replayed = recorded.replayed + live.replayed;
             counts.submitted = recorded.submitted + live.submitted;
-            let profile = daw_view_kit::rails::profile(
-                daw_view_kit::rails::Surface::Mixer,
-                session::modes::Mode::Mix,
+            let profile = mixer_view::rails::profile(
+                mixer_view::rails::Surface::Mixer,
+                mixer_view::app::MIX,
                 session::mix_phases::MixPhase::Tone,
                 scene.map(|s| s.slug.as_str()),
                 session_engine::settings::Settings::default(),
-                dynamic_template::scenes::Audience::Engineer,
+                mixer_view::app::Audience::Engineer,
                 // The bench draws the kit's rails.
                 "drums",
             );
-            daw_view_kit::rails::draw(
+            mixer_view::rails::draw(
                 painter,
                 palette,
                 font,
@@ -1497,11 +1499,11 @@ fn plan_dump(path: &std::path::Path, out: &std::path::Path) {
         .and_then(|slug| dynamic_template::scenes::scene(&slug))
         .or_else(|| dynamic_template::scenes::scene("drum-mixing"))
         .map(|scene| scene.slug.as_str());
-    let planner = daw_view_kit::studio::Planner {
-        raw: std::sync::Arc::new(raw),
+    let planner = session_engine::song_model::template_planner(
+        std::sync::Arc::new(raw),
         scene,
-        kinds: std::sync::Arc::new(session_engine::plan::Kinds::read(path)),
-    };
+        std::sync::Arc::new(session_engine::plan::Kinds::read(path)),
+    );
     let (_, arrange) = planner.plan(&planner.raw);
     let mixer = planner.plan_mixer(
         &planner.raw,
@@ -1572,7 +1574,7 @@ impl Session {
             }
         }
         let scene = std::env::var("FTS_BENCH_SCENE").ok();
-        let (project, rows) = daw_view_kit::studio::plan_rows(&raw, scene.as_deref(), path);
+        let (project, rows) = session_engine::song_model::plan_rows(&raw, scene.as_deref(), path);
         // Read before anything is recorded, not after: a renderer draws
         // and exits, so there is no later for them to arrive in.
         let previews = daw_view_kit::studio::previews_of(&project);
@@ -1642,7 +1644,7 @@ struct MixerRig {
     history: std::collections::HashMap<String, mixer_view::tone::Levels>,
     spectra: std::collections::HashMap<String, mixer_view::tone::Analyser>,
     pointer: daw_view_kit::pointer::Pointer,
-    frame: daw_view_kit::rails::Frame,
+    frame: mixer_view::rails::Frame,
     levels: Vec<daw_proto::TrackLevels>,
     width: f64,
     height: f64,
@@ -1678,13 +1680,13 @@ impl MixerRig {
         // render landing between two passes would make them differ,
         // and the verify run compares them byte for byte.
         settings.prerender_tails();
-        let frame = daw_view_kit::rails::Frame::new(f64::from(width), f64::from(height));
+        let frame = mixer_view::rails::Frame::new(f64::from(width), f64::from(height));
         let mixer = Mixer::build(
             palette,
             font,
             &project,
             &rows,
-            f64::from(height) - daw_view_kit::rails::TOP,
+            f64::from(height) - mixer_view::rails::TOP,
             layout,
             mixer_view::tone::panels_for(TONE),
             // The racks are driven here, so they are drawn live and
@@ -1761,7 +1763,7 @@ impl MixerRig {
             None,
             &vello::kurbo::Rect::new(0.0, 0.0, self.width, self.height),
         );
-        let at = Affine::translate((daw_view_kit::rails::SIDE, daw_view_kit::rails::TOP));
+        let at = Affine::translate((mixer_view::rails::SIDE, mixer_view::rails::TOP));
         // The recorded chrome, then the live values over it.
         let a = self
             .mixer

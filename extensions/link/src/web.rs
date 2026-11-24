@@ -8,10 +8,10 @@
 //! view. Actions run on the page's own Action List
 //! (`session_engine::web_actions`).
 
-use daw_view_kit::song_model::StudioSession;
 use dioxus::prelude::*;
 use serde_json::Value as Json;
 use session_engine_client::engine::Move;
+use session_engine_client::song_model::StudioSession;
 use studio_panels::web_host::{self, HostedState};
 
 /// Nothing to attach to: the page's engine is the `daw` extension's to

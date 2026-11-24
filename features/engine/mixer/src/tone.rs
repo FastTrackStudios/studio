@@ -1330,8 +1330,8 @@ pub struct Folded {
 }
 
 impl Folded {
-    fn bit(phase: session::mix_phases::MixPhase) -> u16 {
-        let at = session::mix_phases::MixPhase::ALL
+    fn bit(phase: fts_session::mix_phases::MixPhase) -> u16 {
+        let at = fts_session::mix_phases::MixPhase::ALL
             .iter()
             .position(|p| *p == phase)
             .unwrap_or(0);
@@ -1339,11 +1339,11 @@ impl Folded {
     }
 
     #[must_use]
-    pub fn is(self, phase: session::mix_phases::MixPhase) -> bool {
+    pub fn is(self, phase: fts_session::mix_phases::MixPhase) -> bool {
         self.shut & Self::bit(phase) != 0
     }
 
-    pub fn toggle(&mut self, phase: session::mix_phases::MixPhase) {
+    pub fn toggle(&mut self, phase: fts_session::mix_phases::MixPhase) {
         self.shut ^= Self::bit(phase);
     }
 
@@ -1377,7 +1377,7 @@ impl Folded {
     #[must_use]
     pub fn rest() -> Self {
         let mut folded = Self::default();
-        folded.toggle(session::mix_phases::MixPhase::Rescue);
+        folded.toggle(fts_session::mix_phases::MixPhase::Rescue);
         folded
     }
 }
@@ -1432,9 +1432,9 @@ impl Fold {
     /// moving to a phase shows. A phase with no section of its own
     /// (Balance, Creative, Overview) shuts them all: the faders are the
     /// question.
-    pub fn focus(&mut self, phase: session::mix_phases::MixPhase) {
+    pub fn focus(&mut self, phase: fts_session::mix_phases::MixPhase) {
         let mut every = Folded::default();
-        for other in session::mix_phases::MixPhase::ALL {
+        for other in fts_session::mix_phases::MixPhase::ALL {
             if other != phase {
                 every.toggle(other);
             }
@@ -1443,7 +1443,7 @@ impl Fold {
         self.by_guid.clear();
     }
 
-    pub fn toggle(&mut self, guid: &str, phase: session::mix_phases::MixPhase) {
+    pub fn toggle(&mut self, guid: &str, phase: fts_session::mix_phases::MixPhase) {
         if self.synced {
             self.every.toggle(phase);
         } else {
@@ -1476,10 +1476,10 @@ impl Fold {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Row {
     /// The container's bar: its name and the chevron that folds it.
-    Head(session::mix_phases::MixPhase),
+    Head(fts_session::mix_phases::MixPhase),
     /// A phase this chain has no units for, kept as a bar so the
     /// phases after it land where they land on every other strip.
-    Blank(session::mix_phases::MixPhase),
+    Blank(fts_session::mix_phases::MixPhase),
     Unit(Which),
 }
 
@@ -1491,12 +1491,12 @@ pub enum Row {
 /// that only had the phases it used put every unit at a different
 /// height on every strip. A chain that is only the late phases (a
 /// return) has nothing to line up with and gets only what it has.
-pub const RACK_PHASES: [session::mix_phases::MixPhase; 5] = [
-    session::mix_phases::MixPhase::Rescue,
-    session::mix_phases::MixPhase::Tone,
-    session::mix_phases::MixPhase::Polish,
-    session::mix_phases::MixPhase::Relational,
-    session::mix_phases::MixPhase::Depth,
+pub const RACK_PHASES: [fts_session::mix_phases::MixPhase; 5] = [
+    fts_session::mix_phases::MixPhase::Rescue,
+    fts_session::mix_phases::MixPhase::Tone,
+    fts_session::mix_phases::MixPhase::Polish,
+    fts_session::mix_phases::MixPhase::Relational,
+    fts_session::mix_phases::MixPhase::Depth,
 ];
 
 /// How tall a phase header is.
@@ -1533,7 +1533,7 @@ pub const ALL_PANELS: [Which; 11] = [
 /// question about the phase, and one day it will be again — as focus,
 /// not as membership.
 #[must_use]
-pub const fn panels_for(_phase: session::mix_phases::MixPhase) -> &'static [Which] {
+pub const fn panels_for(_phase: fts_session::mix_phases::MixPhase) -> &'static [Which] {
     &ALL_PANELS
 }
 
@@ -2155,7 +2155,7 @@ pub fn chain(panels: &[Which], panel: Panel, folded: Folded) -> Vec<(Row, Panel)
     let level = panels.iter().any(|which| {
         matches!(
             which.phase(),
-            session::mix_phases::MixPhase::Rescue | session::mix_phases::MixPhase::Tone
+            fts_session::mix_phases::MixPhase::Rescue | fts_session::mix_phases::MixPhase::Tone
         )
     });
     for phase in RACK_PHASES {
@@ -2371,8 +2371,8 @@ impl Which {
     /// unit rather than as a table of ranges, so adding a processor is
     /// one line in one place.
     #[must_use]
-    pub const fn phase(self) -> session::mix_phases::MixPhase {
-        use session::mix_phases::MixPhase as P;
+    pub const fn phase(self) -> fts_session::mix_phases::MixPhase {
+        use fts_session::mix_phases::MixPhase as P;
         match self {
             Self::RescueEq | Self::Gate | Self::RescueComp => P::Rescue,
             Self::Eq | Self::Comp | Self::Sat | Self::Mod => P::Tone,
@@ -2624,8 +2624,8 @@ impl Which {
 /// states its own. Taken from there rather than chosen again so the
 /// container, the rail button and the REAPER toolbar all agree about
 /// what colour Tone is.
-pub fn phase_tint(phase: session::mix_phases::MixPhase) -> Color {
-    use session::mix_phases::MixPhase as P;
+pub fn phase_tint(phase: fts_session::mix_phases::MixPhase) -> Color {
+    use fts_session::mix_phases::MixPhase as P;
     hex(match phase {
         P::Rescue => "#EF4444",
         P::Balance => "#22C55E",
@@ -2649,7 +2649,7 @@ pub const PHASE: &str = "rack.phase";
 fn phase_themed(
     scene: &mut Scene,
     font: &Font,
-    phase: session::mix_phases::MixPhase,
+    phase: fts_session::mix_phases::MixPhase,
     at: Panel,
     open: Option<(bool, Option<Grip>)>,
 ) -> bool {
@@ -2701,7 +2701,7 @@ pub fn phase_bar(
     scene: &mut Scene,
     palette: &Palette,
     font: &Font,
-    phase: session::mix_phases::MixPhase,
+    phase: fts_session::mix_phases::MixPhase,
     at: Panel,
     open: Option<(bool, Option<Grip>)>,
 ) {
@@ -2725,7 +2725,7 @@ fn container(
     scene: &mut Scene,
     palette: &Palette,
     font: &Font,
-    phase: session::mix_phases::MixPhase,
+    phase: fts_session::mix_phases::MixPhase,
     at: Panel,
     shut: bool,
     lit: Option<Grip>,
@@ -2789,7 +2789,7 @@ fn blank(
     scene: &mut Scene,
     palette: &Palette,
     font: &Font,
-    phase: session::mix_phases::MixPhase,
+    phase: fts_session::mix_phases::MixPhase,
     at: Panel,
 ) {
     scene.fill(
@@ -8400,7 +8400,7 @@ pub enum Grip {
     /// changes what the track sounds like, and a rack where the two
     /// gestures looked alike would be one click away from an unintended
     /// mix decision.
-    Phase(session::mix_phases::MixPhase),
+    Phase(fts_session::mix_phases::MixPhase),
     /// An EQ graph's zoom — the chip at the top of the panel saying
     /// what range it is drawn to.
     ///
@@ -10288,10 +10288,10 @@ pub fn is_pair(rows: &[(daw_proto::Track, u32)], index: usize, depth: u32) -> bo
 /// Whether a track is one half of a stereo pair, by name.
 #[must_use]
 pub fn is_pair_half(name: &str) -> bool {
-    // The scene engine's own answer: the pair-half invariant is enforced
-    // there, and a strip that disagreed about what a half IS would rail
-    // a track the scene had opened.
-    dynamic_template::scenes::is_pair_half(name)
+    // The app's own answer (its scene engine enforces the pair-half
+    // invariant), so a strip cannot disagree about what a half IS and
+    // rail a track the scene had opened.
+    crate::app::is_pair_half(name)
 }
 
 fn band(index: usize, frequency: f64, gain: f64, q: f64, shape: EqBandShape) -> EqBand {
@@ -10829,7 +10829,7 @@ fn ess_trace(scene: &mut Scene, levels: &Levels, tone: &Tone, display: Panel) {
 ///
 /// The Balance phase's green: "on", in the same hue the rail says it.
 fn palette_open() -> Color {
-    phase_tint(session::mix_phases::MixPhase::Balance)
+    phase_tint(fts_session::mix_phases::MixPhase::Balance)
 }
 
 /// One processor's level trace.

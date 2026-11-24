@@ -61,6 +61,40 @@ impl Plans for TemplatePlans {
         RowsRef(Arc::new(plan_strips_with(raw, scene, &self.kinds)))
     }
 
+    /// The mixer's rows for `raw`: the scene laid out for the mixer — each
+    /// track as wide as the scene opens it, the one it focuses selected —
+    /// and every folder as the scene leaves it, then as the window's folds
+    /// leave it.
+    fn mixer(
+        &self,
+        raw: &daw_ui::studio::project::Project,
+        scene: Option<&str>,
+        settings: crate::settings::Settings,
+        extent: f64,
+    ) -> RowsRef {
+        let (visible, depths) =
+            daw_ui::components::folders::FolderState::default().visible(&raw.tracks);
+        let planned: Vec<(daw_proto::Track, u32)> = visible.into_iter().zip(depths).collect();
+        let Some(scene) = scene.and_then(dynamic_template::scenes::scene) else {
+            return RowsRef(Arc::new(crate::folds::apply(planned)));
+        };
+        // And the folders the window shut (`crate::folds`), over the
+        // scene's: shut in the arrangement, shut here — and a folder
+        // opened or shut on a strip in Mix mode is.
+        RowsRef(Arc::new(crate::folds::apply(crate::plan::apply_scene(
+            &planned,
+            &self.kinds,
+            scene,
+            crate::plan::Panel {
+                surface: crate::plan::Surface::Mixer,
+                mode: None,
+                settings,
+                extent,
+                active_language: None,
+            },
+        ))))
+    }
+
     fn scene_name(&self, slug: &str) -> Option<&'static str> {
         dynamic_template::scenes::scene(slug).map(|s| s.name.as_str())
     }
@@ -91,25 +125,12 @@ pub fn template_planner(
     Planner::new(raw, scene, Arc::new(TemplatePlans { kinds }))
 }
 
-/// What Studio plans that a view does not ask of every app: the mixer laid
-/// out by a scene, and the track kinds.
+/// What Studio's planner knows that a view does not ask of every app: the
+/// track kinds.
 pub trait TemplatePlanner {
     /// The track kinds the planner plans with (none when it does not plan
     /// by Studio's template).
     fn kinds(&self) -> Arc<crate::plan::Kinds>;
-
-    /// The mixer's rows for `raw`: the scene laid out for the mixer — each
-    /// track as wide as the scene opens it, the one it focuses selected —
-    /// and every folder as the scene leaves it, the way the scene renders
-    /// (`tests/golden_scenes.rs`), then as the window's folds leave it.
-    /// `extent` is the panel's height.
-    fn plan_mixer(
-        &self,
-        raw: &daw_ui::studio::project::Project,
-        scene: Option<&str>,
-        settings: crate::settings::Settings,
-        extent: f64,
-    ) -> RowsRef;
 }
 
 impl TemplatePlanner for Planner {
@@ -121,39 +142,6 @@ impl TemplatePlanner for Planner {
                 || Arc::new(crate::plan::Kinds::default()),
                 |t| Arc::clone(&t.kinds),
             )
-    }
-
-    fn plan_mixer(
-        &self,
-        raw: &daw_ui::studio::project::Project,
-        scene: Option<&str>,
-        settings: crate::settings::Settings,
-        extent: f64,
-    ) -> RowsRef {
-        let (visible, depths) =
-            daw_ui::components::folders::FolderState::default().visible(&raw.tracks);
-        let planned: Vec<(daw_proto::Track, u32)> = visible.into_iter().zip(depths).collect();
-        let Some(scene) = scene
-            .or(self.scene)
-            .and_then(dynamic_template::scenes::scene)
-        else {
-            return RowsRef(Arc::new(crate::folds::apply(planned)));
-        };
-        // And the folders the window shut (`crate::folds`), over the
-        // scene's: shut in the arrangement, shut here — and a folder
-        // opened or shut on a strip in Mix mode is.
-        RowsRef(Arc::new(crate::folds::apply(crate::plan::apply_scene(
-            &planned,
-            &self.kinds(),
-            scene,
-            crate::plan::Panel {
-                surface: crate::plan::Surface::Mixer,
-                mode: None,
-                settings,
-                extent,
-                active_language: None,
-            },
-        ))))
     }
 }
 
