@@ -99,6 +99,12 @@ pub use session_engine_client::view;
 #[cfg(feature = "native")]
 pub use session_engine_client::view_client;
 #[cfg(feature = "native")]
+pub mod mix_measure;
+#[cfg(feature = "native")]
+pub mod mix_sends;
+#[cfg(feature = "native")]
+pub mod mix_snapshot;
+#[cfg(feature = "native")]
 pub mod signal_kit;
 #[cfg(feature = "native")]
 pub mod vocal_level;

@@ -45,7 +45,13 @@ DRUMS_EDIT_LANES puts the edits on an EDIT lane beside the COMP they are made fr
 check after; HITS_AUDIT checks the whole song. In Edit mode the window draws each piece's markers \
 on its own rows and shades the zones. SESSION_VIEW frames bars, a section or seconds, and tracks, \
 down to the samples. The drum MIDI is a guide, \
-not the truth: a live drummer plays other fills.";
+not the truth: a live drummer plays other fills. Mixing is by measurement: MIX_MEASURE renders a \
+span offline through the whole mix (every FX, Signal's CLAPs too, sends, folders, faders, plugin \
+delay compensated) without touching playback, and gives each track and bus its loudness, peaks, \
+crest, bands, width and share of its folder (`bypass_signal: true` adds the raw drums beside it: \
+Signal's gain per track); MIX_RENDER writes the same to a WAV to listen to. Sends are SENDS_LIST, \
+SEND_ADD, SEND_SET and SEND_REMOVE; SIGNAL_KIT `sends: true` makes the kit's routing. \
+MIX_SNAPSHOT, MIX_RESTORE and MIX_DIFF keep and compare whole mixes, for A/B.";
 
 /// Serve the Action List on the engine's runtime, unless `FTS_MCP=0`, and
 /// say where it is (`~/.config/fts/session-mcp.json`); `None` when it is
