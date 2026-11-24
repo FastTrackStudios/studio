@@ -42,6 +42,11 @@ pub struct Gate {
     /// is silence, not its own (bleeding) input.
     hit_keyed: bool,
     pulse: usize,
+    /// Frames since the last hit, and how long without one before the
+    /// gate keys from its own input again: a dead trigger never silences
+    /// the drum.
+    since_hit: usize,
+    fail_open_after: usize,
 }
 
 const MAX_HITS: usize = 16;
@@ -70,6 +75,8 @@ impl Gate {
             // A 2 ms full-level pulse per hit: past any threshold, and
             // the gate's own hold does the rest.
             pulse: (sr * 0.002) as usize,
+            since_hit: 0,
+            fail_open_after: (sr * 10.0) as usize,
         }
     }
 
@@ -127,8 +134,14 @@ impl BlockProcessor for Gate {
     }
 
     fn process(&mut self, left: &mut [f32], right: &mut [f32]) {
-        if self.keyed == 0 && self.hit_keyed {
-            self.key_from_hits(left.len().min(right.len()).min(self.key.len()));
+        let n = left.len().min(right.len()).min(self.key.len());
+        if self.hit_count > 0 {
+            self.since_hit = 0;
+        } else {
+            self.since_hit = self.since_hit.saturating_add(n);
+        }
+        if self.keyed == 0 && self.hit_keyed && self.since_hit < self.fail_open_after {
+            self.key_from_hits(n);
         }
         let keyed = core::mem::take(&mut self.keyed);
         // Hits that came with an audio key: the audio keyed this piece.
@@ -147,6 +160,7 @@ impl BlockProcessor for Gate {
 
     fn keyed(&mut self) {
         self.hit_keyed = true;
+        self.since_hit = 0;
     }
 
     fn hit(&mut self, offset: u32, _velocity: f32) {
@@ -244,5 +258,34 @@ mod hit_tests {
         assert!(open > 0.2, "open after the hit: {open}");
         assert!(shut < open * 0.1, "shut before: {shut}");
         assert!(after < open * 0.1, "shut again, the bleed ignored: {after}");
+    }
+}
+
+#[cfg(test)]
+mod fail_open_tests {
+    use super::*;
+
+    /// A gate keyed by a trigger that never fires opens on its own input
+    /// after ten seconds: the drum is never silenced for good.
+    #[test]
+    fn a_dead_trigger_never_silences_the_drum() {
+        let mut g = Gate::with_max_block(48_000.0, 512);
+        g.keyed();
+        let mut level_at = alloc::vec::Vec::new();
+        for piece in 0..(48_000 * 12 / 512) {
+            let (mut l, mut r) = (alloc::vec![0.5_f32; 512], alloc::vec![0.5_f32; 512]);
+            g.process(&mut l, &mut r);
+            if piece % (48_000 / 512) == 0 {
+                level_at.push(l.iter().map(|s| s.abs()).fold(0.0, f32::max));
+            }
+        }
+        assert!(
+            level_at[5] < 0.05,
+            "shut while it waits for a hit: {level_at:?}"
+        );
+        assert!(
+            level_at[11] > 0.25,
+            "open on its own input after 10 s: {level_at:?}"
+        );
     }
 }

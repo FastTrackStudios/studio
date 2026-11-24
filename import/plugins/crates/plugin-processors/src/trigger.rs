@@ -67,6 +67,17 @@ impl HitDetector {
         }
     }
 
+    /// Listen below `hz` only: a drum detected on its own close mic (a
+    /// floor tom whose trigger is dead), the cymbals' and the snare's
+    /// bleed filtered out of what it hears. Off the audio thread.
+    #[must_use]
+    pub fn with_low_pass(mut self, hz: f32) -> Self {
+        // At the rate `new` gave the chain; a refused frequency leaves it
+        // unfiltered.
+        let _ = self.chain.set_sc_lpf(f64::from(hz));
+        self
+    }
+
     /// Detect the hits in one piece. No allocation.
     pub fn detect(&mut self, left: &[f32], right: &[f32]) -> &[Hit] {
         self.count = 0;
