@@ -478,9 +478,10 @@ pub mod delay {
                 8 => set2(&mut c.delay_l.flutter_depth, &mut c.delay_r.flutter_depth, v),
                 _ => false,
             };
-            // Filters need their coefficients; everything else is read per
-            // sample. Only on a real change: a repeated set moves nothing.
-            if changed && matches!(index, 3 | 4) {
+            // `update` is what hands time, feedback, drive and the rest to
+            // the style's inner engine (and redesigns its filters). Only on
+            // a real change: a repeated set moves nothing.
+            if changed {
                 self.chain.update(self.config);
             }
         }
