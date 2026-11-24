@@ -31,6 +31,8 @@ pub use session_engine_client::engine;
 pub use session_engine_client::folds;
 pub use session_runtime::folder;
 #[cfg(feature = "native")]
+pub mod clap_fx;
+#[cfg(feature = "native")]
 pub mod fx_actions;
 #[cfg(feature = "native")]
 pub mod grow;
@@ -97,6 +99,8 @@ pub use session_engine_client::view;
 #[cfg(feature = "native")]
 pub use session_engine_client::view_client;
 #[cfg(feature = "native")]
+pub mod signal_kit;
+#[cfg(feature = "native")]
 pub mod vocal_level;
 /// On the web there is no in-process tokio runtime: the engine clients
 /// (`engine::Transport`, `Applier`, `Meters`, …) find none and run
@@ -157,12 +161,12 @@ pub mod drum_apply;
 #[cfg(feature = "native")]
 pub mod drum_bench;
 #[cfg(feature = "native")]
+pub mod drum_plan;
+#[cfg(feature = "native")]
 pub mod edit_list;
+pub mod hit_flags;
 #[cfg(feature = "native")]
 pub mod hit_ops;
-#[cfg(feature = "native")]
-pub mod drum_plan;
-pub mod hit_flags;
 #[cfg(feature = "native")]
 pub mod hit_place;
 #[cfg(feature = "native")]
