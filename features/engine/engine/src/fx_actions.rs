@@ -41,7 +41,7 @@ static SET: ActionMeta = meta(
     "FX_SET",
     "fx_set",
     "Set FX parameters",
-    "Set parameters of one FX on `track` (`fx` its name or `#place`). `set` maps each parameter (name — `Post Freq 6` for the sixth of a repeated one — or `#index`) to a value: the plugin's own words for an FTS processor, a hosted CLAP (its text-to-value) or any choice (`-18 dB`, `4:1`, `Plate`, `1/2`, `On`), or `=0.42` for a normalized value on any plugin. Says what each now reads, or why not. One undo step.",
+    "Set parameters of one FX on `track` (`fx` its name or `#place`). `set` maps each parameter (name — `Post Freq 6` for the sixth of a repeated one —, `#index`, or `@<clap_id>`: a CLAP parameter's id, as signal.chain/1's `clap_id` names a Signal block's slot, `@b014`) to a value: the plugin's own words for an FTS processor, a hosted CLAP (its text-to-value) or any choice (`-18 dB`, `4:1`, `Plate`, `1/2`, `On`), or `=0.42` for a normalized value on any plugin. Says what each now reads, or why not. One undo step.",
     "FX",
     "",
 );
@@ -768,7 +768,14 @@ fn settle(
     settings
         .into_iter()
         .map(|(which, text)| {
-            param_of(&params, which)
+            slot_named(daw, &fx.guid, which)
+                .and_then(|slot| match slot {
+                    Some(index) => params
+                        .iter()
+                        .find(|p| p.index == index)
+                        .ok_or_else(|| format!("no parameter #{index}")),
+                    None => param_of(&params, which),
+                })
                 .and_then(|param| {
                     let value = value_for(daw, fx, param, text)?;
                     Effects::set_parameter(
@@ -789,6 +796,52 @@ fn settle(
                 .unwrap_or_else(|e| format!("{which}: {e}"))
         })
         .collect()
+}
+
+/// The slot `which` names by its CLAP id (`@b014`): the plugin's
+/// parameter whose CLAP id is that (decimal, or hex as `b014` or
+/// `0xb014`), or whose Signal stable id is (signal/1's
+/// `param_stable_id`), or else whose name is. `None` when `which` is no
+/// `@` name (a name or `#index`, for [`param_of`]).
+///
+/// # Errors
+/// An `@` name no parameter of the plugin has.
+pub fn slot_named(
+    daw: &daw::standalone::Standalone,
+    fx_guid: &str,
+    which: &str,
+) -> Result<Option<u32>, String> {
+    let Some(id) = which.trim().strip_prefix('@').map(str::trim) else {
+        return Ok(None);
+    };
+    let hex = id.strip_prefix("0x").unwrap_or(id);
+    let numbers = [id.parse::<u32>().ok(), u32::from_str_radix(hex, 16).ok()];
+    let found = daw.with_plugin_instance(fx_guid, |p| {
+        let infos = p.params();
+        let signal = p.signal();
+        let by = |f: &dyn Fn(&daw_standalone::plugin::PluginParamInfo) -> bool| {
+            infos.iter().position(|i| f(i))
+        };
+        by(&|i| numbers.contains(&Some(i.id)))
+            .or_else(|| {
+                by(&|i| {
+                    signal
+                        .as_ref()
+                        .and_then(|s| s.param_stable_id(i.id))
+                        .is_some_and(|s| s == id)
+                })
+            })
+            .or_else(|| by(&|i| i.name.eq_ignore_ascii_case(id)))
+    });
+    match found {
+        None => Err(format!(
+            "{which}: the FX has no live plugin to name a CLAP id on"
+        )),
+        Some(None) => Err(format!("no parameter with the CLAP id {id}")),
+        Some(Some(at)) => u32::try_from(at)
+            .map(Some)
+            .map_err(|_| format!("{which}: past the last slot")),
+    }
 }
 
 /// What `fx` names to add: one of the FTS processors (by its name), or a

@@ -937,6 +937,8 @@ pub fn record_steps() {
         let (tx, rx) = std::sync::mpsc::channel::<Finished>();
         let tx = Mutex::new(tx);
         daw::standalone::steps::listen(Arc::new(move |project, label| {
+            // A CLAP's `hits:` subscriptions follow each step.
+            crate::clap_host::step_finished();
             if let Ok(tx) = tx.lock()
                 && tx
                     .send((

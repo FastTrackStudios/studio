@@ -266,9 +266,13 @@ pub fn loadable(bundle: &Path) -> Option<PathBuf> {
 /// old instance stays).
 pub fn swap_instance(daw: &Standalone, fx_guid: &str, from: &Path) -> Result<usize, String> {
     let state = daw.save_plugin_state(fx_guid).unwrap_or_default();
-    let mut fresh = daw_standalone::plugin::load_plugin(&from.to_string_lossy())
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("{} is not a plugin bundle", from.display()))?;
+    // Offered what every plugin this engine loads is (Studio's actions).
+    let mut fresh = daw_standalone::plugin::load_plugin_with(
+        &from.to_string_lossy(),
+        &daw.plugin_load_options(),
+    )
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| format!("{} is not a plugin bundle", from.display()))?;
     if !state.is_empty() {
         fresh
             .load_state(&state)

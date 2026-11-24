@@ -271,6 +271,9 @@ path = "src/bin/chain-probe.rs"
 required-features = ["native"]
 
 [dev-dependencies]
+# A CLAP plugin and host built in memory, for the host-actions/1 bridge
+# (`clap_host::tests`).
+clap-sys = "0.5"
 # The metrics, read back through an in-memory exporter.
 opentelemetry_sdk = { workspace = true, features = ["metrics", "testing"] }
 builtin = { workspace = true, features = ["engine"] }

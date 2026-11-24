@@ -23,6 +23,7 @@ pub mod mixer_host;
 pub mod mixer_panel;
 pub mod plugin_faces;
 pub mod rig;
+pub mod signal;
 pub mod simulate;
 pub mod strip_overlay;
 pub mod theme;
