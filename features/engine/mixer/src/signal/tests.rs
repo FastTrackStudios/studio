@@ -697,3 +697,74 @@ fn the_source_phase_has_no_switch_or_make_up() {
     let makeup = view::makeup_box(*bar);
     assert_eq!(view::hit(&laid, makeup.x + 4.0, bar.y + 4.0), None);
 }
+
+#[test]
+fn a_moved_value_revision_reads_the_chain_again_at_the_same_revision() {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    /// The fixture, plus a `values_revision` the test moves.
+    struct Valued {
+        inner: Arc<Fixture>,
+        values: AtomicU64,
+    }
+    impl SignalSource for Valued {
+        fn signal_chain(&self, t: &str) -> Result<Chain, SourceError> {
+            self.inner.signal_chain(t)
+        }
+        fn signal_run(
+            &self,
+            t: &str,
+            a: &str,
+            args: &serde_json::Value,
+        ) -> Result<Chain, SourceError> {
+            self.inner.signal_run(t, a, args)
+        }
+        fn signal_session(&self, t: &str) -> Result<super::source::Session, SourceError> {
+            self.inner.signal_session(t)
+        }
+        fn signal_algorithms(
+            &self,
+            t: &str,
+            k: &str,
+        ) -> Result<Vec<super::source::Algorithm>, SourceError> {
+            self.inner.signal_algorithms(t, k)
+        }
+        fn signal_revisions(&self) -> Vec<(String, u64)> {
+            self.inner.signal_revisions()
+        }
+        fn signal_values_revisions(&self) -> Vec<(String, u64)> {
+            vec![(KICK.into(), self.values.load(Ordering::Relaxed))]
+        }
+        fn signal_meters(&self, t: &str) -> Vec<MeterValue> {
+            self.inner.signal_meters(t)
+        }
+        fn fx_set(&self, t: &str, c: &str, v: &ParamValue) -> Result<(), SourceError> {
+            self.inner.fx_set(t, c, v)
+        }
+    }
+
+    let fixture = Arc::new(Fixture::new(kit()));
+    let source = Arc::new(Valued {
+        inner: fixture.clone(),
+        values: AtomicU64::new(1),
+    });
+    let mut inserts = Inserts::new(Some(source.clone()));
+    let reads = |f: &Fixture| {
+        f.calls()
+            .iter()
+            .filter(|c| matches!(c, Call::Chain(t) if t == KICK))
+            .count()
+    };
+    inserts.follow();
+    assert_eq!(reads(&fixture), 1);
+    inserts.follow();
+    assert_eq!(reads(&fixture), 1, "values still: not read again");
+
+    // Automation moved a value: the chain's revision stays, its values move.
+    source.values.store(2, Ordering::Relaxed);
+    let moved = inserts.follow();
+    assert_eq!(moved.read, [KICK.to_owned()]);
+    assert_eq!(reads(&fixture), 2, "read again for the plugin's value text");
+    inserts.follow();
+    assert_eq!(reads(&fixture), 2, "and only once");
+}

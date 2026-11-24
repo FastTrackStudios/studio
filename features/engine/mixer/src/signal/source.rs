@@ -266,6 +266,15 @@ pub trait SignalSource: Send + Sync {
     /// The live feed: `track`'s meter values now.
     fn signal_meters(&self, track: &TrackId) -> Vec<MeterValue>;
 
+    /// The live feed: each track's `values_revision` now (`signal.chain/1`
+    /// addition 2), which moves when any parameter value does (a set,
+    /// automation, a macro) while `revision` stays. Cheap: polled with
+    /// [`Self::signal_revisions`]. A source without it answers none, and
+    /// values follow structural reads only.
+    fn signal_values_revisions(&self) -> Vec<(String, u64)> {
+        Vec::new()
+    }
+
     /// `FX_SET` on the Signal FX's parameter `clap_id`.
     ///
     /// # Errors

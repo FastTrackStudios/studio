@@ -291,6 +291,10 @@ impl SignalSource for EngineSource {
             .collect()
     }
 
+    fn signal_values_revisions(&self) -> Vec<(String, u64)> {
+        self.values_revisions()
+    }
+
     fn signal_meters(&self, track: &TrackId) -> Vec<MeterValue> {
         self.fed
             .lock()

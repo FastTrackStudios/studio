@@ -325,6 +325,9 @@ pub struct Inserts {
     /// The revision each track's chain could not be read at: not asked
     /// again until the revision moves.
     failed: HashMap<String, u64>,
+    /// The `values_revision` each strip's chain was read at: read again
+    /// when the feed's moves, for the plugin's own value text.
+    values_seen: HashMap<String, u64>,
     meters_read: Option<Instant>,
     /// Moves whenever a chain or a fold does: the mixer's rows are stale.
     generation: u64,
@@ -344,6 +347,7 @@ impl Inserts {
             source,
             strips: HashMap::new(),
             failed: HashMap::new(),
+            values_seen: HashMap::new(),
             meters_read: None,
             generation: 0,
         }
@@ -383,10 +387,13 @@ impl Inserts {
             return Followed::default();
         };
         let now = source.signal_revisions();
-        let plan = stale(self.held(), &now);
+        let values = source.signal_values_revisions();
+        let mut plan = stale(self.held(), &now);
+        plan.reread.extend(self.values_moved(&values, &plan.reread));
         let mut followed = Followed::default();
         for track in plan.gone {
             self.failed.remove(&track);
+            self.values_seen.remove(&track);
             if self.strips.remove(&track).is_some() {
                 followed.gone.push(track);
             }
@@ -395,6 +402,9 @@ impl Inserts {
             match source.signal_chain(&track) {
                 Ok(chain) => {
                     self.failed.remove(&track);
+                    if let Some((_, v)) = values.iter().find(|(t, _)| *t == track) {
+                        self.values_seen.insert(track.clone(), *v);
+                    }
                     self.take_chain(&track, chain);
                     followed.read.push(track);
                 }
@@ -409,6 +419,21 @@ impl Inserts {
             self.bump();
         }
         followed
+    }
+
+    /// The shown strips whose values moved in the feed since their chain
+    /// was read (and not already in `planned`). A strip read before the
+    /// feed carried values is caught up once.
+    fn values_moved(&self, values: &[(String, u64)], planned: &[String]) -> Vec<String> {
+        values
+            .iter()
+            .filter(|(track, v)| {
+                self.strips.contains_key(track)
+                    && !planned.contains(track)
+                    && self.values_seen.get(track) != Some(v)
+            })
+            .map(|(track, _)| track.clone())
+            .collect()
     }
 
     /// Each track's revision as held: its chain's, or the one its read
@@ -437,7 +462,11 @@ impl Inserts {
                 .is_none_or(|at| now.duration_since(at) >= Duration::from_secs(1) / METER_HZ);
         meters_due || {
             let plan = stale(self.held(), &source.signal_revisions());
-            !plan.reread.is_empty() || !plan.gone.is_empty()
+            !plan.reread.is_empty()
+                || !plan.gone.is_empty()
+                || !self
+                    .values_moved(&source.signal_values_revisions(), &plan.reread)
+                    .is_empty()
         }
     }
 
