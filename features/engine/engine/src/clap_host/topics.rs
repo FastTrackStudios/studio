@@ -6,6 +6,7 @@
 //! | `tempo` | on subscribing; when the tempo map changes | `{"bpm": <at 0>, "points": [{"time": <s>, "bpm", "numerator"?, "denominator"?}]}` |
 //! | `hits:<piece track path>` | on subscribing; after each edit step that changed them | `{"piece": "Kick", "track": "Drums/Kick", "note": 36, "count", "hits": [{"time": <s, where it plays now>, "velocity": 1..127}]}` |
 //! | `job` | when an action that answered `{"job": <id>}` finishes | `{"job", "action", "ok", "result"}` or `{"job", "action", "ok": false, "error"}` |
+//! | `timeline` | when the plugin's own track's timeline (`host-timeline/1`) changes | `{"revision": N}`: read it again (`clap_host::timeline`) |
 //!
 //! A piece is named by its track path, any tail of it, its folder's name
 //! or the piece's name (`hits:Drums/Kick`, `hits:Kick/Sum/Trig`,
@@ -31,6 +32,9 @@ pub enum Topic {
     /// A piece of the kit, by its track path.
     Hits(String),
     Job,
+    /// The subscriber's own track's timeline (`host-timeline/1`); sent by
+    /// `clap_host::timeline`, per plugin.
+    Timeline,
 }
 
 impl Topic {
@@ -41,6 +45,7 @@ impl Topic {
             "transport" => Some(Self::Transport),
             "tempo" => Some(Self::Tempo),
             "job" => Some(Self::Job),
+            "timeline" => Some(Self::Timeline),
             other => other
                 .strip_prefix("hits:")
                 .map(str::trim)
@@ -56,6 +61,7 @@ impl Topic {
             Self::Transport => "transport".into(),
             Self::Tempo => "tempo".into(),
             Self::Job => "job".into(),
+            Self::Timeline => "timeline".into(),
             Self::Hits(path) => format!("hits:{path}"),
         }
     }
@@ -121,6 +127,18 @@ pub fn retain_live(live: &[EventSink]) {
     });
 }
 
+/// `sink`'s plugin's subscriptions to `topic`.
+#[must_use]
+pub fn subscriptions_of(sink: &EventSink, topic: &Topic) -> Vec<u64> {
+    with_subs(|s| {
+        s.by_id
+            .iter()
+            .filter(|(_, sub)| sub.topic == *topic && sub.sink.same_plugin(sink))
+            .map(|(id, _)| *id)
+            .collect()
+    })
+}
+
 /// A job finished: its event, to every `job` subscriber.
 pub fn job_finished(event: String) {
     with_subs(|s| {
@@ -146,7 +164,7 @@ impl Outbox {
         let wanted: Vec<(u64, Topic, Option<u64>)> = with_subs(|s| {
             s.by_id
                 .iter()
-                .filter(|(_, sub)| sub.topic != Topic::Job)
+                .filter(|(_, sub)| !matches!(sub.topic, Topic::Job | Topic::Timeline))
                 .map(|(id, sub)| (*id, sub.topic.clone(), sub.sent))
                 .collect()
         });
@@ -219,7 +237,7 @@ fn event_of(daw: &Standalone, project: &ProjectContext, topic: &Topic) -> String
         Topic::Transport => transport(daw, project),
         Topic::Tempo => tempo(daw, project),
         Topic::Hits(path) => hits(daw, project, path),
-        Topic::Job => Value::Null,
+        Topic::Job | Topic::Timeline => Value::Null,
     }
     .to_string()
 }
