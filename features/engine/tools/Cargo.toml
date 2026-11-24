@@ -18,7 +18,7 @@ studio-panels = { workspace = true, features = ["native", "engine"] }
 # The expression editor and the Editor panel (`bench`), and its theme
 # tokens (`theme_export`).
 midi-editor = { workspace = true, features = ["native"] }
-session-engine = { workspace = true }
+session-engine = { workspace = true, features = ["native"] }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }
 blitz-dom = { workspace = true }
@@ -65,3 +65,7 @@ path = "src/bin/blitz_shot.rs"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# The window-attach test's arguments (tests/window_attach.rs).
+serde_json = { workspace = true }
