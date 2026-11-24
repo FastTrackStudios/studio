@@ -612,6 +612,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     register_fundamental(list)?;
     crate::hits::register(list)?;
     crate::drum_apply::register(list)?;
+    crate::drum_plan::register(list)?;
     crate::hits_midi::register(list)?;
     crate::seams::register(list)?;
     crate::comp_keep::register(list)?;

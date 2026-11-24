@@ -161,6 +161,9 @@ pub mod edit_list;
 #[cfg(feature = "native")]
 pub mod hit_ops;
 #[cfg(feature = "native")]
+pub mod drum_plan;
+pub mod hit_flags;
+#[cfg(feature = "native")]
 pub mod hit_place;
 #[cfg(feature = "native")]
 pub mod hits;

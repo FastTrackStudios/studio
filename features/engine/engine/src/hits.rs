@@ -1208,6 +1208,8 @@ pub fn detect(
     let midi = tracing::info_span!("hits.midi_check").entered();
     check_against_midi(daw, project, &mut placed);
     drop(midi);
+    let doubles = flag_false_doubles(&mut placed);
+    tracing::info!(hits.false_doubles = doubles, "hits: false doubles flagged");
 
     // On every recording of the piece in its take.
     let mut written: BTreeMap<String, (String, Vec<Found>)> = BTreeMap::new();
@@ -1373,6 +1375,44 @@ fn check_against_midi(
     }
 }
 
+/// Flags each take's false doubles (`crate::hit_flags`) in their notes;
+/// nothing is removed. How many.
+fn flag_false_doubles(placed: &mut [(KitTake, usize, Vec<Found>)]) -> usize {
+    let mut by_take: BTreeMap<(String, u64), Vec<(usize, usize)>> = BTreeMap::new();
+    for (p, (take, _, hits)) in placed.iter().enumerate() {
+        let refs = by_take
+            .entry((take.pass.clone(), take.origin.to_bits()))
+            .or_default();
+        refs.extend((0..hits.len()).map(|h| (p, h)));
+    }
+    let mut n = 0;
+    for refs in by_take.values() {
+        let flagged = {
+            let strokes: Vec<crate::hit_flags::Stroke<'_>> = refs
+                .iter()
+                .map(|&(p, h)| {
+                    let f = &placed[p].2[h];
+                    crate::hit_flags::Stroke {
+                        piece: &f.mark.piece,
+                        time: f.at,
+                        peak_db: f.mark.peak_db,
+                        from_trigger: f.mark.from_trigger,
+                        from_mic: f.mark.from_mic,
+                        unsure: f.mark.confidence < UNSURE,
+                    }
+                })
+                .collect();
+            crate::hit_flags::false_doubles(&strokes)
+        };
+        for (k, why) in flagged {
+            let (p, h) = refs[k];
+            placed[p].2[h].mark.note = why.note();
+            n += 1;
+        }
+    }
+    n
+}
+
 /// A piece's name as an id part.
 fn slug(name: &str) -> String {
     name.chars()
@@ -1501,7 +1541,7 @@ pub struct HitRow {
     pub confidence: f64,
     /// `both`, `trigger` or `mic`; empty for a hand-placed one.
     pub heard: String,
-    /// `ghost`, `flam`, `bleed`, `unsure`.
+    /// `ghost`, `flam`, `bleed`, `unsure`, `false-double`.
     pub flags: Vec<String>,
     /// `auto`, `manual` or `approved`.
     pub origin: String,
@@ -1554,6 +1594,10 @@ pub fn hits(
                     (
                         h.origin == MarkOrigin::Auto && h.confidence < UNSURE,
                         "unsure",
+                    ),
+                    (
+                        crate::hit_flags::is_false_double(&h.note),
+                        crate::hit_flags::FALSE_DOUBLE,
                     ),
                 ] {
                     if yes {
