@@ -1551,40 +1551,56 @@ fn themed_strip(
 /// writes, one list.
 pub fn look_fields(look: &mut Look) -> [(&'static str, &mut vello::peniko::Color); 32] {
     [
-        ("bg", &mut look.bg),
-        ("row_a", &mut look.row_a),
-        ("row_b", &mut look.row_b),
-        ("grid_beat", &mut look.grid_beat),
-        ("grid_sub", &mut look.grid_sub),
-        ("panel", &mut look.panel),
-        ("panel_border", &mut look.panel_border),
-        ("border_strong", &mut look.border_strong),
-        ("surface_inset", &mut look.surface_inset),
-        ("surface_bar", &mut look.surface_bar),
-        ("gutter_bg", &mut look.gutter_bg),
-        ("key_white", &mut look.key_white),
-        ("key_black", &mut look.key_black),
-        ("key_label", &mut look.key_label),
-        ("text", &mut look.text),
-        ("text_dim", &mut look.text_dim),
-        ("text_bright", &mut look.text_bright),
-        ("text_faint", &mut look.text_faint),
-        ("accent", &mut look.accent),
-        ("selected", &mut look.selected),
-        ("playhead", &mut look.playhead),
-        ("razor", &mut look.razor),
-        ("gold", &mut look.gold),
-        ("zone", &mut look.zone),
-        ("reference", &mut look.reference),
-        ("handle", &mut look.handle),
-        ("control", &mut look.control),
-        ("control_active", &mut look.control_active),
-        ("control_hover", &mut look.control_hover),
-        ("control_selected", &mut look.control_selected),
-        ("octave_line", &mut look.octave_line),
-        ("peaks", &mut look.peaks),
+        ("editor.bg", &mut look.bg),
+        ("editor.row_a", &mut look.row_a),
+        ("editor.row_b", &mut look.row_b),
+        ("editor.grid_beat", &mut look.grid_beat),
+        ("editor.grid_sub", &mut look.grid_sub),
+        ("editor.panel", &mut look.panel),
+        ("editor.panel_border", &mut look.panel_border),
+        ("editor.border_strong", &mut look.border_strong),
+        ("editor.surface_inset", &mut look.surface_inset),
+        ("editor.surface_bar", &mut look.surface_bar),
+        ("editor.gutter_bg", &mut look.gutter_bg),
+        ("editor.key_white", &mut look.key_white),
+        ("editor.key_black", &mut look.key_black),
+        ("editor.key_label", &mut look.key_label),
+        ("editor.text", &mut look.text),
+        ("editor.text_dim", &mut look.text_dim),
+        ("editor.text_bright", &mut look.text_bright),
+        ("editor.text_faint", &mut look.text_faint),
+        ("editor.accent", &mut look.accent),
+        ("editor.selected", &mut look.selected),
+        ("editor.playhead", &mut look.playhead),
+        ("editor.razor", &mut look.razor),
+        ("editor.gold", &mut look.gold),
+        ("editor.zone", &mut look.zone),
+        ("editor.reference", &mut look.reference),
+        ("editor.handle", &mut look.handle),
+        ("editor.control", &mut look.control),
+        ("editor.control_active", &mut look.control_active),
+        ("editor.control_hover", &mut look.control_hover),
+        ("editor.control_selected", &mut look.control_selected),
+        ("editor.octave_line", &mut look.octave_line),
+        ("editor.peaks", &mut look.peaks),
     ]
 }
+
+/// The pitch classes' tokens, C first.
+const PITCH_TOKENS: [&str; 12] = [
+    "editor.pitch_0",
+    "editor.pitch_1",
+    "editor.pitch_2",
+    "editor.pitch_3",
+    "editor.pitch_4",
+    "editor.pitch_5",
+    "editor.pitch_6",
+    "editor.pitch_7",
+    "editor.pitch_8",
+    "editor.pitch_9",
+    "editor.pitch_10",
+    "editor.pitch_11",
+];
 
 /// The theme's own word on any of the editor's colours: `editor.<field>`
 /// in the loaded frame theme's tokens (`editor.bg`, `editor.key_white`,
@@ -1597,7 +1613,7 @@ fn themed(look: &mut Look) {
     };
     let colour = |name: &str| {
         theme
-            .token(&format!("editor.{name}"))
+            .token(name)
             .and_then(frame::theme::runtime::Value::color)
             .map(|c| {
                 let [r, g, b, a] = c.to_rgba8();
@@ -1627,17 +1643,22 @@ fn themed(look: &mut Look) {
         &mut editor::paint::theme::PITCH_CLASS
             .iter()
             .enumerate()
-            .map(|(i, hex)| (format!("pitch_{i}"), *hex)),
+            .map(|(i, hex)| {
+                (
+                    PITCH_TOKENS.get(i).copied().unwrap_or_default().to_owned(),
+                    *hex,
+                )
+            }),
     );
     let drums = table(
         &mut [
-            ("drum_kick", kit::DRUM_KICK_COLOR),
-            ("drum_snare", kit::DRUM_SNARE_COLOR),
-            ("drum_tom", kit::DRUM_TOM_COLOR),
-            ("drum_hat", kit::DRUM_HAT_COLOR),
-            ("drum_ride", kit::DRUM_RIDE_COLOR),
-            ("drum_cymbal", kit::DRUM_CYMBAL_COLOR),
-            ("drum_other", kit::DRUM_OTHER_COLOR),
+            ("editor.drum_kick", kit::DRUM_KICK_COLOR),
+            ("editor.drum_snare", kit::DRUM_SNARE_COLOR),
+            ("editor.drum_tom", kit::DRUM_TOM_COLOR),
+            ("editor.drum_hat", kit::DRUM_HAT_COLOR),
+            ("editor.drum_ride", kit::DRUM_RIDE_COLOR),
+            ("editor.drum_cymbal", kit::DRUM_CYMBAL_COLOR),
+            ("editor.drum_other", kit::DRUM_OTHER_COLOR),
         ]
         .map(|(n, hex)| (n.to_owned(), hex))
         .into_iter(),
@@ -1793,7 +1814,7 @@ pub fn theme_tokens(palette: &crate::palette::Palette) -> Vec<(String, String)> 
     let mut look = base_look(palette);
     let mut vars: Vec<(String, String)> = look_fields(&mut look)
         .into_iter()
-        .map(|(name, c)| (format!("editor.{name}"), hex(to_theme(*c))))
+        .map(|(name, c)| (name.to_owned(), hex(to_theme(*c))))
         .collect();
     vars.push(("sheen".to_owned(), "#ffffff12".to_owned()));
     for (i, c) in editor::paint::theme::PITCH_CLASS.iter().enumerate() {
