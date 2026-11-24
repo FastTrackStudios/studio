@@ -2,7 +2,8 @@
 //! process extension ([`Rhythm`], served by `fts-rhythm` with no
 //! arguments) that provides the DAW's editing contract (`daw.edit`,
 //! `daw_edit`): `PLACE` is [`RHYTHM_PLACE`](place), where a performance's
-//! hits play once moved. Its other actions (detection, planning, quantize,
+//! hits play once moved, and `PLAN` is [`RHYTHM_PLAN`](plan), where a
+//! kit's played hits should go (`rhythm_editing::plan`). Its other actions (detection, planning, quantize,
 //! rendering) run through [`dispatch`], which the CLI uses too.
 
 use std::path::Path;
@@ -268,6 +269,24 @@ pub fn place(params: Json) -> Result<Json, String> {
     serde_json::to_value(daw_edit::PlaceAnswer { pieces }).map_err(|e| e.to_string())
 }
 
+/// `daw.edit`'s `PLAN`: a target for every played hit of a kit, with why,
+/// the rides and removes, and the doubts (`rhythm_editing::plan`).
+///
+/// # Errors
+///
+/// The request is not a `daw_edit::PlanRequest`.
+pub fn plan(params: Json) -> Result<Json, String> {
+    let span = tracing::info_span!("RHYTHM_PLAN", hits = tracing::field::Empty, ms = tracing::field::Empty);
+    let _in = span.enter();
+    let request: daw_edit::PlanRequest =
+        serde_json::from_value(params).map_err(|e| format!("invalid PLAN request: {e}"))?;
+    span.record("hits", request.hits.len());
+    let started = std::time::Instant::now();
+    let answer = rhythm_editing::plan::plan(&request);
+    span.record("ms", started.elapsed().as_secs_f64() * 1000.0);
+    serde_json::to_value(answer).map_err(|e| e.to_string())
+}
+
 /// Rhythm as an Architect extension: every action in its manifest.
 pub struct Rhythm;
 
@@ -278,6 +297,7 @@ impl architect_extensions::linked::Extension for Rhythm {
 
     fn build(&self, ext: &mut architect_extensions::linked::Builder) {
         ext.action("RHYTHM_PLACE", |args| async move { place(args) });
+        ext.action("RHYTHM_PLAN", |args| async move { plan(args) });
         for id in [
             "RHYTHM_STATE",
             "RHYTHM_DETECT",
@@ -295,6 +315,7 @@ impl architect_extensions::linked::Extension for Rhythm {
 pub fn dispatch(registry: &DetectorRegistry, action: &str, params: Json) -> Result<Json, String> {
     match action {
         "RHYTHM_PLACE" => place(params),
+        "RHYTHM_PLAN" => plan(params),
         "RHYTHM_STATE" => Ok(json!({
             "extension": "rhythm",
             "version": env!("CARGO_PKG_VERSION"),
@@ -349,5 +370,32 @@ pub fn dispatch(registry: &DetectorRegistry, action: &str, params: Json) -> Resu
             render_wav(req)
         }
         other => Err(format!("unknown action: {other}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plan_answers_daw_edits_plan() {
+        let request = json!({
+            "hits": [
+                {"id": "k", "piece": "Kick", "time": 1.51},
+                {"id": "s", "piece": "Snare", "time": 1.889}
+            ],
+            "bars": [{"bar": 1, "at": 1.5, "beats": 4, "unit": 4, "beat": 0.375}]
+        });
+        let out = dispatch(&DetectorRegistry::default(), "RHYTHM_PLAN", request).unwrap();
+        let answer: daw_edit::PlanAnswer = serde_json::from_value(out).unwrap();
+        assert!((answer.targets["k"] - 1.5).abs() < 1e-9);
+        assert!((answer.targets["s"] - 1.875).abs() < 1e-9);
+        assert!(dispatch(&DetectorRegistry::default(), "RHYTHM_PLAN", json!({"hits": 3})).is_err());
+    }
+
+    #[test]
+    fn the_manifest_provides_plan() {
+        assert!(MANIFEST.contains("id = \"RHYTHM_PLAN\""));
+        assert!(MANIFEST.contains("\"daw.edit\" = \"0.2.0\""));
     }
 }

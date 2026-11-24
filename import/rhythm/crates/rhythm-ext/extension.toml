@@ -19,9 +19,10 @@ bin = "fts-rhythm"
 
 # The DAW's editing contract (daw-edit): Studio's engine asks the chosen
 # provider where a performance's hits play once moved (`PLACE` →
-# RHYTHM_PLACE).
+# RHYTHM_PLACE) and where a kit's played hits should go (`PLAN` →
+# RHYTHM_PLAN).
 [provides]
-"daw.edit" = "0.1.0"
+"daw.edit" = "0.2.0"
 
 [uses]
 "fts.session" = "^0.1"
@@ -43,6 +44,14 @@ description = "daw.edit's PLACE: where a recorded performance's audio plays once
 group = "Rhythm"
 effect = "read_only"
 params = '{"type":"object","properties":{"hits":{"type":"array"},"span":{"type":"array"},"cut":{"type":"object"},"bounds":{"type":"array"}},"required":["hits","span"]}'
+
+[[actions]]
+id = "RHYTHM_PLAN"
+name = "Rhythm: plan a drum edit"
+description = "daw.edit's PLAN: where each of a kit's played hits should go. Takes `hits` (id, piece, take, time, peak_db, heard, flags), `notes` (the drum MIDI, mapped to pieces), `bars` (each bar's start, meter and beat length), `sections`, `zones` and `settings` (grid_hint per section, anchors, lock_runs, prefer, plan_fills). Answers every hit's target, reason and confidence; `targets`, `remove`, `delete` and `rides` in an apply's shape; `doubts` (only the hits worth a look, each with two candidates and why); and the lean per half bar."
+group = "Rhythm"
+effect = "read_only"
+params = '{"type":"object","properties":{"hits":{"type":"array"},"notes":{"type":"array"},"bars":{"type":"array"},"sections":{"type":"array"},"zones":{"type":"array"},"settings":{"type":"object"}},"required":["hits","bars"]}'
 
 [[actions]]
 id = "RHYTHM_DETECT"
