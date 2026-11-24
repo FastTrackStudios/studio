@@ -612,6 +612,7 @@ fn render_ops(
             piece.start - reach_back - piece.shift,
             piece.end - piece.shift,
         );
+        let warp = Warp::of(piece);
         let under: Vec<&Slice> = lanes
             .comp
             .iter()
@@ -636,18 +637,23 @@ fn render_ops(
             };
             let mut length = b - a;
             let mut markers = Vec::new();
+            let mut at = a + piece.shift;
             // The last resort: only the decay's last span drawn out to meet
-            // the next piece, as the algorithm says.
-            if last && let (Some(reach), Some(from)) = (piece.drawn_to, piece.drawn_from) {
-                let at = a + piece.shift;
-                let from = (from - at).clamp(0.0, length);
-                if reach - at > length + 1e-9 {
+            // the next piece, as the algorithm says — on every COMP item
+            // the span covers (a take switch inside it: each item placed
+            // and stretched by the one warp, never the last alone).
+            if let Some(warp) = warp {
+                let end = b + piece.shift;
+                if end > warp.from + 1e-9 {
+                    let split = (warp.from - at).max(0.0);
+                    let (starts, ends) = (warp.at(at), warp.at(end));
                     markers = vec![StretchMarker::new(0.0, offset)];
-                    if from > 1e-6 {
-                        markers.push(StretchMarker::new(from, offset + from));
+                    if split > 1e-6 {
+                        markers.push(StretchMarker::new(split, offset + split));
                     }
-                    markers.push(StretchMarker::new(reach - at, offset + length));
-                    length = reach - at;
+                    markers.push(StretchMarker::new(ends - starts, offset + length));
+                    at = starts;
+                    length = ends - starts;
                 }
             } else if last && let Some(reach) = piece.drawn_to {
                 let mut shape = source.item.clone();
@@ -672,7 +678,7 @@ fn render_ops(
             });
             ops.push(ItemOp::Place {
                 item: copy.clone(),
-                at: a + piece.shift,
+                at,
                 length,
                 offset,
             });
@@ -690,6 +696,36 @@ fn render_ops(
         }
     }
     ops
+}
+
+/// A piece's stretch (`daw.edit` 0.3): as recorded up to `from`
+/// (timeline), then `from..end` drawn over `from..drawn_to` at `rate`.
+#[derive(Clone, Copy, Debug)]
+struct Warp {
+    from: f64,
+    rate: f64,
+}
+
+impl Warp {
+    /// The stretch `piece` asks for, if it is drawn past its end from
+    /// inside it.
+    fn of(piece: &Piece) -> Option<Self> {
+        let (reach, from) = (piece.drawn_to?, piece.drawn_from?);
+        (reach > piece.end + 1e-9 && piece.end > from + 1e-9).then(|| Self {
+            from,
+            rate: (piece.end - from) / (reach - from),
+        })
+    }
+
+    /// Where the moment the recording has at `t` (timeline, unstretched)
+    /// plays once drawn.
+    fn at(self, t: f64) -> f64 {
+        if t <= self.from {
+            t
+        } else {
+            self.from + (t - self.from) / self.rate
+        }
+    }
 }
 
 /// What takes `start..end` out of `item`: gone if it lies inside, else
@@ -848,5 +884,182 @@ mod tests {
             })
             .collect();
         assert!(near(fades[0].1, 0.004) && near(fades[1].0, 0.004));
+    }
+
+    #[test]
+    fn a_stretch_across_a_take_switch_is_drawn_at_its_one_rate() {
+        // Unbreakable, 253.59 (DRUMS_APPLY with daw.edit 0.3.2): the kick
+        // before the gap is from take 420134, the snare after from 078d8b;
+        // the comp switches at 253.500. The piece before is drawn from
+        // 253.510 (timeline) at 0.615 to 253.5619 — across the switch, at
+        // 253.5415 as it plays. Only the last COMP item, 0.4 ms of it, was
+        // stretched: drawn over 20.4 ms, it played at 0.019. Each item
+        // under the drawn span now plays at the piece's rate, one after
+        // the other, the last reaching where the piece is drawn to.
+        let lanes = Lanes {
+            edit_lane: 1,
+            edit: Vec::new(),
+            comp: vec![
+                slice("t420134", "420134.wav", (250.0, 3.5, 10.0)),
+                slice("t078d8b", "078d8b.wav", (253.5, 6.0, 20.0)),
+            ],
+        };
+        let drawn = Piece {
+            start: 253.4763,
+            end: 253.5419,
+            shift: 0.0415,
+            drawn_to: Some(253.5619),
+            drawn_from: Some(253.51),
+            crossfade: Some(0.01),
+        };
+        let pieces = [
+            drawn,
+            Piece {
+                start: 253.5569,
+                end: 253.6825,
+                shift: 0.0884,
+                drawn_to: None,
+                drawn_from: None,
+                crossfade: Some(0.005),
+            },
+        ];
+        let joins = Joins {
+            lead: 0.005,
+            crossfade: 0.005,
+        };
+        let ops = render_ops(&lanes, &pieces, (253.4763, 253.6825), joins);
+        let planned = (drawn.end - 253.51) / (253.5619 - 253.51);
+        let rendered = rendered(&ops);
+        // The drawn piece is two items, one each side of the switch (and
+        // the snare's, reaching back through the comp's switch, two).
+        assert_eq!(rendered.len(), 4, "{rendered:?}");
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        let (first, second) = (&rendered[0], &rendered[1]);
+        // As recorded up to the stretch, then at the piece's rate, on both.
+        assert!(near(first.slowest, planned), "{first:?}");
+        assert!(near(second.slowest, planned), "{second:?}");
+        assert!(second.fastest <= planned + 1e-9, "{second:?}");
+        // One after the other, the second ending at the piece's reach.
+        assert!(near(first.at + first.length, second.at), "{rendered:?}");
+        assert!(near(second.at + second.length, 253.5619), "{rendered:?}");
+        // From the take it was recorded in: the first from 420134 up to the
+        // switch, the second from 078d8b.
+        assert!(near(first.offset + first.natural, 10.0 + 3.5), "{first:?}");
+        assert!(near(second.offset, 20.0), "{second:?}");
+    }
+
+    /// One item a render places: where, how long, from where in its file,
+    /// how much of the recording it plays, and the slowest and fastest of
+    /// its stretch (1 unstretched).
+    #[derive(Debug)]
+    struct Rendered {
+        at: f64,
+        length: f64,
+        offset: f64,
+        natural: f64,
+        slowest: f64,
+        fastest: f64,
+    }
+
+    fn rendered(ops: &[ItemOp]) -> Vec<Rendered> {
+        let mut out: Vec<(ItemId, Rendered)> = Vec::new();
+        for op in ops {
+            match op {
+                ItemOp::Place {
+                    item,
+                    at,
+                    length,
+                    offset,
+                } => out.push((
+                    item.clone(),
+                    Rendered {
+                        at: *at,
+                        length: *length,
+                        offset: *offset,
+                        natural: *length,
+                        slowest: 1.0,
+                        fastest: 1.0,
+                    },
+                )),
+                ItemOp::Stretch { item, markers } => {
+                    if let Some((_, r)) = out.iter_mut().find(|(id, _)| id == item) {
+                        let rates: Vec<f64> = markers
+                            .windows(2)
+                            .map(|w| {
+                                (w[1].source_position - w[0].source_position)
+                                    / (w[1].position - w[0].position)
+                            })
+                            .collect();
+                        r.slowest = rates.iter().copied().fold(1.0, f64::min);
+                        r.fastest = rates.iter().copied().fold(0.0, f64::max);
+                        r.natural = markers.last().map_or(r.length, |m| m.source_position)
+                            - markers.first().map_or(0.0, |m| m.source_position);
+                    }
+                }
+                _ => {}
+            }
+        }
+        out.into_iter().map(|(_, r)| r).collect()
+    }
+
+    #[test]
+    fn every_piece_renders_at_the_rate_its_fill_planned_on_every_mic() {
+        // Pieces drawn inside one COMP item, across a take switch, and
+        // across two: each item's rendered rate is its piece's planned one,
+        // on every mic (each mic its own COMP lane, the same takes).
+        let joins = Joins {
+            lead: 0.005,
+            crossfade: 0.005,
+        };
+        for switches in [vec![], vec![1.03], vec![1.02, 1.04]] {
+            for mic in 0..3_u8 {
+                let mut cuts = vec![0.0];
+                cuts.extend(&switches);
+                cuts.push(3.0);
+                let comp: Vec<Slice> = cuts
+                    .windows(2)
+                    .enumerate()
+                    .map(|(k, w)| {
+                        let file = format!("mic{mic}-take{k}.wav");
+                        slice(&format!("{mic}-{k}"), &file, (w[0], w[1] - w[0], w[0]))
+                    })
+                    .collect();
+                let lanes = Lanes {
+                    edit_lane: 1,
+                    edit: Vec::new(),
+                    comp,
+                };
+                let drawn = Piece {
+                    start: 0.995,
+                    end: 1.055,
+                    shift: 0.0,
+                    drawn_to: Some(1.105),
+                    drawn_from: Some(1.01),
+                    crossfade: None,
+                };
+                let next = Piece {
+                    start: 1.1,
+                    end: 2.0,
+                    shift: 0.05,
+                    drawn_to: None,
+                    drawn_from: None,
+                    crossfade: Some(0.005),
+                };
+                let ops = render_ops(&lanes, &[drawn, next], (0.995, 2.0), joins);
+                let planned = (1.055 - 1.01) / (1.105 - 1.01);
+                let items = rendered(&ops);
+                let drawn_items = &items[..=switches.len()];
+                for r in drawn_items {
+                    if r.at + r.length > 1.01 + 1e-9 {
+                        assert!((r.slowest - planned).abs() < 1e-9, "{switches:?}: {r:?}");
+                    }
+                }
+                let last = drawn_items.last().expect("an item");
+                assert!((last.at + last.length - 1.105).abs() < 1e-9, "{items:?}");
+                for w in drawn_items.windows(2) {
+                    assert!((w[0].at + w[0].length - w[1].at).abs() < 1e-9, "{items:?}");
+                }
+            }
+        }
     }
 }

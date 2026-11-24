@@ -587,7 +587,7 @@ pub static APPLY: ActionMeta = meta(
     "DRUMS_APPLY",
     "drums_apply",
     "Apply a whole drum edit",
-    "Write a whole drum edit in one step. `targets` {hit id: seconds}: where each hit plays (project seconds, as the song plays now); `remove` [ids]: their markers go (no cut there, the sound rides the slice before); `delete` [ids]: their sound goes (the slice cut out, the slice before drawn out to the next); `rides` {id: leader id}: the hit keeps its played distance from its leader (a flam's grace, a unison kick beside a snare, a second take at a comp seam; a flam marked with HITS_MARK rides by itself). Or `list`: a change list (DRUMS_EDIT_EXPORT, `studio.drum-edit/1`) matched to the markers by drum, take and recorded time (±2 ms) — a detected hit with no match is removed. The whole set is solved at once: hits struck together (15 ms) move together, nothing is sent past or onto another hit, and every hit lands exactly where it is sent. A gap the edit opens is filled by the placement algorithm (daw.edit 0.3, rhythm): the slice before plays on to just before the next attack in its recording, the slice after reaches back into its own take, they crossfade, and only what is left is stretched — its last span, never slower than 0.8×; what that leaves the slice after fills by replaying the previous stroke's decay (never its first 30 ms), then a slower stretch down to 0.5×, then the replay nearer the attack (never nearer than 10 ms, never its transient) and a stretch at whatever rate fills it, flagged `forced`: no silence is ever left; `fills` says how many of each (`replayed_decay`, `forced`), the slowest stretch and the slowest below 0.8 (`slowest_leftover`), any silence left (`left_ms`, 0), and each gap that was stretched or replayed (`replayed_decay_ms`, `replay_from_attack_ms`, `forced`). Refused, saying each `conflicts` entry, where two hits of one drum land on one line, a hit is sent onto another's attack or past it, or hits struck together are sent apart — unless a ride or a delete covers it. One undo step; `mark` names a restore point first (SESSION_HISTORY_RESTORE `mark`), else `Before DRUMS_APPLY <date time>`. `dry_run` solves and says, writing nothing. Says the check (doubled, lost, gaps), each hit's landing error over 0.5 ms (`all_landings` for every one), every slice drawn out and its rate, and the time of each stage.",
+    "Write a whole drum edit in one step. `targets` {hit id: seconds}: where each hit plays (project seconds, as the song plays now); `remove` [ids]: their markers go (no cut there, the sound rides the slice before); `delete` [ids]: their sound goes (the slice cut out, the slice before drawn out to the next); `rides` {id: leader id}: the hit keeps its played distance from its leader (a flam's grace, a unison kick beside a snare, a second take at a comp seam; a flam marked with HITS_MARK rides by itself). Or `list`: a change list (DRUMS_EDIT_EXPORT, `studio.drum-edit/1`) matched to the markers by drum, take and recorded time (±2 ms) — a detected hit with no match is removed. The whole set is solved at once: hits struck together (15 ms) move together, nothing is sent past or onto another hit, and every hit lands exactly where it is sent. A gap the edit opens is filled by the placement algorithm (daw.edit 0.3, rhythm): the slice before plays on to just before the next attack in its recording, the slice after reaches back into its own take, they crossfade, and only what is left is stretched — its last span, never slower than 0.8×; what that leaves the slice after fills by replaying the previous stroke's decay (never its first 30 ms), then a slower stretch down to 0.5×, then the replay nearer the attack (never nearer than 10 ms, never its transient) and a stretch at whatever rate fills it, flagged `forced`: no silence is ever left; `fills` says how many of each (`replayed_decay`, `forced`), the slowest stretch and the slowest below 0.8 (`slowest_leftover`), any silence left (`left_ms`, 0), and each gap that was stretched or replayed (`replayed_decay_ms`, `replay_from_attack_ms`, `forced`). Refused, saying each `conflicts` entry, where two hits of one drum land on one line, a hit is sent onto another's attack or past it, or hits struck together are sent apart — unless a ride or a delete covers it. One undo step; `mark` names a restore point first (SESSION_HISTORY_RESTORE `mark`), else `Before DRUMS_APPLY <date time>`. `dry_run` solves and says, writing nothing. Says the check (doubled, lost, gaps), each hit's landing error over 0.5 ms (`all_landings` for every one), every slice drawn out and its rate (`rates.unplanned`: slices playing at another rate than their fill planned, on any mic — 0), and the time of each stage.",
     "Drums",
     "",
 );
@@ -631,6 +631,12 @@ pub struct Rates {
     pub stretched: u32,
     /// Of them, outside 0.5–1.25 (a gap fill's floor, [`MIN_LEFTOVER_RATE`]).
     pub beyond: u32,
+    /// Of those under a stretch a fill of this edit planned, how many play
+    /// at a rate other than the planned one (on any mic): 0, or the
+    /// rendering disagrees with the plan. And the first few, each its
+    /// attack, rendered rate and planned rate.
+    pub unplanned: u32,
+    pub unplanned_at: Vec<[f64; 3]>,
     /// The slowest and fastest seen.
     pub slowest: Option<f64>,
     pub fastest: Option<f64>,
@@ -1008,6 +1014,13 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
     };
     let ops = planned.ops;
     out.fills = fills_of(&planned.fills);
+    // Where each fill planned a stretch, and its rate: what the check holds
+    // the rendered slices to.
+    let drawn: Vec<(f64, f64, f64)> = planned
+        .fills
+        .iter()
+        .filter_map(|f| f.stretched.map(|s| (s.from, s.over, s.rate)))
+        .collect();
     out.drawn = out.fills.stretched;
     span.record("fill.gaps", out.fills.gaps);
     span.record("fill.stretched", out.fills.stretched);
@@ -1107,7 +1120,7 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
         &sent,
         a.all_landings.unwrap_or(false),
     );
-    let (slices, rates) = rates_of(&song, joins.lead);
+    let (slices, rates) = rates_of(&song, joins.lead, &drawn);
     out.rates = rates;
     step.record("slices", slices);
     step.record("stretched", out.rates.stretched);
@@ -1330,9 +1343,9 @@ fn close_one(
 
 /// Every EDIT slice's playback rate, read back off the lanes: how many
 /// slices there are, and those not at 1.
-fn rates_of(song: &crate::song::Song, lead: f64) -> (usize, Rates) {
+fn rates_of(song: &crate::song::Song, lead: f64, drawn: &[(f64, f64, f64)]) -> (usize, Rates) {
     let mics = crate::hit_place::mics(song);
-    let segments: Vec<(f64, f64, f64)> = song
+    let segments: Vec<(f64, f64, f64, (f64, f64))> = song
         .read(|p| {
             let mut all = Vec::new();
             for m in &mics {
@@ -1343,7 +1356,7 @@ fn rates_of(song: &crate::song::Song, lead: f64) -> (usize, Rates) {
                     (f64::NEG_INFINITY, f64::INFINITY),
                 ) {
                     let (slow, fast) = segment_rates(&s.markers);
-                    all.push((s.start() + lead, slow, fast));
+                    all.push((s.start() + lead, slow, fast, (s.start(), s.end())));
                 }
             }
             all
@@ -1351,9 +1364,24 @@ fn rates_of(song: &crate::song::Song, lead: f64) -> (usize, Rates) {
         .unwrap_or_default();
     let mut out = Rates::default();
     let slices = segments.len();
-    for (at, slow, fast) in segments {
+    for (at, slow, fast, (from, to)) in segments {
         if (slow - 1.0).abs() < 1e-3 && (fast - 1.0).abs() < 1e-3 {
             continue;
+        }
+        // A slice under a planned stretch plays at its rate.
+        if let Some(&(_, _, planned)) = drawn
+            .iter()
+            .find(|(start, over, _)| from < start + over - 1e-6 && to > start + 1e-6)
+            && (slow - planned).abs() > 2e-3
+        {
+            out.unplanned = out.unplanned.saturating_add(1);
+            if out.unplanned_at.len() < LANDINGS {
+                out.unplanned_at.push([
+                    (at * 10_000.0).round() / 10_000.0,
+                    (slow * 1_000.0).round() / 1_000.0,
+                    (planned * 1_000.0).round() / 1_000.0,
+                ]);
+            }
         }
         out.stretched = out.stretched.saturating_add(1);
         if slow < MIN_LEFTOVER_RATE - 1e-3 || fast > MAX_RATE + 1e-3 {
