@@ -42,9 +42,8 @@ wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The flight recorder's folder (crash log, flight log): native only.
 dirs = { workspace = true }
-# The flight recorder (ring, crash log, flight log): native only.
-architect-telemetry = { workspace = true, features = ["flight"] }
 
 # The update check and install (`updates`): architect's signed self-update
 # against the studio repo's GitHub Releases. Desktop only: the web build is

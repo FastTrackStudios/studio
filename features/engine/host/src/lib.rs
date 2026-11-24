@@ -118,51 +118,36 @@ pub fn run() {
     #[cfg(not(target_arch = "wasm32"))]
     apply_open_args();
 
-    // Console logs (RUST_LOG-filtered fmt) + the in-memory log ring, plus
-    // telemetry: Sentry (TASK_SENTRY_DSN) and OTLP export of traces/logs/
-    // metrics when OTEL_EXPORTER_OTLP_ENDPOINT is set (http/protobuf →
-    // the local collector on :4318). Hand-composed rather than
-    // `architect_telemetry::init_tracing_full` because the app adds its own
-    // RingLayer; the layer set is otherwise identical. The guards are
-    // deliberately leaked — main hands control to the dioxus event loop,
-    // which never returns normally.
+    // Console logs (RUST_LOG-filtered fmt), the run's log file and the
+    // in-memory log ring, plus — with the engine built in — the span ring
+    // `PERF_RECENT` reads and OTLP export of every span when
+    // OTEL_EXPORTER_OTLP_ENDPOINT is set (http/protobuf → the local
+    // collector on :4318). Plain tracing + OpenTelemetry
+    // (`session_engine::telemetry`).
     #[cfg(not(target_arch = "wasm32"))]
     {
         use tracing_subscriber::layer::SubscriberExt as _;
         use tracing_subscriber::util::SubscriberInitExt as _;
-        if let Some(guard) = architect_telemetry::init("session") {
-            std::mem::forget(guard);
-        }
         // What is logged without RUST_LOG — and what is exported.
         const LOG_DEFAULT: &str = "info,vox_core=warn,schema_deser=off";
-        use architect_telemetry::timing;
         use tracing_subscriber::Layer as _;
-        // Stage marks are trace-level: let them through to the recorder,
-        // and keep them out of the logs (`timing::no_marks`).
+        let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| LOG_DEFAULT.into());
         // And the Action List's span, whatever the log level: every action
         // is timed (`PERF_RECENT`) even under RUST_LOG=warn.
-        let filter = timing::DIRECTIVES.iter().fold(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| LOG_DEFAULT.into()),
-            |filter, directive| {
-                filter.add_directive(directive.parse().expect("the timing directives parse"))
-            },
-        );
+        #[cfg(feature = "native")]
+        let filter = ::session_engine::telemetry::with_directives(filter);
         let registry = tracing_subscriber::registry()
             .with(filter)
-            .with(tracing_subscriber::fmt::layer().with_filter(timing::no_marks()))
+            .with(tracing_subscriber::fmt::layer())
             // And every run's log in a file of its own, to read afterwards:
             // `/tmp/fts-session/latest.log` (or `FTS_LOG_DIR`).
             .with(run_log().map(|file| {
                 tracing_subscriber::fmt::layer()
                     .with_ansi(false)
                     .with_writer(std::sync::Mutex::new(file))
-                    .with_filter(timing::no_marks())
             }))
-            .with(app_shell::log_ring::RingLayer::new().with_filter(timing::no_marks()))
-            // Where each action's time went, kept to read back
-            // (`PERF_RECENT`).
-            .with(timing::Recorder::default())
+            .with(app_shell::log_ring::RingLayer::new())
             // Which action each step of the song's history was made by
             // (`SESSION_HISTORY`).
             .with({
@@ -171,15 +156,14 @@ pub fn run() {
                 #[cfg(not(feature = "native"))]
                 let layer = tracing_subscriber::layer::Identity::new();
                 layer
-            })
-            .with(architect_telemetry::tracing_layer());
-        match architect_telemetry::otel::init("session", LOG_DEFAULT) {
-            Some((otel_guard, layers)) => {
-                registry.with(layers).init();
-                std::mem::forget(otel_guard);
-            }
-            None => registry.init(),
-        }
+            });
+        // Where each action's time went, kept to read back
+        // (`PERF_RECENT`), and the spans over OTLP.
+        #[cfg(feature = "native")]
+        let registry = registry
+            .with(::session_engine::telemetry::SpanRing::default())
+            .with(::session_engine::telemetry::otel("session"));
+        registry.init();
         app_shell::log_ring::install_panic_hook("Session");
     }
 

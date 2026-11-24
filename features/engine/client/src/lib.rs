@@ -79,7 +79,6 @@ pub mod song_bars;
 pub mod song_chart;
 pub mod song_model;
 pub mod song_modes;
-pub mod stages;
 pub mod stream_quality;
 pub mod stream_set;
 pub mod stretch;

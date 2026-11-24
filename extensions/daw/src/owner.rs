@@ -298,48 +298,27 @@ fn spawn_in_own_session(exe: &Path, log_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The engine's tracing: its log (`engine.log`) and, when an OTLP endpoint
-/// is named (`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, or
-/// `OTEL_EXPORTER_OTLP_ENDPOINT`), every span exported as service
-/// `studio-engine`: what a drag, a quantize or an open cost, stage by stage.
-/// Its level is the engine's own (`FTS_ENGINE_LOG`, `info`), never the
-/// RUST_LOG of the window that started it. The exporter lives for the
-/// process.
+/// The engine's tracing: its log (`engine.log`), the span ring
+/// `PERF_RECENT` reads, and, when an OTLP endpoint is named
+/// (`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, or `OTEL_EXPORTER_OTLP_ENDPOINT`),
+/// every span exported as service `studio-engine`: what a drag, a quantize
+/// or an open cost, step by step. Its level is the engine's own
+/// (`FTS_ENGINE_LOG`, `info`), never the RUST_LOG of the window that
+/// started it. A panic is logged before the hook that was there runs.
 fn init_tracing() {
-    use opentelemetry::trace::TracerProvider as _;
+    use session_engine::telemetry;
     use tracing_subscriber::layer::SubscriberExt as _;
     use tracing_subscriber::util::SubscriberInitExt as _;
     let level = std::env::var("FTS_ENGINE_LOG").unwrap_or_else(|_| "info,vox_core=warn".to_owned());
-    let named = |var: &str| std::env::var(var).is_ok_and(|v| !v.trim().is_empty());
-    let exporting = named("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") || named("OTEL_EXPORTER_OTLP_ENDPOINT");
-    let provider = exporting
-        .then(|| {
-            let exporter = opentelemetry_otlp::SpanExporter::builder()
-                .with_http()
-                .build()
-                .ok()?;
-            Some(
-                opentelemetry_sdk::trace::SdkTracerProvider::builder()
-                    .with_batch_exporter(exporter)
-                    .with_resource(
-                        opentelemetry_sdk::Resource::builder()
-                            .with_service_name("studio-engine")
-                            .build(),
-                    )
-                    .build(),
-            )
-        })
-        .flatten();
-    let otel = provider
-        .as_ref()
-        .map(|p| tracing_opentelemetry::layer().with_tracer(p.tracer("studio-engine")));
-    // Kept for the process: dropping it would stop the export.
-    std::mem::forget(provider);
     let _ = tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(&level))
+        .with(telemetry::with_directives(
+            tracing_subscriber::EnvFilter::new(&level),
+        ))
         .with(tracing_subscriber::fmt::layer().with_ansi(false))
-        .with(otel)
+        .with(telemetry::SpanRing::default())
+        .with(telemetry::otel("studio-engine"))
         .try_init();
+    telemetry::install_panic_hook();
 }
 
 /// The engine: holds the lock, runs the engine, serves one host at a time.

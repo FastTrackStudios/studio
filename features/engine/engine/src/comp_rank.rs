@@ -563,16 +563,17 @@ fn seamed(
 ) -> (f64, f64) {
     use crate::comp_song::{SEAM_LEAD, SEAM_REACH};
     use crate::seams::SEARCH;
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("comp.seams_read").entered();
     // Wide enough for both: the ends cleared of hits, then a seam
     // searched for either side of where they land.
     let reach = SEAM_REACH + SEARCH + SEAM_LEAD;
     let attacks = Attacks::over(daw, project, (from - reach, to + reach));
-    architect_telemetry::wide::set(
+    crate::telemetry::set(
         "comp.seam_attacks",
         i64::try_from(attacks.0.len()).unwrap_or(i64::MAX),
     );
-    stages.mark("comp.seams_read_ms");
+    drop(step);
+    let step = tracing::info_span!("comp.seams_pairs").entered();
     let (start, end) = clear_of_hits(&attacks, (from, to));
     let Some(song) = crate::hit_index::song_of(project) else {
         return (start, end);
@@ -585,11 +586,12 @@ fn seamed(
         crate::seams::pairs(daw, project, &take.lanes, true),
         crate::seams::pairs(daw, project, &take.lanes, false),
     );
-    architect_telemetry::wide::set(
+    crate::telemetry::set(
         "comp.seam_mics",
         i64::try_from(into.len()).unwrap_or(i64::MAX),
     );
-    stages.mark("comp.seams_pairs_ms");
+    drop(step);
+    let step = tracing::info_span!("comp.seams_place").entered();
     let (before, after) = (
         cuts((start - SEARCH, start + lead)),
         cuts((end, end + SEARCH + lead)),
@@ -602,12 +604,12 @@ fn seamed(
             )
         })
         .unwrap_or((None, None));
-    stages.mark("comp.seams_place_ms");
+    drop(step);
     let wide = |keys: [&'static str; 3], placed: Option<crate::seams::Placed>, was: f64| {
         if let Some(s) = placed {
-            architect_telemetry::wide::set(keys[0], (s.at - was) * 1_000.0);
-            architect_telemetry::wide::set(keys[1], s.heard);
-            architect_telemetry::wide::set(keys[2], s.heard_there);
+            crate::telemetry::set(keys[0], (s.at - was) * 1_000.0);
+            crate::telemetry::set(keys[1], s.heard);
+            crate::telemetry::set(keys[2], s.heard_there);
         }
     };
     wide(
@@ -656,9 +658,10 @@ fn comp_in(
     (take, versions): (&crate::hits::TakeVersion, &[crate::hits::TakeVersion]),
     (from, to): (f64, f64),
 ) -> Result<bool, String> {
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("comp.seams").entered();
     let (from, to) = seamed(daw, project, take, (from, to));
-    stages.mark("comp.seams_ms");
+    drop(step);
+    let step = tracing::info_span!("comp.swipe").entered();
     let label = format!("Comp from take {}", take.pass);
     daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
     let comped =
@@ -667,7 +670,8 @@ fn comp_in(
                 .map(|_| n)
                 .map_err(|e| e.to_string())
         });
-    stages.mark("comp.swipe_ms");
+    drop(step);
+    let step = tracing::info_span!("comp.restore").entered();
     // Where the kit is edited, its edit over the stretch made the new comp
     // as recorded — on the engine, in the same undo step, every mic.
     let tracks: Vec<String> = take.lanes.iter().map(|(t, _)| t.clone()).collect();
@@ -676,7 +680,7 @@ fn comp_in(
         .ok()
         .map(|_| crate::comp::edit_from_comp(daw, project, &tracks, (from, to)))
         .transpose();
-    stages.mark("comp.restore_ms");
+    drop(step);
     daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
     comped?;
     let edited = edited?.is_some_and(|n| n > 0);
@@ -772,11 +776,12 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     })?;
     list.register(&CYCLE, Effect::Mutating, |a: CycleArg| {
         let (daw, project) = crate::actions::song()?;
-        let mut stages = crate::stages::Stages::start();
         let mut out = Vec::new();
         for (from, to) in crate::edit_actions::stretches(daw, &project, &a.on)? {
+            let step = tracing::info_span!("comp.rank").entered();
             let (takes, versions, now) = ranked_for(daw, &project, (from, to));
-            stages.mark("comp.rank_ms");
+            drop(step);
+            let step = tracing::info_span!("comp.comp").entered();
             let ranked: Vec<Ranked> = takes
                 .iter()
                 .map(|t| Ranked {
@@ -802,7 +807,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                 .ok_or("the take went")?;
             let edit_restored = comp_in(daw, &project, (version, &versions), (from, to))?;
             now_comped((from, to), &next);
-            stages.mark("comp.comp_ms");
+            drop(step);
             out.push(Comped {
                 from,
                 to,

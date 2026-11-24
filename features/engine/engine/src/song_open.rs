@@ -82,7 +82,9 @@ impl OpenSession for StudioSession {
             open.read_ms = tracing::field::Empty,
         );
         let _in = span.enter();
-        let mut stages = crate::stages::Stages::start();
+        let opening = web_time::Instant::now();
+        let began = opening;
+        let step = tracing::info_span!("open.engine").entered();
         let plan = crate::open::song_plan(path, prepare);
         let opened = if let Some(audio) = first {
             crate::open::open_first_with(&plan.open, audio, media)?
@@ -91,15 +93,22 @@ impl OpenSession for StudioSession {
             crate::open::switch_to(&opened.daw, &opened.project_guid, false);
             opened
         };
-        let engine_ms = stages.mark("open.engine_ms");
+        drop(step);
+        let engine_ms = began.elapsed().as_secs_f64() * 1e3;
+        let began = web_time::Instant::now();
+        let step = tracing::info_span!("open.prepare").entered();
         crate::open::prepare_and_save(crate::folder::disk(), &opened, &plan, prepare);
         // The song as opened (and prepared): what "unsaved changes" is
         // measured from.
         #[cfg(feature = "native")]
         crate::projects::mark_saved(&opened.daw, &opened.project_guid);
-        let prepare_ms = stages.mark("open.prepare_ms");
+        drop(step);
+        let prepare_ms = began.elapsed().as_secs_f64() * 1e3;
+        let began = web_time::Instant::now();
+        let step = tracing::info_span!("open.read").entered();
         let session = Self::read_current(Some(plan.open.as_path()), prepare.chart.clone())?;
-        let read_ms = stages.mark("open.read_ms");
+        drop(step);
+        let read_ms = began.elapsed().as_secs_f64() * 1e3;
         span.record("song.tracks", session.project.0.tracks.len());
         span.record("open.engine_ms", engine_ms);
         span.record("open.prepare_ms", prepare_ms);
@@ -111,7 +120,7 @@ impl OpenSession for StudioSession {
             open.engine_ms = engine_ms,
             open.prepare_ms = prepare_ms,
             open.read_ms = read_ms,
-            open.total_ms = stages.total_ms(),
+            open.total_ms = opening.elapsed().as_secs_f64() * 1e3,
             "song opened"
         );
         Ok((session, opened.project_guid))

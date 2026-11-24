@@ -60,7 +60,6 @@ builtin = { workspace = true, optional = true, features = ["engine"] }
 num-traits = { workspace = true }
 facet = { workspace = true }
 editing = { workspace = true }
-architect-telemetry = { workspace = true }
 facet-json = { workspace = true }
 vox = { workspace = true }
 serde = { workspace = true }

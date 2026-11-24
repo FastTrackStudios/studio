@@ -425,11 +425,16 @@ pub fn sync(
     // One sync at a time: the step thread's and a caller's own, run
     // together, both read one note edit as the hits' edit — and the
     // second's rewrite of the views took the first's back.
-    let mut stages = crate::stages::Stages::start();
+    // The caller's span (a step's `step.follow`), read before this sync's
+    // stages are entered: what the step read is recorded on it, not on a
+    // stage.
+    let caller = tracing::Span::current();
+    let stage = tracing::info_span!("sync.wait").entered();
     let _one = SYNCING
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    stages.mark("sync.wait_ms");
+    drop(stage);
+    let stage = tracing::info_span!("sync.views").entered();
     let tracks = Tracks::all(daw, project.clone());
     let pieces = crate::drum_reference::pieces_of(&tracks);
     let held: Vec<(View, Vec<Note>)> = views(&tracks, &pieces)
@@ -443,12 +448,14 @@ pub fn sync(
             (v, notes)
         })
         .collect();
-    stages.mark("sync.views_ms");
+    drop(stage);
     if held.is_empty() {
         return Ok(Synced::default());
     }
+    let stage = tracing::info_span!("sync.hits").entered();
     let mut hits = hit_notes(&crate::hits::playback(daw, project), moved);
-    stages.mark("sync.hits_ms");
+    drop(stage);
+    let stage = tracing::info_span!("sync.write").entered();
     let mut synced = Synced::default();
     if mode == Mode::Reconcile {
         let piece_of = |pitch: u8| {
@@ -471,7 +478,7 @@ pub fn sync(
             }
         }
         // What the step read as the views edited by hand, on its span.
-        let step = tracing::Span::current();
+        let step = &caller;
         step.record("steps.views_edited", edited_views.join(", ").as_str());
         if !edit.is_empty() {
             let applied = crate::hits::apply_midi(daw, project, &edit.changes, &edit.added);
@@ -498,7 +505,7 @@ pub fn sync(
         remember(&view.track, &reread);
         synced.written = synced.written.saturating_add(1);
     }
-    stages.mark("sync.write_ms");
+    drop(stage);
     Ok(synced)
 }
 
@@ -535,12 +542,13 @@ pub fn write(
     notes: &[Note],
 ) -> Result<(), String> {
     let _span = tracing::info_span!("hits_midi.write_view", view.notes = notes.len()).entered();
-    let mut stages = crate::stages::Stages::start();
+    let stage = tracing::info_span!("view.delete").entered();
     for item in daw.get_items(project.clone(), TrackRef::Guid(track.to_owned())) {
         daw.delete_item(project.clone(), ItemRef::Guid(item.guid))
             .map_err(|e| e.to_string())?;
     }
-    stages.mark("view.delete_ms");
+    drop(stage);
+    let stage = tracing::info_span!("view.create").entered();
     // In time order, whatever order they came in: the item spans them,
     // and each note ends before the next of its pitch.
     let mut notes = notes.to_vec();
@@ -557,7 +565,8 @@ pub fn write(
             last.0 + 5.0,
         )
         .ok_or("the MIDI item would not make")?;
-    stages.mark("view.create_ms");
+    drop(stage);
+    let stage = tracing::info_span!("view.place").entered();
     let tempos: Vec<(f64, f64)> = daw
         .get_tempo_points(project.clone())
         .into_iter()
@@ -567,12 +576,13 @@ pub fn write(
     let created = placed(&notes, |time| {
         crate::drum_reference::qn_between(start, time, &tempos, bpm)
     });
-    stages.mark("view.place_ms");
+    drop(stage);
+    let stage = tracing::info_span!("view.add").entered();
     let _ = daw.add_notes_ppq(
         MidiTakeLocation::new(location.project, location.item, TakeRef::Active),
         created,
     );
-    stages.mark("view.add_ms");
+    drop(stage);
     Ok(())
 }
 

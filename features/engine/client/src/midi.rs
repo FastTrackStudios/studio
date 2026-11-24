@@ -762,9 +762,10 @@ impl Previews {
         if sources.is_empty() {
             return guids.to_vec();
         }
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("waves.cut_of").entered();
         let cuts = crate::wave_pool::map(guids, |guid| cut_of(daw, project, guid));
-        stages.mark("waves.cut_of_ms");
+        drop(step);
+        let step = tracing::info_span!("waves.derive").entered();
         let jobs: Vec<(&String, Option<Cut>)> = guids.iter().zip(cuts).collect();
         let cut = crate::wave_pool::map(&jobs, |(guid, cut)| {
             let cut = cut.as_ref()?;
@@ -792,7 +793,7 @@ impl Previews {
             let curve = take_volume(daw, project, guid);
             Some(((*guid).clone(), wave.through(&curve)))
         });
-        stages.mark("waves.derive_ms");
+        drop(step);
         let mut left = Vec::new();
         let mut made = Vec::new();
         for (guid, wave) in guids.iter().zip(cut) {

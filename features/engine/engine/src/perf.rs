@@ -1,10 +1,9 @@
 //! Where the time went: `PERF_RECENT`, the latest timed units of work —
 //! every action run, the window's part of an edit — read back from the
-//! recorder the app installs (`architect_telemetry::timing::Recorder`).
+//! span ring the process installs (`crate::telemetry::SpanRing`).
 //!
-//! An action marks its stages (`edit.read_ms`, `edit.slip_ms`, …) on its
-//! own span; the window marks its frame's share (`window.settle_ms`,
-//! `window.replan_ms`). A model asks the running app what the last edit
+//! An action's steps are child spans of its own (`edit.read`, `edit.slip`,
+//! …), each one's time a stage of it. A model asks the running app what the last edit
 //! cost, stage by stage, on the song as it is.
 
 use architect::action::{ActionList, ActionMeta, Effect};
@@ -14,7 +13,7 @@ static RECENT: ActionMeta = crate::actions::meta(
     "PERF_RECENT",
     "perf_recent",
     "Where the time went",
-    "The latest timed units of work, newest first: each action run (`action`, with `action.id` and `action.ok`) and the window's part of an edit (`window.slip`), with its fields, its stages in ms (`edit.read_ms`, `edit.slip_ms`, `edit.land_ms`, `window.settle_ms`, `window.replan_ms`, …) and its total. `limit` (20), `name` (a span name: `action`, `window.slip`), `action` (an action id: QUANTIZE). Read-only.",
+    "The latest timed units of work, newest first: each action run (`action`, with `action.id` and `action.ok`) and the window's part of an edit (`window.slip`), with its fields, its steps in ms (its child spans: `edit.read`, `edit.slip`, `edit.land`, …) and its total. `limit` (20), `name` (a span name: `action`, `window.slip`), `action` (an action id: QUANTIZE). Read-only.",
     "Data",
     "",
 );
@@ -56,7 +55,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     list.register(&RECENT, Effect::ReadOnly, |a: RecentArg| {
         let limit = usize::try_from(a.limit.unwrap_or(20)).unwrap_or(20);
         let now = web_time::SystemTime::now();
-        Ok(architect_telemetry::timing::recent(usize::MAX)
+        Ok(crate::telemetry::recent(usize::MAX)
             .into_iter()
             .filter(|t| a.name.as_deref().is_none_or(|n| t.name == n))
             .filter(|t| {

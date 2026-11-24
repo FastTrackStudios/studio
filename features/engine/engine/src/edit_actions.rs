@@ -350,7 +350,7 @@ fn quantize(a: QuantizeArg) -> Result<Quantized, String> {
 /// `EDIT_REVERT`: see its description.
 fn revert(a: RevertArg) -> Result<Reverted, String> {
     let (daw, project) = crate::actions::song()?;
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("edit.read").entered();
     let on = target(daw, &project, &a.on)?;
     match on.profile {
         Profile::Drums => {
@@ -386,12 +386,13 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                 .filter(|h| inside(h.time) && h.now.is_some())
                 .map(|h| h.id)
                 .collect();
-            stages.mark("edit.read_ms");
+            drop(step);
             // Alt+Q / Backspace over a selection: undo covers it, no
             // checkpoint (no save on a key).
             let _key = crate::safety_net::on_a_key();
             let mut restored = true;
             for &(from, to) in &spans {
+                let step = tracing::info_span!("edit.slip").entered();
                 let us = |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
                 let ticket = crate::engine::ticket();
                 // The window carries the restore out; with none following
@@ -407,11 +408,13 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                             .to_owned(),
                     );
                 }
-                stages.mark("edit.slip_ms");
+                drop(step);
+                let step = tracing::info_span!("edit.land").entered();
                 crate::actions::landed(ticket);
-                stages.mark("edit.land_ms");
+                drop(step);
+                let step = tracing::info_span!("edit.check").entered();
                 restored &= as_recorded(daw, &project, (from, to), &playing);
-                stages.mark("edit.check_ms");
+                drop(step);
                 if a.hold.unwrap_or(true) {
                     crate::hits::add_zone(
                         daw,
@@ -425,6 +428,7 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                     )?;
                 }
             }
+            let step = tracing::info_span!("edit.place_back").entered();
             let (mut placed_back, mut forgotten) = (0_u32, 0_u32);
             if keep_manual {
                 for (id, to) in &hand {
@@ -441,7 +445,7 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                 crate::hits::forget_placed_ids(daw, &project, &ids);
                 forgotten = u32::try_from(ids.len()).unwrap_or(u32::MAX);
             }
-            stages.mark("edit.place_back_ms");
+            drop(step);
             crate::hit_overlay::refresh();
             Ok(Reverted {
                 on: on.said(),

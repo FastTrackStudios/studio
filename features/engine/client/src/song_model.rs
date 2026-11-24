@@ -132,33 +132,52 @@ impl StudioSession {
         chart_text: Option<&str>,
         waves: bool,
     ) -> eyre::Result<Self> {
-        let mut stages = crate::stages::Stages::start();
+        // Each step its own span (an async step's future instrumented with
+        // it, a guard is not held across an await), and its time on the
+        // read's line.
+        let at = web_time::Instant::now();
         const SCENE: &str = "drum-mixing";
-        // Say which step fails: `fetch_of` answers only yes or no.
-        let facade =
-            daw_control::Daw::try_get().ok_or_else(|| eyre::eyre!("the daw facade is not up"))?;
-        let handle = facade
-            .project(project.to_owned())
-            .await
-            .map_err(|e| eyre::eyre!("{name} is not in the engine: {e}"))?;
-        let raw = daw_ui::studio::project::fetch_of(handle.clone())
-            .await
-            .ok_or_else(|| eyre::eyre!("could not read {name} back"))?;
-        let fetch_ms = stages.mark("read.fetch_ms");
-        // Its automation lanes: from this process's engine, or through
-        // the facade from wherever the engine is.
-        #[cfg(feature = "native")]
-        let local = crate::open::local_engine().is_some();
-        #[cfg(not(feature = "native"))]
-        let local = false;
-        if local {
-            #[cfg(feature = "native")]
-            crate::automation::refresh_in(project, &raw.tracks);
-        } else {
-            let (lanes, takes) = crate::automation::read_remote(&raw.tracks).await;
-            crate::automation::adopt_remote(lanes, takes);
-        }
-        let automation_ms = stages.mark("read.automation_ms");
+        let (handle, raw) = tracing::Instrument::instrument(
+            async {
+                // Say which step fails: `fetch_of` answers only yes or no.
+                let facade = daw_control::Daw::try_get()
+                    .ok_or_else(|| eyre::eyre!("the daw facade is not up"))?;
+                let handle = facade
+                    .project(project.to_owned())
+                    .await
+                    .map_err(|e| eyre::eyre!("{name} is not in the engine: {e}"))?;
+                let raw = daw_ui::studio::project::fetch_of(handle.clone())
+                    .await
+                    .ok_or_else(|| eyre::eyre!("could not read {name} back"))?;
+                Ok::<_, eyre::Report>((handle, raw))
+            },
+            tracing::info_span!("read.fetch"),
+        )
+        .await?;
+        let fetch_ms = at.elapsed().as_secs_f64() * 1e3;
+        let at = web_time::Instant::now();
+        tracing::Instrument::instrument(
+            async {
+                // Its automation lanes: from this process's engine, or
+                // through the facade from wherever the engine is.
+                #[cfg(feature = "native")]
+                let local = crate::open::local_engine().is_some();
+                #[cfg(not(feature = "native"))]
+                let local = false;
+                if local {
+                    #[cfg(feature = "native")]
+                    crate::automation::refresh_in(project, &raw.tracks);
+                } else {
+                    let (lanes, takes) = crate::automation::read_remote(&raw.tracks).await;
+                    crate::automation::adopt_remote(lanes, takes);
+                }
+            },
+            tracing::info_span!("read.automation"),
+        )
+        .await;
+        let automation_ms = at.elapsed().as_secs_f64() * 1e3;
+        let at = web_time::Instant::now();
+        let step = tracing::info_span!("read.kinds").entered();
         let planner = Planner {
             raw: Arc::new(raw),
             scene: Some(SCENE),
@@ -185,37 +204,49 @@ impl StudioSession {
                 from_text
             }),
         };
-        let kinds_ms = stages.mark("read.kinds_ms");
+        drop(step);
+        let kinds_ms = at.elapsed().as_secs_f64() * 1e3;
+        let at = web_time::Instant::now();
+        let step = tracing::info_span!("read.plan").entered();
         let (studio, rows) = planner.plan(&planner.raw);
-        let plan_ms = stages.mark("read.plan_ms");
+        drop(step);
+        let plan_ms = at.elapsed().as_secs_f64() * 1e3;
         tracing::Span::current().record("song.tracks", studio.0.tracks.len());
+        let at = web_time::Instant::now();
         let previews = crate::midi::Previews::default();
         let items = || studio.0.items.values().flatten();
-        // A song opened behind the one on screen joins its set first; its
-        // pictures are read after ([`Self::fill_previews`]).
-        if waves {
-            previews
-                .fill_in(
-                    &handle,
-                    items()
-                        .filter(|item| studio.0.is_midi(&item.guid))
-                        .map(|item| (item.guid.clone(), item.length.as_seconds()))
-                        .collect(),
-                )
-                .await;
-        }
-        if waves {
-            previews
-                .fill_waves_in(
-                    &handle,
-                    items()
-                        .filter(|item| !studio.0.is_midi(&item.guid))
-                        .map(|item| item.guid.clone())
-                        .collect(),
-                )
-                .await;
-        }
-        let previews_ms = stages.mark("read.previews_ms");
+        tracing::Instrument::instrument(
+            async {
+                // A song opened behind the one on screen joins its set
+                // first; its pictures are read after
+                // ([`Self::fill_previews`]).
+                if waves {
+                    previews
+                        .fill_in(
+                            &handle,
+                            items()
+                                .filter(|item| studio.0.is_midi(&item.guid))
+                                .map(|item| (item.guid.clone(), item.length.as_seconds()))
+                                .collect(),
+                        )
+                        .await;
+                }
+                if waves {
+                    previews
+                        .fill_waves_in(
+                            &handle,
+                            items()
+                                .filter(|item| !studio.0.is_midi(&item.guid))
+                                .map(|item| item.guid.clone())
+                                .collect(),
+                        )
+                        .await;
+                }
+            },
+            tracing::info_span!("read.previews"),
+        )
+        .await;
+        let previews_ms = at.elapsed().as_secs_f64() * 1e3;
         tracing::info!(
             song.name = name,
             read.fetch_ms = fetch_ms,
@@ -265,21 +296,34 @@ impl StudioSession {
     )]
     pub async fn read_linked(project: &str, name: &str) -> eyre::Result<Self> {
         const SCENE: &str = "drum-mixing";
-        let mut stages = crate::stages::Stages::start();
-        let facade =
-            daw_control::Daw::try_get().ok_or_else(|| eyre::eyre!("the daw facade is not up"))?;
-        let handle = facade
-            .project(project.to_owned())
-            .await
-            .map_err(|e| eyre::eyre!("{name} is not in the engine: {e}"))?;
-        let (raw, facts, automation) = futures_util::join!(
-            daw_ui::studio::project::fetch_of(handle.clone()),
-            crate::view_client::song_facts(project),
-            crate::view_client::automation_of(project),
-        );
-        let raw = raw.ok_or_else(|| eyre::eyre!("could not read {name} back"))?;
-        let facts = facts.unwrap_or_default();
-        let fetch_ms = stages.mark("read.fetch_ms");
+        // Each step its own span (an async step's future instrumented with
+        // it, a guard is not held across an await), and its time on the
+        // read's line.
+        let read_back = tracing::Span::current();
+        let at = web_time::Instant::now();
+        let (handle, raw, facts, automation) = tracing::Instrument::instrument(
+            async {
+                let facade = daw_control::Daw::try_get()
+                    .ok_or_else(|| eyre::eyre!("the daw facade is not up"))?;
+                let handle = facade
+                    .project(project.to_owned())
+                    .await
+                    .map_err(|e| eyre::eyre!("{name} is not in the engine: {e}"))?;
+                let (raw, facts, automation) = futures_util::join!(
+                    daw_ui::studio::project::fetch_of(handle.clone()),
+                    crate::view_client::song_facts(project),
+                    crate::view_client::automation_of(project),
+                );
+                let raw = raw.ok_or_else(|| eyre::eyre!("could not read {name} back"))?;
+                let facts = facts.unwrap_or_default();
+                Ok::<_, eyre::Report>((handle, raw, facts, automation))
+            },
+            tracing::info_span!("read.fetch"),
+        )
+        .await?;
+        let fetch_ms = at.elapsed().as_secs_f64() * 1e3;
+        let at = web_time::Instant::now();
+        let step = tracing::info_span!("read.plan").entered();
         if let Some(read) = automation {
             crate::automation::adopt_read(read);
         }
@@ -289,18 +333,24 @@ impl StudioSession {
             kinds: Arc::new(crate::plan::Kinds::from_entries(facts.kinds)),
         };
         let (studio, rows) = planner.plan(&planner.raw);
-        let plan_ms = stages.mark("read.plan_ms");
+        drop(step);
+        let plan_ms = at.elapsed().as_secs_f64() * 1e3;
+        let at = web_time::Instant::now();
         let previews = crate::midi::Previews::default();
         let items = || studio.0.items.values().flatten();
-        previews
-            .fill_in(
+        let step = tracing::info_span!("read.previews");
+        tracing::Instrument::instrument(
+            previews.fill_in(
                 &handle,
                 items()
                     .filter(|item| studio.0.is_midi(&item.guid))
                     .map(|item| (item.guid.clone(), item.length.as_seconds()))
                     .collect(),
-            )
-            .await;
+            ),
+            step.clone(),
+        )
+        .await;
+        let step = step.entered();
         // The waveforms come in behind: the song is shown at once, each
         // lane drawn as its waveform lands (`Previews` counts them).
         let audio: Vec<String> = items()
@@ -310,14 +360,20 @@ impl StudioSession {
         if let Some(rt) = crate::open::runtime() {
             let previews = previews.clone();
             let song = project.to_owned();
-            // Behind the read, but still its work: its trace.
-            let waves = tracing::info_span!("song.waves", song.items = audio.len());
+            // Behind the read, but still its work: its trace (under the
+            // read itself, not the step that spawns it).
+            let waves = tracing::info_span!(
+                parent: &read_back,
+                "song.waves",
+                song.items = audio.len()
+            );
             rt.spawn(tracing::Instrument::instrument(
                 async move { previews.fill_waves_linked(&song, audio).await },
                 waves,
             ));
         }
-        let previews_ms = stages.mark("read.previews_ms");
+        drop(step);
+        let previews_ms = at.elapsed().as_secs_f64() * 1e3;
         tracing::info!(
             song.name = name,
             read.fetch_ms = fetch_ms,
@@ -668,10 +724,11 @@ fn fetch_here() -> Option<daw_ui::studio::project::Project> {
         .enable_all()
         .build()
         .ok()?;
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("fetch.read").entered();
     mark_seen();
     let project = rt.block_on(daw_ui::studio::project::fetch())?;
-    stages.mark("fetch.read_ms");
+    drop(step);
+    let step = tracing::info_span!("fetch.automation").entered();
     // The lanes as the engine reads them (the leveler's among them), over
     // the window's link; a REAPER driven has its lanes on the facade.
     match crate::open::current_song().and_then(|song| crate::view_client::automation(&song)) {
@@ -681,7 +738,7 @@ fn fetch_here() -> Option<daw_ui::studio::project::Project> {
             crate::automation::adopt_remote(lanes, takes);
         }
     }
-    stages.mark("fetch.automation_ms");
+    drop(step);
     Some(project)
 }
 
@@ -734,9 +791,10 @@ pub fn plan_rows_with(
     scene: Option<&str>,
     kinds: &crate::plan::Kinds,
 ) -> (ProjectRef, RowsRef) {
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("plan.clone").entered();
     let project = ProjectRef(Arc::new(raw.clone()));
-    stages.mark("plan.clone_ms");
+    drop(step);
+    let step = tracing::info_span!("plan.rows").entered();
     let (visible, depths) =
         daw_ui::components::folders::FolderState::default().visible(&project.tracks);
     let mut planned: Vec<(daw_proto::Track, u32)> = visible.into_iter().zip(depths).collect();
@@ -762,7 +820,8 @@ pub fn plan_rows_with(
     }
     // And the folders the window shut (`crate::folds`), over the scene's.
     planned = crate::folds::apply(planned);
-    stages.mark("plan.rows_ms");
+    drop(step);
+    let step = tracing::info_span!("plan.refold").entered();
     // A folder the scene shut keeps its row and gets its children's items,
     // folded: the mix happens on the folder, so its name, fader and colour
     // stay, and so does what is in it.
@@ -778,11 +837,12 @@ pub fn plan_rows_with(
             settings.folded_takes,
             &|tracks, folder| crate::lanes::folder_view(tracks, folder).is_some(),
         );
-        stages.mark("plan.refold_ms");
+        drop(step);
+        let step = tracing::info_span!("plan.join").entered();
         if !crate::folds::cuts_shown() {
             daw_ui::studio::folded::join_seams(folded);
         }
-        stages.mark("plan.join_ms");
+        drop(step);
     }
     (project, RowsRef(Arc::new(planned)))
 }

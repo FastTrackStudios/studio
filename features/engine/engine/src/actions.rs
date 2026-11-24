@@ -3135,9 +3135,10 @@ fn detect(
     span: (f64, f64),
     prepared: &Prepared,
 ) -> Result<Detected, String> {
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("detect.kit").entered();
     let kit = &prepared.kit;
-    stages.mark("detect.kit_ms");
+    drop(step);
+    let step = tracing::info_span!("detect.moments").entered();
     let line_of = |h: f64| grid_line(daw, project, h, settings.grid);
     let by_line: &dyn Fn(f64) -> f64 = &line_of;
     let tolerance = settings
@@ -3145,9 +3146,11 @@ fn detect(
         .map_or(f64::INFINITY, |ms| ms / 1_000.0);
     let moments = moments(kit, settings.grid_scan.then_some((by_line, tolerance)));
     let loudness = weights(&moments, settings);
-    stages.mark("detect.moments_ms");
+    drop(step);
+    let step = tracing::info_span!("detect.targets").entered();
     let by = targets(daw, project, settings, (kit, &moments), span, prepared)?;
-    stages.mark("detect.targets_ms");
+    drop(step);
+    let step = tracing::info_span!("detect.written").entered();
     let mut placed: Vec<(f64, Option<f64>)> = by.iter().map(|(h, t, _)| (*h, *t)).collect();
     let mut by_groove = Vec::new();
     let mut by_written = Vec::new();
@@ -3159,7 +3162,8 @@ fn detect(
             }
         }
     }
-    stages.mark("detect.written_ms");
+    drop(step);
+    let step = tracing::info_span!("detect.groove").entered();
     let lo = span.0 - edge(daw, project, span.0);
     let hi = span.1 - edge(daw, project, span.1);
     if settings.target == crate::drum_settings::Target::Pattern
@@ -3200,7 +3204,8 @@ fn detect(
             *to = None;
         }
     }
-    stages.mark("detect.groove_ms");
+    drop(step);
+    let step = tracing::info_span!("detect.overrides").entered();
     let mut by_kind: Vec<Placed> = by.iter().map(|(_, _, b)| *b).collect();
     // A figure, or a fill quantized on a grid of its own, puts its hits on
     // its grid — before strokes sent to one line are settled and gestures
@@ -3217,9 +3222,10 @@ fn detect(
     // Strokes sent to one line take the lines either side of it, in order,
     // where they can: a double kick played into the snare on 2 is the "&"
     // and the "a" before it, not one stroke between the others.
-    stages.mark("detect.overrides_ms");
+    drop(step);
+    let step = tracing::info_span!("detect.parts").entered();
     let parts = &prepared.parts;
-    stages.mark("detect.parts_ms");
+    drop(step);
     // Only on a grid of sixteenths or finer: a double is two sixteenths.
     // On eighths (strokes played between them, two sent to one) the lines
     // either side are an eighth away — the strokes shoved 200 ms, a bar's
@@ -3877,11 +3883,13 @@ fn quantize_span(
     (lock, dry): (Option<&str>, bool),
     prepared: &Prepared,
 ) -> Result<(QuantizeSpan, Planned), String> {
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("span.zones").entered();
     let zones = &prepared.zones;
-    stages.mark("span.zones_ms");
+    drop(step);
+    let step = tracing::info_span!("span.detect").entered();
     let found = detect(daw, project, settings, (from, to), prepared)?;
-    stages.mark("span.detect_ms");
+    drop(step);
+    let step = tracing::info_span!("span.targets").entered();
     // A hit half a sixteenth before the downbeat is this section's pushed
     // first hit; one that close before the end is the next's.
     let (lo, hi) = (from - edge(daw, project, from), to - edge(daw, project, to));
@@ -3961,7 +3969,8 @@ fn quantize_span(
         Some(piece) => locked_targets(daw, project, settings, &found, (piece, (from, to)))?,
         None => found.targets.clone(),
     };
-    stages.mark("span.targets_ms");
+    drop(step);
+    let step = tracing::info_span!("span.held").entered();
     // In a written fill, a hit the chart does not have stays as played.
     if settings.fills == crate::drum_settings::Fills::Skip {
         for ((h, to), by) in targets.iter_mut().zip(&found.placed_by) {
@@ -3989,9 +3998,10 @@ fn quantize_span(
     if let Some(after) = found.targets.iter().map(|(h, _)| *h).find(|h| *h >= hi) {
         left_out.push(after);
     }
-    stages.mark("span.held_ms");
+    drop(step);
+    let step = tracing::info_span!("span.judge").entered();
     let (mut result, cuts) = judge(daw, project, settings, (&pairs, &left_out), dry);
-    stages.mark("span.judge_ms");
+    drop(step);
     if settings.fills == crate::drum_settings::Fills::Skip {
         result.in_fills = in_fills;
     }
@@ -4361,9 +4371,10 @@ fn register_revert(list: &ActionList) -> Result<(), architect::action::ActionErr
 fn register_place(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&PLACE, Effect::Mutating, |a: PlaceArg| {
         let (daw, project) = song()?;
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("edit.read").entered();
         let before = crate::hits::playback(daw, &project);
-        stages.mark("edit.read_ms");
+        drop(step);
+        let step = tracing::info_span!("edit.kit").entered();
         let ids: Vec<String> = a.id.iter().cloned().chain(a.ids.iter().cloned()).collect();
         let chosen: Vec<f64> = before
             .iter()
@@ -4413,19 +4424,22 @@ fn register_place(list: &ActionList) -> Result<(), architect::action::ActionErro
             .flatten()
             .filter_map(|i| times.get(i).copied())
             .collect();
-        stages.mark("edit.kit_ms");
+        drop(step);
+        let step = tracing::info_span!("edit.judge").entered();
         let (result, cuts) = judge(daw, &project, &settings, (&pairs, &neighbours), false);
-        stages.mark("edit.judge_ms");
+        drop(step);
         let span = (earliest.min(to) - 1.0, (latest + shift).max(latest) + 1.0);
         if result.applied {
+            let step = tracing::info_span!("edit.place").entered();
             for id in &ids {
                 crate::hits::mark_placed(daw, &project, id);
             }
             apply_cuts(daw, &project, &settings, cuts)?;
-            stages.mark("edit.place_ms");
+            drop(step);
         }
+        let step = tracing::info_span!("edit.check").entered();
         let out = checked(daw, &project, (&settings, &pairs), &before, span);
-        stages.mark("edit.check_ms");
+        drop(step);
         Ok(out)
     })?;
     Ok(())
@@ -4549,7 +4563,7 @@ fn register_requantize(list: &ActionList) -> Result<(), architect::action::Actio
 /// No hit markers, a section that is not there, or no engine.
 pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
     let (daw, project) = song()?;
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("edit.read").entered();
     if crate::hits::kit_from_markers(daw, &project).is_none() {
         return Err("no hit markers: find the hits first (HITS_DETECT)".to_owned());
     }
@@ -4587,7 +4601,8 @@ pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
     let net = crate::safety_net::before(QUANTIZE.id, reach)?;
     let before = crate::hits::playback(daw, &project);
     let prepared = Prepared::read(daw, &project);
-    stages.mark("edit.read_ms");
+    drop(step);
+    let step = tracing::info_span!("edit.plan").entered();
     let mut out: Vec<QuantizeSpan> = Vec::new();
     let mut cuts: Vec<(i64, i64)> = Vec::new();
     let mut sent: Vec<(f64, Option<f64>)> = Vec::new();
@@ -4610,14 +4625,16 @@ pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
             out.push(span);
         }
     }
-    stages.mark("edit.plan_ms");
+    drop(step);
     if !dry && cuts.iter().any(|c| c.1 != 0) {
+        let step = tracing::info_span!("edit.place").entered();
         apply_cuts(daw, &project, &base, cuts)?;
-        stages.mark("edit.place_ms");
+        drop(step);
         // One edit, one check: every hit sent, held up to where it
         // was sent; none outside the edit moved.
+        let step = tracing::info_span!("edit.check").entered();
         let check = checked(daw, &project, (&base, &sent), &before, whole);
-        stages.mark("edit.check_ms");
+        drop(step);
         if let Some(last) = out.last_mut() {
             last.check = Some(check);
         }
@@ -4794,10 +4811,13 @@ fn apply_cuts(
     settings: &crate::drum_settings::Settings,
     cuts: Vec<(i64, i64)>,
 ) -> Result<(), String> {
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("cuts.song").entered();
     let song = crate::song::Song::current()?;
-    stages.mark("cuts.song_ms");
-    if !crate::hit_place::ready(&song) {
+    // Whether the kit has its lanes is read with the song, so the
+    // branch's own stage times only its own work.
+    let lanes = crate::hit_place::ready(&song);
+    drop(step);
+    if !lanes {
         // The older way (slip the kit's items in a window that follows
         // the engine) needs such a window; without one it would wait for
         // nothing and change nothing.
@@ -4807,12 +4827,15 @@ fn apply_cuts(
                     .to_owned(),
             );
         }
+        let step = tracing::info_span!("cuts.slip").entered();
         landed(slip_now(daw, project, settings, cuts));
-        stages.mark("cuts.slip_ms");
+        drop(step);
         return Ok(());
     }
+    let step = tracing::info_span!("cuts.samples").entered();
     follow_samples(daw, project, settings, &cuts);
-    stages.mark("cuts.samples_ms");
+    drop(step);
+    let step = tracing::info_span!("cuts.place").entered();
     let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
     let moves: Vec<(f64, f64)> = cuts
         .iter()
@@ -4823,10 +4846,11 @@ fn apply_cuts(
         crossfade: settings.xfade_ms / 1_000.0,
     };
     crate::hit_place::place(&song, &moves, joins)?;
-    stages.mark("cuts.place_ms");
+    drop(step);
+    let step = tracing::info_span!("cuts.refresh").entered();
     crate::song_model::request_resync_items();
     crate::hit_overlay::refresh();
-    stages.mark("cuts.refresh_ms");
+    drop(step);
     Ok(())
 }
 

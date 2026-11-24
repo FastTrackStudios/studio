@@ -2759,7 +2759,7 @@ impl ArrangementWidget {
             slip.edits = tracing::field::Empty
         );
         let _in = span.enter();
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("window.slip").entered();
         // Where in its source each take started, before it is cut: every
         // slice of it shows its own part of the take's waveform.
         let taken: std::collections::HashSet<&str> = items.iter().map(String::as_str).collect();
@@ -2810,13 +2810,15 @@ impl ArrangementWidget {
             .collect();
         draw_slices(&self.previews, items.clone(), slices);
         span.record("slip.edits", effects.len());
-        stages.mark("window.slip_ms");
+        drop(step);
+        let step = tracing::info_span!("window.settle").entered();
         self.settle_for_action(effects);
-        stages.mark("window.settle_ms");
+        drop(step);
         // The kit's row folded again from the slices, so every cut is on
         // it (in Edit mode; elsewhere the seams are joined).
+        let step = tracing::info_span!("window.replan").entered();
         self.replan_rows();
-        stages.mark("window.replan_ms");
+        drop(step);
         // The hits have moved: what was detected is not where they are.
         crate::hit_overlay::refresh();
         self.dirty.set(true);
@@ -3018,12 +3020,13 @@ impl ArrangementWidget {
         // One timed unit (`PERF_RECENT {name: "window.resync"}`).
         let span = tracing::info_span!("window.resync", resync.items = tracing::field::Empty);
         let _entered = span.enter();
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("resync.fetch").entered();
         let patched = self
             .replan
             .as_ref()
             .and_then(|(_, raw)| crate::song_model::patch_items(&mut raw.borrow_mut()));
         let Some(now) = patched else {
+            drop(step);
             drop(_entered);
             self.resync();
             return;
@@ -3032,7 +3035,8 @@ impl ArrangementWidget {
         if now.is_empty() && !crate::midi::stale_pending() {
             return;
         }
-        stages.mark("resync.fetch_ms");
+        drop(step);
+        let step = tracing::info_span!("resync.previews").entered();
         // The changed items the window has not drawn: a MIDI item's notes
         // read now, an audio item's waveform cut from its recording's
         // behind the window.
@@ -3068,9 +3072,10 @@ impl ArrangementWidget {
             let previews = self.previews.clone();
             crate::wave_pool::spawn(move || previews.fill_waves_blocking(waves));
         }
-        stages.mark("resync.previews_ms");
+        drop(step);
+        let step = tracing::info_span!("resync.adopt").entered();
         self.replanned();
-        stages.mark("resync.adopt_ms");
+        drop(step);
     }
 
     /// [`Self::resync_as`] in a page: the whole song, always.
@@ -3089,12 +3094,13 @@ impl ArrangementWidget {
         // One timed unit (`PERF_RECENT {name: "window.resync"}`).
         let span = tracing::info_span!("window.resync");
         let _entered = span.enter();
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("resync.fetch").entered();
         let Some(fresh) = crate::song_model::fetch() else {
             tracing::warn!("the session could not be read back from the engine");
             return;
         };
-        stages.mark("resync.fetch_ms");
+        drop(step);
+        let step = tracing::info_span!("resync.previews").entered();
         let unread = unread_midi(&fresh, &self.previews);
         if !unread.is_empty() {
             self.previews.fill_blocking(unread);
@@ -3110,9 +3116,10 @@ impl ArrangementWidget {
             let previews = self.previews.clone();
             crate::wave_pool::spawn(move || previews.fill_waves_blocking(waves));
         }
-        stages.mark("resync.previews_ms");
+        drop(step);
+        let step = tracing::info_span!("resync.adopt").entered();
         self.adopt(fresh);
-        stages.mark("resync.adopt_ms");
+        drop(step);
     }
 
     /// [`Self::resync`] in a page, which cannot block on the engine: the
@@ -3162,11 +3169,12 @@ impl ArrangementWidget {
         let Some((planner, raw)) = self.replan.as_mut() else {
             return;
         };
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("adopt.plan").entered();
         let (project, rows) = planner.plan(&raw.borrow());
-        stages.mark("adopt.plan_ms");
+        drop(step);
+        let step = tracing::info_span!("adopt.restructure").entered();
         self.restructure((*project.0).clone(), rows.as_slice().to_vec());
-        stages.mark("adopt.restructure_ms");
+        drop(step);
         // The engine changed the session: a slice moved is a hit moved.
         crate::hit_overlay::refresh();
     }
@@ -3184,23 +3192,24 @@ impl ArrangementWidget {
         if crate::folds::generation() != self.folds_seen {
             return false;
         }
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("adopt.patch").entered();
         let patched = crate::replan::patch_planned(
             &mut self.project,
             &raw.borrow(),
             &self.rows,
             crate::replan::Folding::current(),
         );
-        stages.mark("adopt.patch_ms");
+        drop(step);
         match patched {
             crate::replan::Patched::Same => true,
             crate::replan::Patched::Items => {
+                let step = tracing::info_span!("adopt.recut").entered();
                 // What was hovered or turned may have moved.
                 self.hovered_item = None;
                 self.turning = None;
                 self.pointer = crate::pointer::Pointer::default();
                 self.recut();
-                stages.mark("adopt.recut_ms");
+                drop(step);
                 true
             }
             crate::replan::Patched::Replan => false,
@@ -3223,9 +3232,10 @@ impl ArrangementWidget {
         project: daw_ui::studio::project::Project,
         rows: Vec<(daw_proto::Track, u32)>,
     ) {
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("restructure.names").entered();
         crate::tcp::fit_names(&self.font, &rows, self.layout);
-        stages.mark("restructure.names_ms");
+        drop(step);
+        let step = tracing::info_span!("restructure.rows").entered();
         self.tracks = rows.iter().map(|(t, _)| t.clone()).collect();
         self.map = crate::plan::Rows::of(&rows, &self.tracks);
         self.rows = rows;
@@ -3233,11 +3243,13 @@ impl ArrangementWidget {
         self.hovered_item = None;
         self.turning = None;
         self.pointer = crate::pointer::Pointer::default();
-        stages.mark("restructure.rows_ms");
+        drop(step);
+        let step = tracing::info_span!("restructure.recut").entered();
         self.recut();
-        stages.mark("restructure.recut_ms");
+        drop(step);
+        let step = tracing::info_span!("restructure.publish").entered();
         self.publish_rows();
-        stages.mark("restructure.publish_ms");
+        drop(step);
     }
 
     /// Link to a docked mixer: the rows go to it (now, and on every
@@ -4521,7 +4533,7 @@ impl ArrangementWidget {
         self.rebuilds = self.rebuilds.saturating_add(1);
         // A view setting, not the session's: an edit must not reset it.
         let lettering = self.scene.lettering;
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("recut.build").entered();
         // From the last recording: only what changed is recorded again.
         self.scene.rebuild_hiding(
             &self.palette,
@@ -4539,7 +4551,7 @@ impl ArrangementWidget {
             },
             &self.hidden,
         );
-        stages.mark("recut.build_ms");
+        drop(step);
         // The scroll's range is the rows as drawn: a row showing its lanes
         // is as tall as its stack of takes, not its track.
         self.content_h.set(self.scene.content_height());

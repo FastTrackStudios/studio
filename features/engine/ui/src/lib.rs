@@ -214,7 +214,6 @@ pub mod shell;
 pub mod simulate;
 pub mod skin;
 pub use session_engine_client::song_model;
-pub use session_engine_client::stages;
 pub use session_engine_client::stretch;
 pub mod strip;
 pub mod studio;

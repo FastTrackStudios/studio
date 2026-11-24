@@ -98,9 +98,13 @@ pub fn run(args: &Args) -> eyre::Result<()> {
         },
     );
     let started = start.enter();
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("engine.audio").entered();
+    let at = web_time::Instant::now();
     let engine = headless::start()?;
-    start.record("engine.audio_ms", stages.mark("engine.audio_ms"));
+    start.record("engine.audio_ms", at.elapsed().as_secs_f64() * 1e3);
+    drop(step);
+    let step = tracing::info_span!("engine.serve").entered();
+    let at = web_time::Instant::now();
     let router = {
         let _inside = engine.runtime.enter();
         crate::studio_engine::view_host::router(&engine.daw)
@@ -136,13 +140,17 @@ pub fn run(args: &Args) -> eyre::Result<()> {
         engine.ws = found.ws.as_deref().unwrap_or("off"),
         "engine: serving"
     );
-    start.record("engine.serve_ms", stages.mark("engine.serve_ms"));
+    start.record("engine.serve_ms", at.elapsed().as_secs_f64() * 1e3);
+    drop(step);
+    let step = tracing::info_span!("engine.open").entered();
+    let at = web_time::Instant::now();
     if let Some(what) = &args.open {
         open_first(what, args.org.clone(), args.song.clone());
     } else if args.reopen {
         crate::studio_engine::link::reopen_last();
     }
-    start.record("engine.open_ms", stages.mark("engine.open_ms"));
+    start.record("engine.open_ms", at.elapsed().as_secs_f64() * 1e3);
+    drop(step);
     // Started: the span ends here, not when the engine stops.
     drop(started);
     drop(start);

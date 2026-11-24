@@ -94,7 +94,8 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
     let _entered = runtime.enter();
     // Its stages on the set's span (`set.open`).
     let set_span = tracing::Span::current();
-    let mut stages = crate::stages::Stages::start();
+    let began = web_time::Instant::now();
+    let step = tracing::info_span!("set.join").entered();
     let (sources, set, name) = match remote {
         Remote::Live { link, name } => {
             let set = TaskSet::parse(&format!("share:{link}"));
@@ -144,7 +145,11 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
             (sources, set, name)
         }
     };
-    set_span.record("set.join_ms", stages.mark("set.join_ms"));
+    drop(step);
+    set_span.record("set.join_ms", began.elapsed().as_secs_f64() * 1e3);
+    // Until the first song is in: the fetches started, then waited on.
+    let began = web_time::Instant::now();
+    let step = tracing::info_span!("set.first_fetch").entered();
     let cache = cache_dir();
     let titles: Vec<String> = sources.iter().map(|(title, _)| title.clone()).collect();
     // Every song brought in at once — each its own fetch, none waiting on
@@ -154,7 +159,7 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
         .map(|(title, source)| {
             let cache = cache.clone();
             // Each song's download, side by side under the set's open.
-            let fetching = tracing::info_span!("song.fetch", song.name = %title);
+            let fetching = tracing::info_span!(parent: &set_span, "song.fetch", song.name = %title);
             let fetch = runtime.spawn(tracing::Instrument::instrument(
                 async move { bring_in(&source, &cache).await },
                 fetching,
@@ -165,6 +170,7 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
     let mut fetches = fetches.into_iter();
     // The set opens on its first song (in set order) to come in; the rest
     // open behind it as theirs do.
+    let mut step = Some(step);
     let (mut setlist, rest) = loop {
         let Some((title, fetch)) = fetches.next() else {
             eyre::bail!("none of the set's songs could be brought in");
@@ -175,7 +181,10 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
         });
         let song = match fetched(runtime, fetch) {
             Ok(song) => {
-                set_span.record("set.first_fetch_ms", stages.mark("set.first_fetch_ms"));
+                if let Some(step) = step.take() {
+                    drop(step);
+                    set_span.record("set.first_fetch_ms", began.elapsed().as_secs_f64() * 1e3);
+                }
                 song
             }
             Err(e) => {
@@ -276,9 +285,11 @@ fn open_behind_all(
                         song.ok = tracing::field::Empty,
                     );
                     let _load = load.enter();
-                    let mut stages = crate::stages::Stages::start();
+                    let began = web_time::Instant::now();
+                    let step = tracing::info_span!("song.fetch").entered();
                     let song = fetched(runtime, fetch);
-                    load.record("song.fetch_ms", stages.mark("song.fetch_ms"));
+                    drop(step);
+                    load.record("song.fetch_ms", began.elapsed().as_secs_f64() * 1e3);
                     let opened = song.and_then(|song| {
                         Setlist::open_behind(Opening {
                             path: song.project.clone(),

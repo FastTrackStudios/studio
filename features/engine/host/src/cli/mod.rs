@@ -221,7 +221,7 @@ pub enum LyricsCommand {
 
 /// Diagnostics through `tracing`, as the window has them: to stderr,
 /// quiet unless asked, and — with `OTEL_EXPORTER_OTLP_ENDPOINT` set —
-/// every span, log and metric over OTLP to a collector as `service`, where
+/// every span and metric over OTLP to a collector as `service`, where
 /// a request's wide event is read whole (`just daw-dev` runs one). With no
 /// collector, `RUST_LOG=info` prints each command's wide event (one
 /// `lyrics.fetch` span per song) as it closes; with one, stderr keeps only
@@ -235,17 +235,13 @@ pub fn init_tracing(service: &'static str, default: &str) {
     use tracing_subscriber::util::SubscriberInitExt as _;
     use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
     let filter = || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default));
-    if let Some(guard) = architect_telemetry::init(service) {
-        // Held for the process: a command runs to its end, then exits.
-        std::mem::forget(guard);
-    }
-    let otel = architect_telemetry::otel::init(service, default);
+    let otel = ::session_engine::telemetry::otel(service);
     let (spans, console) = if otel.is_some() {
         (FmtSpan::NONE, LevelFilter::WARN)
     } else {
         (FmtSpan::CLOSE, LevelFilter::TRACE)
     };
-    let registry = tracing_subscriber::registry()
+    let _ = tracing_subscriber::registry()
         .with(filter())
         .with(
             tracing_subscriber::fmt::layer()
@@ -253,14 +249,8 @@ pub fn init_tracing(service: &'static str, default: &str) {
                 .with_span_events(spans)
                 .with_filter(console),
         )
-        .with(architect_telemetry::tracing_layer());
-    let _ = match otel {
-        Some((guard, layers)) => {
-            std::mem::forget(guard);
-            registry.with(layers).try_init()
-        }
-        None => registry.try_init(),
-    };
+        .with(otel)
+        .try_init();
 }
 
 /// The service a command reports its telemetry as: the engine apart from

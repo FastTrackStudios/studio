@@ -103,10 +103,14 @@ impl SetlistOpen for Setlist {
         };
         // Its stages on its `project.load` (`stream_set`'s).
         let load = tracing::Span::current();
-        let mut stages = crate::stages::Stages::start();
+        let began = web_time::Instant::now();
+        let step = tracing::info_span!("open.engine").entered();
         let prepare = crate::prepare::Prepare::for_song(&path);
         let (opened, plan) = crate::open::open_song_into_with(engine, &path, &prepare, media)?;
-        load.record("open.engine_ms", stages.mark("open.engine_ms"));
+        drop(step);
+        load.record("open.engine_ms", began.elapsed().as_secs_f64() * 1e3);
+        let began = web_time::Instant::now();
+        let step = tracing::info_span!("open.media").entered();
         let guid = opened.project_guid.clone();
         // A voice of the set's engine now: it can sound the moment it is
         // picked, or while another is on screen.
@@ -128,7 +132,10 @@ impl SetlistOpen for Setlist {
             .chart
             .as_ref()
             .and_then(|p| std::fs::read_to_string(p).ok());
-        load.record("open.media_ms", stages.mark("open.media_ms"));
+        drop(step);
+        load.record("open.media_ms", began.elapsed().as_secs_f64() * 1e3);
+        let began = web_time::Instant::now();
+        let step = tracing::info_span!("open.read").entered();
         let mut session = crate::open::engine_runtime()?.block_on(StudioSession::read_project(
             &guid,
             &opened.name,
@@ -136,7 +143,8 @@ impl SetlistOpen for Setlist {
             chart_text.as_deref(),
             false,
         ))?;
-        load.record("open.read_ms", stages.mark("open.read_ms"));
+        drop(step);
+        load.record("open.read_ms", began.elapsed().as_secs_f64() * 1e3);
         load.record("song.tracks", session.project.0.tracks.len());
         session.chart_file = prepare.chart.clone();
         crate::collab::song_opened(&guid);

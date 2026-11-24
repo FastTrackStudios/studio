@@ -113,10 +113,14 @@ fn load_project_file(
     } else {
         branch.to_owned()
     };
-    let mut stages = crate::stages::Stages::start();
+    let at = web_time::Instant::now();
+    let stage = tracing::info_span!("load.build").entered();
     let project_guid = crate::project_file::load(daw, &name, file, branch)
         .map_err(|e| eyre::eyre!("{} did not open: {e}", path.display()))?;
-    let build_ms = stages.mark("load.build_ms");
+    drop(stage);
+    let build_ms = at.elapsed().as_secs_f64() * 1e3;
+    let at = web_time::Instant::now();
+    let stage = tracing::info_span!("load.media").entered();
     daw::standalone::project_loader::anchor_media(daw, &project_guid, &media_dir);
     if media == Media::All {
         let audio =
@@ -130,7 +134,8 @@ fn load_project_file(
             );
         }
     }
-    let media_ms = stages.mark("load.media_ms");
+    drop(stage);
+    let media_ms = at.elapsed().as_secs_f64() * 1e3;
     let track_count = daw::service::Tracks::all(
         daw,
         daw::service::ProjectContext::Project(project_guid.clone()),

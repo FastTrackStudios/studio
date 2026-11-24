@@ -100,7 +100,7 @@ impl Index {
         tracks: &[daw_proto::Track],
         pieces: Vec<(String, String)>,
     ) {
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("index.kit").entered();
         let has_items = |guid: &str| p.items_by_track.get(guid).is_some_and(|v| !v.is_empty());
         let (kit, _) = crate::hits::kit_from(tracks, pieces, &has_items);
         // Each piece's hits are read off its first close mic.
@@ -108,25 +108,40 @@ impl Index {
             .iter()
             .filter_map(|piece| Some((piece.mics.first()?.clone(), piece.name.clone())))
             .collect();
-        stages.mark("index.kit_ms");
+        drop(step);
+        let step = tracing::info_span!("index.changes").entered();
         let changes = p.item_changes_since(self.cursor);
-        stages.mark("index.changes_ms");
+        drop(step);
         // Hit markers rewritten (a hand placing one marks it placed; a
         // detection rewrites them all): the slices playing those
         // recordings worked out again, not the kit — unless the journal
-        // cannot say which.
+        // cannot say which. Why the whole kit is worked out again is the
+        // name of the span over reading the markers: a first look or a new
+        // kit is known before the read; a journal that cannot say only
+        // after it, so that one is an empty span after the read.
+        let step = if self.cursor == 0 {
+            Some(tracing::info_span!("index.whole.first").entered())
+        } else if first_mics != self.kit {
+            Some(tracing::info_span!("index.whole.kit").entered())
+        } else {
+            None
+        };
         let marked: Option<std::collections::HashSet<&String>> = p
             .take_markers
             .written_since(self.cursor)
             .map(Iterator::collect);
         let whole = self.cursor == 0 || first_mics != self.kit || marked.is_none();
-        if self.cursor == 0 {
-            stages.mark("index.whole.first_ms");
-        } else if first_mics != self.kit {
-            stages.mark("index.whole.kit_ms");
-        } else if marked.is_none() {
-            stages.mark("index.whole.markers_ms");
+        if step.is_none() && marked.is_none() {
+            tracing::info_span!("index.whole.markers").in_scope(|| {});
         }
+        drop(step);
+        // The next stage is the splice's items or the rebuild, whichever
+        // arm below runs: it starts here, with the items' slices read.
+        let step = if whole || changes.items.is_none() {
+            tracing::info_span!("index.rebuild").entered()
+        } else {
+            tracing::info_span!("index.items").entered()
+        };
         let items = changes.items.map(|mut items| {
             if let Some(recordings) = marked.as_ref().filter(|r| !r.is_empty()) {
                 items.extend(playing(p, &first_mics, recordings));
@@ -145,13 +160,14 @@ impl Index {
                         self.by_item.insert(item.clone(), hits);
                     }
                 }
-                stages.mark("index.items_ms");
-                architect_telemetry::wide::set(
+                drop(step);
+                let step = tracing::info_span!("index.splice").entered();
+                crate::telemetry::set(
                     "index.changed",
                     i64::try_from(items.len()).unwrap_or(i64::MAX),
                 );
                 self.splice(&items);
-                stages.mark("index.splice_ms");
+                drop(step);
             }
             _ => {
                 self.by_item = first_mics
@@ -162,7 +178,7 @@ impl Index {
                     })
                     .collect();
                 self.rebuild();
-                stages.mark("index.rebuild_ms");
+                drop(step);
             }
         }
         self.kit = first_mics;

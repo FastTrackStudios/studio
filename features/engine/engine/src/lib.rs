@@ -159,6 +159,10 @@ pub mod mix_export;
 pub use session_engine_client::notes_actions;
 #[cfg(feature = "native")]
 pub mod perf;
+/// The engine's telemetry on plain `tracing`: the span ring `PERF_RECENT`
+/// reads, OTLP export, the panic hook.
+#[cfg(feature = "native")]
+pub mod telemetry;
 #[cfg(feature = "native")]
 pub mod perf_meter;
 pub use session_engine_client::plan;
@@ -190,7 +194,6 @@ pub mod song;
 pub use session_engine_client::song_bars;
 pub use session_engine_client::song_chart;
 pub use session_engine_client::song_model;
-pub use session_engine_client::stages;
 pub use session_engine_client::stretch;
 #[cfg(feature = "native")]
 pub mod take_rank;

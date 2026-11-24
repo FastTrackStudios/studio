@@ -317,7 +317,7 @@ impl Arrangement {
         out_of_sight: &std::collections::HashSet<String>,
         old: Option<Self>,
     ) -> Self {
-        let mut stages = crate::stages::Stages::start();
+        let step = tracing::info_span!("build.song").entered();
         let keys = keys_of(project);
         let roles = kit_roles(project);
         let (versions, drawn) = track_hashes(project);
@@ -340,7 +340,8 @@ impl Arrangement {
                 .collect(),
             generation: previews.generation(),
         };
-        stages.mark("build.song_ms");
+        drop(step);
+        let step = tracing::info_span!("build.rows").entered();
         let basis = basis_of(&song);
         let generation = song.generation;
         let (mut old, mut kept) = match old {
@@ -382,8 +383,9 @@ impl Arrangement {
             out.lanes.commands.len(),
             "one x extent per lane command"
         );
-        stages.mark("build.rows_ms");
+        drop(step);
 
+        let step = tracing::info_span!("build.panel").entered();
         let (panel, panel_kept) = cut_panel(
             (palette, font),
             (rows, &out.shapes),
@@ -393,7 +395,7 @@ impl Arrangement {
         );
         out.index.panel = panel.spans;
         out.index.panel_bar = panel.bar_spans;
-        stages.mark("build.panel_ms");
+        drop(step);
 
         let Out {
             lanes,

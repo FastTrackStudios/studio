@@ -212,11 +212,6 @@ winit = { version = "0.31.0-beta.4", optional = true }
 dirs = { workspace = true, optional = true }
 # The start screen's icons (native::start), the same set the views use.
 lucide-dioxus = { workspace = true, optional = true }
-# Telemetry: fmt console logs + optional Sentry + OTLP export (traces,
-# logs, metrics). Doubly opt-in — the `otel` cargo feature carries the
-# dependency weight, and at runtime nothing exports unless
-# OTEL_EXPORTER_OTLP_ENDPOINT is set (http/protobuf, port 4318).
-architect-telemetry = { workspace = true, features = ["otel"] }
 session = { workspace = true, features = ["desktop", "ui"], optional = true }
 # The real DAW panels (MixerPanel / ArrangementView) — self-contained,
 # wired to the in-process daw facade. `web` = the dioxus (WebView) renderer

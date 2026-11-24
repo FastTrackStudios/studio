@@ -1155,13 +1155,14 @@ pub fn detect(
         .into_iter()
         .filter(|t| all_takes || t.in_use())
         .collect();
-    let mut stages = crate::stages::Stages::start();
+    let stage = tracing::info_span!("hits.detect").entered();
     // The takes are found at once, a few in flight: each is its files read
     // whole (a gigabyte a long take across a kit) and its pieces' detection
     // spread across cores inside `drum_hits`. In order, so a run is the
     // same run every time.
     let founds = found_in_parallel(&chosen, &pieces, &extras, settings);
-    stages.mark("hits.detect_ms");
+    drop(stage);
+    let stage = tracing::info_span!("hits.judge").entered();
     for (take, found) in chosen.into_iter().zip(founds) {
         let found = match found {
             Ok(Some(found)) => found,
@@ -1216,7 +1217,8 @@ pub fn detect(
     }
 
     finish(&mut report, seen);
-    stages.mark("hits.judge_ms");
+    drop(stage);
+    let stage = tracing::info_span!("hits.write").entered();
     let names: BTreeSet<String> = pieces.iter().map(|p| p.name.clone()).collect();
     Projects::begin_undo_block(daw, project.clone(), "Detect drum hits");
     for (item, hits) in written.into_values() {
@@ -1227,7 +1229,7 @@ pub fn detect(
         }
     }
     Projects::end_undo_block(daw, project.clone(), "Detect drum hits", None);
-    stages.mark("hits.write_ms");
+    drop(stage);
     report.seconds = started.elapsed().as_secs_f64();
     Ok(report)
 }

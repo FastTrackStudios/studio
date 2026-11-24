@@ -185,8 +185,8 @@ fn guarded(reach: Reach, fork: impl FnOnce() -> Result<String, String>) -> Resul
 pub fn mark_before(guid: &str, action: &str, stamp: &str) -> Result<String, String> {
     let began = web_time::Instant::now();
     let name = crate::project_file::mark(guid, action, |taken| name_for(action, stamp, taken))?;
-    architect_telemetry::wide::set("checkpoint.name", name.clone());
-    architect_telemetry::wide::set("checkpoint.ms", began.elapsed().as_secs_f64() * 1_000.0);
+    crate::telemetry::set("checkpoint.name", name.clone());
+    crate::telemetry::set("checkpoint.ms", began.elapsed().as_secs_f64() * 1_000.0);
     Ok(name)
 }
 
@@ -351,7 +351,7 @@ pub fn register(
                 crate::project_file::delete_branches(&guid, &plan.removed)?;
                 plan.applied = true;
             }
-            architect_telemetry::wide::set(
+            crate::telemetry::set(
                 "checkpoint.pruned",
                 i64::try_from(plan.removed.len()).unwrap_or(i64::MAX),
             );

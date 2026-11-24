@@ -74,7 +74,7 @@ pub fn phrases(song: &Song, (from, to): (f64, f64), bars: f64) -> Vec<(f64, f64)
 /// # Errors
 /// When the engine refuses the edit.
 pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Comped, String> {
-    let mut stages = crate::stages::Stages::start();
+    let step = tracing::info_span!("comp.read").entered();
     let (Some(first), Some(last)) = (phrases.first(), phrases.last()) else {
         return Ok(Comped::default());
     };
@@ -84,7 +84,8 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
     let written = crate::comp_rank::written(daw, &project, span, &versions);
     let playing = Playing::read(song, &versions, span);
     let audio = Audio::read(song, &versions, span);
-    stages.mark("comp.read_ms");
+    drop(step);
+    let step = tracing::info_span!("comp.rank").entered();
     // Each seam between phrases just before the hits there, in every take:
     // a seam on the beat cut between two takes that do not hit it at the
     // same instant, and both attacks played — a flam.
@@ -145,7 +146,7 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
             })
         })
         .collect();
-    stages.mark("comp.rank_ms");
+    drop(step);
     if dry || choices.is_empty() {
         return Ok(Comped {
             phrases: phrases.len(),
@@ -154,11 +155,13 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
         });
     }
 
+    let step = tracing::info_span!("comp.plan").entered();
     let edit = Edit::plan(song, &versions, &choices);
-    stages.mark("comp.plan_ms");
+    drop(step);
+    let step = tracing::info_span!("comp.apply").entered();
     let ops = edit.ops.len();
     song.undo_step("Comp the best takes", |song| edit.apply(song))?;
-    stages.mark("comp.apply_ms");
+    drop(step);
     crate::comp_rank::forget();
     crate::song_model::request_resync_items();
     crate::hit_overlay::refresh();

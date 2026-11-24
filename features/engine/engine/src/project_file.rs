@@ -631,7 +631,7 @@ fn write_snapshot_later(
     let work = move || {
         let _in = span.enter();
         let _job = crate::jobs::start("Saving the song's history", 0);
-        let mut stages = crate::stages::Stages::start();
+        let stage = tracing::info_span!("song.compact").entered();
         let written = snapshot
             .pack()
             .map_err(|e| e.to_string())
@@ -640,11 +640,9 @@ fn write_snapshot_later(
                     s.write_snapshot(packed).map_err(|e| e.to_string())
                 })
             });
-        match written {
-            Ok(()) => {
-                stages.mark("song.compact_ms");
-            }
-            Err(e) => tracing::warn!(song.error = %e, "the song's history could not be folded"),
+        drop(stage);
+        if let Err(e) = written {
+            tracing::warn!(song.error = %e, "the song's history could not be folded");
         }
     };
     if !spawned {
@@ -728,16 +726,21 @@ pub fn record_steps() {
                             "song.step",
                             steps.labels = labels.len(),
                             steps.label = labels.first().map(String::as_str).unwrap_or_default(),
+                        );
+                        let _step = step.enter();
+                        // What is made from the recording follows it first —
+                        // the kit's samples onto where its hits play now — so
+                        // it is in the same commit as the edit that moved it.
+                        // What the follow read of the views (`hits_midi::sync`
+                        // records it on the span it runs in) is on its stage.
+                        let stage = tracing::info_span!(
+                            "step.follow",
                             steps.views_edited = tracing::field::Empty,
                             steps.hits_added = tracing::field::Empty,
                             steps.hits_moved = tracing::field::Empty,
                             steps.hits_removed = tracing::field::Empty,
-                        );
-                        let _step = step.enter();
-                        let mut stages = crate::stages::Stages::start();
-                        // What is made from the recording follows it first —
-                        // the kit's samples onto where its hits play now — so
-                        // it is in the same commit as the edit that moved it.
+                        )
+                        .entered();
                         if let Some(daw) = crate::open::local_engine() {
                             crate::actions::samples_follow(
                                 daw,
@@ -745,11 +748,12 @@ pub fn record_steps() {
                                 sync_mode(&labels),
                             );
                         }
-                        stages.mark("step.follow_ms");
+                        drop(stage);
+                        let stage = tracing::info_span!("step.record").entered();
                         if let Err(why) = record(&project, &labels.join("; "), action.as_deref()) {
                             tracing::warn!(project.guid = %project, why, "an edit step was not recorded");
                         }
-                        stages.mark("step.record_ms");
+                        drop(stage);
                     }
                     PENDING.fetch_sub(taken, std::sync::atomic::Ordering::SeqCst);
                 }
@@ -894,10 +898,14 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
         load.uncompacted = tracing::field::Empty,
     );
     let _load = span.enter();
-    let mut stages = crate::stages::Stages::start();
+    let began = web_time::Instant::now();
+    let step = tracing::info_span!("load.store").entered();
     let (store, loaded, uncompacted) =
         tracing::info_span!("project_file.open_branch").in_scope(|| open_branch(path, branch))?;
-    span.record("load.store_ms", stages.mark("load.store_ms"));
+    drop(step);
+    span.record("load.store_ms", began.elapsed().as_secs_f64() * 1e3);
+    let began = web_time::Instant::now();
+    let step = tracing::info_span!("load.doc").entered();
     span.record("load.uncompacted", uncompacted);
     // A backlog on the snapshot is folded once the song is left alone.
     if uncompacted > 0
@@ -914,7 +922,10 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
     let doc =
         tracing::info_span!("project_file.from_loro").in_scope(|| SessionDoc::from_loro(loaded));
     let saved = doc.version();
-    span.record("load.doc_ms", stages.mark("load.doc_ms"));
+    drop(step);
+    span.record("load.doc_ms", began.elapsed().as_secs_f64() * 1e3);
+    let began = web_time::Instant::now();
+    let step = tracing::info_span!("load.build").entered();
     let guid = uuid::Uuid::new_v4().to_string();
     let stage = daw.stage();
     stage.engine().seed_project(daw_proto::ProjectInfo {
@@ -929,7 +940,10 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
         doc,
         StoreBlobs::new(store.clone()),
     )?;
-    span.record("load.build_ms", stages.mark("load.build_ms"));
+    drop(step);
+    span.record("load.build_ms", began.elapsed().as_secs_f64() * 1e3);
+    let began = web_time::Instant::now();
+    let step = tracing::info_span!("load.land").entered();
     let daw = daw.clone();
     let path = path.to_path_buf();
     let branch = branch.to_owned();
@@ -956,7 +970,8 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
         );
         Ok::<(), String>(())
     })??;
-    span.record("load.land_ms", stages.mark("load.land_ms"));
+    drop(step);
+    span.record("load.land_ms", began.elapsed().as_secs_f64() * 1e3);
     Ok(guid)
 }
 

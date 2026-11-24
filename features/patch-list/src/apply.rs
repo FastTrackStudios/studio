@@ -130,7 +130,12 @@ pub fn apply<D>(
 where
     D: Tracks + Projects,
 {
-    let span = tracing::info_span!("patch_list.apply");
+    let span = tracing::info_span!(
+        "patch_list.apply",
+        patch.applied = tracing::field::Empty,
+        patch.unpatched = tracing::field::Empty,
+        patch.unused = tracing::field::Empty,
+    );
     let _enter = span.enter();
 
     let tracks = resolve.tracks();
@@ -165,15 +170,10 @@ where
 
     let unpatched = tracks.len().saturating_sub(matched.len());
 
-    // `opentelemetry::Value` has no `From<u64>` (only the signed
-    // integer, float, bool and string forms), so the counts go through
-    // `i64` — plenty of range for a track count.
-    architect_telemetry::wide::set("patch.applied", i64::try_from(applied).unwrap_or(i64::MAX));
-    architect_telemetry::wide::set(
-        "patch.unpatched",
-        i64::try_from(unpatched).unwrap_or(i64::MAX),
-    );
-    architect_telemetry::wide::set("patch.unused", i64::try_from(unused).unwrap_or(i64::MAX));
+    // The wide event's counts, on the span declared above.
+    span.record("patch.applied", applied);
+    span.record("patch.unpatched", unpatched);
+    span.record("patch.unused", unused);
 
     Ok(Report {
         applied,
