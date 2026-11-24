@@ -667,54 +667,9 @@ fn the_kick_folders_align_finds_its_shift_and_polarity_offline() {
     let _: Value = block["analysis"]["values"].clone();
 }
 
-/// The all-pass model LISTEN_ALIGN predicts with: the mic shifted, then
-/// RBJ all-pass biquads (f64), each window run from rest.
-fn predicted_fix(mic: &[Vec<f32>], delay: i64, sections: &[(f64, f64)]) -> Vec<Vec<f32>> {
-    let rate = f64::from(RATE);
-    mic.iter()
-        .map(|x| {
-            let n = x.len() as i64;
-            let shifted: Vec<f64> = (0..n)
-                .map(|k| {
-                    let j = k - delay;
-                    if (0..n).contains(&j) {
-                        f64::from(x[j as usize])
-                    } else {
-                        0.0
-                    }
-                })
-                .collect();
-            sections
-                .iter()
-                .fold(shifted, |x, &(hz, q)| {
-                    let w = std::f64::consts::TAU * hz / rate;
-                    let alpha = w.sin() / (2.0 * q);
-                    let (a0, c) = (1.0 + alpha, w.cos());
-                    let (b0, b1, a1, a2) = (
-                        (1.0 - alpha) / a0,
-                        -2.0 * c / a0,
-                        -2.0 * c / a0,
-                        (1.0 - alpha) / a0,
-                    );
-                    let (mut x1, mut x2, mut y1, mut y2) = (0.0, 0.0, 0.0, 0.0);
-                    x.iter()
-                        .map(|&v| {
-                            let y = b0 * v + b1 * x1 + x2 - a1 * y1 - a2 * y2;
-                            (x2, x1, y2, y1) = (x1, v, y1, y);
-                            y
-                        })
-                        .collect()
-                })
-                .into_iter()
-                .map(|v| v as f32)
-                .collect()
-        })
-        .collect()
-}
-
 #[test]
-fn a_listen_align_fix_set_on_the_block_plays_as_listen_align_predicted() {
-    use crate::listen::align::{Windows, compare};
+fn listen_aligns_kick_fix_set_on_the_blocks_plays_as_it_predicted() {
+    use crate::listen::align::{Fix, Section, Windows, apply, compare};
     let Some(clap) = clap() else {
         eprintln!("skipped: SIGNAL_DEV_CLAP names no Signal Dev .clap");
         return;
@@ -723,56 +678,78 @@ fn a_listen_align_fix_set_on_the_block_plays_as_listen_align_predicted() {
     let sr = f64::from(RATE);
     let hit = |t: f64, k: f64| {
         let env = (-t * 12.0).exp();
-        ((std::f64::consts::TAU * (50.0 + 70.0 * (-t * 30.0).exp()) * t + k).sin() * env * 0.5
+        ((std::f64::consts::TAU * (55.0 + 70.0 * (-t * 30.0).exp()) * t + k).sin() * env * 0.5
             + if t < 0.0015 { 0.3 } else { 0.0 }) as f32
     };
     let len = (12.0 * sr) as usize;
-    // In; Out 136 samples late and its low end turned against In.
+    // In; Out 136 samples late, its low end turned; Sample upside down.
     let kick_in: Vec<f32> = (0..len).map(|i| hit((i as f64 / sr) % 0.5, 0.0)).collect();
     let kick_out: Vec<f32> = (0..len)
         .map(|i| {
             i.checked_sub(136)
-                .map_or(0.0, |j| 0.8 * hit((j as f64 / sr) % 0.5, -2.0))
+                .map_or(0.0, |j| 0.8 * hit((j as f64 / sr) % 0.5, -1.5))
         })
         .collect();
+    let kick_sample: Vec<f32> = kick_in.iter().map(|v| -0.6 * v).collect();
     let ctx = song(
         daw,
         "offline-kick",
         &[
             ("Kick In", "Kick", kick_in.clone()),
             ("Kick Out", "Kick", kick_out.clone()),
+            ("Kick Sample", "Kick", kick_sample.clone()),
         ],
     );
-    let out_guid = guid(daw, &ctx, "Kick Out");
-    crate::clap_fx::add(
-        daw,
-        &ctx,
-        &FxChainContext::Track(out_guid.clone()),
-        &clap,
-        u32::MAX,
-    )
-    .expect("loads");
-    signal::run(
-        daw,
-        &ctx,
-        (&out_guid, None),
-        "SIGNAL_BLOCK_ADD",
-        &json!({"phase": "rescue", "kind": "align", "first": true}).to_string(),
-    )
-    .expect("an align block");
-    // The fix, as LISTEN_ALIGN would set it: Out 136 earlier, one all-pass
-    // section in its low end.
-    let sections = [(50.0, 0.7)];
-    signal::run(
-        daw,
-        &ctx,
-        (&out_guid, None),
-        "SIGNAL_ANALYZE",
-        &json!({"block": "align", "values": {"delay_samples": -136, "invert": 0, "allpass": [{"hz": 50.0, "q": 0.7}]}}).to_string(),
-    )
-    .expect("the fix set");
-    let chain = signal::chain(daw, &ctx, &out_guid, None).unwrap();
-    let block = &chain["chain"]["phases"][0]["blocks"][0];
+    // The fixes, as LISTEN_ALIGN's block ids have them.
+    let fixes = [
+        (
+            "Kick Out",
+            json!({"delay_samples": -136, "invert": 0, "allpass.0.hz": 63.0, "allpass.0.q": 2.0}),
+            Fix {
+                delay: -136,
+                invert: false,
+                allpass: vec![Section::Second { hz: 63.0, q: 2.0 }],
+            },
+        ),
+        (
+            "Kick Sample",
+            json!({"invert": 1}),
+            Fix {
+                delay: 0,
+                invert: true,
+                allpass: Vec::new(),
+            },
+        ),
+    ];
+    for (track, values, _) in &fixes {
+        let g = guid(daw, &ctx, track);
+        crate::clap_fx::add(
+            daw,
+            &ctx,
+            &FxChainContext::Track(g.clone()),
+            &clap,
+            u32::MAX,
+        )
+        .expect("loads");
+        signal::run(
+            daw,
+            &ctx,
+            (&g, None),
+            "SIGNAL_BLOCK_ADD",
+            &json!({"phase": "rescue", "kind": "align", "first": true}).to_string(),
+        )
+        .expect("an align block");
+        signal::run(
+            daw,
+            &ctx,
+            (&g, None),
+            "SIGNAL_ANALYZE",
+            &json!({"block": "align", "values": values}).to_string(),
+        )
+        .expect("the fix set");
+    }
+    let out_chain = signal::chain(daw, &ctx, "Kick Out", None).unwrap();
+    let block = &out_chain["chain"]["phases"][0]["blocks"][0];
     let param = |id: &str| {
         block["params"]
             .as_array()
@@ -781,26 +758,28 @@ fn a_listen_align_fix_set_on_the_block_plays_as_listen_align_predicted() {
             .find(|p| p["id"] == id)
             .map(|p| p["value"].clone())
     };
-    assert_eq!(param("ap1_hz"), Some(json!(50.0)), "{block}");
-    // What plays: Out after its Signal, lined up by the render (its
-    // latency is the advance alone).
+    assert_eq!(param("allpass.0.hz"), Some(json!(63.0)), "{block}");
+    assert_eq!(param("allpass.0.q"), Some(json!(2.0)));
+    // What plays: each after its Signal, lined up by the render.
     let (from, to) = (1.0, 11.0);
-    let played = super::left(
-        &crate::listen::render_at(
-            daw,
-            &ctx,
-            &crate::listen::RenderAt {
-                track: &out_guid,
-                at: "post-fx",
-                from,
-                to,
-                exact: true,
-            },
+    let heard_of = |track: &str| {
+        super::left(
+            &crate::listen::render_at(
+                daw,
+                &ctx,
+                &crate::listen::RenderAt {
+                    track,
+                    at: "post-fx",
+                    from,
+                    to,
+                    exact: true,
+                },
+            )
+            .expect("rendered")
+            .samples,
         )
-        .expect("rendered")
-        .samples,
-    );
-    // Windows around each hit, as LISTEN_ALIGN scores them.
+    };
+    let (played_out, played_sample) = (heard_of("Kick Out"), heard_of("Kick Sample"));
     let pre = 960;
     let span = (0.3 * sr) as usize;
     let at = |x: &[f32], t0: f64| -> Vec<Vec<f32>> {
@@ -811,7 +790,6 @@ fn a_listen_align_fix_set_on_the_block_plays_as_listen_align_predicted() {
             })
             .collect()
     };
-    let (wi, wo, wp) = (at(&kick_in, 0.0), at(&kick_out, 0.0), at(&played, from));
     let w = Windows::new(RATE, pre);
     let add = |a: &[Vec<f32>], b: &[Vec<f32>]| -> Vec<Vec<f32>> {
         a.iter()
@@ -819,11 +797,23 @@ fn a_listen_align_fix_set_on_the_block_plays_as_listen_align_predicted() {
             .map(|(a, b)| a.iter().zip(b).map(|(x, y)| x + y).collect())
             .collect()
     };
-    let before = add(&wi, &wo);
-    let predicted = compare(&w, &before, &add(&wi, &predicted_fix(&wo, -136, &sections)));
-    let heard = compare(&w, &before, &add(&wi, &wp));
+    let (wi, wo, ws) = (at(&kick_in, 0.0), at(&kick_out, 0.0), at(&kick_sample, 0.0));
+    let before = add(&add(&wi, &wo), &ws);
+    let predicted = compare(
+        &w,
+        &before,
+        &add(
+            &add(&wi, &apply(&w, &wo, &fixes[0].2)),
+            &apply(&w, &ws, &fixes[1].2),
+        ),
+    );
+    let heard = compare(
+        &w,
+        &before,
+        &add(&add(&wi, &at(&played_out, from)), &at(&played_sample, from)),
+    );
     eprintln!(
-        "the kick's fix predicted level {:+.2} dB, low {:+.2} dB, attack {:+.2} dB; the block plays level {:+.2} dB, low {:+.2} dB, attack {:+.2} dB",
+        "the kick's fix: LISTEN_ALIGN predicts level {:+.2} dB, low {:+.2} dB, attack {:+.2} dB; the blocks play level {:+.2} dB, low {:+.2} dB, attack {:+.2} dB",
         predicted.level, predicted.low, predicted.attack, heard.level, heard.low, heard.attack
     );
     assert!(
