@@ -685,7 +685,7 @@ pub fn record_steps() {
         // Each step with the span it finished in (the action that made
         // it): its recording is traced under that.
         // And the action that made it, read here, on its thread.
-        type Finished = (String, String, tracing::Span, Option<String>);
+        type Finished = (String, String, Option<u64>, (tracing::Span, Option<String>));
         let (tx, rx) = std::sync::mpsc::channel::<Finished>();
         let tx = Mutex::new(tx);
         daw::standalone::steps::listen(Arc::new(move |project, label| {
@@ -694,8 +694,8 @@ pub fn record_steps() {
                     .send((
                         project.to_owned(),
                         label.to_owned(),
-                        tracing::Span::current(),
-                        crate::history::running_action(),
+                        crate::history::running_run(),
+                        (tracing::Span::current(), crate::history::running_action()),
                     ))
                     .is_ok()
             {
@@ -706,19 +706,13 @@ pub fn record_steps() {
             .name("project-file-steps".into())
             .spawn(move || {
                 while let Ok(first) = rx.recv() {
-                    type Gathered = (String, Vec<String>, tracing::Span, Option<String>);
-                    let mut steps: Vec<Gathered> = Vec::new();
-                    let mut taken = 0_usize;
-                    for (project, label, made_in, action) in
-                        std::iter::once(first).chain(rx.try_iter())
-                    {
-                        taken = taken.saturating_add(1);
-                        match steps.iter_mut().find(|(p, _, _, _)| *p == project) {
-                            Some((_, labels, _, _)) => labels.push(label),
-                            None => steps.push((project, vec![label], made_in, action)),
-                        }
-                    }
-                    for (project, labels, made_in, action) in steps {
+                    // Steps of one action call are one commit; another
+                    // call's are its own (`history_marks::gather`).
+                    let finished: Vec<Finished> =
+                        std::iter::once(first).chain(rx.try_iter()).collect();
+                    let taken = finished.len();
+                    let steps = crate::history_marks::gather(finished);
+                    for (project, labels, (made_in, action)) in steps {
                         // The steps' recording, under the action that made
                         // the first of them (it may outlast it).
                         let step = tracing::info_span!(
@@ -759,6 +753,37 @@ pub fn record_steps() {
                 }
             });
     });
+}
+
+/// Run `work` on the store of the song `guid` and the file it is open
+/// from, holding the song: no step is appended to the file while it runs
+/// (what makes `SESSION_BACKUP`'s copy consistent).
+///
+/// # Errors
+/// The song is not open from its project file, or `work` failed.
+pub fn with_open_store<T: Send>(
+    guid: &str,
+    work: impl FnOnce(&Store, &Path) -> Result<T, String> + Send,
+) -> Result<T, String> {
+    let guid = guid.to_owned();
+    run(async move {
+        let songs = open_songs().lock().await;
+        let open = songs
+            .get(&guid)
+            .ok_or("the song is not open from its project file (a .session)")?;
+        let path = open.path.clone();
+        let done = with_store(&open.store, |s| work(s, &path));
+        drop(songs);
+        done
+    })?
+}
+
+/// How many steps the engine finished that the recorder has not recorded
+/// yet: what a call waits on to be a step of its own
+/// (`history_marks::settle`).
+#[must_use]
+pub fn steps_pending() -> usize {
+    PENDING.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 /// The engine finished the step `label` in the song `project_guid`: read
