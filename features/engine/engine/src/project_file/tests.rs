@@ -305,3 +305,56 @@ fn an_rpp_opens_as_its_session_file() {
         "it opens as its session file from now on"
     );
 }
+
+/// The Verb track's volume set to `volume` in `guid`'s engine.
+fn set_verb(daw: &Standalone, guid: &str, volume: f64) {
+    daw.write_project(guid, |p| {
+        if let Some(t) = p.tracks.iter_mut().find(|t| t.name == "Verb") {
+            t.volume = volume;
+        }
+    });
+}
+
+#[test]
+fn a_mark_waits_on_no_write_and_lands_between_the_steps_around_it() {
+    // A step read and handed to the writer, a mark set at once, a step
+    // after it: the mark is set in well under 100 ms (it never waits on a
+    // step's doc write — seconds for a whole kit's edit), and lands after
+    // the step before it and before the one after, holding the first.
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let daw = Standalone::new();
+    seed_song(&daw, "marked-song");
+    saved(&daw, "marked-song", &dir.path().join("Marked.session"));
+    set_verb(&daw, "marked-song", 0.5);
+    super::record("marked-song", "Louder", Some("TEST")).expect("read");
+    let began = Instant::now();
+    let mark = super::mark("marked-song", "TEST", |_| "Before quieter".to_owned()).expect("marked");
+    let took = began.elapsed();
+    set_verb(&daw, "marked-song", 0.25);
+    super::record("marked-song", "Quieter", Some("TEST")).expect("read");
+    assert!(super::written(Duration::from_secs(10)), "the writes finish");
+    assert!(took < Duration::from_millis(100), "the mark took {took:?}");
+    let (moments, _) = super::history("marked-song", (0, 20)).expect("its history");
+    let labels: Vec<&str> = moments.iter().map(|(m, _)| m.label.as_str()).collect();
+    let at = |label: &str| {
+        labels
+            .iter()
+            .position(|l| *l == label)
+            .unwrap_or_else(|| panic!("no {label:?} in {labels:?}"))
+    };
+    // Newest first.
+    assert!(
+        at("Quieter") < at(&mark) && at(&mark) < at("Louder"),
+        "{labels:?}"
+    );
+    super::restore(
+        "marked-song",
+        session_format::store::MomentRef::Mark(mark.clone()),
+    )
+    .expect("restored");
+    assert_eq!(
+        verb_volume(&daw, "marked-song"),
+        Some(0.5),
+        "the mark holds the step before it"
+    );
+}

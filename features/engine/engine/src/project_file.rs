@@ -169,6 +169,15 @@ fn watch_remote(
     session::project_sync::watch_imports(doc, move || {
         let guid = guid.clone();
         async move {
+            // A step read and still being written: the doc is behind what
+            // the bridge shows until it is, and a read back now would undo
+            // it in the engine.
+            let began = web_time::Instant::now();
+            while WRITING.load(std::sync::atomic::Ordering::SeqCst) > 0
+                && began.elapsed() < WRITE_WAIT
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
             let mut songs = open_songs().lock().await;
             // Not in the open songs yet (still opening): the bridge's watch
             // keeps what the edit touched, and the next pass applies it.
@@ -440,6 +449,8 @@ pub fn save(
     branch: &str,
     label: &str,
 ) -> Result<PathBuf, String> {
+    // Every step read is in the doc first.
+    written(WRITE_WAIT);
     let _job = crate::jobs::start("Saving", 0);
     if path.is_dir() {
         let legacy = PathBuf::from(format!("{}.legacy", path.display()));
@@ -661,7 +672,9 @@ fn write_snapshot_later(
 /// that song is open from it — on a thread of its own, so the window
 /// never waits on a read of the engine. Steps that finish while one is
 /// being recorded are read together, as one commit named for them all.
-/// Steps the engine finished that the recorder has not recorded yet.
+/// Steps the engine finished that the recorder has not read yet (once
+/// read, what the engine does next is not in their commit, though the
+/// doc's write of them may still run: [`WRITING`]).
 static PENDING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// [`PENDING`], song by song: what a song's own undo and going back read —
@@ -679,6 +692,225 @@ fn song_pending(guid: &str) -> bool {
         .get(guid)
         .is_some_and(|n| *n > 0)
 }
+
+/// Steps read whose doc write is still running on the writer thread —
+/// changed with the songs held, so what holds them sees it settled.
+static WRITING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// The writes sent to the writer, numbered in order, and the last done.
+static SENT_WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// A mark asked for while a step's write ran: noted at the doc's frontier
+/// once the writes sent before it are done, before any after it.
+struct QueuedMark {
+    guid: String,
+    name: String,
+    action: String,
+    after: u64,
+}
+
+fn queued_marks() -> &'static Mutex<Vec<QueuedMark>> {
+    static QUEUED: std::sync::LazyLock<Mutex<Vec<QueuedMark>>> =
+        std::sync::LazyLock::new(Default::default);
+    &QUEUED
+}
+
+/// A read step for the writer: its song, name and action, what was read,
+/// its number, and the span it was recorded under.
+struct Write {
+    guid: String,
+    label: String,
+    action: Option<String>,
+    read: session::sync::LocalRead,
+    writer: session::sync::StepWriter,
+    seq: u64,
+    span: tracing::Span,
+}
+
+/// Where read steps go to be written into their songs' docs, in order, on
+/// a thread of their own: a write of a big edit (seconds for the whole
+/// kit's items) never holds the songs, so the next step is read and the
+/// next action marked meanwhile.
+fn writes() -> &'static Mutex<std::sync::mpsc::Sender<Write>> {
+    static WRITES: std::sync::LazyLock<Mutex<std::sync::mpsc::Sender<Write>>> =
+        std::sync::LazyLock::new(|| {
+            let (tx, rx) = std::sync::mpsc::channel::<Write>();
+            let spawned = std::thread::Builder::new()
+                .name("project-file-writes".into())
+                .spawn(move || {
+                    for job in rx {
+                        write_read(job);
+                    }
+                });
+            if let Err(e) = spawned {
+                tracing::warn!(song.error = %e, "no thread to write the song's steps on");
+            }
+            Mutex::new(tx)
+        });
+    &WRITES
+}
+
+/// Write one read step into its song's doc (nothing held), then — the
+/// songs held — append it to the file and note the marks that waited on
+/// it.
+fn write_read(job: Write) {
+    let span = tracing::info_span!(
+        parent: &job.span,
+        "song.write",
+        steps.label = job.label.as_str(),
+        steps.marks = tracing::field::Empty,
+    );
+    let _in = span.enter();
+    let wrote = job.writer.write(&job.read, &job.label);
+    let done = run(async {
+        let mut songs = open_songs().lock().await;
+        if let Err(e) = &wrote {
+            tracing::warn!(project.guid = %job.guid, why = %e, "an edit step was not written to the song's doc");
+        } else if let Some(open) = songs.get_mut(&job.guid) {
+            let appended = tracing::info_span!("project_file.append")
+                .in_scope(|| append_as(open, &job.label, job.action.as_deref()));
+            if let Err(why) = appended {
+                tracing::warn!(project.guid = %job.guid, why, "an edit step was not appended to the song's file");
+            }
+        }
+        let noted = note_queued(&mut songs, job.seq);
+        span.record("steps.marks", noted);
+        WRITING.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        drop(songs);
+    });
+    if let Err(why) = done {
+        WRITING.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        tracing::warn!(why, "an edit step's append did not run");
+    }
+}
+
+/// Note every queued mark that waited on the writes up to `done`, at its
+/// song's frontier now. How many.
+fn note_queued(songs: &mut HashMap<String, Open>, done: u64) -> usize {
+    let due: Vec<QueuedMark> = match queued_marks().lock() {
+        Ok(mut queued) => {
+            let (due, wait) = std::mem::take(&mut *queued)
+                .into_iter()
+                .partition(|m| m.after <= done);
+            *queued = wait;
+            due
+        }
+        Err(_) => Vec::new(),
+    };
+    let mut noted = 0;
+    for m in due {
+        let Some(open) = songs.get_mut(&m.guid) else {
+            continue;
+        };
+        match note_mark(open, &m.name, &m.action) {
+            Ok(()) => noted += 1,
+            Err(why) => {
+                tracing::warn!(project.guid = %m.guid, why, "a mark was not noted on the song");
+            }
+        }
+    }
+    noted
+}
+
+/// Note the mark `name` (set by `action`) at the doc's frontier now.
+fn note_mark(open: &Open, name: &str, action: &str) -> Result<(), String> {
+    let frontiers = open.bridge.doc().loro().state_frontiers();
+    with_store(&open.store, |s| {
+        s.note(
+            &open.branch,
+            (session_format::store::MomentKind::Mark, name, Some(action)),
+            &frontiers,
+        )
+        .map(drop)
+        .map_err(|e| e.to_string())
+    })
+}
+
+/// Wait (at most `most`) until no step's doc write is running: what reads
+/// or rewrites the doc whole (an undo, a restore, a copy of the file)
+/// then sees every step recorded. Whether it got there.
+pub(crate) fn written(most: std::time::Duration) -> bool {
+    if WRITING.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+        return true;
+    }
+    let span = tracing::info_span!("history.written", history.waited_ms = tracing::field::Empty);
+    let _in = span.enter();
+    let began = web_time::Instant::now();
+    let mut nap = std::time::Duration::from_micros(200);
+    while WRITING.load(std::sync::atomic::Ordering::SeqCst) > 0 && began.elapsed() < most {
+        std::thread::sleep(nap);
+        nap = (nap * 2).min(std::time::Duration::from_millis(5));
+    }
+    span.record("history.waited_ms", began.elapsed().as_secs_f64() * 1e3);
+    WRITING.load(std::sync::atomic::Ordering::SeqCst) == 0
+}
+
+/// The engine's revision of the song `guid` when its bridge last read it
+/// whole (sampled just before the read, so an edit during it counts as
+/// after).
+fn read_revisions() -> &'static Mutex<HashMap<String, u64>> {
+    static READ: std::sync::LazyLock<Mutex<HashMap<String, u64>>> =
+        std::sync::LazyLock::new(Default::default);
+    &READ
+}
+
+/// The song `guid`'s revision in the engine now: every write moves it on.
+/// `None`: no engine in this process to ask.
+fn revision(guid: &str) -> Option<u64> {
+    crate::open::local_engine()?.read_project(guid, |p| p.revision)
+}
+
+/// The song `guid` was read at `revision`.
+fn read_at(guid: &str, revision: Option<u64>) {
+    if let (Some(revision), Ok(mut read)) = (revision, read_revisions().lock()) {
+        read.insert(guid.to_owned(), revision);
+    }
+}
+
+/// Whether the engine has written nothing to the song `guid` since its
+/// bridge last read it — so a mark needs no read of it (a whole song's
+/// read: a quarter second on a sliced kit). False when it cannot be told.
+fn unchanged_since_read(guid: &str) -> bool {
+    let Some(now) = revision(guid) else {
+        return false;
+    };
+    read_revisions()
+        .lock()
+        .ok()
+        .and_then(|read| read.get(guid).copied())
+        == Some(now)
+}
+
+/// Hand the step `label` of the song `guid` (made by `action`), read off
+/// its engine, to the writer — the songs held, so its number is in order.
+fn send_write(
+    open: &Open,
+    (guid, label, action): (&str, &str, Option<&str>),
+    read: session::sync::LocalRead,
+) -> Result<(), String> {
+    let seq = SENT_WRITES.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    WRITING.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let job = Write {
+        guid: guid.to_owned(),
+        label: label.to_owned(),
+        action: action.map(str::to_owned),
+        read,
+        writer: open.bridge.writer(),
+        seq,
+        span: tracing::Span::current(),
+    };
+    let sent = writes()
+        .lock()
+        .map_err(|_| "the writer's lock".to_owned())
+        .and_then(|tx| tx.send(job).map_err(|e| e.to_string()));
+    if let Err(why) = sent {
+        WRITING.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        return Err(format!("the step was read but not written: {why}"));
+    }
+    Ok(())
+}
+
+/// The longest an undo, a restore or a copy waits for a step's write.
+pub(crate) const WRITE_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// How the kit's MIDI agrees with its hits after `labels` (the steps
 /// recorded together): an undo or a redo puts both back, so the views are
@@ -731,7 +963,7 @@ pub fn record_steps() {
                     // call's are its own (`history_marks::gather`).
                     let finished: Vec<Finished> =
                         std::iter::once(first).chain(rx.try_iter()).collect();
-                    let taken = finished.len();
+                    let mut taken = finished.len();
                     let mut by_song: HashMap<String, usize> = HashMap::new();
                     for (project, ..) in &finished {
                         *by_song.entry(project.clone()).or_default() += 1;
@@ -773,6 +1005,10 @@ pub fn record_steps() {
                             tracing::warn!(project.guid = %project, why, "an edit step was not recorded");
                         }
                         drop(stage);
+                        // Read: what the next action does no longer reaches
+                        // these steps' commit (its write runs on).
+                        PENDING.fetch_sub(labels.len(), std::sync::atomic::Ordering::SeqCst);
+                        taken = taken.saturating_sub(labels.len());
                     }
                     {
                         let mut songs = pending_songs()
@@ -804,6 +1040,7 @@ pub fn with_open_store<T: Send>(
     work: impl FnOnce(&Store, &Path) -> Result<T, String> + Send,
 ) -> Result<T, String> {
     let guid = guid.to_owned();
+    written(WRITE_WAIT);
     run(async move {
         let songs = open_songs().lock().await;
         let open = songs
@@ -837,6 +1074,24 @@ pub(crate) fn record(project_guid: &str, label: &str, action: Option<&str>) -> R
         let Some(open) = songs.get_mut(&guid) else {
             return Ok(());
         };
+        // A song synced through its org: its doc's own writer appends each
+        // commit as it is made, read and written in one.
+        if open.synced.is_none() {
+            let revision = revision(&guid);
+            let read = tracing::Instrument::instrument(
+                open.bridge.read_step(&label),
+                tracing::info_span!("bridge.read_step"),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+            read_at(&guid, revision);
+            let Some(read) = read else {
+                return Ok(());
+            };
+            send_write(open, (&guid, &label, action.as_deref()), read)?;
+            drop(songs);
+            return Ok(());
+        }
         open.name_next(&label);
         let recorded = match tracing::Instrument::instrument(
             open.bridge.local_step(&label),
@@ -893,6 +1148,8 @@ fn through_doc(daw: &Standalone, project_guid: &str, back: bool) -> Result<Undon
     )
     .unwrap_or_else(|| "Edits".to_owned());
     let guid = project_guid.to_owned();
+    // The doc holding every step read, the one undone among them.
+    written(WRITE_WAIT);
     run(async move {
         let mut songs = open_songs().lock().await;
         let Some(open) = songs.get_mut(&guid) else {
@@ -952,6 +1209,8 @@ async fn step_back(
 ///
 /// The file would not open or load, or the engine refused to rebuild it.
 pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<String, String> {
+    // Every step read is in the doc first.
+    written(WRITE_WAIT);
     let _job = crate::jobs::start("Opening", 0);
     record_steps();
     // The project file's load, one unit of work under the song's open: the
@@ -1103,6 +1362,8 @@ pub fn fork(
     path: &Path,
     name: &str,
 ) -> Result<PathBuf, String> {
+    // Every step read is in the doc first.
+    written(WRITE_WAIT);
     let name = name.trim();
     if name.is_empty() || name.contains(['/', '\\']) || name == session_format::store::MAIN {
         return Err(format!("{name:?} is not a name an alternative can have"));
@@ -1138,6 +1399,8 @@ pub fn fork(
 /// # Errors
 /// The song is not open from its file, or the file refused.
 pub fn history(guid: &str, page: (u32, u32)) -> Result<(Vec<(Moment, bool)>, u32), String> {
+    // Every step read is in the doc first.
+    written(WRITE_WAIT);
     let guid = guid.to_owned();
     run(async move {
         let songs = open_songs().lock().await;
@@ -1169,9 +1432,12 @@ fn reachable(vv: &session::sync::loro::VersionVector, frontiers: &[u8]) -> bool 
 
 /// Set a mark on the song `guid` as it is now — its doc's frontier and a
 /// name, a few bytes in its file, no branch — named by `name_for` from the
-/// marks it has already. Whatever the engine holds that no step has
-/// recorded yet is recorded first, as a step named for the mark, so the
-/// mark holds the song as it is. Says the mark's name.
+/// marks it has already. The steps before it are read first (never their
+/// writes waited on): while one is still being written into the doc, the
+/// mark is queued and the writer notes it right after, before any step
+/// read since. Whatever the engine holds that no step read in time is
+/// recorded first, as a step named for the mark, so the mark holds the
+/// song as it is. Says the mark's name.
 ///
 /// # Errors
 /// The song is not open from its file, or the engine would not be read,
@@ -1181,42 +1447,82 @@ pub fn mark(
     action: &str,
     name_for: impl FnOnce(&[String]) -> String + Send,
 ) -> Result<String, String> {
+    let span = tracing::info_span!(
+        "history.mark_set",
+        history.queued = tracing::field::Empty,
+        history.read_first = tracing::field::Empty,
+    );
+    let _in = span.enter();
+    // What it marks is the song as the steps before it left it: those
+    // read, never their (slow) writes waited on.
+    crate::history_marks::settle(crate::history_marks::SETTLE);
     let guid = guid.to_owned();
     let action = action.to_owned();
-    run(async move {
+    run(tracing::Instrument::in_current_span(async move {
         let mut songs = open_songs().lock().await;
         let open = songs
             .get_mut(&guid)
             .ok_or("the song is not open from its project file (a .session)")?;
-        let taken = with_store(&open.store, |s| {
+        let mut taken = with_store(&open.store, |s| {
             s.mark_names(&open.branch).map_err(|e| e.to_string())
         })?;
-        let name = name_for(&taken);
-        open.name_next(&name);
-        if open
-            .bridge
-            .local_step(&name)
-            .await
-            .map_err(|e| e.to_string())?
-        {
-            append_as(open, &name, Some(&action))?;
+        if let Ok(queued) = queued_marks().lock() {
+            taken.extend(
+                queued
+                    .iter()
+                    .filter(|m| m.guid == guid)
+                    .map(|m| m.name.clone()),
+            );
         }
-        let frontiers = open.bridge.doc().loro().state_frontiers();
-        with_store(&open.store, |s| {
-            s.note(
-                &open.branch,
-                (
-                    session_format::store::MomentKind::Mark,
-                    &name,
-                    Some(&action),
-                ),
-                &frontiers,
-            )
-            .map_err(|e| e.to_string())
-        })?;
+        let name = name_for(&taken);
+        // Steps not read in time, or an edit no step recorded: read first,
+        // as a step named for the mark, so the mark holds the song as it
+        // is. An engine unchanged since its last read is not read.
+        let unread =
+            PENDING.load(std::sync::atomic::Ordering::SeqCst) > 0 || !unchanged_since_read(&guid);
+        tracing::Span::current().record("history.read_first", unread);
+        if unread && open.synced.is_none() {
+            let revision = revision(&guid);
+            if let Some(read) = open
+                .bridge
+                .read_step(&name)
+                .await
+                .map_err(|e| e.to_string())?
+            {
+                send_write(open, (&guid, &name, Some(&action)), read)?;
+            }
+            read_at(&guid, revision);
+        } else if unread {
+            open.name_next(&name);
+            if open
+                .bridge
+                .local_step(&name)
+                .await
+                .map_err(|e| e.to_string())?
+            {
+                append_as(open, &name, Some(&action))?;
+            }
+        }
+        // A step still being written (its own, or one before it): the mark
+        // goes after it, noted by the writer — before any step read after
+        // this. Never waited on.
+        let writing = WRITING.load(std::sync::atomic::Ordering::SeqCst) > 0;
+        tracing::Span::current().record("history.queued", writing);
+        if writing && let Ok(mut queued) = queued_marks().lock() {
+            queued.push(QueuedMark {
+                guid: guid.clone(),
+                name: name.clone(),
+                action: action.clone(),
+                after: SENT_WRITES.load(std::sync::atomic::Ordering::SeqCst),
+            });
+            drop(queued);
+            drop(songs);
+            return Ok(name);
+        }
+        note_mark(open, &name, &action)?;
         drop(songs);
         Ok(name)
-    })?
+    }))?
 }
 
 /// Bring the song `guid` back to the step or mark `which` of its history
@@ -1230,6 +1536,7 @@ pub fn mark(
 /// set joined since), or the engine would not be read or made to match.
 pub fn restore(guid: &str, which: MomentRef) -> Result<Moment, String> {
     let guid = guid.to_owned();
+    written(WRITE_WAIT);
     run(async move {
         let mut songs = open_songs().lock().await;
         let open = songs
@@ -1289,6 +1596,8 @@ pub fn restore(guid: &str, which: MomentRef) -> Result<Moment, String> {
 /// # Errors
 /// The song is not open from its file, or the file refused.
 pub fn delete_branches(guid: &str, names: &[String]) -> Result<(), String> {
+    // Every step read is in the doc first.
+    written(WRITE_WAIT);
     let guid = guid.to_owned();
     let names = names.to_vec();
     run(async move {
@@ -1340,6 +1649,8 @@ pub fn doc_of(path: &Path) -> Option<session::sync::loro::LoroDoc> {
 ///
 /// The file would not open, or either song would not be read.
 pub fn check(daw: &Standalone, project_guid: &str, path: &Path) -> Result<Vec<String>, String> {
+    // Every step read is in the doc first.
+    written(WRITE_WAIT);
     let (file, branch) = save_target(path);
     let reopened = load(daw, "check", &file, &branch)?;
     let live_guid = project_guid.to_owned();
@@ -1515,6 +1826,8 @@ pub fn live_side(
     guid: &str,
     opened_from: &Path,
 ) -> Result<session::sync::relay::Side, String> {
+    // Every step read is in the doc first.
+    written(WRITE_WAIT);
     let (daw, guid) = (daw.clone(), guid.to_owned());
     let (file, branch) = save_target(opened_from);
     run(async move {
@@ -1615,6 +1928,8 @@ pub fn adopt(
     live: &session::sync::loro::LoroDoc,
     archive: &str,
 ) -> Result<Adopted, NotAdopted> {
+    // Every step read is in the doc first.
+    written(WRITE_WAIT);
     let frames = session::sync::relay::seed(live).map_err(|e| NotAdopted::Failed(e.to_string()))?;
     let (guid, archive) = (guid.to_owned(), archive.to_owned());
     run(async move {

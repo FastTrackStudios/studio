@@ -10,8 +10,11 @@
 //! apart:
 //!
 //! - **A barrier** ([`settle`]): a mutating drum action first waits for the
-//!   recorder to have recorded every step before it, so its own edit
-//!   starts a commit of its own;
+//!   recorder to have read every step before it off the engine, so its own
+//!   edit starts a commit of its own — never for their write into the doc,
+//!   which runs on a thread of its own (seconds for a whole kit's edit);
+//!   and an action waits for its own steps to be read before it returns
+//!   (`edit_trace::run_edit`), so the next finds nothing to wait for;
 //! - **runs** ([`gather`]): each action call has a run number (the
 //!   outermost action on its thread, `crate::history::running_run`); the
 //!   recorder only gathers steps of the same run into one commit.
@@ -34,8 +37,10 @@ pub fn next_run() -> u64 {
 /// whole song's read included.
 pub const SETTLE: std::time::Duration = std::time::Duration::from_secs(3);
 
-/// Wait until every step the engine finished has been recorded (at most
-/// `most`). Whether it got there; one warn line when it did not.
+/// Wait until every step the engine finished has been read by the
+/// recorder (at most `most`): what the engine does next is in none of
+/// their commits. Their doc writes are not waited on. Whether it got
+/// there; one warn line when it did not.
 pub fn settle(most: std::time::Duration) -> bool {
     settle_on(crate::project_file::steps_pending, most)
 }

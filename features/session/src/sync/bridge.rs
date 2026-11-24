@@ -62,6 +62,37 @@ pub struct Bridge {
     quiet: Vec<String>,
 }
 
+/// A local step read off the engine ([`Bridge::read_step`]): what the
+/// engine showed before it and after.
+pub struct LocalRead {
+    before: SessionModel,
+    now: SessionModel,
+}
+
+/// Writes a bridge's read steps into its doc ([`Bridge::writer`]).
+pub struct StepWriter {
+    doc: SessionDoc,
+    naming: std::sync::Arc<std::sync::Mutex<String>>,
+}
+
+impl StepWriter {
+    /// Write `read` into the doc as one commit named `label` (the undo
+    /// stack's step of that name): only what changed.
+    ///
+    /// # Errors
+    /// When the doc cannot be written.
+    pub fn write(&self, read: &LocalRead, label: &str) -> eyre::Result<()> {
+        if let Ok(mut naming) = self.naming.lock() {
+            label.clone_into(&mut naming);
+        }
+        tracing::info_span!("bridge.write_step").in_scope(|| {
+            self.doc
+                .write_step(&read.before, &read.now, ORIGIN_LOCAL, label)
+        })?;
+        Ok(())
+    }
+}
+
 /// An undo manager on `doc` whose steps carry the name `naming` holds
 /// when each is pushed.
 fn undo_manager(doc: &SessionDoc) -> (loro::UndoManager, std::sync::Arc<std::sync::Mutex<String>>) {
@@ -400,6 +431,23 @@ impl Bridge {
     /// # Errors
     /// When the engine cannot be read or the doc cannot be written.
     pub async fn local_step(&mut self, label: &str) -> eyre::Result<bool> {
+        let Some(read) = self.read_step(label).await? else {
+            return Ok(false);
+        };
+        self.writer().write(&read, label)?;
+        Ok(true)
+    }
+
+    /// [`Self::local_step`]'s first half: the engine read and compared,
+    /// and what it shows now taken as shown — the doc not yet written.
+    /// `None`: the step changed nothing (kept as a quiet step). The doc
+    /// must be written with [`StepWriter::write`] (this bridge's
+    /// [`Self::writer`]) before anything reads it against what is shown;
+    /// steps read one after another are written in the same order.
+    ///
+    /// # Errors
+    /// When the engine cannot be read.
+    pub async fn read_step(&mut self, label: &str) -> eyre::Result<Option<LocalRead>> {
         use tracing::Instrument as _;
         let at = self.journal_now();
         let since = self.cursor.map(|cursor| engine::Since {
@@ -425,14 +473,22 @@ impl Bridge {
                 self.quiet.remove(0);
             }
             self.quiet.push(label.to_owned());
-            return Ok(false);
+            return Ok(None);
         }
-        self.name_next(label);
-        tracing::info_span!("bridge.write_step")
-            .in_scope(|| self.doc.write_step(&self.shown, &now, ORIGIN_LOCAL, label))?;
-        self.shown = now;
+        let before = std::mem::replace(&mut self.shown, now.clone());
         self.quiet.clear();
-        Ok(true)
+        Ok(Some(LocalRead { before, now }))
+    }
+
+    /// What writes this bridge's read steps into its doc: a handle on the
+    /// doc and the undo stack's naming, usable without the bridge (a long
+    /// write holds nothing of it).
+    #[must_use]
+    pub fn writer(&self) -> StepWriter {
+        StepWriter {
+            doc: self.doc.clone(),
+            naming: std::sync::Arc::clone(&self.naming),
+        }
     }
 
     /// Undo this peer's last step: in the doc, then in the engine. Returns

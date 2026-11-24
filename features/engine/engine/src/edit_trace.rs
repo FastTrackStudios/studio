@@ -155,6 +155,11 @@ pub fn run_edit<T>(
         }
         run(&traced)
     });
+    // The steps it made read before it returns: the next action finds
+    // nothing of this one's to wait for (their doc write runs on).
+    if !crate::history::nested() {
+        crate::history_marks::settle(crate::history_marks::SETTLE);
+    }
     traced.outcome(&out);
     out
 }

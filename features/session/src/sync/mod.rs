@@ -36,7 +36,7 @@ pub mod transport;
 pub mod whole;
 
 #[cfg(feature = "engine")]
-pub use bridge::Bridge;
+pub use bridge::{Bridge, LocalRead, StepWriter};
 pub use diff::{Change, ItemField, TrackField, diff};
 pub use doc::{ORIGIN_LOCAL, SCHEMA, SessionDoc};
 pub use hold::{Held, Hold};

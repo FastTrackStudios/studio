@@ -110,7 +110,9 @@ fn a_step_is_gone_back_to_after_the_song_is_reopened() {
     let wanted = steps("first-open")[0].0;
     step(&daw, "first-open", 0.8);
 
-    // Reopened as another session would: the file as it is on disk.
+    // Reopened as another session would: the file as it is on disk, once
+    // the last step's write (on its own thread) is in it.
+    assert!(project_file::written(project_file::WRITE_WAIT));
     let copy = dir.path().join("Reopened.session");
     std::fs::copy(&file, &copy).expect("the file");
     let wal = |f: &Path| {
