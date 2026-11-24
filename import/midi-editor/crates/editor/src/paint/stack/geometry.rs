@@ -1,6 +1,7 @@
 //! Lane layout and time conversion, independent of component state.
 use super::waveform::{columns_polygon, summed_columns};
 use crate::doc::{ExpressionDoc, Note};
+use crate::kit::RoleColor as _;
 use crate::paint::theme;
 use crate::{Editor, Mode, kit, rows::RowSpace, tracks::StackRow};
 const LANE_PAD: f64 = 3.0;

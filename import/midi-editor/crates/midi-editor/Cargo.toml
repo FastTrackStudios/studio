@@ -1,0 +1,50 @@
+[package]
+name = "midi-editor"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Studio's MIDI editor view: the expression editor drawn with daw-view-kit, and the Editor panel that follows the arrangement. Moving to FastTrackStudios/midi-editor."
+
+# The editor crate is the document, its painter and its gestures (no
+# Dioxus); this is it as one of the DAW views, over daw-view-kit. The kit
+# never names this crate (daw-view-kit/docs/extraction-plan.md, step 5):
+# the arrangement hands it a clicked item through the kit's
+# `edit_target`, and the kit's theme export takes its `editor.*` tokens
+# through `skin::export::install_editor_tokens` (both installed by
+# `midi_editor::install`).
+
+[dependencies]
+daw-view-kit = { workspace = true }
+daw-view = { workspace = true }
+# The expression editor: its engine, its painter and gestures, and the
+# take-to-document conversion.
+editor = { workspace = true, features = ["audio", "audio-daw", "daw", "paint"] }
+dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
+daw-ui = { workspace = true, features = ["studio"] }
+blitz-dom = { workspace = true }
+blitz-traits = { workspace = true }
+dioxus-native-dom = { workspace = true }
+daw-proto = { workspace = true }
+daw = { workspace = true }
+frame = { workspace = true, features = ["host-scene", "live", "theme"] }
+anyrender = { workspace = true }
+vello = "0.11"
+timeline = { workspace = true, features = ["actions"] }
+cursor-icon = { workspace = true }
+web-time = { workspace = true }
+eyre = { workspace = true }
+tracing = { workspace = true }
+facet-json = { workspace = true }
+
+[features]
+default = ["native"]
+# daw-view-kit's features, forwarded.
+native = ["daw-view-kit/native", "daw-view/native"]
+web = ["daw-view-kit/web", "daw-view/web", "dioxus/web"]
+
+[dev-dependencies]
+daw-view-kit = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true

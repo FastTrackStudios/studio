@@ -22,6 +22,7 @@ pub mod cursor;
 pub mod demo;
 pub mod guitar;
 pub mod interaction;
+pub mod keymap;
 pub mod keys;
 pub mod num;
 pub mod paint;
