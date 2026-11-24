@@ -86,6 +86,11 @@ daw-view-kit = { workspace = true, optional = true, features = ["native"] }
 # (`THEME_*`, src/themes.rs); the arrangement's declaration of what it uses.
 daw-theme = { workspace = true, optional = true }
 arrangement-view = { workspace = true, optional = true, features = ["native"] }
+# The app's panels around the views (the top and bottom bars, Setup, the
+# transport bar, the lyrics choice).
+studio-panels = { workspace = true, optional = true, features = ["native"] }
+# The Editor view.
+midi-editor = { workspace = true, optional = true, features = ["native"] }
 session-engine-client = { workspace = true, optional = true, features = ["native"] }
 # The window's modes (`SESSION_MODE`, this client's own).
 session = { workspace = true, optional = true }
@@ -142,6 +147,8 @@ native = [
     "dep:daw-view-kit",
     "dep:daw-theme",
     "dep:arrangement-view",
+    "dep:studio-panels",
+    "dep:midi-editor",
     "dep:mixer-view",
     "dep:session-engine-client",
     "dep:session",

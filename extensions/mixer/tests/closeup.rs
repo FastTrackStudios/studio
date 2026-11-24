@@ -33,11 +33,11 @@ use architect_scene::anim::Readings;
 use architect_scene::ops::{Receiver, Sender};
 use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
-use daw_view_kit::studio::StudioSession;
 use dioxus::prelude::*;
 use mixer_view::closeup::RackWidget;
 use mixer_view::tone::Which;
 use peniko::kurbo::Affine;
+use session_engine_client::song_model::StudioSession;
 use studio_mixer::closeup::HostedRack;
 use studio_view_link::{InScope, Stats};
 

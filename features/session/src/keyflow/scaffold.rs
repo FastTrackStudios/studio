@@ -15,6 +15,7 @@ use tracing::{info, warn};
 
 use crate::proto::keyflow_scaffold::{KeyflowScaffoldActions, register_keyflow_scaffold_actions};
 
+use crate::keyflow::actions::SectionKindKeyflow as _;
 use crate::keyflow::actions::{normalize_section_regions, section_type_color};
 use crate::setlist::chart_import::{ChartLayout, chart_to_layout};
 

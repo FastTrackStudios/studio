@@ -16,7 +16,7 @@
 //! MCP as every action is.
 //!
 //! **In a browser** (studio-web) the view is the same panel over the
-//! page's own engine (`daw_view_kit::web_host`, the panels under
+//! page's own engine (`studio_panels::web_host`, the panels under
 //! dioxus-web with the widget in a WebGL2 canvas): one crate, the host
 //! chosen by the target ([`web`]).
 
@@ -38,10 +38,10 @@ use architect_extensions_dioxus::PaintPane;
 #[cfg(not(target_arch = "wasm32"))]
 use architect_scene::paint::PaintMount;
 #[cfg(not(target_arch = "wasm32"))]
-use daw_view_kit::song_model::StudioSession;
-#[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
 use serde_json::{Value as Json, json};
+#[cfg(not(target_arch = "wasm32"))]
+use session_engine_client::song_model::StudioSession;
 #[cfg(not(target_arch = "wasm32"))]
 use studio_view_link::InScope;
 use studio_view_link::Stats;
@@ -73,6 +73,9 @@ impl Extension for Arrangement {
         // The arrangement's views, for the window's views that show it
         // (the mixer's docked pair, the browser's DAW panels).
         arrangement_view::arrangement_host::install();
+        // The views' keys: Studio's input profile.
+        #[cfg(not(target_arch = "wasm32"))]
+        studio_panels::hooks::install();
         #[cfg(not(target_arch = "wasm32"))]
         ext.view("arrangement", ArrangementPane);
         #[cfg(target_arch = "wasm32")]
@@ -127,7 +130,7 @@ fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
     return session_engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
-    return daw_view_kit::web_host::hosted_is_open();
+    return studio_panels::web_host::hosted_is_open();
 }
 
 /// The pane: the arrangement once the engine has a song, a line saying
@@ -169,8 +172,11 @@ impl PartialEq for Song {
 #[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn Panel(session: Song) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.0.song());
     use_context_provider(|| session.0.clone());
-    studio_view_link::use_client_mode();
+    // The client's mode, and what it asks the arrangement to show.
+    studio_panels::shows::provide(studio_view_link::use_client_mode());
     // Beside a mixer pane it is not linked to: compact, as docked.
     use_context_provider(|| arrangement_view::panel::StartCompact(true));
     let applier = use_hook(|| Rc::new(daw_view_kit::engine::Applier::start()));

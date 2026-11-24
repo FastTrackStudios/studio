@@ -27,6 +27,7 @@ architect-scene = { workspace = true, features = ["paint-ui"] }
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest", "paint"] }
 daw-view-kit = { workspace = true, features = ["native"] }
+studio-panels = { workspace = true, features = ["native"] }
 arrangement-view = { workspace = true, features = ["native"] }
 session-engine-client = { workspace = true, features = ["native"] }
 session = { workspace = true }
@@ -39,6 +40,7 @@ web-time = { workspace = true }
 # The browser: the panel over the page's own engine (`src/web.rs`).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 daw-view-kit = { workspace = true, features = ["web"] }
+studio-panels = { workspace = true, features = ["web"] }
 arrangement-view = { workspace = true, features = ["web"] }
 session-engine-client = { workspace = true, features = ["web"] }
 session-engine = { workspace = true, features = ["web"] }
@@ -46,8 +48,9 @@ session-engine = { workspace = true, features = ["web"] }
 [dev-dependencies]
 # The tests open a song on an engine in the test's own process.
 session-engine = { workspace = true, features = ["native"] }
-daw-view-kit = { workspace = true, features = ["native", "engine"] }
-arrangement-view = { workspace = true, features = ["native", "engine"] }
+daw-view-kit = { workspace = true, features = ["native"] }
+studio-panels = { workspace = true, features = ["native", "engine"] }
+arrangement-view = { workspace = true, features = ["native"] }
 # The tests stand a pane up as the workspace does (`ViewHost`, `Placement`).
 architect-workspace = { workspace = true, features = ["paint-ui"] }
 architect = { workspace = true, features = ["action-list"] }

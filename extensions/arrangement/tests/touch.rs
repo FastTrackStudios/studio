@@ -28,8 +28,8 @@ use architect_workspace::{
 };
 use arrangement_view::panel::ArrangementPanel;
 use arrangement_view::widget::ArrangementWidget;
-use daw_view_kit::studio::StudioSession;
 use dioxus::prelude::*;
+use session_engine_client::song_model::StudioSession;
 use studio_arrangement::host::{Hosted, InScope, Stats};
 
 const W: u32 = 1280;

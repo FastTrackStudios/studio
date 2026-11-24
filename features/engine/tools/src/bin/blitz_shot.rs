@@ -7,7 +7,7 @@
 //! ```
 //!
 //! Nothing here draws the arrangement. The session is opened and planned
-//! the way the app opens it ([`daw_view_kit::studio::StudioSession`]), and
+//! the way the app opens it ([`session_engine_client::song_model::StudioSession`]), and
 //! the tree is the app's: in a window it is
 //! [`mixer_view::mixer_panel::DawPanels`] — the arrangement panel, its
 //! chrome and the docked mixer, exactly what the desktop shell mounts —
@@ -51,12 +51,17 @@ use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
 
 use arrangement_view::panel::{ArrangementPanel, PanelEvent, Slot};
-use daw_view_kit::studio::{PPS, StudioSession};
+use daw_view_kit::studio::PPS;
+use session_engine::song_model::StudioSession;
 
 /// The scene the app lays a session out by.
 const SCENE: &str = "drum-mixing";
 
 fn main() {
+    // Studio behind the views, as the app installs it: its host, its
+    // hooks (keys, docks, the mixer's scenes and phases).
+    session_engine::install();
+    studio_panels::hooks::install();
     // The arrangement the DAW panels show, as the app installs it.
     arrangement_view::arrangement_host::install();
     // A window writes to a LOG rather than to a terminal it does not
@@ -396,11 +401,11 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             .collect();
         let _ = session_engine::lanes::set_expanded(&guids, Some(true));
     }
-    let planner = daw_view_kit::studio::Planner {
-        raw: Arc::new(raw),
-        scene: Some(scene),
-        kinds: Arc::new(session_engine::plan::Kinds::read(path)),
-    };
+    let planner = session_engine::song_model::template_planner(
+        Arc::new(raw),
+        Some(scene),
+        Arc::new(session_engine::plan::Kinds::read(path)),
+    );
     let (project, rows) = planner.plan(&planner.raw);
     let previews = daw_view_kit::studio::previews_of(&project);
     let chart = prepare.chart.as_deref().and_then(|chart_path| {
@@ -461,6 +466,7 @@ struct StillProps {
 
 #[component]
 fn Still(props: StillProps) -> Element {
+    use_context_provider(|| props.session.song());
     use_context_provider(|| props.session.clone());
     use_context_provider(|| props.slot.clone());
     // `FTS_BLITZ_MODE=edit` (or `record`, `mix`): the window's mode, as
@@ -537,6 +543,7 @@ struct WindowProps {
 /// surface.
 #[component]
 fn Window(props: WindowProps) -> Element {
+    use_context_provider(|| props.session.song());
     use_context_provider(|| props.session.clone());
     let slot = use_context_provider(Slot::default);
     // The window's ACTUAL size, not the one it was asked for. Laying out

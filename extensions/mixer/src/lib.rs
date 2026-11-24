@@ -19,7 +19,7 @@
 
 //!
 //! **In a browser** (studio-web) the `mixer` view is the same widget over
-//! the page's own engine (`daw_view_kit::web_host`, [`web`]); the strip and
+//! the page's own engine (`studio_panels::web_host`, [`web`]); the strip and
 //! the close-up say they are the desktop's for now.
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -42,12 +42,12 @@ use architect_extensions_dioxus::PaintPane;
 #[cfg(not(target_arch = "wasm32"))]
 use architect_scene::paint::PaintMount;
 #[cfg(not(target_arch = "wasm32"))]
-use daw_view_kit::song_model::StudioSession;
-#[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use mixer_view::mixer_panel::{HostedMixer, Links};
 use serde_json::{Value as Json, json};
+#[cfg(not(target_arch = "wasm32"))]
+use session_engine_client::song_model::StudioSession;
 #[cfg(not(target_arch = "wasm32"))]
 use studio_view_link::InScope;
 use studio_view_link::Stats;
@@ -76,6 +76,9 @@ impl Extension for Mixer {
         mixer_view::mixer_host::install();
         // The arrangement its DAW panels dock the mixer under.
         arrangement_view::arrangement_host::install();
+        // The views' keys: Studio's input profile.
+        #[cfg(not(target_arch = "wasm32"))]
+        studio_panels::hooks::install();
         #[cfg(not(target_arch = "wasm32"))]
         {
             claim::claim(ext.handle());
@@ -139,7 +142,7 @@ fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
     return session_engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
-    return daw_view_kit::web_host::hosted_is_open();
+    return studio_panels::web_host::hosted_is_open();
 }
 
 /// Which of the two a pane is.
@@ -211,8 +214,10 @@ impl PartialEq for Song {
 #[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn Strips(session: Song, shown: Shown) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.0.song());
     let session = use_context_provider(|| session.0.clone());
-    studio_view_link::use_client_mode();
+    studio_panels::shows::provide(studio_view_link::use_client_mode());
     let mixer = use_hook(|| {
         let rows = session
             .planner

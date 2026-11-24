@@ -25,10 +25,15 @@ serde_json = { workspace = true }
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest"] }
 daw-view-kit = { workspace = true, features = ["native"] }
+studio-panels = { workspace = true, features = ["native"] }
+# Studio's session as it reads a song (`song_model::StudioSession`).
+session-engine-client = { workspace = true, features = ["native"] }
 
 # The browser: the same panel over the page's own engine.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 daw-view-kit = { workspace = true, features = ["web"] }
+studio-panels = { workspace = true, features = ["web"] }
+session-engine-client = { workspace = true, features = ["web"] }
 
 [lints]
 workspace = true

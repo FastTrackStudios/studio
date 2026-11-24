@@ -1057,13 +1057,27 @@ fn marker_color_for_name(name: &str) -> Option<u32> {
     }
 }
 
-impl SectionKind {
+/// A section kind as keyflow names it, and how long it runs by default:
+/// Studio's reading of the session primitive's kinds.
+pub trait SectionKindKeyflow: Sized {
+    /// The keyflow `SectionType` this kind stamps a region as.
+    fn section_type(self) -> SectionType;
+    /// The kind a keyflow `SectionType` is stamped as.
+    fn from_section_type(st: &SectionType) -> Self;
+    /// Its default length, measures.
+    fn default_measure_count(self) -> u32;
+    /// Its verified default length, measures, where there is one.
+    fn verified_default_measure_count(self) -> Option<u32>;
+    /// The colour its region is stamped in, as CSS (`#rrggbb`).
+    fn css_color(self) -> String;
+}
+
+impl SectionKindKeyflow for SectionKind {
     /// The keyflow `SectionType` this kind stamps a region as — also
     /// what a non-REAPER caller (a toolbar button) uses to look up the
     /// same color the region gets, via
     /// `keyflow::sections::colors_for_section_type`.
-    #[must_use]
-    pub fn section_type(self) -> SectionType {
+    fn section_type(self) -> SectionType {
         match self {
             Self::Intro => SectionType::Intro,
             Self::Verse => SectionType::Verse,
@@ -1091,7 +1105,7 @@ impl SectionKind {
     /// session model has no free-form section kind, so a custom section is
     /// stamped as a generic instrumental region (its label is carried
     /// separately).
-    pub(crate) const fn from_section_type(st: &SectionType) -> Self {
+    fn from_section_type(st: &SectionType) -> Self {
         match st {
             SectionType::Intro | SectionType::Opening => Self::Intro,
             SectionType::Verse => Self::Verse,
@@ -1113,11 +1127,11 @@ impl SectionKind {
         }
     }
 
-    pub(crate) fn default_measure_count(self) -> u32 {
+    fn default_measure_count(self) -> u32 {
         self.verified_default_measure_count().unwrap_or(4)
     }
 
-    const fn verified_default_measure_count(self) -> Option<u32> {
+    fn verified_default_measure_count(self) -> Option<u32> {
         match self {
             Self::CountIn | Self::Turnaround => Some(2),
             Self::Verse | Self::Chorus | Self::Bridge | Self::Refrain => Some(8),
@@ -1131,10 +1145,27 @@ impl SectionKind {
             | Self::End => None,
         }
     }
+
+    /// The colour its region is stamped in, as CSS (`#rrggbb`) — so a
+    /// toolbar button and the region it inserts cannot disagree.
+    fn css_color(self) -> String {
+        let native = section_type_color(&self.section_type());
+        // Undo `reaper_native_rgb`: BGR with a flag.
+        let rgb = ((native & 0xff) << 16) | (native & 0xff00) | ((native >> 16) & 0xff);
+        format!("#{rgb:06x}")
+    }
 }
 
-impl MarkerKind {
-    pub(crate) const fn name(self) -> &'static str {
+/// A marker kind's REAPER name and colour: Studio's.
+pub trait MarkerKindName {
+    /// The marker's name, as REAPER's projects carry it.
+    fn name(self) -> &'static str;
+    /// Its colour, REAPER-native.
+    fn default_color(self) -> u32;
+}
+
+impl MarkerKindName for MarkerKind {
+    fn name(self) -> &'static str {
         match self {
             Self::CountIn => "COUNT-IN",
             Self::Start => "=START",
@@ -1144,20 +1175,8 @@ impl MarkerKind {
         }
     }
 
-    const fn default_color(self) -> u32 {
+    fn default_color(self) -> u32 {
         reaper_native_rgb(self.rgb())
-    }
-}
-
-impl SectionKind {
-    /// The colour its region is stamped in, as CSS (`#rrggbb`) — so a
-    /// toolbar button and the region it inserts cannot disagree.
-    #[must_use]
-    pub fn css_color(self) -> String {
-        let native = section_type_color(&self.section_type());
-        // Undo `reaper_native_rgb`: BGR with a flag.
-        let rgb = ((native & 0xff) << 16) | (native & 0xff00) | ((native >> 16) & 0xff);
-        format!("#{rgb:06x}")
     }
 }
 
