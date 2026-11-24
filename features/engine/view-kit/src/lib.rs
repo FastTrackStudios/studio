@@ -115,8 +115,6 @@ pub mod versions;
 pub use session_engine::actions;
 #[cfg(all(not(feature = "native"), feature = "engine"))]
 pub use session_engine::open;
-#[cfg(all(feature = "native", feature = "engine"))]
-pub use session_engine::vocal_level;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::actions;
 #[cfg(all(not(feature = "native"), not(feature = "engine")))]
@@ -125,8 +123,6 @@ pub use session_engine_client::open;
 pub use session_engine_client::wave_pool;
 pub mod browser;
 pub mod device_audio;
-#[cfg(all(feature = "signal", feature = "engine"))]
-pub use session_engine::drum_samples;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::edit_actions;
 pub use session_engine_client::drum_edit;
@@ -135,9 +131,6 @@ pub use session_engine_client::drum_settings;
 pub use session_engine_client::edit_actions;
 pub use session_engine_client::gain_stage;
 pub mod grid_in_force;
-pub use editing::groove;
-#[cfg(all(feature = "native", feature = "engine"))]
-pub use session_engine::mix_chains;
 pub use session_engine_client::hit_overlay;
 pub use session_engine_client::kit_gate;
 pub mod overlay;
@@ -166,8 +159,6 @@ pub mod progress;
 pub mod quantize_panel;
 pub mod rails;
 pub mod record_view;
-#[cfg(all(feature = "native", feature = "engine"))]
-pub use session_engine::reference_play;
 pub mod replan;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::render_ahead;
@@ -188,8 +179,6 @@ pub use session_engine_client::song_model;
 pub use session_engine_client::stretch;
 pub mod strip;
 pub mod studio;
-#[cfg(all(feature = "native", feature = "engine"))]
-pub use session_engine::take_rank;
 pub mod take_rating;
 pub mod tcp;
 /// A small song for tests, here and in the crates over this one (their
@@ -219,7 +208,6 @@ pub mod which_key;
 pub mod window;
 pub use session_engine_client::window_queue;
 pub mod window_cursor;
-pub use editing::written;
 pub use session_engine_client::zoom;
 
 /// Whether this process's windows are linked into the app that hosts them

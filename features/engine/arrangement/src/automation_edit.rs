@@ -458,7 +458,7 @@ fn set_ride(track: &str, item: &str, ride: &[dsp::level::envelope::EnvPoint]) {
 }
 
 /// Leveled item `item` as the window has it, kept and written as its
-/// volume ([`crate::vocal_level::relevel`]).
+/// volume (`session_engine::vocal_level::relevel`).
 fn relevel(track: &str, item: &str) {
     #[cfg(feature = "native")]
     {

@@ -33,7 +33,6 @@ keybinds = { workspace = true }
 editor = { workspace = true, features = ["audio", "audio-daw", "daw", "paint"] }
 frame = { workspace = true, features = ["host-scene", "live", "theme"] }
 daw = { workspace = true }
-studio = { workspace = true }
 anyrender = { workspace = true }
 # The Patch List's picture (`patch_list::shot`).
 anyrender_vello = { workspace = true, optional = true }

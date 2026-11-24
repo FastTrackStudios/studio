@@ -115,7 +115,6 @@ frame = { workspace = true, features = ["host-scene", "live", "theme"] }
 # extension's Unix socket, not linking its FFI, which is what lets this
 # window run on a machine that has no REAPER at all.
 daw = { workspace = true }
-studio = { workspace = true }
 
 # The GPU-accelerated arrangement. `anyrender` is the 2D abstraction
 # (`PaintScene`: fill/stroke/draw_glyphs/draw_image) and the portable
@@ -208,7 +207,6 @@ gloo-timers = { workspace = true, optional = true }
 builtin = { workspace = true, optional = true, features = ["engine"] }
 num-traits = { workspace = true }
 facet = { workspace = true }
-editing = { workspace = true }
 serde_json = { workspace = true }
 # What an engine action answers, read back (`browser`'s `RIG_BROWSE`).
 facet-json = { workspace = true }
@@ -231,10 +229,10 @@ default = ["native"]
 signal = ["native", "session-engine?/signal"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["dep:opentelemetry", "session-engine-client/native", "session-engine?/native", "dep:dioxus-native", "dep:zbus", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu_context", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dsp/hits", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "dep:builtin", "builtin?/engine", "session/library", "session/project-sync"]
+native = ["dep:opentelemetry", "session-engine-client/native", "session-engine?/native", "dep:dioxus-native", "dep:zbus", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu_context", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dsp/hits", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "dep:builtin", "builtin?/engine", "session/library", "session/project-sync"]
 # A show recorded as one Live set, split into its songs (src/show.rs,
 # the `show-split` bin): the Live-set reader and the .als → .RPP converter.
-show = ["native", "engine", "studio/convert-ableton", "session-engine/show"]
+show = ["native", "engine", "session-engine/show"]
 # The browser: the same widgets, hosted in <canvas> elements under
 # dioxus-web and drawn with vello_hybrid's WebGL renderer (keyflow-ui's
 # `wasm-graphics` pattern). See `web_host`.
@@ -243,7 +241,7 @@ web = ["engine", "session-engine-client/web", "session-engine/web", "dioxus/web"
 # feature so an ordinary `cargo nextest run --workspace` does not try to
 # reach one that is not running — `just reaper-test` turns it on, via
 # session-reaper-xtask, which starts the REAPER first.
-reaper-tests = ["engine", "studio/test-harness", "session-engine/reaper-tests"]
+reaper-tests = ["engine", "session-engine/reaper-tests"]
 # The engine in this process (`session-engine`): what the old Session window
 # runs (session-desktop enables it), the headless tools, a browser page.
 # Without it this crate is a view of an engine reached over its link
