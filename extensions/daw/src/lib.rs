@@ -1,7 +1,7 @@
 //! `daw`: Studio's engine as an Architect extension.
 //!
 //! The process runs the engine `studio engine` runs
-//! (`session_desktop::engine_host`): one `Standalone`, the set's audio
+//! (`session_engine::engine_host`): one `Standalone`, the set's audio
 //! engine, the set, the Action List, and the engine's view service on a
 //! Unix socket, published under `$XDG_CONFIG_HOME/fts/engines/` as
 //! `studio engine` publishes itself. Studio's views, installed as
@@ -58,14 +58,14 @@ pub fn opened() -> Option<&'static str> {
 #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
 pub fn start_engine(open: Option<String>) {
     let _ = OPENED.set(open.clone());
-    let args = session_desktop::engine_host::Args {
+    let args = session_engine::engine_host::Args {
         open,
-        ..session_desktop::engine_host::Args::default()
+        ..session_engine::engine_host::Args::default()
     };
     let spawned = std::thread::Builder::new()
         .name("studio-engine".to_owned())
         .spawn(move || {
-            if let Err(e) = session_desktop::engine_host::run(&args) {
+            if let Err(e) = session_engine::engine_host::run(&args) {
                 let _ = STARTED.set(Err(e.to_string()));
             }
         });

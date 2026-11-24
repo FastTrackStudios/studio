@@ -79,7 +79,7 @@ pub mod cli;
     not(target_arch = "wasm32"),
     not(target_os = "ios")
 ))]
-pub mod engine_host;
+pub use ::session_engine::engine_host;
 /// The app on Blitz — see `docs/app-on-blitz.md`. The desktop's, and the
 /// iPhone's: the same renderer and the same panels, laid out for the screen.
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]

@@ -80,6 +80,11 @@ pub mod page;
 pub use session_engine_client::stream_quality;
 #[cfg(feature = "native")]
 pub mod studio_engine;
+/// The engine with no window, serving windows over its socket: what
+/// `studio engine`, `studio-desktop --session-engine` and Studio's `daw`
+/// extension run.
+#[cfg(all(feature = "native", unix, not(target_os = "ios")))]
+pub mod engine_host;
 pub use session_engine_client::take_colors;
 #[cfg(feature = "native")]
 pub mod task_account;
