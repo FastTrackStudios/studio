@@ -21,6 +21,8 @@
 
 pub mod chain;
 pub mod closeup;
+#[cfg(feature = "native")]
+pub mod engine;
 pub mod fixtures;
 pub mod paint;
 pub mod source;

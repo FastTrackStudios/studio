@@ -235,6 +235,8 @@ pub fn register_mixer(list: &ActionList) -> Result<(), architect::action::Action
         }
         .to_owned())
     })?;
+    // A track's Signal FX as its blocks or one insert.
+    crate::signal::register(list)?;
     Ok(())
 }
 

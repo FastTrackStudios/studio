@@ -86,11 +86,12 @@ pub fn studio_style() -> Element {
 /// The window actions the mixer pane carries out (`studio.mixer` claims
 /// them from the engine; a window showing the arrangement hands them
 /// over): what `studio-desktop`'s one window runs itself.
-pub const MIXER_ACTIONS: [&str; 4] = [
+pub const MIXER_ACTIONS: [&str; 5] = [
     "MIXER_VIEW",
     "SESSION_MIXER_FX",
     "SESSION_TOGGLE_MIXER",
     "SESSION_CLOSEUP",
+    "SIGNAL_INSERTS",
 ];
 
 /// How a pane has been painting.
