@@ -26,7 +26,7 @@ pub const WINDOW: &str = "studio.mixer";
 const PANE: &str = "studio.mixer/mixer";
 
 /// The actions this pane claims: what the arrangement hands over.
-const CLAIMED: [&str; 4] = studio_view_link::MIXER_ACTIONS;
+const CLAIMED: [&str; 5] = studio_view_link::MIXER_ACTIONS;
 
 /// The extension's way to the host, once it runs.
 static HANDLE: OnceLock<Handle> = OnceLock::new();

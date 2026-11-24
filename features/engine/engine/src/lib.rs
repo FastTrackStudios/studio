@@ -33,6 +33,8 @@ pub use session_runtime::folder;
 #[cfg(feature = "native")]
 pub mod clap_fx;
 #[cfg(feature = "native")]
+pub mod clap_host;
+#[cfg(feature = "native")]
 pub mod fx_actions;
 #[cfg(feature = "native")]
 pub mod grow;

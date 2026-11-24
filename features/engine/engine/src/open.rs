@@ -339,6 +339,11 @@ pub fn set_song_color(project_guid: &str, rgb: u32, saved: Option<&Path>) {
 /// unrelated the first time a panel subscribes to anything.
 fn bootstrap(standalone: &Standalone) -> eyre::Result<()> {
     crate::install();
+    // Every CLAP the process's engine loads is offered Studio's actions
+    // (host-actions/1), before its first song opens.
+    if std::ptr::eq(standalone, engine()) {
+        crate::clap_host::install(engine());
+    }
     if BUNDLE.get().is_some() {
         return Ok(());
     }

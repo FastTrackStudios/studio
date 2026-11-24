@@ -6,6 +6,17 @@ use dioxus::prelude::*;
 
 /// Install the mixer's views and actions for every window of this process.
 pub fn install() {
+    // Signal's chains from the engine this window runs against, once.
+    #[cfg(feature = "native")]
+    {
+        static SIGNAL: std::sync::Once = std::sync::Once::new();
+        // A source installed before (a test's fixture) is kept.
+        SIGNAL.call_once(|| {
+            if crate::signal::installed().is_none() {
+                crate::signal::install(crate::signal::engine::EngineSource::engine());
+            }
+        });
+    }
     crate::dock::install_mixer(crate::dock::MixerViews {
         mixer: group_mixer,
         #[cfg(feature = "web")]

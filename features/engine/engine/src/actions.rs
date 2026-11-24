@@ -628,6 +628,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::fx_actions::register(list)?;
     #[cfg(feature = "native")]
     crate::signal_kit::register(list)?;
+    crate::clap_host::signal::register(list)?;
     #[cfg(feature = "native")]
     crate::mix_sends::register(list)?;
     #[cfg(feature = "native")]

@@ -1,0 +1,1075 @@
+{
+ "session": "unbreakable-drums",
+ "tracks": [
+  {
+   "path": "Drums/Kick",
+   "chain": {
+    "schema": "signal.chain/1",
+    "revision": 1,
+    "session": "unbreakable-drums",
+    "port": "Drums/Kick",
+    "mode": "per-track",
+    "midi": null,
+    "phases": [
+     {
+      "id": "rescue",
+      "name": "Rescue",
+      "bypass": false,
+      "makeup_db": 0.07,
+      "blocks": [
+       {
+        "id": "rescue.gate",
+        "kind": "gate",
+        "name": "Gate",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": {
+         "from": "Drums/Kick/Sum/Trig",
+         "via": "hits"
+        },
+        "params": [
+         {
+          "id": "length",
+          "clap_id": "b000",
+          "name": "Length",
+          "value": 300.0,
+          "normalized": 0.2929,
+          "text": "300 ms",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 1000.0,
+          "default": 300.0,
+          "choices": []
+         },
+         {
+          "id": "mode",
+          "clap_id": "b001",
+          "name": "Mode",
+          "value": 0.0,
+          "normalized": 0.0,
+          "text": "Gate",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "choices": [
+           "Gate",
+           "Duck"
+          ]
+         },
+         {
+          "id": "threshold",
+          "clap_id": "b002",
+          "name": "Threshold",
+          "value": -40.0,
+          "normalized": 0.5,
+          "text": "-40.0 dB",
+          "unit": "dB",
+          "min": -80.0,
+          "max": 0.0,
+          "default": -40.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "gain_reduction",
+          "name": "GR",
+          "unit": "dB",
+          "index": 0
+         }
+        ]
+       }
+      ],
+      "meters": [
+       {
+        "id": "level",
+        "name": "Rescue level",
+        "unit": "dB",
+        "index": 3
+       }
+      ]
+     },
+     {
+      "id": "tone",
+      "name": "Tone",
+      "bypass": false,
+      "makeup_db": 3.81,
+      "blocks": [
+       {
+        "id": "tone.comp",
+        "kind": "comp",
+        "name": "Comp",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "attack",
+          "clap_id": "b010",
+          "name": "Attack",
+          "value": 20.0,
+          "normalized": 0.1992,
+          "text": "20 ms",
+          "unit": "ms",
+          "min": 0.1,
+          "max": 100.0,
+          "default": 10.0,
+          "choices": []
+         },
+         {
+          "id": "ratio",
+          "clap_id": "b011",
+          "name": "Ratio",
+          "value": 4.0,
+          "normalized": 0.1579,
+          "text": "4.0:1",
+          "unit": ":1",
+          "min": 1.0,
+          "max": 20.0,
+          "default": 4.0,
+          "choices": []
+         },
+         {
+          "id": "release",
+          "clap_id": "b012",
+          "name": "Release",
+          "value": 80.0,
+          "normalized": 0.0707,
+          "text": "80 ms",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 1000.0,
+          "default": 100.0,
+          "choices": []
+         },
+         {
+          "id": "threshold",
+          "clap_id": "b013",
+          "name": "Threshold",
+          "value": -18.0,
+          "normalized": 0.775,
+          "text": "-18.0 dB",
+          "unit": "dB",
+          "min": -80.0,
+          "max": 0.0,
+          "default": -40.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "gain_reduction",
+          "name": "GR",
+          "unit": "dB",
+          "index": 1
+         }
+        ]
+       },
+       {
+        "id": "tone.eq",
+        "kind": "eq",
+        "name": "EQ",
+        "bypass": false,
+        "algorithm": "parametric",
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "output",
+          "clap_id": "b020",
+          "name": "Output",
+          "value": 0.0,
+          "normalized": 0.5,
+          "text": "0.0 dB",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "choices": []
+         }
+        ],
+        "meters": []
+       },
+       {
+        "id": "tone.sat",
+        "kind": "saturate",
+        "name": "Saturate",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "drive",
+          "clap_id": "b030",
+          "name": "Drive",
+          "value": 3.0,
+          "normalized": 0.125,
+          "text": "3.0 dB",
+          "unit": "dB",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 0.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "drive",
+          "name": "Drive",
+          "unit": "dB",
+          "index": 2
+         }
+        ]
+       }
+      ],
+      "meters": [
+       {
+        "id": "level",
+        "name": "Tone level",
+        "unit": "dB",
+        "index": 4
+       }
+      ]
+     }
+    ],
+    "macros": []
+   }
+  },
+  {
+   "path": "Drums/Kick/Sum/In",
+   "chain": {
+    "schema": "signal.chain/1",
+    "revision": 2,
+    "session": "unbreakable-drums",
+    "port": "Drums/Kick/Sum/In",
+    "mode": "per-track",
+    "midi": null,
+    "phases": [
+     {
+      "id": "rescue",
+      "name": "Rescue",
+      "bypass": false,
+      "makeup_db": 0.0,
+      "blocks": [
+       {
+        "id": "rescue.rescue_eq",
+        "kind": "eq",
+        "name": "EQ",
+        "bypass": false,
+        "algorithm": "channel",
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "low_cut",
+          "clap_id": "b000",
+          "name": "Low Cut",
+          "value": 30.0,
+          "normalized": 0.0263,
+          "text": "30 Hz",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 400.0,
+          "default": 20.0,
+          "choices": []
+         }
+        ],
+        "meters": []
+       }
+      ],
+      "meters": [
+       {
+        "id": "level",
+        "name": "Rescue level",
+        "unit": "dB",
+        "index": 2
+       }
+      ]
+     },
+     {
+      "id": "tone",
+      "name": "Tone",
+      "bypass": false,
+      "makeup_db": 3.69,
+      "blocks": [
+       {
+        "id": "tone.comp",
+        "kind": "comp",
+        "name": "Comp",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "attack",
+          "clap_id": "b010",
+          "name": "Attack",
+          "value": 15.0,
+          "normalized": 0.1491,
+          "text": "15 ms",
+          "unit": "ms",
+          "min": 0.1,
+          "max": 100.0,
+          "default": 10.0,
+          "choices": []
+         },
+         {
+          "id": "ratio",
+          "clap_id": "b011",
+          "name": "Ratio",
+          "value": 3.0,
+          "normalized": 0.1053,
+          "text": "3.0:1",
+          "unit": ":1",
+          "min": 1.0,
+          "max": 20.0,
+          "default": 4.0,
+          "choices": []
+         },
+         {
+          "id": "release",
+          "clap_id": "b012",
+          "name": "Release",
+          "value": 80.0,
+          "normalized": 0.0707,
+          "text": "80 ms",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 1000.0,
+          "default": 100.0,
+          "choices": []
+         },
+         {
+          "id": "threshold",
+          "clap_id": "b013",
+          "name": "Threshold",
+          "value": -18.0,
+          "normalized": 0.775,
+          "text": "-18.0 dB",
+          "unit": "dB",
+          "min": -80.0,
+          "max": 0.0,
+          "default": -40.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "gain_reduction",
+          "name": "GR",
+          "unit": "dB",
+          "index": 0
+         }
+        ]
+       },
+       {
+        "id": "tone.eq",
+        "kind": "eq",
+        "name": "EQ",
+        "bypass": false,
+        "algorithm": "parametric",
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "output",
+          "clap_id": "b020",
+          "name": "Output",
+          "value": 0.0,
+          "normalized": 0.5,
+          "text": "0.0 dB",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "choices": []
+         }
+        ],
+        "meters": []
+       },
+       {
+        "id": "tone.sat",
+        "kind": "saturate",
+        "name": "Saturate",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "drive",
+          "clap_id": "b030",
+          "name": "Drive",
+          "value": 0.0,
+          "normalized": 0.0,
+          "text": "0.0 dB",
+          "unit": "dB",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 0.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "drive",
+          "name": "Drive",
+          "unit": "dB",
+          "index": 1
+         }
+        ]
+       }
+      ],
+      "meters": [
+       {
+        "id": "level",
+        "name": "Tone level",
+        "unit": "dB",
+        "index": 3
+       }
+      ]
+     }
+    ],
+    "macros": []
+   }
+  },
+  {
+   "path": "Drums/Kick/Sum/Out",
+   "chain": {
+    "schema": "signal.chain/1",
+    "revision": 3,
+    "session": "unbreakable-drums",
+    "port": "Drums/Kick/Sum/Out",
+    "mode": "per-track",
+    "midi": null,
+    "phases": [
+     {
+      "id": "rescue",
+      "name": "Rescue",
+      "bypass": false,
+      "makeup_db": 0.0,
+      "blocks": [
+       {
+        "id": "rescue.rescue_eq",
+        "kind": "eq",
+        "name": "EQ",
+        "bypass": false,
+        "algorithm": "channel",
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "low_cut",
+          "clap_id": "b000",
+          "name": "Low Cut",
+          "value": 30.0,
+          "normalized": 0.0263,
+          "text": "30 Hz",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 400.0,
+          "default": 20.0,
+          "choices": []
+         }
+        ],
+        "meters": []
+       }
+      ],
+      "meters": [
+       {
+        "id": "level",
+        "name": "Rescue level",
+        "unit": "dB",
+        "index": 2
+       }
+      ]
+     },
+     {
+      "id": "tone",
+      "name": "Tone",
+      "bypass": false,
+      "makeup_db": 2.21,
+      "blocks": [
+       {
+        "id": "tone.comp",
+        "kind": "comp",
+        "name": "Comp",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "attack",
+          "clap_id": "b010",
+          "name": "Attack",
+          "value": 15.0,
+          "normalized": 0.1491,
+          "text": "15 ms",
+          "unit": "ms",
+          "min": 0.1,
+          "max": 100.0,
+          "default": 10.0,
+          "choices": []
+         },
+         {
+          "id": "ratio",
+          "clap_id": "b011",
+          "name": "Ratio",
+          "value": 3.0,
+          "normalized": 0.1053,
+          "text": "3.0:1",
+          "unit": ":1",
+          "min": 1.0,
+          "max": 20.0,
+          "default": 4.0,
+          "choices": []
+         },
+         {
+          "id": "release",
+          "clap_id": "b012",
+          "name": "Release",
+          "value": 80.0,
+          "normalized": 0.0707,
+          "text": "80 ms",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 1000.0,
+          "default": 100.0,
+          "choices": []
+         },
+         {
+          "id": "threshold",
+          "clap_id": "b013",
+          "name": "Threshold",
+          "value": -18.0,
+          "normalized": 0.775,
+          "text": "-18.0 dB",
+          "unit": "dB",
+          "min": -80.0,
+          "max": 0.0,
+          "default": -40.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "gain_reduction",
+          "name": "GR",
+          "unit": "dB",
+          "index": 0
+         }
+        ]
+       },
+       {
+        "id": "tone.eq",
+        "kind": "eq",
+        "name": "EQ",
+        "bypass": false,
+        "algorithm": "parametric",
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "output",
+          "clap_id": "b020",
+          "name": "Output",
+          "value": 0.0,
+          "normalized": 0.5,
+          "text": "0.0 dB",
+          "unit": "dB",
+          "min": -24.0,
+          "max": 24.0,
+          "default": 0.0,
+          "choices": []
+         }
+        ],
+        "meters": []
+       },
+       {
+        "id": "tone.sat",
+        "kind": "saturate",
+        "name": "Saturate",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "drive",
+          "clap_id": "b030",
+          "name": "Drive",
+          "value": 0.0,
+          "normalized": 0.0,
+          "text": "0.0 dB",
+          "unit": "dB",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 0.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "drive",
+          "name": "Drive",
+          "unit": "dB",
+          "index": 1
+         }
+        ]
+       }
+      ],
+      "meters": [
+       {
+        "id": "level",
+        "name": "Tone level",
+        "unit": "dB",
+        "index": 3
+       }
+      ]
+     }
+    ],
+    "macros": []
+   }
+  },
+  {
+   "path": "Drums/Kick/Sum/Trig",
+   "chain": {
+    "schema": "signal.chain/1",
+    "revision": 4,
+    "session": "unbreakable-drums",
+    "port": "Drums/Kick/Sum/Trig",
+    "mode": "per-track",
+    "midi": null,
+    "phases": [
+     {
+      "id": "source",
+      "name": "Source",
+      "bypass": false,
+      "makeup_db": 0.0,
+      "blocks": [
+       {
+        "id": "source.trigger",
+        "kind": "trigger",
+        "name": "Trigger",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "threshold_db",
+          "clap_id": "b000",
+          "name": "Threshold",
+          "value": -30.0,
+          "normalized": 0.625,
+          "text": "-30.0 dB",
+          "unit": "dB",
+          "min": -80.0,
+          "max": 0.0,
+          "default": -30.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "hit",
+          "name": "Hit",
+          "unit": "",
+          "index": 0
+         }
+        ]
+       }
+      ],
+      "meters": []
+     }
+    ],
+    "macros": []
+   }
+  },
+  {
+   "path": "Drums/Kick/Sum/Sample",
+   "chain": {
+    "schema": "signal.chain/1",
+    "revision": 5,
+    "session": "unbreakable-drums",
+    "port": "Drums/Kick/Sum/Sample",
+    "mode": "per-track",
+    "midi": {
+     "plays": [
+      {
+       "note": 36,
+       "piece": "Kick",
+       "block": "source.drum"
+      }
+     ],
+     "publishes_hits": false
+    },
+    "phases": [
+     {
+      "id": "source",
+      "name": "Source",
+      "bypass": false,
+      "makeup_db": 0.0,
+      "blocks": [
+       {
+        "id": "source.drum",
+        "kind": "sampler",
+        "name": "Sampler",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": {
+         "from": "Drums/Kick/Sum/Trig",
+         "via": "hits"
+        },
+        "params": [
+         {
+          "id": "dynamics",
+          "clap_id": "b000",
+          "name": "Dynamics",
+          "value": 0.5,
+          "normalized": 0.5,
+          "text": "50%",
+          "unit": "%",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.5,
+          "choices": []
+         },
+         {
+          "id": "level",
+          "clap_id": "b001",
+          "name": "Level",
+          "value": -6.0,
+          "normalized": 0.75,
+          "text": "-6.0 dB",
+          "unit": "dB",
+          "min": -60.0,
+          "max": 12.0,
+          "default": 0.0,
+          "choices": []
+         },
+         {
+          "id": "velocity",
+          "clap_id": "b002",
+          "name": "Velocity",
+          "value": 120.0,
+          "normalized": 0.9444,
+          "text": "120",
+          "unit": "",
+          "min": 1.0,
+          "max": 127.0,
+          "default": 100.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "level",
+          "name": "Level",
+          "unit": "dB",
+          "index": 0
+         }
+        ]
+       }
+      ],
+      "meters": []
+     }
+    ],
+    "macros": []
+   }
+  },
+  {
+   "path": "Drums/Kick/Sub",
+   "chain": {
+    "schema": "signal.chain/1",
+    "revision": 6,
+    "session": "unbreakable-drums",
+    "port": "Drums/Kick/Sub",
+    "mode": "per-track",
+    "midi": null,
+    "phases": [
+     {
+      "id": "tone",
+      "name": "Tone",
+      "bypass": false,
+      "makeup_db": 3.92,
+      "blocks": [
+       {
+        "id": "tone.band_pass",
+        "kind": "eq",
+        "name": "EQ",
+        "bypass": false,
+        "algorithm": "parametric",
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "band.1.freq",
+          "clap_id": "b000",
+          "name": "Band 1 Freq",
+          "value": 55.0,
+          "normalized": 0.0018,
+          "text": "55 Hz",
+          "unit": "Hz",
+          "min": 20.0,
+          "max": 20000.0,
+          "default": 1000.0,
+          "choices": []
+         },
+         {
+          "id": "band.1.q",
+          "clap_id": "b001",
+          "name": "Band 1 Q",
+          "value": 2.0,
+          "normalized": 0.1919,
+          "text": "2",
+          "unit": "",
+          "min": 0.1,
+          "max": 10.0,
+          "default": 0.7,
+          "choices": []
+         },
+         {
+          "id": "band.1.shape",
+          "clap_id": "b002",
+          "name": "Band 1 Shape",
+          "value": 6.0,
+          "normalized": 0.75,
+          "text": "6",
+          "unit": "",
+          "min": 0.0,
+          "max": 8.0,
+          "default": 0.0,
+          "choices": []
+         },
+         {
+          "id": "band.1.slope",
+          "clap_id": "b003",
+          "name": "Band 1 Slope",
+          "value": 2.0,
+          "normalized": 0.5,
+          "text": "2",
+          "unit": "",
+          "min": 0.0,
+          "max": 4.0,
+          "default": 1.0,
+          "choices": []
+         },
+         {
+          "id": "band.1.used",
+          "clap_id": "b004",
+          "name": "Band 1 On",
+          "value": 1.0,
+          "normalized": 1.0,
+          "text": "On",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "choices": [
+           "Off",
+           "On"
+          ]
+         }
+        ],
+        "meters": []
+       },
+       {
+        "id": "tone.gate",
+        "kind": "gate",
+        "name": "Gate",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": {
+         "from": "Drums/Kick/Sum/Trig",
+         "via": "hits"
+        },
+        "params": [
+         {
+          "id": "length",
+          "clap_id": "b010",
+          "name": "Length",
+          "value": 250.0,
+          "normalized": 0.2424,
+          "text": "250 ms",
+          "unit": "ms",
+          "min": 10.0,
+          "max": 1000.0,
+          "default": 300.0,
+          "choices": []
+         },
+         {
+          "id": "mode",
+          "clap_id": "b011",
+          "name": "Mode",
+          "value": 0.0,
+          "normalized": 0.0,
+          "text": "Gate",
+          "unit": "",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0,
+          "choices": [
+           "Gate",
+           "Duck"
+          ]
+         },
+         {
+          "id": "threshold",
+          "clap_id": "b012",
+          "name": "Threshold",
+          "value": -40.0,
+          "normalized": 0.5,
+          "text": "-40.0 dB",
+          "unit": "dB",
+          "min": -80.0,
+          "max": 0.0,
+          "default": -40.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "gain_reduction",
+          "name": "GR",
+          "unit": "dB",
+          "index": 0
+         }
+        ]
+       },
+       {
+        "id": "tone.sat",
+        "kind": "saturate",
+        "name": "Saturate",
+        "bypass": false,
+        "algorithm": null,
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "drive",
+          "clap_id": "b020",
+          "name": "Drive",
+          "value": 6.0,
+          "normalized": 0.25,
+          "text": "6.0 dB",
+          "unit": "dB",
+          "min": 0.0,
+          "max": 24.0,
+          "default": 0.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "drive",
+          "name": "Drive",
+          "unit": "dB",
+          "index": 1
+         }
+        ]
+       }
+      ],
+      "meters": [
+       {
+        "id": "level",
+        "name": "Tone level",
+        "unit": "dB",
+        "index": 2
+       }
+      ]
+     }
+    ],
+    "macros": []
+   }
+  },
+  {
+   "path": "Drums/Kick/Verb/Room",
+   "chain": {
+    "schema": "signal.chain/1",
+    "revision": 7,
+    "session": "unbreakable-drums",
+    "port": "Drums/Kick/Verb/Room",
+    "mode": "per-track",
+    "midi": null,
+    "phases": [
+     {
+      "id": "depth",
+      "name": "Depth",
+      "bypass": false,
+      "makeup_db": 0.18,
+      "blocks": [
+       {
+        "id": "depth.verb",
+        "kind": "reverb",
+        "name": "Reverb",
+        "bypass": false,
+        "algorithm": "room",
+        "backend": "linked",
+        "status": "ok",
+        "key": null,
+        "params": [
+         {
+          "id": "mix",
+          "clap_id": "b000",
+          "name": "Mix",
+          "value": 1.0,
+          "normalized": 1.0,
+          "text": "100%",
+          "unit": "%",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 1.0,
+          "choices": []
+         }
+        ],
+        "meters": [
+         {
+          "id": "level",
+          "name": "Level",
+          "unit": "dB",
+          "index": 0
+         }
+        ]
+       }
+      ],
+      "meters": [
+       {
+        "id": "level",
+        "name": "Depth level",
+        "unit": "dB",
+        "index": 1
+       }
+      ]
+     }
+    ],
+    "macros": []
+   }
+  }
+ ]
+}
