@@ -26,35 +26,9 @@ use std::sync::OnceLock;
 use tokio::sync::watch;
 
 use crate::open_progress::Progress;
-use crate::setlist::{Arrival, Setlist};
+use crate::setlist::{Arrival, Setlist, SetlistOpen as _};
 
-/// Where opening a set has got to.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub enum Opening {
-    /// Nothing is being opened.
-    #[default]
-    Idle,
-    /// Opening: where it has got to.
-    Busy(Progress),
-    /// The last open failed, and why, for a person.
-    Failed(String),
-}
-
-/// The set as the engine has it, as published.
-#[derive(Clone, Default)]
-pub struct SetView {
-    /// Bumped by every change: a reader that saw this revision has seen
-    /// everything up to it.
-    pub revision: u64,
-    /// Which set this is: bumped when one is installed or closed. Songs
-    /// arriving for an older set are dropped, and a window remounts its
-    /// views when it changes.
-    pub epoch: u64,
-    /// The set, when one is open.
-    pub setlist: Option<Setlist>,
-    /// An open under way, or how the last one went.
-    pub opening: Opening,
-}
+pub use session_engine_client::studio_engine::set::*;
 
 /// The set's songs as titles and projects — what the Action List lists and
 /// picks from, without the window's read-back of each song.
@@ -343,25 +317,33 @@ fn stop_others(keep: Vec<String>) {
     let spawned = std::thread::Builder::new()
         .name("set-stop-others".into())
         .spawn(move || {
-            let stopped = crate::open::facade_blocking("stop the projects not in the set", |daw| async move {
-                let mut stopped = 0_u32;
-                for project in daw.projects().await? {
-                    let info = project.info().await?;
-                    if keep.iter().any(|k| *k == info.guid) {
-                        continue;
+            let stopped = crate::open::facade_blocking(
+                "stop the projects not in the set",
+                |daw| async move {
+                    let mut stopped = 0_u32;
+                    for project in daw.projects().await? {
+                        let info = project.info().await?;
+                        if keep.iter().any(|k| *k == info.guid) {
+                            continue;
+                        }
+                        let transport = project.transport();
+                        if transport.is_playing().await.unwrap_or(true) {
+                            transport.stop().await?;
+                            stopped += 1;
+                        }
                     }
-                    let transport = project.transport();
-                    if transport.is_playing().await.unwrap_or(true) {
-                        transport.stop().await?;
-                        stopped += 1;
-                    }
-                }
-                Ok(stopped)
-            });
+                    Ok(stopped)
+                },
+            );
             match stopped {
                 Ok(0) => {}
-                Ok(n) => tracing::info!(set.stopped = n, "set: projects outside the set stopped playing"),
-                Err(error) => tracing::warn!(error = %error, "set: the projects outside it were not stopped"),
+                Ok(n) => tracing::info!(
+                    set.stopped = n,
+                    "set: projects outside the set stopped playing"
+                ),
+                Err(error) => {
+                    tracing::warn!(error = %error, "set: the projects outside it were not stopped")
+                }
             }
         });
     if let Err(error) = spawned {
@@ -610,20 +592,6 @@ fn failed(e: &eyre::Report) {
         view.opening = Opening::Failed(why);
         true
     });
-}
-
-/// A setlist of an org's Task library to open: its title, the org whose
-/// library holds it, and one of its songs to open alone.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LibraryOpen {
-    /// The org whose library holds it; `FTS_TASK_ORG`, else the org last
-    /// picked here, when `None`.
-    pub org: Option<String>,
-    /// Its title, as the library lists it.
-    pub setlist: String,
-    /// One of its songs (slug or title) to open alone; the whole set when
-    /// `None`.
-    pub song: Option<String>,
 }
 
 /// Stream `request`'s setlist in from the library, as the person signed in

@@ -33,7 +33,7 @@
 //! [`set`]'s operations; it never holds the set itself.
 
 pub mod headless;
-pub mod link;
+pub use session_engine_client::studio_engine::link;
 pub mod live;
 pub mod mcp;
 pub mod set;

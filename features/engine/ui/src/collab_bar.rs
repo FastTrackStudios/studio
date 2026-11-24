@@ -35,15 +35,17 @@ mod live {
     use crate::collab::Status;
 
     /// Whether the engine is another process's.
+    #[cfg(feature = "engine")]
     fn elsewhere() -> bool {
         crate::studio_engine::link::linked().is_some()
     }
 
-    fn frame() -> Option<std::sync::Arc<session_engine::view::LiveFrame>> {
+    fn frame() -> Option<std::sync::Arc<session_engine_client::view::LiveFrame>> {
         crate::view_client::live()
     }
 
     pub fn status() -> Option<Status> {
+        #[cfg(feature = "engine")]
         if !elsewhere() {
             return crate::collab::status();
         }
@@ -65,51 +67,57 @@ mod live {
     }
 
     pub fn joining() -> bool {
-        if elsewhere() {
-            frame().is_some_and(|f| f.joining)
-        } else {
-            crate::collab::joining()
+        // The engine in this process, when there is one and no link.
+        #[cfg(feature = "engine")]
+        if !elsewhere() {
+            return crate::collab::joining();
         }
+        frame().is_some_and(|f| f.joining)
     }
 
     pub fn last_error() -> Option<String> {
-        if elsewhere() {
-            frame().and_then(|f| f.error.clone())
-        } else {
-            crate::collab::last_error()
+        // The engine in this process, when there is one and no link.
+        #[cfg(feature = "engine")]
+        if !elsewhere() {
+            return crate::collab::last_error();
         }
+        frame().and_then(|f| f.error.clone())
     }
 
     pub fn sync_locked() -> bool {
-        if elsewhere() {
-            frame().is_some_and(|f| f.locked)
-        } else {
-            crate::collab::sync_locked()
+        // The engine in this process, when there is one and no link.
+        #[cfg(feature = "engine")]
+        if !elsewhere() {
+            return crate::collab::sync_locked();
         }
+        frame().is_some_and(|f| f.locked)
     }
 
     pub fn hosted() -> Option<String> {
-        if elsewhere() {
-            frame().and_then(|f| f.hosted.clone())
-        } else {
-            crate::live_host::hosted().map(|h| h.title)
+        // The engine in this process, when there is one and no link.
+        #[cfg(feature = "engine")]
+        if !elsewhere() {
+            return crate::live_host::hosted().map(|h| h.title);
         }
+        frame().and_then(|f| f.hosted.clone())
     }
 
     pub fn notices() -> Vec<String> {
-        if elsewhere() {
-            frame().map(|f| f.notices.clone()).unwrap_or_default()
-        } else {
-            crate::collab::notices()
+        // The engine in this process, when there is one and no link.
+        #[cfg(feature = "engine")]
+        if !elsewhere() {
+            return crate::collab::notices();
         }
+        frame().map(|f| f.notices.clone()).unwrap_or_default()
     }
 
     pub fn host_error() -> Option<String> {
-        if elsewhere() {
-            frame().and_then(|f| f.host_error.clone())
-        } else {
-            crate::live_host::last_error()
+        // The engine in this process, when there is one and no link.
+        #[cfg(feature = "engine")]
+        if !elsewhere() {
+            return crate::live_host::last_error();
         }
+        frame().and_then(|f| f.host_error.clone())
     }
 
     /// The live session's control `id` run with `args` — on the engine
@@ -189,6 +197,7 @@ pub fn use_collab_start() {
     use_hook(move || {
         static STARTED: std::sync::Once = std::sync::Once::new();
         STARTED.call_once(|| {
+            #[cfg(feature = "engine")]
             if crate::studio_engine::link::linked().is_none() {
                 crate::collab::start_in_engine(display_name());
             }
@@ -763,7 +772,14 @@ pub fn use_follow_song(mut setlist: Signal<crate::setlist::Setlist>) {
                     follow(&mut setlist, index, at);
                 }
             }
+            // The shared transport's ask is the engine's: here when the
+            // engine is (a linked window's engine follows it itself).
+            #[cfg(feature = "engine")]
             let Some(project) = crate::collab::take_song_request() else {
+                continue;
+            };
+            #[cfg(not(feature = "engine"))]
+            let Some(project) = None::<String> else {
                 continue;
             };
             let index = setlist

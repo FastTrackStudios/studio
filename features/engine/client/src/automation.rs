@@ -564,8 +564,13 @@ pub fn read_leveled(
 ) -> HashMap<String, Vec<Leveled>> {
     tracks
         .iter()
-        .filter(|t| crate::vocal_level::has_lanes(daw, project, &t.guid))
-        .map(|t| (t.guid.clone(), crate::vocal_level::leveled(daw, project, t)))
+        .filter(|t| crate::body::body().vocal_has_lanes(daw, project, &t.guid))
+        .map(|t| {
+            (
+                t.guid.clone(),
+                crate::body::body().vocal_leveled(daw, project, t),
+            )
+        })
         .filter(|(_, items)| !items.is_empty())
         .collect()
 }
@@ -641,7 +646,7 @@ fn read_with(
         // The leveler expanded: its four stages, a lane each. Collapsed,
         // their sum is drawn on the items alone.
         if let Some(items) = leveled.get(&track.guid)
-            && crate::vocal_level::lane_shown(daw, project, &track.guid)
+            && crate::body::body().vocal_lane_shown(daw, project, &track.guid)
         {
             lanes.extend(stage_lanes(&track.guid, items));
         }

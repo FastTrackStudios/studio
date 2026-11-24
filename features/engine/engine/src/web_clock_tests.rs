@@ -76,6 +76,7 @@ fn the_library_reads_a_clock_the_browser_has() {
     let mut found = Vec::new();
     for src in [
         here.join("src"),
+        here.join("../client/src"),
         here.join("../ui/src"),
         here.join("../runtime/src"),
     ] {

@@ -1,7 +1,7 @@
 //! `studio engine` (and `studio-desktop --session-engine`): Session's whole
 //! engine, headless, in this process.
 //!
-//! The engine a window runs (`session_engine::studio_engine::headless`): one
+//! The engine a window runs (`crate::studio_engine::headless`): one
 //! `Standalone`, the set's one audio engine, the set itself, and the Action
 //! List on MCP (127.0.0.1:47811, `FTS_MCP_PORT`) — so `studio open`,
 //! `studio songs`, `studio song next` and `studio run …` drive it exactly
@@ -26,8 +26,8 @@
 
 use std::path::{Path, PathBuf};
 
-use session_engine::studio_engine::link::{Found, publish};
-use session_engine::studio_engine::{headless, set};
+use crate::studio_engine::link::{Found, publish};
+use crate::studio_engine::{headless, set};
 
 /// What the engine is asked to do as it comes up.
 #[derive(Clone, Debug, Default)]
@@ -98,12 +98,12 @@ pub fn run(args: &Args) -> eyre::Result<()> {
         },
     );
     let started = start.enter();
-    let mut stages = session_engine::stages::Stages::start();
+    let mut stages = crate::stages::Stages::start();
     let engine = headless::start()?;
     start.record("engine.audio_ms", stages.mark("engine.audio_ms"));
     let router = {
         let _inside = engine.runtime.enter();
-        session_engine::studio_engine::view_host::router(&engine.daw)
+        crate::studio_engine::view_host::router(&engine.daw)
     };
     let socket = args.socket.clone().unwrap_or_else(default_socket);
     let listener = {
@@ -126,7 +126,7 @@ pub fn run(args: &Args) -> eyre::Result<()> {
         socket: socket.clone(),
         mcp: mcp_url(),
         ws: args.listen.as_ref().map(|a| format!("ws://{a}/vox")),
-        build: session_engine::studio_engine::link::build_id(),
+        build: crate::studio_engine::link::build_id(),
     };
     let discovery = publish(&found);
     tracing::info!(
@@ -140,7 +140,7 @@ pub fn run(args: &Args) -> eyre::Result<()> {
     if let Some(what) = &args.open {
         open_first(what, args.org.clone(), args.song.clone());
     } else if args.reopen {
-        session_engine::studio_engine::link::reopen_last();
+        crate::studio_engine::link::reopen_last();
     }
     start.record("engine.open_ms", stages.mark("engine.open_ms"));
     // Started: the span ends here, not when the engine stops.
@@ -220,13 +220,13 @@ async fn serve_client(stream: tokio::net::UnixStream, router: daw::LayerRouter) 
     }
 }
 
-/// Where the Action List is served, as `session_engine::studio_engine::mcp`
+/// Where the Action List is served, as `crate::studio_engine::mcp`
 /// serves it.
 fn mcp_url() -> String {
     let port = std::env::var("FTS_MCP_PORT")
         .ok()
         .and_then(|p| p.parse::<u16>().ok())
-        .unwrap_or(session_engine::studio_engine::mcp::DEFAULT_PORT);
+        .unwrap_or(crate::studio_engine::mcp::DEFAULT_PORT);
     format!("http://127.0.0.1:{port}/mcp")
 }
 

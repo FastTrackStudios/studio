@@ -132,7 +132,7 @@ fn state() -> Json {
 /// browser) the page's open.
 fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
-    return session_engine::view_client::is_linked();
+    return session_engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
     return session_ui::web_host::hosted_is_open();
 }
@@ -238,7 +238,7 @@ fn Strips(session: Song, shown: Shown) -> Element {
     // same frame as there.
     use_hook(|| {
         let wake = mount.wake_handle();
-        Rc::new(session_engine::engine::on_track_event(Arc::new(
+        Rc::new(session_engine_client::engine::on_track_event(Arc::new(
             move || {
                 wake.wake();
             },

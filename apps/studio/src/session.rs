@@ -329,7 +329,7 @@ mod native {
     use app_shell::Workspace;
     use app_shell::ui::{AppShell, BarSpan, Tabs, TopBar, use_top_bar_span};
     use app_shell_extensions::{ExtensionOverlays, ExtensionUi, use_extension_ui};
-    use session_engine::setlist::Setlist;
+    use session_engine_client::setlist::Setlist;
     use session_ui::shell::View as Ui;
 
     use super::{View, go_to, leave, route};
@@ -438,7 +438,7 @@ mod native {
     /// views' link, changed when the engine's set does.
     fn use_engine_setlist() -> Signal<Setlist> {
         let now = || {
-            session_engine::view_client::peek_set(|v| {
+            session_engine_client::view_client::peek_set(|v| {
                 (v.revision, v.setlist.clone().unwrap_or_default())
             })
         };
@@ -446,7 +446,7 @@ mod native {
         use_future(move || async move {
             let mut seen = u64::MAX;
             loop {
-                let revision = session_engine::view_client::peek_set(|v| v.revision);
+                let revision = session_engine_client::view_client::peek_set(|v| v.revision);
                 if revision != seen {
                     seen = revision;
                     setlist.set(now().1);
@@ -639,7 +639,7 @@ mod native {
                     badges: rsx! { EngineBadge {} },
                     on_pick: move |i: usize| go_to(app, i),
                     on_color: move |(i, color): (usize, Option<String>)| {
-                        session_engine::view_client::ask::recolor(i, color);
+                        session_engine_client::view_client::ask::recolor(i, color);
                     },
                 }
             }

@@ -286,13 +286,7 @@ pub fn refresh() {
                 // a track read while its edits were landing was held
                 // half-edited, the take as played drawn under hits that
                 // had moved, for good).
-                if let Ok((daw, project)) = crate::actions::song()
-                    && let daw::service::ProjectContext::Project(song) = &project
-                {
-                    let mut overlay = crate::hits::overlay(daw, &project);
-                    overlay.marks.sort_by(|a, b| a.time.total_cmp(&b.time));
-                    crate::studio_engine::view_host::overlay_read(song.clone(), overlay);
-                }
+                crate::body::body().overlay_read_current();
                 BUSY.store(false, Ordering::Release);
                 if !AGAIN.load(Ordering::Acquire) || BUSY.swap(true, Ordering::AcqRel) {
                     break;

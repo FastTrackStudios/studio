@@ -236,16 +236,7 @@ struct TicketArg {
     name: Option<String>,
 }
 
-/// Who this person is in a set, when they are not named: the account's
-/// name, else the machine user's.
-#[must_use]
-pub fn person_name() -> String {
-    std::env::var("FTS_COLLAB_NAME")
-        .ok()
-        .or_else(|| std::env::var("USER").ok())
-        .filter(|n| !n.trim().is_empty())
-        .unwrap_or_else(|| "Someone".to_owned())
-}
+pub use session_engine_client::studio_engine::set_actions::person_name;
 
 /// The set's actions, into `list`.
 ///

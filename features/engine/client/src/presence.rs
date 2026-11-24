@@ -240,7 +240,7 @@ pub static CARET: std::sync::Mutex<Option<(usize, usize)>> = std::sync::Mutex::n
 #[cfg(feature = "native")]
 pub fn local_caret() -> Option<(Vec<u8>, Vec<u8>)> {
     let (anchor, head) = (*CARET.lock().ok()?)?;
-    let (doc, _, _) = crate::collab::chart_context()?;
+    let (doc, _, _) = crate::body::body().chart_context()?;
     Some((doc.chart_cursor(anchor)?, doc.chart_cursor(head)?))
 }
 

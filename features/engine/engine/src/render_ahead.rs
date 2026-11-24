@@ -16,50 +16,14 @@ use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::{TrackRef, Tracks};
 use facet::Facet;
 
-/// Whether the engine renders ahead, and how far, ms.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Facet)]
-pub struct RenderAhead {
-    pub on: bool,
-    pub depth_ms: u32,
-}
-
-impl Default for RenderAhead {
-    fn default() -> Self {
-        Self {
-            on: true,
-            depth_ms: 200,
-        }
-    }
-}
-
-/// The depths the Settings page offers, ms: REAPER's default among them.
-pub const DEPTHS: [u32; 4] = [50, 100, 200, 400];
+pub use session_engine_client::render_ahead::*;
 
 /// The longest render ahead taken, ms.
 const MOST_MS: u32 = 2_000;
 
-impl RenderAhead {
-    /// The engine's prefs for it: a device opened as Session opens it.
-    #[must_use]
-    pub fn io_prefs(self) -> daw::standalone::audio_engine::AudioIoPrefs {
-        daw::standalone::audio_engine::AudioIoPrefs {
-            render_ahead_ms: self.depth_ms,
-            no_render_ahead: !self.on,
-            ..Default::default()
-        }
-    }
-}
-
 fn store() -> &'static std::sync::Mutex<RenderAhead> {
     static STORE: std::sync::OnceLock<std::sync::Mutex<RenderAhead>> = std::sync::OnceLock::new();
     STORE.get_or_init(|| std::sync::Mutex::new(load().unwrap_or_default()))
-}
-
-/// The render ahead as it was last kept — what a window shows, read
-/// afresh: the engine that keeps it is another process.
-#[must_use]
-pub fn saved() -> RenderAhead {
-    load().unwrap_or_default()
 }
 
 /// The render ahead as it stands.
@@ -88,15 +52,6 @@ pub(crate) fn set(want: RenderAhead) -> RenderAhead {
         crate::open::restart_audio();
     }
     now
-}
-
-fn path() -> Option<std::path::PathBuf> {
-    dirs::config_dir().map(|d| d.join("fts").join("render-ahead.json"))
-}
-
-fn load() -> Option<RenderAhead> {
-    let text = std::fs::read(path()?).ok()?;
-    facet_json::from_slice(&text).ok()
 }
 
 fn save(r: RenderAhead) {

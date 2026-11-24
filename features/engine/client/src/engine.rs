@@ -868,7 +868,7 @@ pub fn transport(command: Move, seconds: f64) {
     // A press by a person: playing together, everyone's.
     #[cfg(any(feature = "native", feature = "web"))]
     if !matches!(command, Move::ToggleLoop | Move::ToggleRecord) {
-        crate::collab::transport_pressed();
+        crate::body::body().transport_pressed();
     }
     // A press runs the transport's named action (`SESSION_PLAY_STOP`,
     // `SESSION_SEEK`, `TRANSPORT_RECORD`, …) — on the engine over the link,
@@ -906,7 +906,7 @@ pub fn transport_here(command: Move, seconds: f64) {
     if matches!(command, Move::ToggleRecord) && crate::open::local_engine().is_some() {
         let _ = std::thread::Builder::new()
             .name("session-engine-record".into())
-            .spawn(crate::record::toggle_through_the_list);
+            .spawn(|| crate::body::body().record_toggle());
         return;
     }
     // Play on a song still streaming in waits until every recording it
@@ -931,7 +931,7 @@ pub mod buffering {
 
     /// Whether a play press is waiting for the song to arrive.
     #[must_use]
-    pub(crate) fn waiting() -> bool {
+    pub fn waiting() -> bool {
         WAITING.load(Ordering::Acquire) != 0
     }
 
@@ -949,10 +949,10 @@ pub mod buffering {
         let Some(song) = crate::open::current_song() else {
             return false;
         };
-        if !crate::stream_set::is_stopped(&song) {
+        if !crate::body::body().is_stopped(&song) {
             return false;
         }
-        let Some(ready) = crate::stream_set::readiness(&song) else {
+        let Some(ready) = crate::body::body().readiness(&song) else {
             return false;
         };
         if ready.ready {
@@ -975,7 +975,7 @@ pub mod buffering {
                     if WAITING.load(Ordering::Acquire) != id {
                         return;
                     }
-                    let now = crate::stream_set::readiness(&song);
+                    let now = crate::body::body().readiness(&song);
                     if now.as_ref().is_none_or(|r| r.ready) {
                         if WAITING
                             .compare_exchange(id, 0, Ordering::AcqRel, Ordering::Acquire)
@@ -1158,7 +1158,10 @@ impl Applier {
                 // on the page's list (`crate::web_actions`).
                 #[cfg(feature = "web")]
                 if let Edit::Run(id, args) = &edit {
-                    if let Err(e) = crate::web_actions::run(id, args.as_bytes()).await {
+                    if let Err(e) = crate::body::body()
+                        .web_run(id.clone(), args.as_bytes().to_vec())
+                        .await
+                    {
                         tracing::warn!(action.id = %id, error = %e, "control action refused");
                     }
                     continue;

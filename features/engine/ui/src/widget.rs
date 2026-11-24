@@ -4482,11 +4482,11 @@ impl ArrangementWidget {
     }
 
     /// A gesture's edits committed as the one named action of what it did
-    /// (`session_engine::arrange_actions::gesture`), run on the engine in
+    /// (`session_engine_client::arrange_actions::gesture`), run on the engine in
     /// order with the edits queued before it ([`Self::commit`]); `label`
     /// the undo step they make.
     fn commit_edits(&self, label: Option<&str>, edits: Vec<crate::engine::Edit>) {
-        match session_engine::arrange_actions::gesture(label, &edits) {
+        match session_engine_client::arrange_actions::gesture(label, &edits) {
             Some((id, args)) => self.commit(id, args),
             // Not an arrangement edit (nothing a gesture makes today):
             // sent as it is, said once so it is found and named.

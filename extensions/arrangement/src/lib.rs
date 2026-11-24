@@ -122,7 +122,7 @@ fn state() -> Json {
 /// browser) the page's open.
 fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
-    return session_engine::view_client::is_linked();
+    return session_engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
     return session_ui::web_host::hosted_is_open();
 }

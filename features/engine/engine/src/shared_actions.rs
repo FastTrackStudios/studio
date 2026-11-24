@@ -10,28 +10,7 @@
 use architect::action::ActionMeta;
 use facet::Facet;
 
-/// An action's description, as the list and its menus show it.
-pub const fn meta(
-    id: &'static str,
-    method_name: &'static str,
-    display_name: &'static str,
-    description: &'static str,
-    group: &'static str,
-    shortcut: &'static str,
-) -> ActionMeta {
-    ActionMeta {
-        id,
-        trait_name: "Session",
-        method_name,
-        display_name,
-        description,
-        category: "Session",
-        group,
-        shortcut,
-        toggleable: false,
-        undo: false,
-    }
-}
+pub use session_engine_client::actions::meta;
 
 pub static TRACK_SET: ActionMeta = meta(
     "TRACK_SET",
@@ -78,14 +57,7 @@ pub static PHASE: ActionMeta = meta(
     "",
 );
 
-pub static SHOW_LANES: ActionMeta = meta(
-    "TRACK_SHOW_LANES",
-    "track_show_lanes",
-    "Show a track's lanes",
-    "Show every lane of `track` (a path, name or GUID; left out, the selected track — Alt+L) stacked in its row — the takes, the comp and the edit side by side, to hear and comp from — or only the lane that plays: `show` true or false, toggled when left out. On a folder, its row (shut, each lane folded from the tracks under it) and every track under it with lanes. The window's view, not the song's. Says whether they show now.",
-    "View",
-    "Alt+L",
-);
+pub use session_engine_client::comp::SHOW_LANES;
 
 /// What to set on a track.
 #[derive(Facet)]

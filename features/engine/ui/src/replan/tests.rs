@@ -1,6 +1,6 @@
 use super::*;
 
-use session_engine::view::ItemNow;
+use session_engine_client::view::ItemNow;
 
 /// The song, opened as a person working on its kit has it.
 fn song(slices: usize) -> crate::test_song::Song {

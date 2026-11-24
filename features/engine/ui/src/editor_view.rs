@@ -492,7 +492,7 @@ fn saver() -> Option<std::sync::mpsc::Sender<(String, Content)>> {
                     .ok_or_else(|| "the take would not say itself".to_owned())
                     .and_then(|args| {
                         crate::actions::run(
-                            session_engine::notes_actions::NOTES_WRITE.id,
+                            session_engine_client::notes_actions::NOTES_WRITE.id,
                             args.as_bytes(),
                         )
                     });

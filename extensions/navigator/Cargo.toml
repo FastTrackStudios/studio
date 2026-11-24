@@ -25,12 +25,13 @@ serde_json = { workspace = true }
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest"] }
 session-ui = { workspace = true, features = ["native"] }
-session-engine = { workspace = true, features = ["native"] }
+session-engine-client = { workspace = true, features = ["native"] }
 futures-timer = { workspace = true }
 
 # The browser: the page's own engine (`src/web.rs`).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 session-ui = { workspace = true, features = ["web"] }
+session-engine-client = { workspace = true, features = ["web"] }
 session-engine = { workspace = true, features = ["web"] }
 gloo-timers = { workspace = true, features = ["futures"] }
 

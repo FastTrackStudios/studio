@@ -8,6 +8,8 @@ use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::{Markers, ProjectContext, TempoMap as _, Tracks};
 use facet::Facet;
 
+pub use session_engine_client::page::*;
+
 /// A little of the bars either side of a page is shown too: a hit on its
 /// first downbeat, or the next page's, is seen whole.
 const EDGE_OF_A_BAR: f64 = 0.25;
@@ -32,23 +34,6 @@ struct PageArg {
     /// The page the window is on, and whether this step resized it.
     first: Option<i32>,
     resized: Option<bool>,
-}
-
-/// The page.
-#[derive(Facet, Clone, Debug, PartialEq)]
-pub struct PageOut {
-    pub first_bar: i32,
-    pub last_bar: i32,
-    pub bars: i32,
-    pub group: String,
-    /// Seconds.
-    pub from: f64,
-    pub to: f64,
-    /// What is shown of it, with a little either side.
-    pub shown_from: f64,
-    pub shown_to: f64,
-    /// The tracks framed down the view, by GUID (none: every track).
-    pub tracks: Vec<String>,
 }
 
 /// `bar` moved on by `n` bars as the song counts them: no bar 0.
@@ -156,26 +141,6 @@ static SPAN: ActionMeta = crate::actions::meta(
     "View",
     "",
 );
-
-/// What a view frames, worked out.
-#[derive(Facet, Clone, Debug, PartialEq)]
-pub struct SpanOut {
-    /// Seconds.
-    pub span: Option<(f64, f64)>,
-    pub tracks: Vec<String>,
-}
-
-/// What to look at.
-#[derive(Facet)]
-pub struct ViewArg {
-    pub from: Option<f64>,
-    pub to: Option<f64>,
-    pub bars: Option<Vec<i32>>,
-    pub section: Option<String>,
-    /// Which of the sections of that name, from 1 (1).
-    pub nth: Option<u32>,
-    pub tracks: Option<Vec<String>>,
-}
 
 /// The span `a` asks for, if it asks for one.
 pub fn view_span(

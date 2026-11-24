@@ -81,7 +81,7 @@ keyflow-extension = { workspace = true, optional = true }
 ignition-pane = { workspace = true, optional = true }
 studio-view-link = { workspace = true, optional = true }
 session-ui = { workspace = true, optional = true, features = ["native"] }
-session-engine = { workspace = true, optional = true, features = ["native"] }
+session-engine-client = { workspace = true, optional = true, features = ["native"] }
 # The window's modes (`SESSION_MODE`, this client's own).
 session = { workspace = true, optional = true }
 architect-extensions = { workspace = true, optional = true, features = ["host", "linked", "process"] }
@@ -135,7 +135,7 @@ native = [
     "dep:ignition-pane",
     "dep:studio-view-link",
     "dep:session-ui",
-    "dep:session-engine",
+    "dep:session-engine-client",
     "dep:session",
     "dep:architect-extensions",
     "dep:architect-extensions-dioxus",
