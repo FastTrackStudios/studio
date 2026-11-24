@@ -786,13 +786,37 @@ pub fn automation_button(
 #[must_use]
 pub fn track_color(palette: &Palette, track: &Track) -> Color {
     track.color.map_or(palette.text_faint, |rgb| {
-        Color::from_rgba8(
-            u8::try_from((rgb >> 16) & 0xff).unwrap_or(0),
-            u8::try_from((rgb >> 8) & 0xff).unwrap_or(0),
-            u8::try_from(rgb & 0xff).unwrap_or(0),
-            0xff,
+        nearest_clip(
+            palette,
+            Color::from_rgba8(
+                u8::try_from((rgb >> 16) & 0xff).unwrap_or(0),
+                u8::try_from((rgb >> 8) & 0xff).unwrap_or(0),
+                u8::try_from(rgb & 0xff).unwrap_or(0),
+                0xff,
+            ),
         )
     })
+}
+
+/// `color` as the theme's clip palette has it: the nearest entry
+/// (`clip.0`…), or `color` itself when the theme sets none.
+#[must_use]
+pub fn nearest_clip(palette: &Palette, color: Color) -> Color {
+    let distance = |c: &Color| {
+        let [r0, g0, b0, _] = color.components;
+        let [r1, g1, b1, _] = c.components;
+        // Weighted toward green, as the eye is.
+        (r1 - r0).powi(2).mul_add(
+            0.3,
+            (g1 - g0).powi(2).mul_add(0.59, (b1 - b0).powi(2) * 0.11),
+        )
+    };
+    palette
+        .clips
+        .iter()
+        .min_by(|a, b| distance(a).total_cmp(&distance(b)))
+        .copied()
+        .unwrap_or(color)
 }
 
 /// The colour a folder writes along the bottom of its children.

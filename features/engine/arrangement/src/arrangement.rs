@@ -1954,7 +1954,7 @@ pub fn slip_overlay(
     painter.fill(
         Fill::NonZero,
         at,
-        item.color.multiply_alpha(body_alpha()),
+        item.color.multiply_alpha(body_alpha(palette)),
         None,
         &Rect::new(item.x0, y0, item.x1, y1),
     );
@@ -2872,11 +2872,12 @@ const FOLDER_BODY: f32 = 0.4;
 /// its colour, not so much the waveform drowns in it.
 const TAKE_BODY: f32 = 0.38;
 
-fn body_alpha() -> f32 {
+fn body_alpha(palette: &Palette) -> f32 {
     if crate::options::OUTLINED.get() {
         0.12
     } else {
-        0.42
+        // A theme's own (`clip.alpha`): a flat look's clips are solid.
+        palette.clip_alpha.unwrap_or(0.42)
     }
 }
 

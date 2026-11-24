@@ -1340,9 +1340,9 @@ fn record_item(
     let alpha = if take_body.is_some() {
         TAKE_BODY
     } else if folded_guid.is_some() {
-        body_alpha() * FOLDER_BODY
+        body_alpha(song.palette) * FOLDER_BODY
     } else {
-        body_alpha()
+        body_alpha(song.palette)
     };
     if !inside {
         let (top, bottom) = (y + ctx.inset, y + body - ctx.inset);
@@ -1880,7 +1880,7 @@ fn basis_of(song: &Song<'_>) -> Basis {
         tcp: song.tcp,
         layout: song.layout,
         length: song.project.length_secs.to_bits(),
-        alpha: body_alpha().to_bits(),
+        alpha: body_alpha(song.palette).to_bits(),
         keys: keys.finish(),
         tracks: tracks.finish(),
         out_of_sight,

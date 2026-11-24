@@ -53,6 +53,17 @@ pub struct Palette {
     pub tcp_button: Color,
     pub tcp_combo: Color,
     pub tcp_meter_well: Color,
+    /// The play cursor, where the audio is.
+    pub playhead: Color,
+    /// The edit cursor, where you are.
+    pub edit_cursor: Color,
+    /// The clip palette a theme sets (`clip.0`…): a track's colour, drawn
+    /// on its clips and its strip, is the nearest of these. Empty, a
+    /// track's own colour.
+    pub clips: Vec<Color>,
+    /// How opaque a clip's body is, when a theme says
+    /// (`clip.alpha`); the arrangement's own otherwise.
+    pub clip_alpha: Option<f32>,
     /// How strongly a track's colour tints its row, from the theme.
     pub track_tint: f32,
     /// The palette the ported control art is drawn against.
@@ -100,6 +111,11 @@ impl Palette {
             tcp_button: c(theme.tokens.surface),
             tcp_combo: c(theme.tokens.surface_sunken),
             tcp_meter_well: c(theme.tokens.surface_sunken),
+            // Yellow, where the audio is; blue (blue-500), where you are.
+            playhead: Color::from_rgba8(0xfa, 0xcc, 0x15, 0xff),
+            edit_cursor: Color::from_rgba8(0x3b, 0x82, 0xf6, 0xff),
+            clips: Vec::new(),
+            clip_alpha: None,
             track_tint: theme.metrics.track_tint,
             chrome: chrome(theme),
             text: c(theme.tokens.text),

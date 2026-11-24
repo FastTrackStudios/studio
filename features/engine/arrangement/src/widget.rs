@@ -6639,7 +6639,10 @@ impl ArrangementWidget {
         let now = web_time::Instant::now();
         self.trail.record(now, at_now.play_at);
         let look = {
-            let look = crate::cursor::Look::default();
+            let look = crate::cursor::Look {
+                line: self.palette.playhead,
+                ..crate::cursor::Look::default()
+            };
             look.trailing(self.trail.length(now, view.pps, look.trail))
         };
         // Into the picture, or with the meters when a host asked for what
