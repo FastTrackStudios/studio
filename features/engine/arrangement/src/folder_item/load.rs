@@ -7,9 +7,9 @@
 
 use std::collections::HashMap;
 
+use daw_edit::drums::kit_role;
 use daw_proto::Track;
 use daw_ui::studio::project::Project;
-use editor::kit::kit_role;
 use vello::peniko::Color;
 
 use super::Folder;

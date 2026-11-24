@@ -137,33 +137,24 @@ pub struct DrumLane {
     pub other_hand: Option<i32>,
 }
 
-/// The part of the kit a lane belongs to.
-///
-/// Grouping is what makes a real kit navigable: the FTS map is 39 rows,
-/// and a wall of evenly-striped lanes gives the eye nothing to steer by.
-/// Banding by family means you find the toms by *shape* rather than by
-/// reading every label.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum DrumFamily {
-    Kick,
-    Snare,
-    Tom,
-    HiHat,
-    Cymbal,
-    /// Ride is its own band rather than a cymbal, because it is played
-    /// like a hat — a continuous part — not struck like a crash.
-    Ride,
-    Other,
-}
+/// The part of the kit a lane belongs to, and which one a name is: the
+/// DAW's (daw-edit), so the editor, the arrangement and the engine never
+/// disagree about what a "Tom" is.
+pub use daw_edit::drums::{DrumFamily, drum_family};
 
-impl DrumFamily {
+/// A family's row band, as the editor paints it.
+pub trait FamilyBand {
     /// Background tint for the row band.
     ///
     /// Deliberately near-black: this sits *under* the notes, and a band
     /// strong enough to notice on its own would compete with the
     /// material it exists to organise. The hue is the signal; the value
     /// stays almost flat.
-    pub fn band(self) -> &'static str {
+    fn band(self) -> &'static str;
+}
+
+impl FamilyBand for DrumFamily {
+    fn band(self) -> &'static str {
         match self {
             DrumFamily::Kick => "#1e1416",
             DrumFamily::Snare => "#1e1a13",
@@ -173,53 +164,6 @@ impl DrumFamily {
             DrumFamily::Ride => "#14181f",
             DrumFamily::Other => "#16161a",
         }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            DrumFamily::Kick => "Kick",
-            DrumFamily::Snare => "Snare",
-            DrumFamily::Tom => "Toms",
-            DrumFamily::HiHat => "Hi-hat",
-            DrumFamily::Cymbal => "Cymbals",
-            DrumFamily::Ride => "Ride",
-            DrumFamily::Other => "Other",
-        }
-    }
-}
-
-/// Which family a lane name belongs to.
-///
-/// Reads the FTS abbreviations first and exactly — `K`, `S`, `T1`, `H-`,
-/// `C-`, `R-` — then falls back to the words a General MIDI map uses.
-/// Matching a single letter by substring would put half the kit in the
-/// wrong band.
-pub fn drum_family(name: &str) -> DrumFamily {
-    let n = name.to_ascii_lowercase();
-    let head = n.split([' ', '-']).next().unwrap_or("");
-    match head {
-        "k" | "kl" => return DrumFamily::Kick,
-        "s" | "sr" => return DrumFamily::Snare,
-        "t1" | "t2" | "t3" | "t4" => return DrumFamily::Tom,
-        "h" => return DrumFamily::HiHat,
-        "r" => return DrumFamily::Ride,
-        "c" => return DrumFamily::Cymbal,
-        _ => {}
-    }
-    if n.contains("kick") {
-        DrumFamily::Kick
-    } else if n.contains("snare") || n.contains("stick") || n.contains("clap") {
-        DrumFamily::Snare
-    } else if n.contains("tom") {
-        DrumFamily::Tom
-    } else if n.contains("hh") || n.contains("hat") {
-        DrumFamily::HiHat
-    } else if n.contains("ride") {
-        DrumFamily::Ride
-    } else if n.contains("crash") || n.contains("china") || n.contains("splash") {
-        DrumFamily::Cymbal
-    } else {
-        DrumFamily::Other
     }
 }
 

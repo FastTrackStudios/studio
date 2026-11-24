@@ -2215,7 +2215,7 @@ pub fn hits_overlay(
         let drum = overlay
             .pieces
             .get(piece)
-            .and_then(|name| kit_color(editor::kit::kit_role(name, &[])))
+            .and_then(|name| kit_color(daw_edit::drums::kit_role(name, &[])))
             .unwrap_or(palette.text);
         let spaced = |k: usize| {
             let x = mine.get(k).map_or(0.0, |m| x_of(m.time));
@@ -3561,7 +3561,7 @@ fn source_of(item: &daw_proto::Item) -> crate::wave_detail::Source {
     )
 }
 
-use editor::kit::LaneRole;
+use daw_edit::drums::LaneRole;
 
 /// The drums a shut kit's item is layered by, under to over: the kit's
 /// own colour for the rest (cymbals, rooms) at the bottom, then toms,
@@ -3605,7 +3605,7 @@ fn kit_roles(project: &Project) -> std::collections::HashMap<&str, LaneRole> {
             }
             (
                 track.guid.as_str(),
-                editor::kit::kit_role(&track.name, &folders),
+                daw_edit::drums::kit_role(&track.name, &folders),
             )
         })
         .collect()

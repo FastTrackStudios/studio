@@ -637,7 +637,7 @@ pub struct ArrangementWidget {
     editing: Rc<Cell<bool>>,
     /// What Backspace last put back, and when: pressed again on the same
     /// selection, it takes the hand placements off too.
-    backspaced: std::cell::RefCell<Option<(editing::scope::Scope, web_time::Instant)>>,
+    backspaced: std::cell::RefCell<Option<(daw_edit::scope::Scope, web_time::Instant)>>,
     /// What a drag snaps to besides the grid, gathered at its press
     /// ([`Self::gather_magnets`]): item edges, markers, sections, hits,
     /// the cursor — sorted.
@@ -1859,12 +1859,12 @@ impl ArrangementWidget {
     /// Lay the rows out as `slug` (an overview); pressed again, or the
     /// other overview's key pressed in this one's, go back to the scene
     /// before. `false` with no planner.
-    /// What an edit key acts on here ([`editing::scope::Scope`]): the
+    /// What an edit key acts on here ([`daw_edit::scope::Scope`]): the
     /// selected folded rows — their folders over their spans — else the
     /// razor areas — their rows' tracks over theirs — else the selected
     /// tracks over the time selection (the whole song with none).
-    fn scope(&self) -> editing::scope::Scope {
-        use editing::scope::{Scope, Span};
+    fn scope(&self) -> daw_edit::scope::Scope {
+        use daw_edit::scope::{Scope, Span};
         let mut tracks: Vec<String> = Vec::new();
         let mut add = |guid: &str| {
             if !tracks.iter().any(|t| t == guid) {
@@ -1917,18 +1917,18 @@ impl ArrangementWidget {
 
     /// Why `scope` cannot be edited here, if it cannot: its tracks have no
     /// editing profile, or more than one.
-    fn refused(&self, scope: &editing::scope::Scope) -> Option<&'static str> {
-        let tree: Vec<editing::scope::Node<'_>> = self
+    fn refused(&self, scope: &daw_edit::scope::Scope) -> Option<&'static str> {
+        let tree: Vec<daw_edit::scope::Node<'_>> = self
             .project
             .tracks
             .iter()
-            .map(|t| editing::scope::Node {
+            .map(|t| daw_edit::scope::Node {
                 guid: &t.guid,
                 name: &t.name,
                 parent: t.parent_guid.as_deref(),
             })
             .collect();
-        editing::scope::profile_of(&tree, scope).err().map(|_| {
+        daw_edit::scope::profile_of(&tree, scope).err().map(|_| {
             "only the drums are edited this way so far — select the kit, its rows or a stretch of time"
         })
     }
@@ -1946,7 +1946,7 @@ impl ArrangementWidget {
     /// the kit as recorded, the hits a hand placed put back where it put
     /// them — and pressed again on the same selection within a few
     /// seconds, the hand placements too.
-    fn backspace(&self, scope: editing::scope::Scope) -> bool {
+    fn backspace(&self, scope: daw_edit::scope::Scope) -> bool {
         /// How soon a second press counts as a second press.
         const AGAIN: std::time::Duration = std::time::Duration::from_secs(8);
         let now = web_time::Instant::now();
@@ -2005,15 +2005,15 @@ impl ArrangementWidget {
 
     /// [`Self::revert_drums`] over the stretch `from`..`to`.
     fn revert_span(&self, (from, to): (f64, f64)) -> bool {
-        self.backspace(editing::scope::Scope {
+        self.backspace(daw_edit::scope::Scope {
             tracks: Vec::new(),
-            spans: vec![editing::scope::Span::between(from, to)],
+            spans: vec![daw_edit::scope::Span::between(from, to)],
         })
     }
 
     /// [`Self::revert_drums`] over `scope`; `keep_manual`, the hits a hand
     /// placed put back where it placed them.
-    fn revert_scope(&self, scope: editing::scope::Scope, hold: bool, keep_manual: bool) -> bool {
+    fn revert_scope(&self, scope: daw_edit::scope::Scope, hold: bool, keep_manual: bool) -> bool {
         if scope.merged().is_empty() {
             *self
                 .staged
@@ -2177,12 +2177,12 @@ impl ArrangementWidget {
     /// picked on its strip, else the selected hits' stretch, else the
     /// selected items (each mic's, or the folded kit's), else what else
     /// is selected.
-    fn comp_scope(&self) -> editing::scope::Scope {
-        let spans = |spans: Vec<(f64, f64)>| editing::scope::Scope {
+    fn comp_scope(&self) -> daw_edit::scope::Scope {
+        let spans = |spans: Vec<(f64, f64)>| daw_edit::scope::Scope {
             tracks: Vec::new(),
             spans: spans
                 .into_iter()
-                .map(|(from, to)| editing::scope::Span::between(from, to))
+                .map(|(from, to)| daw_edit::scope::Span::between(from, to))
                 .collect(),
         };
         let picked = self.comp_picked.clone();

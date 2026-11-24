@@ -5,7 +5,7 @@
 //! sides into two halves of one.
 
 use anyrender::{PaintScene, Scene};
-use editor::kit::LaneRole;
+use daw_edit::drums::LaneRole;
 use vello::kurbo::{Affine, BezPath, Rect};
 use vello::peniko::{Color, Fill};
 
@@ -180,7 +180,7 @@ pub fn draw(scene: &mut Scene, folded: &Fold, track: Color) {
                     mid,
                     half,
                 );
-                fill(scene, hex(role.color()), &path);
+                fill(scene, crate::theme_tokens::drum(role).color(), &path);
             }
         }
         GroupBy::Side => {

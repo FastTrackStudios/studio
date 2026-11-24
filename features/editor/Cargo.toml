@@ -32,6 +32,8 @@ webview = ["dioxus/desktop", "dioxus/launch", "ui", "ui-webview"]
 
 [dependencies]
 timeline = { workspace = true, features = ["actions"] }
+# The drum roles and families, shared with the arrangement and the engine.
+daw-edit = { workspace = true }
 dsp = { workspace = true, optional = true }
 anyrender = { workspace = true, optional = true }
 anyrender_vello_cpu = { workspace = true, optional = true }

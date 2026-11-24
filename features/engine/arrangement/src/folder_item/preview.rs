@@ -27,7 +27,7 @@
 
 use daw_proto::peak::MeterFrame;
 
-use editor::kit::LaneRole;
+use daw_edit::drums::LaneRole;
 
 use super::fold::{Child, Fold, FoldColumn, GroupBy, SLOTS, Side};
 
