@@ -42,7 +42,7 @@ pub fn claim(handle: Handle) {
         return;
     }
     let list = session_engine_client::actions::list();
-    let registered = session_ui::view_actions::register_mixer(list).and_then(|()| {
+    let registered = session_ui::mixer_actions::register_mixer(list).and_then(|()| {
         list.register_async(
             &session_ui::window::TOGGLE_MIXER,
             Effect::Mutating,
@@ -50,9 +50,9 @@ pub fn claim(handle: Handle) {
         )
         .and_then(|()| {
             list.register_async(
-                &session_ui::view_actions::CLOSEUP,
+                &session_ui::mixer_actions::CLOSEUP,
                 Effect::Mutating,
-                |a: session_ui::view_actions::CloseupArg| async move { closeup(a).await },
+                |a: session_ui::mixer_actions::CloseupArg| async move { closeup(a).await },
             )
         })
     });
@@ -184,7 +184,7 @@ const CLOSEUP_PANE: &str = "studio.mixer/closeup";
 /// close-up pane (opened, or moved to it), or the pane closed. What the
 /// window's close-up layer does over the window; here the pane is its
 /// own, and a strip's expand mark asks for it as in the window.
-async fn closeup(a: session_ui::view_actions::CloseupArg) -> Result<String, String> {
+async fn closeup(a: session_ui::mixer_actions::CloseupArg) -> Result<String, String> {
     if a.close {
         if run("WORKSPACE_PANE_GET", json!({ "pane": CLOSEUP_PANE }))
             .await

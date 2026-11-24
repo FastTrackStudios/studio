@@ -441,7 +441,7 @@ struct DeviceRow {
     lanes: usize,
     /// How many tracks past the first the lanes start.
     down: usize,
-    /// The last `FX_VIEW` ask taken up (`view_actions::FX_ASKS`).
+    /// The last `FX_VIEW` ask taken up (`mixer_actions::FX_ASKS`).
     view_seen: u64,
     /// How far each lane is scrolled sideways, by track.
     scroll: std::collections::HashMap<String, f64>,
@@ -582,19 +582,20 @@ impl DeviceRow {
     }
 
     /// `FX_VIEW` run with `view`, and taken up here at once.
-    fn press_view(&mut self, view: &crate::view_actions::FxView) {
+    fn press_view(&mut self, view: &crate::mixer_actions::FxView) {
         let args = facet_json::to_string(view)
             .ok()
             .and_then(|j| serde_json::from_str(&j).ok());
         if let Some(args) = args {
-            let _ = crate::press::press(crate::view_actions::FX_VIEW.id, &args);
+            let _ = crate::press::press(crate::mixer_actions::FX_VIEW.id, &args);
         }
         self.take_view();
     }
 
     /// What `FX_VIEW` asked since the last look, shown.
     fn take_view(&mut self) {
-        for view in crate::view_actions::since(&crate::view_actions::FX_ASKS, &mut self.view_seen) {
+        for view in crate::view_actions::since(&crate::mixer_actions::FX_ASKS, &mut self.view_seen)
+        {
             if let Some(fold) = view.fold
                 && let Some(group) = group_named(&fold.group)
             {
@@ -893,12 +894,12 @@ impl DeviceRow {
             }
         } else if dy < 0.0 {
             // Down through the tracks, a lane at a time.
-            self.press_view(&crate::view_actions::FxView {
+            self.press_view(&crate::mixer_actions::FxView {
                 down: Some(u32::try_from(self.down.saturating_add(1)).unwrap_or(u32::MAX)),
                 ..Default::default()
             });
         } else {
-            self.press_view(&crate::view_actions::FxView {
+            self.press_view(&crate::mixer_actions::FxView {
                 down: Some(u32::try_from(self.down.saturating_sub(1)).unwrap_or(u32::MAX)),
                 ..Default::default()
             });
@@ -1036,8 +1037,8 @@ impl DeviceRow {
         };
         if let Some((guid, group)) = bar {
             // `FX_VIEW {fold}`, taken up here at once.
-            self.press_view(&crate::view_actions::FxView {
-                fold: Some(crate::view_actions::FxFold {
+            self.press_view(&crate::mixer_actions::FxView {
+                fold: Some(crate::mixer_actions::FxFold {
                     track: guid,
                     group: group.slug(),
                     solo: e.mods.shift(),
@@ -2495,7 +2496,7 @@ impl blitz_dom::node::Widget for DeviceRow {
         self.dirty.get()
             || self.animating.get()
             || self.heard()
-            || crate::view_actions::pending(&crate::view_actions::FX_ASKS, self.view_seen)
+            || crate::view_actions::pending(&crate::mixer_actions::FX_ASKS, self.view_seen)
     }
 
     fn paint(

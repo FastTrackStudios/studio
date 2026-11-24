@@ -723,8 +723,10 @@ fn DemoView(
     // Touch mode: on where the page's pointer is a finger.
     use_context_provider(crate::touch::Touch::detect);
     // What is shown full screen, if anything, and the racks' settings
-    // every view of them shares (`crate::closeup`).
-    use_context_provider(crate::closeup::Closeups::new);
+    // every view of them shares (the installed mixer's).
+    if let Some(mixer) = crate::dock::mixer_views() {
+        (mixer.use_closeups)();
+    }
     crate::shell::use_pins();
     let current = setlist.read().current().cloned();
     if form().compact() {
@@ -753,7 +755,7 @@ fn DemoView(
                     }
                 },
             }
-            crate::closeup::CloseupLayer { landscape: landscape() }
+            {crate::dock::mixer_views().map(|m| (m.closeup_layer)(landscape()))}
             if asking() {
                 LoadMultitracks { listening: listening(), asking }
             }
@@ -811,7 +813,7 @@ fn DemoView(
                 },
             }
             // Whatever is zoomed into, over all of it.
-            crate::closeup::CloseupLayer { landscape: landscape() }
+            {crate::dock::mixer_views().map(|m| (m.closeup_layer)(landscape()))}
             if asking() {
                 LoadMultitracks { listening: listening(), asking }
             }
@@ -882,10 +884,10 @@ fn PhoneViews(
         // Keyed apart: the same component in the same place would otherwise
         // be kept and handed the other view's props.
         PhoneView::Arrangement => {
-            rsx! { crate::mixer_panel::WebDawPanels { key: "{view():?}", engine: engine.clone() } }
+            rsx! { DawPanels { key: "{view():?}", engine: engine.clone() } }
         }
         PhoneView::Mixer => {
-            rsx! { crate::mixer_panel::WebDawPanels { key: "{view():?}", engine: engine.clone(), mixer_only: true } }
+            rsx! { DawPanels { key: "{view():?}", engine: engine.clone(), mixer_only: true } }
         }
     }
 }
@@ -1013,14 +1015,14 @@ fn SongViews(
                         WebPerformance {}
                     }
                 },
-                View::Daw => rsx! { crate::mixer_panel::WebDawPanels { engine: engine.clone() } },
+                View::Daw => rsx! { DawPanels { engine: engine.clone() } },
                 View::Chart => rsx! { crate::chart_panel::WebChart { paged: true } },
                 View::Lyrics => rsx! { crate::lyrics_panel::LyricsPanel {} },
                 View::Editor => rsx! { crate::editor_view::EditorPanel {} },
                 View::Mixer => rsx! {
-                    crate::mixer_panel::WebDawPanels { engine: engine.clone(), mixer_only: true }
+                    DawPanels { engine: engine.clone(), mixer_only: true }
                 },
-                View::Fx => rsx! { crate::fx_view::FxPanel {} },
+                View::Fx => crate::dock::mixer_views().map_or_else(|| rsx! {}, |m| (m.fx_panel)()),
                 View::Overview => rsx! {
                     OverviewLayout {
                         progress: rsx! { crate::progress::ProgressBar {} },
@@ -1029,7 +1031,7 @@ fn SongViews(
                         // desktop — from its Lyrics track.
                         under_chart: rsx! { crate::lyrics_panel::LyricsPanel {} },
                         panels: rsx! {
-                            crate::mixer_panel::WebDawPanels {
+                            DawPanels {
                                 engine: engine.clone(),
                                 docked: true,
                             }
@@ -1350,7 +1352,9 @@ fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Eleme
     };
     use_context_provider(|| crate::record_view::PickSong(Callback::new(pick)));
     use_context_provider(crate::touch::Touch::detect);
-    use_context_provider(crate::closeup::Closeups::new);
+    if let Some(mixer) = crate::dock::mixer_views() {
+        (mixer.use_closeups)();
+    }
     let current = setlist.read().current().cloned();
     let why = match (listening(), crate::web_engine::reference_reason()) {
         (crate::web_engine::Listening::Reference { .. }, crate::web_engine::ReferenceWhy::Link) => {
@@ -1401,7 +1405,7 @@ fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Eleme
                     WithSong {
                         key: "{song.project}",
                         session: song.session.clone(),
-                        crate::mixer_panel::WebDawPanels {
+                        DawPanels {
                             key: "{which}",
                             engine: engine.clone(),
                             mixer_only: panel == HostedPanel::Mixer,
@@ -1409,10 +1413,25 @@ fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Eleme
                     }
                 }
             }
-            crate::closeup::CloseupLayer { landscape: landscape() }
+            {crate::dock::mixer_views().map(|m| (m.closeup_layer)(landscape()))}
             if asking() {
                 LoadMultitracks { listening: listening(), asking }
             }
         }
+    }
+}
+
+/// The DAW view's panels: the installed mixer's (the arrangement with the
+/// mixer under it, or the mixer alone), else the arrangement on its own.
+#[component]
+fn DawPanels(
+    engine: crate::web_engine::EngineRef,
+    #[props(default)] docked: bool,
+    #[props(default)] mixer_only: bool,
+) -> Element {
+    match crate::dock::mixer_views() {
+        Some(mixer) => (mixer.web_daw_panels)(engine, docked, mixer_only),
+        None if mixer_only => rsx! {},
+        None => rsx! { WebArrangement { engine } },
     }
 }

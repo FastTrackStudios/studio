@@ -467,7 +467,7 @@ struct Strip {
     arm: Option<daw_proto::Track>,
 }
 
-/// The mixer: the DAW's own ([`crate::mixer_panel`]), with one strip per
+/// The mixer: the DAW's own (the installed mixer, `crate::dock::mixer_views`), with one strip per
 /// group the project has. Which tracks those are is read from the engine
 /// now and again, since a song picked is another project; what they are
 /// set to arrives as the engine's track events, inside the mixer.
@@ -520,12 +520,7 @@ fn GroupMixer(strips: Vec<Strip>) -> Element {
         links.fill = true;
         links
     });
-    #[cfg(feature = "native")]
-    return rsx! { crate::mixer_panel::Mixer {} };
-    #[cfg(all(feature = "web", not(feature = "native")))]
-    return rsx! { crate::mixer_panel::WebMixer { hidden: false } };
-    #[cfg(not(any(feature = "native", feature = "web")))]
-    rsx! {}
+    crate::dock::mixer_views().map_or_else(|| rsx! {}, |mixer| (mixer.mixer)())
 }
 
 /// Which tracks the groups are: what, changed, means another mixer.

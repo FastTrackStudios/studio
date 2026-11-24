@@ -58,7 +58,7 @@ impl Closeup {
 pub struct Closeups {
     pub current: Signal<Option<Closeup>>,
     /// The last `SESSION_CLOSEUP` ask taken up
-    /// (`view_actions::CLOSEUP_ASKS`).
+    /// (`mixer_actions::CLOSEUP_ASKS`).
     seen: Signal<u64>,
     /// The racks' settings: the mixer's strips and a close-up of one
     /// panel edit the same ones.
@@ -104,11 +104,11 @@ impl CloseupHandle {
     /// shown, or closed.
     fn take_actions(mut self) {
         let was = *self.seen.peek();
-        if !crate::view_actions::pending(&crate::view_actions::CLOSEUP_ASKS, was) {
+        if !crate::view_actions::pending(&crate::mixer_actions::CLOSEUP_ASKS, was) {
             return;
         }
         let mut seen = was;
-        let asked = crate::view_actions::since(&crate::view_actions::CLOSEUP_ASKS, &mut seen);
+        let asked = crate::view_actions::since(&crate::mixer_actions::CLOSEUP_ASKS, &mut seen);
         self.seen.set(seen);
         if let Some(last) = asked.into_iter().last() {
             self.current.set(last);
@@ -118,7 +118,7 @@ impl CloseupHandle {
     /// Close it, through `SESSION_CLOSEUP`, and show that at once.
     pub fn close(self) {
         let _ = crate::press::press(
-            crate::view_actions::CLOSEUP.id,
+            crate::mixer_actions::CLOSEUP.id,
             &serde_json::json!({ "close": true }),
         );
         self.take_actions();
@@ -128,7 +128,7 @@ impl CloseupHandle {
     pub fn show(self, closeup: &Closeup) {
         let Closeup::Rack { guid, name, which } = closeup;
         let _ = crate::press::press(
-            crate::view_actions::CLOSEUP.id,
+            crate::mixer_actions::CLOSEUP.id,
             &serde_json::json!({ "track": guid, "panel": which.slug(), "name": name }),
         );
         self.take_actions();

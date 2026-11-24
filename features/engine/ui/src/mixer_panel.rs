@@ -753,7 +753,7 @@ pub struct MixerWidget {
     /// The simulated signal's clock held at this many seconds (a test
     /// drawing one moment twice); `None`: it runs.
     simulated_at: Option<f64>,
-    /// The last `MIXER_VIEW` ask taken up (`view_actions::MIXER_ASKS`).
+    /// The last `MIXER_VIEW` ask taken up (`mixer_actions::MIXER_ASKS`).
     view_seen: u64,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
@@ -1267,19 +1267,19 @@ impl MixerWidget {
         // A rail of the mixer's own view: `MIXER_VIEW`, taken up at once
         // (and by any other mixer on its next frame).
         let view = match act {
-            Action::Scene(slug) => Some(crate::view_actions::MixerView {
+            Action::Scene(slug) => Some(crate::mixer_actions::MixerView {
                 scene: Some(slug.to_owned()),
                 ..Default::default()
             }),
-            Action::FocusSelected => Some(crate::view_actions::MixerView {
+            Action::FocusSelected => Some(crate::mixer_actions::MixerView {
                 focus_selected: Some(!self.rails.settings.focus_selected),
                 ..Default::default()
             }),
-            Action::TakeFocusWidth => Some(crate::view_actions::MixerView {
+            Action::TakeFocusWidth => Some(crate::mixer_actions::MixerView {
                 take_focus_width: Some(!self.rails.settings.take_focus_width),
                 ..Default::default()
             }),
-            Action::Audience => Some(crate::view_actions::MixerView {
+            Action::Audience => Some(crate::mixer_actions::MixerView {
                 audience: Some(
                     if self.rails.audience == Audience::Engineer {
                         "player"
@@ -1329,12 +1329,12 @@ impl MixerWidget {
     }
 
     /// `MIXER_VIEW` run with `view`, and taken up here at once.
-    fn press_view(&mut self, view: &crate::view_actions::MixerView) {
+    fn press_view(&mut self, view: &crate::mixer_actions::MixerView) {
         let args = facet_json::to_string(view)
             .ok()
             .and_then(|j| serde_json::from_str(&j).ok());
         if let Some(args) = args {
-            let _ = crate::press::press(crate::view_actions::MIXER_VIEW.id, &args);
+            let _ = crate::press::press(crate::mixer_actions::MIXER_VIEW.id, &args);
         }
         self.take_view();
     }
@@ -1343,7 +1343,7 @@ impl MixerWidget {
     fn take_view(&mut self) {
         use dynamic_template::scenes::Audience;
         for view in
-            crate::view_actions::since(&crate::view_actions::MIXER_ASKS, &mut self.view_seen)
+            crate::view_actions::since(&crate::mixer_actions::MIXER_ASKS, &mut self.view_seen)
         {
             if let Some(scene) = view.scene.as_deref().and_then(|wanted| {
                 dynamic_template::scenes::scenes()
@@ -1395,7 +1395,7 @@ impl MixerWidget {
     /// Where the strips are scrolled to, said (`MIXER_VIEW {scroll}`): a
     /// scroll gesture ended.
     fn commit_scroll(&mut self) {
-        let view = crate::view_actions::MixerView {
+        let view = crate::mixer_actions::MixerView {
             scroll: Some(self.scroll.get()),
             ..Default::default()
         };
@@ -1581,7 +1581,7 @@ impl MixerWidget {
                         "panel": which.slug(),
                         "name": track.name,
                     });
-                    let _ = crate::press::press(crate::view_actions::CLOSEUP.id, &args);
+                    let _ = crate::press::press(crate::mixer_actions::CLOSEUP.id, &args);
                     if let Some(closeups) = &self.closeups {
                         closeups.take_ask();
                     }
@@ -1590,8 +1590,8 @@ impl MixerWidget {
             } else if let Grip::Phase(phase) = grip {
                 // What the mixer is showing, not a setting of the track:
                 // `MIXER_VIEW {rack_fold}`.
-                let view = crate::view_actions::MixerView {
-                    rack_fold: Some(crate::view_actions::RackFold {
+                let view = crate::mixer_actions::MixerView {
+                    rack_fold: Some(crate::mixer_actions::RackFold {
                         track: guid.clone(),
                         phase: phase.slug().to_owned(),
                     }),
@@ -2195,7 +2195,7 @@ impl MixerWidget {
             }
             Hold::Overview => self.commit_scroll(),
             Hold::RackScroll { .. } => {
-                let view = crate::view_actions::MixerView {
+                let view = crate::mixer_actions::MixerView {
                     rack_scroll: Some(self.rack_scroll),
                     ..Default::default()
                 };
@@ -2679,7 +2679,7 @@ impl Widget for MixerWidget {
             // The racks shown or hidden.
             || racks_shown() != self.racks_seen.get()
             // A `MIXER_VIEW` asked of it.
-            || crate::view_actions::pending(&crate::view_actions::MIXER_ASKS, self.view_seen)
+            || crate::view_actions::pending(&crate::mixer_actions::MIXER_ASKS, self.view_seen)
     }
 
     fn paint(

@@ -1119,7 +1119,7 @@ fn mixer_shot(
         }
     }
     let mut racks = if live {
-        session_ui::overlay::Racks {
+        session_ui::strip_overlay::Racks {
             settings: &settings,
             history: &mut history,
             spectra: &mut spectra,
@@ -1128,7 +1128,7 @@ fn mixer_shot(
             folded: Box::leak(Box::new(session_ui::tone::Fold::rest())),
         }
     } else {
-        session_ui::overlay::Racks::none()
+        session_ui::strip_overlay::Racks::none()
     };
     // The bench applies no preset, so the map is the identity — built
     // rather than skipped so the shot exercises the same lookup the
@@ -1158,7 +1158,7 @@ fn mixer_shot(
             // shot that skipped them would be a shot of a mixer with no
             // faders, and the whole point of the shot is to be the same
             // frame the window shows.
-            let live = session_ui::overlay::controls(
+            let live = session_ui::strip_overlay::controls(
                 painter,
                 palette,
                 font,
@@ -1174,7 +1174,7 @@ fn mixer_shot(
                 // Nothing has clipped in a still frame, and a latch in
                 // the reference image would be a difference nobody
                 // asked for.
-                &session_ui::overlay::Clips::default(),
+                &session_ui::strip_overlay::Clips::default(),
                 // At the top: a shot is the reference every viewport is
                 // compared against, and a scrolled rack in it would be
                 // a difference nobody asked for.
@@ -1764,7 +1764,7 @@ impl MixerRig {
         let a = self
             .mixer
             .replay(painter, 0.0, self.frame.content_width(), at);
-        let b = session_ui::overlay::controls(
+        let b = session_ui::strip_overlay::controls(
             painter,
             palette,
             font,
@@ -1773,9 +1773,9 @@ impl MixerRig {
             &self.map,
             &self.pointer,
             &self.levels,
-            &session_ui::overlay::Clips::default(),
+            &session_ui::strip_overlay::Clips::default(),
             0.0,
-            &mut session_ui::overlay::Racks {
+            &mut session_ui::strip_overlay::Racks {
                 folded: &session_ui::tone::Fold::default(),
                 settings: &self.settings,
                 history: &mut self.history,

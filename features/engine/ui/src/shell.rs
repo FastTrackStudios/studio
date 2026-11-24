@@ -89,7 +89,7 @@ pub enum View {
     /// The mixer alone, the whole window.
     Mixer,
     /// The selected track's effects as devices, the whole window
-    /// (`crate::fx_view`).
+    /// (the mixer's FX view).
     Fx,
     /// The audio and MIDI editor (the expression editor, brought in
     /// next): a place held for it.

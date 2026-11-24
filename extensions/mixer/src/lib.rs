@@ -71,6 +71,9 @@ impl Extension for Mixer {
     }
 
     fn build(&self, ext: &mut Builder) {
+        // The mixer's views and actions, for the window's views that show
+        // one (a close-up, the FX view, the browser's DAW panels).
+        session_ui::mixer_host::install();
         #[cfg(not(target_arch = "wasm32"))]
         {
             claim::claim(ext.handle());

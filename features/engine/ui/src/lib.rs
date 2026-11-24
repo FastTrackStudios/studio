@@ -94,6 +94,8 @@ pub mod controls;
 pub mod dock;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod mix_guide;
+pub mod mixer_actions;
+pub mod mixer_host;
 pub mod mixer_panel;
 pub mod mousemap;
 pub mod navigator;

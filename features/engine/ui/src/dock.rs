@@ -195,3 +195,47 @@ pub fn set_racks_shown(on: bool) {
     RACKS.store(on, std::sync::atomic::Ordering::Relaxed);
     utils::prefs::set_raw(RACKS_PREF, if on { "shown" } else { "hidden" });
 }
+
+/// What the mixer hands the rest of the window, so nothing here reaches
+/// the mixer's code: the mixer installs it once at start
+/// ([`install_mixer`]), and a view that shows a mixer, a close-up or the
+/// FX view draws what it was given ([`mixer_views`]). Not installed (an
+/// arrangement alone), those places show nothing, and the arrangement
+/// stands in for the DAW view's panels.
+#[derive(Clone, Copy)]
+pub struct MixerViews {
+    /// A mixer on its own, its [`Links`] taken from the context (the
+    /// record view's group strips).
+    pub mixer: fn() -> Element,
+    /// The DAW view's panels in a browser, keyed: the arrangement with
+    /// the mixer under it (`docked` opens it from the start), or the
+    /// mixer alone (`mixer_only`).
+    #[cfg(feature = "web")]
+    pub web_daw_panels:
+        fn(engine: crate::web_engine::EngineRef, docked: bool, mixer_only: bool) -> Element,
+    /// A hook: the close-ups' state, for every view of them under it.
+    pub use_closeups: fn(),
+    /// What is shown close up, over everything (`landscape`: the screen's
+    /// shape).
+    pub closeup_layer: fn(landscape: bool) -> Element,
+    /// The FX view.
+    pub fx_panel: fn() -> Element,
+    /// The mixer's view actions, put on a list with the window's own
+    /// (`crate::view_actions::register`).
+    pub register: fn(&architect::action::ActionList) -> Result<(), architect::action::ActionError>,
+}
+
+static MIXER_VIEWS: std::sync::OnceLock<MixerViews> = std::sync::OnceLock::new();
+
+/// Install the mixer's views, once, before the first window draws. A
+/// second install is ignored: the first mixer stays.
+pub fn install_mixer(views: MixerViews) {
+    // A second install is the same mixer installed twice; the first stays.
+    let _ = MIXER_VIEWS.set(views);
+}
+
+/// The installed mixer's views, if a mixer is installed.
+#[must_use]
+pub fn mixer_views() -> Option<&'static MixerViews> {
+    MIXER_VIEWS.get()
+}
