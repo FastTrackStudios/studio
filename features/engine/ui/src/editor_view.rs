@@ -636,19 +636,19 @@ impl EditorView {
                 view.press(
                     f64::from(e.coords.client_x),
                     f64::from(e.coords.client_y),
-                    crate::widget::mods(e.mods),
+                    crate::mousemap::mods(e.mods),
                     button,
                 )
             }
             UiEvent::PointerMove(e) => view.moved(
                 f64::from(e.coords.client_x),
                 f64::from(e.coords.client_y),
-                crate::widget::mods(e.mods),
+                crate::mousemap::mods(e.mods),
             ),
             UiEvent::PointerUp(e) | UiEvent::PointerCancel(e) => view.release(
                 f64::from(e.coords.client_x),
                 f64::from(e.coords.client_y),
-                crate::widget::mods(e.mods),
+                crate::mousemap::mods(e.mods),
             ),
             UiEvent::Wheel(e) => {
                 let (dx, dy) = match e.delta {
@@ -660,11 +660,11 @@ impl EditorView {
                     f64::from(e.coords.client_y),
                     dx,
                     dy,
-                    crate::widget::mods(e.mods),
+                    crate::mousemap::mods(e.mods),
                 )
             }
-            UiEvent::KeyDown(e) => view.key(&key_name(&e.key), crate::widget::mods(e.modifiers)),
-            UiEvent::KeyUp(e) => view.key_up(&key_name(&e.key), crate::widget::mods(e.modifiers)),
+            UiEvent::KeyDown(e) => view.key(&key_name(&e.key), crate::mousemap::mods(e.modifiers)),
+            UiEvent::KeyUp(e) => view.key_up(&key_name(&e.key), crate::mousemap::mods(e.modifiers)),
             _ => false,
         };
         self.dirty |= changed;
@@ -727,9 +727,9 @@ impl EditorView {
         };
         let mods = match event {
             UiEvent::PointerMove(e) | UiEvent::PointerDown(e) | UiEvent::PointerUp(e) => {
-                crate::widget::mods(e.mods)
+                crate::mousemap::mods(e.mods)
             }
-            UiEvent::KeyDown(e) | UiEvent::KeyUp(e) => crate::widget::mods(e.modifiers),
+            UiEvent::KeyDown(e) | UiEvent::KeyUp(e) => crate::mousemap::mods(e.modifiers),
             _ => return,
         };
         self.mods.set(mods);

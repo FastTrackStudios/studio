@@ -99,7 +99,7 @@ pub fn key_alone(
     if event.is_auto_repeating && keys.is_pending() {
         return true;
     }
-    let held = crate::widget::mods(event.modifiers);
+    let held = crate::mousemap::mods(event.modifiers);
     let actions = keys.press(
         code,
         architect_input::Modifiers {
@@ -974,6 +974,8 @@ pub fn action_ids() -> &'static [String] {
 /// A change the engine announced, taken up for what this window draws.
 fn heard(change: crate::changes::Change) {
     match change {
-        crate::changes::Change::Marks => crate::marks_strip::refresh(),
+        // The engine reads the marks again whenever they change and says
+        // so to every window (`marks_strip::refresh`): nothing to do here.
+        crate::changes::Change::Marks => {}
     }
 }

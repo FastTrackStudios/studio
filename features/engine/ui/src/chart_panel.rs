@@ -57,7 +57,7 @@ const ZOOM_MAX: f64 = 6.0;
 
 /// What the widget reads (and partly writes) every paint, shared with the
 /// panel's own window-level input handling — the same shape
-/// `crate::widget::Shared` gives the arrangement.
+/// the arrangement's `widget::Shared` gives the arrangement.
 struct Live {
     /// Pan, in chart points — zoom-independent, see [`ChartView::paint`].
     scroll_pt: (f64, f64),
@@ -544,7 +544,7 @@ pub fn WebChart(
     #[props(default)]
     paged: bool,
 ) -> Element {
-    use crate::panel::{Button, PanelEvent};
+    use crate::panel_input::{Button, PanelEvent};
     let session: StudioSession = use_context();
     let built = use_hook(|| {
         build(&session, paged).map(|(widget, live)| {

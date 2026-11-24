@@ -58,6 +58,9 @@ use anyrender::{RenderContext, Scene};
 use blitz_dom::node::{ComputedStyles, Widget};
 use blitz_traits::events::{Modifiers, MouseEventButton, UiEvent};
 
+use crate::mousemap::mods;
+pub use crate::song_left::rows_as_left;
+
 use vello::kurbo::Affine;
 
 use crate::arrangement::{Arrangement, Palette, Viewport};
@@ -290,14 +293,6 @@ fn joined(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
     })
 }
 
-pub(crate) fn mods(from: Modifiers) -> crate::mousemap::Mods {
-    crate::mousemap::Mods {
-        shift: from.contains(Modifiers::SHIFT),
-        ctrl: from.contains(Modifiers::CONTROL),
-        alt: from.contains(Modifiers::ALT),
-    }
-}
-
 /// How tall the strip at the top of a piece's row is where its hits are
 /// taken by hand — their flags — px.
 const FLAG_STRIP: f64 = 10.0;
@@ -510,7 +505,7 @@ pub struct ArrangementWidget {
     /// (with the visibility this window has changed since): what a track
     /// shown or hidden re-plans from. `None` in a widget built without
     /// one, which then cannot show or hide anything.
-    replan: Option<(crate::song_model::Planner, Left)>,
+    replan: Option<(crate::song_model::Planner, crate::song_left::Left)>,
     /// A page's session read back from the engine, waiting to be drawn
     /// ([`Self::resync`]).
     #[cfg(not(feature = "native"))]
@@ -614,7 +609,7 @@ pub struct ArrangementWidget {
     controls_apart: bool,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
-    /// The outside edits the rows were planned at ([`edit_song`]).
+    /// The outside edits the rows were planned at ([`crate::song_left::edit_song`]).
     edited_seen: u64,
     /// The ruler's own furniture, for hit testing.
     sections: Vec<daw_ui::studio::project::Section>,
@@ -939,7 +934,7 @@ impl ArrangementWidget {
             value_parts: Vec::new(),
             controls_apart: false,
             folds_seen: crate::folds::generation(),
-            edited_seen: EDITED.with(Cell::get),
+            edited_seen: crate::song_left::edited(),
             previews,
             renaming: None,
             keys: crate::keys::Keys::load(),
@@ -1854,7 +1849,7 @@ impl ArrangementWidget {
         planner: crate::song_model::Planner,
         content_h: Rc<std::cell::Cell<f64>>,
     ) -> Self {
-        let raw = song_as_left(&planner);
+        let raw = crate::song_left::song_as_left(&planner);
         self.replan = Some((planner, raw));
         content_h.set(self.content_h.get());
         self.content_h = content_h;
@@ -4811,79 +4806,6 @@ impl ArrangementWidget {
     }
 }
 
-thread_local! {
-    /// Each open song as its arrangement last had it — the tracks with the
-    /// mutes, renames and visibility changed in it — by the song (held
-    /// weakly: a song closed is forgotten). A panel rebuilt on the way
-    /// back from another view starts from this, not from the song as it
-    /// opened.
-    static LEFT: RefCell<Vec<(std::sync::Weak<daw_ui::studio::project::Project>, Left)>> =
-        const { RefCell::new(Vec::new()) };
-}
-
-/// A song as its arrangement has it, shared by every arrangement built for
-/// it ([`song_as_left`]).
-type Left = Rc<RefCell<daw_ui::studio::project::Project>>;
-
-thread_local! {
-    /// How many times a song's kept copy was edited from outside an
-    /// arrangement ([`edit_song`]): one showing it compares this with the
-    /// value it planned at, as it does the folds.
-    static EDITED: Cell<u64> = const { Cell::new(0) };
-}
-
-/// Change `planner`'s song as the arrangement has it, from outside one —
-/// Mix mode muting the guide. `f` says what changed (`Some`), and an
-/// arrangement showing the song plans its rows again; `None`, nothing did.
-pub(crate) fn edit_song<R>(
-    planner: &crate::song_model::Planner,
-    f: impl FnOnce(&mut daw_ui::studio::project::Project) -> Option<R>,
-) -> Option<R> {
-    let raw = song_as_left(planner);
-    let out = f(&mut raw.borrow_mut());
-    if out.is_some() {
-        EDITED.with(|edited| edited.set(edited.get().wrapping_add(1)));
-    }
-    out
-}
-
-/// `planner`'s song as its arrangement left it, kept from now on.
-fn song_as_left(planner: &crate::song_model::Planner) -> Left {
-    LEFT.with(|all| {
-        let mut all = all.borrow_mut();
-        all.retain(|(song, _)| song.strong_count() > 0);
-        if let Some((_, raw)) = all
-            .iter()
-            .find(|(song, _)| std::ptr::eq(song.as_ptr(), std::sync::Arc::as_ptr(&planner.raw)))
-        {
-            return Rc::clone(raw);
-        }
-        let raw = Rc::new(RefCell::new((*planner.raw).clone()));
-        all.push((std::sync::Arc::downgrade(&planner.raw), Rc::clone(&raw)));
-        raw
-    })
-}
-
-/// The rows to open `planner`'s arrangement with, when it has been shown
-/// before.
-///
-/// Planned again from the song as it was left, with the window's folds as
-/// they are now. `None` the first time — the rows the song opened with
-/// are those.
-#[must_use]
-pub fn rows_as_left(
-    planner: &crate::song_model::Planner,
-) -> Option<(daw_ui::studio::ProjectRef, daw_ui::studio::RowsRef)> {
-    let raw = LEFT.with(|all| {
-        all.borrow()
-            .iter()
-            .find(|(song, _)| std::ptr::eq(song.as_ptr(), std::sync::Arc::as_ptr(&planner.raw)))
-            .map(|(_, raw)| Rc::clone(raw))
-    })?;
-    let as_left = planner.plan(&raw.borrow());
-    Some(as_left)
-}
-
 /// The MIDI items of `fresh` whose notes `previews` has not read.
 fn unread_midi(
     fresh: &daw_ui::studio::project::Project,
@@ -5037,7 +4959,7 @@ impl Widget for ArrangementWidget {
             // paint re-cuts the rows for them.
             || self.previews.generation() != self.previews_seen
             || crate::folds::generation() != self.folds_seen
-            || EDITED.with(Cell::get) != self.edited_seen
+            || crate::song_left::edited() != self.edited_seen
     }
 
     fn handle_event(&mut self, event: &UiEvent) {
@@ -5369,7 +5291,7 @@ impl ArrangementWidget {
         // rows planned again, and the mixer given them.
         // Or the song changed from outside (Mix mode's guide mute).
         let folds = crate::folds::generation();
-        let edited = EDITED.with(Cell::get);
+        let edited = crate::song_left::edited();
         if folds != self.folds_seen || edited != self.edited_seen {
             self.folds_seen = folds;
             self.edited_seen = edited;

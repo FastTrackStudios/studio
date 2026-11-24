@@ -2,7 +2,7 @@
 //!
 //! REAPER's mouse behaviour is a table: for each CONTEXT — a media
 //! item, its left edge, a fade, the ruler, the empty arrange area —
-//! and each modifier combination, an action. [`crate::hit`] answers
+//! and each modifier combination, an action. The arrangement's `hit` answers
 //! "what did you touch, and in which context"; this answers "and what
 //! does that do", so the two stay separately configurable: a hit test
 //! is geometry, a mouse map is preference.
@@ -247,4 +247,14 @@ pub fn table() -> Vec<Binding> {
         rows.push(b(C::MediaItemBottomHalf, G::Drag, m, A::CopyItem));
     }
     rows
+}
+
+/// Blitz's modifier keys, as the mouse map reads them.
+#[must_use]
+pub fn mods(from: blitz_traits::events::Modifiers) -> Mods {
+    Mods {
+        shift: from.contains(blitz_traits::events::Modifiers::SHIFT),
+        ctrl: from.contains(blitz_traits::events::Modifiers::CONTROL),
+        alt: from.contains(blitz_traits::events::Modifiers::ALT),
+    }
 }

@@ -468,7 +468,7 @@ pub fn WebDawPanels(
 #[cfg(feature = "web")]
 #[component]
 pub fn WebMixer(hidden: bool) -> Element {
-    use crate::panel::PanelEvent;
+    use crate::panel_input::PanelEvent;
     let links: Links = use_context();
     let touch = use_hook(|| Rc::new(Cell::new(false)));
     touch.set(crate::touch::use_touch());

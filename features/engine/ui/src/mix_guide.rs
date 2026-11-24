@@ -68,7 +68,7 @@ pub fn use_mix_guide(setlist: Signal<crate::setlist::Setlist>, mode: Signal<Mode
         else {
             return;
         };
-        let toggled = crate::widget::edit_song(&planner, |raw| {
+        let toggled = crate::song_left::edit_song(&planner, |raw| {
             let (guid, muted) = guide(&raw.tracks)?;
             let toggle = stints
                 .borrow_mut()

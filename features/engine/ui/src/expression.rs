@@ -810,7 +810,7 @@ impl Expression {
             return self.stack.wheel(&mut self.editor, dx, dy, mods_of(mods));
         }
         let (rx, ry) = self.roll_point(x, y);
-        // The arrangement's wheel (`crate::panel`), so the two read alike:
+        // The arrangement's wheel (the arrangement's `panel`), so the two read alike:
         // a wheel scrolls, Shift scrolls sideways; with `z` held it zooms
         // time, and with Shift the rows. Its units too — pixels, a notch
         // forty — where the editor's own was tuned for a notch of one and

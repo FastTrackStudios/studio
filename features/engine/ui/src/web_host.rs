@@ -27,7 +27,7 @@ use vello::kurbo::Affine;
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::closure::Closure;
 
-use crate::panel::{Button, PanelEvent, WHEEL_LINE};
+use crate::panel_input::{Button, PanelEvent, WHEEL_LINE};
 
 /// What a canvas hosts: something that paints a scene and takes events.
 pub trait Hosted {

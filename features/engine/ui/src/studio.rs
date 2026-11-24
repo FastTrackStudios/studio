@@ -28,7 +28,7 @@ pub const PPS: f64 = 40.0;
 
 pub use crate::song_model::*;
 
-use crate::panel::BAR;
+use crate::panel_input::BAR;
 
 /// The arrangement's queue of edits for the engine, shared with what sits on
 /// the panel beside the widget (the main toolbar). Equal by identity.

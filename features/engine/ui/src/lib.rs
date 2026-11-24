@@ -166,6 +166,7 @@ pub use session_engine::page;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::page;
 pub mod panel;
+pub mod panel_input;
 #[cfg(feature = "native")]
 pub mod patch_list;
 pub mod performer;
@@ -207,6 +208,7 @@ pub use session_engine_client::settings;
 pub mod setup;
 pub mod shell;
 pub mod skin;
+pub mod song_left;
 pub use session_engine_client::song_model;
 pub use session_engine_client::stretch;
 pub mod strip;

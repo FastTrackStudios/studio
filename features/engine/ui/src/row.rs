@@ -44,7 +44,7 @@ pub enum Control {
     /// comp from — or only the one that plays again.
     LaneShow,
     /// The automation button, at the head of row two: what the track can
-    /// automate, to show in lanes ([`crate::automation_menu`]).
+    /// automate, to show in lanes (the arrangement's `automation_menu`).
     Automation,
 }
 
