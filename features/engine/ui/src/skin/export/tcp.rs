@@ -3,7 +3,7 @@
 //! The strip's counterpart: [`crate::row::Row`]'s geometry as expressions
 //! over the row's height `h` (and the host's `row.indent`), and the
 //! painters' controls — `tcp::draw_row`'s recording and
-//! `overlay::control_row`'s live pass — as drawings, every state of each
+//! `tcp_live::control_row`'s live pass — as drawings, every state of each
 //! shown by a binding. The full panel only: the compact panel's second
 //! line is the painters' still.
 //!
@@ -133,7 +133,7 @@ impl Gen<'_> {
             ),
         );
         self.row_two();
-        // ── the live pass (`overlay::control_row`) ──
+        // ── the live pass (`tcp_live::control_row`) ──
         self.tcp_buttons();
         self.tcp_fx_routing_phase(&knob);
         self.tcp_arm(&knob, field_x);

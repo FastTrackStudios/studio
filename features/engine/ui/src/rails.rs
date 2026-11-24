@@ -623,7 +623,7 @@ pub fn main_toolbar(
         SIDE,
         TOP,
         SIDE + crate::palette::TCP_WIDTH,
-        TOP + crate::ruler::ruler_h(),
+        TOP + crate::ruler_layout::ruler_h(),
     );
     fill(painter, palette.tcp_gutter, corner);
     let each = corner.width() / crate::num::coord(modes.len());

@@ -9,7 +9,7 @@
 
 use std::sync::Mutex;
 
-use crate::ruler::GridRegion;
+use crate::ruler_layout::GridRegion;
 
 /// The grid in force: a default, and the stretches that differ, in
 /// seconds.

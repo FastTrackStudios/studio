@@ -37,7 +37,7 @@ fn words_of(session: &StudioSession) -> Words {
     let regions = project
         .sections
         .iter()
-        .filter(|r| r.lane == crate::ruler::SECTIONS_ROW as u32)
+        .filter(|r| r.lane == crate::ruler_layout::SECTIONS_ROW as u32)
         .map(|r| ColoredSpan {
             span: SectionSpan {
                 name: r.name.clone(),
@@ -69,7 +69,7 @@ pub fn summary(session: &StudioSession) -> (usize, usize, usize) {
     let sections = project
         .sections
         .iter()
-        .filter(|r| r.lane == crate::ruler::SECTIONS_ROW as u32)
+        .filter(|r| r.lane == crate::ruler_layout::SECTIONS_ROW as u32)
         .count();
     (lines, sections, project.sections.len())
 }

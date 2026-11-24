@@ -171,25 +171,4 @@ pub fn on(
 /// miss.
 pub(super) const MARKER_GRIP: f64 = 6.0;
 
-/// Which lane makes markers, by the FTS convention.
-///
-/// The third: SONG, SECTIONS, MARKS. A press in it creates a marker;
-/// a press in either of the others creates a region.
-pub const MARKS_ROW: usize = 2;
-
-/// Which lane makes a song section.
-///
-/// The second. A region here IS a section — that is the rule the song
-/// model reads the arrangement by, so it is the one this file has to
-/// agree with.
-pub const SECTIONS_ROW: usize = 1;
-
-/// The lane number to store for a row.
-///
-/// The inverse of `lane_row`: rows and lanes both count from 0.
-#[must_use]
-pub const fn lane_of(row: usize) -> u32 {
-    row as u32
-}
-
 // ─── Counting through tempo and signature changes ───────────────────

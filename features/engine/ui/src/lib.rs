@@ -57,6 +57,7 @@ pub use session_engine_client::folds;
 pub mod fps;
 pub mod frames;
 pub mod gesture;
+pub mod ghost_paint;
 pub mod ghosts;
 /// What the window's GPU device asks for: buffers as large as the adapter has.
 #[cfg(feature = "native")]
@@ -197,6 +198,7 @@ pub use session_engine::render_ahead;
 pub use session_engine_client::render_ahead;
 pub mod row;
 pub mod ruler;
+pub mod ruler_layout;
 #[cfg(feature = "engine")]
 pub use session_engine::setlist;
 #[cfg(not(feature = "engine"))]
@@ -215,6 +217,7 @@ pub use session_engine::take_rank;
 pub mod take_rating;
 pub mod take_window;
 pub mod tcp;
+pub mod tcp_live;
 #[cfg(test)]
 pub(crate) mod test_song;
 pub mod text;
@@ -232,6 +235,7 @@ pub use session_engine_client::wave_detail;
 pub use session_engine_client::web_audio;
 pub mod press;
 pub mod view_actions;
+pub mod viewport;
 #[cfg(feature = "web")]
 pub mod web_host;
 pub mod which_key;

@@ -76,6 +76,14 @@ impl Hit {
     }
 }
 
+/// What the pointer did, over a [`Hit`].
+pub type Event = timeline::input::ClickEvent<Hit>;
+
+/// The pointer's state between events, over [`Hit`]s. Pass
+/// [`crate::gesture::FINE`] as `moved`'s scale while the fine modifier
+/// is held.
+pub type Gestures = timeline::input::Clicks<Hit>;
+
 /// What the pointer is over in the arrangement.
 #[must_use]
 pub fn arrangement(

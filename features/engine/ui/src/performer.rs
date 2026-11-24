@@ -92,7 +92,7 @@ impl SessionPlayback {
             .project
             .sections
             .iter()
-            .filter(|r| r.lane == crate::ruler::SECTIONS_ROW as u32)
+            .filter(|r| r.lane == crate::ruler_layout::SECTIONS_ROW as u32)
             .collect();
         parts.sort_by(|a, b| a.start.total_cmp(&b.start));
         parts
@@ -114,9 +114,9 @@ impl PlaybackModel for SessionPlayback {
         let key = crate::palette::key_at(&self.session.project, r.at)
             .map(|k| crate::transport_bar::short_key(&k))
             .unwrap_or_default();
-        let (bar, beat) = crate::ruler::song_bar_beat(
+        let (bar, beat) = crate::ruler_layout::song_bar_beat(
             &self.session.project.tempo,
-            crate::ruler::song_start_of(&self.session.project),
+            crate::ruler_layout::song_start_of(&self.session.project),
             r.at,
         );
         let bpm = if r.bpm.is_finite() && r.bpm > 0.0 {

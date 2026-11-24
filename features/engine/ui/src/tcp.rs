@@ -594,7 +594,7 @@ pub fn rail_layout(font: &Font, track: &Track, indent: f64, y: f64, h: f64) -> R
 }
 
 // Mute and solo are ONE SIZE on every track, drawn in the live pass —
-// see `overlay::panel_controls`. The size is fixed rather than scaled
+// see `tcp_live::panel_controls`. The size is fixed rather than scaled
 // to the row because a control that is a different size on every track
 // cannot be built on: there is no shared hit target, and nothing else
 // can address "the mute column" when the mute column is a different
@@ -655,7 +655,7 @@ fn row_one(
     // hittable and the volume and pan indicators are what a collapsed
     // row is being read for.
     // The record arm is live — lit when armed, and that changes on a
-    // click. See `overlay::panel_controls`.
+    // click. See `tcp_live::panel_controls`.
 
     // The name, between the arm and the knob, cut short rather than
     // wrapped or shrunk — REAPER truncates here too. The type shrinks
@@ -690,7 +690,7 @@ fn row_one(
 
 // Volume and pan are live: their whole job is to show a value, and a
 // recorded knob is one frozen at whatever the project opened with. They
-// are drawn per frame in `overlay::panel_controls`, in whichever form
+// are drawn per frame in `tcp_live::panel_controls`, in whichever form
 // the row's height calls for — a knob while there is a circle big
 // enough to read an angle off, a bar below that. Both forms sit in the
 // same two columns, so a row can change which it shows without anything

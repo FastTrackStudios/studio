@@ -34,29 +34,13 @@ mod chords;
 mod hit;
 mod lanes;
 mod tempo;
-mod timeline;
 
+pub use crate::ruler_layout::*;
 pub use bars::*;
 pub use chords::*;
 pub use hit::*;
 pub use lanes::*;
 pub use tempo::*;
-pub use timeline::*;
-
-/// The bar strip's height. REAPER's, measured.
-pub const BARS_H: f64 = 28.0;
-
-/// One ruler lane's height.
-pub const LANE_H: f64 = 15.0;
-
-/// How many ruler lanes there are, over the bars.
-///
-/// The FTS convention (REAPER 7.62's ruler lanes, numbered from 0 as
-/// REAPER's API and the daw service do): lane 0 is the SONG, one region
-/// over the whole song; lane 1 the SECTIONS, a region per verse and
-/// chorus; lane 2 the MARKS — SONGSTART, SONGEND and the like. Always three, so a session with fewer still lays its rows out
-/// where every other session does.
-pub const LANES: usize = 3;
 
 /// How wide the strip of lane names is, against the ruler's left edge:
 /// the track panel's mute/solo column, so the names line up over the
@@ -86,129 +70,6 @@ fn label(
 
 /// What the lanes are called, top to bottom.
 pub const LANE_NAMES: [&str; LANES] = ["SONG", "SECTIONS", "MARKS"];
-
-/// How tall the tempo strip is, above the bar numbers.
-///
-/// Its own row rather than a flag among the marks: a tempo change is
-/// not a place in the song, it is a change to what every number below
-/// it MEANS. Putting it in the marks lane would file it with the things
-/// it reinterprets.
-pub const TEMPO_H: f64 = 13.0;
-
-/// The CHORDS lane's height: the song's key changes and its chords,
-/// read off the Keyflow folder's KEY and CHORD tracks. A lane like the
-/// others, so the ruler reads as one set of rows; the chords are lettered
-/// smaller to fit it.
-pub const CHORD_H: f64 = LANE_H;
-
-/// Whether the ruler carries the CHORDS lane: unset, off, on.
-static CHORDS: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
-
-/// Whether the ruler shows the CHORDS lane. On unless
-/// `FTS_RULER_CHORDS=0` — it is where a prepared session keeps its key
-/// and chords once the Keyflow folder is out of the panel.
-///
-/// Process-wide rather than per view because the ruler's height is: the
-/// hit tests, the lanes' offset and the corner beside the ruler all ask
-/// it, and a height that two of them disagreed about would put every
-/// click one lane off.
-#[must_use]
-pub fn chords_shown() -> bool {
-    use std::sync::atomic::Ordering;
-    match CHORDS.load(Ordering::Relaxed) {
-        1 => false,
-        2 => true,
-        _ => {
-            let on = std::env::var("FTS_RULER_CHORDS").map_or(true, |v| v != "0");
-            CHORDS.store(if on { 2 } else { 1 }, Ordering::Relaxed);
-            on
-        }
-    }
-}
-
-/// Show or hide the CHORDS lane.
-pub fn show_chords(on: bool) {
-    CHORDS.store(if on { 2 } else { 1 }, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// The CHORDS lane's height as the ruler has it now: nothing when it is
-/// hidden.
-#[must_use]
-pub fn chords_h() -> f64 {
-    if chords_shown() { CHORD_H } else { 0.0 }
-}
-
-/// How far down the ruler a lane row starts.
-///
-/// SONG and SECTIONS stack from the top; the CHORDS lane, when shown,
-/// sits under SECTIONS and pushes MARKS below it. The chords follow the
-/// sections they are the harmony of, and the marks — the sparsest lane —
-/// sit nearest the bars, where a SONGSTART flag is read against its bar.
-#[must_use]
-pub fn row_top(row: usize) -> f64 {
-    let above = (0..row).filter(|&r| lane_shown(r)).count();
-    let lanes = LANE_H * crate::num::coord(above);
-    if row >= MARKS_ROW {
-        lanes + chords_h()
-    } else {
-        lanes
-    }
-}
-
-/// The whole top strip: the lanes, the chords, then the tempo and the
-/// bars under them.
-#[must_use]
-pub fn ruler_h() -> f64 {
-    let lanes = (0..LANES).filter(|&r| lane_shown(r)).count();
-    bars_h() + tempo_h() + LANE_H * crate::num::coord(lanes) + chords_h()
-}
-
-/// The bar numbers' row on a slim ruler: small numbers, a short tick.
-pub const SLIM_BARS_H: f64 = 13.0;
-
-/// The bar numbers' row as the ruler has it now.
-#[must_use]
-pub fn bars_h() -> f64 {
-    if slim() { SLIM_BARS_H } else { BARS_H }
-}
-
-/// The slim ruler, for a touchscreen: the sections and small bar numbers
-/// (the chords on request), and not the song band, the marks or the
-/// tempo. A finger's ruler
-/// is drawn a third bigger, and six lanes of it took a sixth of an iPad
-/// from the tracks; Logic's is one line.
-static SLIM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Make the ruler slim, or full. A slim ruler starts without its CHORDS
-/// lane — the sections and the bars are the whole of it — unless the
-/// chords were asked for (the toolbar's switch, `FTS_RULER_CHORDS=1`).
-pub fn set_slim(on: bool) {
-    use std::sync::atomic::Ordering;
-    SLIM.store(on, Ordering::Relaxed);
-    if on && CHORDS.load(Ordering::Relaxed) == 0 {
-        let asked = std::env::var("FTS_RULER_CHORDS").is_ok_and(|v| v == "1");
-        CHORDS.store(if asked { 2 } else { 1 }, Ordering::Relaxed);
-    }
-}
-
-/// Whether the ruler is slim ([`set_slim`]).
-#[must_use]
-pub fn slim() -> bool {
-    SLIM.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// Whether a lane row is on the ruler: every one, or on a slim ruler the
-/// sections alone.
-#[must_use]
-pub fn lane_shown(row: usize) -> bool {
-    !slim() || row == SECTIONS_ROW
-}
-
-/// The TEMPO lane's height: nothing on a slim ruler.
-#[must_use]
-pub fn tempo_h() -> f64 {
-    if slim() { 0.0 } else { TEMPO_H }
-}
 
 /// As much of a name as fits a width, or nothing.
 fn fit<'a>(font: &Font, name: &'a str, size: f32, room: f64) -> Option<&'a str> {
@@ -281,10 +142,6 @@ fn line_every(
         }
     }
 }
-
-/// A stretch on a grid of its own (a Grid region of the edited track's):
-/// `(start, end, division)`, seconds and a whole note's division.
-pub type GridRegion = (f64, f64, u32);
 
 thread_local! {
     /// The grid regions the ruler and the grid draw by this frame.

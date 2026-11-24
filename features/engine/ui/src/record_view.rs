@@ -281,7 +281,7 @@ fn SectionBar(height: String) -> Element {
     } else {
         &session.project.0.tempo
     };
-    let starts: Vec<(u32, f64)> = crate::ruler::Timeline::new(tempo)
+    let starts: Vec<(u32, f64)> = crate::ruler_layout::Timeline::new(tempo)
         .beats(to, 20_000)
         .into_iter()
         .filter(|b| b.beat == 1 && b.at >= from - 1e-6 && b.at < to - 1e-6)

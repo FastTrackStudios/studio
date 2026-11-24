@@ -484,56 +484,5 @@ pub fn subdivisions(beat_px: f64) -> Option<u32> {
         .find(|n| beat_px / f64::from(*n) >= SUB_ROOM)
 }
 
-/// A measure counted from the song's: `bar_one` (a measure counted from
-/// the project's start) is bar 1, the ones after it 2, 3 …, the ones
-/// before it −1, −2 … — the count-in counting down to the song, with no
-/// bar 0, as REAPER numbers a measure offset.
-#[must_use]
-pub fn from_song(measure: u32, bar_one: u32) -> i64 {
-    let shown = i64::from(measure) - i64::from(bar_one) + 1;
-    if shown <= 0 { shown - 1 } else { shown }
-}
-
-/// Where `project`'s song starts: its `SONGSTART` marker, the ruler's
-/// bar 1.
-#[must_use]
-pub fn song_start_of(project: &daw_ui::studio::project::Project) -> Option<f64> {
-    project
-        .markers
-        .iter()
-        .find(|m| m.name == "SONGSTART")
-        .map(|m| m.at)
-}
-
-/// The bar and beat at `at`, counted from the song as the ruler counts
-/// them ([`from_song`]).
-#[must_use]
-pub fn song_bar_beat(
-    tempo: &[daw_ui::studio::project::TempoChange],
-    song_start: Option<f64>,
-    at: f64,
-) -> (i64, u32) {
-    let beats = Timeline::new(tempo).beats(at.max(song_start.unwrap_or(0.0)) + 1e-6, MAX_BEATS);
-    let bar_one = song_start
-        .and_then(|start| beats.iter().rev().find(|b| b.at <= start + 1e-6))
-        .map_or(1, |b| b.measure);
-    beats
-        .iter()
-        .rev()
-        .find(|b| b.at <= at + 1e-6)
-        .map_or((1, 1), |b| (from_song(b.measure, bar_one), b.beat))
-}
-
-/// How many beats a ruler will count before it gives up.
-///
-/// A tempo map cannot be trusted to be sane — a zero or a negative bpm
-/// would make the walk stand still — and a ruler is not the place to
-/// find that out by hanging.
-///
-/// Well above any real session: an hour of sixteenth notes at 200 bpm
-/// is under fifty thousand. The guard above is what keeps an absurd
-/// zoom from asking for them at all.
-pub(super) const MAX_BEATS: usize = 100_000;
-
 /// How many bars between numbers once a beat is too fine to label.
 pub(super) const BAR_STEPS: [i32; 8] = [1, 2, 4, 8, 16, 32, 64, 128];

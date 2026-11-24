@@ -807,7 +807,7 @@ pub struct ArrangementWidget {
     /// decides which tier of controls a row shows. A value changing —
     /// somebody turning a knob — needs the same, and the hook for that
     /// is [`ArrangementWidget::values_changed`].
-    controls: Option<(crate::overlay::Controls, f64)>,
+    controls: Option<(crate::tcp_live::Controls, f64)>,
     /// Last frame's vertical zoom, so this one can tell whether a
     /// gesture is still in flight.
     ///
@@ -5246,7 +5246,7 @@ impl ArrangementWidget {
                 controls.replay(out, &self.scene, view, at);
             }
             None => {
-                crate::overlay::panel_controls(
+                crate::tcp_live::panel_controls(
                     out,
                     &self.palette,
                     &self.font,
@@ -6172,7 +6172,13 @@ impl ArrangementWidget {
             crate::view_client::show_edit(self.editor.cursor, Some(scope));
         }
         crate::ghosts::local_selection(self.editor.selected.as_set(), &self.rows);
-        crate::ghosts::local_shown(&self.rows, &self.scene);
+        crate::ghosts::local_shown(&self.rows, || {
+            self.scene
+                .item_boxes()
+                .iter()
+                .map(|i| i.guid.clone())
+                .collect()
+        });
         // The engine changed the session under us (a toolbar insert, an
         // edited chart): read it back before drawing it.
         if let Some(scope) = crate::song_model::take_resync_scope() {
@@ -6573,7 +6579,7 @@ impl ArrangementWidget {
             .as_ref()
             .is_none_or(|(_, zoom)| (zoom - view.zoom_y).abs() >= f64::EPSILON);
         if settled && stale {
-            let recorded = crate::overlay::record_controls(
+            let recorded = crate::tcp_live::record_controls(
                 &self.palette,
                 &self.font,
                 &self.scene,
@@ -6607,7 +6613,7 @@ impl ArrangementWidget {
                 // The recording is at rest, so the row the pointer is
                 // on is drawn again over it. One row of forty, and only
                 // while the pointer is on one.
-                crate::overlay::hovered_row(
+                crate::tcp_live::hovered_row(
                     &mut out,
                     &self.palette,
                     &self.font,
@@ -6621,7 +6627,7 @@ impl ArrangementWidget {
                 );
                 counts
             }
-            None => crate::overlay::panel_controls(
+            None => crate::tcp_live::panel_controls(
                 &mut out,
                 &self.palette,
                 &self.font,
@@ -6636,7 +6642,7 @@ impl ArrangementWidget {
         };
         // Their mute and solo, lit, as parts the engine's values show.
         if self.buttons_apart {
-            self.value_parts = crate::overlay::panel_buttons(
+            self.value_parts = crate::tcp_live::panel_buttons(
                 &self.palette,
                 &self.font,
                 &self.scene,
@@ -6665,7 +6671,7 @@ impl ArrangementWidget {
                 }
                 None => &mut out,
             };
-            let lit = crate::overlay::row_meters(
+            let lit = crate::tcp_live::row_meters(
                 into,
                 &self.palette,
                 &self.scene,
@@ -6756,7 +6762,7 @@ impl ArrangementWidget {
         // cursors and mouse. Over your cursors so a peer on the same spot
         // is still seen, but drawn thin and pale so theirs never reads as
         // yours.
-        crate::ghosts::paint(
+        crate::ghost_paint::paint(
             &mut out,
             &self.palette,
             &self.font,

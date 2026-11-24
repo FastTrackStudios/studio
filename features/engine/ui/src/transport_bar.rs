@@ -91,9 +91,9 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
     // Open above the bottom bar's buttons, below a small bar's.
     let menu_side = if big { "bottom:100%;" } else { "top:100%;" };
     // Counted from the song, as the ruler counts.
-    let (bar, beat) = crate::ruler::song_bar_beat(
+    let (bar, beat) = crate::ruler_layout::song_bar_beat(
         &session.project.tempo,
-        crate::ruler::song_start_of(&session.project),
+        crate::ruler_layout::song_start_of(&session.project),
         r.at,
     );
     let key = crate::palette::key_at(&session.project, r.at)

@@ -44,7 +44,7 @@ impl Song {
         let percent = |t: f64| ((t - start) / span * 100.0).clamp(0.0, 100.0);
         let mut parts: Vec<_> = regions
             .iter()
-            .filter(|r| r.lane == crate::ruler::SECTIONS_ROW as u32)
+            .filter(|r| r.lane == crate::ruler_layout::SECTIONS_ROW as u32)
             .collect();
         parts.sort_by(|a, b| a.start.total_cmp(&b.start));
         Some(Self {

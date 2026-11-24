@@ -14,8 +14,6 @@
 //! movement down rather than changing what is being dragged, which is
 //! REAPER's behaviour and everyone else's.
 
-use crate::hit::Hit;
-
 pub use timeline::input::{DOUBLE, SLOP};
 
 /// How much a drag is scaled by while the fine modifier is held.
@@ -24,13 +22,6 @@ pub use timeline::input::{DOUBLE, SLOP};
 /// of movement — which sounds absurd until you are matching a level by
 /// ear, where the useful range is about two dB.
 pub const FINE: f64 = 0.25;
-
-/// What the pointer did, over a mixer [`Hit`].
-pub type Event = timeline::input::ClickEvent<Hit>;
-
-/// The pointer's state between events, over mixer [`Hit`]s. Pass
-/// [`FINE`] as `moved`'s scale while the fine modifier is held.
-pub type Gestures = timeline::input::Clicks<Hit>;
 
 /// How far a vertical drag moves a control, as a fraction of its range.
 ///
