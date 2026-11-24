@@ -82,6 +82,10 @@ ignition-pane = { workspace = true, optional = true }
 studio-view-link = { workspace = true, optional = true }
 mixer-view = { workspace = true, optional = true, features = ["native"] }
 daw-view-kit = { workspace = true, optional = true, features = ["native"] }
+# The views' theme packs: the spec, installs from a link, the check
+# (`THEME_*`, src/themes.rs); the arrangement's declaration of what it uses.
+daw-theme = { workspace = true, optional = true }
+arrangement-view = { workspace = true, optional = true, features = ["native"] }
 session-engine-client = { workspace = true, optional = true, features = ["native"] }
 # The window's modes (`SESSION_MODE`, this client's own).
 session = { workspace = true, optional = true }
@@ -136,6 +140,8 @@ native = [
     "dep:ignition-pane",
     "dep:studio-view-link",
     "dep:daw-view-kit",
+    "dep:daw-theme",
+    "dep:arrangement-view",
     "dep:mixer-view",
     "dep:session-engine-client",
     "dep:session",

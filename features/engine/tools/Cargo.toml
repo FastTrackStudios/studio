@@ -4,12 +4,17 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-description = "The DAW views' headless tools: `bench` (the arrangement's and the mixer's frame costs) and `blitz_shot` (the app's own tree, rendered to a PNG or a window), over arrangement-view and mixer-view."
+description = "The DAW views' headless tools: the golden session and the theme gallery (`daw-view-tools gallery`), `bench` (the arrangement's and the mixer's frame costs) and `blitz_shot` (the app's own tree, rendered to a PNG or a window), over arrangement-view and mixer-view."
 # Tools, not a library anyone depends on: an edit to either view rebuilds
 # these, and nothing else waits on them.
 publish = false
 
 [dependencies]
+daw-theme = { workspace = true }
+anyrender_vello_cpu = { workspace = true }
+timeline = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
 daw-view-kit = { workspace = true, features = ["native", "engine"] }
 arrangement-view = { workspace = true, features = ["native", "engine"] }
 mixer-view = { workspace = true, features = ["native", "engine"] }
@@ -45,6 +50,13 @@ pprof = { workspace = true, features = ["flamegraph"], optional = true }
 
 [features]
 profile = ["dep:pprof", "daw-view-kit/profile"]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "daw-view-tools"
+path = "src/bin/daw-view-tools.rs"
 
 [[bin]]
 name = "bench"

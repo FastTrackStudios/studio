@@ -23,9 +23,8 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
-// A file's mtime is std's `SystemTime`; the clock is `web_time`'s, which a
-// browser has.
-use std::time::{Duration, SystemTime};
+// The clock is `web_time`'s, which a browser has.
+use std::time::Duration;
 use web_time::Instant;
 
 use daw_proto::Track;
@@ -36,6 +35,7 @@ use crate::palette::Palette;
 
 pub mod canvas;
 pub mod export;
+pub mod uses;
 
 /// The role a theme draws a mixer strip as.
 pub const STRIP: &str = "mcp.strip";
@@ -53,115 +53,15 @@ pub const STEP: &str = "mcp.step";
 /// How often [`poll`] looks at the file.
 const POLL: Duration = Duration::from_millis(250);
 
-/// What a strip theme can bind, in slot order.
+/// What a theme can bind, in slot order: the spec's fields
+/// (`daw_theme::spec::FIELDS`).
 ///
 /// Live, because the mixer draws them every frame rather than re-record
 /// for them: the values the overlay already draws live (mute, solo, arm,
 /// the fader, the meter, which control the pointer is on).
 #[must_use]
 pub fn schema() -> Schema {
-    Schema::new()
-        .field("track.name")
-        .field("track.label")
-        .field("track.number")
-        .field("track.color")
-        .field("track.has_color")
-        .field("track.selected")
-        .field("track.folder")
-        .field("track.collapsed")
-        .field("track.depth")
-        .field("track.input")
-        .field("track.ground")
-        .field("track.edge")
-        .field("track.has_edge")
-        .field("track.tint")
-        .field("track.band")
-        .field("track.label_size")
-        .field("track.parent_send")
-        .field("ui.rack")
-        .field("folder.tint")
-        .field("folder.level")
-        .field("button.label")
-        .field("button.label_size")
-        .field("button.on")
-        .field("button.hover")
-        .field("button.pressed")
-        .field("button.has_icon")
-        .field("button.enabled")
-        .field("button.readout")
-        .field("key.black")
-        .field("key.piano")
-        .field("key.label")
-        .field("key.labelled")
-        .field("group.label")
-        .field("lane.name")
-        .field("lane.active")
-        .field("lane.reference")
-        .field("lane.tinted")
-        .field("lane.tint")
-        .field("tick.bar")
-        .field("tick.label")
-        .field("tick.labelled")
-        .field("marker.label")
-        .field("strip.label")
-        .field("menu.label")
-        .field("menu.shortcut")
-        .field("menu.enabled")
-        .field("menu.hover")
-        .field("menu.rule")
-        .field("unit.name")
-        .field("unit.value")
-        .field("unit.bypassed")
-        .field("unit.glyph")
-        .field("unit.expands")
-        .field("unit.zoom_lit")
-        .field("phase.name")
-        .field("phase.tint")
-        .field("phase.blank")
-        .field("phase.shut")
-        .field("phase.held")
-        .field("macro.name")
-        .field("macro.value")
-        .field("macro.says")
-        .field("macro.tint")
-        .field("macro.held")
-        .field("row.indent")
-        .field("row.number")
-        .field("row.number_size")
-        .field("row.number_x")
-        .field("row.number_baseline")
-        .field("row.has_number")
-        .field("row.icon")
-        .field("row.icon_x")
-        .field("row.icon_y")
-        .field("row.icon_size")
-        .field("row.name")
-        .field("row.name_size")
-        .field("row.input")
-        .layout("mixer.h")
-        .layout("ui.mixing")
-        .layout("ui.recording")
-        .live("track.mute")
-        .live("track.solo")
-        .live("track.armed")
-        .live("track.monitor")
-        .live("track.phase")
-        .live("track.fader")
-        .live("track.volume")
-        .live("track.pan")
-        .live("track.fx")
-        .live("track.sends")
-        .live("track.receives")
-        .live("meter.left")
-        .live("meter.right")
-        .live("meter.hold_left")
-        .live("meter.hold_right")
-        .live("meter.clip")
-        .live("ui.hover")
-        .live("ui.pressed")
-        .live("meter.peak")
-        .live("track.volume_label")
-        .live("track.volume_label_w")
+    daw_theme::spec::schema()
 }
 
 /// One strip's values, in [`schema`]'s order.
@@ -486,12 +386,22 @@ pub fn control(name: &str) -> Option<Control> {
 
 // ── the loaded theme ──────────────────────────────────────────────────
 
+/// Which pack and theme is loaded, as the actions report it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Chosen {
+    /// The pack's name; `None` for layers given by hand (`FTS_THEME`).
+    pub pack: Option<String>,
+    /// The theme's name in its pack.
+    pub theme: Option<String>,
+    pub mode: Option<String>,
+    /// The layers, base first.
+    pub layers: Vec<PathBuf>,
+}
+
 struct Loaded {
-    /// The layers as given, base first: files and folders.
-    paths: Vec<PathBuf>,
-    mode: Option<String>,
-    /// Every file they came to and when it last changed.
-    stamp: Vec<(PathBuf, Option<SystemTime>)>,
+    chosen: Chosen,
+    /// Every file the layers came to and when it last changed.
+    watch: daw_theme::Watch,
     checked: Instant,
     /// The last error reported, so a broken file is reported once.
     reported: Option<String>,
@@ -539,66 +449,187 @@ pub fn loaded() -> Option<Arc<Theme>> {
     THEME.with(|t| t.read().unwrap_or_else(PoisonError::into_inner).clone())
 }
 
+/// Which pack and theme is loaded; `None` for the built-in look.
+#[must_use]
+pub fn chosen() -> Option<Chosen> {
+    with_source(|s| s.as_ref().map(|l| l.chosen.clone()))
+}
+
+/// Each colour of the [`Palette`] the painters draw with, and the spec's
+/// token that sets it (`daw_theme::spec::TOKENS`).
+pub const PALETTE: &[(&str, &str)] = &[
+    ("surface", "arrange.ground"),
+    ("row_a", "arrange.row"),
+    ("row_b", "arrange.row_alt"),
+    ("divider", "arrange.divider"),
+    ("grid", "grid.bar"),
+    ("grid_beat", "grid.beat"),
+    ("grid_sub", "grid.sub"),
+    ("ruler_bg", "ruler.ground"),
+    ("ruler_fg", "ruler.ink"),
+    ("ruler_fg2", "ruler.ink_dim"),
+    ("item_edge", "clip.edge"),
+    ("text", "text"),
+    ("text_dim", "text.dim"),
+    ("text_faint", "text.faint"),
+    ("accent", "accent"),
+    ("mute", "mute"),
+    ("solo", "solo"),
+    ("rec", "rec"),
+    ("meter_safe", "meter.safe"),
+    ("meter_warn", "meter.warn"),
+    ("pan", "pan"),
+    ("meter_danger", "meter.danger"),
+    ("tcp_tint", "tcp.tint"),
+    ("tcp_gutter", "rail.ground"),
+    ("tcp_column", "tcp.column"),
+    ("tcp_rule", "rail.rule"),
+    ("tcp_field", "field"),
+    ("tcp_button", "rail.button"),
+    ("tcp_combo", "combo"),
+    ("tcp_meter_well", "rack.well"),
+    ("playhead", "playhead"),
+    ("edit_cursor", "cursor.edit"),
+];
+
+/// Each colour of the control art's palette (`palette.chrome`), and its
+/// token.
+pub const CHROME: &[(&str, &str)] = &[
+    ("hardware", "hardware"),
+    ("hardware_edge", "hardware.edge"),
+    ("hardware_mark", "hardware.mark"),
+    ("surface", "surface"),
+    ("surface_raised", "surface.raised"),
+    ("surface_sunken", "surface.sunken"),
+    ("border", "border"),
+    ("text", "text"),
+    ("text_dim", "text.dim"),
+    ("text_faint", "text.faint"),
+    ("accent", "accent"),
+    ("selected", "selected"),
+];
+
+/// The palette's numbers and lists, and their tokens: how much a track's
+/// colour tints its row, how opaque a clip is, the clip palette.
+pub const PALETTE_VALUES: &[(&str, &str)] = &[
+    ("track_tint", "tint.strength"),
+    ("clip_alpha", "clip.alpha"),
+    ("clips", "clip.<n>"),
+];
+
+/// The clip palette's tokens, in order.
+pub const CLIPS: [&str; 16] = [
+    "clip.0", "clip.1", "clip.2", "clip.3", "clip.4", "clip.5", "clip.6", "clip.7", "clip.8",
+    "clip.9", "clip.10", "clip.11", "clip.12", "clip.13", "clip.14", "clip.15",
+];
+
+/// The [`Palette`] colour named `field`.
+fn palette_field<'a>(p: &'a mut Palette, field: &str) -> Option<&'a mut vello::peniko::Color> {
+    Some(match field {
+        "surface" => &mut p.surface,
+        "row_a" => &mut p.row_a,
+        "row_b" => &mut p.row_b,
+        "divider" => &mut p.divider,
+        "grid" => &mut p.grid,
+        "grid_beat" => &mut p.grid_beat,
+        "grid_sub" => &mut p.grid_sub,
+        "ruler_bg" => &mut p.ruler_bg,
+        "ruler_fg" => &mut p.ruler_fg,
+        "ruler_fg2" => &mut p.ruler_fg2,
+        "item_edge" => &mut p.item_edge,
+        "text" => &mut p.text,
+        "text_dim" => &mut p.text_dim,
+        "text_faint" => &mut p.text_faint,
+        "accent" => &mut p.accent,
+        "mute" => &mut p.mute,
+        "solo" => &mut p.solo,
+        "rec" => &mut p.rec,
+        "meter_safe" => &mut p.meter_safe,
+        "meter_warn" => &mut p.meter_warn,
+        "pan" => &mut p.pan,
+        "meter_danger" => &mut p.meter_danger,
+        "tcp_tint" => &mut p.tcp_tint,
+        "tcp_gutter" => &mut p.tcp_gutter,
+        "tcp_column" => &mut p.tcp_column,
+        "tcp_rule" => &mut p.tcp_rule,
+        "tcp_field" => &mut p.tcp_field,
+        "tcp_button" => &mut p.tcp_button,
+        "tcp_combo" => &mut p.tcp_combo,
+        "tcp_meter_well" => &mut p.tcp_meter_well,
+        "playhead" => &mut p.playhead,
+        "edit_cursor" => &mut p.edit_cursor,
+        _ => return None,
+    })
+}
+
+/// The art palette's colour named `field`.
+fn chrome_field<'a>(
+    c: &'a mut daw_ui::theme::Chrome,
+    field: &str,
+) -> Option<&'a mut daw_ui::theme::Color> {
+    Some(match field {
+        "hardware" => &mut c.hardware,
+        "hardware_edge" => &mut c.hardware_edge,
+        "hardware_mark" => &mut c.hardware_mark,
+        "surface" => &mut c.surface,
+        "surface_raised" => &mut c.surface_raised,
+        "surface_sunken" => &mut c.surface_sunken,
+        "border" => &mut c.border,
+        "text" => &mut c.text,
+        "text_dim" => &mut c.text_dim,
+        "text_faint" => &mut c.text_faint,
+        "accent" => &mut c.accent,
+        "selected" => &mut c.selected,
+        _ => return None,
+    })
+}
+
 /// `base` recoloured by the loaded theme: every colour the painters draw
-/// with that the theme names as a token is the theme's.
+/// with that the theme sets, through its spec token, is the theme's.
 ///
 /// So what is still painted rather than themed — the rack's curves and
-/// knobs, the live strips — wears the theme's colours as soon as it has
-/// them: a theme that sets `$mute` reddens every mute the painters draw
-/// too, not only the ones it draws itself.
+/// knobs, the live strips, the arrangement — wears the theme's colours as
+/// soon as it has them: a theme that sets `$mute` reddens every mute the
+/// painters draw too, not only the ones it draws itself. A token the theme
+/// leaves out falls back as the spec says, and to `base` (the built-in
+/// look) when nothing it sets reaches it.
 #[must_use]
 pub fn palette(base: &Palette) -> Palette {
-    let mut p = base.clone();
-    let Some(theme) = loaded() else {
-        return p;
-    };
+    palette_from(base, loaded().as_deref())
+}
+
+/// [`palette`] for `theme`, not the loaded one.
+#[must_use]
+pub fn palette_from(base: &Palette, theme: Option<&Theme>) -> Palette {
+    let mut out = base.clone();
+    if theme.is_none() {
+        return out;
+    }
+    let tokens = daw_theme::Tokens::new(theme);
     let colour = |name: &str| {
-        theme.token(name).and_then(Value::color).map(|c| {
+        tokens.color(name).map(|c| {
             let [r, g, b, a] = c.to_rgba8();
             vello::peniko::Color::from_rgba8(r, g, b, a)
         })
     };
-    for (name, field) in [
-        ("text", &mut p.text),
-        ("text.dim", &mut p.text_dim),
-        ("text.faint", &mut p.text_faint),
-        ("accent", &mut p.accent),
-        ("mute", &mut p.mute),
-        ("solo", &mut p.solo),
-        ("rec", &mut p.rec),
-        ("pan", &mut p.pan),
-        ("meter.safe", &mut p.meter_safe),
-        ("meter.warn", &mut p.meter_warn),
-        ("meter.danger", &mut p.meter_danger),
-        ("field", &mut p.tcp_field),
-        ("combo", &mut p.tcp_combo),
-        ("rack.well", &mut p.tcp_meter_well),
-        ("rail.ground", &mut p.tcp_gutter),
-        ("rail.rule", &mut p.tcp_rule),
-        ("rail.button", &mut p.tcp_button),
-    ] {
-        if let Some(c) = colour(name) {
-            *field = c;
+    for (field, token) in PALETTE {
+        if let (Some(c), Some(at)) = (colour(token), palette_field(&mut out, field)) {
+            *at = c;
         }
     }
-    let chrome = &mut p.chrome;
-    for (name, field) in [
-        ("hardware", &mut chrome.hardware),
-        ("hardware.edge", &mut chrome.hardware_edge),
-        ("hardware.mark", &mut chrome.hardware_mark),
-        ("surface", &mut chrome.surface),
-        ("surface.sunken", &mut chrome.surface_sunken),
-        ("border", &mut chrome.border),
-        ("text", &mut chrome.text),
-        ("text.dim", &mut chrome.text_dim),
-        ("text.faint", &mut chrome.text_faint),
-        ("accent", &mut chrome.accent),
-    ] {
-        if let Some(c) = colour(name) {
-            *field = crate::tcp::to_theme(c);
+    for (field, token) in CHROME {
+        if let (Some(c), Some(at)) = (colour(token), chrome_field(&mut out.chrome, field)) {
+            *at = crate::tcp::to_theme(c);
         }
     }
-    p
+    if let Some(v) = tokens.number("tint.strength") {
+        out.track_tint = crate::num::narrow(v.clamp(0.0, 1.0));
+    }
+    if let Some(v) = tokens.number("clip.alpha") {
+        out.clip_alpha = Some(crate::num::narrow(v.clamp(0.0, 1.0)));
+    }
+    out.clips = CLIPS.iter().filter_map(|t| colour(t)).collect();
+    out
 }
 
 /// Values for a view's own fields (`name`, value), every other field
@@ -636,22 +667,54 @@ pub fn set(theme: Option<Arc<Theme>>) {
     VERSION.fetch_add(1, Ordering::AcqRel);
 }
 
+/// Back to the built-in look: no theme, nothing watched.
+pub fn clear() {
+    with_source(|s| *s = None);
+    set(None);
+}
+
 /// Load the theme layered from `paths` (base first; files, or folders of
 /// them) in `mode`, and keep watching them.
 ///
 /// # Errors
 /// Why it did not compile; the previous theme stays.
 pub fn load(paths: Vec<PathBuf>, mode: Option<String>) -> Result<(), String> {
-    let stamp = stamp(&paths);
-    let result = compile(&stamp, mode.as_deref());
-    let loaded = Loaded {
-        paths,
+    load_chosen(Chosen {
+        pack: None,
+        theme: None,
         mode,
-        stamp,
+        layers: paths,
+    })
+}
+
+/// Load theme `theme` of `pack`, and keep watching its files: every view
+/// restyles when they change.
+///
+/// # Errors
+/// Why it did not compile; the previous theme stays.
+pub fn load_pack(pack: &daw_theme::Pack, theme: &daw_theme::ThemeDef) -> Result<(), String> {
+    load_chosen(Chosen {
+        pack: Some(pack.name.clone()),
+        theme: Some(theme.name.clone()),
+        mode: theme.mode.clone(),
+        layers: theme.layers.clone(),
+    })
+}
+
+fn load_chosen(chosen: Chosen) -> Result<(), String> {
+    let watch = daw_theme::Watch::new(chosen.layers.clone());
+    let result = compile(&watch.files(), chosen.mode.as_deref());
+    let loaded = Loaded {
+        chosen,
+        watch,
         checked: Instant::now(),
         reported: result.as_ref().err().cloned(),
     };
-    with_source(|source| *source = Some(loaded));
+    // A theme that does not compile is not chosen: the last good one
+    // stays, and goes on being watched.
+    if result.is_ok() {
+        with_source(|source| *source = Some(loaded));
+    }
     result.map(|theme| set(Some(Arc::new(theme))))
 }
 
@@ -679,12 +742,10 @@ pub fn poll() -> bool {
             return None;
         }
         loaded.checked = Instant::now();
-        let now = stamp(&loaded.paths);
-        if now == loaded.stamp {
+        if !loaded.watch.changed() {
             return None;
         }
-        loaded.stamp = now;
-        match compile(&loaded.stamp, loaded.mode.as_deref()) {
+        match compile(&loaded.watch.files(), loaded.chosen.mode.as_deref()) {
             Ok(theme) => {
                 loaded.reported = None;
                 Some(theme)
@@ -701,59 +762,67 @@ pub fn poll() -> bool {
     fresh.map(|theme| set(Some(Arc::new(theme)))).is_some()
 }
 
-/// Whether `path` is a frame document: `.frame`, or the older `.fm`.
-fn is_theme_file(path: &std::path::Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e == "frame" || e == "fm")
-}
-
-/// The files `paths` come to, in layering order — a folder's by name — each
-/// with when it last changed.
-fn stamp(paths: &[PathBuf]) -> Vec<(PathBuf, Option<SystemTime>)> {
-    let mut files = Vec::new();
-    for path in paths {
-        if path.is_dir() {
-            let mut inside: Vec<PathBuf> = std::fs::read_dir(path)
-                .into_iter()
-                .flatten()
-                .filter_map(Result::ok)
-                .map(|e| e.path())
-                .filter(|p| is_theme_file(p))
-                .collect();
-            inside.sort();
-            files.extend(inside);
-        } else {
-            files.push(path.clone());
-        }
-    }
-    files
-        .into_iter()
-        .map(|f| {
-            let modified = std::fs::metadata(&f).and_then(|m| m.modified()).ok();
-            (f, modified)
-        })
-        .collect()
-}
-
-fn compile(files: &[(PathBuf, Option<SystemTime>)], mode: Option<&str>) -> Result<Theme, String> {
+fn compile(files: &[PathBuf], mode: Option<&str>) -> Result<Theme, String> {
     if files.is_empty() {
         return Err("no theme files".into());
     }
-    let mut sources = Vec::new();
-    for (path, _) in files {
-        let src = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        sources.push((path.display().to_string(), src));
+    daw_theme::pack::compile(files, mode).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod reload_tests {
+    use super::*;
+
+    const DARK: &str = r##"<Document><Variables modes="dark light"><Var name="mute" dark="#111111" light="#eeeeee" /></Variables></Document>"##;
+
+    fn mute(p: &Palette) -> [u8; 4] {
+        p.mute.to_rgba8().to_u8_array()
     }
-    let sources: Vec<(&str, &str)> = sources
-        .iter()
-        .map(|(l, s)| (l.as_str(), s.as_str()))
-        .collect();
-    Theme::from_sources(&sources, schema(), mode).map_err(|errors| {
-        errors
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("; ")
-    })
+
+    /// A pack's theme loads, its tokens recolour the palette, and an edit
+    /// to its file restyles the views (the version moves) without a reload
+    /// being asked for.
+    #[test]
+    fn a_pack_loads_and_reloads_when_its_file_changes() {
+        let dir = std::env::temp_dir().join(format!("skin-reload-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("themes/t")).expect("dirs");
+        std::fs::write(dir.join("themes/t/tokens.frame"), DARK).expect("write");
+        std::fs::write(
+            dir.join("pack.styx"),
+            "name demo\nthemes {\n    t-light { layers (themes/t), mode light }\n}\n",
+        )
+        .expect("manifest");
+        let pack = daw_theme::Pack::open(&dir).expect("pack");
+        let theme = pack.theme(None).expect("theme");
+        load_pack(&pack, theme).expect("loads");
+        let base = Palette::from_theme(&daw_ui::theming::Theme::dark());
+        assert_eq!(mute(&palette(&base)), [0xee, 0xee, 0xee, 0xff]);
+        assert_eq!(chosen().and_then(|c| c.theme).as_deref(), Some("t-light"));
+
+        let before = version();
+        std::fs::write(
+            dir.join("themes/t/tokens.frame"),
+            DARK.replace("#eeeeee", "#123456"),
+        )
+        .expect("edit");
+        let file = std::fs::File::options()
+            .write(true)
+            .open(dir.join("themes/t/tokens.frame"))
+            .expect("open");
+        file.set_modified(std::time::SystemTime::UNIX_EPOCH)
+            .expect("mtime");
+        std::thread::sleep(POLL + Duration::from_millis(50));
+        assert!(poll(), "the edit is seen");
+        assert!(version() > before);
+        assert_eq!(mute(&palette(&base)), [0x12, 0x34, 0x56, 0xff]);
+
+        clear();
+        assert_eq!(
+            mute(&palette(&base)),
+            mute(&base),
+            "cleared, the built-in look"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

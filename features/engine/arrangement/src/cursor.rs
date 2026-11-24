@@ -69,7 +69,7 @@ pub fn paint_edit(
     painter.fill(
         Fill::NonZero,
         Affine::IDENTITY,
-        EDIT_CURSOR,
+        palette.edit_cursor,
         None,
         &Rect::new(x, top, x + 1.0, bottom),
     );

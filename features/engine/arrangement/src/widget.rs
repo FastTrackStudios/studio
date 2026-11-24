@@ -1041,6 +1041,15 @@ impl ArrangementWidget {
         &self.scene
     }
 
+    /// The edit cursor and the time selection the view opens with, where
+    /// a click on the ruler would have left them: a picture of a known
+    /// moment (the gallery's golden session).
+    #[must_use]
+    pub fn with_cursor(mut self, cursor: crate::cursor::Edit) -> Self {
+        self.editor.cursor = cursor;
+        self
+    }
+
     /// Touch mode: the view opens with rows a finger can hit.
     #[must_use]
     pub fn with_touch(mut self, touch: bool) -> Self {
@@ -6639,7 +6648,10 @@ impl ArrangementWidget {
         let now = web_time::Instant::now();
         self.trail.record(now, at_now.play_at);
         let look = {
-            let look = crate::cursor::Look::default();
+            let look = crate::cursor::Look {
+                line: self.palette.playhead,
+                ..crate::cursor::Look::default()
+            };
             look.trailing(self.trail.length(now, view.pps, look.trail))
         };
         // Into the picture, or with the meters when a host asked for what

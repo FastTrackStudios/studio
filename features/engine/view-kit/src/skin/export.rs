@@ -313,7 +313,7 @@ impl Gen<'_> {
         let mut look = crate::expression::base_look(self.palette);
         let mut vars: Vec<(String, String)> = crate::expression::look_fields(&mut look)
             .into_iter()
-            .map(|(name, c)| (format!("editor.{name}"), hex(to_theme(*c))))
+            .map(|(name, c)| (name.to_owned(), hex(to_theme(*c))))
             .collect();
         vars.push(("sheen".to_owned(), "#ffffff12".to_owned()));
         for (i, c) in editor::paint::theme::PITCH_CLASS.iter().enumerate() {

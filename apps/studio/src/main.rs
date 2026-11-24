@@ -28,6 +28,9 @@ mod playback;
 #[cfg(feature = "web")]
 mod player;
 mod storage;
+// The views' theme packs, switched while the app runs (`THEME_*`).
+#[cfg(feature = "native")]
+mod themes;
 #[cfg(feature = "drive")]
 mod trace;
 // The browser build engraves charts and reads setlist files from Drive.

@@ -10072,6 +10072,13 @@ impl Store {
         }
     }
 
+    /// Hold the seeded placeholders as what the tracks have, so nothing
+    /// reads the engine for them: a picture of a known song with no engine
+    /// to read chains from (the gallery's golden session).
+    pub fn hold_placeholders(&mut self) {
+        self.read.extend(self.by_guid.keys().cloned());
+    }
+
     /// Read each track's chain from the engine that has not been read, or
     /// has changed since ([`Self::changed`]): what the track has is what
     /// shows, not a placeholder.

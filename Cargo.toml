@@ -219,6 +219,9 @@ daw-control = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0
 # The DAW's editing contract and its built-in algorithms (hit placement):
 # what Studio's engine asks an edit algorithm, and answers without one.
 daw-edit = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+# The theme spec the views implement and the packs' loader (daw#52): a
+# commit of its own until the daw lines above move to one that has it.
+daw-theme = { git = "https://github.com/FastTrackStudios/daw", rev = "5f2b06d985f85b2d69974cdfc802ee0864507694" }
 daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }

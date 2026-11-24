@@ -26,6 +26,7 @@ pub mod rig;
 pub mod signal;
 pub mod simulate;
 pub mod strip_overlay;
+pub mod theme;
 pub mod tone;
 #[cfg(feature = "native")]
 pub mod tone_bind;
