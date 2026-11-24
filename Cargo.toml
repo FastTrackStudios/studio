@@ -224,6 +224,9 @@ daw-control = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0
 # The DAW's editing contract and its built-in algorithms (hit placement):
 # what Studio's engine asks an edit algorithm, and answers without one.
 daw-edit = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+# The timeline state every view and the engine share (the cursors, the
+# time selection, what is selected, the clipboard).
+daw-timeline = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
@@ -1446,6 +1449,7 @@ dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.
 [patch."https://github.com/FastTrackStudios/daw"]
 daw                = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-edit           = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-timeline       = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 daw-standalone     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 session-format     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 dawfile-reaper     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }

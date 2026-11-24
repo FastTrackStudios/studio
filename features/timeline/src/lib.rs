@@ -1,6 +1,12 @@
 //! Editing time by rows: the grid that follows the zoom ([`grid`]), razor
 //! edit areas ([`razor`]) and the view gestures the arrangement and the
 //! Editor share ([`gestures`]).
+//!
+//! The timeline's state — the cursors and the time selection, what is
+//! selected, the clipboard — is the DAW's (`daw-timeline`), re-exported
+//! here under the paths the views were written against.
+
+pub use daw_timeline::{clipboard, cursor, select};
 
 #[cfg(feature = "actions")]
 pub mod actions;
@@ -15,7 +21,6 @@ pub mod mouse;
 pub mod razor;
 pub mod rows;
 pub mod scroll;
-pub mod select;
 pub mod snap;
 pub mod time;
 pub mod zoom;

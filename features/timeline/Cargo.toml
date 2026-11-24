@@ -9,18 +9,20 @@ description = "Editing time by rows — the grid that follows the zoom, razor ar
 
 [dependencies]
 web-time.workspace = true
+# The timeline state (cursors, selection, clipboard) is the DAW's.
+daw-timeline.workspace = true
 architect = { workspace = true, optional = true }
 architect-action-derive = { workspace = true, optional = true }
-
-[features]
 # Drawing the pointer glyphs (`glyph::draw`, feature `paint`).
 anyrender = { workspace = true, optional = true }
 kurbo = { workspace = true, optional = true }
 peniko = { workspace = true, optional = true }
+
+[features]
 # The TIMELINE_* action group (`actions`), for the surfaces that bind it.
 actions = ["dep:architect", "dep:architect-action-derive"]
-
-[lints]
 # The pointer glyphs drawn into a scene (`glyph::draw`).
 paint = ["dep:anyrender", "dep:kurbo", "dep:peniko"]
+
+[lints]
 workspace = true
