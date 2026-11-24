@@ -165,6 +165,7 @@ pub mod tcp;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_song;
 pub mod text;
+pub mod theme_tokens;
 pub mod tool;
 pub mod toolbar;
 pub mod touch;
