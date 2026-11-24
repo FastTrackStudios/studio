@@ -479,9 +479,12 @@ pub mod delay {
                 _ => false,
             };
             // `update` is what hands time, feedback, drive and the rest to
-            // the style's inner engine (and redesigns its filters). Only on
-            // a real change: a repeated set moves nothing.
-            if changed {
+            // the style's inner engine (and redesigns its filters). It is
+            // not free of side effects (smoother timing, the freeze ramp, the
+            // diffusers), so only for what needs it and only on a real
+            // change: mix and width are read per sample, through the
+            // chain's own smoothers.
+            if changed && !matches!(index, 2 | 5) {
                 self.chain.update(self.config);
             }
         }
