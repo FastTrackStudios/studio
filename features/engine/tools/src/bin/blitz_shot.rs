@@ -11,7 +11,7 @@
 //! the tree is the app's: in a window it is
 //! [`mixer_view::mixer_panel::DawPanels`] — the arrangement panel, its
 //! chrome and the docked mixer, exactly what the desktop shell mounts —
-//! and in a headless document it is [`session_ui::panel::NativeTree`],
+//! and in a headless document it is [`arrangement_view::panel::NativeTree`],
 //! the same panel and chrome without the winit bridge a headless document
 //! has no window for. The painting is `ArrangementWidget`'s, the one
 //! painter.
@@ -50,13 +50,15 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
 
-use session_ui::panel::{ArrangementPanel, PanelEvent, Slot};
+use arrangement_view::panel::{ArrangementPanel, PanelEvent, Slot};
 use session_ui::studio::{PPS, StudioSession};
 
 /// The scene the app lays a session out by.
 const SCENE: &str = "drum-mixing";
 
 fn main() {
+    // The arrangement the DAW panels show, as the app installs it.
+    arrangement_view::arrangement_host::install();
     // A window writes to a LOG rather than to a terminal it does not
     // have. `FTS_BLITZ_LOG` names the file; a window defaults to one, so
     // that what the run did can be read afterwards instead of watched
@@ -328,11 +330,18 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             .map(|t| t.guid.clone())
             .expect("the folder");
         let mut effects = Vec::new();
-        session_ui::arrange_edit::Editor::comp(&mut project, &folder, take, from, to, &mut effects);
+        arrangement_view::arrange_edit::Editor::comp(
+            &mut project,
+            &folder,
+            take,
+            from,
+            to,
+            &mut effects,
+        );
         let sent = effects
             .iter()
             .filter_map(|e| match e {
-                session_ui::arrange_edit::Effect::Edit(edit) => Some(edit),
+                arrangement_view::arrange_edit::Effect::Edit(edit) => Some(edit),
                 _ => None,
             })
             .filter(|edit| session_engine::engine::apply_now(edit))
@@ -343,7 +352,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             .iter()
             .find(|t| t.lane_count > 0)
             .expect("a lane track");
-        let comp = session_ui::arrange_edit::comp_lane(lane);
+        let comp = arrangement_view::arrange_edit::comp_lane(lane);
         let pieces: Vec<(f64, f64, f64)> = back
             .items
             .get(&lane.guid)
@@ -479,22 +488,22 @@ fn Still(props: StillProps) -> Element {
 }
 
 /// The arrangement panel with no window under it: the app's panel and
-/// widget ([`session_ui::panel::use_arrangement_panel`]) and its tree
-/// ([`session_ui::panel::NativeTree`]). What `studio::Arrangement` adds
+/// widget ([`arrangement_view::panel::use_arrangement_panel`]) and its tree
+/// ([`arrangement_view::panel::NativeTree`]). What `studio::Arrangement` adds
 /// on top — winit's events, the pointer's shape, the engine's transport —
 /// needs a window, and a headless document has none to give it.
 #[component]
 fn HeadlessArrangement() -> Element {
-    let engine: session_ui::panel::Engine = std::rc::Rc::new(|edit| {
+    let engine: arrangement_view::panel::Engine = std::rc::Rc::new(|edit| {
         tracing::debug!(?edit, "a picture carries out no edits");
     });
-    let (panel, widget) = session_ui::panel::use_arrangement_panel(
+    let (panel, widget) = arrangement_view::panel::use_arrangement_panel(
         None,
         engine,
         dioxus_native_dom::CustomWidgetAttr::new,
     );
     rsx! {
-        session_ui::panel::NativeTree { panel, widget }
+        arrangement_view::panel::NativeTree { panel, widget }
     }
 }
 

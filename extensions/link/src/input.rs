@@ -52,23 +52,23 @@ pub const fn mouse(
 ) -> (
     MouseEventButton,
     MouseEventButtons,
-    session_ui::panel::Button,
+    session_ui::panel_input::Button,
 ) {
     match button {
         Button::Primary => (
             MouseEventButton::Main,
             MouseEventButtons::Primary,
-            session_ui::panel::Button::Left,
+            session_ui::panel_input::Button::Left,
         ),
         Button::Middle => (
             MouseEventButton::Auxiliary,
             MouseEventButtons::Auxiliary,
-            session_ui::panel::Button::Middle,
+            session_ui::panel_input::Button::Middle,
         ),
         Button::Secondary => (
             MouseEventButton::Secondary,
             MouseEventButtons::Secondary,
-            session_ui::panel::Button::Other,
+            session_ui::panel_input::Button::Other,
         ),
     }
 }

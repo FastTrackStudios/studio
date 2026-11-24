@@ -4,7 +4,7 @@
 //! A drag in the arrangement — an item moved, trimmed, slipped, faded,
 //! split, copied or deleted, a marker or a region dragged, items picked,
 //! an item's volume dial or its take volume curve — is planned in the
-//! window (`session_ui::arrange_edit`: snapping, a folded row standing for
+//! window (`arrangement_view::arrange_edit`: snapping, a folded row standing for
 //! its mics, ripple), drawn there at once, and committed when it ends as
 //! ONE of these actions: its edits, in order, as one undo step. So `watch`
 //! sees `Ran { id: "ARRANGE_TRIM" }` when a hand trims an item, and a

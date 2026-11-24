@@ -174,8 +174,7 @@ fn write_png(path: &std::path::Path, (w, h): (u32, u32), rgba: &[u8]) {
 /// The panel's backdrop: its `surface`, what the mixer's pane is filled
 /// with under the widget in the window and in Architect alike.
 fn backdrop(p: &mut anyrender_vello_cpu::VelloCpuScenePainter, (w, h): (u32, u32)) {
-    let surface =
-        session_ui::arrangement::Palette::from_theme(&daw_ui::theming::Theme::dark()).surface;
+    let surface = session_ui::palette::Palette::from_theme(&daw_ui::theming::Theme::dark()).surface;
     p.fill(
         peniko::Fill::NonZero,
         Affine::IDENTITY,

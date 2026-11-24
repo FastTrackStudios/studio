@@ -1,19 +1,15 @@
-//! The Session DAW: the arrangement, the mixer and the panels around them.
-//!
-//! The arrangement is painted by one thing, [`widget::ArrangementWidget`],
-//! mounted by [`panel::use_arrangement_panel`] and [`panel::PanelChrome`]
-//! wherever the app shows it — the desktop shell on dioxus-native, the
-//! browser through `web_host`. The headless tools (`bin/bench`,
-//! `bin/blitz_shot`) draw through the same widget, so a benchmark or a
-//! screenshot is a picture of the window rather than of a copy of it.
+//! The DAW views' kit: what the arrangement (`arrangement-view`) and the
+//! mixer (`mixer-view`) are both drawn with — the theme and its loader
+//! (`skin`), the track panel's rows (`tcp`, `row`), the strip controls,
+//! text, layout, touch and pointer handling, the ruler's measurements, the
+//! dock's links — and, for now, the panels around them (the shell, the
+//! chart, the lyrics, the transport). The arrangement and the mixer
+//! install their views into it (`dock::install_arrangement`,
+//! `dock::install_mixer`), so nothing here names either one's code.
 
 pub mod animate;
 #[cfg(all(feature = "native", target_os = "linux"))]
 pub mod app_menu;
-pub mod arrange_camera;
-pub mod arrange_edit;
-pub mod arrangement;
-pub mod arrangement_host;
 pub mod art;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::automation_actions;
@@ -21,10 +17,6 @@ pub use session_engine_client::audio_mode;
 pub use session_engine_client::automation;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::automation_actions;
-pub mod automation_draw;
-pub mod automation_edit;
-#[cfg(feature = "native")]
-pub mod automation_menu;
 pub mod bar_step;
 pub mod beats;
 /// The chart editor, editing the song's chart on the engine in this
@@ -46,36 +38,28 @@ pub mod collab_pointers;
 pub use session_engine::comp;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::comp;
-pub mod comp_predict;
 pub mod compact;
-pub mod cursor;
 pub use session_engine_client::edit_state;
 pub mod editor_view;
 pub use session_engine_client::engine;
 pub mod expression;
-pub mod folder_item;
 pub use session_engine_client::folds;
 pub mod fps;
 pub mod frames;
 pub mod gesture;
-pub mod ghost_paint;
 pub mod ghosts;
 /// What the window's GPU device asks for: buffers as large as the adapter has.
 #[cfg(feature = "native")]
 pub mod gpu;
 #[cfg(feature = "native")]
 pub mod headless;
-pub mod hit;
 pub mod icons;
-#[cfg(feature = "native")]
-pub mod instrument_rail;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::instrument_tracks;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::instrument_tracks;
 pub use session_engine_client::jobs;
 pub mod keys;
-pub mod lane_stack;
 pub use session_engine_client::lanes;
 pub mod layout;
 #[cfg(all(feature = "native", feature = "engine"))]
@@ -83,7 +67,6 @@ pub use session_engine::live_host;
 pub use session_engine_client::leveler;
 pub mod loading;
 pub mod lyrics_panel;
-pub mod marks_strip;
 pub use session_engine_client::midi;
 pub mod controls;
 pub mod dock;
@@ -91,18 +74,15 @@ pub mod dock;
 pub mod mix_guide;
 pub mod mousemap;
 pub mod navigator;
-pub mod notice;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::open;
+#[cfg(all(feature = "native", feature = "engine"))]
+pub use session_engine::organize_edit;
 pub use session_engine_client::num;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::open;
 pub use session_engine_client::open_progress;
 pub use session_engine_client::options;
-#[cfg(feature = "native")]
-pub mod organize;
-#[cfg(all(feature = "native", feature = "engine"))]
-pub use session_engine::organize_edit;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::organize_edit;
 pub use session_engine_client::play_return;
@@ -166,17 +146,13 @@ pub mod palette;
 pub use session_engine::page;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::page;
-pub mod panel;
 pub mod panel_input;
-#[cfg(feature = "native")]
-pub mod patch_list;
 pub mod performer;
 #[cfg(feature = "engine")]
 pub use session_engine::poi;
 pub use session_engine_client::plan;
 #[cfg(not(feature = "engine"))]
 pub use session_engine_client::poi;
-pub mod poi_paint;
 pub mod pointer;
 #[cfg(feature = "engine")]
 pub use session_engine::prepare;
@@ -192,14 +168,12 @@ pub mod rails;
 pub mod record_view;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::reference_play;
-pub mod rename;
 pub mod replan;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::render_ahead;
 #[cfg(all(feature = "native", not(feature = "engine")))]
 pub use session_engine_client::render_ahead;
 pub mod row;
-pub mod ruler;
 pub mod ruler_layout;
 #[cfg(feature = "engine")]
 pub use session_engine::setlist;
@@ -214,15 +188,14 @@ pub use session_engine_client::song_model;
 pub use session_engine_client::stretch;
 pub mod strip;
 pub mod studio;
-pub mod swipe;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::take_rank;
 pub mod take_rating;
-pub mod take_window;
 pub mod tcp;
-pub mod tcp_live;
-#[cfg(test)]
-pub(crate) mod test_song;
+/// A small song for tests, here and in the crates over this one (their
+/// dev-dependency turns on `test-support`).
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_song;
 pub mod text;
 pub mod tool;
 pub mod toolbar;
@@ -245,7 +218,6 @@ pub mod which_key;
 #[cfg(feature = "native")]
 pub mod window;
 pub use session_engine_client::window_queue;
-pub mod widget;
 pub mod window_cursor;
 pub use editing::written;
 pub use session_engine_client::zoom;

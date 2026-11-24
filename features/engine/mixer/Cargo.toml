@@ -58,16 +58,6 @@ facet = { workspace = true }
 serde_json = { workspace = true }
 facet-json = { workspace = true }
 
-image = { workspace = true }
-# The headless tools (bin/bench, bin/blitz_shot) only.
-anyrender_vello = { workspace = true, optional = true }
-daw-control = { workspace = true, optional = true }
-editor = { workspace = true, features = ["audio", "audio-daw", "daw", "paint"], optional = true }
-tracing-subscriber = { workspace = true, optional = true }
-daw = { workspace = true, optional = true }
-eyre = { workspace = true, optional = true }
-keyflow = { workspace = true, features = ["text", "engraver"], optional = true }
-blitz-paint = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -78,18 +68,8 @@ default = ["native"]
 # session-ui's features, forwarded, with what the mixer's own code needs.
 native = ["session-ui/native", "session-engine-client/native", "dep:dioxus-native", "dep:wgpu_context", "dep:winit", "dep:architect", "dep:builtin", "builtin?/engine", "dsp/eq-native", "dep:tokio"]
 web = ["session-ui/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:architect"]
-engine = ["session-ui/engine", "dep:session-engine", "dep:anyrender_vello", "dep:daw-control", "dep:editor", "dep:tracing-subscriber", "dep:daw", "dep:eyre", "dep:keyflow", "dep:blitz-paint"]
+engine = ["session-ui/engine", "dep:session-engine"]
 signal = ["native", "session-ui/signal"]
-
-[[bin]]
-name = "bench"
-path = "src/bin/bench.rs"
-required-features = ["native", "engine"]
-
-[[bin]]
-name = "blitz_shot"
-path = "src/bin/blitz_shot.rs"
-required-features = ["native", "engine"]
 
 [lints]
 workspace = true

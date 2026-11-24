@@ -27,6 +27,7 @@ architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest", "paint"] }
 mixer-view = { workspace = true, features = ["native"] }
 session-ui = { workspace = true, features = ["native"] }
+arrangement-view = { workspace = true, features = ["native"] }
 session-engine-client = { workspace = true, features = ["native"] }
 blitz-traits = { workspace = true }
 architect-scene = { workspace = true, features = ["paint-ui"] }
@@ -39,6 +40,7 @@ tracing = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 mixer-view = { workspace = true, features = ["web"] }
 session-ui = { workspace = true, features = ["web"] }
+arrangement-view = { workspace = true, features = ["web"] }
 session-engine-client = { workspace = true, features = ["web"] }
 
 [dev-dependencies]
@@ -46,6 +48,7 @@ session-engine-client = { workspace = true, features = ["web"] }
 session-engine = { workspace = true, features = ["native"] }
 mixer-view = { workspace = true, features = ["native", "engine"] }
 session-ui = { workspace = true, features = ["native", "engine"] }
+arrangement-view = { workspace = true, features = ["native", "engine"] }
 # The tests stand a pane up as the workspace does (`ViewHost`, `Placement`).
 architect-workspace = { workspace = true, features = ["paint-ui"] }
 anyrender_vello_cpu = { workspace = true }

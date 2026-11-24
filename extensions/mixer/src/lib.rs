@@ -75,7 +75,7 @@ impl Extension for Mixer {
         // one (a close-up, the FX view, the browser's DAW panels).
         mixer_view::mixer_host::install();
         // The arrangement its DAW panels dock the mixer under.
-        session_ui::arrangement_host::install();
+        arrangement_view::arrangement_host::install();
         #[cfg(not(target_arch = "wasm32"))]
         {
             claim::claim(ext.handle());

@@ -26,10 +26,10 @@ use architect_workspace::paint::PaintView as _;
 use architect_workspace::{
     FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost, ViewInput,
 };
+use arrangement_view::panel::ArrangementPanel;
+use arrangement_view::widget::ArrangementWidget;
 use dioxus::prelude::*;
-use session_ui::panel::ArrangementPanel;
 use session_ui::studio::StudioSession;
-use session_ui::widget::ArrangementWidget;
 use studio_arrangement::host::{Hosted, InScope, Stats};
 
 const W: u32 = 1280;
@@ -83,10 +83,10 @@ impl PartialEq for Song {
 fn Root(song: Song, got: Got) -> Element {
     use_context_provider(|| song.0.clone());
     use_context_provider(|| Signal::new(session::modes::Mode::Live));
-    use_context_provider(|| session_ui::panel::StartCompact(true));
-    let engine: session_ui::panel::Engine = Rc::new(|_| {});
+    use_context_provider(|| arrangement_view::panel::StartCompact(true));
+    let engine: arrangement_view::panel::Engine = Rc::new(|_| {});
     let (panel, widget) =
-        session_ui::panel::use_arrangement_panel(None, engine, |w| Rc::new(RefCell::new(w)));
+        arrangement_view::panel::use_arrangement_panel(None, engine, |w| Rc::new(RefCell::new(w)));
     use_hook(|| *got.0.borrow_mut() = Some((widget, panel, InScope::here())));
     rsx! { div {} }
 }

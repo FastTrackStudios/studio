@@ -34,16 +34,16 @@ use anyrender::{ImageRenderer, PaintScene};
 use anyrender_vello::VelloImageRenderer;
 use vello::kurbo::Affine;
 
+use arrangement_view::arrangement::{Arrangement, Palette, TCP_WIDTH, Viewport};
+use arrangement_view::widget::{ArrangementWidget, Shared, View};
 use mixer_view::mcp::Mixer;
-use session_ui::arrangement::{Arrangement, Palette, TCP_WIDTH, Viewport};
 use session_ui::headless::{BATCH, Headless};
-use session_ui::widget::{ArrangementWidget, Shared, View};
 
 /// The phase these measurements are taken in — the one the rack was
 /// built for, and the one every reference image was shot in.
 const TONE: session::mix_phases::MixPhase = session::mix_phases::MixPhase::Tone;
+use arrangement_view::ruler::ruler_h;
 use session_ui::profile::{Counts, Stages, Summary};
-use session_ui::ruler::ruler_h;
 
 /// One phase's motion over `0..1`, as (`scroll_x`, `scroll_y`,
 /// `zoom_x`, `zoom_y`) fractions.
@@ -489,10 +489,10 @@ fn kit_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
 /// `.folder-item-colours`; the third is `flow.guitars.folder-items`, and
 /// it is a stereo part rather than a folder because in a session that
 /// has not grown its channels out a double IS one stereo track.
-const SHEET: [(&str, session_ui::folder_item::GroupBy); 3] = [
-    ("Drums", session_ui::folder_item::GroupBy::Role),
-    ("Snare", session_ui::folder_item::GroupBy::Role),
-    ("Rhythm", session_ui::folder_item::GroupBy::Side),
+const SHEET: [(&str, arrangement_view::folder_item::GroupBy); 3] = [
+    ("Drums", arrangement_view::folder_item::GroupBy::Role),
+    ("Snare", arrangement_view::folder_item::GroupBy::Role),
+    ("Rhythm", arrangement_view::folder_item::GroupBy::Side),
 ];
 
 /// One sheet of folder items over the open session, to a PNG.
@@ -505,7 +505,7 @@ const SHEET: [(&str, session_ui::folder_item::GroupBy); 3] = [
 /// The peaks are the session's own, read back through the facade:
 /// nothing here is simulated.
 fn folder_items_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
-    use session_ui::folder_item::{FolderItems, Place};
+    use arrangement_view::folder_item::{FolderItems, Place};
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -526,7 +526,7 @@ fn folder_items_shot(palette: &Palette, out: &std::path::Path, width: u32, heigh
     // Named rather than picked by guid: the fixture is about what a
     // folder of a kit and a double look like, and the golden session's
     // names are the stable thing about it.
-    let wanted: Vec<(String, session_ui::folder_item::GroupBy)> = SHEET
+    let wanted: Vec<(String, arrangement_view::folder_item::GroupBy)> = SHEET
         .iter()
         .filter_map(|(name, group_by)| {
             snapshot
@@ -536,7 +536,7 @@ fn folder_items_shot(palette: &Palette, out: &std::path::Path, width: u32, heigh
                 .map(|t| (t.guid.clone(), *group_by))
         })
         .collect();
-    let (folders, found) = rt.block_on(session_ui::folder_item::load::load(
+    let (folders, found) = rt.block_on(arrangement_view::folder_item::load::load(
         &project,
         &snapshot,
         &wanted,
@@ -561,7 +561,7 @@ fn folder_items_shot(palette: &Palette, out: &std::path::Path, width: u32, heigh
     let pad = (row_height * 0.08).min(12.0);
 
     if let Ok(path) = std::env::var("FTS_BENCH_FOLD") {
-        let text = session_ui::folder_item::fixture_text(&folders, 0, from, to);
+        let text = arrangement_view::folder_item::fixture_text(&folders, 0, from, to);
         std::fs::write(&path, text).expect("write the fold");
     }
 
@@ -636,7 +636,7 @@ fn folder_items_shot(palette: &Palette, out: &std::path::Path, width: u32, heigh
 /// Mute or hide every child called `name`, and say on how many folders
 /// something moved.
 fn set_on_every_folder(
-    items: &mut session_ui::folder_item::FolderItems,
+    items: &mut arrangement_view::folder_item::FolderItems,
     name: &str,
     to: bool,
     mute: bool,
@@ -1298,7 +1298,7 @@ fn verify(
             renderer.render_to_vec(
                 |painter| {
                     painter.reset();
-                    session_ui::arrangement::replay_all(painter, &scene.lanes, lanes);
+                    arrangement_view::arrangement::replay_all(painter, &scene.lanes, lanes);
                     scene.replay_all_panel(painter, view, panel);
                 },
                 &mut complete,
@@ -1415,7 +1415,7 @@ fn shot(
         .and_then(|n| scene.sections().get(n).cloned())
     {
         Some(section) => {
-            let framed = session_ui::take_window::viewport(
+            let framed = arrangement_view::take_window::viewport(
                 (section.start, section.end),
                 scene.tempo(),
                 f64::from(width),
@@ -2171,19 +2171,19 @@ fn studio(
                     // Right zooms time in and up zooms the rows out: the
                     // panel's drag, about where the press landed.
                     let to = (
-                        at.zoom_x * session_ui::panel::factor(moved.0),
-                        at.zoom_y * session_ui::panel::factor(moved.1),
+                        at.zoom_x * arrangement_view::panel::factor(moved.0),
+                        at.zoom_y * arrangement_view::panel::factor(moved.1),
                     );
                     // No further than the session reaches at the new
                     // zoom, and never before its start.
                     let reach =
                         |span: f64, lane: f64, zoom: f64| ((span + lane) * zoom - lane).max(0.0);
                     at.scroll_x =
-                        session_ui::panel::zoom_about(press.0, at.scroll_x, at.zoom_x, to.0)
+                        arrangement_view::panel::zoom_about(press.0, at.scroll_x, at.zoom_x, to.0)
                             .min(reach(span_x, lanes.0, to.0))
                             .max(0.0);
                     at.scroll_y =
-                        session_ui::panel::zoom_about(press.1, at.scroll_y, at.zoom_y, to.1)
+                        arrangement_view::panel::zoom_about(press.1, at.scroll_y, at.zoom_y, to.1)
                             .min(reach(span_y, lanes.1, to.1))
                             .max(0.0);
                     (at.zoom_x, at.zoom_y) = to;
@@ -2323,14 +2323,14 @@ fn studio(
 /// fixture album resolved against the fixture room — the picture
 /// `features/engine/ui/tests/patch_list_view.rs` compares byte for byte.
 fn patch_list_shot(out: &std::path::Path, width: u32, height: u32) {
-    let table = match session_ui::patch_list::Table::fixture() {
+    let table = match arrangement_view::patch_list::Table::fixture() {
         Ok(table) => table,
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(2);
         }
     };
-    let Some(buffer) = session_ui::patch_list::shot(&table, (width, height)) else {
+    let Some(buffer) = arrangement_view::patch_list::shot(&table, (width, height)) else {
         eprintln!("no gpu: the patch list picture needs a real device");
         std::process::exit(2);
     };
@@ -2353,14 +2353,14 @@ fn patch_list_shot(out: &std::path::Path, width: u32, height: u32) {
 /// banner, the picture `features/engine/ui/tests/patch_list_view.rs`
 /// compares structurally.
 fn patch_list_shot_overridden_stale(out: &std::path::Path, width: u32, height: u32) {
-    let table = match session_ui::patch_list::Table::fixture_overridden_stale() {
+    let table = match arrangement_view::patch_list::Table::fixture_overridden_stale() {
         Ok(table) => table,
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(2);
         }
     };
-    let Some(buffer) = session_ui::patch_list::shot(&table, (width, height)) else {
+    let Some(buffer) = arrangement_view::patch_list::shot(&table, (width, height)) else {
         eprintln!("no gpu: the patch list picture needs a real device");
         std::process::exit(2);
     };

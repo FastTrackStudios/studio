@@ -78,6 +78,8 @@ members = [
     "features/engine/runtime",
     "features/engine/ui",
     "features/engine/mixer",
+    "features/engine/arrangement",
+    "features/engine/tools",
     "features/patch-list",
     "features/adapters/reaper/session-extension",
     "features/adapters/reaper/session-extension/xtask",
@@ -852,6 +854,7 @@ session-engine-client = { path = "features/engine/client", default-features = fa
 session-runtime = { path = "features/engine/runtime" }
 session-ui = { path = "features/engine/ui", default-features = false }
 mixer-view = { path = "features/engine/mixer", default-features = false }
+arrangement-view = { path = "features/engine/arrangement", default-features = false }
 studio-view-link = { path = "extensions/link" }
 # Studio's engine, arrangement and mixer extensions as libraries: what
 # Studio's distribution (apps/desktop) links in. Each is also its own

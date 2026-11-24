@@ -81,7 +81,7 @@ pub fn Shell() -> Element {
             }
             // What the arrangement queued, to the engine — with no frame
             // coming (the window hidden), an action's edits would wait.
-            session_ui::panel::send_pending();
+            session_ui::panel_input::send_pending();
             // Another song or version asked for over the Action List
             // (`SESSION_OPEN`): out of this one, and the start screen
             // opens it.
@@ -640,13 +640,13 @@ fn Arrangement(#[props(default)] docked: bool) -> Element {
         div {
             style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column;",
             if mode() == Mode::Organize {
-                session_ui::organize::OrganizeToolbar {}
+                arrangement_view::organize::OrganizeToolbar {}
             }
             div {
                 style: "position:relative; flex:1; min-height:0; display:flex;",
                 // Organize's instruments down the left: Drums, Bass, Guitar.
                 if mode() == Mode::Organize {
-                    session_ui::instrument_rail::InstrumentRail {}
+                    arrangement_view::instrument_rail::InstrumentRail {}
                 }
                 div {
                     style: "position:relative; flex:1; min-width:0;",

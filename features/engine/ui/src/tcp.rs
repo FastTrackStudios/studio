@@ -752,7 +752,7 @@ fn row_two(scene: &mut anyrender::Scene, palette: &Palette, font: &Font, track: 
 
 /// The automation button, where a row has room for it: a field with an
 /// envelope's line drawn in it.
-pub(crate) fn automation_button(
+pub fn automation_button(
     scene: &mut anyrender::Scene,
     palette: &Palette,
     y: f64,
@@ -923,7 +923,7 @@ pub fn row_tint(palette: &Palette, track: &Track) -> Color {
 }
 
 /// Blend `b` into `a` by `t`.
-pub(crate) fn mix(a: Color, b: Color, t: f32) -> Color {
+pub fn mix(a: Color, b: Color, t: f32) -> Color {
     let t = t.clamp(0.0, 1.0);
     let [ar, ag, ab, aa] = a.components;
     let [br, bg, bb, _] = b.components;

@@ -249,6 +249,8 @@ reaper-tests = ["engine", "studio/test-harness", "session-engine/reaper-tests"]
 # Without it this crate is a view of an engine reached over its link
 # (`view_client`), as Studio's windows are.
 engine = ["dep:session-engine"]
+# The test song (`test_song`), for the tests of the crates over this one.
+test-support = []
 # A sampling profiler on the headless benchmarks. Behind a feature so an
 # ordinary build never links a signal handler: `pprof` installs a SIGPROF
 # timer, which is exactly what you want while measuring and nothing you

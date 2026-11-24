@@ -11,7 +11,7 @@
 //! `session_ui::skin::export`.
 
 fn main() {
-    let palette = session_ui::arrangement::Palette::from_theme(&daw_ui::theming::Theme::dark());
+    let palette = session_ui::palette::Palette::from_theme(&daw_ui::theming::Theme::dark());
     let out = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "features/engine/ui/themes/fts-dark.frame".to_owned());

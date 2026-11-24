@@ -3,7 +3,7 @@
 //! protocol.
 //!
 //! One song (the golden template), one widget
-//! (`session_ui::widget::ArrangementWidget`, built by the panel the app
+//! (`arrangement_view::widget::ArrangementWidget`, built by the panel the app
 //! mounts), drawn twice:
 //!
 //! - **in-app:** `paint_scene`, what the widget hands Blitz in
@@ -47,12 +47,12 @@ use architect_scene::engine::EngineTable;
 use architect_scene::ops::{Receiver, Sender};
 use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
+use arrangement_view::panel::{ArrangementPanel, PanelEvent};
+use arrangement_view::widget::ArrangementWidget;
 use dioxus::prelude::*;
 use peniko::kurbo::Affine;
 use session_engine::engine::{TRACK_PARTS, VALUE_TRACKS, track_value};
-use session_ui::panel::{ArrangementPanel, PanelEvent};
 use session_ui::studio::StudioSession;
-use session_ui::widget::ArrangementWidget;
 use studio_arrangement::host::{Hosted, InScope, Stats};
 
 const W: u32 = 1280;
@@ -128,10 +128,10 @@ impl PartialEq for Song {
 fn Root(song: Song, got: Got, compact: bool) -> Element {
     use_context_provider(|| song.0.clone());
     use_context_provider(|| Signal::new(session::modes::Mode::Live));
-    use_context_provider(|| session_ui::panel::StartCompact(compact));
-    let engine: session_ui::panel::Engine = Rc::new(|_| {});
+    use_context_provider(|| arrangement_view::panel::StartCompact(compact));
+    let engine: arrangement_view::panel::Engine = Rc::new(|_| {});
     let (panel, widget) =
-        session_ui::panel::use_arrangement_panel(None, engine, |w| Rc::new(RefCell::new(w)));
+        arrangement_view::panel::use_arrangement_panel(None, engine, |w| Rc::new(RefCell::new(w)));
     use_hook(|| {
         *got.0.borrow_mut() = Some((
             widget,

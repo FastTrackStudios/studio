@@ -94,7 +94,7 @@ pub fn run() {
     ::mixer_view::mixer_host::install();
     // The arrangement's, for every window that shows it.
     #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
-    ::session_ui::arrangement_host::install();
+    ::arrangement_view::arrangement_host::install();
     // iPhone: the page is drawn to the left and right edges, and minds the
     // camera housing itself (`native::ios_scene::island_on_left`) — a phone
     // on its side reports the housing's inset on both sides.

@@ -1,5 +1,5 @@
 //! The arrangement widget in an Architect pane: the third host of
-//! `session_ui::panel` (after dioxus-native's `studio::Arrangement` and the
+//! `arrangement_view::panel` (after dioxus-native's `studio::Arrangement` and the
 //! browser's `web_host::WebArrangement`).
 //!
 //! Nothing here draws. Each frame the pane's paint view does what the
@@ -21,10 +21,10 @@ use std::sync::{Arc, Mutex};
 
 use architect_scene::paint::{Layer, LayerKey, PaintView, Scene};
 use architect_scene::view::{ViewCtx, ViewInput};
+use arrangement_view::panel::{ArrangementPanel, PanelEvent};
+use arrangement_view::widget::ArrangementWidget;
 use blitz_traits::events::{KeyState, MouseEventButton, MouseEventButtons, UiEvent};
 use dioxus::prelude::{ReadableExt as _, WritableExt as _};
-use session_ui::panel::{ArrangementPanel, PanelEvent};
-use session_ui::widget::ArrangementWidget;
 pub use studio_view_link::{InScope, Stats};
 use studio_view_link::{SceneLayer, input};
 
@@ -210,12 +210,12 @@ impl PaintView for Hosted {
                 self.panel(self.pointer_at(*x, *y));
                 match &event {
                     UiEvent::PointerDown(_) => self.panel(PanelEvent::Button {
-                        button: session_ui::panel::Button::Left,
+                        button: arrangement_view::panel::Button::Left,
                         pressed: true,
                     }),
                     UiEvent::PointerUp(_) | UiEvent::PointerCancel(_) => {
                         self.panel(PanelEvent::Button {
-                            button: session_ui::panel::Button::Left,
+                            button: arrangement_view::panel::Button::Left,
                             pressed: false,
                         });
                     }

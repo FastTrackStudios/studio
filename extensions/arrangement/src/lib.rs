@@ -5,7 +5,7 @@
 //! on Studio's engine (`studio_view_link`: attached as `studio-desktop`'s
 //! window attaches to a `studio engine`, the song read through the window
 //! protocol's replicas), and mounts the arrangement panel
-//! (`session_ui::panel::use_arrangement_panel`, its widget and its DOM
+//! (`arrangement_view::panel::use_arrangement_panel`, its widget and its DOM
 //! chrome, `PanelChrome`) with an Architect pane as the panel's host
 //! ([`host`]): the panel's third host, beside dioxus-native and the
 //! browser.
@@ -72,7 +72,7 @@ impl Extension for Arrangement {
     fn build(&self, ext: &mut Builder) {
         // The arrangement's views, for the window's views that show it
         // (the mixer's docked pair, the browser's DAW panels).
-        session_ui::arrangement_host::install();
+        arrangement_view::arrangement_host::install();
         #[cfg(not(target_arch = "wasm32"))]
         ext.view("arrangement", ArrangementPane);
         #[cfg(target_arch = "wasm32")]
@@ -172,9 +172,9 @@ fn Panel(session: Song) -> Element {
     use_context_provider(|| session.0.clone());
     studio_view_link::use_client_mode();
     // Beside a mixer pane it is not linked to: compact, as docked.
-    use_context_provider(|| session_ui::panel::StartCompact(true));
+    use_context_provider(|| arrangement_view::panel::StartCompact(true));
     let applier = use_hook(|| Rc::new(session_ui::engine::Applier::start()));
-    let engine: session_ui::panel::Engine = {
+    let engine: arrangement_view::panel::Engine = {
         let applier = Rc::clone(&applier);
         Rc::new(move |edit| {
             if let Some(applier) = applier.as_ref() {
@@ -183,7 +183,7 @@ fn Panel(session: Song) -> Element {
         })
     };
     let (panel, widget) =
-        session_ui::panel::use_arrangement_panel(None, engine, |w| Rc::new(RefCell::new(w)));
+        arrangement_view::panel::use_arrangement_panel(None, engine, |w| Rc::new(RefCell::new(w)));
     let stats = use_hook(|| {
         let stats = Arc::new(Mutex::new(Stats::default()));
         *STATS.lock().unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&stats));
@@ -213,7 +213,7 @@ fn Panel(session: Song) -> Element {
             div { style: "position:absolute; left:0; top:0; width:100%; height:100%;",
                 PaintPane { mount }
             }
-            session_ui::panel::PanelChrome { panel }
+            arrangement_view::panel::PanelChrome { panel }
         }
     }
 }
