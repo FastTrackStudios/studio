@@ -16,6 +16,12 @@ const ALLOWED: &[Allowance] = &[
         why: "the docks chord, in through_list",
     },
     Allowance {
+        file: "app.rs",
+        pattern: "request_dock(",
+        count: 2,
+        why: "its definition, and if_docked asking the app's dock",
+    },
+    Allowance {
         file: "dock.rs",
         pattern: "set_racks_shown(",
         count: 1,

@@ -16,8 +16,6 @@
 //! [`Keys::which_key`] lists what can follow it, with the profile's own
 //! labels, for the which-key popup ([`crate::which_key`]).
 
-use std::collections::HashMap;
-
 use architect_input::{
     InputCommand, InputContext, InputEvent, InputProcessor, KeyChord, KeyCode, KeyTrie,
     KeymapConfig, LeafAction, ModeId, Modifiers, WhichKeyEntry, WhichKeyLabels, WhichKeyNext,

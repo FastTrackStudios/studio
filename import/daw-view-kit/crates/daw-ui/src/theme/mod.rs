@@ -21,7 +21,7 @@
 //! adopting an existing theme as a starting point.
 //!
 //! ```no_run
-//! use crate::theme::Theme;
+//! use daw_ui::theme::Theme;
 //!
 //! let theme = Theme::default();
 //! for assignment in theme.reaper_palette() {
