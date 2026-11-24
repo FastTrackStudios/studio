@@ -1,0 +1,76 @@
+[package]
+name = "mixer-view"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Studio's mixer, a view only: strips, racks, the FX view and close-ups over daw-view-kit's base. Moving to FastTrackStudios/mixer-view."
+
+[dependencies]
+daw-view-kit = { workspace = true }
+utils = { workspace = true }
+daw-view = { workspace = true }
+# The session primitive: the mix phases.
+fts-session = { workspace = true }
+dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
+daw-ui = { workspace = true, features = ["studio"] }
+blitz-dom = { workspace = true }
+blitz-traits = { workspace = true }
+dioxus-native-dom = { workspace = true }
+dioxus-native = { workspace = true, optional = true }
+daw-proto = { workspace = true }
+lucide-dioxus = { workspace = true }
+dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
+fts-audio-ui = { workspace = true }
+frame = { workspace = true, features = ["host-scene", "live", "theme"] }
+anyrender = { workspace = true }
+wgpu_context = { workspace = true, optional = true }
+vello = "0.11"
+winit = { version = "0.31.0-beta.4", optional = true }
+web-time = { workspace = true }
+architect = { workspace = true, optional = true, features = ["vox", "platform", "action-list"] }
+tracing = { workspace = true }
+web-sys = { workspace = true, optional = true, features = [
+    "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement",
+    "DomRect", "CssStyleDeclaration", "console", "Response", "Headers", "PointerEvent",
+    "EventTarget",
+    # The audio out (`web_audio`): a worklet the page posts rendered blocks to.
+    "AudioContext", "AudioContextOptions", "BaseAudioContext", "AudioContextState",
+    "AudioWorklet", "AudioWorkletNode", "AudioWorkletNodeOptions",
+    "AudioNode", "AudioDestinationNode", "MessagePort", "MessageEvent",
+    "Blob", "BlobPropertyBag", "Url", "Worklet", "WorkletOptions",
+    "KeyboardEvent", "Event", "AddEventListenerOptions",
+    # The live session card's invite, onto the clipboard.
+    "Navigator", "Clipboard", "UrlSearchParams",
+    # A shared song's proxies, kept off the wasm heap and across reloads
+    # (`song_stream::CachedFetch`).
+    "CacheStorage", "Cache",
+    # Whether this viewer chose the multitracks, kept across a set's resets.
+    "Storage",
+    # Touch mode's default: whether the page's pointer is a finger.
+    "MediaQueryList",
+] }
+builtin = { workspace = true, optional = true, features = ["engine"] }
+num-traits = { workspace = true }
+facet = { workspace = true }
+serde_json = { workspace = true }
+facet-json = { workspace = true }
+
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.48", default-features = false, features = ["sync", "macros"] }
+
+[features]
+default = ["native"]
+# daw-view-kit's features, forwarded, with what the mixer's own code needs.
+native = ["daw-view-kit/native", "daw-view/native", "dep:dioxus-native", "dep:wgpu_context", "dep:winit", "dep:architect", "dep:builtin", "builtin?/engine", "dsp/eq-native", "dep:tokio"]
+web = ["daw-view-kit/web", "daw-view/web", "dioxus/web", "dep:web-sys", "dep:architect"]
+signal = ["native", "daw-view-kit/signal"]
+
+[dev-dependencies]
+# The Action List guard (tests/actions_everywhere.rs).
+daw-view-kit = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true

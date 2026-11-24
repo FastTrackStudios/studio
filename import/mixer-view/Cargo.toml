@@ -1,0 +1,782 @@
+# mixer-view: the mixer (strips, racks, the FX view, close-ups), a view on
+# daw-view (FastTrackStudios/daw), the session primitive and daw-view-kit
+# alone. Versions and patches are Studio's.
+
+[workspace]
+resolver = "3"
+members = ["crates/mixer-view"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.87"
+authors = ["FastTrack Studio"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/FastTrackStudios/mixer-view"
+
+[workspace.dependencies]
+# This repo's own crates.
+mixer-view = { path = "crates/mixer-view", default-features = false }
+# Across repos (pinned by rev; a local checkout patches them in with paths,
+# never committed).
+daw-view = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0", default-features = false }
+daw-timeline = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+fts-session = { package = "session", git = "https://github.com/FastTrackStudios/session", rev = "04e90dace4724ac6d49a60c59ce14237e9f8261e", default-features = false }
+daw-view-kit = { git = "https://github.com/FastTrackStudios/daw-view-kit", rev = "a7217417048b836dc09595d699f4a15ce915ea6d", default-features = false }
+daw-ui = { git = "https://github.com/FastTrackStudios/daw-view-kit", rev = "a7217417048b836dc09595d699f4a15ce915ea6d" }
+timeline = { git = "https://github.com/FastTrackStudios/daw-view-kit", rev = "a7217417048b836dc09595d699f4a15ce915ea6d" }
+audio-controls = { git = "https://github.com/FastTrackStudios/daw-view-kit", rev = "a7217417048b836dc09595d699f4a15ce915ea6d" }
+# Studio's pins, so every crate here resolves to the versions Studio builds.
+drive-dioxus = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+drive-client = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+drive-spine = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+drive-files = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8", default-features = false }
+drive-sidecars = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+drive-local = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+signal-space = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-tone3000 = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+fts-audio-ui = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
+frame = { git = "https://github.com/FastTrackStudios/frame", rev = "1f6311abc5eeef87c5226155a4838a6f58984410" }
+synth = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+sampler = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+guitar = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+protools = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+ableton = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+logic = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+dsp-core = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
+keys = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+ekit = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+drums = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+keybinds = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+preset-browser = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
+dsp = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
+nice-plug = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
+nice-plug-xtask = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
+arborium = { version = "2.16.0", default-features = false }
+arborium-theme = "2.16.0"
+arborium-tree-sitter = "2.16.0"
+ropey = "1.6"
+daw-proto = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-control = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-edit = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+audio = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-test-macro = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+utils = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+midi = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+fts-sample = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0", default-features = false }
+daw = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-standalone = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+session-format = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+dawfile-reaper = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+signal-plugin-host = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0", default-features = false }
+builtin = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+studio = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+daw-actions = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+daw-reaper = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252", default-features = false }
+daw-extension-runtime = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+reaper-dioxus = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
+keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
+keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+engraver = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
+world-sys = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
+signal-fx = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+facet = { version = "0.50.0-rc.5", features = ["reflect", "chrono", "uuid"] }
+facet-json = { version = "0.50.0-rc.7" }
+facet-postcard = { version = "0.50.0-rc.5" }
+facet-styx = { version = "5.0.0-rc.7" }
+vox = { version = "0.10.0-rc.5", default-features = false, features = ["runtime"] }
+vox-types = { version = "0.10.0-rc.5" }
+vox-phon = { version = "0.10.0-rc.5" }
+vox-stream = { version = "0.10.0-rc.5" }
+vox-core = { version = "0.10.0-rc.5" }
+vox-websocket = { version = "0.10.0-rc.5" }
+iroh = { version = "1" }
+fastcdc = { version = "4", features = ["tokio"] }
+iroh-blobs = { version = "0.103", default-features = false, features = ["fs-store"] }
+blake3 = { version = "1.8" }
+reflink-copy = { version = "0.1" }
+jj-lib = { version = "=0.44.0" }
+gix = { version = "0.85", default-features = false, features = ["index", "max-performance-safe", "sha1"] }
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["fs"] }
+include_dir = "0.7"
+inferno-net = { git = "https://github.com/FastTrackStudios/inferno-control", rev = "d3b048941df55dae12c7b9f8c4b776681b8679d3" }
+architect = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-derive = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-rpc-derive = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-action-derive = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-mcp = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-control = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-scripting = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-atom = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-form = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-permissions = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-permissions-proto = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-auth = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth-proto = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth-db = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth-client = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+crdt = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+crdt-derive = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-ui = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extensions = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extensions-dioxus = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-views = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-process-view = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-scene = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-theme = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-vault = { package = "vault", git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-settings = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-spaces = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-input = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-core = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-macros = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-runtime = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-shell = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-snapshots = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-parity = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "wasmbind"] }
+fake = { version = "4", features = ["derive", "uuid", "chrono"] }
+sea-orm = { version = "1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros", "with-uuid", "with-chrono"] }
+sea-orm-migration = { version = "1", features = ["sqlx-sqlite", "runtime-tokio-rustls"] }
+async-trait = "0.1"
+loro = { version = "1.12", default-features = false }
+argon2 = "0.5"
+base64 = "0.22.1"
+chacha20poly1305 = "0.10"
+cookie = "0.18"
+hkdf = "0.12"
+jsonwebtoken = "9"
+rand = "0.8"
+sha1 = "0.10"
+sha2 = "0.10"
+totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+music-catalog = { git = "https://github.com/FastTrackStudios/music-convention", tag = "v0.1.3" }
+color-palette = { git = "https://github.com/FastTrackStudios/music-convention", tag = "v0.1.3" }
+monarchy = { git = "https://github.com/FastTrackStudios/music-convention", tag = "v0.1.3" }
+monarchy_derive = { git = "https://github.com/FastTrackStudios/music-convention", tag = "v0.1.3" }
+musicxml = "1.1"
+dioxus = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41", default-features = false, features = ["lib"] }
+wasm-splitter = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
+dioxus-web = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41", default-features = false }
+dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1", default-features = false, features = ["prelude", "system-fonts", "svg", "autofocus", "data-uri", "vello", "accessibility", "hot-reload", "net", "html", "clipboard", "file-dialog", "vello-hybrid", "woff", "apple-font-embolden"] }
+blitz-dom = "=0.3.0-beta.4"
+blitz-paint = "=0.3.0-beta.4"
+blitz-traits = "=0.3.0-beta.4"
+blitz-shell = "=0.3.0-beta.4"
+blitz-html = "=0.3.0-beta.4"
+dioxus-native-dom = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
+dioxus-mcp-probe = { git = "https://github.com/tonybierman/dioxus-mcp" }
+dioxus-test = { git = "https://github.com/FastTrackStudios/vendor", rev = "c892de83e77b3d51e9c3dd17d9f9e8471d01e112" }
+dioxus-primitives = { git = "https://github.com/FastTrackStudios/dioxus-components", package = "dioxus-primitives", tag = "fts-upstream-2026-11", default-features = false }
+lucide-dioxus = { git = "https://github.com/FastTrackStudios/lucide", tag = "fts-upstream-2026-11", features = ["all-icons"] }
+clsx = "0.1.1"
+tw_merge = "0.1.21"
+nucleo-matcher = "0.3"
+neo_frizbee = { version = "0.11", features = ["match_end_col"] }
+palette = "0.7.6"
+linkme = "0.3"
+reaper-low = { git = "https://github.com/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+reaper-medium = { git = "https://github.com/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+reaper-high = { git = "https://github.com/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+reaper-macros = { git = "https://github.com/FastTrackStudios/reaper-rs.git", branch = "feat/reaper-763-ruler-lanes" }
+nih_plug = { git = "https://github.com/FastTrackStudios/nih-plug.git", branch = "reaper-embed-ui" }
+wgpu = { version = "30", features = ["wgsl"] }
+skrifa = "0.44"
+anyrender_vello = "0.15"
+anyrender = "0.14"
+anyrender_vello_hybrid = "0.11"
+vello_gpu = "0.3"
+vello_common = "0.3"
+peniko = "0.6"
+kurbo = "0.13"
+parley = "0.12"
+anyrender_vello_cpu = "0.18"
+zbus = { version = "5.19", default-features = false, features = ["tokio"] }
+tokio = { version = "1.48", features = ["full"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+futures = "0.3"
+notify-fs = { package = "notify", version = "8" }
+globset = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+num-traits = "0.2"
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = { version = "0.1", features = ["std"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+opentelemetry = "0.30"
+opentelemetry_sdk = { version = "0.30", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.30", default-features = false, features = ["http-proto", "reqwest-blocking-client", "reqwest-rustls", "trace", "logs", "metrics"] }
+opentelemetry-appender-tracing = "0.30"
+opentelemetry-semantic-conventions = "0.30"
+tracing-opentelemetry = "0.31"
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+dssim-core = "3"
+png = "0.17"
+tempfile = "3.8"
+atomic_refcell = "0.1"
+raw-window-handle = "0.6"
+realfft = "3.0"
+tract-onnx = "0.21"
+approx = "0.5.1"
+crossbeam-channel = "0.5"
+rayon = "1.12"
+open = "5.3.3"
+triple_buffer = "9.0.0"
+rtrb = "0.3.3"
+semver = "1.0.27"
+pollster = "0.4.0"
+parking_lot = "0.12"
+egui = { version = "0.34.1", default-features = false, features = ["bytemuck"] }
+symphonium = { version = "0.6", default-features = false, features = ["wav", "pcm", "fft-resampler"] }
+eyre = "0.6"
+uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
+futures-timer = "3"
+clap = { version = "4", features = ["derive"] }
+dify = "0.8"
+image = { version = "0.25", default-features = false, features = ["png"] }
+fragile = "2"
+midir = "0.11"
+cpal = "0.18"
+libc = "0.2"
+editor-view = { git = "https://github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528", default-features = false }
+editor-state = { git = "https://github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528", default-features = false }
+editor-crdt = { git = "https://github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
+editor-keyflow = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+editor-keyflow-lang = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+view-knowledge-graph = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+ssg = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+ssg-ui = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+ssg-build = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+collection-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main", default-features = false }
+attachments-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+resources-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+files-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+files-client = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+task-dial = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+org-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+live-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+links-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+project-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+share-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+keybindings = "0.0.2"
+editor-types = "0.0.2"
+rrule = "0.11"
+octocrab = "0.46"
+indexmap = "2"
+regex = "1"
+serde_yaml = "0.9"
+cooklang = "0.18"
+pulldown-cmark = { version = "0.10", default-features = false }
+dioxus-router = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41", default-features = false }
+dioxus-icons = { git = "https://github.com/FastTrackStudios/dioxus-icons", tag = "v0.1.0" }
+web-sys = "0.3.98"
+wasm-bindgen = "=0.2.127"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+gloo-timers = { version = "0.3", features = ["futures"] }
+futures-channel = "0.3"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rust_decimal = "1.39"
+vox-codegen = "0.10.0-rc.5"
+signal-nam = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+web-time = "1"
+signal-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-import = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+keyflow-extension = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+ignition-pane = { git = "https://github.com/FastTrackStudios/Ignition", rev = "b9a90c27979bc53b955fe0716d7b19707972ccd0", default-features = false, features = ["pane"] }
+signal-rig-host = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-rigs-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-rig-shell = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-widgets = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-rig-perform-ui = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-content-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-content-library = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-content-client = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-synth-rig = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+socket2 = { version = "0.6", features = ["all"] }
+anyrender_svg = "0.15"
+taffy = { version = "0.7", default-features = false, features = ["std", "flexbox", "taffy_tree"] }
+winit = "0.30"
+ab_glyph = "0.2"
+android-activity = "0.6"
+baseview = "0.2.2"
+block2 = "0.6"
+chatterbox-rs = { git = "https://github.com/bearcove/cbx" }
+claxon = "0.4"
+console_error_panic_hook = "0.1"
+core-foundation = "0.10"
+coremidi = "0.9"
+cursor-icon = "1.2"
+dioxus-core = { package = "dioxus-vdom", git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
+dioxus-signals = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
+dioxus-ssr = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41", default-features = false }
+dirs = "6"
+dispatch2 = "0.3"
+dpp = "0.4"
+fixed = "1.28"
+flacenc = "0.5.1"
+gethostname = "1"
+guitarpro = "=0.4.2"
+hound = "3.5"
+icns = "0.4"
+if-addrs = "0.13"
+insta = "1.34"
+libspa = "0.10"
+libspa-sys = "0.10"
+manganis = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
+mdns-sd = "0.13"
+midly = "0.5"
+miniz_oxide = "0.8"
+nice-plug-core = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", default-features = false }
+objc2-av-foundation = { version = "0.3", default-features = false }
+objc2-avf-audio = "0.3"
+objc2-core-audio = { version = "0.3", default-features = false }
+objc2-core-audio-types = { version = "0.3", default-features = false }
+objc2-core-foundation = { version = "0.3", default-features = false }
+objc2-foundation = { version = "0.3.2", default-features = false }
+objc2-media-player = "0.3"
+objc2-ui-kit = "0.3"
+ort = { version = "=2.0.0-rc.10", default-features = false }
+pipewire = "0.10"
+pprof = "0.15"
+pretty_assertions = "1.4"
+resvg = "0.45"
+usvg = { version = "0.45", default-features = false, features = ["text"] }
+rfd = "0.17"
+rustc-hash = "2"
+smallvec = "1.15.2"
+styx-tree = "5.0.0-rc.5"
+svg = "0.18"
+symphonia = { version = "0.5", default-features = false }
+symphonia-bundle-flac = "0.5"
+symphonia-codec-vorbis = "0.5"
+symphonia-core = "0.5"
+symphonia-format-ogg = "0.5"
+tiny-skia = "0.11"
+toml = "0.8"
+tracing-wasm = "0.2"
+ureq = "2"
+url = "2"
+vello_cpu = { version = "0.3", default-features = false }
+vorbis_rs = "0.5"
+zstd = "0.13"
+wgpu_context = "0.10"
+ebur128 = "0.1"
+libm = { version = "0.2", default-features = false }
+rustfft = "6.2"
+test-that = { version = "0.5.2", default-features = false }
+
+[workspace.lints.rust]
+dead_code = "warn"
+unused = "warn"
+unused_unsafe = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(feature, values(\"fake\"))"] }
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "allow"
+private_intra_doc_links = "allow"
+redundant_explicit_links = "allow"
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+unchecked_time_subtraction = "deny"
+todo = "deny"
+string_slice = "deny"
+panic_in_result_fn = "deny"
+panic = "deny"
+exit = "deny"
+as_conversions = "deny"
+
+[patch.crates-io]
+dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+dioxus = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
+gdtf = { git = "https://github.com/FastTrackStudios/Ignition", rev = "b9a90c27979bc53b955fe0716d7b19707972ccd0" }
+tone3000 = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }
+baseview = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
+libspa-sys = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs.git", rev = "9b54509e848e53ffa971ace15d7adf4908c09358" }
+pipewire-sys = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs.git", rev = "9b54509e848e53ffa971ace15d7adf4908c09358" }
+blitz-dom = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-traits = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-paint = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-shell = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-net = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-html = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+anyrender = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+anyrender_vello = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+anyrender_vello_hybrid = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+winit-uikit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+wgpu-hal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+raw-window-metal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+styx-format = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.1.0" }
+phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.1" }
+facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.1" }
+phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
+
+[patch."https://github.com/bevyengine/bevy"]
+bevy_pbr = { git = "https://github.com/FastTrackStudios/Ignition", rev = "b9a90c27979bc53b955fe0716d7b19707972ccd0" }
+
+[patch."https://github.com/DioxusLabs/dioxus"]
+dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+dioxus-native-dom = { git = "https://www.github.com/FastTrackStudios/vendor", rev = "25bf4bcdfd0b6acb268ca91a93bc8ff8da683a96" }
+dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+
+[patch."https://github.com/FastTrackStudios/daw"]
+daw = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-edit = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-timeline = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-view = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-standalone = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+session-format = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+dawfile-reaper = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+signal-plugin-host = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+builtin = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-sync = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-proto = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-control = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-module = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-transport-sync = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-test-macro = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+utils = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+midi = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+audio = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+fts-sample = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+
+[patch."https://github.com/FastTrackStudios/editor"]
+editor-ext = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+editor-lsp = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+editor-state = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+editor-syntax = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+editor-view = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+editor-vim = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+editor-crdt = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+
+[patch."https://github.com/FastTrackStudios/architect"]
+architect = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-accounts = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-atom = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-commands = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-control = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-devices = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-editor = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extension-archive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extension-wasi = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extensions = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extensions-dioxus = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-favourites = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-files = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-guide = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-input = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-mcp = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-navigator-api = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-orgs = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-palette = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-presence = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-scripting = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-settings = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-settings-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-shell = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-spaces = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-core = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-macros = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-theme = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-views = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-scene = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-workspace = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth-client = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth-proto = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+crdt = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+crdt-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-collab = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-doc = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-live = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-obsidian = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-proto = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-process-view = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+opt-level = 1
+debug = false
+
+[profile.dev.package.rubato]
+opt-level = 3
+
+[profile.dev.package.fixed-resample]
+opt-level = 3
+
+[profile.dev.package.fast-interleave]
+opt-level = 3
+
+[profile.dev.package.dasp_frame]
+opt-level = 3
+
+[profile.dev.package.dasp_sample]
+opt-level = 3
+
+[profile.dev.package.tempo-map]
+opt-level = 3
+
+[profile.dev.package.rustfft]
+opt-level = 3
+
+[profile.dev.package.realfft]
+opt-level = 3
+
+[profile.dev.package.transpose]
+opt-level = 3
+
+[profile.dev.package.strength_reduce]
+opt-level = 3
+
+[profile.dev.package.primal-check]
+opt-level = 3
+
+[profile.dev.package.num-complex]
+opt-level = 3
+
+[profile.dev.package.symphonia-core]
+opt-level = 3
+
+[profile.dev.package.symphonia-bundle-mp3]
+opt-level = 3
+
+[profile.dev.package.symphonia-codec-pcm]
+opt-level = 3
+
+[profile.dev.package.symphonia-codec-aac]
+opt-level = 3
+
+[profile.dev.package.symphonia-format-riff]
+opt-level = 3
+
+[profile.dev.package.zstd-safe]
+opt-level = 3
+
+[profile.dev.package.zstd-sys]
+opt-level = 3
+
+[profile.dev.package.blake3]
+opt-level = 3
+
+[profile.dev.package.phon]
+opt-level = 3
+
+[profile.dev.package.phon-engine]
+opt-level = 3
+
+[profile.dev.package.phon-jit]
+opt-level = 3
+
+[profile.dev.package.dsp-core]
+opt-level = 3
+
+[profile.dev.package.daw-audio-graph]
+opt-level = 3
+
+[profile.dev.package.audio]
+opt-level = 3
+
+[profile.dev.package.daw-standalone]
+opt-level = 3
+
+[profile.dev.package.neural-amp-modeler]
+opt-level = 3
+
+[profile.dev.package.valverig-nam]
+opt-level = 3
+
+[profile.dev.package.dsp]
+opt-level = 3
+
+[profile.dev.package.builtin]
+opt-level = 3
+
+[profile.dev.package.sampler]
+opt-level = 3
+
+[profile.dev.package.guitar]
+opt-level = 3
+
+[profile.dev.package.blitz-dom]
+opt-level = 3
+
+[profile.dev.package.blitz-paint]
+opt-level = 3
+
+[profile.dev.package.blitz-shell]
+opt-level = 3
+
+[profile.dev.package.blitz-traits]
+opt-level = 3
+
+[profile.dev.package.anyrender]
+opt-level = 3
+
+[profile.dev.package.anyrender_vello]
+opt-level = 3
+
+[profile.dev.package.vello]
+opt-level = 3
+
+[profile.dev.package.vello_encoding]
+opt-level = 3
+
+[profile.dev.package.wgpu]
+opt-level = 3
+
+[profile.dev.package.wgpu-core]
+opt-level = 3
+
+[profile.dev.package.wgpu-hal]
+opt-level = 3
+
+[profile.dev.package.naga]
+opt-level = 3
+
+[profile.dev.package.stylo]
+opt-level = 3
+
+[profile.dev.package.selectors]
+opt-level = 3
+
+[profile.dev.package.taffy]
+opt-level = 3
+
+[profile.dev.package.parley]
+opt-level = 3
+
+[profile.dev.package.skrifa]
+opt-level = 3
+
+[profile.dev.package.read-fonts]
+opt-level = 3
+
+[profile.dev.package.swash]
+opt-level = 3
+
+[profile.dev.package.fontique]
+opt-level = 3
+
+[profile.dev.package.peniko]
+opt-level = 3
+
+[profile.dev.package.kurbo]
+opt-level = 3
+
+[profile.dev.package.dioxus-core]
+opt-level = 3
+
+[profile.dev.package.dioxus-native-dom]
+opt-level = 3
+
+[profile.dev.build-override]
+opt-level = 3
+debug = false
+
+[profile.release-fast]
+inherits = "release"
+incremental = true
+codegen-units = 256
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
+[profile.wasm-release.package.audiocore-dsp]
+opt-level = 3
+
+[profile.wasm-release.package.daw-audio-graph]
+opt-level = 3
+
+[profile.wasm-release.package.daw-standalone]
+opt-level = 3
+
+[profile.wasm-release.package.fts-sample]
+opt-level = 3
+
+[profile.wasm-release.package.symphonia-core]
+opt-level = 3
+
+[profile.wasm-release.package.symphonia-format-ogg]
+opt-level = 3
+
+[profile.wasm-release.package.symphonia-codec-vorbis]
+opt-level = 3
+
+[profile.desktop-dev]
+inherits = "dev"
+
+[profile.dev-dbg]
+inherits = "dev"
+debug = 2
+split-debuginfo = "packed"
+
+[profile.dev-dbg.package."*"]
+debug = 2
+
+[profile.wasm-dev]
+inherits = "dev"
+debug = false
+strip = "debuginfo"
+
+[profile.wasm-dev.package."*"]
+opt-level = 3
+
+[profile.wasm-dev.package.audiocore-dsp]
+opt-level = 3
+
+[profile.wasm-dev.package.daw-audio-graph]
+opt-level = 3
+
+[profile.wasm-dev.package.daw-standalone]
+opt-level = 3
+
+[profile.release-lto]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+
