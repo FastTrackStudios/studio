@@ -225,7 +225,11 @@ async fn follow(link: Link, which: Stream) {
     let ended = match which {
         Stream::Set => {
             let (tx, rx) = vox::channel::<SetFrame>();
-            drain(link.streams.set(tx), rx, |frame| set_arrived(frame)).await
+            drain(link.streams.set(tx), rx, |frame| {
+                set_arrived(frame);
+                crate::wake::wake();
+            })
+            .await
         }
         Stream::Overlays => {
             let (tx, rx) = vox::channel::<crate::view::OverlayFrame>();
@@ -237,7 +241,11 @@ async fn follow(link: Link, which: Stream) {
         }
         Stream::Marks => {
             let (tx, rx) = vox::channel::<MarksFrame>();
-            drain(link.streams.marks(tx), rx, marks_arrived).await
+            drain(link.streams.marks(tx), rx, |frame| {
+                marks_arrived(frame);
+                crate::wake::wake();
+            })
+            .await
         }
         Stream::Streams => {
             let (tx, rx) = vox::channel::<crate::view::StreamsFrame>();
@@ -246,6 +254,7 @@ async fn follow(link: Link, which: Stream) {
                 crate::stream_set::adopt_shown(frame);
                 #[cfg(not(feature = "native"))]
                 let _ = frame;
+                crate::wake::wake();
             })
             .await
         }
@@ -259,15 +268,27 @@ async fn follow(link: Link, which: Stream) {
         }
         Stream::Live => {
             let (tx, rx) = vox::channel::<crate::view::LiveFrame>();
-            drain(link.streams.live(tx), rx, live_arrived).await
+            drain(link.streams.live(tx), rx, |frame| {
+                live_arrived(frame);
+                crate::wake::wake();
+            })
+            .await
         }
         Stream::Edits => {
             let (tx, rx) = vox::channel::<crate::view::EditAsked>();
-            drain(link.streams.edits(tx), rx, edit_asked).await
+            drain(link.streams.edits(tx), rx, |frame| {
+                edit_asked(frame);
+                crate::wake::wake();
+            })
+            .await
         }
         Stream::Changes => {
             let (tx, rx) = vox::channel::<crate::view::Changed>();
-            drain(link.streams.changes(tx), rx, changed).await
+            drain(link.streams.changes(tx), rx, |frame| {
+                changed(frame);
+                crate::wake::wake();
+            })
+            .await
         }
         Stream::Queued => {
             let (tx, rx) = vox::channel::<crate::view::Queued>();

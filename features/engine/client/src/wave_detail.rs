@@ -228,6 +228,7 @@ static EPOCH: AtomicU64 = AtomicU64::new(0);
 pub fn engine_changed() {
     EPOCH.fetch_add(1, Ordering::Relaxed);
     GENERATION.fetch_add(1, Ordering::Relaxed);
+    crate::wake::wake();
 }
 
 /// Goes up each time detail arrives: a window compares it with the one
@@ -346,6 +347,8 @@ fn read_newest() {
                 GENERATION.fetch_add(1, Ordering::Relaxed);
             }
         }
+        // The detail read off the window's thread: drawn in the next frame.
+        crate::wake::wake();
     });
 }
 

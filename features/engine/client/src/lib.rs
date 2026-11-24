@@ -92,6 +92,8 @@ pub mod view;
 /// A window's link to its engine: replicas and calls.
 #[cfg(feature = "native")]
 pub mod view_client;
+/// Asking the windows for a frame when the engine changed what they draw.
+pub mod wake;
 pub mod wave_detail;
 #[cfg(feature = "native")]
 pub mod wave_pool;

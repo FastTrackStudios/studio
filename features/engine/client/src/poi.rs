@@ -33,6 +33,7 @@ pub fn publish(points: Vec<Poi>) {
         *shown = Some(Arc::new(points));
     }
     VERSION.fetch_add(1, Ordering::Relaxed);
+    crate::wake::wake();
     // Windows draw them from the marks the engine sends.
     crate::changes::announce(crate::changes::Change::Marks);
 }
@@ -48,6 +49,7 @@ pub fn adopt(points: Vec<Poi>, stepped: Option<String>) {
         *c = stepped;
     }
     VERSION.fetch_add(1, Ordering::Relaxed);
+    crate::wake::wake();
 }
 
 /// Goes up on every change: a window compares it with the one it drew.
@@ -75,6 +77,7 @@ pub fn set_current(id: Option<String>) {
         *c = id;
     }
     VERSION.fetch_add(1, Ordering::Relaxed);
+    crate::wake::wake();
     crate::changes::announce(crate::changes::Change::Marks);
 }
 

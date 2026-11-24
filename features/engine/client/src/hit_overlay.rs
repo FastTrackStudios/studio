@@ -232,6 +232,8 @@ pub fn publish(mut overlay: Overlay) {
     if let Ok(mut showing) = SHOWING.lock() {
         *showing = Some((version, span));
     }
+    // Painted in the next frame, not at the next event.
+    crate::wake::wake();
 }
 
 /// A view painted the markers of `version` (or later): `edit.shown` ends.
