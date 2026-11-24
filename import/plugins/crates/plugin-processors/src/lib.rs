@@ -111,6 +111,11 @@ pub trait BlockProcessor: Send {
 
     /// Set parameter `index` to a plain value (already clamped to its spec;
     /// already modulated, when modulation is on).
+    ///
+    /// Idempotent: setting the value it already has changes nothing (no
+    /// reset glide, no re-seeded smoother). A host may set a parameter
+    /// more than once at a change point (a CLAP gets a value and a
+    /// modulation event), and the null test holds a block to this.
     fn set_param(&mut self, index: usize, value: f32);
 
     /// Clear its state (filters, tails, envelopes), keeping its parameters.

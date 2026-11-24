@@ -44,13 +44,19 @@ impl BlockProcessor for Delay {
         let v = f64::from(value);
         for d in &mut self.lines {
             match index {
+                // Read every tick: the line glides to a new time itself.
                 0 => d.time_ms = v,
                 1 => d.feedback = v,
-                3 => d.hicut_freq = v,
+                // The filter needs its coefficients, and `update` also
+                // re-seeds the time glide, so only on a real change: a
+                // repeated set must not move anything (the trait's rule).
+                3 if d.hicut_freq.to_bits() != v.to_bits() => {
+                    d.hicut_freq = v;
+                    // The lines are already this rate's length: no allocation.
+                    d.update(self.sample_rate);
+                }
                 _ => {}
             }
-            // The lines are already this rate's length: no allocation.
-            d.update(self.sample_rate);
         }
         if index == 2 {
             self.mix = value;
