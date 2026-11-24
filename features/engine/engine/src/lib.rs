@@ -141,6 +141,9 @@ pub mod history;
 pub mod hit_index;
 pub use session_engine_client::hit_overlay;
 #[cfg(feature = "native")]
+pub mod drum_plan;
+pub mod hit_flags;
+#[cfg(feature = "native")]
 pub mod hit_place;
 #[cfg(feature = "native")]
 pub mod hits;

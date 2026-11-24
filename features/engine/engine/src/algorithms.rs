@@ -34,6 +34,9 @@ static EXTENSIONS: OnceLock<Option<Extensions>> = OnceLock::new();
 /// How long an algorithm may take to answer before the built-in answers.
 const ANSWER_WITHIN: Duration = Duration::from_secs(20);
 
+/// The `daw.edit` contract the engine speaks (0.2: `PLAN`).
+const WANTED: &str = "^0.2";
+
 /// The engine's algorithm extensions, started the first time they are
 /// asked for (`None` where they cannot run: no config folder).
 pub fn extensions() -> Option<&'static Extensions> {
@@ -52,7 +55,10 @@ fn root() -> Option<PathBuf> {
 fn start() -> Option<Extensions> {
     let root = root()?;
     let list = crate::actions::list().clone();
-    let host = Host::new(list.clone(), SharedSections::new(architect_settings::Registry::new()));
+    let host = Host::new(
+        list.clone(),
+        SharedSections::new(architect_settings::Registry::new()),
+    );
     let host = match architect_extensions::process::ProcessRunner::new() {
         Ok(runner) => host.with_runner(runner),
         Err(error) => {
@@ -60,8 +66,8 @@ fn start() -> Option<Extensions> {
             host
         }
     };
-    let mut ext =
-        Extensions::new(host, Installs::new(root.join("installed"))).with_dev_root(root.join("dev"));
+    let mut ext = Extensions::new(host, Installs::new(root.join("installed")))
+        .with_dev_root(root.join("dev"));
     if let Some(target) = std::env::var_os("FTS_ENGINE_EXT_TARGET") {
         ext = ext.with_build_target(PathBuf::from(target));
     }
@@ -121,8 +127,12 @@ fn tell(events: &[Event]) {
             Event::Failed { id, error } => {
                 tracing::warn!(ext.id = %id, error = %error, "algorithms: an extension did not load");
             }
-            Event::Loaded(change) => tracing::info!(ext.id = %change.id, "algorithms: extension loaded"),
-            Event::Unloaded { id } => tracing::info!(ext.id = %id, "algorithms: extension unloaded"),
+            Event::Loaded(change) => {
+                tracing::info!(ext.id = %change.id, "algorithms: extension loaded")
+            }
+            Event::Unloaded { id } => {
+                tracing::info!(ext.id = %id, "algorithms: extension unloaded")
+            }
         }
     }
 }
@@ -141,22 +151,41 @@ pub fn place(request: &daw_edit::PlaceRequest) -> Result<daw_edit::PlaceAnswer, 
     })
 }
 
+/// [`daw_edit::METHOD_PLAN`]: where a kit's played hits should go, from
+/// the chosen `daw.edit` provider (rhythm's `RHYTHM_PLAN`). The engine has
+/// no planner of its own.
+///
+/// # Errors
+///
+/// No extension provides `daw.edit` 0.2, or the provider failed or did not
+/// answer in time.
+pub fn plan(request: &daw_edit::PlanRequest) -> Result<daw_edit::PlanAnswer, String> {
+    ask(daw_edit::METHOD_PLAN, request)?.ok_or_else(|| {
+        "no edit algorithm is loaded: planning a drum edit needs an extension providing daw.edit 0.2 (rhythm: ENGINE_EXT_DEV {\"folder\": \"<rhythm>/crates/rhythm-ext\"})".to_owned()
+    })
+}
+
 /// The chosen `daw.edit` provider's answer to `method` with `request`:
 /// `None` when no extension provides the service.
 fn ask<Q: serde::Serialize, A: serde::de::DeserializeOwned>(
     method: &str,
     request: &Q,
 ) -> Result<Option<A>, String> {
-    let Some(ext) = extensions() else { return Ok(None) };
+    let Some(ext) = extensions() else {
+        return Ok(None);
+    };
     let host = ext.host();
-    let wanted = semver::VersionReq::parse("^0.1").map_err(|e| e.to_string())?;
+    let wanted = semver::VersionReq::parse(WANTED).map_err(|e| e.to_string())?;
     let Some((provider, _)) = host.provider(daw_edit::SERVICE, &wanted) else {
         return Ok(None);
     };
-    let loaded = host.get(&provider).ok_or_else(|| format!("{provider} is not loaded"))?;
+    let loaded = host
+        .get(&provider)
+        .ok_or_else(|| format!("{provider} is not loaded"))?;
     let action =
         architect_extensions::interop::method_action(&loaded.manifest.action_prefix(), method);
     let args = serde_json::to_vec(request).map_err(|e| e.to_string())?;
+    let started = web_time::Instant::now();
     let runtime = crate::open::runtime().ok_or("no engine runtime")?;
     let (tx, rx) = std::sync::mpsc::channel();
     let call = action.clone();
@@ -166,10 +195,21 @@ fn ask<Q: serde::Serialize, A: serde::de::DeserializeOwned>(
     });
     let out = rx
         .recv_timeout(ANSWER_WITHIN)
-        .map_err(|_| format!("{action} did not answer within {} s", ANSWER_WITHIN.as_secs()))?
+        .map_err(|_| {
+            format!(
+                "{action} did not answer within {} s",
+                ANSWER_WITHIN.as_secs()
+            )
+        })?
         .map_err(|e| format!("{action}: {e}"))?;
     let answer = serde_json::from_slice(&out).map_err(|e| format!("{action}'s answer: {e}"))?;
-    tracing::info!(algo.provider = %provider, algo.action = %action, "algorithms: answered by an extension");
+    tracing::info!(
+        algo.provider = %provider,
+        algo.action = %action,
+        algo.ms = started.elapsed().as_secs_f64() * 1000.0,
+        algo.answer_bytes = out.len(),
+        "algorithms: answered by an extension"
+    );
     Ok(Some(answer))
 }
 
@@ -262,21 +302,29 @@ struct UseArgs {
 
 fn register(list: &ActionList, ext: &Extensions, overrides: Overrides) -> Result<(), ActionError> {
     let (me, kept) = (ext.clone(), overrides.clone());
-    list.register_with(&DEV, Effect::Mutating, move |_: &ActionCaller, a: Folder| {
-        let dir = PathBuf::from(&a.folder);
-        let id = develop(&me, &dir)?;
-        kept.set(&dir, true)?;
-        Ok::<_, String>(RawJson::from(
-            json!({ "folder": a.folder, "id": id, "build": me.build_of(&id) }).to_string(),
-        ))
-    })?;
+    list.register_with(
+        &DEV,
+        Effect::Mutating,
+        move |_: &ActionCaller, a: Folder| {
+            let dir = PathBuf::from(&a.folder);
+            let id = develop(&me, &dir)?;
+            kept.set(&dir, true)?;
+            Ok::<_, String>(RawJson::from(
+                json!({ "folder": a.folder, "id": id, "build": me.build_of(&id) }).to_string(),
+            ))
+        },
+    )?;
     let (me, kept) = (ext.clone(), overrides);
-    list.register_with(&DEV_END, Effect::Mutating, move |_: &ActionCaller, a: Folder| {
-        let dir = PathBuf::from(&a.folder);
-        tell(&me.end_dev(&dir));
-        kept.set(&dir, false)?;
-        Ok::<_, String>(RawJson::from(json!({ "folder": a.folder }).to_string()))
-    })?;
+    list.register_with(
+        &DEV_END,
+        Effect::Mutating,
+        move |_: &ActionCaller, a: Folder| {
+            let dir = PathBuf::from(&a.folder);
+            tell(&me.end_dev(&dir));
+            kept.set(&dir, false)?;
+            Ok::<_, String>(RawJson::from(json!({ "folder": a.folder }).to_string()))
+        },
+    )?;
     let me = ext.clone();
     list.register_with(&LIST, Effect::ReadOnly, move |_: &ActionCaller, (): ()| {
         let host = me.host();
@@ -293,7 +341,7 @@ fn register(list: &ActionList, ext: &Extensions, overrides: Overrides) -> Result
                 })
             })
             .collect();
-        let wanted = semver::VersionReq::parse("^0.1").ok();
+        let wanted = semver::VersionReq::parse(WANTED).ok();
         let chosen = wanted
             .as_ref()
             .and_then(|w| host.provider(daw_edit::SERVICE, w))
@@ -307,12 +355,16 @@ fn register(list: &ActionList, ext: &Extensions, overrides: Overrides) -> Result
         ))
     })?;
     let me = ext.clone();
-    list.register_with(&USE, Effect::Mutating, move |_: &ActionCaller, a: UseArgs| {
-        let service = a.service.unwrap_or_else(|| daw_edit::SERVICE.to_owned());
-        me.host().use_provider(&service, a.provider.as_deref());
-        Ok::<_, String>(RawJson::from(
-            json!({ "service": service, "provider": a.provider }).to_string(),
-        ))
-    })?;
+    list.register_with(
+        &USE,
+        Effect::Mutating,
+        move |_: &ActionCaller, a: UseArgs| {
+            let service = a.service.unwrap_or_else(|| daw_edit::SERVICE.to_owned());
+            me.host().use_provider(&service, a.provider.as_deref());
+            Ok::<_, String>(RawJson::from(
+                json!({ "service": service, "provider": a.provider }).to_string(),
+            ))
+        },
+    )?;
     Ok(())
 }
