@@ -36,7 +36,10 @@ pub enum Taper {
     /// `0.5` (the usual frequency and time knobs).
     Skewed(f32),
     /// Skewed either side of `center`, which sits at 0.5.
-    SymmetricalSkewed { factor: f32, center: f32 },
+    SymmetricalSkewed {
+        factor: f32,
+        center: f32,
+    },
 }
 
 /// One parameter.
@@ -336,7 +339,8 @@ mod tests {
         assert_eq!(f.denormalize(0.0), 20.0);
         assert_eq!(f.denormalize(1.0), 20_000.0);
         // Symmetrical around 0 on -24..24: the center is exactly halfway.
-        let g = ParamSpec::new("g", "Gain", Unit::Db, -24.0, 24.0, 0.0).symmetrical_skewed(0.5, 0.0);
+        let g =
+            ParamSpec::new("g", "Gain", Unit::Db, -24.0, 24.0, 0.0).symmetrical_skewed(0.5, 0.0);
         assert_eq!(g.normalize(0.0), 0.5);
         assert_eq!(g.denormalize(0.5), 0.0);
         for n in [0.0_f32, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0] {

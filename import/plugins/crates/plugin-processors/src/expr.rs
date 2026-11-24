@@ -97,7 +97,10 @@ fn lex(src: &str) -> Result<Vec<(usize, Tok)>, ExprError> {
     let b = src.as_bytes();
     let mut out = Vec::new();
     let mut i = 0;
-    let err = |at: usize, why: &str| ExprError { at, why: why.into() };
+    let err = |at: usize, why: &str| ExprError {
+        at,
+        why: why.into(),
+    };
     while i < b.len() {
         let c = b[i];
         if c.is_ascii_whitespace() {
@@ -106,8 +109,13 @@ fn lex(src: &str) -> Result<Vec<(usize, Tok)>, ExprError> {
         }
         let start = i;
         if c.is_ascii_digit() || (c == b'.' && b.get(i + 1).is_some_and(u8::is_ascii_digit)) {
-            while i < b.len() && (b[i].is_ascii_digit() || b[i] == b'.' || b[i] == b'e' || b[i] == b'E'
-                || ((b[i] == b'-' || b[i] == b'+') && matches!(b.get(i.wrapping_sub(1)), Some(b'e' | b'E'))))
+            while i < b.len()
+                && (b[i].is_ascii_digit()
+                    || b[i] == b'.'
+                    || b[i] == b'e'
+                    || b[i] == b'E'
+                    || ((b[i] == b'-' || b[i] == b'+')
+                        && matches!(b.get(i.wrapping_sub(1)), Some(b'e' | b'E'))))
             {
                 i += 1;
             }
@@ -124,7 +132,10 @@ fn lex(src: &str) -> Result<Vec<(usize, Tok)>, ExprError> {
             out.push((start, Tok::Ident(text.into())));
             continue;
         }
-        const SYMS: &[&str] = &["&&", "||", "==", "!=", "<=", ">=", "<", ">", "+", "-", "*", "/", "^", "!", "?", ":", "(", ")", ","];
+        const SYMS: &[&str] = &[
+            "&&", "||", "==", "!=", "<=", ">=", "<", ">", "+", "-", "*", "/", "^", "!", "?", ":",
+            "(", ")", ",",
+        ];
         let rest = src.get(i..).unwrap_or("");
         let Some(sym) = SYMS.iter().find(|s| rest.starts_with(**s)) else {
             return Err(err(i, "unexpected character"));
@@ -146,7 +157,15 @@ struct Parser<'a> {
 }
 
 fn norm_name(s: &str) -> String {
-    s.chars().map(|c| if c == ' ' || c == '-' { '_' } else { c.to_ascii_lowercase() }).collect()
+    s.chars()
+        .map(|c| {
+            if c == ' ' || c == '-' {
+                '_'
+            } else {
+                c.to_ascii_lowercase()
+            }
+        })
+        .collect()
 }
 
 impl Parser<'_> {
@@ -155,7 +174,10 @@ impl Parser<'_> {
     }
 
     fn err<T>(&self, why: impl Into<String>) -> Result<T, ExprError> {
-        Err(ExprError { at: self.at(), why: why.into() })
+        Err(ExprError {
+            at: self.at(),
+            why: why.into(),
+        })
     }
 
     fn peek_sym(&self, s: &str) -> bool {
@@ -172,7 +194,11 @@ impl Parser<'_> {
     }
 
     fn expect(&mut self, s: &str) -> Result<(), ExprError> {
-        if self.eat(s) { Ok(()) } else { self.err(alloc::format!("expected `{s}`")) }
+        if self.eat(s) {
+            Ok(())
+        } else {
+            self.err(alloc::format!("expected `{s}`"))
+        }
     }
 
     fn emit(&mut self, op: Op, pushes: isize) -> Result<(), ExprError> {
@@ -199,7 +225,11 @@ impl Parser<'_> {
         Ok(())
     }
 
-    fn binary(&mut self, next: fn(&mut Self) -> Result<(), ExprError>, ops: &[(&str, Op)]) -> Result<(), ExprError> {
+    fn binary(
+        &mut self,
+        next: fn(&mut Self) -> Result<(), ExprError>,
+        ops: &[(&str, Op)],
+    ) -> Result<(), ExprError> {
         next(self)?;
         'outer: loop {
             for (s, op) in ops {
@@ -220,7 +250,17 @@ impl Parser<'_> {
         self.binary(Self::cmp, &[("&&", Op::And)])
     }
     fn cmp(&mut self) -> Result<(), ExprError> {
-        self.binary(Self::add, &[("==", Op::Eq), ("!=", Op::Ne), ("<=", Op::Le), (">=", Op::Ge), ("<", Op::Lt), (">", Op::Gt)])
+        self.binary(
+            Self::add,
+            &[
+                ("==", Op::Eq),
+                ("!=", Op::Ne),
+                ("<=", Op::Le),
+                (">=", Op::Ge),
+                ("<", Op::Lt),
+                (">", Op::Gt),
+            ],
+        )
     }
     fn add(&mut self) -> Result<(), ExprError> {
         self.binary(Self::mul, &[("+", Op::Add), ("-", Op::Sub)])
@@ -260,7 +300,9 @@ impl Parser<'_> {
     }
 
     fn atom(&mut self) -> Result<(), ExprError> {
-        let Some((_, tok)) = self.toks.get(self.pos).cloned() else { return self.err("expected a value") };
+        let Some((_, tok)) = self.toks.get(self.pos).cloned() else {
+            return self.err("expected a value");
+        };
         self.pos += 1;
         match tok {
             Tok::Num(v) => self.emit(Op::Const(v), 1),
@@ -304,7 +346,9 @@ impl Parser<'_> {
                     "true" => self.emit(Op::Const(1.0), 1),
                     "false" => self.emit(Op::Const(0.0), 1),
                     "pi" => self.emit(Op::Const(core::f32::consts::PI), 1),
-                    _ => self.err(alloc::format!("`{name}` is not a control, a choice of this target, or a constant")),
+                    _ => self.err(alloc::format!(
+                        "`{name}` is not a control, a choice of this target, or a constant"
+                    )),
                 }
             }
         }
@@ -314,7 +358,9 @@ impl Parser<'_> {
         self.expect("(")?;
         self.ternary()?;
         self.expect(",")?;
-        let Some((_, Tok::Ident(name))) = self.toks.get(self.pos).cloned() else { return self.err("expected a curve name") };
+        let Some((_, Tok::Ident(name))) = self.toks.get(self.pos).cloned() else {
+            return self.err("expected a curve name");
+        };
         self.pos += 1;
         self.expect(")")?;
         let Some(i) = self.scope.curves.iter().position(|c| *c == name) else {
@@ -332,7 +378,15 @@ impl Parser<'_> {
 /// large.
 pub fn compile(src: &str, scope: &Scope<'_>) -> Result<Vec<Op>, ExprError> {
     let toks = lex(src)?;
-    let mut p = Parser { toks, pos: 0, scope, ops: Vec::new(), depth: 0, max_depth: 0, end: src.len() };
+    let mut p = Parser {
+        toks,
+        pos: 0,
+        scope,
+        ops: Vec::new(),
+        depth: 0,
+        max_depth: 0,
+        end: src.len(),
+    };
     p.ternary()?;
     if p.pos != p.toks.len() {
         return p.err("unexpected text after the expression");
@@ -363,7 +417,9 @@ impl Curve {
 
     #[must_use]
     pub fn at(&self, x: f32) -> f32 {
-        let Some(&(x0, y0)) = self.points.first() else { return 0.0 };
+        let Some(&(x0, y0)) = self.points.first() else {
+            return 0.0;
+        };
         if x <= x0 {
             return y0;
         }
@@ -484,7 +540,11 @@ pub fn eval(ops: &[Op], controls: &[f32], curves: &[Curve]) -> f32 {
             }
         }
     }
-    let v = if sp > 0 { stack.get(sp - 1).copied().unwrap_or(0.0) } else { 0.0 };
+    let v = if sp > 0 {
+        stack.get(sp - 1).copied().unwrap_or(0.0)
+    } else {
+        0.0
+    };
     if v.is_finite() { v } else { 0.0 }
 }
 
@@ -495,7 +555,11 @@ mod tests {
     fn run(src: &str, controls: &[(&str, f32)]) -> f32 {
         let names: Vec<&str> = controls.iter().map(|c| c.0).collect();
         let values: Vec<f32> = controls.iter().map(|c| c.1).collect();
-        let scope = Scope { controls: &names, choices: &["Bell", "Low Shelf"], curves: &["q"] };
+        let scope = Scope {
+            controls: &names,
+            choices: &["Bell", "Low Shelf"],
+            curves: &["q"],
+        };
         let ops = compile(src, &scope).unwrap_or_else(|e| panic!("{src}: {e}"));
         let curve = Curve::from_flat(&[0.0, 0.6, 15.0, 1.5]).unwrap_or_else(|e| panic!("{e}"));
         eval(&ops, &values, &[curve])
@@ -507,8 +571,22 @@ mod tests {
         assert_eq!(run("(1 + 2) * 3", &[]), 9.0);
         assert_eq!(run("2 ^ 3 ^ 2", &[]), 512.0);
         assert_eq!(run("-gain", &[("gain", 4.0)]), -4.0);
-        assert!((run("lf_bell ? 0.6 + abs(lf_gain) * 0.06 : 0.707", &[("lf_bell", 1.0), ("lf_gain", -10.0)]) - 1.2).abs() < 1e-6);
-        assert!((run("lf_bell ? 0.6 + abs(lf_gain) * 0.06 : 0.707", &[("lf_bell", 0.0), ("lf_gain", -10.0)]) - 0.707).abs() < 1e-6);
+        assert!(
+            (run(
+                "lf_bell ? 0.6 + abs(lf_gain) * 0.06 : 0.707",
+                &[("lf_bell", 1.0), ("lf_gain", -10.0)]
+            ) - 1.2)
+                .abs()
+                < 1e-6
+        );
+        assert!(
+            (run(
+                "lf_bell ? 0.6 + abs(lf_gain) * 0.06 : 0.707",
+                &[("lf_bell", 0.0), ("lf_gain", -10.0)]
+            ) - 0.707)
+                .abs()
+                < 1e-6
+        );
         assert_eq!(run("lf_bell ? bell : low_shelf", &[("lf_bell", 0.0)]), 1.0);
         assert!((run("curve(g, q)", &[("g", 7.5)]) - 1.05).abs() < 1e-6);
         assert_eq!(run("clamp(x, 0, 1)", &[("x", 3.0)]), 1.0);
@@ -519,8 +597,19 @@ mod tests {
 
     #[test]
     fn bad_expressions_say_where_and_why() {
-        let scope = Scope { controls: &["a"], choices: &[], curves: &[] };
-        for (src, why) in [("a +", "expected a value"), ("b", "is not a control"), ("nope(a)", "no function"), ("a a", "unexpected text"), ("curve(a, z)", "no curve"), ("(a", "expected `)`")] {
+        let scope = Scope {
+            controls: &["a"],
+            choices: &[],
+            curves: &[],
+        };
+        for (src, why) in [
+            ("a +", "expected a value"),
+            ("b", "is not a control"),
+            ("nope(a)", "no function"),
+            ("a a", "unexpected text"),
+            ("curve(a, z)", "no curve"),
+            ("(a", "expected `)`"),
+        ] {
             match compile(src, &scope) {
                 Err(e) => assert!(e.why.contains(why), "{src}: {}", e.why),
                 Ok(_) => panic!("{src} compiled"),
@@ -528,8 +617,14 @@ mod tests {
         }
         // Bounded: a deep nest is refused, not run.
         let deep = "(".repeat(40) + "a" + &")".repeat(40);
-        assert!(compile(&deep, &scope).is_ok(), "parentheses alone add no depth");
+        assert!(
+            compile(&deep, &scope).is_ok(),
+            "parentheses alone add no depth"
+        );
         let wide = (0..40).map(|_| "a").collect::<Vec<_>>().join(" + (") + &")".repeat(39);
-        assert!(compile(&wide, &scope).is_err(), "40 nested operands exceed the stack");
+        assert!(
+            compile(&wide, &scope).is_err(),
+            "40 nested operands exceed the stack"
+        );
     }
 }

@@ -182,7 +182,11 @@ pub const NAMES: &[&str] = &[
 ///
 /// [`BuildError`] when the engine refuses the rate or block size.
 #[cfg(feature = "std")]
-pub fn build(name: &str, sample_rate: f32, max_block: usize) -> Option<Result<Box<dyn BlockProcessor>, BuildError>> {
+pub fn build(
+    name: &str,
+    sample_rate: f32,
+    max_block: usize,
+) -> Option<Result<Box<dyn BlockProcessor>, BuildError>> {
     build_algorithm(name, None, sample_rate, max_block)
 }
 

@@ -34,7 +34,9 @@ use daw_clap_ext::plugin::{SignalPlugin, SignalPluginLookup, SignalVtable};
 use daw_clap_ext::{ExtError, ModSourceInfo};
 use nice_plug::params::internals::ParamPtr;
 use nice_plug::prelude::*;
-use nice_plug::wrapper::clap::{clap_extension_state, clap_plugin, clap_request_rescan, param_clap_id};
+use nice_plug::wrapper::clap::{
+    clap_extension_state, clap_plugin, clap_request_rescan, param_clap_id,
+};
 use plugin_processors::algorithms::{self, Algorithm, FamilyBlock};
 use plugin_processors::{BlockProcessor, ModSourceSpec, ValueText};
 
@@ -55,10 +57,14 @@ pub trait FamilyDef: Send + Sync + 'static {
 
 fn slot_id(i: usize) -> &'static str {
     static IDS: OnceLock<Vec<&'static str>> = OnceLock::new();
-    IDS.get_or_init(|| (1..=SLOTS).map(|n| &*Box::leak(format!("c{n:03}").into_boxed_str())).collect())
-        .get(i)
-        .copied()
-        .unwrap_or("c000")
+    IDS.get_or_init(|| {
+        (1..=SLOTS)
+            .map(|n| &*Box::leak(format!("c{n:03}").into_boxed_str()))
+            .collect()
+    })
+    .get(i)
+    .copied()
+    .unwrap_or("c000")
 }
 
 // ── The audio side's mailbox ────────────────────────────────────────────
@@ -75,7 +81,9 @@ impl Mailbox {
     /// Main thread.
     fn post(&self, block: FamilyBlock) {
         self.collect();
-        let old = self.pending.swap(Box::into_raw(Box::new(block)), Ordering::AcqRel);
+        let old = self
+            .pending
+            .swap(Box::into_raw(Box::new(block)), Ordering::AcqRel);
         if !old.is_null() {
             // Never installed: ours to drop.
             // SAFETY: only `post` and `take` touch `pending`, by swap.
@@ -111,7 +119,10 @@ impl Mailbox {
 
 impl Drop for Mailbox {
     fn drop(&mut self) {
-        for p in [self.pending.load(Ordering::Acquire), self.retired.load(Ordering::Acquire)] {
+        for p in [
+            self.pending.load(Ordering::Acquire),
+            self.retired.load(Ordering::Acquire),
+        ] {
             if !p.is_null() {
                 // SAFETY: the plugin is going; nothing else holds them.
                 drop(unsafe { Box::from_raw(p) });
@@ -148,7 +159,10 @@ pub struct Shared {
 
 impl Shared {
     fn current(&self) -> Arc<Algorithm> {
-        self.current.read().unwrap_or_else(PoisonError::into_inner).clone()
+        self.current
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     /// Load `algo`: build its block for the running config (main thread),
@@ -156,11 +170,17 @@ impl Shared {
     /// the new controls' defaults. Then ask the host to rescan.
     fn switch(&self, algo: Arc<Algorithm>, reset_values: bool) {
         *self.current.write().unwrap_or_else(PoisonError::into_inner) = algo.clone();
+        // Not run yet under this algorithm.
+        for v in &self.values {
+            v.store(f32::NAN.to_bits(), Ordering::Release);
+        }
         let config = *self.config.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some((sr, max_block)) = config {
             match FamilyBlock::new(algo.clone(), sr, max_block) {
                 Ok(block) => self.mailbox.post(block),
-                Err(e) => nice_plug::nice_log!("{}: algorithm {} not built: {e}", self.family, algo.id),
+                Err(e) => {
+                    nice_plug::nice_log!("{}: algorithm {} not built: {e}", self.family, algo.id)
+                }
             }
         }
         if reset_values {
@@ -190,7 +210,7 @@ impl Shared {
             "author": a.author,
             "look": a.look,
             "controls": a.controls.iter().enumerate().map(|(i, c)| {
-                let value = self.values.get(i).map(|v| f32::from_bits(v.load(Ordering::Acquire)));
+                let value = self.values.get(i).map(|v| f32::from_bits(v.load(Ordering::Acquire))).filter(|v| v.is_finite());
                 serde_json::json!({"id": c.id, "name": c.name, "slot": slot_id(i), "value": value})
             }).collect::<Vec<_>>(),
         })
@@ -208,7 +228,8 @@ impl SignalPlugin for Shared {
     }
 
     fn run_action(&self, id: &str, args_json: &str) -> Result<String, ExtError> {
-        let args: serde_json::Value = serde_json::from_str(args_json).unwrap_or(serde_json::Value::Null);
+        let args: serde_json::Value =
+            serde_json::from_str(args_json).unwrap_or(serde_json::Value::Null);
         match id {
             "SIGNAL_ALGORITHMS" => Ok(serde_json::Value::Array(
                 algorithms::family(self.family)
@@ -253,11 +274,20 @@ impl SignalPlugin for Shared {
     }
 
     fn mod_sources(&self) -> Vec<ModSourceInfo> {
-        self.sources.iter().map(|s| ModSourceInfo { id: s.id.into(), name: s.name.into(), unit: String::new() }).collect()
+        self.sources
+            .iter()
+            .map(|s| ModSourceInfo {
+                id: s.id.into(),
+                name: s.name.into(),
+                unit: String::new(),
+            })
+            .collect()
     }
 
     fn mod_source_value(&self, index: usize) -> f64 {
-        self.source_values.get(index).map_or(0.0, |v| f64::from(f32::from_bits(v.load(Ordering::Acquire))))
+        self.source_values.get(index).map_or(0.0, |v| {
+            f64::from(f32::from_bits(v.load(Ordering::Acquire)))
+        })
     }
 
     fn set_session(&self, _session: Option<(&str, &str)>) -> bool {
@@ -278,20 +308,37 @@ impl FamilyParams {
         let first = shared.current();
         let slots = (0..SLOTS)
             .map(|i| {
-                let default = first.controls.get(i).map_or(0.0, |c| c.normalize(c.default));
+                let default = first
+                    .controls
+                    .get(i)
+                    .map_or(0.0, |c| c.normalize(c.default));
                 let (s_name, s_text, s_parse) = (shared.clone(), shared.clone(), shared.clone());
-                FloatParam::new(format!("Control {}", i + 1), default, FloatRange::Linear { min: 0.0, max: 1.0 })
-                    .with_dynamic_name(Arc::new(move || {
-                        s_name.current().controls.get(i).map_or_else(|| format!("(unused {})", i + 1), |c| c.name.to_owned())
-                    }))
-                    .with_value_to_string(Arc::new(move |n| {
-                        s_text.current().controls.get(i).map_or_else(String::new, |c| ValueText::of(c, c.denormalize(n)).as_str().to_owned())
-                    }))
-                    .with_string_to_value(Arc::new(move |text| {
-                        let a = s_parse.current();
-                        let c = a.controls.get(i)?;
-                        c.parse(text).map(|v| c.normalize(v))
-                    }))
+                FloatParam::new(
+                    format!("Control {}", i + 1),
+                    default,
+                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                )
+                .with_dynamic_name(Arc::new(move || {
+                    s_name
+                        .current()
+                        .controls
+                        .get(i)
+                        .map_or_else(|| format!("(unused {})", i + 1), |c| c.name.to_owned())
+                }))
+                .with_value_to_string(Arc::new(move |n| {
+                    s_text
+                        .current()
+                        .controls
+                        .get(i)
+                        .map_or_else(String::new, |c| {
+                            ValueText::of(c, c.denormalize(n)).as_str().to_owned()
+                        })
+                }))
+                .with_string_to_value(Arc::new(move |text| {
+                    let a = s_parse.current();
+                    let c = a.controls.get(i)?;
+                    c.parse(text).map(|v| c.normalize(v))
+                }))
             })
             .collect();
         Self { slots, shared }
@@ -302,25 +349,49 @@ impl FamilyParams {
 // construction, alive as long as nice-plug's `Arc<FamilyParams>`.
 unsafe impl Params for FamilyParams {
     fn param_map(&self) -> Vec<(String, ParamPtr, String)> {
-        self.slots.iter().enumerate().map(|(i, p)| (slot_id(i).to_owned(), p.as_ptr(), String::new())).collect()
+        self.slots
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (slot_id(i).to_owned(), p.as_ptr(), String::new()))
+            .collect()
     }
 
     fn serialize_fields(&self) -> BTreeMap<String, String> {
         let mut out = BTreeMap::new();
-        out.insert("algorithm".into(), serde_json::to_string(self.shared.current().id).unwrap_or_default());
-        if let Some(file) = self.shared.algorithm_file.lock().unwrap_or_else(PoisonError::into_inner).as_ref() {
-            out.insert("algorithm_file".into(), serde_json::to_string(file).unwrap_or_default());
+        out.insert(
+            "algorithm".into(),
+            serde_json::to_string(self.shared.current().id).unwrap_or_default(),
+        );
+        if let Some(file) = self
+            .shared
+            .algorithm_file
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+        {
+            out.insert(
+                "algorithm_file".into(),
+                serde_json::to_string(file).unwrap_or_default(),
+            );
         }
         out
     }
 
     fn deserialize_fields(&self, serialized: &BTreeMap<String, String>) {
-        let field = |k: &str| serialized.get(k).and_then(|v| serde_json::from_str::<String>(v).ok());
+        let field = |k: &str| {
+            serialized
+                .get(k)
+                .and_then(|v| serde_json::from_str::<String>(v).ok())
+        };
         if let Some(file) = field("algorithm_file") {
             // A downloaded algorithm travels with the session.
             if let Ok(def) = algorithms::parse_styx(&file) {
                 if def.family == self.shared.family && algorithms::register(&def).is_ok() {
-                    *self.shared.algorithm_file.lock().unwrap_or_else(PoisonError::into_inner) = Some(file);
+                    *self
+                        .shared
+                        .algorithm_file
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner) = Some(file);
                 }
             }
         }
@@ -328,7 +399,11 @@ unsafe impl Params for FamilyParams {
             match algorithms::find(self.shared.family, Some(&id)) {
                 // The values were restored with it: keep them.
                 Some(algo) => self.shared.switch(algo, false),
-                None => nice_plug::nice_log!("{}: algorithm {id} isn't here; keeping {}", self.shared.family, self.shared.current().id),
+                None => nice_plug::nice_log!(
+                    "{}: algorithm {id} isn't here; keeping {}",
+                    self.shared.family,
+                    self.shared.current().id
+                ),
             }
         }
     }
@@ -347,8 +422,12 @@ pub struct FamilyPlugin<D: FamilyDef> {
 
 impl<D: FamilyDef> Default for FamilyPlugin<D> {
     fn default() -> Self {
-        let first = algorithms::find(D::FAMILY, None)
-            .unwrap_or_else(|| algorithms::family(D::FAMILY).into_iter().next().unwrap_or_else(|| unreachable_family(D::FAMILY)));
+        let first = algorithms::find(D::FAMILY, None).unwrap_or_else(|| {
+            algorithms::family(D::FAMILY)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| unreachable_family(D::FAMILY))
+        });
         let sources = plugin_processors::sources_of(D::FAMILY);
         let shared = Arc::new(Shared {
             family: D::FAMILY,
@@ -358,7 +437,10 @@ impl<D: FamilyDef> Default for FamilyPlugin<D> {
             mailbox: Mailbox::default(),
             sources,
             source_values: sources.iter().map(|_| AtomicU32::new(0)).collect(),
-            values: (0..SLOTS).map(|_| AtomicU32::new(0)).collect(),
+            // NaN until the block has run: `null` in the chain's JSON.
+            values: (0..SLOTS)
+                .map(|_| AtomicU32::new(f32::NAN.to_bits()))
+                .collect(),
             revision: AtomicU64::new(0),
             plugin: AtomicPtr::new(std::ptr::null_mut()),
             rescan: rescan_fn::<D>,
@@ -366,11 +448,20 @@ impl<D: FamilyDef> Default for FamilyPlugin<D> {
         });
         let params = Arc::new(FamilyParams::new(shared.clone()));
         let _ = shared.params.set(Arc::downgrade(&params));
-        Self { params, shared, block: None, applied: vec![u32::MAX; SLOTS], _def: PhantomData }
+        Self {
+            params,
+            shared,
+            block: None,
+            applied: vec![u32::MAX; SLOTS],
+            _def: PhantomData,
+        }
     }
 }
 
-#[allow(clippy::panic, reason = "a family with no algorithm at all is a build without its engine: nothing to run")]
+#[allow(
+    clippy::panic,
+    reason = "a family with no algorithm at all is a build without its engine: nothing to run"
+)]
 fn unreachable_family(family: &str) -> Arc<Algorithm> {
     panic!("no {family} algorithms in this build")
 }
@@ -403,9 +494,20 @@ impl<D: FamilyDef> Plugin for FamilyPlugin<D> {
         self.params.clone()
     }
 
-    fn activate(&mut self, _layout: &AudioIOLayout, config: &BufferConfig, cx: &mut impl ActivateContext<Self>) -> bool {
-        let max_block = usize::try_from(config.max_buffer_size).unwrap_or(1024).max(1);
-        *self.shared.config.lock().unwrap_or_else(PoisonError::into_inner) = Some((config.sample_rate, max_block));
+    fn activate(
+        &mut self,
+        _layout: &AudioIOLayout,
+        config: &BufferConfig,
+        cx: &mut impl ActivateContext<Self>,
+    ) -> bool {
+        let max_block = usize::try_from(config.max_buffer_size)
+            .unwrap_or(1024)
+            .max(1);
+        *self
+            .shared
+            .config
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some((config.sample_rate, max_block));
         self.shared.mailbox.collect();
         match FamilyBlock::new(self.shared.current(), config.sample_rate, max_block) {
             Ok(block) => {
@@ -424,7 +526,12 @@ impl<D: FamilyDef> Plugin for FamilyPlugin<D> {
         }
     }
 
-    fn process(&mut self, buffer: &mut Buffer, _aux: &mut AuxiliaryBuffers, _cx: &mut impl ProcessContext<Self>) -> ProcessStatus {
+    fn process(
+        &mut self,
+        buffer: &mut Buffer,
+        _aux: &mut AuxiliaryBuffers,
+        _cx: &mut impl ProcessContext<Self>,
+    ) -> ProcessStatus {
         // A new algorithm, swapped in at this block boundary.
         if let Some(new) = self.shared.mailbox.take() {
             if let Some(old) = self.block.replace(new) {
@@ -432,11 +539,18 @@ impl<D: FamilyDef> Plugin for FamilyPlugin<D> {
             }
             self.applied.iter_mut().for_each(|a| *a = u32::MAX);
         }
-        let Some(block) = self.block.as_mut() else { return ProcessStatus::Normal };
+        let Some(block) = self.block.as_mut() else {
+            return ProcessStatus::Normal;
+        };
         // Each control at its slot's modulated position, through the
         // control's own spec: the arithmetic the compiled-in block does.
         let specs = block.params();
-        for (i, ((spec, slot), applied)) in specs.iter().zip(&self.params.slots).zip(self.applied.iter_mut()).enumerate() {
+        for (i, ((spec, slot), applied)) in specs
+            .iter()
+            .zip(&self.params.slots)
+            .zip(self.applied.iter_mut())
+            .enumerate()
+        {
             let v = spec.denormalize(slot.modulated_normalized_value());
             if v.to_bits() != *applied {
                 *applied = v.to_bits();
@@ -509,4 +623,3 @@ macro_rules! family_clap {
         ::nice_plug::nice_export_vst3!($crate::FamilyPlugin<$def>);
     };
 }
-

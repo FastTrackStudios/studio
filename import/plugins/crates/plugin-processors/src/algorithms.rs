@@ -146,14 +146,16 @@ fn unit_of(def: &ControlDef, choices: Option<&'static [&'static str]>) -> Result
     if def.toggle == Some(true) {
         return Ok(Unit::Toggle);
     }
-    Ok(match def.unit.as_deref().map(str::to_ascii_lowercase).as_deref() {
-        None | Some("") => Unit::Plain(def.decimals.unwrap_or(2)),
-        Some("db") => Unit::Db,
-        Some("hz") => Unit::Hz,
-        Some("ms") => Unit::Ms,
-        Some("percent" | "%") => Unit::Percent,
-        Some(other) => return Err(format!("control {}: unknown unit `{other}`", def.id)),
-    })
+    Ok(
+        match def.unit.as_deref().map(str::to_ascii_lowercase).as_deref() {
+            None | Some("") => Unit::Plain(def.decimals.unwrap_or(2)),
+            Some("db") => Unit::Db,
+            Some("hz") => Unit::Hz,
+            Some("ms") => Unit::Ms,
+            Some("percent" | "%") => Unit::Percent,
+            Some(other) => return Err(format!("control {}: unknown unit `{other}`", def.id)),
+        },
+    )
 }
 
 fn control_spec(def: &ControlDef) -> Result<ParamSpec, String> {
@@ -166,8 +168,10 @@ fn control_spec(def: &ControlDef) -> Result<ParamSpec, String> {
         Unit::Choice(names) => (0.0, crate::util_f32(names.len().saturating_sub(1))),
         Unit::Toggle => (0.0, 1.0),
         _ => (
-            def.min.ok_or_else(|| format!("control {}: needs min", def.id))?,
-            def.max.ok_or_else(|| format!("control {}: needs max", def.id))?,
+            def.min
+                .ok_or_else(|| format!("control {}: needs min", def.id))?,
+            def.max
+                .ok_or_else(|| format!("control {}: needs max", def.id))?,
         ),
     };
     if !(min < max) {
@@ -175,7 +179,10 @@ fn control_spec(def: &ControlDef) -> Result<ParamSpec, String> {
     }
     let default = def.default.unwrap_or(min);
     if !(min..=max).contains(&default) {
-        return Err(format!("control {}: default {default} is outside {min}..{max}", def.id));
+        return Err(format!(
+            "control {}: default {default} is outside {min}..{max}",
+            def.id
+        ));
     }
     let mut spec = ParamSpec::new(intern(&def.id), intern(&def.name), unit, min, max, default);
     match (def.skew, def.center) {
@@ -196,7 +203,10 @@ impl Algorithm {
     /// expression that doesn't compile.
     pub fn compile(def: &AlgorithmDef) -> Result<Self, AlgoError> {
         let name = format!("{}/{}", def.family, def.id);
-        let fail = |why: String| AlgoError { algorithm: name.clone(), why };
+        let fail = |why: String| AlgoError {
+            algorithm: name.clone(),
+            why,
+        };
         if def.id.is_empty() || def.family.is_empty() {
             return Err(fail("needs an id and a family".into()));
         }
@@ -205,9 +215,13 @@ impl Algorithm {
             .find(|e| e.id == def.engine)
             .ok_or_else(|| fail(format!("no engine `{}` in this build", def.engine)))?;
         if engine.family != def.family {
-            return Err(fail(format!("engine {} is a {} engine, not {}", engine.id, engine.family, def.family)));
+            return Err(fail(format!(
+                "engine {} is a {} engine, not {}",
+                engine.id, engine.family, def.family
+            )));
         }
-        let targets = crate::engines::targets_of(engine.id).ok_or_else(|| fail("engine has no targets".into()))?;
+        let targets = crate::engines::targets_of(engine.id)
+            .ok_or_else(|| fail("engine has no targets".into()))?;
 
         let controls: &'static [ParamSpec] = match &def.controls {
             None => targets,
@@ -223,7 +237,11 @@ impl Algorithm {
             }
         };
 
-        let curve_names: Vec<&str> = def.curves.iter().flat_map(|c| c.keys().map(String::as_str)).collect();
+        let curve_names: Vec<&str> = def
+            .curves
+            .iter()
+            .flat_map(|c| c.keys().map(String::as_str))
+            .collect();
         let curves = def
             .curves
             .iter()
@@ -237,16 +255,20 @@ impl Algorithm {
         match &def.map {
             Some(map) => {
                 for (target, src) in map {
-                    let ti = targets
-                        .iter()
-                        .position(|t| t.id == target)
-                        .ok_or_else(|| fail(format!("map: {} has no target `{target}`", engine.id)))?;
+                    let ti = targets.iter().position(|t| t.id == target).ok_or_else(|| {
+                        fail(format!("map: {} has no target `{target}`", engine.id))
+                    })?;
                     let choices: &[&str] = match targets.get(ti).map(|t| t.unit) {
                         Some(Unit::Choice(names)) => names,
                         _ => &[],
                     };
-                    let scope = Scope { controls: &control_ids, choices, curves: &curve_names };
-                    let ops = expr::compile(src, &scope).map_err(|e| fail(format!("map {target}: {e}")))?;
+                    let scope = Scope {
+                        controls: &control_ids,
+                        choices,
+                        curves: &curve_names,
+                    };
+                    let ops = expr::compile(src, &scope)
+                        .map_err(|e| fail(format!("map {target}: {e}")))?;
                     ops_total = ops_total.saturating_add(ops.len());
                     outputs.push((ti, ops));
                 }
@@ -255,14 +277,23 @@ impl Algorithm {
                 // Straight through, by id.
                 for (ci, c) in controls.iter().enumerate() {
                     let ti = targets.iter().position(|t| t.id == c.id).ok_or_else(|| {
-                        fail(format!("control {} drives no target of {} (add a map)", c.id, engine.id))
+                        fail(format!(
+                            "control {} drives no target of {} (add a map)",
+                            c.id, engine.id
+                        ))
                     })?;
-                    outputs.push((ti, alloc::vec![Op::Control(u16::try_from(ci).unwrap_or(u16::MAX))]));
+                    outputs.push((
+                        ti,
+                        alloc::vec![Op::Control(u16::try_from(ci).unwrap_or(u16::MAX))],
+                    ));
                 }
             }
         }
         if ops_total > expr::MAX_OPS {
-            return Err(fail(format!("the map is {ops_total} operations; at most {}", expr::MAX_OPS)));
+            return Err(fail(format!(
+                "the map is {ops_total} operations; at most {}",
+                expr::MAX_OPS
+            )));
         }
 
         Ok(Self {
@@ -281,8 +312,13 @@ impl Algorithm {
     }
 
     /// Engine target values for `controls` (plain), as `(target, value)`.
-    pub fn targets_for<'a>(&'a self, controls: &'a [f32]) -> impl Iterator<Item = (usize, f32)> + 'a {
-        self.outputs.iter().map(move |(t, ops)| (*t, expr::eval(ops, controls, &self.curves)))
+    pub fn targets_for<'a>(
+        &'a self,
+        controls: &'a [f32],
+    ) -> impl Iterator<Item = (usize, f32)> + 'a {
+        self.outputs
+            .iter()
+            .map(move |(t, ops)| (*t, expr::eval(ops, controls, &self.curves)))
     }
 }
 
@@ -304,12 +340,22 @@ impl FamilyBlock {
     /// # Errors
     ///
     /// When the engine can't be built for this rate or block size.
-    pub fn new(algorithm: Arc<Algorithm>, sample_rate: f32, max_block: usize) -> Result<Self, BuildError> {
+    pub fn new(
+        algorithm: Arc<Algorithm>,
+        sample_rate: f32,
+        max_block: usize,
+    ) -> Result<Self, BuildError> {
         let engine = crate::engines::build(algorithm.engine, sample_rate, max_block)
             .ok_or_else(|| BuildError(format!("no engine {}", algorithm.engine)))??;
         let targets = engine.params();
         let controls = algorithm.controls.iter().map(|c| c.default).collect();
-        let mut block = Self { sent: alloc::vec![u32::MAX; targets.len()], targets, algorithm, engine, controls };
+        let mut block = Self {
+            sent: alloc::vec![u32::MAX; targets.len()],
+            targets,
+            algorithm,
+            engine,
+            controls,
+        };
         block.push_all();
         // Settle the engine on its starting values (its smoothers on them,
         // not gliding from the engine's own defaults): a fresh block is then
@@ -325,7 +371,13 @@ impl FamilyBlock {
     }
 
     fn push_all(&mut self) {
-        let Self { algorithm, engine, controls, sent, targets } = self;
+        let Self {
+            algorithm,
+            engine,
+            controls,
+            sent,
+            targets,
+        } = self;
         for (t, v) in algorithm.targets_for(controls) {
             let v = targets.get(t).map_or(v, |spec| spec.clamp(v));
             if let Some(last) = sent.get_mut(t) {
@@ -344,7 +396,9 @@ impl BlockProcessor for FamilyBlock {
     }
 
     fn set_param(&mut self, index: usize, value: f32) {
-        let Some(slot) = self.controls.get_mut(index) else { return };
+        let Some(slot) = self.controls.get_mut(index) else {
+            return;
+        };
         if slot.to_bits() == value.to_bits() {
             return;
         }
@@ -393,7 +447,10 @@ impl BlockProcessor for FamilyBlock {
 const BUILT_IN: &[(&str, &str)] = &[
     ("eq/channel", include_str!("../algorithms/eq/channel.styx")),
     ("eq/ssl-e", include_str!("../algorithms/eq/ssl-e.styx")),
-    ("reverb/plate", include_str!("../algorithms/reverb/plate.styx")),
+    (
+        "reverb/plate",
+        include_str!("../algorithms/reverb/plate.styx"),
+    ),
     ("delay/tape", include_str!("../algorithms/delay/tape.styx")),
 ];
 
@@ -415,7 +472,11 @@ fn identity_id(engine_id: &str) -> &str {
     match engine_id {
         "eq.canonical@1" => "parametric",
         "gain@1" => "gain",
-        id => id.split_once('.').map_or(id, |(_, rest)| rest).split_once('@').map_or(id, |(name, _)| name),
+        id => id
+            .split_once('.')
+            .map_or(id, |(_, rest)| rest)
+            .split_once('@')
+            .map_or(id, |(name, _)| name),
     }
 }
 
@@ -495,7 +556,11 @@ pub fn families() -> Vec<&'static str> {
 #[must_use]
 pub fn find(family: &str, id: Option<&str>) -> Option<Arc<Algorithm>> {
     let id = id.or_else(|| DEFAULTS.iter().find(|(f, _)| *f == family).map(|(_, a)| *a))?;
-    registry::read(|all| all.iter().find(|a| a.family == family && a.id == id).cloned())
+    registry::read(|all| {
+        all.iter()
+            .find(|a| a.family == family && a.id == id)
+            .cloned()
+    })
 }
 
 /// Add (or replace) an algorithm: one a person downloaded, or wrote.
@@ -517,7 +582,10 @@ pub fn register(def: &AlgorithmDef) -> Result<Arc<Algorithm>, AlgoError> {
 /// [`AlgoError`] when it isn't valid Styx for an algorithm.
 #[cfg(feature = "files")]
 pub fn parse_styx(text: &str) -> Result<AlgorithmDef, AlgoError> {
-    facet_styx::from_str(text).map_err(|e| AlgoError { algorithm: "(file)".into(), why: format!("{e}") })
+    facet_styx::from_str(text).map_err(|e| AlgoError {
+        algorithm: "(file)".into(),
+        why: format!("{e}"),
+    })
 }
 
 /// Read, validate and register an algorithm file.
@@ -537,7 +605,12 @@ pub fn load_styx(text: &str) -> Result<Arc<Algorithm>, AlgoError> {
 ///
 /// When the engine can't be built for this rate or block size.
 #[cfg(feature = "std")]
-pub fn build(family: &str, id: Option<&str>, sample_rate: f32, max_block: usize) -> Option<Result<FamilyBlock, BuildError>> {
+pub fn build(
+    family: &str,
+    id: Option<&str>,
+    sample_rate: f32,
+    max_block: usize,
+) -> Option<Result<FamilyBlock, BuildError>> {
     let algo = find(family, id)?;
     Some(FamilyBlock::new(algo, sample_rate, max_block))
 }
@@ -553,11 +626,18 @@ mod tests {
             Algorithm::compile(&def).unwrap_or_else(|e| panic!("{name}: {e}"));
         }
         for (family, id) in DEFAULTS {
-            assert!(find(family, Some(id)).is_some(), "{family}'s default {id} is missing");
+            assert!(
+                find(family, Some(id)).is_some(),
+                "{family}'s default {id} is missing"
+            );
         }
         // Every engine has an algorithm: a reverb's every space is there.
         for engine in crate::engines::all() {
-            assert!(find(engine.family, Some(identity_id(engine.id))).is_some(), "{}", engine.id);
+            assert!(
+                find(engine.family, Some(identity_id(engine.id))).is_some(),
+                "{}",
+                engine.id
+            );
         }
     }
 
@@ -565,8 +645,13 @@ mod tests {
     fn an_ssl_face_maps_onto_the_canonical_eq() {
         let ssl = find("eq", Some("ssl-e")).unwrap_or_else(|| panic!("ssl-e"));
         assert!(ssl.controls.len() < 20, "a face, not the whole engine");
-        let mut block = FamilyBlock::new(ssl.clone(), 48_000.0, 256).unwrap_or_else(|e| panic!("{e}"));
-        let i = ssl.controls.iter().position(|c| c.id == "lf_gain").unwrap_or_else(|| panic!("lf_gain"));
+        let mut block =
+            FamilyBlock::new(ssl.clone(), 48_000.0, 256).unwrap_or_else(|e| panic!("{e}"));
+        let i = ssl
+            .controls
+            .iter()
+            .position(|c| c.id == "lf_gain")
+            .unwrap_or_else(|| panic!("lf_gain"));
         block.set_param(i, 9.0);
         let mut l = alloc::vec![0.1_f32; 256];
         let mut r = l.clone();
@@ -596,7 +681,13 @@ map {
         assert_eq!(a.controls.len(), 1);
         assert!(find("eq", Some("tilt")).is_some());
         let bad = file.replace("band.1.gain tilt", "band.1.gane tilt");
-        assert!(load_styx(&bad).map_err(|e| e.why).err().unwrap_or_default().contains("no target `band.1.gane`"));
+        assert!(
+            load_styx(&bad)
+                .map_err(|e| e.why)
+                .err()
+                .unwrap_or_default()
+                .contains("no target `band.1.gane`")
+        );
         let bad = file.replace("band.1.gain tilt", "band.1.gain \"tilt +\"");
         assert!(load_styx(&bad).is_err());
     }
