@@ -2,7 +2,7 @@
 
 A flat, low-contrast look for Studio's views, in the style of Ableton Live: the [arrangement](https://github.com/FastTrackStudios/arrangement-view) and its track headers, and the [mixer](https://github.com/FastTrackStudios/mixer-view). It is [Frame](https://github.com/FastTrackStudios/frame) documents that implement daw's theme spec ([daw#52](https://github.com/FastTrackStudios/daw/issues/52), `daw-theme`), with a dark and a light theme.
 
-It's a look-alike in style only. Nothing in it is taken from Ableton: no logos, icons, fonts or artwork. The colours are its own, and its type is Inter, which every Frame renderer bundles. Ableton and Ableton Live are trademarks of Ableton AG; this pack is not affiliated with or endorsed by them.
+It's a look-alike in style only. Nothing in it is taken from Ableton or from the theme it was measured against: no logos, icons, fonts, images or other files. Its type is Inter, which every Frame renderer bundles. Ableton and Ableton Live are trademarks of Ableton AG; this pack is not affiliated with or endorsed by them.
 
 ## Themes
 
