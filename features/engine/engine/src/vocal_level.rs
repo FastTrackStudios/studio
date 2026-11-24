@@ -35,6 +35,16 @@
 //!
 //! A two-channel vocal is a dual-capsule recording (front left, rear
 //! right; FTS Mic makes it the mic): it is read off its front capsule.
+//!
+//! **On a track with a Signal FX** the leveler is Signal's `level` offline
+//! block instead ([`crate::signal_offline`]): added first in its Rescue
+//! phase when it has none, analysed offline over the audio arriving at
+//! it, and its four lanes written as the FX's own parameter automation —
+//! visible, editable and undoable in the arrangement, played by the host,
+//! the de-ess lane a band's gain rather than the whole vocal's. The take
+//! volume envelopes below are the **fallback** for a vocal with no Signal
+//! on it; moving a vocal onto Signal clears the envelopes it had, so it is
+//! never leveled twice.
 
 #![cfg(feature = "native")]
 
@@ -136,6 +146,11 @@ pub struct Leveled {
     pub ess_spans: u32,
     pub ride_points: u32,
     pub composite_points: u32,
+    /// What leveled it: `signal` (the Signal FX's `level` block, its lanes
+    /// the FX's automation) or `take-envelopes` (the fallback).
+    pub via: String,
+    /// From the call to the lanes being in the song, ms (Signal).
+    pub total_ms: f64,
 }
 
 /// One playing item, read.
@@ -736,6 +751,8 @@ pub fn level(
         ess_spans: count(made.iter().map(|l| l.sibilance.len()).sum()),
         ride_points: count(made.iter().map(|l| l.ride.len()).sum()),
         composite_points: count(composites.iter().map(Vec::len).sum()),
+        via: "take-envelopes".into(),
+        total_ms: 0.0,
     };
     if dry {
         return Ok(said);
@@ -760,11 +777,117 @@ pub fn level(
     Ok(said)
 }
 
+/// Level `track` with the `level` block of the Signal FX on it: `None`
+/// when it has no Signal FX (the take envelopes do it then).
+pub(crate) fn level_with_signal(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    track: &daw_proto::Track,
+    knobs: &Knobs,
+) -> Option<Result<Leveled, String>> {
+    let chain = crate::clap_host::signal::chain(daw, project, &track.guid, None).ok()?;
+    let has_level = chain["chain"]["phases"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|p| p["blocks"].as_array().cloned().unwrap_or_default())
+        .any(|b| b["kind"] == "level");
+    let run = |action: &str, args: serde_json::Value| {
+        crate::clap_host::signal::run(daw, project, (&track.guid, None), action, &args.to_string())
+    };
+    if !has_level {
+        if let Err(e) = run(
+            "SIGNAL_BLOCK_ADD",
+            serde_json::json!({ "phase": "rescue", "kind": "level", "first": true }),
+        ) {
+            return Some(Err(format!(
+                "{}: no level block on its Signal: {e}",
+                track.name
+            )));
+        }
+    }
+    // Onto Signal: the take envelopes it was leveled with go.
+    let cleared = clear_take_lanes(daw, project, track);
+    let done = crate::signal_offline::analyze(
+        daw,
+        project,
+        &crate::signal_offline::AnalyzeArg {
+            track: track.guid.clone(),
+            block: Some("level".into()),
+            consistency: Some(knobs.consistency * 100.0),
+            range_db: Some(knobs.range_db),
+            target_db: knobs.target_db,
+            ..crate::signal_offline::AnalyzeArg::default()
+        },
+    );
+    Some(done.map(|v| {
+        let lanes = v["lanes"].as_array().cloned().unwrap_or_default();
+        let written = |param: &str| {
+            lanes
+                .iter()
+                .filter(|l| l["param"] == param)
+                .filter_map(|l| l["written"].as_u64())
+                .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
+                .sum::<u32>()
+        };
+        tracing::info!(vocal.track = %track.name, vocal.via = "signal", vocal.cleared_items = cleared, "vocal leveled on Signal");
+        Leveled {
+            track: track.name.clone(),
+            items: u32::try_from(playing(daw, project, track).len()).unwrap_or(u32::MAX),
+            target_db: v["made"]["target_db"].as_f64().unwrap_or(0.0),
+            level_db: v["made"]["level_db"].as_f64().unwrap_or(0.0),
+            makeup_db: v["made"]["makeup_db"].as_f64().unwrap_or(0.0),
+            gate_points: written("gate"),
+            breath_points: written("breath"),
+            ride_points: written("ride"),
+            ess_spans: written("ess"),
+            via: "signal".into(),
+            total_ms: v["total_ms"].as_f64().unwrap_or(0.0),
+            ..Leveled::default()
+        }
+    }))
+}
+
+/// Clear the take-envelope leveling of `track` (its items' volume curves
+/// and the lanes kept for them): how many items had it.
+fn clear_take_lanes(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    track: &daw_proto::Track,
+) -> usize {
+    let ext = Tracks::ext_state(daw, project.clone(), TrackRef::Guid(track.guid.clone()));
+    let items: Vec<String> = ext
+        .iter()
+        .filter(|e| e.key != LANE_SHOWN && !e.value.is_empty())
+        .filter_map(|e| e.key.strip_prefix(LANES_KEY).map(str::to_owned))
+        .collect();
+    if items.is_empty() {
+        return 0;
+    }
+    let label = "Move the vocal leveler onto Signal";
+    daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+    for item in &items {
+        if let Some(it) = daw.get_item(project.clone(), ItemRef::Guid(item.clone())) {
+            crate::drum_level::write_curve(daw, project, &it, &[]);
+        }
+        let _ = Tracks::set_ext_state(
+            daw,
+            project.clone(),
+            TrackRef::Guid(track.guid.clone()),
+            &format!("{LANES_KEY}{item}"),
+            "",
+        );
+    }
+    daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+    crate::midi::mark_stale(items.clone());
+    items.len()
+}
+
 static LEVEL: architect::action::ActionMeta = crate::actions::meta(
     "VOCAL_LEVEL",
     "vocal_level",
     "Level the vocals",
-    "Level `tracks` (paths, names or GUIDs; every vocal under Vocals when left out) the way an engineer does before any compressor: four lanes made for each playing item from one analysis of it — the gate (noise between lines taken down, set from the recording's own noise floor), de-breath (breaths and soft noises under the song's level tucked down), the ride (each line, a phrase at a time, brought toward one level for the whole track, so a quiet verse sits with the chorus) and de-ess (each \"ess\" eased) — then the makeup that puts the leveled track's sung level where its louder lines were sung (`level_db` says where), so the choruses keep their level and the verses come up to it. Their sum is written as each item's volume envelope (what plays, what the waveform draws, and it rides with the item); the four lanes are kept with the track per item. `consistency` 0–100 (90): how far each line is brought; `range_db` (12): the most a line moves; `target_db` to ride to, and finish at, a level of your own (dBFS, the front capsule). Says each section's sung level before and after. `dry_run` only says. One undo step.",
+    "Level `tracks` (paths, names or GUIDs; every vocal under Vocals when left out) the way an engineer does before any compressor: four lanes made for each playing item from one analysis of it — the gate (noise between lines taken down, set from the recording's own noise floor), de-breath (breaths and soft noises under the song's level tucked down), the ride (each line, a phrase at a time, brought toward one level for the whole track, so a quiet verse sits with the chorus) and de-ess (each \"ess\" eased) — then the makeup that puts the leveled track's sung level where its louder lines were sung (`level_db` says where), so the choruses keep their level and the verses come up to it. On a vocal with a Signal FX the leveler is its `level` offline block (added first in Rescue when missing): analysed offline over the audio arriving at it, its four lanes written as the FX's own parameter automation in one undo step (`via`: signal, `total_ms` from the call to the lanes being in the song), the de-ess lane a band's gain; a vocal moved onto Signal loses its take-envelope leveling. With no Signal FX (the fallback, `via`: take-envelopes) their sum is written as each item's volume envelope (what plays, what the waveform draws, and it rides with the item); the four lanes are kept with the track per item. `consistency` 0–100 (90): how far each line is brought; `range_db` (12): the most a line moves; `target_db` to ride to, and finish at, a level of your own (dBFS, the front capsule). Says each section's sung level before and after. `dry_run` only says. One undo step.",
     "Vocals",
     "",
 );
@@ -987,7 +1110,19 @@ pub fn register(
             }
             let out: Vec<Leveled> = tracks
                 .iter()
-                .filter_map(|t| level(daw, &project, t, (&knobs, dry)).ok())
+                .filter_map(|t| {
+                    // Signal's `level` block where the vocal has a Signal FX;
+                    // the take envelopes where it has none.
+                    if !dry {
+                        if let Some(done) = level_with_signal(daw, &project, t, &knobs) {
+                            return done.ok();
+                        }
+                    }
+                    level(daw, &project, t, (&knobs, dry)).ok().map(|mut l| {
+                        l.via = "take-envelopes".into();
+                        l
+                    })
+                })
                 .collect();
             if !dry {
                 daw::service::Projects::end_undo_block(daw, project, label, None);
