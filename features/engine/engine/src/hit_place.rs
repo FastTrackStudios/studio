@@ -94,7 +94,7 @@ pub fn place(
     moves: &[(f64, f64)],
     joins: Joins,
 ) -> Result<usize, String> {
-    let ops = plan(song, moves, joins, None)?;
+    let ops = plan(song, moves, joins, (None, None))?.ops;
     if ops.is_empty() {
         return Ok(0);
     }
@@ -105,11 +105,21 @@ pub fn place(
     Ok(ops.len())
 }
 
+/// A placement planned: its item edits, and each piece still drawn out
+/// (where it starts, timeline seconds, and the rate it plays at).
+#[derive(Debug, Default)]
+pub struct Plan {
+    pub ops: Vec<ItemOp>,
+    pub drawn: Vec<(f64, f64)>,
+}
+
 /// The item edits [`place`] makes, not yet applied: for a caller that
 /// writes them with edits of its own as one undo step (`DRUMS_APPLY`).
 /// `cut_on`, when given, are the hits (where they play now) a piece
 /// starts at — the kit's markers otherwise: a hit left out rides in the
-/// piece before it.
+/// piece before it. `least`, when given, is the slowest a piece may be
+/// drawn out: past it the piece after starts earlier to meet it
+/// ([`crate::drum_apply::limit_draws`]).
 ///
 /// # Errors
 /// As [`place`].
@@ -117,8 +127,8 @@ pub fn plan(
     song: &crate::song::Song,
     moves: &[(f64, f64)],
     joins: Joins,
-    cut_on: Option<&[f64]>,
-) -> Result<Vec<ItemOp>, String> {
+    (cut_on, least): (Option<&[f64]>, Option<f64>),
+) -> Result<Plan, String> {
     // Each step its own span under `hits.place`: the trace says where the
     // time went.
     let step = tracing::info_span!("hits.place.mics").entered();
@@ -142,7 +152,7 @@ pub fn plan(
             .map(|m| m.1)
     };
     if moved.is_empty() {
-        return Ok(Vec::new());
+        return Ok(Plan::default());
     }
     let mics = mics(song);
     drop(step);
@@ -181,7 +191,7 @@ pub fn plan(
     let to = (last + CONTEXT).min(hits.len().saturating_sub(1));
     let around = hits.get(from..=to).ok_or("no hit where a move was asked")?;
     let (Some(&near), Some(&far)) = (around.first(), around.last()) else {
-        return Ok(Vec::new());
+        return Ok(Plan::default());
     };
 
     // Every mic's lanes around it, read at once: a slice reached from as
@@ -278,13 +288,29 @@ pub fn plan(
     let outside = (recorded(from.checked_sub(1)), recorded(Some(to + 1)));
     // The chosen `daw.edit` algorithm places them (an extension: rhythm's,
     // or another's); the engine has no placement of its own.
-    let pieces = crate::algorithms::place(&daw_edit::PlaceRequest {
+    let mut pieces = crate::algorithms::place(&daw_edit::PlaceRequest {
         hits: placed.clone(),
         span,
         cut,
         bounds: outside,
     })?
     .pieces;
+    let drawn = least.map_or_else(Vec::new, |least| {
+        let attacks: Vec<f64> = placed.iter().map(|h| h.at).collect();
+        // One take's recording from `a` to `b` (COMP time): the same file
+        // under both on the reference mic's COMP lane.
+        let file_at = |t: f64| {
+            kit.first().and_then(|lanes| {
+                lanes
+                    .comp
+                    .iter()
+                    .find(|c| c.start() <= t && t < c.end())
+                    .and_then(|c| c.file.clone())
+            })
+        };
+        let joined = |a: f64, b: f64| file_at(a).is_some() && file_at(a) == file_at(b);
+        crate::drum_apply::limit_draws(&mut pieces, &attacks, &joined, (cut.guard, least))
+    });
     if let Some(bad) = pieces.iter().find(|p| p.end <= p.start) {
         return Err(format!(
             "a piece would end before it starts ({bad:?}) placing {:?} over {:.3}..{:.3}",
@@ -298,7 +324,7 @@ pub fn plan(
         .flat_map(|lanes| render_ops(lanes, &pieces, span, joins))
         .collect();
     drop(step);
-    Ok(ops)
+    Ok(Plan { ops, drawn })
 }
 
 /// How far past the hits around a move its lanes are read, seconds: a

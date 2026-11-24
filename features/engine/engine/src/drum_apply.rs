@@ -90,6 +90,10 @@ pub struct Limits {
     /// The closest two moments may land: a piece's lead and crossfade
     /// before an attack must not reach the attack before.
     pub apart: f64,
+    /// How far past the attack before it a slice reaching back to meet
+    /// the one before may start, in its recording: the placement's guard
+    /// and crossfade.
+    pub guard: f64,
 }
 
 impl Default for Limits {
@@ -97,6 +101,7 @@ impl Default for Limits {
         Self {
             merge: editing::drums::KIT_MERGE,
             apart: 0.012,
+            guard: 0.020,
         }
     }
 }
@@ -241,7 +246,7 @@ pub fn solve(strokes: &[Stroke], edit: &Edit, limits: Limits) -> Solution {
     rides(&mut out, &riders);
     deletes(&mut out, edit);
     order(&mut out, edit, &riders, limits);
-    stretch_limit(&mut out, &riders);
+    stretch_limit(&mut out, &riders, limits.guard);
     out
 }
 
@@ -505,8 +510,65 @@ fn order(out: &mut Solution, edit: &Edit, riders: &HashMap<usize, usize>, limits
 /// [`KEEP`] as recorded, as the draw-out does).
 #[must_use]
 pub fn farthest(natural: f64) -> f64 {
+    farthest_at(natural, MIN_RATE)
+}
+
+/// [`farthest`], no slower than `least`.
+#[must_use]
+pub fn farthest_at(natural: f64, least: f64) -> f64 {
     let keep = KEEP.min(natural / 2.0);
-    keep + (natural - keep) / MIN_RATE
+    keep + (natural - keep) / least
+}
+
+/// The stretch limit on a placement's pieces (`daw.edit`'s answer, in
+/// timeline order): a piece drawn out past what [`MIN_RATE`] reaches is
+/// drawn no further, and the piece after it starts earlier to meet it —
+/// playing its own recording before its attack, back to no nearer than
+/// `guard` after the attack before (`attacks`, recording times, sorted),
+/// where `joined` says that stretch of recording is one take's. Each
+/// piece still drawn out: its start and the rate it plays at.
+pub fn limit_draws(
+    pieces: &mut [daw_edit::placement::Piece],
+    attacks: &[f64],
+    joined: &dyn Fn(f64, f64) -> bool,
+    (guard, least): (f64, f64),
+) -> Vec<(f64, f64)> {
+    let mut out = Vec::new();
+    for k in 0..pieces.len() {
+        let (Some(p), Some(n)) = (pieces.get(k).copied(), pieces.get(k + 1).copied()) else {
+            continue;
+        };
+        let Some(reach) = p.drawn_to else { continue };
+        let natural = (p.end - p.start).max(1e-6);
+        let most = p.start + farthest_at(natural, least);
+        let mut reach_to = reach;
+        if reach > most + 1e-6 {
+            let start_rec = n.start - n.shift;
+            // Its own attack, and the one before it in the recording.
+            let own = attacks.partition_point(|a| *a < start_rec - 1e-6);
+            let before = own
+                .checked_sub(1)
+                .and_then(|i| attacks.get(i))
+                .copied()
+                .unwrap_or(f64::NEG_INFINITY);
+            let earliest = before + guard + n.shift;
+            let start = most.max(earliest);
+            if start < n.start - 1e-6 && joined(start - n.shift, start_rec) {
+                if let Some(next) = pieces.get_mut(k + 1) {
+                    next.start = start;
+                }
+                reach_to = start;
+            }
+            if let Some(piece) = pieces.get_mut(k) {
+                piece.drawn_to = (reach_to > piece.end + 1e-9).then_some(reach_to);
+            }
+        }
+        let r = rate(natural, reach_to - p.start);
+        if r < 1.0 - 1e-6 {
+            out.push((p.start, r));
+        }
+    }
+    out
 }
 
 /// The rate a slice whose recording runs `natural` seconds plays at over
@@ -520,10 +582,13 @@ pub fn rate(natural: f64, length: f64) -> f64 {
     (natural - keep) / (length - keep).max(1e-9)
 }
 
-/// The stretch limit: in the order they play, where the slice before a
-/// moment would be drawn out slower than [`MIN_RATE`], the moment (and
-/// what rides it) is moved up to meet it.
-fn stretch_limit(out: &mut Solution, riders: &HashMap<usize, usize>) {
+/// The stretch limit: in the order they play, the slice before a moment
+/// is drawn out no slower than [`MIN_RATE`]; past that the moment's own
+/// slice starts earlier to meet it (its recording before its attack, one
+/// take's, back to `guard` after the attack before it: [`limit_draws`]
+/// does it to the placement); and only past that too is the moment (and
+/// what rides it) moved up.
+fn stretch_limit(out: &mut Solution, riders: &HashMap<usize, usize>, guard: f64) {
     let n = out.moments.len();
     for i in 0..n {
         let Some(a) = out.moments.get(i).filter(|m| !m.deleted).cloned() else {
@@ -545,8 +610,17 @@ fn stretch_limit(out: &mut Solution, riders: &HashMap<usize, usize>) {
             continue;
         }
         let most = farthest(natural);
-        if length > most + 1e-6 {
-            let delta = length - most;
+        // How far back the next slice may reach in its own recording.
+        let back = out.moments.get(j - 1).map_or(0.0, |p| {
+            let same = take_of_moment(&out.strokes, p) == take_of_moment(&out.strokes, b);
+            if same {
+                (b.recorded - p.recorded - guard).max(0.0)
+            } else {
+                0.0
+            }
+        });
+        if length > most + back + 1e-6 {
+            let delta = length - most - back;
             let leader: Vec<usize> = b.hits.clone();
             let first = leader
                 .first()
@@ -579,7 +653,7 @@ fn stretch_limit(out: &mut Solution, riders: &HashMap<usize, usize>) {
         let Some(b) = out.moments.get(j) else {
             continue;
         };
-        let r = rate(natural, b.lands() - a.lands());
+        let r = rate(natural, (b.lands() - a.lands()).min(most));
         if r < 1.0 - 1e-6 {
             let id = a
                 .hits
@@ -590,6 +664,14 @@ fn stretch_limit(out: &mut Solution, riders: &HashMap<usize, usize>) {
             out.drawn.push((id, (r * 1_000.0).round() / 1_000.0));
         }
     }
+}
+
+/// The take a moment's first hit is of (its id's code after `~`).
+fn take_of_moment<'a>(strokes: &'a [Stroke], m: &Moment) -> &'a str {
+    m.hits
+        .first()
+        .and_then(|k| strokes.get(*k))
+        .map_or("", |s| crate::edit_list::take_of(&s.id))
 }
 
 /// A synthetic song's edit for timing the solve (`drum-bench`, the
@@ -880,6 +962,7 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
     };
     let limits = Limits {
         apart: joins.lead + joins.crossfade + 0.002,
+        guard: daw_edit::placement::Cut::default().guard + joins.crossfade,
         ..Limits::default()
     };
     let solution = solve(&strokes, &edit, limits);
@@ -949,11 +1032,13 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
     let t = web_time::Instant::now();
     let moves = solution.moves();
     let cut_on = solution.cut_on();
-    let ops = if solution.moments.iter().any(|m| m.by.abs() > NO_MOVE) {
-        crate::hit_place::plan(&song, &moves, joins, Some(&cut_on))?
+    let planned = if solution.moments.iter().any(|m| m.by.abs() > NO_MOVE) {
+        crate::hit_place::plan(&song, &moves, joins, (Some(&cut_on), Some(MIN_RATE)))?
     } else {
-        Vec::new()
+        crate::hit_place::Plan::default()
     };
+    let ops = planned.ops;
+    out.drawn = count(planned.drawn.len());
     step.record("ops", ops.len());
     out.ms.cut = ms(t);
     drop(step);
@@ -978,7 +1063,7 @@ pub fn apply(a: ApplyArg) -> Result<Applied, String> {
         drop(step);
         let step = tracing::info_span!("DRUMS_APPLY.crossfade", deleted = out.deleted).entered();
         let t = web_time::Instant::now();
-        let closing = close_deleted(song, &solution, joins);
+        let closing = close_deleted(song, &solution, (joins, limits.guard));
         let t_lock = web_time::Instant::now();
         song.apply(&closing).map_err(|e| e.to_string())?;
         lock += t_lock.elapsed().as_secs_f64();
@@ -1138,21 +1223,33 @@ fn landings(offs: impl Iterator<Item = (String, f64)>, all: bool) -> Landings {
 fn close_deleted(
     song: &crate::song::Song,
     solution: &Solution,
-    joins: crate::hit_place::Joins,
+    (joins, guard): (crate::hit_place::Joins, f64),
 ) -> Vec<ItemOp> {
-    let deleted: Vec<f64> = solution
+    // Each deleted moment where it lands, and the earliest the slice after
+    // it may start: its own recording back to the deleted attack and a
+    // guard past it.
+    let deleted: Vec<Gone> = solution
         .moments
         .iter()
-        .filter(|m| m.deleted)
-        .map(Moment::lands)
+        .enumerate()
+        .filter(|(_, m)| m.deleted)
+        .map(|(i, m)| {
+            let after = solution.moments.iter().skip(i + 1).find(|n| !n.deleted);
+            Gone {
+                at: m.lands(),
+                earliest: after.map_or(f64::NEG_INFINITY, |n| {
+                    m.recorded + (n.lands() - n.recorded) + guard
+                }),
+            }
+        })
         .collect();
     if deleted.is_empty() {
         return Vec::new();
     }
     let mics = crate::hit_place::mics(song);
     let (lo, hi) = (
-        deleted.first().copied().unwrap_or(0.0) - 10.0,
-        deleted.last().copied().unwrap_or(0.0) + 10.0,
+        deleted.first().map_or(0.0, |g| g.at) - 10.0,
+        deleted.last().map_or(0.0, |g| g.at) + 10.0,
     );
     let lanes: Vec<Vec<crate::hit_place::Slice>> = song
         .read(|p| {
@@ -1163,44 +1260,73 @@ fn close_deleted(
         .unwrap_or_default();
     let mut ops = Vec::new();
     for lane in &lanes {
-        for &at in &deleted {
-            close_one(lane, at, joins, &mut ops);
+        for gone in &deleted {
+            close_one(lane, *gone, joins, &mut ops);
         }
     }
     ops
 }
 
-/// One mic's slice at `at` (an attack) cut out, the one before drawn out
-/// to the slice after it.
+/// A deleted moment: where it lands, and the earliest the slice after it
+/// may start.
+#[derive(Clone, Copy, Debug)]
+struct Gone {
+    at: f64,
+    earliest: f64,
+}
+
+/// One mic's slice at `gone.at` (an attack) cut out, the one before
+/// drawn out to meet the slice after — no slower than [`MIN_RATE`], the
+/// slice after starting earlier for the rest, as [`limit_draws`] does.
 fn close_one(
     lane: &[crate::hit_place::Slice],
-    at: f64,
+    gone: Gone,
     joins: crate::hit_place::Joins,
     ops: &mut Vec<ItemOp>,
 ) {
     let Some(k) = lane
         .iter()
-        .position(|s| (s.start() + joins.lead - at).abs() <= 0.002)
+        .position(|s| (s.start() + joins.lead - gone.at).abs() <= 0.002)
     else {
         return;
     };
-    let (Some(gone), Some(prev)) = (lane.get(k), k.checked_sub(1).and_then(|p| lane.get(p))) else {
+    let (Some(cut), Some(prev)) = (lane.get(k), k.checked_sub(1).and_then(|p| lane.get(p))) else {
         return;
     };
-    let to = lane
-        .get(k + 1)
-        .map_or_else(|| gone.end(), |next| next.start() + joins.crossfade);
-    let mut shape = prev.item.clone();
     // Trimmed to just before the deleted attack in its own recording,
     // then drawn out: never through the stroke that goes.
-    let natural = (at - joins.lead - prev.start()).max(0.001);
+    let natural = (gone.at - joins.lead - prev.start()).max(0.001);
+    let most = prev.start() + farthest(natural);
+    let mut to = cut.end();
+    if let Some(next) = lane.get(k + 1) {
+        let mut start = next.start();
+        let want = most.max(gone.earliest);
+        let offset = next.item.start_offset.as_seconds() - (start - want);
+        if want < start - 1e-6 && offset >= 0.0 && next.markers.len() < 2 {
+            start = want;
+            let id = ItemId::from(next.item.guid.as_str());
+            ops.push(ItemOp::Place {
+                item: id.clone(),
+                at: start,
+                length: next.end() - start,
+                offset,
+            });
+            ops.push(ItemOp::Fades {
+                item: id,
+                fade_in: joins.crossfade,
+                fade_out: next.item.fade_out_length.as_seconds(),
+            });
+        }
+        to = start + joins.crossfade;
+    }
+    let mut shape = prev.item.clone();
     shape.length = daw_proto::Duration::from_seconds(natural);
     let markers = crate::stretch::draw_out_to(&mut shape, to, MIN_RATE)
         .or_else(|| crate::stretch::draw_out_markers(&mut shape, to))
         .unwrap_or_default();
     let item = ItemId::from(prev.item.guid.as_str());
     ops.push(ItemOp::Delete {
-        item: ItemId::from(gone.item.guid.as_str()),
+        item: ItemId::from(cut.item.guid.as_str()),
     });
     ops.push(ItemOp::Place {
         item: item.clone(),
