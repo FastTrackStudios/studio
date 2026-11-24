@@ -40,7 +40,7 @@ struct EditHit {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let (Some(req), Some(edit)) = (args.get(1), args.get(2)) else {
-        eprintln!("usage: plan_bench <request.json> <edit.json> [--misses]");
+        eprintln!("usage: plan_bench <request.json> <edit.json> [--misses] [--leans] [--dump <plan.json>]");
         std::process::exit(2);
     };
     let show = args.iter().any(|a| a == "--misses");
@@ -52,6 +52,11 @@ fn main() {
     let plan = rhythm_editing::plan::plan(&request);
     let took = started.elapsed();
 
+    if let Some(i) = args.iter().position(|a| a == "--dump") {
+        if let Some(path) = args.get(i + 1) {
+            std::fs::write(path, serde_json::to_vec(&plan).expect("plan")).expect("dump");
+        }
+    }
     let bar_len = 240.0 / edit.tempo.bpm;
     let at = |t: f64| {
         let b = (t - edit.tempo.bar_1_at) / bar_len;

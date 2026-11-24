@@ -32,6 +32,8 @@ use daw_edit::PlanRequest;
 
 /// Strokes this close sound as one (a unison, a flam's second stroke).
 pub const UNISON: f64 = 0.030;
+/// A kick this soon before a snare is under it, and rides it.
+pub const KICK_UNDER: f64 = 0.040;
 /// Two drums' strokes this close were struck together: the first leads.
 pub const TOGETHER: f64 = 0.012;
 /// A trigger-only stroke this soon after its own drum's stroke…
@@ -54,7 +56,7 @@ pub const TIE: f64 = 0.010;
 /// The lean is never taken past this.
 const MAX_LEAN: f64 = 0.120;
 /// How much nearer a written note's line counts than a bare line.
-const NOTE_PULL_MIDI: f64 = 0.035;
+const NOTE_PULL_MIDI: f64 = 0.080;
 const NOTE_PULL_GRID: f64 = 0.008;
 /// What breaking a straight run (not one line apart) costs.
 const RUN_BREAK: f64 = 0.030;
@@ -140,6 +142,25 @@ fn is_snare(piece: &str) -> bool {
     piece.to_ascii_lowercase().contains("snare")
 }
 
+/// A leader's line: where, why, how sure, the line nearest it as played
+/// (after the lean), and the other line worth a look, with why.
+#[derive(Clone, Debug)]
+struct Fit {
+    line: f64,
+    reason: Reason,
+    confidence: f64,
+    near: f64,
+    doubt: Option<(f64, String)>,
+}
+
+/// The line of a whole note's `division` nearest `t`.
+fn nearest_line(beats: &Beats<'_>, t: f64, division: u32) -> f64 {
+    let b = beats.beat_of(t);
+    let (bi, _) = beats.in_bar(b);
+    let step = beats.step(bi, division);
+    beats.time_of((b / step).round() * step)
+}
+
 /// What became of a hit before its line is chosen.
 #[derive(Clone, Debug)]
 enum Fate {
@@ -209,11 +230,23 @@ pub fn plan(request: &PlanRequest) -> Plan {
         tracing::info!(halves = l.len(), "lean");
         l
     };
+    // Between half bars' middles, the lean goes from one to the next: a
+    // stroke at a bar line leans as the bar it lands in does.
+    let middles: Vec<(f64, f64)> = leans
+        .iter()
+        .map(|((i, half), l)| {
+            let quarter = f64::from(request.bars[*i].beats) / 4.0;
+            (beats.first[*i] + quarter * (1.0 + 2.0 * f64::from(*half)), l.lean)
+        })
+        .collect();
     let lean_at = |t: f64| -> f64 {
         let b = beats.beat_of(t);
-        let (i, within) = beats.in_bar(b);
-        let half = u8::from(within >= f64::from(request.bars[i].beats) / 2.0);
-        leans.get(&(i, half)).map_or(0.0, |l| l.lean)
+        let k = middles.partition_point(|(m, _)| *m <= b);
+        match (k.checked_sub(1).and_then(|k| middles.get(k)), middles.get(k)) {
+            (Some(&(m0, l0)), Some(&(m1, l1))) if m1 > m0 => l0 + (l1 - l0) * (b - m0) / (m1 - m0),
+            (Some(&(_, l)), _) | (None, Some(&(_, l))) => l,
+            (None, None) => 0.0,
+        }
     };
     let triplet = {
         let _s = tracing::info_span!("rhythm.plan.grid").entered();
@@ -222,7 +255,7 @@ pub fn plan(request: &PlanRequest) -> Plan {
         t
     };
 
-    let mut target: Vec<Option<(f64, Reason, f64, Option<f64>)>> = vec![None; hits.len()];
+    let mut target: Vec<Option<Fit>> = vec![None; hits.len()];
     {
         let _s = tracing::info_span!("rhythm.plan.lines").entered();
         let mut by_piece: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
@@ -258,6 +291,19 @@ pub fn plan(request: &PlanRequest) -> Plan {
             Fate::Kept => (h.time, Reason::Kept, 1.0),
             Fate::Rides(lead, why) => {
                 let shift = lead_shift(*lead, &hits, &fate, &target);
+                let gap = (hits[*lead].time - h.time).abs();
+                if matches!(why, Reason::Rides(_)) && h.piece != hits[*lead].piece && (0.010..0.020).contains(&gap) {
+                    let own = nearest_line(&beats, h.time - lean_at(h.time), 16);
+                    if (own - (h.time + shift)).abs() > 0.0005 {
+                        out.doubts.push(Doubt {
+                            id: h.id.clone(),
+                            piece: h.piece.clone(),
+                            time: h.time,
+                            candidates: [h.time + shift, own],
+                            why: format!("rides the {} {:.0} ms away, or leads", hits[*lead].piece.to_lowercase(), gap * 1000.0),
+                        });
+                    }
+                }
                 let mut first = *lead;
                 while let Fate::Rides(next, _) = &fate[first] {
                     first = *next;
@@ -266,26 +312,22 @@ pub fn plan(request: &PlanRequest) -> Plan {
                 (h.time + shift, why.clone(), 0.9)
             }
             Fate::Lead | Fate::FillGrid(_) => match &target[i] {
-                Some((t, reason, confidence, other)) => {
-                    out.targets.insert(h.id.clone(), *t);
-                    let moved = (t - h.time).abs();
-                    let why = if *confidence < 0.35 {
-                        Some("two lines nearly as near".to_owned())
-                    } else if moved > LONG_MOVE {
-                        Some(format!("moves {:.0} ms", moved * 1000.0))
-                    } else {
-                        None
-                    };
-                    if let (Some(why), Some(o)) = (why, other) {
+                Some(fit) => {
+                    out.targets.insert(h.id.clone(), fit.line);
+                    let moved = (fit.line - h.time).abs();
+                    let doubt = fit.doubt.clone().or_else(|| {
+                        (moved > LONG_MOVE).then(|| (fit.near, format!("moves {:.0} ms", moved * 1000.0)))
+                    });
+                    if let Some((other, why)) = doubt.filter(|(o, _)| (o - fit.line).abs() > 0.0005) {
                         out.doubts.push(Doubt {
                             id: h.id.clone(),
                             piece: h.piece.clone(),
                             time: h.time,
-                            candidates: [*t, *o],
+                            candidates: [fit.line, other],
                             why,
                         });
                     }
-                    (*t, reason.clone(), *confidence)
+                    (fit.line, fit.reason.clone(), fit.confidence)
                 }
                 None => (h.time, Reason::Kept, 0.5),
             },
@@ -318,7 +360,7 @@ fn lead_shift(
     mut lead: usize,
     hits: &[&PlayedHit],
     fate: &[Fate],
-    target: &[Option<(f64, Reason, f64, Option<f64>)>],
+    target: &[Option<Fit>],
 ) -> f64 {
     for _ in 0..8 {
         match &fate[lead] {
@@ -326,7 +368,7 @@ fn lead_shift(
             _ => break,
         }
     }
-    target[lead].as_ref().map_or(0.0, |(t, ..)| t - hits[lead].time)
+    target[lead].as_ref().map_or(0.0, |f| f.line - hits[lead].time)
 }
 
 /// The written notes per piece, by time.
@@ -427,6 +469,19 @@ fn rides(hits: &[&PlayedHit], fate: &mut [Fate], notes: &HashMap<&str, Vec<f64>>
             });
         if let Some(j) = main {
             fate[i] = Fate::Rides(j, Reason::FlamGrace(hits[j].id.clone()));
+        }
+    }
+    // A kick just before a snare (within [`KICK_UNDER`]) is under it:
+    // it rides the snare, just before.
+    for i in 0..hits.len() {
+        if !leads(&fate[i]) || rank(&hits[i].piece) != 1 {
+            continue;
+        }
+        let snare = (i + 1..hits.len())
+            .take_while(|&j| hits[j].time - hits[i].time <= KICK_UNDER)
+            .find(|&j| is_snare(&hits[j].piece) && leads(&fate[j]) && hits[j].time - hits[i].time >= UNISON);
+        if let Some(j) = snare {
+            fate[i] = Fate::Rides(j, Reason::Rides(hits[j].id.clone()));
         }
     }
     // Unisons: a group from its first stroke.
@@ -699,19 +754,24 @@ fn triplet_beats(
     let off16 = |x: f64| ((x * 4.0) - (x * 4.0).round()).abs() > 0.08;
     // The written notes on a triplet line and off a 16th.
     let mut written: BTreeMap<i64, (u32, u32)> = BTreeMap::new();
+    let mut straight: std::collections::BTreeSet<i64> = std::collections::BTreeSet::new();
     for ns in notes.values() {
         for &n in ns {
             let b = beats.beat_of(n);
             let frac = b - b.floor();
+            let t8 = ((frac * 3.0) - (frac * 3.0).round()).abs() < 0.06;
+            let t16 = ((frac * 6.0) - (frac * 6.0).round()).abs() < 0.06;
+            let on_beat = frac < 0.06 || frac > 0.94;
             if off16(frac) {
-                let t8 = ((frac * 3.0) - (frac * 3.0).round()).abs() < 0.06;
-                let t16 = ((frac * 6.0) - (frac * 6.0).round()).abs() < 0.06;
                 let e = written.entry(b.floor() as i64).or_default();
                 if t8 {
                     e.0 += 1;
                 } else if t16 {
                     e.1 += 1;
                 }
+            } else if !on_beat && !t16 {
+                // On a 16th and on no triplet line: a straight beat.
+                straight.insert(b.floor() as i64);
             }
         }
     }
@@ -744,8 +804,19 @@ fn triplet_beats(
             continue;
         }
         let (w8, w16) = written.get(&beat).copied().unwrap_or((0, 0));
-        if w8 + w16 >= 2 {
+        // The bar's triplet notes: one alone is the part written loosely,
+        // two or more a triplet figure.
+        let (bi, _) = beats.in_bar(beat as f64);
+        let bar_first = beats.first[bi] as i64;
+        let in_bar: u32 = (bar_first..bar_first + i64::from(request.bars[bi].beats))
+            .filter_map(|b| written.get(&b))
+            .map(|(a, b)| a + b)
+            .sum();
+        if !straight.contains(&beat) && (w8 + w16 >= 2 || (w8 + w16 >= 1 && in_bar >= 2)) {
             out.insert(beat, if w16 > 0 { 24 } else { 12 });
+            continue;
+        }
+        if straight.contains(&beat) {
             continue;
         }
         let Some(p) = played.get(&beat) else { continue };
@@ -812,6 +883,12 @@ fn candidates(
             if (line - c).abs() <= 0.16 {
                 push(line, &mut out);
             }
+            // Past half a line from the stroke, every bit counts twice:
+            // a stroke goes to a farther line only when it must.
+            let half = step * beats.bars[bi].beat / 2.0;
+            if let Some(e) = out.last_mut().filter(|e| (e.0 - line).abs() < 0.0005 && !e.2) {
+                e.1 += 2.0 * (e.1 - half).max(0.0);
+            }
         }
     }
     let pull = match prefer {
@@ -850,7 +927,7 @@ fn fit_lines(
     notes: &[f64],
     triplet: &BTreeMap<i64, u32>,
     lean_at: &dyn Fn(f64) -> f64,
-) -> Vec<Option<(f64, Reason, f64, Option<f64>)>> {
+) -> Vec<Option<Fit>> {
     let n = idx.len();
     if n == 0 {
         return Vec::new();
@@ -971,8 +1048,33 @@ fn fit_lines(
                 _ if in_run[k] && run_len[k] >= 3 || k + 1 < n && in_run[k + 1] && run_len[k] >= 3 => Reason::DoubleRun,
                 _ => Reason::Grid,
             };
-            let confidence = if margin < TIE { confidence.min(0.3) } else { confidence };
-            Some((line, reason, confidence, other.map(|o| o.0)))
+            let c = corrected[k];
+            let near = nearest_line(beats, c, 16);
+            // The other grid's nearest line: a 16th for a triplet line, a
+            // triplet line for a 16th.
+            let on16 = (nearest_line(beats, line, 16) - line).abs() < 0.0005;
+            let cross = if on16 {
+                [nearest_line(beats, c, 12), nearest_line(beats, c, 24)]
+                    .into_iter()
+                    .filter(|l| (nearest_line(beats, *l, 16) - l).abs() > 0.0005)
+                    .min_by(|a, b| (a - c).abs().total_cmp(&(b - c).abs()))
+            } else {
+                Some(near)
+            };
+            let doubt = if margin < TIE {
+                other.map(|o| (o.0, "two lines nearly as near".to_owned()))
+            } else if let Some(x) = cross
+                .filter(|_| !(on16 && written))
+                .filter(|x| (x - c).abs() < (line - c).abs() + if on16 { -0.004 } else { 0.012 })
+            {
+                Some((x, if on16 { "straight or triplet" } else { "triplet or straight" }.to_owned()))
+            } else if written && (near - c).abs() + 0.025 < (line - c).abs() {
+                Some((near, "the written note, or the line it was played on".to_owned()))
+            } else {
+                None
+            };
+            let confidence = if doubt.is_some() { confidence.min(0.3) } else { confidence };
+            Some(Fit { line, reason, confidence, near, doubt })
         })
         .collect()
 }
