@@ -24,8 +24,9 @@ fn placed(hits: &[Hit], span: (f64, f64), takes: &[Take]) -> Placed {
 
 /// What every placement must hold: each hit plays where it was sent, at
 /// its own speed, by a piece of its shift; no piece plays an attack it is
-/// not that hit's (no attack sounds twice); no stretch is slower than the
-/// leftover's floor.
+/// not that hit's (no attack's transient sounds twice), nor stretches its
+/// own hit's transient; no silence is left between two pieces; a stretch
+/// slower than the leftover's floor is flagged forced.
 fn sound(out: &Placed, hits: &[Hit], fill: Fill) {
     for h in hits {
         let t = h.at + h.shift;
@@ -36,12 +37,13 @@ fn sound(out: &Placed, hits: &[Hit], fill: Fill) {
         let p = by.unwrap_or_else(|| panic!("hit {h:?} plays in no piece: {:?}", out.pieces));
         if let Some(from) = p.drawn_from {
             assert!(
-                from >= t + fill.keep - 1e-9,
-                "the attack of {h:?} is stretched"
+                from > t + 1e-6,
+                "the transient of {h:?} is stretched: {p:?}"
             );
         }
     }
     for p in &out.pieces {
+        assert!(p.end > p.start, "{p:?}");
         let (lo, hi) = (p.start - p.shift, p.end - p.shift);
         for h in hits.iter().filter(|h| (h.shift - p.shift).abs() > 1e-9) {
             assert!(
@@ -49,14 +51,26 @@ fn sound(out: &Placed, hits: &[Hit], fill: Fill) {
                 "{p:?} sounds the attack of {h:?} again"
             );
         }
-        if let (Some(from), Some(to)) = (p.drawn_from, p.drawn_to) {
-            let rate = (p.end - from) / (to - from);
-            assert!(
-                rate >= fill.least_rate_leftover - 1e-9,
-                "{p:?} plays at {rate}"
+        assert!(p.drawn_to.is_none() || p.drawn_from.is_some(), "{p:?}");
+    }
+    for pair in out.pieces.windows(2) {
+        assert!(
+            pair[1].start <= pair[0].reach() + 1e-9,
+            "silence between {:?} and {:?}",
+            pair[0],
+            pair[1]
+        );
+    }
+    for f in &out.fills {
+        assert!(f.left.abs() < 1e-12, "silence left: {f:?}");
+        if let Some(s) = f.stretched {
+            assert!(s.rate > 0.0, "{f:?}");
+            assert_eq!(
+                f.forced_rate,
+                s.rate < fill.least_rate_leftover - 1e-9,
+                "{f:?}"
             );
         }
-        assert!(p.drawn_to.is_none() || p.drawn_from.is_some(), "{p:?}");
     }
 }
 
@@ -122,21 +136,92 @@ fn only_the_last_span_of_what_is_left_is_stretched() {
 }
 
 #[test]
-fn past_what_a_stretch_reaches_at_the_floor_a_faded_dip_is_left() {
-    // 300 ms later after 50 ms: the kick's decay after its attack is
-    // 15 ms, drawn at 0.5 it covers 15 more: the rest is a dip, each side
-    // fading within itself (a crossfade of 0), rather than a slice at
-    // 0.004×. The dip is the silence itself, the crossfade not counted.
+fn past_the_floor_the_replay_reaches_nearer_then_a_forced_stretch_fills() {
+    // 300 ms later after 50 ms: the snare replays the kick's decay as
+    // near as 10 ms past its attack (1.31 as it now plays), and the kick's
+    // 15 ms of decay past its own 10 ms is drawn over the rest at a rate
+    // below 0.5 — flagged, but no silence: the kick reaches the snare's
+    // start and crossfades into it.
     let hits = [hit(1.0, 0.0), hit(1.05, 0.3)];
     let out = placed(&hits, (0.995, 2.5), &[]);
     let fill = &out.fills[0];
     let s = fill.stretched.expect("stretched");
-    assert!(near(s.rate, 0.5));
-    let kick = &out.pieces[0];
-    let snare = &out.pieces[1];
-    assert!(near(fill.left, snare.start - kick.reach()), "{fill:?}");
-    assert!(fill.left > 0.25, "{fill:?}");
-    assert_eq!(snare.crossfade, Some(0.0));
+    assert!(s.rate < 0.5, "{s:?}");
+    assert!(fill.forced_rate);
+    assert!(near(fill.left, 0.0));
+    let (kick, snare) = (&out.pieces[0], &out.pieces[1]);
+    assert!(near(snare.start, 1.31), "{snare:?}");
+    assert!(near(fill.replay_from_attack.expect("replayed"), 0.010));
+    assert!(near(kick.drawn_from.expect("drawn"), 1.01));
+    assert!(near(kick.reach(), snare.start + Fill::default().crossfade));
+}
+
+#[test]
+fn the_replay_goes_nearer_the_attack_before_a_stretch_is_forced() {
+    // The snare 90 ms later after 100: by the guard (15 ms past the kick)
+    // it starts at 1.105, the kick's slice stops at 1.095. At 0.5 the
+    // kick's 65 ms past its keep covers 65, enough: no replay nearer than
+    // the guard. 240 ms later it is not: the replay goes to 10 ms past the
+    // kick, then the stretch runs from the least keep.
+    let near_one = placed(&[hit(1.0, 0.0), hit(1.1, 0.09)], (0.995, 2.5), &[]);
+    let f = &near_one.fills[0];
+    assert!(
+        f.stretched.is_some_and(|s| s.rate >= 0.5) && !f.forced_rate,
+        "{f:?}"
+    );
+    assert_eq!(f.replay_from_attack, None, "{f:?}");
+    let far = placed(&[hit(1.0, 0.0), hit(1.1, 0.24)], (0.995, 2.5), &[]);
+    let f = &far.fills[0];
+    assert!(
+        near(f.replay_from_attack.expect("replayed"), 0.010),
+        "{f:?}"
+    );
+    assert!(near(far.pieces[0].drawn_from.expect("drawn"), 1.01));
+    assert!(f.forced_rate, "{f:?}");
+}
+
+#[test]
+fn strokes_a_few_ms_apart_and_take_edges_leave_no_silence() {
+    // Two strokes 6–15 ms apart (a flam, a double kick; nearer than the
+    // lead the engine keeps them one moment), the second sent 10 to 80 ms
+    // later: what little audio there is is stretched over it.
+    for apart in [0.006, 0.008, 0.010, 0.012, 0.015] {
+        for by in [0.010, 0.030, 0.080] {
+            let hits = [
+                hit(0.6, 0.0),
+                hit(1.0, 0.0),
+                hit(1.0 + apart, by),
+                hit(1.4, by),
+            ];
+            let out = placed(&hits, (0.595, 1.6), &[]);
+            assert!(
+                out.fills.iter().all(|f| f.left == 0.0),
+                "{apart} {by}: {:?}",
+                out.fills
+            );
+        }
+    }
+    // At take edges: the kick's take ends just past its attack, the
+    // snare's starts just before its own; neither side has decay to give.
+    let takes = [
+        Take {
+            from: 0.0,
+            to: 1.012,
+        },
+        Take {
+            from: 1.095,
+            to: 3.0,
+        },
+    ];
+    for by in [0.010, 0.050, 0.200] {
+        let hits = [hit(0.6, 0.0), hit(1.0, 0.0), hit(1.1, by), hit(1.5, by)];
+        let out = placed(&hits, (0.595, 2.0), &takes);
+        assert!(
+            out.fills.iter().all(|f| f.left == 0.0),
+            "{by}: {:?}",
+            out.fills
+        );
+    }
 }
 
 #[test]
@@ -166,9 +251,9 @@ fn a_stretch_past_the_least_rate_is_only_as_slow_as_it_must_be() {
 #[test]
 fn the_piece_after_replays_the_previous_strokes_decay_before_a_stretch() {
     // A guard of 40 ms (wider than the 30 ms keep): the snare 20 ms later
-    // after 60 ms reaches back past the guard, into the kick's decay, up
-    // to 30 ms past the kick's attack, and crossfades with the kick's
-    // slice: no stretch, no dip, the kick's attack played once.
+    // after 60 ms reaches back past the guard, into the kick's decay, no
+    // nearer than 30 ms past the kick's attack, and crossfades with the
+    // kick's slice: no stretch, the kick's attack played once.
     let cut = Cut {
         lead: 0.005,
         guard: 0.040,
@@ -181,10 +266,14 @@ fn the_piece_after_replays_the_previous_strokes_decay_before_a_stretch() {
     assert_eq!(f.stretched, None, "{f:?}");
     assert!(near(f.left, 0.0));
     // The kick plays to 1.055; the snare could reach 1.06 by the guard,
-    // replays from 1.05 (crossfading the last 5 ms of the kick).
-    assert!(near(out.pieces[1].start, 1.05), "{:?}", out.pieces);
-    assert!(near(f.replayed_decay, 0.010), "{f:?}");
-    assert!(near(f.crossfade, 0.005), "{f:?}");
+    // replays from 1.051 (crossfading the kick's last 4 ms).
+    assert!(near(out.pieces[1].start, 1.051), "{:?}", out.pieces);
+    assert!(near(f.replayed_decay, 0.009), "{f:?}");
+    assert!(
+        near(f.replay_from_attack.expect("replayed"), 0.031),
+        "{f:?}"
+    );
+    assert!(near(f.crossfade, 0.004), "{f:?}");
     assert!(out.pieces[1].start - out.pieces[1].shift >= 1.0 + fill.keep - 1e-9);
 }
 
@@ -307,7 +396,7 @@ fn unbreakables_slow_slices_play_no_slower_than_the_floor_and_no_hit_moves() {
             .find(|f| near(f.recorded, b))
             .unwrap_or_else(|| panic!("no fill before {b}: {:?}", out.fills));
         if let Some(s) = fill.stretched {
-            assert!(s.rate >= 0.5 - 1e-9, "{start}: {s:?}");
+            assert!(s.rate >= 0.5 - 1e-9 || fill.forced_rate, "{start}: {s:?}");
         }
         // The fill is never more than the gap the old rule drew over.
         assert!(fill.left <= by + 1e-9, "{start}: {fill:?}");
@@ -336,15 +425,14 @@ fn unbreakables_slow_slices_play_no_slower_than_the_floor_and_no_hit_moves() {
 /// One of the 20 gaps Unbreakable's full edit (DRUMS_APPLY, replayed)
 /// left silent: the hit after it (where it plays, where it was recorded),
 /// the gap and the silence the 0.3.0 fill reported (`left_ms`: the real
-/// silence and the crossfade it was asked to reach too), the dip left now
-/// (`now_ms`), and the hits around it as the engine sends them (recorded,
+/// silence and the crossfade it was asked to reach too) — none is left
+/// now — and the hits around it as the engine sends them (recorded,
 /// shift; seconds, rounded to 0.1 ms).
 struct Case {
     at: f64,
     recorded: f64,
     gap_ms: f64,
     left_ms: f64,
-    now_ms: f64,
     hits: &'static [(f64, f64)],
 }
 
@@ -354,7 +442,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 89.5847,
         gap_ms: 34.5,
         left_ms: 9.9,
-        now_ms: 0.0,
         hits: &[
             (89.1864, 0.0636),
             (89.3203, 0.0234),
@@ -369,7 +456,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 120.7301,
         gap_ms: 24.4,
         left_ms: 15.4,
-        now_ms: 8.2,
         hits: &[
             (120.4716, 0.0284),
             (120.6031, 0.0219),
@@ -384,7 +470,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 136.4081,
         gap_ms: 34.8,
         left_ms: 2.3,
-        now_ms: 0.0,
         hits: &[
             (135.8933, 0.0442),
             (136.2699, 0.0426),
@@ -399,7 +484,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 150.155,
         gap_ms: 35.1,
         left_ms: 0.6,
-        now_ms: 0.0,
         hits: &[
             (149.8229, -0.0104),
             (150.0121, -0.0121),
@@ -414,7 +498,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 151.1184,
         gap_ms: 36.8,
         left_ms: 4.3,
-        now_ms: 0.0,
         hits: &[
             (150.8414, 0.0023),
             (150.9393, -0.0018),
@@ -429,7 +512,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 160.3023,
         gap_ms: 34.1,
         left_ms: 14.5,
-        now_ms: 0.8,
         hits: &[
             (159.9033, 0.0342),
             (160.0504, -0.0191),
@@ -444,7 +526,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 162.3619,
         gap_ms: 39.0,
         left_ms: 44.0,
-        now_ms: 39.0,
         hits: &[
             (162.1581, -0.0331),
             (162.2697, -0.0197),
@@ -459,7 +540,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 181.2228,
         gap_ms: 36.6,
         left_ms: 3.9,
-        now_ms: 0.0,
         hits: &[
             (180.9638, 0.0363),
             (181.0315, -0.0002),
@@ -474,7 +554,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 185.2832,
         gap_ms: 17.6,
         left_ms: 22.6,
-        now_ms: 17.6,
         hits: &[
             (185.0977, -0.0352),
             (185.1792, -0.023),
@@ -489,7 +568,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 192.8885,
         gap_ms: 43.6,
         left_ms: 19.6,
-        now_ms: 3.1,
         hits: &[
             (192.7438, -0.0102),
             (192.7602, -0.0102),
@@ -504,7 +582,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 211.8348,
         gap_ms: 43.3,
         left_ms: 17.4,
-        now_ms: 0.1,
         hits: &[
             (211.292, 0.0205),
             (211.496, 0.004),
@@ -519,7 +596,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 211.8846,
         gap_ms: 42.8,
         left_ms: 19.2,
-        now_ms: 3.2,
         hits: &[
             (211.496, 0.004),
             (211.7832, -0.0957),
@@ -534,7 +610,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 214.0661,
         gap_ms: 52.2,
         left_ms: 38.9,
-        now_ms: 29.2,
         hits: &[
             (213.8452, -0.0015),
             (213.9363, 0.0012),
@@ -549,7 +624,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 215.9822,
         gap_ms: 54.8,
         left_ms: 44.8,
-        now_ms: 37.0,
         hits: &[
             (215.4656, -0.0281),
             (215.5878, 0.0372),
@@ -564,7 +638,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 222.7341,
         gap_ms: 30.9,
         left_ms: 29.3,
-        now_ms: 24.3,
         hits: &[
             (222.5714, -0.0089),
             (222.626, -0.001),
@@ -579,7 +652,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 240.7997,
         gap_ms: 55.3,
         left_ms: 47.8,
-        now_ms: 41.3,
         hits: &[
             (240.2116, -0.0241),
             (240.6035, -0.041),
@@ -594,7 +666,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 253.5054,
         gap_ms: 46.9,
         left_ms: 27.0,
-        now_ms: 13.1,
         hits: &[
             (253.2723, 0.0402),
             (253.3735, 0.0328),
@@ -609,7 +680,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 254.6989,
         gap_ms: 0.9,
         left_ms: 5.9,
-        now_ms: 0.9,
         hits: &[
             (254.4854, -0.0479),
             (254.5693, -0.038),
@@ -624,7 +694,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 264.7524,
         gap_ms: 0.6,
         left_ms: 5.5,
-        now_ms: 0.5,
         hits: &[
             (264.6338, 0.0135),
             (264.6428, 0.0135),
@@ -639,7 +708,6 @@ const UNBREAKABLE_GAPS: [Case; 20] = [
         recorded: 264.7917,
         gap_ms: 18.4,
         left_ms: 8.0,
-        now_ms: 0.0,
         hits: &[
             (264.6428, 0.0135),
             (264.7273, -0.0024),
@@ -705,13 +773,21 @@ fn unbreakables_gaps_are_rebuilt_as_the_engine_sent_them() {
 }
 
 #[test]
-fn unbreakables_gaps_report_the_silence_they_leave_never_more_than_the_gap() {
-    // 0.3.0 said 44 ms left at 162.375 over a 39 ms gap (and 22.6 over
-    // 17.6, 5.9 over 0.9, 5.5 over 0.6): it counted the crossfade the
-    // stretch was asked to reach as silence. What is left is the dip
-    // between the two pieces' audio, never more than the gap.
+fn unbreakables_gaps_leave_no_silence() {
+    // 0.3.0 said 44 ms left at 162.375 over a 39 ms gap: it counted the
+    // crossfade the stretch was asked to reach as silence. 0.3.2 leaves
+    // none at all: every one of the 20 is filled, the replay never nearer
+    // than 10 ms past the previous attack, a stretch slower than 0.5 only
+    // where nothing else reaches, and flagged.
+    let mut forced = 0;
     for case in &UNBREAKABLE_GAPS {
         let (out, fill) = unbreakable_gap(case);
+        assert!(case.left_ms > 0.0, "{}: was not silent", case.at);
+        assert!(fill.left.abs() < 1e-12, "{}: {fill:?}", case.at);
+        if let Some(d) = fill.replay_from_attack {
+            assert!(d >= engine_fill().keep_min - 1e-9, "{}: {fill:?}", case.at);
+        }
+        // The two sides overlap: crossfaded, never a dip.
         let starts = out
             .pieces
             .iter()
@@ -723,43 +799,12 @@ fn unbreakables_gaps_report_the_silence_they_leave_never_more_than_the_gap() {
             })
             .unwrap_or_else(|| panic!("{}: {:?}", case.at, out.pieces));
         let (before, after) = (&out.pieces[starts - 1], &out.pieces[starts]);
-        let silence = (after.start - before.reach()).max(0.0);
-        assert!(near(fill.left, silence), "{}: {fill:?}", case.at);
-        assert!(fill.left <= fill.gap + 1e-9, "{}: {fill:?}", case.at);
-        assert!(
-            fill.left * 1e3 <= (case.left_ms - 5.0).max(0.0) + 0.3,
-            "{}: {fill:?}",
-            case.at
-        );
-        // A dip is never a hard cut: each side fades within itself.
-        if fill.left > 0.0 {
-            assert_eq!(after.crossfade, Some(0.0), "{}", case.at);
-        }
+        assert!(after.start <= before.reach() + 1e-9, "{}", case.at);
+        forced += usize::from(fill.forced_rate);
     }
-}
-
-#[test]
-fn unbreakables_gaps_are_filled_by_the_owners_rule() {
-    // The previous stroke's decay replayed (none here: the engine's 20 ms
-    // guard already reaches past the 30 ms keep), then what is left
-    // stretched down to 0.5 over the before's decay past its keep, then a
-    // dip: 381 ms reported over 20 gaps (281 ms of real silence) is now
-    // 218 ms over 14, 6 of the gaps filled whole.
-    let mut left = 0.0;
-    for case in &UNBREAKABLE_GAPS {
-        let (_, fill) = unbreakable_gap(case);
-        assert!(
-            (fill.left * 1e3 - case.now_ms).abs() < 0.15,
-            "{}: left {} ms, not {}: {fill:?}",
-            case.at,
-            fill.left * 1e3,
-            case.now_ms
-        );
-        assert!(fill.replayed_decay.abs() < 1e-9, "{}: {fill:?}", case.at);
-        if let Some(s) = fill.stretched {
-            assert!(s.rate >= 0.5 - 1e-9, "{}: {s:?}", case.at);
-        }
-        left += fill.left;
-    }
-    assert!((left * 1e3 - 218.4).abs() < 1.0, "{} ms left", left * 1e3);
+    // The strokes too close for any decay past 10 ms (162.375: 23.5 ms
+    // apart, 185.28: 15) and the widest moves (214.125, 216, 222.75,
+    // 240.84) are the 6 forced below 0.5; the other 14 fill at 0.5 or
+    // faster, or by the replay alone.
+    assert_eq!(forced, 6);
 }

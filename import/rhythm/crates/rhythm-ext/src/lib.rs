@@ -262,6 +262,7 @@ pub fn place(params: Json) -> Result<Json, String> {
         "fill.stretched" = tracing::field::Empty,
         "fill.slowest" = tracing::field::Empty,
         "fill.slowest_leftover" = tracing::field::Empty,
+        "fill.forced" = tracing::field::Empty,
         "fill.left" = tracing::field::Empty,
         "fill.left_ms" = tracing::field::Empty,
         "fill.take_stopped" = tracing::field::Empty,
@@ -287,6 +288,7 @@ pub fn place(params: Json) -> Result<Json, String> {
     span.record("fill.extended", count(&|f| f.extended > 0.0));
     span.record("fill.reached_back", count(&|f| f.reached_back > 0.0));
     span.record("fill.replayed_decay", count(&|f| f.replayed_decay > 0.0));
+    span.record("fill.forced", count(&|f| f.forced_rate));
     span.record("fill.crossfaded", count(&|f| f.crossfade > 0.0));
     span.record("fill.stretched", count(&|f| f.stretched.is_some()));
     span.record("fill.left", count(&|f| f.left > 0.0));
