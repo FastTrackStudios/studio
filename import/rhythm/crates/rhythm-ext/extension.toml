@@ -22,7 +22,7 @@ bin = "fts-rhythm"
 # RHYTHM_PLACE) and where a kit's played hits should go (`PLAN` →
 # RHYTHM_PLAN).
 [provides]
-"daw.edit" = "0.3.0"
+"daw.edit" = "0.3.1"
 
 [uses]
 "fts.session" = "^0.1"
@@ -40,7 +40,7 @@ effect = "read_only"
 [[actions]]
 id = "RHYTHM_PLACE"
 name = "Rhythm: place moved hits"
-description = "daw.edit's PLACE: where a recorded performance's audio plays once its hits are moved (`hits`: each `at` and `shift` in seconds; `span`; `cut`: `lead` and `guard`; `bounds`; `takes`: each take's `from`/`to` in recording time; `fill`: `least_rate`, `crossfade`, `most_crossfade`, `keep`). Answers the pieces of the recording to lay on the timeline, in the order they play: each `start`, `end`, `shift`, `crossfade` (how long it sounds over the piece before) and, where its last span is stretched over what is left of a gap, `drawn_from` and `drawn_to`. Each gap is filled without moving a hit: the piece before plays on to just before the next attack in its recording, the piece after reaches back into its own take, the two crossfade, only what is left is stretched (the shortest last span, never slower than `least_rate`), the rest left silent; `fills` says each (gap, extended, reached_back, crossfade, stretched {from, over, rate}, left, take_switch)."
+description = "daw.edit's PLACE: where a recorded performance's audio plays once its hits are moved (`hits`: each `at` and `shift` in seconds; `span`; `cut`: `lead` and `guard`; `bounds`; `takes`: each take's `from`/`to` in recording time; `fill`: `least_rate`, `least_rate_leftover`, `crossfade`, `most_crossfade`, `keep`). Answers the pieces of the recording to lay on the timeline, in the order they play: each `start`, `end`, `shift`, `crossfade` (how long it sounds over the piece before) and, where its last span is stretched over what is left of a gap, `drawn_from` and `drawn_to`. Each gap is filled without moving a hit: the piece before plays on to just before the next attack in its recording, the piece after reaches back into its own take (past the guard into the previous stroke's decay if it must, never its first `keep`), the two crossfade, only what is left is stretched (the shortest last span at `least_rate`, else all the decay past its attack only as slow as it must be, down to `least_rate_leftover`), the rest a dip each side fades into (a `crossfade` of 0), never a hard cut; `fills` says each (gap, extended, reached_back, replayed_decay, crossfade, stretched {from, over, rate}, left: the dip, take_switch)."
 group = "Rhythm"
 effect = "read_only"
 params = '{"type":"object","properties":{"hits":{"type":"array"},"span":{"type":"array"},"cut":{"type":"object"},"bounds":{"type":"array"},"takes":{"type":"array"},"fill":{"type":"object"}},"required":["hits","span"]}'

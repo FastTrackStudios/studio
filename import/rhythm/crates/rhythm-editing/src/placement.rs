@@ -28,19 +28,31 @@
 //!    most [`Fill::most_crossfade`] ending where the piece before has to
 //!    stop. The same pieces go to every mic of the kit: one set of cuts
 //!    and fades, the phase between the mics kept.
-//! 4. Only what is still left is stretched: the decay before (a drum's
+//! 4. If they still do not meet, the piece after replays a bit of the
+//!    previous stroke's decay: it reaches back past `cut.guard`, into that
+//!    stroke's decay in its own recording, but never into its first
+//!    [`Fill::keep`] after the attack (no attack sounds twice), and
+//!    crossfades where it overlaps the piece before
+//!    ([`Filled::replayed_decay`]).
+//! 5. Only what is still left is stretched: the decay before (a drum's
 //!    tail stretches unheard; the lead-in after sits against an attack
 //!    and is never slowed), only its last span — the shortest that
 //!    reaches at [`Fill::least_rate`] — and never its attack
-//!    ([`Fill::keep`]). Past what that reaches the rest is left silent.
-//! 5. At a take switch a side first stops at its take's end; if that
+//!    ([`Fill::keep`]). Where all of that decay at [`Fill::least_rate`]
+//!    does not reach, all of it is drawn only as slow as it must be, down
+//!    to [`Fill::least_rate_leftover`].
+//! 6. Only past both is a dip left ([`Filled::left`]): the piece after
+//!    starts with a `crossfade` of `Some(0.0)`, each side fading out or in
+//!    within itself, never a hard cut.
+//! 7. At a take switch a side first stops at its take's end; if that
 //!    leaves a stretch or a silence, it plays on through the comp's own
 //!    switch there instead (the comp as recorded, never past an attack):
 //!    [`TakeSwitch::Crossed`].
 //!
 //! Each gap is reported ([`Filled`]): how far the piece before was
-//! extended, how far the piece after reached back, how long they
-//! crossfade, what was stretched and at what rate, and what was left.
+//! extended, how far the piece after reached back (and how much of that
+//! replays the previous stroke's decay), how long they crossfade, what
+//! was stretched and at what rate, and what was left.
 
 pub use daw_edit::placement::{Cut, Fill, Filled, Hit, Piece, Stretched, Take, TakeSwitch};
 
@@ -226,6 +238,30 @@ struct Tail {
     report: Option<Filled>,
 }
 
+/// How a seam came out: where the piece before ends, where the one after
+/// starts, how long they crossfade, the stretch and the dip left.
+#[derive(Clone, Copy)]
+struct Done {
+    ends: f64,
+    starts: f64,
+    crossfade: f64,
+    stretched: Option<Stretched>,
+    left: f64,
+}
+
+impl Done {
+    /// The two meet: no stretch, nothing left.
+    const fn met(ends: f64, starts: f64, crossfade: f64) -> Self {
+        Self {
+            ends,
+            starts,
+            crossfade,
+            stretched: None,
+            left: 0.0,
+        }
+    }
+}
+
 struct Rules<'a> {
     cut: Cut,
     fill: Fill,
@@ -259,11 +295,12 @@ impl Rules<'_> {
         }
     }
 
-    /// The earliest the run may start, recording time: `cut.guard` past
-    /// the attack before it in its recording, and (`within`) its take's
-    /// start — whether the take's start is what stops it.
-    fn reaches_back(&self, run: &Run, within: bool) -> (f64, bool) {
-        let attack = run.before.map_or(f64::NEG_INFINITY, |p| p + self.cut.guard);
+    /// The earliest the run may start, recording time: `past` (the
+    /// guard, or the replay's keep) after the attack before it in its
+    /// recording, and (`within`) its take's start — whether the take's
+    /// start is what stops it.
+    fn reaches_back(&self, run: &Run, past: f64, within: bool) -> (f64, bool) {
+        let attack = run.before.map_or(f64::NEG_INFINITY, |p| p + past);
         let take = self.take(run.first).from;
         if within && take > attack {
             (take, true)
@@ -294,117 +331,134 @@ impl Rules<'_> {
     fn seam_within(&self, before: &Run, after: &Run, opened: f64, within: bool) -> Seam {
         let lead = after.first + after.shift - self.cut.lead;
         let (runs_rec, b_take) = self.runs_on(before, before.after, within);
-        let (reach_rec, a_take) = self.reaches_back(after, within);
+        let (reach_rec, a_take) = self.reaches_back(after, self.cut.guard, within);
+        let (replay_rec, r_take) = self.reaches_back(after, self.fill.keep, within);
         let runs_to = runs_rec + before.shift;
         let reaches_to = (reach_rec + after.shift).min(lead);
+        // 4. How far it may reach replaying the previous stroke's decay:
+        // past the guard, never into that stroke's keep.
+        let replays_to = (replay_rec + after.shift).min(reaches_to);
         // Where the piece before was cut before the move: just before this
         // hit's old place, as it plays at the before's shift.
         let old_cut = after.first + before.shift - self.cut.lead;
         let gap = lead - old_cut;
         let switch = if !within {
             TakeSwitch::Crossed
-        } else if b_take || a_take {
+        } else if b_take || a_take || (r_take && replays_to < reaches_to) {
             TakeSwitch::Stopped
         } else {
             TakeSwitch::None
         };
-        let report =
-            |ends: f64, starts: f64, crossfade: f64, stretched: Option<Stretched>, left: f64| {
-                (gap > GAP || left > 0.0 || stretched.is_some()).then(|| Filled {
-                    at: after.first + after.shift,
-                    recorded: after.first,
-                    gap: gap.max(0.0),
-                    extended: (ends.min(runs_to) - old_cut).max(0.0),
-                    reached_back: (lead - starts).max(0.0),
-                    crossfade,
-                    stretched,
-                    left,
-                    take_switch: if stretched.is_some() || left > 0.0 || ends < lead - SAME {
-                        switch
-                    } else {
-                        TakeSwitch::None
-                    },
-                })
-            };
+        let report = |done: Done| {
+            (gap > GAP || done.left > 0.0 || done.stretched.is_some()).then(|| Filled {
+                at: after.first + after.shift,
+                recorded: after.first,
+                gap: gap.max(0.0),
+                extended: (done.ends.min(runs_to) - old_cut).max(0.0),
+                reached_back: (lead - done.starts).max(0.0),
+                replayed_decay: (reaches_to - done.starts).max(0.0),
+                crossfade: done.crossfade,
+                stretched: done.stretched,
+                left: done.left,
+                take_switch: if done.stretched.is_some()
+                    || done.left > 0.0
+                    || done.ends < lead - SAME
+                {
+                    switch
+                } else {
+                    TakeSwitch::None
+                },
+            })
+        };
+        let seam = |done: Done, draw: Option<Draw>| Seam {
+            ends: done.ends,
+            starts: done.starts,
+            crossfade: done.crossfade,
+            draw,
+            report: report(done),
+        };
         // 1. The piece before reaches the lead: the seam is the lead, the
         // usual crossfade into the lead-in before it.
         if lead <= runs_to {
             let crossfade = self.fill.crossfade.min(lead - reaches_to).max(0.0);
-            let starts = lead - crossfade;
-            return Seam {
-                ends: lead,
-                starts,
-                crossfade,
-                draw: None,
-                report: report(lead, starts, crossfade, None, 0.0),
-            };
+            return seam(Done::met(lead, lead - crossfade, crossfade), None);
         }
-        // 2–3. It stops short; the piece after reaches back to meet it, and
+        // 2–4. It stops short; the piece after reaches back to meet it —
+        // past the guard into the previous stroke's decay if it must — and
         // they crossfade over what they share.
-        if reaches_to <= runs_to {
-            let crossfade = (runs_to - reaches_to).min(self.fill.most_crossfade);
-            let starts = runs_to - crossfade;
-            return Seam {
-                ends: runs_to,
-                starts,
-                crossfade,
-                draw: None,
-                report: report(runs_to, starts, crossfade, None, 0.0),
+        if replays_to <= runs_to {
+            let from = if reaches_to <= runs_to {
+                reaches_to
+            } else {
+                replays_to
             };
+            let crossfade = (runs_to - from).min(self.fill.most_crossfade);
+            return seam(Done::met(runs_to, runs_to - crossfade, crossfade), None);
         }
-        // 4. Neither reaches: the decay before's last span is stretched to
-        // meet the piece after, crossfading into it.
-        let crossfade = self.fill.crossfade;
+        // 5. Neither reaches: the decay before's last span is stretched to
+        // meet the piece after (reaching back as far as it may), crossfading
+        // into it; 6. what not even that reaches is a dip.
         let attack = (before.last + before.shift + self.fill.keep).max(opened);
-        let (draw, stretched, left) = self.stretch(runs_to, attack, reaches_to + crossfade);
-        let reach = draw.map_or(runs_to, |d| d.to);
-        let crossfade = if left > 0.0 {
-            0.0
+        let stretch = self.stretch(runs_to, attack, replays_to + self.fill.crossfade);
+        let reach = stretch.map_or(runs_to, |(d, _)| d.to);
+        let left = replays_to - reach;
+        let (left, crossfade) = if left > SAME {
+            (left, 0.0)
         } else {
-            (reach - reaches_to).max(0.0)
+            (0.0, (reach - replays_to).max(0.0))
         };
-        Seam {
-            ends: runs_to,
-            starts: reaches_to,
-            crossfade,
-            draw,
-            report: report(runs_to, reaches_to, crossfade, stretched, left),
-        }
+        seam(
+            Done {
+                ends: runs_to,
+                starts: replays_to,
+                crossfade,
+                stretched: stretch.map(|(_, s)| s),
+                left,
+            },
+            stretch.map(|(d, _)| d),
+        )
     }
 
     /// The decay ending at `ends` (timeline; its attack's keep ends at
     /// `attack`) stretched to reach `to`: the shortest last span that does
-    /// at [`Fill::least_rate`], or all the decay there is at that rate and
-    /// the rest left.
-    fn stretch(&self, ends: f64, attack: f64, to: f64) -> (Option<Draw>, Option<Stretched>, f64) {
+    /// at [`Fill::least_rate`]; else all the decay there is, only as slow
+    /// as it must be, down to [`Fill::least_rate_leftover`] — what that
+    /// does not reach is left. None: no decay to stretch, or nothing
+    /// short.
+    fn stretch(&self, ends: f64, attack: f64, to: f64) -> Option<(Draw, Stretched)> {
         let short = to - ends;
         let least = self.fill.least_rate;
-        if short <= SAME {
-            return (None, None, 0.0);
+        if short <= SAME || !(least > 0.0 && least < 1.0) {
+            return None;
         }
-        if !(least > 0.0 && least < 1.0) {
-            return (None, None, short);
+        let floor = self.fill.least_rate_leftover;
+        let floor = if floor > 0.0 && floor <= least {
+            floor
+        } else {
+            least
+        };
+        let room = (ends - attack).max(0.0);
+        if room <= 1e-3 {
+            return None;
         }
         let need = short * least / (1.0 - least);
-        let room = (ends - attack).max(0.0);
-        let span = need.min(room);
-        if span <= 1e-3 {
-            return (None, None, short);
-        }
-        let covers = span * (1.0 - least) / least;
-        let covers = covers.min(short);
+        let (span, covers) = if need <= room {
+            (need, short)
+        } else if room / (room + short) >= floor {
+            (room, short)
+        } else {
+            (room, room * (1.0 - floor) / floor)
+        };
         let from = ends - span;
         let reach = ends + covers;
-        let stretched = Stretched {
-            from,
-            over: reach - from,
-            rate: span / (reach - from),
-        };
-        (
-            Some(Draw { from, to: reach }),
-            Some(stretched),
-            (short - covers).max(0.0),
-        )
+        Some((
+            Draw { from, to: reach },
+            Stretched {
+                from,
+                over: reach - from,
+                rate: span / (reach - from),
+            },
+        ))
     }
 
     /// The span's last piece, `start..end` (timeline): stopped before the
@@ -439,7 +493,10 @@ impl Rules<'_> {
             return None;
         }
         let attack = (run.last + run.shift + self.fill.keep).max(start);
-        let (draw, stretched, left) = self.stretch(runs_to, attack, end);
+        let stretch = self.stretch(runs_to, attack, end);
+        let (draw, stretched) = (stretch.map(|(d, _)| d), stretch.map(|(_, s)| s));
+        let left = end - draw.map_or(runs_to, |d| d.to);
+        let left = if left > SAME { left } else { 0.0 };
         let switch = if !within {
             TakeSwitch::Crossed
         } else if stopped {
@@ -456,6 +513,7 @@ impl Rules<'_> {
                 gap: end - runs_to,
                 extended: 0.0,
                 reached_back: 0.0,
+                replayed_decay: 0.0,
                 crossfade: 0.0,
                 stretched,
                 left,

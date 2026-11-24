@@ -257,10 +257,13 @@ pub fn place(params: Json) -> Result<Json, String> {
         "fill.gaps" = tracing::field::Empty,
         "fill.extended" = tracing::field::Empty,
         "fill.reached_back" = tracing::field::Empty,
+        "fill.replayed_decay" = tracing::field::Empty,
         "fill.crossfaded" = tracing::field::Empty,
         "fill.stretched" = tracing::field::Empty,
         "fill.slowest" = tracing::field::Empty,
+        "fill.slowest_leftover" = tracing::field::Empty,
         "fill.left" = tracing::field::Empty,
+        "fill.left_ms" = tracing::field::Empty,
         "fill.take_stopped" = tracing::field::Empty,
         "fill.take_crossed" = tracing::field::Empty,
     );
@@ -283,9 +286,14 @@ pub fn place(params: Json) -> Result<Json, String> {
     span.record("fill.gaps", fills.len());
     span.record("fill.extended", count(&|f| f.extended > 0.0));
     span.record("fill.reached_back", count(&|f| f.reached_back > 0.0));
+    span.record("fill.replayed_decay", count(&|f| f.replayed_decay > 0.0));
     span.record("fill.crossfaded", count(&|f| f.crossfade > 0.0));
     span.record("fill.stretched", count(&|f| f.stretched.is_some()));
     span.record("fill.left", count(&|f| f.left > 0.0));
+    span.record(
+        "fill.left_ms",
+        fills.iter().map(|f| f.left).sum::<f64>() * 1_000.0,
+    );
     span.record(
         "fill.take_stopped",
         count(&|f| f.take_switch == daw_edit::placement::TakeSwitch::Stopped),
@@ -300,6 +308,15 @@ pub fn place(params: Json) -> Result<Json, String> {
         .reduce(f64::min)
     {
         span.record("fill.slowest", slowest);
+    }
+    // The stretches of what the replay left, slower than the least rate.
+    if let Some(slowest) = fills
+        .iter()
+        .filter_map(|f| f.stretched.map(|s| s.rate))
+        .filter(|&rate| rate < request.fill.least_rate - 1e-9)
+        .reduce(f64::min)
+    {
+        span.record("fill.slowest_leftover", slowest);
     }
     serde_json::to_value(daw_edit::PlaceAnswer {
         pieces: placed.pieces,
@@ -447,6 +464,53 @@ mod tests {
     fn the_manifest_provides_plan() {
         assert!(MANIFEST.contains("id = \"RHYTHM_PLAN\""));
         assert!(MANIFEST.contains(&format!("\"daw.edit\" = \"{}\"", daw_edit::VERSION)));
+    }
+
+    /// The properties `action`'s `params` schema declares, from the
+    /// manifest.
+    fn declared(action: &str) -> Vec<String> {
+        let block = MANIFEST
+            .split("[[actions]]")
+            .find(|b| b.contains(&format!("id = \"{action}\"")))
+            .unwrap_or_else(|| panic!("no {action} in the manifest"));
+        let params = block
+            .lines()
+            .find_map(|l| l.strip_prefix("params = '"))
+            .and_then(|l| l.strip_suffix('\''))
+            .unwrap_or_else(|| panic!("{action} declares no params"));
+        let schema: Json = serde_json::from_str(params).unwrap();
+        schema["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn place_declares_every_field_of_a_full_request() {
+        // The host checks a call against the declared schema: a field
+        // missing there (0.3's takes and fill were) is a refused request.
+        let request = daw_edit::PlaceRequest {
+            hits: vec![daw_edit::placement::Hit {
+                at: 1.0,
+                shift: 0.0,
+            }],
+            span: (0.0, 2.0),
+            cut: daw_edit::placement::Cut::default(),
+            bounds: (Some(-1.0), Some(3.0)),
+            takes: vec![daw_edit::placement::Take { from: 0.0, to: 2.0 }],
+            fill: daw_edit::placement::Fill::default(),
+        };
+        let sent = serde_json::to_value(&request).unwrap();
+        let declared = declared("RHYTHM_PLACE");
+        for key in sent.as_object().unwrap().keys() {
+            assert!(declared.contains(key), "RHYTHM_PLACE's params lack `{key}`");
+        }
+        // And the description names every fill setting.
+        for key in sent["fill"].as_object().unwrap().keys() {
+            assert!(MANIFEST.contains(&format!("`{key}`")), "the fill's `{key}`");
+        }
     }
 
     #[test]
