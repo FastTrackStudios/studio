@@ -8,6 +8,7 @@
 
 pub mod hybrid;
 pub mod placement;
+pub mod plan;
 pub mod render;
 
 pub use hybrid::{
