@@ -13,6 +13,7 @@ pub mod app_menu;
 pub mod arrange_camera;
 pub mod arrange_edit;
 pub mod arrangement;
+pub mod arrangement_host;
 pub mod art;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::automation_actions;

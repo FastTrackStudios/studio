@@ -239,3 +239,51 @@ pub fn install_mixer(views: MixerViews) {
 pub fn mixer_views() -> Option<&'static MixerViews> {
     MIXER_VIEWS.get()
 }
+
+/// What the arrangement hands the rest of the window, so nothing here
+/// reaches the arrangement's code: the arrangement installs it once at
+/// start ([`install_arrangement`]), and a view that shows the arrangement
+/// (the DAW view's panels, the mixer's docked pair) draws what it was
+/// given ([`arrangement`], [`web_arrangement`]). Not installed, those
+/// places show nothing.
+#[derive(Clone, Copy)]
+pub struct ArrangementViews {
+    /// The arrangement panel on dioxus-native, its session from the
+    /// context.
+    #[cfg(feature = "native")]
+    pub arrangement: fn() -> Element,
+    /// The arrangement panel in a browser, over the page's engine.
+    #[cfg(feature = "web")]
+    pub web_arrangement: fn(engine: crate::web_engine::EngineRef) -> Element,
+}
+
+static ARRANGEMENT_VIEWS: std::sync::OnceLock<ArrangementViews> = std::sync::OnceLock::new();
+
+/// Install the arrangement's views, once, before the first window draws.
+/// A second install is ignored: the first arrangement stays.
+pub fn install_arrangement(views: ArrangementViews) {
+    // A second install is the same arrangement installed twice.
+    let _ = ARRANGEMENT_VIEWS.set(views);
+}
+
+/// The installed arrangement's views, if an arrangement is installed.
+#[must_use]
+pub fn arrangement_views() -> Option<&'static ArrangementViews> {
+    ARRANGEMENT_VIEWS.get()
+}
+
+/// The arrangement panel on dioxus-native, if one is installed; nothing
+/// otherwise.
+#[cfg(feature = "native")]
+#[must_use]
+pub fn arrangement() -> Element {
+    arrangement_views().map_or_else(|| rsx! {}, |views| (views.arrangement)())
+}
+
+/// The arrangement panel in a browser, if one is installed; nothing
+/// otherwise.
+#[cfg(feature = "web")]
+#[must_use]
+pub fn web_arrangement(engine: crate::web_engine::EngineRef) -> Element {
+    arrangement_views().map_or_else(|| rsx! {}, |views| (views.web_arrangement)(engine))
+}

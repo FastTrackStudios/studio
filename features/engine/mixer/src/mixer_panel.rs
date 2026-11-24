@@ -199,7 +199,7 @@ pub fn DawPanels(
         if !mixer_only {
             div {
                                 style: "position:absolute; top:0; left:0; right:{column_w}px; bottom:{arrange_bottom};",
-                crate::studio::Arrangement {}
+                {crate::dock::arrangement()}
                 if quantizing {
                     crate::quantize_panel::QuantizePanel {}
                 }
@@ -452,7 +452,7 @@ pub fn WebDawPanels(
         if !mixer_only {
             div {
                 style: "position:absolute; top:0; left:0; right:0; bottom:{arrange_bottom};",
-                crate::web_host::WebArrangement { engine }
+                {crate::dock::web_arrangement(engine)}
             }
         }
         div {

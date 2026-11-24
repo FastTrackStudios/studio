@@ -35,15 +35,6 @@ pub trait Hosted {
     fn event(&mut self, event: &UiEvent);
 }
 
-impl Hosted for crate::widget::ArrangementWidget {
-    fn paint(&mut self, width: u32, height: u32, scale: f64) -> anyrender::Scene {
-        self.paint_scene(width, height, scale)
-    }
-    fn event(&mut self, event: &UiEvent) {
-        crate::widget::ArrangementWidget::event(self, event);
-    }
-}
-
 /// A hosted widget, shared between its canvas and whoever built it.
 #[derive(Clone)]
 pub struct HostedRef(pub Rc<RefCell<dyn Hosted>>);
@@ -524,53 +515,6 @@ fn start_painting(
     }));
     if let (Some(window), Some(first)) = (web_sys::window(), tick.borrow().as_ref()) {
         let _ = window.request_animation_frame(first.as_ref().unchecked_ref());
-    }
-}
-
-/// The arrangement panel in a browser: [`crate::panel`]'s behaviour, the
-/// widget in a canvas, the shared chrome over it.
-#[component]
-pub fn WebArrangement(engine: crate::web_engine::EngineRef) -> Element {
-    let element = use_hook(|| Rc::new(RefCell::new(None::<web_sys::HtmlElement>)));
-    let sink: crate::tool::Sink = {
-        let element = Rc::clone(&element);
-        // A browser canvas takes no painted cursor here: each glyph's
-        // nearest CSS shape.
-        Rc::new(move |shape: crate::window_cursor::Shape| {
-            if let Some(el) = element.borrow().as_ref() {
-                let _ = el.style().set_property("cursor", shape.icon().name());
-            }
-        })
-    };
-    let to_engine: crate::panel::Engine = {
-        let engine = engine.clone();
-        Rc::new(move |edit| engine.send(edit))
-    };
-    let (panel, widget) = crate::panel::use_arrangement_panel(Some(sink), to_engine, |w| {
-        HostedRef(Rc::new(RefCell::new(w)))
-    });
-    let colors = daw_ui::studio::lanes::Colors::from_theme(&daw_ui::theming::Theme::dark());
-    let surface = colors.surface.clone();
-    let mounted = Rc::clone(&panel.mounted);
-    let (on_panel, on_frame) = (panel.clone(), panel.clone());
-    let focus = FocusSlot(Rc::clone(&panel.focus_node));
-    let playhead = engine.clone();
-    rsx! {
-        div {
-            style: "position:absolute; top:0; left:0; right:0; bottom:0; overflow:hidden; \
-                    background:{surface};",
-            onmounted: move |event| {
-                *mounted.borrow_mut() = Some(event.data());
-            },
-            WidgetCanvas {
-                widget,
-                panel: move |e| on_panel.handle(e),
-                frame: move |()| on_frame.handle(PanelEvent::Frame { play_at: playhead.position() }),
-                focus,
-                element: Some(ElementSlot(Rc::clone(&element))),
-            }
-            crate::panel::PanelChrome { panel: panel.clone() }
-        }
     }
 }
 
@@ -1432,6 +1376,6 @@ fn DawPanels(
     match crate::dock::mixer_views() {
         Some(mixer) => (mixer.web_daw_panels)(engine, docked, mixer_only),
         None if mixer_only => rsx! {},
-        None => rsx! { WebArrangement { engine } },
+        None => crate::dock::web_arrangement(engine),
     }
 }

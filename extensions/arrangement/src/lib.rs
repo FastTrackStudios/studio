@@ -70,6 +70,9 @@ impl Extension for Arrangement {
     }
 
     fn build(&self, ext: &mut Builder) {
+        // The arrangement's views, for the window's views that show it
+        // (the mixer's docked pair, the browser's DAW panels).
+        session_ui::arrangement_host::install();
         #[cfg(not(target_arch = "wasm32"))]
         ext.view("arrangement", ArrangementPane);
         #[cfg(target_arch = "wasm32")]
