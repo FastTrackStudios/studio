@@ -229,6 +229,11 @@ path = "src/bin/hits.rs"
 required-features = ["native"]
 
 [[bin]]
+name = "drum-bench"
+path = "src/bin/drum-bench.rs"
+required-features = ["native"]
+
+[[bin]]
 name = "show-split"
 path = "src/bin/show-split.rs"
 required-features = ["show"]

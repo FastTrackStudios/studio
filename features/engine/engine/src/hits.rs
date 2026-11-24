@@ -1632,10 +1632,23 @@ fn edit_hits(
     project: &ProjectContext,
     ids: &BTreeSet<String>,
     label: &str,
+    change: impl FnMut(&mut TakeMarker, f64) -> bool,
+) -> u32 {
+    Projects::begin_undo_block(daw, project.clone(), label);
+    let n = change_markers(daw, project, ids, change);
+    Projects::end_undo_block(daw, project.clone(), label, None);
+    n
+}
+
+/// [`edit_hits`] without an undo step of its own: for an edit that writes
+/// the markers with its slices as one step (`DRUMS_APPLY`).
+pub(crate) fn change_markers(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    ids: &BTreeSet<String>,
     mut change: impl FnMut(&mut TakeMarker, f64) -> bool,
 ) -> u32 {
     let mut n = 0_u32;
-    Projects::begin_undo_block(daw, project.clone(), label);
     for r in kit_recordings(daw, project) {
         let at = ItemRef::Guid(r.item.clone());
         let markers = daw.get_take_markers(project.clone(), at.clone(), TakeRef::Active);
@@ -1656,7 +1669,6 @@ fn edit_hits(
             tracing::warn!(hits.write_error = %e, "a hit edit could not be written");
         }
     }
-    Projects::end_undo_block(daw, project.clone(), label, None);
     n
 }
 
@@ -3478,7 +3490,7 @@ static MARK: ActionMeta = meta(
     "HITS_MARK",
     "hits_mark",
     "Mark drum hits",
-    "Set what is known about the hits `ids`: `approve` (true: checked — kept by every run; false: back to auto), `ghost`, `bleed`, `note`. One undo step. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
+    "Set what is known about the hits `ids`: `approve` (true: checked — kept by every run; false: back to auto), `ghost`, `bleed`, `note`, `grace_of: <id>` (a grace note of that stroke: it rides the stroke's slice with no cut of its own, and moves with it in QUANTIZE and DRUMS_APPLY), `flam_with: <id>` (one stroke of a flam with that one: the quieter rides the louder), `no_flam` (clear either). One undo step. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
     "Drums",
     "",
 );
@@ -3620,6 +3632,13 @@ struct MarkArg {
     ghost: Option<bool>,
     bleed: Option<bool>,
     note: Option<String>,
+    /// The hits are grace notes of this one (its id): they ride its slice,
+    /// with no cut of their own (`flam_with`, the louder the main stroke).
+    grace_of: Option<String>,
+    /// The hits are a flam with this one: the quieter rides the louder.
+    flam_with: Option<String>,
+    /// Clear what `grace_of`/`flam_with` set.
+    no_flam: Option<bool>,
 }
 
 /// Register the hit detector's actions.
@@ -3947,6 +3966,12 @@ fn mark_hits(a: &MarkArg) -> Result<u32, String> {
                 }
                 if let Some(n) = &a.note {
                     h.note.clone_from(n);
+                }
+                if let Some(main) = a.grace_of.as_ref().or(a.flam_with.as_ref()) {
+                    h.flam_with = Some(main.clone());
+                }
+                if a.no_flam.unwrap_or(false) {
+                    h.flam_with = None;
                 }
             }
             true

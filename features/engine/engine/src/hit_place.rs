@@ -35,10 +35,10 @@ pub struct Joins {
 }
 
 /// A mic of the kit: its track and its two lanes.
-struct Mic {
-    track: String,
-    comp: u32,
-    edit: u32,
+pub(crate) struct Mic {
+    pub(crate) track: String,
+    pub(crate) comp: u32,
+    pub(crate) edit: u32,
 }
 
 /// A mic's two lanes around a placement, as they are: what it reads its
@@ -106,6 +106,49 @@ pub fn place(
     moves: &[(f64, f64)],
     joins: Joins,
 ) -> Result<usize, String> {
+    let ops = plan(song, moves, joins, (None, None))?.ops;
+    if ops.is_empty() {
+        return Ok(0);
+    }
+    let step =
+        tracing::info_span!("hits.place.apply", edit.lock_ms = tracing::field::Empty).entered();
+    let lock_at = crate::edit_trace::lock_us();
+    song.undo_step("Place a drum hit", |song| song.apply(&ops))
+        .map_err(|e| e.to_string())?;
+    step.record(
+        "edit.lock_ms",
+        num_traits::ToPrimitive::to_f64(&crate::edit_trace::lock_us().saturating_sub(lock_at))
+            .unwrap_or(0.0)
+            / 1e3,
+    );
+    drop(step);
+    Ok(ops.len())
+}
+
+/// A placement planned: its item edits, and each piece still drawn out
+/// (where it starts, timeline seconds, and the rate it plays at).
+#[derive(Debug, Default)]
+pub struct Plan {
+    pub ops: Vec<ItemOp>,
+    pub drawn: Vec<(f64, f64)>,
+}
+
+/// The item edits [`place`] makes, not yet applied: for a caller that
+/// writes them with edits of its own as one undo step (`DRUMS_APPLY`).
+/// `cut_on`, when given, are the hits (where they play now) a piece
+/// starts at — the kit's markers otherwise: a hit left out rides in the
+/// piece before it. `least`, when given, is the slowest a piece may be
+/// drawn out: past it the piece after starts earlier to meet it
+/// ([`crate::drum_apply::limit_draws`]).
+///
+/// # Errors
+/// As [`place`].
+pub fn plan(
+    song: &crate::song::Song,
+    moves: &[(f64, f64)],
+    joins: Joins,
+    (cut_on, least): (Option<&[f64]>, Option<f64>),
+) -> Result<Plan, String> {
     // Each step its own span under `hits.place`: the trace says where the
     // time went.
     let step = tracing::info_span!("hits.place.mics").entered();
@@ -129,7 +172,7 @@ pub fn place(
             .map(|m| m.1)
     };
     if moved.is_empty() {
-        return Ok(0);
+        return Ok(Plan::default());
     }
     let call = tracing::Span::current();
     call.record("edit.moved", moved.len());
@@ -140,10 +183,15 @@ pub fn place(
     if mics.is_empty() {
         return Err("no mic of the kit has COMP and EDIT lanes".to_owned());
     }
-    let mut hits: Vec<f64> = crate::hit_index::playback(song)
-        .iter()
-        .map(|p| p.time)
-        .collect();
+    let mut hits: Vec<f64> = cut_on.map_or_else(
+        || {
+            crate::hit_index::playback(song)
+                .iter()
+                .map(|p| p.time)
+                .collect()
+        },
+        <[f64]>::to_vec,
+    );
     hits.sort_by(f64::total_cmp);
     hits.dedup_by(|a, b| (*a - *b).abs() < SAME_HIT);
     drop(step);
@@ -166,7 +214,7 @@ pub fn place(
     let to = (last + CONTEXT).min(hits.len().saturating_sub(1));
     let around = hits.get(from..=to).ok_or("no hit where a move was asked")?;
     let (Some(&near), Some(&far)) = (around.first(), around.last()) else {
-        return Ok(0);
+        return Ok(Plan::default());
     };
 
     // Every mic's lanes around it, read at once: a slice reached from as
@@ -266,7 +314,7 @@ pub fn place(
     call.record("edit.hits", placed.len());
     let provider =
         tracing::info_span!("hits.place.provider", edit.slices = tracing::field::Empty).entered();
-    let pieces = crate::algorithms::place(&daw_edit::PlaceRequest {
+    let mut pieces = crate::algorithms::place(&daw_edit::PlaceRequest {
         hits: placed.clone(),
         span,
         cut,
@@ -276,6 +324,22 @@ pub fn place(
     provider.record("edit.slices", pieces.len());
     drop(provider);
     let render = tracing::info_span!("hits.place.render").entered();
+    let drawn = least.map_or_else(Vec::new, |least| {
+        let attacks: Vec<f64> = placed.iter().map(|h| h.at).collect();
+        // One take's recording from `a` to `b` (COMP time): the same file
+        // under both on the reference mic's COMP lane.
+        let file_at = |t: f64| {
+            kit.first().and_then(|lanes| {
+                lanes
+                    .comp
+                    .iter()
+                    .find(|c| c.start() <= t && t < c.end())
+                    .and_then(|c| c.file.clone())
+            })
+        };
+        let joined = |a: f64, b: f64| file_at(a).is_some() && file_at(a) == file_at(b);
+        crate::drum_apply::limit_draws(&mut pieces, &attacks, &joined, (cut.guard, least))
+    });
     if let Some(bad) = pieces.iter().find(|p| p.end <= p.start) {
         return Err(format!(
             "a piece would end before it starts ({bad:?}) placing {:?} over {:.3}..{:.3}",
@@ -297,19 +361,7 @@ pub fn place(
         pieces.len().saturating_sub(1).saturating_mul(kit.len()),
     );
     call.record("edit.items_written", ops.len());
-    let step =
-        tracing::info_span!("hits.place.apply", edit.lock_ms = tracing::field::Empty).entered();
-    let lock_at = crate::edit_trace::lock_us();
-    song.undo_step("Place a drum hit", |song| song.apply(&ops))
-        .map_err(|e| e.to_string())?;
-    step.record(
-        "edit.lock_ms",
-        num_traits::ToPrimitive::to_f64(&crate::edit_trace::lock_us().saturating_sub(lock_at))
-            .unwrap_or(0.0)
-            / 1e3,
-    );
-    drop(step);
-    Ok(ops.len())
+    Ok(Plan { ops, drawn })
 }
 
 /// How far past the hits around a move its lanes are read, seconds: a
@@ -325,7 +377,7 @@ pub fn ready(song: &crate::song::Song) -> bool {
 }
 
 /// Every track with both a COMP and an EDIT lane: the kit's mics.
-fn mics(song: &crate::song::Song) -> Vec<Mic> {
+pub(crate) fn mics(song: &crate::song::Song) -> Vec<Mic> {
     song.daw()
         .all(song.context())
         .into_iter()
@@ -405,7 +457,7 @@ pub fn lane_of(
 /// Where the EDIT lane plays the moment at `t` minus where the COMP lane
 /// has it: the slice there, read through the recording it plays, found on
 /// the COMP lane.
-fn shift_at(edit: &[Slice], comp: &[Slice], t: f64) -> Option<f64> {
+pub(crate) fn shift_at(edit: &[Slice], comp: &[Slice], t: f64) -> Option<f64> {
     // The latest slice to start by `t`: at a crossfade, the one coming in.
     let slice = edit
         .iter()
