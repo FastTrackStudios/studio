@@ -28,7 +28,7 @@ static CHAIN: ActionMeta = meta(
     "SIGNAL_CHAIN",
     "signal_chain",
     "Signal chain on a track",
-    "The Signal chain on `track` (a GUID, a path like `Drums/Kick/Sum/In`, any tail of it, or a name), as its Signal instance gives it: `{track, track_guid, fx: {guid, place, name}, revision, cached, chain}`. `chain` is the plugin's `signal.chain/1` — `schema`, `revision`, `session` (the shared session it is in, or null), `port` (its track in the kit), `mode` (`per-track` or `kit`), `midi` (what its note input plays; `publishes_hits`), `phases` (each `{id, name, bypass, makeup_db, blocks}`; a block `{id (stable: rescue.gate), kind (eq, comp, gate, saturate, reverb, delay, nam, sampler, trigger, clap…), name, bypass, backend (linked or clap), status (ok, unavailable, error), key ({from, via: hits|midi|self} or null), params, meters}`; a param `{id, clap_id (the FX parameter slot, FX_PARAM_SET sets it), name, value, normalized, text, unit, min, max, default, choices}`; a meter `{id, name, unit, index}` — its live value is in SIGNAL_FEED) and `macros`. The chain is read from the plugin only when its revision moved since the last read (`cached: true` otherwise). `fx` (a name, or `#place`) picks one when the track holds more than one Signal instance. Structural changes (bypass a block or a phase, add, remove, move a block) are SIGNAL_RUN's (`SIGNAL_SET`, `SIGNAL_BLOCK_ADD`, …); a parameter's value is FX_PARAM_SET on its `clap_id`.",
+    "The Signal chain on `track` (a GUID, a path like `Drums/Kick/Sum/In`, any tail of it, or a name), as its Signal instance gives it: `{track, track_guid, fx: {guid, place, name}, revision, cached, chain}`. `chain` is the plugin's `signal.chain/1` — `schema`, `revision`, `session` (the shared session it is in, or null), `port` (its track in the kit), `mode` (`per-track` or `kit`), `midi` (what its note input plays; `publishes_hits`), `phases` (each `{id, name, bypass, makeup_db, blocks}`; a block `{id (stable: rescue.gate), kind (eq, comp, gate, saturate, reverb, delay, nam, sampler, trigger, clap…), name, bypass, backend (linked or clap), status (ok, unavailable, error), key ({from, via: hits|midi|self} or null), params, meters}`; a param `{id, clap_id (the FX parameter slot, FX_PARAM_SET sets it), name, value, normalized, text, unit, min, max, default, choices}`; a meter `{id, name, unit, index}` — its live value is in SIGNAL_FEED) and `macros`. The chain is read from the plugin when its revision moved since the last read, or that read is older than 250 ms (a parameter value moves without the revision); otherwise it is the kept one (`cached: true`). `fx` (a name, or `#place`) picks one when the track holds more than one Signal instance. Structural changes (bypass a block or a phase, add, remove, move a block) are SIGNAL_RUN's (`SIGNAL_SET`, `SIGNAL_BLOCK_ADD`, …); a parameter's value is FX_PARAM_SET on its `clap_id`.",
     "FX",
     "",
 );
@@ -55,7 +55,7 @@ static FEED: ActionMeta = meta(
     "SIGNAL_FEED",
     "signal_feed",
     "Signal's live values",
-    "The mixer's live feed of Signal, cheap enough to read ten times a second: `{at_ms, fx: [{track, track_guid, fx_guid, place, name, revision, meters: [{id, name, unit, index, value}]}]}`, one row per Signal instance on the song. `revision` is its chain's: when it moved, read SIGNAL_CHAIN again. A meter's `value` (in its `unit`: dB, %, Hz) is what the block published after its last processed block, read without holding up the audio. The same rows stream to a window in this process (`session_engine::clap_host::signal::feed_hub`).",
+    "The mixer's live feed of Signal, cheap enough to read ten times a second: `{at_ms, fx: [{track, track_guid, fx_guid, place, name, revision, values_revision, meters: [{id, name, unit, index, value}]}]}`, one row per Signal instance on the song. `revision` is its chain's: when it moved, read SIGNAL_CHAIN again; `values_revision` (the chain's, null from a Signal build without it; at most 250 ms old) moves when a parameter value does: read the values again. A meter's `value` (in its `unit`: dB, %, Hz) is what the block published after its last processed block, read without holding up the audio. The same rows stream to a window in this process (`session_engine::clap_host::signal::feed_hub`).",
     "FX",
     "",
 );
@@ -101,6 +101,12 @@ pub struct FeedRow {
     pub name: String,
     /// Its chain's revision: SIGNAL_CHAIN again when it moved.
     pub revision: u64,
+    /// Its parameter values' revision (the chain's `values_revision`):
+    /// read the values again when it moved. `None` from a Signal build
+    /// that does not send it. As of the chain's last read, at most
+    /// [`VALUES_FRESH`] ago, until signal/1 has a thread-safe
+    /// `values_revision()`.
+    pub values_revision: Option<u64>,
     pub meters: Vec<MeterValue>,
 }
 
@@ -127,7 +133,7 @@ struct Kept {
     /// `None`: the plugin has no signal/1.
     client: Option<SignalPluginClient>,
     /// Its last chain read, at its revision.
-    chain: Option<(u64, Arc<Value>)>,
+    chain: Option<(u64, Arc<Value>, web_time::Instant)>,
     /// Its meters, as of the chain revision they were read at.
     meters: Option<(u64, Vec<daw::standalone::clap_ext::ModSourceInfo>)>,
 }
@@ -282,7 +288,7 @@ fn chain_of_port(daw: &Standalone, port: &Port) -> Result<(u64, Arc<Value>, bool
             c.by_fx
                 .get(&port.fx_guid)
                 .and_then(|k| k.chain.clone())
-                .filter(|(r, _)| *r == rev)
+                .filter(|(r, _, at)| *r == rev && at.elapsed() < VALUES_FRESH)
         })
     {
         return Ok((kept.0, kept.1, true));
@@ -303,11 +309,17 @@ fn chain_of_port(daw: &Standalone, port: &Port) -> Result<(u64, Arc<Value>, bool
     );
     with_cache(|c| {
         if let Some(k) = c.by_fx.get_mut(&port.fx_guid) {
-            k.chain = Some((rev, Arc::clone(&chain)));
+            k.chain = Some((rev, Arc::clone(&chain), web_time::Instant::now()));
         }
     });
     Ok((rev, chain, false))
 }
+
+/// How long a chain read stands for the plugin's parameter values while
+/// its revision holds: a value changes without moving the revision (the
+/// contract keeps them apart), so a chain is read again after this, and
+/// the feed's `values_revision` is at most this old.
+pub const VALUES_FRESH: std::time::Duration = std::time::Duration::from_millis(250);
 
 /// SIGNAL_CHAIN.
 ///
@@ -471,6 +483,11 @@ pub fn feed(daw: &Standalone, project: &ProjectContext) -> Feed {
             continue;
         };
         let infos = meters_of(daw, &port, revision);
+        // The values' revision is the chain's: read again at most every
+        // VALUES_FRESH (kept between, while the chain's revision holds).
+        let values_revision = chain_of_port(daw, &port)
+            .ok()
+            .and_then(|(_, chain, _)| chain.get("values_revision").and_then(Value::as_u64));
         let Some(client) = client_of(daw, &port.fx_guid) else {
             continue;
         };
@@ -509,6 +526,7 @@ pub fn feed(daw: &Standalone, project: &ProjectContext) -> Feed {
             place: port.place,
             name: port.name,
             revision,
+            values_revision,
             meters,
         });
     }

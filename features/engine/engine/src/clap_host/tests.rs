@@ -319,6 +319,21 @@ fn signal_dev_on_a_track_is_read_and_driven() {
     assert_eq!(feed.fx.len(), 1, "{feed:?}");
     assert_eq!(feed.fx[0].fx_guid, fx);
     assert_eq!(feed.fx[0].track, "Drums/Kick/Sum/In");
+    // FX_SET names a Signal slot as the chain does: `@<clap_id>`.
+    let clap_ids: Vec<String> = first["chain"]["phases"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|p| p["blocks"].as_array().cloned().unwrap_or_default())
+        .flat_map(|b| b["params"].as_array().cloned().unwrap_or_default())
+        .filter_map(|p| p["clap_id"].as_str().map(str::to_owned))
+        .collect();
+    if let Some(id) = clap_ids.first() {
+        let slot = crate::fx_actions::slot_named(&daw, &fx, &format!("@{id}"));
+        assert!(matches!(slot, Ok(Some(_))), "@{id}: {slot:?}");
+    } else {
+        eprintln!("this Signal Dev exposes no clap_id yet");
+    }
     let session = super::signal::session(&daw, &ctx);
     assert_eq!(session["ports"], 1);
 }
