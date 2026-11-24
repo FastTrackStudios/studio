@@ -1,0 +1,27 @@
+[package]
+name = "plugin-processors"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The plugins' effects, headless: parameter tables and dsp engines behind one Processor interface, for the CLAP/VST3 targets, Signal's blocks and Studio's engine (native, iOS, wasm)"
+
+[lints]
+workspace = true
+
+[features]
+default = ["std", "gate", "saturate", "eq", "comp", "delay", "reverb"]
+# `std::error::Error` for BuildError. The effects below that need the dsp
+# crate's `std` features turn it on.
+std = []
+gate = ["dsp/gate"]
+saturate = ["dsp/saturate"]
+eq = ["std", "dsp-core/audio"]
+comp = ["std", "dsp/comp"]
+delay = ["std", "dsp/delay"]
+reverb = ["std", "dsp/reverb", "dsp-core/audio"]
+
+[dependencies]
+dsp = { workspace = true }
+dsp-core = { workspace = true }
+libm = { workspace = true }
