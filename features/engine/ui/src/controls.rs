@@ -10,7 +10,7 @@ use daw_ui::art::geometry::mcp as g;
 use vello::kurbo::{Affine, Line, Stroke};
 use vello::peniko::Color;
 
-use crate::arrangement::Palette;
+use crate::palette::Palette;
 
 /// REAPER's wide strip, and the width everything in the geometry was
 /// measured against.

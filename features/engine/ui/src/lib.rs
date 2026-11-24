@@ -159,6 +159,7 @@ pub use session_engine::mix_chains;
 pub use session_engine_client::hit_overlay;
 pub use session_engine_client::kit_gate;
 pub mod overlay;
+pub mod palette;
 #[cfg(all(feature = "native", feature = "engine"))]
 pub use session_engine::page;
 #[cfg(all(feature = "native", not(feature = "engine")))]

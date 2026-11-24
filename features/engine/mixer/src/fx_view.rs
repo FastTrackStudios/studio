@@ -434,7 +434,7 @@ struct DeviceRow {
     fx_watch: Option<crate::engine::FxWatch>,
     /// Changes taken off the watch to ask for a frame, applied in it.
     pending: RefCell<Vec<daw_proto::track::TrackEvent>>,
-    palette: crate::arrangement::Palette,
+    palette: crate::palette::Palette,
     font: crate::text::Font,
     layout: crate::layout::Layout,
     /// How many lanes show at once.
@@ -509,7 +509,7 @@ impl DeviceRow {
             #[cfg(feature = "native")]
             fx_watch: crate::engine::FxWatch::start(),
             pending: RefCell::new(Vec::new()),
-            palette: crate::skin::palette(&crate::arrangement::Palette::from_theme(
+            palette: crate::skin::palette(&crate::palette::Palette::from_theme(
                 &daw_ui::theming::Theme::dark(),
             )),
             font,
@@ -2266,7 +2266,7 @@ impl DeviceRow {
 /// whether it is folded, `None` for a phase with nothing in it.
 fn phase_edge(
     scene: &mut Scene,
-    palette: &crate::arrangement::Palette,
+    palette: &crate::palette::Palette,
     font: &crate::text::Font,
     (name, tint): (&str, vello::peniko::Color),
     group: Panel,
@@ -2371,7 +2371,7 @@ fn phase_edge(
 
 /// The returns' fold edge, `edge` tall: a hairline down it and its
 /// chevron at the top.
-fn returns_edge(scene: &mut Scene, palette: &crate::arrangement::Palette, edge: Panel, shut: bool) {
+fn returns_edge(scene: &mut Scene, palette: &crate::palette::Palette, edge: Panel, shut: bool) {
     let line_x = edge.x + EDGE_W / 2.0 - 0.5;
     anyrender::PaintScene::fill(
         scene,
@@ -2391,12 +2391,7 @@ fn returns_edge(scene: &mut Scene, palette: &crate::arrangement::Palette, edge: 
 
 /// The chevron that folds a group, at the top of its edge: down open,
 /// right shut.
-fn edge_chevron(
-    scene: &mut Scene,
-    palette: &crate::arrangement::Palette,
-    group: Panel,
-    shut: bool,
-) {
+fn edge_chevron(scene: &mut Scene, palette: &crate::palette::Palette, group: Panel, shut: bool) {
     let (cx, cy) = (group.x + EDGE_W / 2.0, group.y + TINT_H + 9.0);
     let mut chevron = vello::kurbo::BezPath::new();
     if shut {

@@ -439,6 +439,6 @@ fn paint_pointer(
         NAME_SIZE,
     );
     for command in &text.commands {
-        crate::arrangement::submit_command(painter, command, Affine::IDENTITY);
+        crate::palette::submit_command(painter, command, Affine::IDENTITY);
     }
 }

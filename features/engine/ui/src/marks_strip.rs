@@ -135,7 +135,7 @@ pub fn spans_at(tracks: &[String], time: f64, grid: bool) -> Vec<(f64, f64)> {
 /// selected track and the folders above it; `origin` as the ruler is drawn.
 pub fn paint(
     painter: &mut impl PaintScene,
-    (palette, font): (&crate::arrangement::Palette, &crate::text::Font),
+    (palette, font): (&crate::palette::Palette, &crate::text::Font),
     view: crate::arrangement::Viewport,
     origin: (f64, f64),
     tracks: &[String],

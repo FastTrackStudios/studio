@@ -404,7 +404,7 @@ pub struct RackWidget {
     tone: Rc<Shared>,
     guid: String,
     which: Which,
-    palette: crate::arrangement::Palette,
+    palette: crate::palette::Palette,
     font: crate::text::Font,
     /// Where the panel was last laid out, in its own (zoomed) units.
     panel: Cell<Panel>,
@@ -437,7 +437,7 @@ impl RackWidget {
             tone,
             guid,
             which,
-            palette: crate::arrangement::Palette::from_theme(&theme),
+            palette: crate::palette::Palette::from_theme(&theme),
             font: crate::text::Font::embedded().expect("the embedded font"),
             panel: Cell::new(Panel {
                 x: 0.0,

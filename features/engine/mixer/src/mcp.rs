@@ -35,12 +35,12 @@ use daw_ui::studio::{ProjectRef, RowsRef};
 use vello::kurbo::{Affine, Rect};
 use vello::peniko::{Color, Fill};
 
-use crate::arrangement::Palette;
 pub use crate::controls::{
     Columns, Control, DEFAULT_HEIGHT, FADER_W, FOCUSED, FOLD_W, INDENT_STEP, Press, SCALE_W,
     STRIP_GAP, STRIP_W, Squeeze, TOUCH_STRIP_W, click, drag, f64_to_f32, rack_ground, run, select,
     strip_edge, strip_ground, wash,
 };
+use crate::palette::Palette;
 use crate::profile::Counts;
 use crate::text::Font;
 
@@ -668,7 +668,7 @@ impl Mixer {
             };
             for cmd in cmds {
                 counts.replayed = counts.replayed.saturating_add(1);
-                if crate::arrangement::submit_command(painter, cmd, transform) {
+                if crate::palette::submit_command(painter, cmd, transform) {
                     counts.submitted = counts.submitted.saturating_add(1);
                 }
             }

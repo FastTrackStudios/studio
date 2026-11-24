@@ -93,7 +93,7 @@ pub fn arrangement(
 
     // The corner above the track panel, before the ruler — it is drawn
     // over it, so it is hit before it too.
-    let corner_w = crate::arrangement::TCP_WIDTH;
+    let corner_w = crate::palette::TCP_WIDTH;
     if y >= rail_y
         && y < rail_y + crate::ruler::ruler_h()
         && x >= rail_x

@@ -31,8 +31,8 @@ use web_time::Instant;
 use daw_proto::Track;
 use frame::theme::runtime::{Fields, Rgba, Schema, Theme, Value};
 
-use crate::arrangement::Palette;
 use crate::controls::Control;
+use crate::palette::Palette;
 
 pub mod canvas;
 pub mod export;

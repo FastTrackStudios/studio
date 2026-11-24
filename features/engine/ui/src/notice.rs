@@ -22,7 +22,7 @@
 use vello::kurbo::{Affine, Rect, RoundedRect};
 use vello::peniko::Fill;
 
-use crate::arrangement::Palette;
+use crate::palette::Palette;
 use crate::text::Font;
 
 /// How long the notice reads at full strength before it starts to go.
@@ -220,6 +220,6 @@ pub fn paint(
     }
 
     for command in &scene.commands {
-        crate::arrangement::submit_command(painter, command, transform);
+        crate::palette::submit_command(painter, command, transform);
     }
 }

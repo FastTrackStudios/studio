@@ -589,7 +589,7 @@ fn SongTable(setlist: Signal<Setlist>, on_pick: Option<EventHandler<usize>>) -> 
                     let ground = if current { RAISED } else { "transparent" };
                     let ink = if current { TEXT } else { "#c9ccd2" };
                     let project = &song.session.project;
-                    let key = crate::arrangement::key_at(project, song.span.0)
+                    let key = crate::palette::key_at(project, song.span.0)
                         .map_or_else(|| "—".to_owned(), |k| crate::transport_bar::short_key(&k));
                     let bpm = crate::transport_bar::tempo_text(project.bpm);
                     let long = length(song.span.1 - song.span.0);

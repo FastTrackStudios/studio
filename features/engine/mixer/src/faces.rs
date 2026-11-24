@@ -11,8 +11,8 @@
 use anyrender::{PaintScene, Scene};
 use vello::kurbo::{Affine, Rect};
 
-use crate::arrangement::Palette;
 use crate::macros::{Macro, frac, span};
+use crate::palette::Palette;
 use crate::text::Font;
 use crate::tone::{Panel, Tone, Which};
 

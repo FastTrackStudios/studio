@@ -9,7 +9,7 @@ use anyrender::PaintScene;
 use vello::kurbo::{Affine, Rect, RoundedRect, Stroke};
 use vello::peniko::Fill;
 
-use crate::arrangement::Palette;
+use crate::palette::Palette;
 use crate::text::Font;
 
 /// One choice's height.

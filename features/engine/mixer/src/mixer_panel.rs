@@ -673,7 +673,7 @@ enum Hold {
 /// The widget: the recorded strips and what the pointer is doing to them.
 pub struct MixerWidget {
     links: Links,
-    palette: crate::arrangement::Palette,
+    palette: crate::palette::Palette,
     font: crate::text::Font,
     layout: crate::layout::Layout,
     /// The rows as last taken from [`Links::rows`], and its generation.
@@ -862,7 +862,7 @@ impl MixerWidget {
         let targets = links.arm_of.values().cloned().collect();
         Self {
             links,
-            palette: crate::arrangement::Palette::from_theme(&theme),
+            palette: crate::palette::Palette::from_theme(&theme),
             font: crate::text::Font::embedded().expect("the embedded font"),
             layout: crate::layout::Layout::from_env(),
             rows: Vec::new(),
@@ -2482,7 +2482,7 @@ impl MixerWidget {
             self.built_racks = racks;
             // The theme may have changed, and with it the colours the
             // painters draw what it does not.
-            self.palette = crate::skin::palette(&crate::arrangement::Palette::from_theme(
+            self.palette = crate::skin::palette(&crate::palette::Palette::from_theme(
                 &daw_ui::theming::Theme::dark(),
             ));
             for analyser in self.spectra.values_mut() {

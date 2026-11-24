@@ -45,7 +45,7 @@ use daw_ui::art::paint::{Align, Brush, Drawing, Op, Shape};
 use daw_ui::theme::Color as Tc;
 use vello::kurbo::Shape as _;
 
-use crate::arrangement::Palette;
+use crate::palette::Palette;
 use crate::tcp::to_theme;
 
 use super::canvas::BASELINE;

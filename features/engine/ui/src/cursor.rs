@@ -16,7 +16,7 @@ use web_time::Instant;
 /// moves has to be the one you can see.
 pub fn paint_edit(
     painter: &mut impl anyrender::PaintScene,
-    palette: &crate::arrangement::Palette,
+    palette: &crate::palette::Palette,
     edit: &Edit,
     view: crate::arrangement::Viewport,
     origin: (f64, f64),

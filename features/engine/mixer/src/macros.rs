@@ -14,7 +14,7 @@ use session::mix_phases::MixPhase;
 use vello::kurbo::{Affine, Arc, Stroke};
 use vello::peniko::Color;
 
-use crate::arrangement::Palette;
+use crate::palette::Palette;
 use crate::text::Font;
 use crate::tone::{Panel, Tone};
 

@@ -58,7 +58,7 @@ impl Place {
 pub fn replay(painter: &mut impl PaintScene, scene: &Scene, at: Place) {
     let transform = at.transform();
     for command in &scene.commands {
-        crate::arrangement::submit_command(painter, command, transform);
+        crate::palette::submit_command(painter, command, transform);
     }
 }
 

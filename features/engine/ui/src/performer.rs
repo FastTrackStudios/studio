@@ -111,7 +111,7 @@ impl PlaybackModel for SessionPlayback {
     fn view(&self) -> PlaybackView {
         let r = (self.reading)();
         let (start, end) = self.song.as_ref().map_or((0.0, 0.0), |s| (s.start, s.end));
-        let key = crate::arrangement::key_at(&self.session.project, r.at)
+        let key = crate::palette::key_at(&self.session.project, r.at)
             .map(|k| crate::transport_bar::short_key(&k))
             .unwrap_or_default();
         let (bar, beat) = crate::ruler::song_bar_beat(

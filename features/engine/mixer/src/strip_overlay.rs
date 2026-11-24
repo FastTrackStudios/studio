@@ -9,8 +9,8 @@ use daw_ui::art::mixer_controls::Interaction;
 use daw_ui::art::paint::tcp as art;
 use vello::kurbo::Affine;
 
-use crate::arrangement::Palette;
 use crate::mcp::{Control, Mixer};
+use crate::palette::Palette;
 use crate::pointer::Spot;
 use crate::text::Font;
 
@@ -198,7 +198,7 @@ pub fn control(
     }
 
     for command in &scene.commands {
-        crate::arrangement::submit_command(painter, command, transform);
+        crate::palette::submit_command(painter, command, transform);
     }
 }
 
@@ -330,7 +330,7 @@ pub fn controls(
     }
     for command in &scene.commands {
         counts.replayed = counts.replayed.saturating_add(1);
-        if crate::arrangement::submit_command(painter, command, transform) {
+        if crate::palette::submit_command(painter, command, transform) {
             counts.submitted = counts.submitted.saturating_add(1);
         }
     }

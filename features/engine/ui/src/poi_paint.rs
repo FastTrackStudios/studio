@@ -10,7 +10,7 @@ use crate::poi::{current, shown};
 /// note beside it — amber open, green done, ringed when stepped to.
 pub fn paint(
     painter: &mut impl PaintScene,
-    (palette, font): (&crate::arrangement::Palette, &crate::text::Font),
+    (palette, font): (&crate::palette::Palette, &crate::text::Font),
     view: crate::arrangement::Viewport,
     origin: (f64, f64),
 ) {

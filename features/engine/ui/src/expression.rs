@@ -1183,7 +1183,7 @@ pub fn notes_write_args(
 /// playing. A drum family's band is only a tint over the rows here,
 /// where the standalone editor paints it solid.
 #[must_use]
-pub fn look_of(palette: &crate::arrangement::Palette) -> Look {
+pub fn look_of(palette: &crate::palette::Palette) -> Look {
     let mut look = base_look(palette);
     themed(&mut look);
     look
@@ -1193,7 +1193,7 @@ pub fn look_of(palette: &crate::arrangement::Palette) -> Look {
 /// from the palette alone — what a generated theme writes those tokens
 /// as, so it draws the editor the way the editor draws itself.
 #[must_use]
-pub fn base_look(palette: &crate::arrangement::Palette) -> Look {
+pub fn base_look(palette: &crate::palette::Palette) -> Look {
     let canonical = Look::default();
     Look {
         bg: palette.surface,

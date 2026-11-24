@@ -27,7 +27,7 @@ use vello::peniko::{Color, Fill};
 use daw_ui::art::mixer_controls::Interaction;
 use vello::peniko::ImageBrush;
 
-use crate::arrangement::Palette;
+use crate::palette::Palette;
 use crate::text::Font;
 
 /// How wide the side rails are.
@@ -622,7 +622,7 @@ pub fn main_toolbar(
     let corner = Rect::new(
         SIDE,
         TOP,
-        SIDE + crate::arrangement::TCP_WIDTH,
+        SIDE + crate::palette::TCP_WIDTH,
         TOP + crate::ruler::ruler_h(),
     );
     fill(painter, palette.tcp_gutter, corner);

@@ -37,7 +37,7 @@ use vello::peniko::{Color, Fill};
 
 use daw_ui::art::paint::tcp as art;
 
-use crate::arrangement::Palette;
+use crate::palette::Palette;
 use crate::text::Font;
 
 /// How much of a track panel fits in the height it has.

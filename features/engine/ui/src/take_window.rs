@@ -82,7 +82,7 @@ pub fn viewport(
 ) -> Viewport {
     let (from, to) = span(section, tempo);
     let seconds = (to - from).max(0.001);
-    let lane = (width - crate::arrangement::TCP_WIDTH).max(1.0);
+    let lane = (width - crate::palette::TCP_WIDTH).max(1.0);
     let pps = (lane / seconds).max(0.001);
     Viewport {
         scroll_x: from * pps,
@@ -91,6 +91,6 @@ pub fn viewport(
         zoom_y,
         width,
         height,
-        panel_w: crate::arrangement::TCP_WIDTH,
+        panel_w: crate::palette::TCP_WIDTH,
     }
 }

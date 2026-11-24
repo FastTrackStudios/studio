@@ -96,7 +96,7 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
         crate::ruler::song_start_of(&session.project),
         r.at,
     );
-    let key = crate::arrangement::key_at(&session.project, r.at)
+    let key = crate::palette::key_at(&session.project, r.at)
         .map(|name| short_key(&name))
         .unwrap_or_else(|| "—".to_owned());
     let minutes = (r.at / 60.0).floor();

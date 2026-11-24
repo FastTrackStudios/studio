@@ -45,9 +45,9 @@ use fts_audio_ui::axis::{DbAxis, FreqAxis};
 use vello::kurbo::{Affine, BezPath, Line, Rect, Shape, Stroke};
 use vello::peniko::{Color, Fill};
 
-use crate::arrangement::Palette;
 use crate::controls::{FOCUSED, knob_arc};
 use crate::live::Meters;
+use crate::palette::Palette;
 use crate::text::Font;
 
 /// The sample rate the curves are drawn against.

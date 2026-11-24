@@ -95,7 +95,7 @@ pub fn starts_on(laned: &daw_proto::Track, lane: u32) -> bool {
 /// ends ruled — over the lanes, `origin` where content `(0, 0)` lands.
 pub fn overlay(
     painter: &mut impl PaintScene,
-    palette: &crate::arrangement::Palette,
+    palette: &crate::palette::Palette,
     scene: &crate::arrangement::Arrangement,
     view: crate::arrangement::Viewport,
     origin: (f64, f64),
@@ -147,7 +147,7 @@ pub fn overlay(
 /// names keep their size at every zoom.
 pub fn tcp_lanes(
     painter: &mut impl PaintScene,
-    palette: &crate::arrangement::Palette,
+    palette: &crate::palette::Palette,
     font: &crate::text::Font,
     scene: &crate::arrangement::Arrangement,
     view: crate::arrangement::Viewport,

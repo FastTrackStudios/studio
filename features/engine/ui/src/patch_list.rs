@@ -20,7 +20,7 @@ use patch_list::{PatchList, StudioProfile};
 use vello::kurbo::{Affine, Rect};
 use vello::peniko::{Color, Fill};
 
-use crate::arrangement::Palette;
+use crate::palette::Palette;
 use crate::text::Font;
 
 /// Whether the room resolved a row's role.

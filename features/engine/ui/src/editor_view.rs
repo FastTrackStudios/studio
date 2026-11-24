@@ -1007,9 +1007,9 @@ impl EditorView {
 /// the theme's `editor.*` tokens over it.
 #[cfg(feature = "native")]
 fn look() -> editor::paint::paint::Look {
-    crate::expression::look_of(&crate::skin::palette(
-        &crate::arrangement::Palette::from_theme(&daw_ui::theming::Theme::dark()),
-    ))
+    crate::expression::look_of(&crate::skin::palette(&crate::palette::Palette::from_theme(
+        &daw_ui::theming::Theme::dark(),
+    )))
 }
 
 /// A key as the editor names it: a character's text, else the W3C name

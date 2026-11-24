@@ -168,7 +168,7 @@ impl Rename {
 /// text field ever built.
 pub fn paint(
     painter: &mut impl anyrender::PaintScene,
-    palette: &crate::arrangement::Palette,
+    palette: &crate::palette::Palette,
     font: &crate::text::Font,
     rename: &Rename,
     field: vello::kurbo::Rect,
@@ -222,6 +222,6 @@ pub fn paint(
     );
 
     for command in &scene.commands {
-        crate::arrangement::submit_command(painter, command, transform);
+        crate::palette::submit_command(painter, command, transform);
     }
 }

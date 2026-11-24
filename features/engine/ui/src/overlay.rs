@@ -17,7 +17,7 @@ use daw_ui::art::mixer_controls::Interaction;
 use daw_ui::art::paint::tcp as art;
 use vello::kurbo::Affine;
 
-use crate::arrangement::Palette;
+use crate::palette::Palette;
 use crate::text::Font;
 
 /// The routing widget's state, from the track.
@@ -329,7 +329,7 @@ pub fn panel_controls(
     }
     for command in &out.commands {
         counts.replayed = counts.replayed.saturating_add(1);
-        if crate::arrangement::submit_command(painter, command, transform) {
+        if crate::palette::submit_command(painter, command, transform) {
             counts.submitted = counts.submitted.saturating_add(1);
         }
     }
@@ -497,7 +497,7 @@ impl Controls {
             };
             for command in commands {
                 counts.replayed = counts.replayed.saturating_add(1);
-                if crate::arrangement::submit_command(painter, command, transform) {
+                if crate::palette::submit_command(painter, command, transform) {
                     counts.submitted = counts.submitted.saturating_add(1);
                 }
             }
@@ -551,7 +551,7 @@ pub fn hovered_row(
     );
     for command in &out.commands {
         counts.replayed = counts.replayed.saturating_add(1);
-        if crate::arrangement::submit_command(painter, command, transform) {
+        if crate::palette::submit_command(painter, command, transform) {
             counts.submitted = counts.submitted.saturating_add(1);
         }
     }
