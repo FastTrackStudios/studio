@@ -1854,77 +1854,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "block-clap"
-version = "0.1.0"
-dependencies = [
- "daw-clap-ext",
- "nice-plug",
- "plugin-processors",
-]
-
-[[package]]
-name = "block-comp"
-version = "0.1.0"
-dependencies = [
- "block-clap",
- "nice-plug",
-]
-
-[[package]]
-name = "block-delay"
-version = "0.1.0"
-dependencies = [
- "block-clap",
- "nice-plug",
-]
-
-[[package]]
-name = "block-drive"
-version = "0.1.0"
-dependencies = [
- "block-clap",
- "nice-plug",
-]
-
-[[package]]
-name = "block-eq"
-version = "0.1.0"
-dependencies = [
- "block-clap",
- "nice-plug",
-]
-
-[[package]]
-name = "block-gain"
-version = "0.1.0"
-dependencies = [
- "block-clap",
- "nice-plug",
-]
-
-[[package]]
-name = "block-gate"
-version = "0.1.0"
-dependencies = [
- "block-clap",
- "nice-plug",
-]
-
-[[package]]
 name = "block-padding"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8894febbff9f758034a5b8e12d87918f56dfc64a8e1fe757d65e29041538d93"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "block-reverb"
-version = "0.1.0"
-dependencies = [
- "block-clap",
- "nice-plug",
 ]
 
 [[package]]
@@ -2456,10 +2391,8 @@ dependencies = [
 name = "comp-plugin"
 version = "0.1.0"
 dependencies = [
- "dsp",
+ "family-clap",
  "nice-plug",
- "plugin-core",
- "plugin-ui",
 ]
 
 [[package]]
@@ -3154,7 +3087,7 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 [[package]]
 name = "daw-clap-ext"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/daw?rev=4c96623f43836a1c1c5087236b82233602787c80#4c96623f43836a1c1c5087236b82233602787c80"
+source = "git+https://github.com/FastTrackStudios/daw?rev=acd3f395e06fd6090593e5bbc7dd8af630ac3fd3#acd3f395e06fd6090593e5bbc7dd8af630ac3fd3"
 dependencies = [
  "clap-sys",
 ]
@@ -3185,11 +3118,8 @@ source = "git+https://www.github.com/FastTrackStudios/blitz?rev=db5b7ef11e4df19e
 name = "delay-plugin"
 version = "0.1.0"
 dependencies = [
- "dsp",
- "dsp-core",
+ "family-clap",
  "nice-plug",
- "plugin-core",
- "plugin-ui",
 ]
 
 [[package]]
@@ -4048,7 +3978,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4086,7 +4016,7 @@ version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab8ecd87370524b461f8557c119c405552c396ed91fc0a8eec68679eab26f94a"
 dependencies = [
- "libloading 0.7.4",
+ "libloading 0.8.9",
 ]
 
 [[package]]
@@ -4097,7 +4027,7 @@ checksum = "ad5208a115eaba24916f7456929832e310a81518c641f93fee4f89aa93aa3675"
 dependencies = [
  "cfg-if",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4471,11 +4401,8 @@ dependencies = [
 name = "eq-plugin"
 version = "0.1.0"
 dependencies = [
- "dsp",
- "dsp-core",
+ "family-clap",
  "nice-plug",
- "plugin-core",
- "plugin-ui",
 ]
 
 [[package]]
@@ -4532,7 +4459,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4828,6 +4755,16 @@ dependencies = [
  "facet-format",
  "facet-reflect",
  "indexmap",
+]
+
+[[package]]
+name = "family-clap"
+version = "0.1.0"
+dependencies = [
+ "daw-clap-ext",
+ "nice-plug",
+ "plugin-processors",
+ "serde_json",
 ]
 
 [[package]]
@@ -5250,7 +5187,7 @@ dependencies = [
 name = "gate-plugin"
 version = "0.1.0"
 dependencies = [
- "dsp",
+ "family-clap",
  "nice-plug",
 ]
 
@@ -6658,7 +6595,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8065,7 +8002,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 [[package]]
 name = "nice-log"
 version = "0.3.1"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#08d3989c146d587469f53f7475731e20518d44ac"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#0ded90b71e8d7f78db1f33765ad77cf9c36d7b6e"
 dependencies = [
  "tracing-appender",
  "windows",
@@ -8074,7 +8011,7 @@ dependencies = [
 [[package]]
 name = "nice-plug"
 version = "0.4.2"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#08d3989c146d587469f53f7475731e20518d44ac"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#0ded90b71e8d7f78db1f33765ad77cf9c36d7b6e"
 dependencies = [
  "anyhow",
  "anymap3",
@@ -8105,7 +8042,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-core"
 version = "0.4.2"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#08d3989c146d587469f53f7475731e20518d44ac"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#0ded90b71e8d7f78db1f33765ad77cf9c36d7b6e"
 dependencies = [
  "atomic_float",
  "atomic_refcell",
@@ -8125,7 +8062,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-derive"
 version = "0.1.2"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#08d3989c146d587469f53f7475731e20518d44ac"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#0ded90b71e8d7f78db1f33765ad77cf9c36d7b6e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8135,7 +8072,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-dioxus"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#08d3989c146d587469f53f7475731e20518d44ac"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#0ded90b71e8d7f78db1f33765ad77cf9c36d7b6e"
 dependencies = [
  "anyrender",
  "anyrender_vello",
@@ -8168,7 +8105,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-xtask"
 version = "0.1.1"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#08d3989c146d587469f53f7475731e20518d44ac"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#0ded90b71e8d7f78db1f33765ad77cf9c36d7b6e"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -8228,7 +8165,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8395,7 +8332,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
 dependencies = [
- "proc-macro-crate 1.3.1",
+ "proc-macro-crate 2.0.2",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -10202,7 +10139,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10663,12 +10600,8 @@ dependencies = [
 name = "reverb-plugin"
 version = "0.1.0"
 dependencies = [
- "crossbeam-channel",
- "dsp",
- "dsp-core",
+ "family-clap",
  "nice-plug",
- "plugin-core",
- "plugin-ui",
 ]
 
 [[package]]
@@ -10877,7 +10810,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10945,7 +10878,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11009,11 +10942,8 @@ dependencies = [
 name = "saturate-plugin"
 version = "0.1.0"
 dependencies = [
- "atomic_float",
- "dsp",
+ "family-clap",
  "nice-plug",
- "plugin-core",
- "plugin-ui",
 ]
 
 [[package]]
@@ -12805,7 +12735,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -12823,7 +12753,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8c27177b12a6399ffc08b98f76f7c9a1f4fe9fc967c784c5a071fa8d93cf7e1"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -15030,7 +14960,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

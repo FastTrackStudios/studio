@@ -4,7 +4,7 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-description = "FTS EQ — CLAP/VST3 audio plugin entry point"
+description = "FTS EQ: Signal's eq block family as its own CLAP/VST3 (signal#26)"
 
 [lib]
 crate-type = ["cdylib", "lib"]
@@ -13,20 +13,12 @@ crate-type = ["cdylib", "lib"]
 workspace = true
 
 [dependencies]
-plugin-core = { workspace = true }
-dsp = { workspace = true, features = ["stack", "eq", "eq-profiles", "eq-analyzer"] }
-plugin-ui = { workspace = true, features = ["eq", "eq-native", "eq-profiles", "eq-ui"] }
-# The full Dioxus plugin editor (control view, EQ graph, spectrum) —
-# `native` pulls nice-plug-dioxus/Blitz.
-dsp-core = { workspace = true, features = ["audio"] }
+# `nice_export_clap!` expands to `::nice_plug::…` paths.
 nice-plug = { workspace = true, features = ["vst3"] }
+family-clap = { workspace = true }
 
 [features]
 default = []
-# The CLAP / VST3 entry points, on only for the bundle build (`just
-# plugins-bundle` passes `--features export`): every plugin exports the
-# same `clap_entry` / `GetPluginFactory` symbols, so two in one binary —
-# the session engine's built-in FX, or a workspace test build, where cargo
-# unifies features — collide.
+# The CLAP / VST3 entry points, only for the bundle build: two plugins'
+# entry points in one binary (a workspace test build) collide.
 export = []
-

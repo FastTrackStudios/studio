@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "FTS Reverb — CLAP/VST3 reverb plugin (15 algorithms) over the reverb engine"
+description = "FTS Reverb: Signal's reverb block family as its own CLAP/VST3 (signal#26)"
 
 [lib]
 # cdylib → the loadable CLAP/VST3 binary; lib → tests + a future standalone host.
@@ -14,30 +14,12 @@ crate-type = ["cdylib", "lib"]
 workspace = true
 
 [dependencies]
-# Plugin framework. `nice_plug` must be a DIRECT dep: `#[derive(Params)]` and
-# `nice_export_clap!`/`nice_export_vst3!` expand to absolute `::nice_plug::…`
-# paths, so the crate has to be nameable here. `vst3` is on by default.
+# `nice_export_clap!` expands to `::nice_plug::…` paths.
 nice-plug = { workspace = true, features = ["vst3"] }
-
-# The DSP facade (re-exports reverb-dsp). Never depend on reverb-dsp directly.
-dsp = { workspace = true, features = ["stack", "reverb", "reverb-profiles"] }
-plugin-ui = { workspace = true, features = ["reverb", "reverb-native", "reverb-profiles", "reverb-ui", "reverb-viz"] }
-
-# The chain's lifecycle trait (`Processor`) + `AudioConfig` live here.
-dsp-core = { workspace = true, features = ["audio"] }
-
-# The Blitz/nice-plug editor: the seven families and their panels. `native`
-# pulls nice-plug-dioxus.
-plugin-core = { workspace = true }
-# The IR hand-off channel: the editor's worker sends, the chain receives.
-crossbeam-channel = { workspace = true }
+family-clap = { workspace = true }
 
 [features]
 default = []
-# The CLAP / VST3 entry points, on only for the bundle build (`just
-# plugins-bundle` passes `--features export`): every plugin exports the
-# same `clap_entry` / `GetPluginFactory` symbols, so two in one binary —
-# the session engine's built-in FX, or a workspace test build, where cargo
-# unifies features — collide.
+# The CLAP / VST3 entry points, only for the bundle build: two plugins'
+# entry points in one binary (a workspace test build) collide.
 export = []
-

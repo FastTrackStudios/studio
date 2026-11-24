@@ -8,13 +8,6 @@
 resolver = "3"
 
 members = [
-    "apps/blocks/gain",
-    "apps/blocks/gate",
-    "apps/blocks/drive",
-    "apps/blocks/eq",
-    "apps/blocks/comp",
-    "apps/blocks/delay",
-    "apps/blocks/reverb",
     "apps/plugins/comp",
     "apps/plugins/delay",
     "apps/plugins/eq",
@@ -30,7 +23,7 @@ members = [
     "apps/plugins/saturate",
     "apps/plugins/trigger",
     "apps/plugins/unison",
-    "crates/block-clap",
+    "crates/family-clap",
     "crates/fts-audio-ui",
     "crates/plugin-core",
     "crates/plugin-processors",
@@ -51,7 +44,7 @@ repository = "https://github.com/FastTrackStudios/plugins"
 # ── This repo's crates ────────────────────────────────────────────────
 fts-audio-ui = { path = "crates/fts-audio-ui" }
 plugin-core = { path = "crates/plugin-core" }
-block-clap = { path = "crates/block-clap" }
+family-clap = { path = "crates/family-clap" }
 plugin-processors = { path = "crates/plugin-processors", default-features = false }
 plugin-ui = { path = "crates/plugin-ui" }
 preset-browser = { path = "crates/preset-browser" }
@@ -66,9 +59,9 @@ preset-browser = { path = "crates/preset-browser" }
 dsp = { git = "https://github.com/FastTrackStudios/dsp", rev = "75d475b01e96eed4a5ddad8ad6799396f220dd82" }
 dsp-core = { git = "https://github.com/FastTrackStudios/dsp", rev = "75d475b01e96eed4a5ddad8ad6799396f220dd82" }
 
-# FastTrackStudio's CLAP extensions (signal/1 for the block CLAPs), from
+# FastTrackStudio's CLAP extensions (signal/1 for the family CLAPs), from
 # the daw repo.
-daw-clap-ext = { git = "https://github.com/FastTrackStudios/daw", rev = "4c96623f43836a1c1c5087236b82233602787c80" }
+daw-clap-ext = { git = "https://github.com/FastTrackStudios/daw", rev = "acd3f395e06fd6090593e5bbc7dd8af630ac3fd3" }
 
 # ── Other repos, pinned as Studio pins them ───────────────────────────
 architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }

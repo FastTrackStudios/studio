@@ -44,23 +44,9 @@ name = "FTS Unison"
 [mic-plugin]
 name = "FTS Mic"
 
-[block-gain]
-name = "FTS Gain Block"
 
-[block-gate]
-name = "FTS Gate Block"
 
-[block-drive]
-name = "FTS Drive Block"
 
-[block-eq]
-name = "FTS EQ Block"
 
-[block-comp]
-name = "FTS Comp Block"
 
-[block-delay]
-name = "FTS Delay Block"
 
-[block-reverb]
-name = "FTS Reverb Block"

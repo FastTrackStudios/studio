@@ -1,0 +1,16 @@
+[package]
+name = "family-clap"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "A Signal block family as one CLAP (FTS EQ, FTS Reverb, …): fixed control slots named by the loaded algorithm, algorithms switched and loaded over Signal's signal/1 extension (signal#26)"
+
+[lints]
+workspace = true
+
+[dependencies]
+nice-plug = { workspace = true }
+plugin-processors = { workspace = true, features = ["std", "files", "gate", "saturate", "eq", "comp", "delay", "reverb"] }
+daw-clap-ext = { workspace = true }
+serde_json = { workspace = true }
