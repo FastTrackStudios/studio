@@ -12,9 +12,13 @@ REAPER's look for Studio's views (the arrangement, the mixer and the MIDI editor
 
 ## Use
 
-```sh
-FTS_THEME=themes/fts-dark.frame Studio
+In Studio, while it runs:
+
+```text
+THEME_SET {"pack": "reaper", "theme": "fts-dark"}
 ```
+
+or for one run, `FTS_THEME=themes/fts-dark.frame Studio`. `pack.styx` names the theme; it passes spec 1 (`daw-theme check .`).
 
 ## Licence
 
