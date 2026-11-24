@@ -142,11 +142,17 @@ pub fn lead() {
             // engine is: `(at, playing, when)`.
             let mut song: Option<String> = None;
             let mut last: Option<(f64, bool, Instant)> = None;
+            // When the song's timing was last compared with its session's.
+            let mut timed = Instant::now();
             loop {
                 std::thread::sleep(TICK);
                 let Some((project, title, length)) = current() else {
                     continue;
                 };
+                if song.as_deref() == Some(project.as_str()) && timed.elapsed() >= RETIME {
+                    timed = Instant::now();
+                    retime_if_behind(&project);
+                }
                 let Some((at, playing)) = session_engine::engine::playhead_of(&project) else {
                     continue;
                 };
@@ -187,6 +193,22 @@ pub fn lead() {
                 }
             }
         });
+}
+
+/// How often the song's sections, markers and tempo are compared with what
+/// its session holds.
+const RETIME: Duration = Duration::from_secs(1);
+
+/// The current song's session given its timing again when the song's
+/// sections, markers or tempo changed (an edit in the arrangement): the
+/// chart and the lighting read the session, so they follow.
+fn retime_if_behind(project: &str) {
+    let Some(now) = crate::session_doc::timing_now(project) else {
+        return;
+    };
+    if crate::session_doc::behind(project, crate::session_doc::timing_of(&now)) {
+        crate::session_doc::retime(project, &now);
+    }
 }
 
 /// The deck moved (`app:playhead.changed`, this extension's source): the
