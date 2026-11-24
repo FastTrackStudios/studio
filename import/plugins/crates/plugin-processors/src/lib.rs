@@ -141,6 +141,12 @@ pub trait BlockProcessor: Send {
         let _ = (left, right);
     }
 
+    /// This block is keyed by another lane, from now on (said once, when
+    /// the graph is built): its key is what that lane gives it, audio or
+    /// hits, and silence between, never its own input. A gate keyed by a
+    /// trigger on another track stays shut until that trigger's first hit.
+    fn keyed(&mut self) {}
+
     /// A drum hit in the next piece, `offset` frames in, at `velocity`
     /// (0–1): what a sample block plays. Effects ignore it.
     fn hit(&mut self, offset: u32, velocity: f32) {

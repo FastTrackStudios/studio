@@ -31,7 +31,20 @@ pub struct Gate {
     /// The key for the next piece (mono-summed), and how much of it there is.
     key: alloc::vec::Vec<f64>,
     keyed: usize,
+    /// Hits for the next piece, as frame offsets: a key built from them
+    /// when no audio key comes (a trigger on another track, whose hits
+    /// arrive over the session and not its audio).
+    hits: [u32; MAX_HITS],
+    hit_count: usize,
+    /// Frames of the last piece's pulse still to come.
+    pulse_left: usize,
+    /// Once a hit has come, the gate is hit-keyed: between hits its key
+    /// is silence, not its own (bleeding) input.
+    hit_keyed: bool,
+    pulse: usize,
 }
+
+const MAX_HITS: usize = 16;
 
 impl Gate {
     #[must_use]
@@ -50,7 +63,36 @@ impl Gate {
             sample_rate: sr,
             key: alloc::vec![0.0; max_block],
             keyed: 0,
+            hits: [0; MAX_HITS],
+            hit_count: 0,
+            pulse_left: 0,
+            hit_keyed: false,
+            // A 2 ms full-level pulse per hit: past any threshold, and
+            // the gate's own hold does the rest.
+            pulse: (sr * 0.002) as usize,
         }
+    }
+
+    /// The key from the hits: a pulse at each.
+    fn key_from_hits(&mut self, n: usize) {
+        let Some(key) = self.key.get_mut(..n) else {
+            return;
+        };
+        key.fill(0.0);
+        let mut fill = |from: usize, len: usize, key: &mut [f64]| -> usize {
+            let end = (from + len).min(n);
+            if let Some(k) = key.get_mut(from.min(end)..end) {
+                k.fill(1.0);
+            }
+            from + len - end
+        };
+        let mut left = fill(0, self.pulse_left, key);
+        for h in self.hits.iter().take(core::mem::take(&mut self.hit_count)) {
+            let at = usize::try_from(*h).unwrap_or(0).min(n);
+            left = left.max(fill(at, self.pulse, key));
+        }
+        self.pulse_left = left;
+        self.keyed = n;
     }
 }
 
@@ -80,10 +122,17 @@ impl BlockProcessor for Gate {
 
     fn reset(&mut self) {
         self.gate.reset();
+        self.hit_count = 0;
+        self.pulse_left = 0;
     }
 
     fn process(&mut self, left: &mut [f32], right: &mut [f32]) {
+        if self.keyed == 0 && self.hit_keyed {
+            self.key_from_hits(left.len().min(right.len()).min(self.key.len()));
+        }
         let keyed = core::mem::take(&mut self.keyed);
+        // Hits that came with an audio key: the audio keyed this piece.
+        self.hit_count = 0;
         for (i, (l, r)) in left.iter_mut().zip(right.iter_mut()).enumerate() {
             let mut frame = [f64::from(*l), f64::from(*r)];
             match self.key.get(i).filter(|_| i < keyed) {
@@ -93,6 +142,18 @@ impl BlockProcessor for Gate {
             }
             *l = dsp_core::num::narrow(frame[0]);
             *r = dsp_core::num::narrow(frame[1]);
+        }
+    }
+
+    fn keyed(&mut self) {
+        self.hit_keyed = true;
+    }
+
+    fn hit(&mut self, offset: u32, _velocity: f32) {
+        self.hit_keyed = true;
+        if let Some(slot) = self.hits.get_mut(self.hit_count) {
+            *slot = offset;
+            self.hit_count += 1;
         }
     }
 
@@ -150,5 +211,38 @@ mod key_tests {
         }
         let open = l.iter().map(|s| s.abs()).fold(0.0, f32::max);
         assert!(open > shut * 4.0, "open {open}, shut {shut}");
+    }
+}
+
+#[cfg(test)]
+mod hit_tests {
+    use super::*;
+
+    /// A gate keyed by hits alone (its trigger on another track): open at
+    /// each hit, shut on the bleed between, whatever its own input.
+    #[test]
+    fn hits_key_a_gate_with_no_audio_key() {
+        let mut g = Gate::with_max_block(48_000.0, 512);
+        g.keyed();
+        g.set_param(2, 100.0); // open 100 ms
+        let mut out = alloc::vec::Vec::new();
+        for piece in 0..200 {
+            // Loud bleed throughout: alone it would hold the gate open.
+            let (mut l, mut r) = (alloc::vec![0.3_f32; 512], alloc::vec![0.3_f32; 512]);
+            if piece == 20 || piece == 120 {
+                g.hit(100, 1.0);
+            }
+            g.process(&mut l, &mut r);
+            out.extend(l);
+        }
+        let level =
+            |from: usize, to: usize| out[from..to].iter().map(|s| s.abs()).fold(0.0, f32::max);
+        let hit = 20 * 512 + 100;
+        let shut = level(hit - 5_000, hit - 1_000);
+        let open = level(hit + 2_000, hit + 3_000);
+        let after = level(hit + 30_000, hit + 40_000);
+        assert!(open > 0.2, "open after the hit: {open}");
+        assert!(shut < open * 0.1, "shut before: {shut}");
+        assert!(after < open * 0.1, "shut again, the bleed ignored: {after}");
     }
 }

@@ -438,6 +438,10 @@ impl BlockProcessor for FamilyBlock {
         self.engine.hit(offset, velocity);
     }
 
+    fn keyed(&mut self) {
+        self.engine.keyed();
+    }
+
     fn mod_sources(&self) -> &'static [ModSourceSpec] {
         self.engine.mod_sources()
     }
