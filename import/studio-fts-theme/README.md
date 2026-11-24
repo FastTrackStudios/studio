@@ -26,7 +26,14 @@ It's one of the `studio-*-theme` packs (`studio-reaper-theme` is REAPER's look, 
 
 A theme is a list of files or folders, base first. Each one replaces tokens, components and pages of the ones before it **by name**. So a theme built on this one is only the files it changes: one control, the strip, a colour.
 
-Today Studio reads the layers from `FTS_THEME` (`:`-separated) and reloads them when a file changes:
+`pack.styx` names the pack's one theme, `console`, and its layers. In Studio, choose it while it runs (the views restyle at once, and again whenever a file changes):
+
+```text
+THEME_SET   {"pack": "fts", "theme": "console"}
+THEME_CHECK {}
+```
+
+For one run, `FTS_THEME` names the layers (`:`-separated):
 
 ```sh
 FTS_THEME=themes/console Studio
@@ -35,11 +42,11 @@ FTS_THEME=themes/console:my-theme/ Studio   # this pack, then your changes on to
 
 ## Making your own pack
 
-Start a repo with a `themes/` folder. Either copy `themes/console` and change it, or write only the files you want to differ and layer them over this pack. Studio installs a pack from its GitHub link; the install flow is part of daw's theme spec work.
+Start a repo with a `themes/` folder and a `pack.styx`. Either copy `themes/console` and change it, or write only the files you want to differ and layer them over this pack. Check it with daw's `daw-theme check <folder>`; Studio installs it from its GitHub link (`THEME_INSTALL {"link": "owner/repo@rev"}`), pinned to that commit.
 
 ## Status
 
-The mixer strip draws from these files today (`FTS_THEME`). The track control panel, the arrangement, the rails, the Tone rack and the MIDI editor are still drawn natively, and move onto the theme as each view moves to its own repo. The copy of these files in the studio repo (`features/engine/ui/themes`) goes once the views load the pack.
+It passes spec 1 (`daw-theme check .`). The mixer strip, the track panel row, the rails, the Tone rack's units and the MIDI editor's chrome draw from these files; everything the views still paint natively (the arrangement's rows, grid and clips) wears its tokens.
 
 ## Licence
 
