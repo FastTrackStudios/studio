@@ -111,6 +111,7 @@ pub fn timing_of(project: &daw_ui::studio::project::Project) -> u64 {
 /// locks (no window's model, which is a snapshot from when it opened).
 #[must_use]
 pub fn timing_now(song: &str) -> Option<daw_ui::studio::project::Project> {
+    use daw::service::TempoMap as _;
     use daw_ui::studio::project::{Marker as M, Project, Section, TempoChange};
     let song = session_engine::song::Song::named_or_current(Some(song)).ok()?;
     let (daw, ctx) = (song.daw(), song.context());
