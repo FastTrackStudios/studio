@@ -25,10 +25,10 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use daw_edit::PlanRequest;
 use daw_edit::plan::{
     BarLine, Doubt, Heard, Lean, Plan, Planned, PlayedHit, Prefer, Reason, ZoneKind,
 };
-use daw_edit::PlanRequest;
 
 /// Strokes this close sound as one (a unison, a flam's second stroke).
 pub const UNISON: f64 = 0.030;
@@ -56,7 +56,7 @@ pub const TIE: f64 = 0.010;
 /// The lean is never taken past this.
 const MAX_LEAN: f64 = 0.120;
 /// How much nearer a written note's line counts than a bare line.
-const NOTE_PULL_MIDI: f64 = 0.080;
+const NOTE_PULL_MIDI: f64 = 0.060;
 const NOTE_PULL_GRID: f64 = 0.008;
 /// What breaking a straight run (not one line apart) costs.
 const RUN_BREAK: f64 = 0.030;
@@ -167,7 +167,6 @@ enum Fate {
     Lead,
     Rides(usize, Reason),
     Removed,
-    Deleted,
     Kept,
     /// Leads, on a fill's own grid.
     FillGrid(u32),
@@ -195,12 +194,12 @@ pub fn plan(request: &PlanRequest) -> Plan {
         let _s = tracing::info_span!("rhythm.plan.doubles").entered();
         false_doubles(&hits, &mut fate);
         seam_doubles(&hits, &mut fate);
-        let (removed, deleted) = fate.iter().fold((0, 0), |(r, d), f| match f {
-            Fate::Removed => (r + 1, d),
-            Fate::Deleted => (r, d + 1),
-            _ => (r, d),
-        });
-        tracing::info!(removed, deleted, "doubles");
+        let removed = fate.iter().filter(|f| matches!(f, Fate::Removed)).count();
+        let seams = fate
+            .iter()
+            .filter(|f| matches!(f, Fate::Rides(_, Reason::SeamDouble)))
+            .count();
+        tracing::info!(removed, seams, "doubles");
     }
     {
         let _s = tracing::info_span!("rhythm.plan.zones").entered();
@@ -208,7 +207,11 @@ pub fn plan(request: &PlanRequest) -> Plan {
             if !matches!(fate[i], Fate::Lead) {
                 continue;
             }
-            if let Some(z) = request.zones.iter().find(|z| h.time >= z.start - 0.010 && h.time < z.end) {
+            if let Some(z) = request
+                .zones
+                .iter()
+                .find(|z| h.time >= z.start - 0.010 && h.time < z.end)
+            {
                 fate[i] = match (z.kind, z.grid) {
                     (ZoneKind::Fill, Some(g)) => Fate::FillGrid(g),
                     (ZoneKind::Fill, None) if request.settings.plan_fills => Fate::Lead,
@@ -236,13 +239,19 @@ pub fn plan(request: &PlanRequest) -> Plan {
         .iter()
         .map(|((i, half), l)| {
             let quarter = f64::from(request.bars[*i].beats) / 4.0;
-            (beats.first[*i] + quarter * (1.0 + 2.0 * f64::from(*half)), l.lean)
+            (
+                beats.first[*i] + quarter * (1.0 + 2.0 * f64::from(*half)),
+                l.lean,
+            )
         })
         .collect();
     let lean_at = |t: f64| -> f64 {
         let b = beats.beat_of(t);
         let k = middles.partition_point(|(m, _)| *m <= b);
-        match (k.checked_sub(1).and_then(|k| middles.get(k)), middles.get(k)) {
+        match (
+            k.checked_sub(1).and_then(|k| middles.get(k)),
+            middles.get(k),
+        ) {
             (Some(&(m0, l0)), Some(&(m1, l1))) if m1 > m0 => l0 + (l1 - l0) * (b - m0) / (m1 - m0),
             (Some(&(_, l)), _) | (None, Some(&(_, l))) => l,
             (None, None) => 0.0,
@@ -267,7 +276,16 @@ pub fn plan(request: &PlanRequest) -> Plan {
         let mut solved = 0usize;
         for (piece, idx) in by_piece {
             let piece_notes = notes.get(piece).map_or(&[][..], Vec::as_slice);
-            let fit = fit_lines(request, &hits, &idx, &fate, &beats, piece_notes, &triplet, &lean_at);
+            let fit = fit_lines(
+                request,
+                &hits,
+                &idx,
+                &fate,
+                &beats,
+                piece_notes,
+                &triplet,
+                &lean_at,
+            );
             for (k, i) in idx.iter().enumerate() {
                 target[*i] = fit[k].clone();
             }
@@ -284,15 +302,14 @@ pub fn plan(request: &PlanRequest) -> Plan {
                 out.remove.push(h.id.clone());
                 (h.time, Reason::FalseDouble, 0.9)
             }
-            Fate::Deleted => {
-                out.delete.push(h.id.clone());
-                (h.time, Reason::SeamDouble, 0.8)
-            }
             Fate::Kept => (h.time, Reason::Kept, 1.0),
             Fate::Rides(lead, why) => {
                 let shift = lead_shift(*lead, &hits, &fate, &target);
                 let gap = (hits[*lead].time - h.time).abs();
-                if matches!(why, Reason::Rides(_)) && h.piece != hits[*lead].piece && (0.010..0.020).contains(&gap) {
+                if matches!(why, Reason::Rides(_))
+                    && h.piece != hits[*lead].piece
+                    && (0.010..0.020).contains(&gap)
+                {
                     let own = nearest_line(&beats, h.time - lean_at(h.time), 16);
                     if (own - (h.time + shift)).abs() > 0.0005 {
                         out.doubts.push(Doubt {
@@ -300,7 +317,11 @@ pub fn plan(request: &PlanRequest) -> Plan {
                             piece: h.piece.clone(),
                             time: h.time,
                             candidates: [h.time + shift, own],
-                            why: format!("rides the {} {:.0} ms away, or leads", hits[*lead].piece.to_lowercase(), gap * 1000.0),
+                            why: format!(
+                                "rides the {} {:.0} ms away, or leads",
+                                hits[*lead].piece.to_lowercase(),
+                                gap * 1000.0
+                            ),
                         });
                     }
                 }
@@ -316,9 +337,11 @@ pub fn plan(request: &PlanRequest) -> Plan {
                     out.targets.insert(h.id.clone(), fit.line);
                     let moved = (fit.line - h.time).abs();
                     let doubt = fit.doubt.clone().or_else(|| {
-                        (moved > LONG_MOVE).then(|| (fit.near, format!("moves {:.0} ms", moved * 1000.0)))
+                        (moved > LONG_MOVE)
+                            .then(|| (fit.near, format!("moves {:.0} ms", moved * 1000.0)))
                     });
-                    if let Some((other, why)) = doubt.filter(|(o, _)| (o - fit.line).abs() > 0.0005) {
+                    if let Some((other, why)) = doubt.filter(|(o, _)| (o - fit.line).abs() > 0.0005)
+                    {
                         out.doubts.push(Doubt {
                             id: h.id.clone(),
                             piece: h.piece.clone(),
@@ -339,9 +362,35 @@ pub fn plan(request: &PlanRequest) -> Plan {
             confidence,
         });
     }
+    // A fill planned like the groove: one question for the whole fill,
+    // on its first stroke — or left as played?
+    if request.settings.plan_fills {
+        for z in request
+            .zones
+            .iter()
+            .filter(|z| z.kind == ZoneKind::Fill && z.grid.is_none())
+        {
+            let first = hits.iter().zip(&out.hits).find(|(h, p)| {
+                h.time >= z.start - 0.010 && h.time < z.end && (p.target - h.time).abs() > 0.0005
+            });
+            if let Some((h, p)) = first {
+                out.doubts.push(Doubt {
+                    id: h.id.clone(),
+                    piece: h.piece.clone(),
+                    time: h.time,
+                    candidates: [p.target, h.time],
+                    why: format!(
+                        "a fill ({:.2}–{:.2} s) planned on the grid, or left as played",
+                        z.start, z.end
+                    ),
+                });
+            }
+        }
+    }
+    out.doubts.sort_by(|a, b| a.time.total_cmp(&b.time));
     out.leans = {
         let mut l: Vec<Lean> = leans.into_values().collect();
-        l.sort_by(|a, b| (a.bar, a.half).cmp(&(b.bar, b.half)));
+        l.sort_by_key(|a| (a.bar, a.half));
         l
     };
     tracing::info!(
@@ -356,19 +405,16 @@ pub fn plan(request: &PlanRequest) -> Plan {
 }
 
 /// How far a rider's leader moves (following a chain of rides).
-fn lead_shift(
-    mut lead: usize,
-    hits: &[&PlayedHit],
-    fate: &[Fate],
-    target: &[Option<Fit>],
-) -> f64 {
+fn lead_shift(mut lead: usize, hits: &[&PlayedHit], fate: &[Fate], target: &[Option<Fit>]) -> f64 {
     for _ in 0..8 {
         match &fate[lead] {
             Fate::Rides(next, _) => lead = *next,
             _ => break,
         }
     }
-    target[lead].as_ref().map_or(0.0, |f| f.line - hits[lead].time)
+    target[lead]
+        .as_ref()
+        .map_or(0.0, |f| f.line - hits[lead].time)
 }
 
 /// The written notes per piece, by time.
@@ -402,7 +448,10 @@ fn false_doubles(hits: &[&PlayedHit], fate: &mut [Fate]) {
             fate[i] = Fate::Removed;
             continue;
         }
-        let before = hits[..i].iter().rev().take_while(|o| h.time - o.time <= FALSE_DOUBLE_WITHIN);
+        let before = hits[..i]
+            .iter()
+            .rev()
+            .take_while(|o| h.time - o.time <= FALSE_DOUBLE_WITHIN);
         let mut double = false;
         for o in before {
             if o.piece == h.piece
@@ -479,7 +528,9 @@ fn rides(hits: &[&PlayedHit], fate: &mut [Fate], notes: &HashMap<&str, Vec<f64>>
         }
         let snare = (i + 1..hits.len())
             .take_while(|&j| hits[j].time - hits[i].time <= KICK_UNDER)
-            .find(|&j| is_snare(&hits[j].piece) && leads(&fate[j]) && hits[j].time - hits[i].time >= UNISON);
+            .find(|&j| {
+                is_snare(&hits[j].piece) && leads(&fate[j]) && hits[j].time - hits[i].time >= UNISON
+            });
         if let Some(j) = snare {
             fate[i] = Fate::Rides(j, Reason::Rides(hits[j].id.clone()));
         }
@@ -579,18 +630,16 @@ fn leans(
                 placed = true;
             }
         }
-        if !placed {
-            if let Some(ns) = notes.get(h.piece.as_str()) {
-                let j = ns.partition_point(|n| *n < h.time - MAX_LEAN - CAP);
-                let near: Vec<f64> = ns[j..]
-                    .iter()
-                    .take_while(|n| **n <= h.time + MAX_LEAN + CAP)
-                    .map(|n| snap_note(beats, *n))
-                    .collect();
-                if !near.is_empty() {
-                    evidence[k].push((W_NOTE, h.time, near));
-                    placed = true;
-                }
+        if !placed && let Some(ns) = notes.get(h.piece.as_str()) {
+            let j = ns.partition_point(|n| *n < h.time - MAX_LEAN - CAP);
+            let near: Vec<f64> = ns[j..]
+                .iter()
+                .take_while(|n| **n <= h.time + MAX_LEAN + CAP)
+                .map(|n| snap_note(beats, *n))
+                .collect();
+            if !near.is_empty() {
+                evidence[k].push((W_NOTE, h.time, near));
+                placed = true;
             }
         }
         if !placed {
@@ -646,7 +695,9 @@ fn leans(
         cost = next;
         back.push(from);
     }
-    let mut s = (0..ns).min_by(|a, b| cost[*a].total_cmp(&cost[*b])).unwrap_or(ns / 2);
+    let mut s = (0..ns)
+        .min_by(|a, b| cost[*a].total_cmp(&cost[*b]))
+        .unwrap_or(ns / 2);
     let mut path = vec![0usize; halves];
     for k in (0..halves).rev() {
         path[k] = s;
@@ -669,14 +720,23 @@ fn leans(
 }
 
 /// The sections whose snare is on 3 more than on 2 and 4.
-fn half_time_sections(request: &PlanRequest, hits: &[&PlayedHit], fate: &[Fate], beats: &Beats<'_>) -> Vec<bool> {
+fn half_time_sections(
+    request: &PlanRequest,
+    hits: &[&PlayedHit],
+    fate: &[Fate],
+    beats: &Beats<'_>,
+) -> Vec<bool> {
     request
         .sections
         .iter()
         .map(|s| {
             let (mut on3, mut on24) = (0, 0);
             for (i, h) in hits.iter().enumerate() {
-                if !matches!(fate[i], Fate::Lead) || !is_snare(&h.piece) || h.time < s.from || h.time >= s.to {
+                if !matches!(fate[i], Fate::Lead)
+                    || !is_snare(&h.piece)
+                    || h.time < s.from
+                    || h.time >= s.to
+                {
                     continue;
                 }
                 let (bi, within) = beats.in_bar(beats.beat_of(h.time));
@@ -697,7 +757,10 @@ fn half_time_sections(request: &PlanRequest, hits: &[&PlayedHit], fate: &[Fate],
 /// The anchor beats (1-based) for `piece` at `t`: the settings' for its
 /// section, else the snare's backbeat (3 in half time, else 2 and 4).
 fn anchors_at(request: &PlanRequest, half_time: &[bool], piece: &str, t: f64) -> Vec<f64> {
-    let section = request.sections.iter().position(|s| t >= s.from && t < s.to);
+    let section = request
+        .sections
+        .iter()
+        .position(|s| t >= s.from && t < s.to);
     let name = section.map(|i| request.sections[i].name.as_str());
     let set: Vec<&daw_edit::plan::Anchor> = request
         .settings
@@ -782,7 +845,10 @@ fn triplet_beats(
             continue;
         }
         let b = beats.beat_of(h.time - lean_at(h.time)) + 1.0 / 12.0;
-        played.entry(b.floor() as i64).or_default().push(b - 1.0 / 12.0 - b.floor());
+        played
+            .entry(b.floor() as i64)
+            .or_default()
+            .push(b - 1.0 / 12.0 - b.floor());
     }
     let hinted = |beat: i64| {
         let t = beats.time_of(beat as f64 + 0.5);
@@ -823,7 +889,12 @@ fn triplet_beats(
         if p.len() < 3 {
             continue;
         }
-        let err = |div: f64| p.iter().map(|x| ((x * div) - (x * div).round()).abs() / div).sum::<f64>() / p.len() as f64;
+        let err = |div: f64| {
+            p.iter()
+                .map(|x| ((x * div) - (x * div).round()).abs() / div)
+                .sum::<f64>()
+                / p.len() as f64
+        };
         let (e16, e8t, e16t) = (err(4.0), err(3.0), err(6.0));
         // In beats: 0.03 beat is ~11 ms at 160.
         if e16 > 0.05 && e16t < e16 * 0.45 {
@@ -886,7 +957,10 @@ fn candidates(
             // Past half a line from the stroke, every bit counts twice:
             // a stroke goes to a farther line only when it must.
             let half = step * beats.bars[bi].beat / 2.0;
-            if let Some(e) = out.last_mut().filter(|e| (e.0 - line).abs() < 0.0005 && !e.2) {
+            if let Some(e) = out
+                .last_mut()
+                .filter(|e| (e.0 - line).abs() < 0.0005 && !e.2)
+            {
                 e.1 += 2.0 * (e.1 - half).max(0.0);
             }
         }
@@ -905,7 +979,9 @@ fn candidates(
         let step = beats.step(nbi, div);
         let line = beats.time_of((nb / step).round() * step);
         if let Some(e) = out.iter_mut().find(|(l, ..)| (l - line).abs() < 0.0005) {
-            e.1 -= pull;
+            // A written note's line costs its distance alone, less the
+            // pull: no penalty for being far, within the window.
+            e.1 = (line - c).abs() - pull;
             e.2 = true;
         } else {
             out.push((line, (line - c).abs() - pull, true));
@@ -932,7 +1008,10 @@ fn fit_lines(
     if n == 0 {
         return Vec::new();
     }
-    let corrected: Vec<f64> = idx.iter().map(|&i| hits[i].time - lean_at(hits[i].time)).collect();
+    let corrected: Vec<f64> = idx
+        .iter()
+        .map(|&i| hits[i].time - lean_at(hits[i].time))
+        .collect();
     let cands: Vec<Vec<(f64, f64, bool)>> = idx
         .iter()
         .zip(&corrected)
@@ -1012,7 +1091,9 @@ fn fit_lines(
     }
     let mut choice = vec![usize::MAX; n];
     let last = &cost[n - 1];
-    let mut c = (0..last.len()).min_by(|a, b| last[*a].total_cmp(&last[*b])).unwrap_or(usize::MAX);
+    let mut c = (0..last.len())
+        .min_by(|a, b| last[*a].total_cmp(&last[*b]))
+        .unwrap_or(usize::MAX);
     for k in (0..n).rev() {
         choice[k] = c;
         if c == usize::MAX {
@@ -1022,7 +1103,9 @@ fn fit_lines(
         if k > 0 && p == usize::MAX {
             // A broken chain: the stroke before chooses alone.
             let prev = &cost[k - 1];
-            c = (0..prev.len()).min_by(|a, b| prev[*a].total_cmp(&prev[*b])).unwrap_or(usize::MAX);
+            c = (0..prev.len())
+                .min_by(|a, b| prev[*a].total_cmp(&prev[*b]))
+                .unwrap_or(usize::MAX);
         } else {
             c = p;
         }
@@ -1074,7 +1157,19 @@ fn fit_lines(
                 None
             };
             let confidence = if doubt.is_some() { confidence.min(0.3) } else { confidence };
+            tracing::debug!(
+                hit.id = %hits[idx[k]].id,
+                hit.time = hits[idx[k]].time,
+                plan.corrected = c,
+                plan.line = line,
+                plan.reason = %reason,
+                plan.candidates = ?cands[k].iter().map(|(l, cost, w)| (l, cost, w)).collect::<Vec<_>>(),
+                "plan.line"
+            );
             Some(Fit { line, reason, confidence, near, doubt })
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

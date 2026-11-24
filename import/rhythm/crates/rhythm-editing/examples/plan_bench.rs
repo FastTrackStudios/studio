@@ -38,24 +38,35 @@ struct EditHit {
 }
 
 fn main() {
+    // RUST_LOG=rhythm_editing=debug shows each line chosen, as spans and
+    // fields (on stderr).
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
+        .init();
     let args: Vec<String> = std::env::args().collect();
     let (Some(req), Some(edit)) = (args.get(1), args.get(2)) else {
-        eprintln!("usage: plan_bench <request.json> <edit.json> [--misses] [--leans] [--dump <plan.json>]");
+        eprintln!(
+            "usage: plan_bench <request.json> <edit.json> [--misses] [--leans] [--dump <plan.json>]"
+        );
         std::process::exit(2);
     };
     let show = args.iter().any(|a| a == "--misses");
     let request: daw_edit::PlanRequest =
         serde_json::from_slice(&std::fs::read(req).expect("request")).expect("a PlanRequest");
-    let edit: Edit = serde_json::from_slice(&std::fs::read(edit).expect("edit")).expect("studio.drum-edit/1");
+    let edit: Edit =
+        serde_json::from_slice(&std::fs::read(edit).expect("edit")).expect("studio.drum-edit/1");
 
     let started = Instant::now();
     let plan = rhythm_editing::plan::plan(&request);
     let took = started.elapsed();
 
-    if let Some(i) = args.iter().position(|a| a == "--dump") {
-        if let Some(path) = args.get(i + 1) {
-            std::fs::write(path, serde_json::to_vec(&plan).expect("plan")).expect("dump");
-        }
+    if let Some(path) = args
+        .iter()
+        .position(|a| a == "--dump")
+        .and_then(|i| args.get(i + 1))
+    {
+        std::fs::write(path, serde_json::to_vec(&plan).expect("plan")).expect("dump");
     }
     let bar_len = 240.0 / edit.tempo.bpm;
     let at = |t: f64| {
@@ -63,18 +74,22 @@ fn main() {
         let bar = b.floor();
         format!("{}.{:.2}", bar as i64 + 1, (b - bar) * 4.0 + 1.0)
     };
-    let planned: BTreeMap<&str, &daw_edit::plan::Planned> = plan.hits.iter().map(|p| (p.id.as_str(), p)).collect();
-    let gone: HashSet<&str> = plan.remove.iter().chain(&plan.delete).map(String::as_str).collect();
+    let planned: BTreeMap<&str, &daw_edit::plan::Planned> =
+        plan.hits.iter().map(|p| (p.id.as_str(), p)).collect();
+    let gone: HashSet<&str> = plan
+        .remove
+        .iter()
+        .chain(&plan.delete)
+        .map(String::as_str)
+        .collect();
     let doubted: HashSet<&str> = plan.doubts.iter().map(|d| d.id.as_str()).collect();
     let (mut ok, mut total, mut covered) = (0usize, 0usize, 0usize);
     let mut by_bar: BTreeMap<i64, Vec<String>> = BTreeMap::new();
     let mut unmatched = 0usize;
     for e in &edit.hits {
-        let Some(h) = request
-            .hits
-            .iter()
-            .find(|h| h.piece == e.piece && h.take == e.take && (h.time - e.recorded).abs() <= 0.002)
-        else {
+        let Some(h) = request.hits.iter().find(|h| {
+            h.piece == e.piece && h.take == e.take && (h.time - e.recorded).abs() <= 0.002
+        }) else {
             unmatched += 1;
             continue;
         };
@@ -119,18 +134,35 @@ fn main() {
             }
             let b = (e.to - edit.tempo.bar_1_at) / bar_len;
             let half = u8::from(b - b.floor() >= 0.5);
-            owner.entry((b.floor() as i64 + 1, half)).or_default().push(e.recorded - e.to);
+            owner
+                .entry((b.floor() as i64 + 1, half))
+                .or_default()
+                .push(e.recorded - e.to);
         }
         for l in &plan.leans {
             if let Some(v) = owner.get_mut(&(i64::from(l.bar), l.half)) {
                 v.sort_by(f64::total_cmp);
                 let m = v[v.len() / 2];
-                let flag = if (m - l.lean).abs() > 0.02 { "  <-" } else { "" };
-                println!("lean {}.{} plan {:+.0} owner {:+.0} ({} anchors){flag}", l.bar, l.half, l.lean * 1000.0, m * 1000.0, l.anchors);
+                let flag = if (m - l.lean).abs() > 0.02 {
+                    "  <-"
+                } else {
+                    ""
+                };
+                println!(
+                    "lean {}.{} plan {:+.0} owner {:+.0} ({} anchors){flag}",
+                    l.bar,
+                    l.half,
+                    l.lean * 1000.0,
+                    m * 1000.0,
+                    l.anchors
+                );
             }
         }
     }
-    let bars: Vec<String> = by_bar.iter().map(|(b, v)| format!("{b}×{}", v.len())).collect();
+    let bars: Vec<String> = by_bar
+        .iter()
+        .map(|(b, v)| format!("{b}×{}", v.len()))
+        .collect();
     println!("misses by bar: {}", bars.join(" "));
     if show {
         for (b, v) in &by_bar {
