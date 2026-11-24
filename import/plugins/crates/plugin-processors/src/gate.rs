@@ -41,6 +41,9 @@ pub struct Gate {
     /// Once a hit has come, the gate is hit-keyed: between hits its key
     /// is silence, not its own (bleeding) input.
     hit_keyed: bool,
+    /// Another lane keys it (`keyed`): hit-keyed from the start, a reset
+    /// too.
+    wired: bool,
     pulse: usize,
     /// Frames since the last hit, and how long without one before the
     /// gate keys from its own input again: a dead trigger never silences
@@ -72,6 +75,7 @@ impl Gate {
             hit_count: 0,
             pulse_left: 0,
             hit_keyed: false,
+            wired: false,
             // A 2 ms full-level pulse per hit: past any threshold, and
             // the gate's own hold does the rest.
             pulse: (sr * 0.002) as usize,
@@ -127,10 +131,17 @@ impl BlockProcessor for Gate {
         self.gate.set_settings(self.settings);
     }
 
+    /// As it was built: its envelope, its key and hits, and how long since
+    /// a hit all cleared (a gate that had gone ten seconds without one
+    /// waits for a hit again).
     fn reset(&mut self) {
         self.gate.reset();
+        self.key.fill(0.0);
+        self.keyed = 0;
         self.hit_count = 0;
         self.pulse_left = 0;
+        self.hit_keyed = self.wired;
+        self.since_hit = 0;
     }
 
     fn process(&mut self, left: &mut [f32], right: &mut [f32]) {
@@ -159,6 +170,7 @@ impl BlockProcessor for Gate {
     }
 
     fn keyed(&mut self) {
+        self.wired = true;
         self.hit_keyed = true;
         self.since_hit = 0;
     }
@@ -287,5 +299,28 @@ mod fail_open_tests {
             level_at[11] > 0.25,
             "open on its own input after 10 s: {level_at:?}"
         );
+    }
+
+    /// Reset after it failed open, it sounds as a fresh one: shut, waiting
+    /// for a hit.
+    #[test]
+    fn a_reset_gate_waits_for_a_hit_again() {
+        let run = |g: &mut Gate, pieces: usize| -> alloc::vec::Vec<f32> {
+            let mut out = alloc::vec::Vec::new();
+            for _ in 0..pieces {
+                let (mut l, mut r) = (alloc::vec![0.5_f32; 512], alloc::vec![0.5_f32; 512]);
+                g.process(&mut l, &mut r);
+                out.extend_from_slice(&l);
+            }
+            out
+        };
+        let mut warm = Gate::with_max_block(48_000.0, 512);
+        warm.keyed();
+        let _ = run(&mut warm, 48_000 * 11 / 512);
+        warm.reset();
+        let mut fresh = Gate::with_max_block(48_000.0, 512);
+        fresh.keyed();
+        fresh.reset();
+        assert_eq!(run(&mut warm, 200), run(&mut fresh, 200));
     }
 }
