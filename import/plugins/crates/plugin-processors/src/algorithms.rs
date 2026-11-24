@@ -311,6 +311,11 @@ impl FamilyBlock {
         let controls = algorithm.controls.iter().map(|c| c.default).collect();
         let mut block = Self { sent: alloc::vec![u32::MAX; targets.len()], targets, algorithm, engine, controls };
         block.push_all();
+        // Settle the engine on its starting values (its smoothers on them,
+        // not gliding from the engine's own defaults): a fresh block is then
+        // in one state whoever built it, the compiled-in graph or a CLAP
+        // swapping in a new algorithm.
+        block.engine.reset();
         Ok(block)
     }
 
