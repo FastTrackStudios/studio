@@ -18,6 +18,7 @@
 //!   (or takes from) the sum; a picture of every mic's averaged hit.
 
 pub mod ab;
+pub mod align;
 pub mod measure;
 pub mod plot;
 pub mod render;
@@ -97,6 +98,31 @@ static AB: ActionMeta = meta(
     "Mix",
     "",
 );
+
+static ALIGN: ActionMeta = meta(
+    "LISTEN_ALIGN",
+    "listen_align",
+    "Align a piece's mics",
+    "Find how each mic of a drum piece (`piece`, as LISTEN_HITS: its mics read where they reach the sum, its hits from its hit markers between `from` and `to`) should be moved (an offset within `max_ms`, 3 unless given), turned over (`invert: false` forbids it) and phase-rotated in one band (`rotate: false` forbids it: a band around 40–250 Hz, width Q 1, turned by up to ±180°) so that the piece's sum is fullest — scored on the sum, over the hits only, not on how alike two mics are: `level` (the sum's power), `low` (below 150 Hz) and `attack` (its transients over the first 10 ms: the power of its first difference), each in dB against the sum as it is, added into `score`; within 0.1 dB the smaller move wins. Mics are taken in turn (the most of the sum first, the reference mic left where it is), each against the sum with the ones before it set. Answers per mic: `now` (its offset and polarity against the reference, what it adds to the sum), `candidates` (the best offsets and polarities, and the best rotation, each `{delay_samples, invert, rotate_hz, rotate_deg, rotate_q, gains: {level, low, attack, score}}`), `chosen` (the best, when it gains more than 0.2 dB; else none); and `predicted` (the whole sum's gains with every chosen fix). `apply: true` makes the fixes, confirms them and keeps them only if the sum is better: on a track whose Signal instance has the `align` block, through it (added in its first phase if missing; `delay_samples`, `invert`, `rotate_hz`, `rotate_deg`, `rotate_q`), else only a polarity, through the track's polarity (the rest listed in `not_applied`); then the hits are heard again and `measured` says what the sum gained; worse on `score`, and the mix is put back as it was (as LISTEN_AB puts it back). A PNG of the sum's averaged hit before and after (and each fixed mic) goes under /tmp/listen/. `exact` as LISTEN.",
+    "Mix",
+    "",
+);
+
+/// LISTEN_ALIGN's arguments.
+#[derive(Facet)]
+struct AlignArg {
+    piece: String,
+    from: Option<String>,
+    to: Option<String>,
+    sum: Option<String>,
+    reference: Option<String>,
+    max_ms: Option<f64>,
+    invert: Option<bool>,
+    rotate: Option<bool>,
+    apply: Option<bool>,
+    exact: Option<bool>,
+    png: Option<bool>,
+}
 
 /// LISTEN_RENDER's arguments.
 #[derive(Facet)]
@@ -627,20 +653,35 @@ fn piece_tracks(
     })
 }
 
-/// `LISTEN_HITS`.
+/// A piece's hits, cut out of the mix: what LISTEN_HITS and LISTEN_ALIGN
+/// both read.
+struct HitWindows {
+    tracks: PieceTracks,
+    /// The hits, project seconds.
+    times: Vec<f64>,
+    pre_ms: f64,
+    post_ms: f64,
+    /// The window's frames before and after each hit.
+    pre: usize,
+    post: usize,
+    /// Where the mics are read.
+    at: Probe,
+    /// Each mic's windows (mono), in `tracks.mics` order; the sum's.
+    mic_windows: Vec<Vec<Vec<f32>>>,
+    sum_windows: Vec<Vec<f32>>,
+    heard: render::Heard,
+}
+
+/// Render a piece's mics and sum over its hits (as LISTEN_HITS asks) and
+/// cut each hit's window out of them.
 ///
 /// # Errors
 /// No such piece, no hits in the span, or the render failed.
-fn listen_hits(daw: &Standalone, project: &ProjectContext, a: &HitsArg) -> Result<Value, String> {
-    let span = tracing::info_span!(
-        "LISTEN_HITS",
-        listen.piece = %a.piece,
-        listen.hits = tracing::field::Empty,
-        listen.mics = tracing::field::Empty,
-        listen.ms = tracing::field::Empty,
-    );
-    let _in = span.enter();
-    let began = web_time::Instant::now();
+fn hit_windows(
+    daw: &Standalone,
+    project: &ProjectContext,
+    a: &HitsArg,
+) -> Result<HitWindows, String> {
     let song = crate::fx_actions::project_guid(project)?;
     let tracks = piece_tracks(
         daw,
@@ -710,7 +751,6 @@ fn listen_hits(daw: &Standalone, project: &ProjectContext, a: &HitsArg) -> Resul
             exact: a.exact.unwrap_or(false),
         },
     )?;
-    let analysed = web_time::Instant::now();
     let frames: Vec<usize> = times
         .iter()
         .map(|t| ((t - from) * f64::from(RATE)).round().max(0.0) as usize)
@@ -721,6 +761,47 @@ fn listen_hits(daw: &Standalone, project: &ProjectContext, a: &HitsArg) -> Resul
         .map(|s| cut(s))
         .collect();
     let sum_windows = cut(&heard.signals[tracks.mics.len()]);
+    Ok(HitWindows {
+        tracks,
+        times,
+        pre_ms,
+        post_ms,
+        pre,
+        post,
+        at,
+        mic_windows,
+        sum_windows,
+        heard,
+    })
+}
+
+/// `LISTEN_HITS`.
+///
+/// # Errors
+/// No such piece, no hits in the span, or the render failed.
+fn listen_hits(daw: &Standalone, project: &ProjectContext, a: &HitsArg) -> Result<Value, String> {
+    let span = tracing::info_span!(
+        "LISTEN_HITS",
+        listen.piece = %a.piece,
+        listen.hits = tracing::field::Empty,
+        listen.mics = tracing::field::Empty,
+        listen.ms = tracing::field::Empty,
+    );
+    let _in = span.enter();
+    let began = web_time::Instant::now();
+    let HitWindows {
+        tracks,
+        times,
+        pre_ms,
+        post_ms,
+        pre,
+        at,
+        mic_windows,
+        sum_windows,
+        heard,
+        ..
+    } = hit_windows(daw, project, a)?;
+    let analysed = web_time::Instant::now();
     let sum_avg = measure::average(&sum_windows);
     let reference = tracks
         .mics
@@ -1118,7 +1199,321 @@ fn listen_ab(
     }))
 }
 
+/// A fix, as answered.
+fn fix_json(c: &align::Candidate) -> Value {
+    json!({
+        "delay_samples": c.fix.delay,
+        "delay_ms": r2(c.fix.delay as f64 * 1e3 / f64::from(RATE)),
+        "invert": c.fix.invert,
+        "rotate_hz": c.fix.rotate.map(|r| r.hz),
+        "rotate_deg": c.fix.rotate.map(|r| r.deg),
+        "rotate_q": c.fix.rotate.map(|r| r.q),
+        "gains": {
+            "level": r2(c.gains.level),
+            "low": r2(c.gains.low),
+            "attack": r2(c.gains.attack),
+            "score": r2(c.gains.score()),
+        },
+    })
+}
+
+/// A chosen fix must gain this much on the sum, dB.
+const ALIGN_LEAST: f64 = 0.2;
+
+/// One mic's search: its candidates and the one chosen (if any gains).
+struct Searched {
+    candidates: Vec<align::Candidate>,
+    chosen: Option<align::Candidate>,
+}
+
+/// Search one mic against `sum`.
+fn search(
+    w: &align::Windows,
+    mic: &[Vec<f32>],
+    sum: &[Vec<f32>],
+    (most, invert, rotate): (i64, bool, bool),
+) -> Searched {
+    let offsets = align::offsets(w, mic, sum, (most, invert));
+    let mut candidates: Vec<align::Candidate> = offsets.iter().take(3).copied().collect();
+    let mut best = offsets.first().copied();
+    if rotate && let Some(b) = best {
+        if let Some(r) = align::rotations(w, mic, sum, &b.fix).first().copied() {
+            candidates.push(r);
+            if r.gains.score() > b.gains.score() + align::CLOSE {
+                best = Some(r);
+            }
+        }
+    }
+    let chosen = best.filter(|b| b.fix != align::Fix::NONE && b.gains.score() > ALIGN_LEAST);
+    Searched { candidates, chosen }
+}
+
+/// Set `fix` on `track` (guid): through its Signal instance's `align`
+/// block when it has one (added if missing), else only its polarity
+/// through the track's. What could not be set, in words.
+fn set_fix(
+    daw: &Standalone,
+    project: &ProjectContext,
+    list: &ActionList,
+    (track, fix): (&str, &align::Fix),
+) -> Result<Vec<String>, String> {
+    let run = |id: &str, args: Value| -> Result<Value, String> {
+        list.run_json(id, args.to_string().as_bytes())
+            .map_err(|e| format!("{id}: {e}"))
+            .map(|b| serde_json::from_slice(&b).unwrap_or(Value::Null))
+    };
+    let align_block = |chain: &Value| -> Option<Value> {
+        chain["chain"]["phases"]
+            .as_array()?
+            .iter()
+            .filter_map(|p| p["blocks"].as_array())
+            .flatten()
+            .find(|b| b["kind"] == "align")
+            .cloned()
+    };
+    let chain = crate::clap_host::signal::chain(daw, project, track, None).ok();
+    let mut block = chain.as_ref().and_then(align_block);
+    if block.is_none()
+        && let Some(c) = &chain
+    {
+        let phase = c["chain"]["phases"]
+            .as_array()
+            .and_then(|p| {
+                p.iter()
+                    .map(|p| p["id"].as_str())
+                    .find(|id| *id != Some("source"))
+                    .flatten()
+            })
+            .unwrap_or("rescue")
+            .to_owned();
+        let added = run(
+            "SIGNAL_RUN",
+            json!({ "track": track, "action": "SIGNAL_BLOCK_ADD", "args": { "phase": phase, "kind": "align" } }),
+        );
+        if added.is_ok() {
+            block = crate::clap_host::signal::chain(daw, project, track, None)
+                .ok()
+                .as_ref()
+                .and_then(align_block);
+        }
+    }
+    let Some(block) = block else {
+        // No align block: the polarity alone, through the track.
+        let mut left = Vec::new();
+        if fix.invert {
+            let phase = Tracks::all(daw, project.clone())
+                .iter()
+                .find(|t| t.guid == track)
+                .is_some_and(|t| t.phase_inverted);
+            run("TRACK_SET", json!({ "track": track, "phase": !phase }))?;
+        }
+        if fix.delay != 0 {
+            left.push(format!(
+                "delay {} samples (no Signal align block on the track)",
+                fix.delay
+            ));
+        }
+        if let Some(r) = fix.rotate {
+            left.push(format!(
+                "rotation {:.0}° at {:.0} Hz (no Signal align block on the track)",
+                r.deg, r.hz
+            ));
+        }
+        return Ok(left);
+    };
+    // Each parameter by its CLAP id, normalized over its range.
+    let value = |id: &str, v: f64| -> Option<(String, String)> {
+        let p = block["params"].as_array()?.iter().find(|p| p["id"] == id)?;
+        let clap = p["clap_id"].as_str()?;
+        let (lo, hi) = (p["min"].as_f64()?, p["max"].as_f64()?);
+        let n = if hi > lo {
+            ((v - lo) / (hi - lo)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        Some((format!("@{clap}"), format!("={n:.6}")))
+    };
+    let r = fix.rotate.unwrap_or(align::Rotation {
+        hz: 100.0,
+        deg: 0.0,
+        q: align::ROTATE_Q,
+    });
+    let set: serde_json::Map<String, Value> = [
+        value("delay_samples", fix.delay as f64),
+        value("invert", if fix.invert { 1.0 } else { 0.0 }),
+        value("rotate_hz", r.hz),
+        value("rotate_deg", r.deg),
+        value("rotate_q", r.q),
+    ]
+    .into_iter()
+    .flatten()
+    .map(|(k, v)| (k, Value::String(v)))
+    .collect();
+    run(
+        "FX_SET",
+        json!({ "track": track, "fx": "Signal", "set": set }),
+    )?;
+    Ok(Vec::new())
+}
+
+/// `LISTEN_ALIGN`.
+///
+/// # Errors
+/// No such piece or no hits, a render failed, or a fix would not be set
+/// (the mix is put back then).
+fn listen_align(
+    daw: &Standalone,
+    project: &ProjectContext,
+    list: &ActionList,
+    a: &AlignArg,
+) -> Result<Value, String> {
+    let span = tracing::info_span!(
+        "LISTEN_ALIGN",
+        listen.piece = %a.piece,
+        listen.chosen = tracing::field::Empty,
+        listen.applied = tracing::field::Empty,
+        listen.kept = tracing::field::Empty,
+        listen.ms = tracing::field::Empty,
+    );
+    let _in = span.enter();
+    let began = web_time::Instant::now();
+    let hits_arg = HitsArg {
+        piece: a.piece.clone(),
+        from: a.from.clone(),
+        to: a.to.clone(),
+        at: None,
+        sum: a.sum.clone(),
+        reference: a.reference.clone(),
+        window_ms: None,
+        window_pre_ms: None,
+        png: Some(false),
+        fresh: None,
+        exact: a.exact,
+    };
+    let hw = hit_windows(daw, project, &hits_arg)?;
+    let w = align::Windows::new(RATE, hw.pre);
+    let most = (a.max_ms.unwrap_or(3.0).clamp(0.0, 20.0) * f64::from(RATE) / 1e3) as i64;
+    let how = (most, a.invert.unwrap_or(true), a.rotate.unwrap_or(true));
+    let all = Tracks::all(daw, project.clone());
+    let paths = crate::mix_sends::paths(&all);
+    let path = |g: &str| paths.get(g).cloned().unwrap_or_else(|| g.to_owned());
+    // The most of the sum first; the reference stays.
+    let mut order: Vec<usize> = (0..hw.tracks.mics.len())
+        .filter(|i| hw.tracks.mics[*i] != hw.tracks.reference)
+        .collect();
+    let share = |i: usize| measure::contribution(&hw.mic_windows[i], &hw.sum_windows).1;
+    order.sort_by(|x, y| share(*y).total_cmp(&share(*x)));
+    let mut sum = hw.sum_windows.clone();
+    let mut rows = Vec::new();
+    let mut chosen: Vec<(String, align::Fix)> = Vec::new();
+    let mut fixed_mics: Vec<(String, Vec<f32>, Vec<f32>)> = Vec::new();
+    for i in order {
+        let mic = &hw.mic_windows[i];
+        let found = search(&w, mic, &sum, how);
+        let (without, share) = measure::contribution(mic, &sum);
+        if let Some(c) = found.chosen {
+            let fixed = align::apply(&w, mic, &c.fix);
+            sum = align::swap(&sum, mic, &fixed);
+            chosen.push((hw.tracks.mics[i].clone(), c.fix));
+            let avg = measure::average(&fixed);
+            let env = measure::envelope(&avg, RATE, 5.0);
+            let name = path(&hw.tracks.mics[i]);
+            fixed_mics.push((
+                format!("{} aligned", name.rsplit('/').next().unwrap_or(&name)),
+                avg,
+                env,
+            ));
+        }
+        rows.push(json!({
+            "path": path(&hw.tracks.mics[i]),
+            "now": { "without_db": without, "share": share },
+            "candidates": found.candidates.iter().map(fix_json).collect::<Vec<_>>(),
+            "chosen": found.chosen.as_ref().map(fix_json),
+        }));
+    }
+    let predicted = align::compare(&w, &hw.sum_windows, &sum);
+    let gains_json = |g: &align::Gains| json!({ "level": r2(g.level), "low": r2(g.low), "attack": r2(g.attack), "score": r2(g.score()) });
+    span.record("listen.chosen", chosen.len());
+    let png = if a.png.unwrap_or(true) {
+        let before = measure::average(&hw.sum_windows);
+        let after = measure::average(&sum);
+        let mut series = vec![
+            (
+                "sum now".to_owned(),
+                before.clone(),
+                measure::envelope(&before, RATE, 5.0),
+            ),
+            (
+                "sum aligned".to_owned(),
+                after.clone(),
+                measure::envelope(&after, RATE, 5.0),
+            ),
+        ];
+        series.extend(fixed_mics);
+        let title = format!(
+            "{} · {} hits · sum before and after alignment (predicted {:+.2} dB low, {:+.2} dB level)",
+            a.piece,
+            hw.times.len(),
+            predicted.low,
+            predicted.level
+        );
+        drawn(
+            Ok(plot::hit(&series, RATE, hw.pre_ms, &title)),
+            picture("align", &a.piece),
+        )
+    } else {
+        Value::Null
+    };
+    let mut applied = Value::Null;
+    if a.apply.unwrap_or(false) && !chosen.is_empty() {
+        let before = crate::mix_snapshot::current(daw, project)?;
+        let mut not_applied = Vec::new();
+        let set: Result<(), String> = chosen.iter().try_for_each(|(track, fix)| {
+            let left = set_fix(daw, project, list, (track, fix))?;
+            not_applied.extend(left.into_iter().map(|l| format!("{}: {l}", path(track))));
+            Ok(())
+        });
+        if let Err(why) = set {
+            let _ = ab::put_back(daw, project, &before);
+            return Err(format!("{why} (the mix is put back)"));
+        }
+        let again = hit_windows(daw, project, &hits_arg)?;
+        let measured = align::compare(&w, &hw.sum_windows, &again.sum_windows);
+        let keep = measured.score() > 0.0;
+        if !keep {
+            ab::put_back(daw, project, &before)?;
+        }
+        span.record("listen.applied", chosen.len());
+        span.record("listen.kept", keep);
+        applied = json!({
+            "measured": gains_json(&measured),
+            "kept": keep,
+            "not_applied": not_applied,
+        });
+    }
+    let ms = began.elapsed().as_secs_f64() * 1e3;
+    span.record("listen.ms", ms);
+    Ok(json!({
+        "piece": a.piece,
+        "hits": hw.times.len(),
+        "reference": path(&hw.tracks.reference),
+        "sum": path(&hw.tracks.sum),
+        "mics_at": probe_word(hw.at),
+        "mics": rows,
+        "predicted": gains_json(&predicted),
+        "apply": applied,
+        "png": png,
+        "rendered": rendered_json(&hw.heard, &|g: &str| path(g)),
+        "ms": r2(ms),
+    }))
+}
+
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register_with(&ALIGN, Effect::Mutating, |_: &ActionCaller, a: AlignArg| {
+        let (daw, project) = song()?;
+        listen_align(daw, &project, crate::actions::list(), &a)
+            .map(|v| RawJson::from(v.to_string()))
+    })?;
     list.register_with(
         &RENDER,
         Effect::ReadOnly,
