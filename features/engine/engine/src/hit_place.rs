@@ -319,9 +319,11 @@ pub fn plan(
         edit.takes = tracing::field::Empty,
         fill.gaps = tracing::field::Empty,
         fill.reached_back = tracing::field::Empty,
+        fill.replayed_decay = tracing::field::Empty,
         fill.crossfaded = tracing::field::Empty,
         fill.stretched = tracing::field::Empty,
         fill.slowest = tracing::field::Empty,
+        fill.slowest_leftover = tracing::field::Empty,
         fill.left = tracing::field::Empty,
         fill.left_ms = tracing::field::Empty,
     )
@@ -374,11 +376,13 @@ pub fn plan(
 }
 
 /// The fills' counts on `span`: how many gaps, how each was filled, the
-/// slowest stretch and the silence left.
+/// slowest stretch (and the slowest below 0.8, what the replay left) and
+/// the dips left.
 fn record_fills(span: &tracing::Span, fills: &[placement::Filled]) {
     let count = |f: &dyn Fn(&placement::Filled) -> bool| fills.iter().filter(|x| f(x)).count();
     span.record("fill.gaps", fills.len());
     span.record("fill.reached_back", count(&|f| f.reached_back > 0.0));
+    span.record("fill.replayed_decay", count(&|f| f.replayed_decay > 0.0));
     span.record("fill.crossfaded", count(&|f| f.crossfade > 0.0));
     span.record("fill.stretched", count(&|f| f.stretched.is_some()));
     span.record("fill.left", count(&|f| f.left > 0.0));
@@ -392,6 +396,14 @@ fn record_fills(span: &tracing::Span, fills: &[placement::Filled]) {
         .reduce(f64::min)
     {
         span.record("fill.slowest", slowest);
+    }
+    if let Some(slowest) = fills
+        .iter()
+        .filter_map(|f| f.stretched.map(|s| s.rate))
+        .filter(|&rate| rate < crate::drum_apply::MIN_RATE - 1e-9)
+        .reduce(f64::min)
+    {
+        span.record("fill.slowest_leftover", slowest);
     }
 }
 
