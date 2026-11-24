@@ -2,10 +2,10 @@
 //!
 //! The DAW owns the edit surface; *how* an edit is decided is an algorithm
 //! (`daw_edit`'s contract: where a performance's hits play once moved,
-//! …). The engine runs the DAW's own ([`daw_edit::builtin`]) unless an
-//! extension provides the service (`[provides] "daw.edit" = "0.1.0"`):
-//! then it asks that one, as Architect services are asked (its action for
-//! a method, `RHYTHM_PLACE` for `PLACE`). First-party (rhythm, pitch) and
+//! …). The engine has none of its own: an extension provides the service
+//! (`[provides] "daw.edit" = "0.1.0"`), and the engine asks the chosen one,
+//! as Architect services are asked (its action for a method,
+//! `RHYTHM_PLACE` for `PLACE`). First-party (rhythm, pitch) and
 //! third-party algorithms are loaded the same way.
 //!
 //! For development, an algorithm runs from its checkout: `ENGINE_EXT_DEV
@@ -128,18 +128,17 @@ fn tell(events: &[Event]) {
 }
 
 /// [`daw_edit::METHOD_PLACE`]: where a performance's hits play, from the
-/// chosen `daw.edit` provider, else the DAW's own. A provider that fails
-/// or does not answer in time falls back to the DAW's own, said in the log.
-#[must_use]
-pub fn place(request: &daw_edit::PlaceRequest) -> daw_edit::PlaceAnswer {
-    match ask(daw_edit::METHOD_PLACE, request) {
-        Ok(Some(answer)) => answer,
-        Ok(None) => daw_edit::builtin::place(request),
-        Err(error) => {
-            tracing::warn!(error = %error, "algorithms: daw.edit PLACE failed, the DAW's own placed the hits");
-            daw_edit::builtin::place(request)
-        }
-    }
+/// chosen `daw.edit` provider. The engine has no placement of its own.
+///
+/// # Errors
+///
+/// No extension provides `daw.edit` (run rhythm: `ENGINE_EXT_DEV` on its
+/// `crates/rhythm-ext`, or install it), or the provider failed or did not
+/// answer in time.
+pub fn place(request: &daw_edit::PlaceRequest) -> Result<daw_edit::PlaceAnswer, String> {
+    ask(daw_edit::METHOD_PLACE, request)?.ok_or_else(|| {
+        "no edit algorithm is loaded: placing hits needs an extension providing daw.edit (rhythm: ENGINE_EXT_DEV {\"folder\": \"<rhythm>/crates/rhythm-ext\"})".to_owned()
+    })
 }
 
 /// The chosen `daw.edit` provider's answer to `method` with `request`:
@@ -235,7 +234,7 @@ static DEV: ActionMeta = meta(
 static DEV_END: ActionMeta = meta(
     "ENGINE_EXT_DEV_END",
     "Stop running an algorithm from its checkout",
-    "Ends the development copy in `folder`: unloaded now and at the next start (the DAW's own algorithm answers again where it was the one chosen).",
+    "Ends the development copy in `folder`: unloaded now and at the next start (another provider of its service answers, else edits that need one are refused).",
 );
 static LIST: ActionMeta = meta(
     "ENGINE_EXT_LIST",
@@ -245,7 +244,7 @@ static LIST: ActionMeta = meta(
 static USE: ActionMeta = meta(
     "ENGINE_EXT_USE",
     "Choose an algorithm",
-    "Chooses extension `provider` to answer `service` (`daw.edit` unless given); no `provider` goes back to the engine's own choice (the newest, else the DAW's built-in).",
+    "Chooses extension `provider` to answer `service` (`daw.edit` unless given); no `provider` goes back to the engine's own choice (the newest loaded).",
 );
 
 #[derive(Debug, Facet)]

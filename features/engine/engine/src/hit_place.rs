@@ -88,12 +88,15 @@ impl Slice {
 /// # Errors
 /// When the kit has no mic with both lanes, a hit is not on an EDIT
 /// slice, or the engine refuses an edit.
+#[tracing::instrument(name = "hits.place", skip_all, fields(hits.moves = moves.len()))]
 pub fn place(
     song: &crate::song::Song,
     moves: &[(f64, f64)],
     joins: Joins,
 ) -> Result<usize, String> {
-    let mut stages = crate::stages::Stages::start();
+    // Each step its own span under `hits.place`: the trace says where the
+    // time went.
+    let step = tracing::info_span!("hits.place.mics").entered();
     // Every moment the call names — moved or held where it is — by time,
     // and those it moves.
     let mut named: Vec<(f64, f64)> = moves.to_vec();
@@ -117,7 +120,8 @@ pub fn place(
         return Ok(0);
     }
     let mics = mics(song);
-    stages.mark("place.mics_ms");
+    drop(step);
+    let step = tracing::info_span!("hits.place.hits").entered();
     if mics.is_empty() {
         return Err("no mic of the kit has COMP and EDIT lanes".to_owned());
     }
@@ -127,7 +131,8 @@ pub fn place(
         .collect();
     hits.sort_by(f64::total_cmp);
     hits.dedup_by(|a, b| (*a - *b).abs() < SAME_HIT);
-    stages.mark("place.hits_ms");
+    drop(step);
+    let step = tracing::info_span!("hits.place.read").entered();
 
     // The hits placed again: from where the moved ones were to where they
     // land, and a couple either side.
@@ -156,7 +161,8 @@ pub fn place(
     if kit.is_empty() {
         return Err("the kit could not be read".to_owned());
     }
-    stages.mark("place.read_ms");
+    drop(step);
+    let step = tracing::info_span!("hits.place.plan").entered();
 
     // Each hit as recorded and shifted, read on the reference mic. A hit
     // beside the moved ones with no EDIT slice under it (where the lane
@@ -240,14 +246,14 @@ pub fn place(
             .map(|shift| t - shift)
     };
     let outside = (recorded(from.checked_sub(1)), recorded(Some(to + 1)));
-    // The chosen `daw.edit` algorithm places them (an extension, rhythm's
-    // or another's), else the DAW's own.
+    // The chosen `daw.edit` algorithm places them (an extension: rhythm's,
+    // or another's); the engine has no placement of its own.
     let pieces = crate::algorithms::place(&daw_edit::PlaceRequest {
         hits: placed.clone(),
         span,
         cut,
         bounds: outside,
-    })
+    })?
     .pieces;
     if let Some(bad) = pieces.iter().find(|p| p.end <= p.start) {
         return Err(format!(
@@ -261,11 +267,12 @@ pub fn place(
         .iter()
         .flat_map(|lanes| render_ops(lanes, &pieces, span, joins))
         .collect();
-    stages.mark("place.plan_ms");
+    drop(step);
+    let step = tracing::info_span!("hits.place.apply").entered();
 
     song.undo_step("Place a drum hit", |song| song.apply(&ops))
         .map_err(|e| e.to_string())?;
-    stages.mark("place.apply_ms");
+    drop(step);
     Ok(ops.len())
 }
 

@@ -5167,6 +5167,15 @@ fn apply_cuts(
     let song = crate::song::Song::current()?;
     stages.mark("cuts.song_ms");
     if !crate::hit_place::ready(&song) {
+        // The older way (slip the kit's items in a window that follows
+        // the engine) needs such a window; without one it would wait for
+        // nothing and change nothing.
+        if !crate::window_queue::engine_has_window() {
+            return Err(
+                "the kit has no COMP and EDIT lanes to place hits from: run DRUMS_EDIT_LANES first (step 6 of the drum editing guide)"
+                    .to_owned(),
+            );
+        }
         landed(slip_now(daw, project, settings, cuts));
         stages.mark("cuts.slip_ms");
         return Ok(());

@@ -215,13 +215,32 @@ impl Overlay {
 static SHOWN: Mutex<Option<Arc<Overlay>>> = Mutex::new(None);
 static VERSION: AtomicU64 = AtomicU64::new(0);
 
+/// From markers taken up to the first frame painted with them: the span
+/// `edit.shown`, open until a view says it drew them ([`drawn`]). A newer
+/// one replaces an older one no frame showed.
+static SHOWING: Mutex<Option<(u64, tracing::Span)>> = Mutex::new(None);
+
 /// Show `overlay` (its marks sorted here).
 pub fn publish(mut overlay: Overlay) {
     overlay.marks.sort_by(|a, b| a.time.total_cmp(&b.time));
+    let marks = overlay.marks.len();
     if let Ok(mut shown) = SHOWN.lock() {
         *shown = Some(Arc::new(overlay));
     }
-    VERSION.fetch_add(1, Ordering::Relaxed);
+    let version = VERSION.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+    let span = tracing::info_span!("edit.shown", edit.version = version, edit.marks = marks);
+    if let Ok(mut showing) = SHOWING.lock() {
+        *showing = Some((version, span));
+    }
+}
+
+/// A view painted the markers of `version` (or later): `edit.shown` ends.
+pub fn drawn(version: u64) {
+    if let Ok(mut showing) = SHOWING.lock()
+        && showing.as_ref().is_some_and(|(v, _)| *v <= version)
+    {
+        showing.take();
+    }
 }
 
 /// What is shown, if anything.

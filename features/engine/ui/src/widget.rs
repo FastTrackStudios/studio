@@ -317,6 +317,10 @@ struct HitDrag {
     /// Every hit dragged: the selection the flag taken is in, else it.
     ids: Vec<String>,
     from_x: f64,
+    /// The song's time under the pointer when it was pressed: the drag is
+    /// measured in the song, so the view scrolling under it (the edge
+    /// scroll, the playhead followed) moves nothing.
+    from_secs: f64,
     x: f64,
     /// Ctrl held at the press: the marker alone moves — where the hit
     /// was found is corrected, the audio stays. Without it the kit moves
@@ -1453,10 +1457,13 @@ impl ArrangementWidget {
                             .map_or(spot.time, |m| m.time);
                         let mut magnets = self.gather_magnets();
                         magnets.retain(|t| dragged.iter().all(|d| (d - t).abs() > 1e-6));
+                        let view = self.viewport(self.size.0, self.size.1);
+                        let from_secs = self.seconds_at(x, view);
                         self.hit_drag = Some(HitDrag {
                             id,
                             ids,
                             from_x: x,
+                            from_secs,
                             x,
                             marker_only: held.ctrl,
                             stretch: spot.foot && !held.ctrl,
@@ -1542,7 +1549,9 @@ impl ArrangementWidget {
                 } else {
                     drag.from_x
                 };
-                if (x - drag.from_x).abs() >= FLAG_SLOP {
+                let view = self.viewport(self.size.0, self.size.1);
+                let moved_px = (self.seconds_at(x, view) - drag.from_secs).abs() * view.pps;
+                if moved_px >= FLAG_SLOP {
                     // Where it was seen to go: snapped as it was dragged.
                     let ms = self.hit_drag_dt(&drag, x) * 1_000.0;
                     if drag.stretch {
@@ -3945,7 +3954,8 @@ impl ArrangementWidget {
     fn hit_drag_dt(&self, drag: &HitDrag, x: f64) -> f64 {
         let view = self.viewport(self.size.0, self.size.1);
         let pps = view.pps.max(f64::EPSILON);
-        let raw = (x - drag.from_x) / pps;
+        // Where the pointer is in the song now, less where it was pressed.
+        let raw = self.seconds_at(x, view) - drag.from_secs;
         if !drag.snap {
             return raw;
         }
@@ -5099,6 +5109,9 @@ impl ArrangementWidget {
     /// them, content `(0, 0)` at `lanes_at`.
     fn paint_kit_hits(&self, out: &mut Scene, view: Viewport, lanes_at: (f64, f64)) {
         // In every mode: the takes' ranks and notes on their items.
+        // The markers this frame draws: the edit that changed them is shown
+        // now (`edit.shown` ends).
+        crate::hit_overlay::drawn(crate::hit_overlay::version());
         match crate::hit_overlay::current() {
             Some(hits) => crate::arrangement::take_marks_overlay(
                 out,
