@@ -35,10 +35,10 @@ pub struct Joins {
 }
 
 /// A mic of the kit: its track and its two lanes.
-struct Mic {
-    track: String,
-    comp: u32,
-    edit: u32,
+pub(crate) struct Mic {
+    pub(crate) track: String,
+    pub(crate) comp: u32,
+    pub(crate) edit: u32,
 }
 
 /// A mic's two lanes around a placement, as they are: what it reads its
@@ -94,6 +94,31 @@ pub fn place(
     moves: &[(f64, f64)],
     joins: Joins,
 ) -> Result<usize, String> {
+    let ops = plan(song, moves, joins, None)?;
+    if ops.is_empty() {
+        return Ok(0);
+    }
+    let step = tracing::info_span!("hits.place.apply").entered();
+    song.undo_step("Place a drum hit", |song| song.apply(&ops))
+        .map_err(|e| e.to_string())?;
+    drop(step);
+    Ok(ops.len())
+}
+
+/// The item edits [`place`] makes, not yet applied: for a caller that
+/// writes them with edits of its own as one undo step (`DRUMS_APPLY`).
+/// `cut_on`, when given, are the hits (where they play now) a piece
+/// starts at — the kit's markers otherwise: a hit left out rides in the
+/// piece before it.
+///
+/// # Errors
+/// As [`place`].
+pub fn plan(
+    song: &crate::song::Song,
+    moves: &[(f64, f64)],
+    joins: Joins,
+    cut_on: Option<&[f64]>,
+) -> Result<Vec<ItemOp>, String> {
     // Each step its own span under `hits.place`: the trace says where the
     // time went.
     let step = tracing::info_span!("hits.place.mics").entered();
@@ -117,7 +142,7 @@ pub fn place(
             .map(|m| m.1)
     };
     if moved.is_empty() {
-        return Ok(0);
+        return Ok(Vec::new());
     }
     let mics = mics(song);
     drop(step);
@@ -125,10 +150,15 @@ pub fn place(
     if mics.is_empty() {
         return Err("no mic of the kit has COMP and EDIT lanes".to_owned());
     }
-    let mut hits: Vec<f64> = crate::hit_index::playback(song)
-        .iter()
-        .map(|p| p.time)
-        .collect();
+    let mut hits: Vec<f64> = cut_on.map_or_else(
+        || {
+            crate::hit_index::playback(song)
+                .iter()
+                .map(|p| p.time)
+                .collect()
+        },
+        <[f64]>::to_vec,
+    );
     hits.sort_by(f64::total_cmp);
     hits.dedup_by(|a, b| (*a - *b).abs() < SAME_HIT);
     drop(step);
@@ -151,7 +181,7 @@ pub fn place(
     let to = (last + CONTEXT).min(hits.len().saturating_sub(1));
     let around = hits.get(from..=to).ok_or("no hit where a move was asked")?;
     let (Some(&near), Some(&far)) = (around.first(), around.last()) else {
-        return Ok(0);
+        return Ok(Vec::new());
     };
 
     // Every mic's lanes around it, read at once: a slice reached from as
@@ -268,12 +298,7 @@ pub fn place(
         .flat_map(|lanes| render_ops(lanes, &pieces, span, joins))
         .collect();
     drop(step);
-    let step = tracing::info_span!("hits.place.apply").entered();
-
-    song.undo_step("Place a drum hit", |song| song.apply(&ops))
-        .map_err(|e| e.to_string())?;
-    drop(step);
-    Ok(ops.len())
+    Ok(ops)
 }
 
 /// How far past the hits around a move its lanes are read, seconds: a
@@ -289,7 +314,7 @@ pub fn ready(song: &crate::song::Song) -> bool {
 }
 
 /// Every track with both a COMP and an EDIT lane: the kit's mics.
-fn mics(song: &crate::song::Song) -> Vec<Mic> {
+pub(crate) fn mics(song: &crate::song::Song) -> Vec<Mic> {
     song.daw()
         .all(song.context())
         .into_iter()
@@ -369,7 +394,7 @@ pub fn lane_of(
 /// Where the EDIT lane plays the moment at `t` minus where the COMP lane
 /// has it: the slice there, read through the recording it plays, found on
 /// the COMP lane.
-fn shift_at(edit: &[Slice], comp: &[Slice], t: f64) -> Option<f64> {
+pub(crate) fn shift_at(edit: &[Slice], comp: &[Slice], t: f64) -> Option<f64> {
     // The latest slice to start by `t`: at a crossfade, the one coming in.
     let slice = edit
         .iter()
