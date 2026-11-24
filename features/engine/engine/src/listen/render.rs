@@ -51,10 +51,15 @@ pub const PREROLL: f64 = 1.0;
 const MOST: f64 = 600.0;
 /// The most recordings kept (about 5 MB each for 13 s).
 const KEPT_RECORDINGS: usize = 240;
-/// The Signal session the copies share: one of their own, never the live
-/// kit's, and the same for every listen so a reused copy and a fresh one
-/// meet in it.
+/// The Signal session a chunk's copies share (`listen-<chunk>`): one of
+/// their own, never the live kit's, and the same for every listen so a
+/// reused copy and a fresh one meet in it.
 const SESSION_TAG: &str = "listen";
+/// A span is rendered in this many chunks at most, side by side, each on
+/// copies of its own (in a Signal session of its own) from a preroll of
+/// its own; a chunk is at least [`CHUNK_LEAST`] seconds.
+const CHUNKS: u64 = 3;
+const CHUNK_LEAST: f64 = 3.0;
 
 /// A track whose plugins others key from (`from`, a kit piece's
 /// trigger), and the tracks keyed (`by`, its piece's mics).
@@ -180,6 +185,11 @@ pub struct Ask<'a> {
     /// Signal instances (by FX guid) cut at a block for this render (a
     /// point at `block:<id>:pre|post`): fresh copies, cut, never kept.
     pub cuts: &'a HashMap<String, Cut>,
+    /// Render in one piece, not in chunks side by side: slower, and what a
+    /// whole render (MIX_MEASURE) would say to the sample. Chunks, each
+    /// from a preroll of its own, measure within about 0.05 LU of it, and
+    /// within a few tenths of a dB on peaks and crest.
+    pub exact: bool,
 }
 
 /// How a listen was answered.
@@ -220,6 +230,8 @@ pub struct Heard {
     pub reused: u32,
     /// Plugins that would not be copied (rendered dry), and why.
     pub failures: Vec<String>,
+    /// The chunks it was rendered in, side by side (0 when replayed).
+    pub chunks: u32,
     pub plan_ms: f64,
     pub copy_ms: f64,
     pub prime_ms: f64,
@@ -245,6 +257,8 @@ struct Warm {
 /// One point of a track as a render heard it.
 struct Recorded {
     key: u64,
+    /// Rendered in one piece ([`Ask::exact`]).
+    exact: bool,
     /// Render frames `start..end`.
     start: u64,
     end: u64,
@@ -269,7 +283,8 @@ type Point = (String, Probe);
 /// never run at once (their copies share one Signal session).
 #[derive(Default)]
 struct Kept {
-    warm: HashMap<String, Warm>,
+    /// Per chunk, by FX guid.
+    warm: Vec<HashMap<String, Warm>>,
     /// By point and key: a point keeps what it sounded like before and
     /// after a change, so putting a change back replays the first.
     recordings: HashMap<(Point, u64), Recorded>,
@@ -296,11 +311,16 @@ impl Kept {
     }
 
     /// The recording of `at` under `key` over `frames`, if one is kept.
-    fn holding(&self, at: &Point, key: Option<u64>, frames: (u64, u64)) -> Option<&Recorded> {
+    fn holding(
+        &self,
+        at: &Point,
+        (key, exact): (Option<u64>, bool),
+        frames: (u64, u64),
+    ) -> Option<&Recorded> {
         let key = key?;
         self.recordings
             .get(&(at.clone(), key))
-            .filter(|r| r.holds(key, frames))
+            .filter(|r| r.holds(key, frames) && (r.exact || !exact))
     }
 }
 
@@ -471,6 +491,7 @@ fn fingerprint(state: &[u8]) -> u64 {
 }
 
 /// A plugin with a live instance: its guid, chain name and state.
+#[derive(Clone)]
 struct Instance {
     guid: String,
     name: String,
@@ -549,11 +570,11 @@ fn ready(
     daw: &Standalone,
     wanted: Vec<Instance>,
     warm: &mut HashMap<String, Warm>,
-    cuts: &HashMap<String, Cut>,
+    (cuts, tag): (&HashMap<String, Cut>, &str),
 ) -> Result<Ready, String> {
     let restate = |name: &str, state: Vec<u8>| {
         if crate::signal_kit::is_signal_bundle(name) {
-            crate::signal_kit::private_session(state, SESSION_TAG)
+            crate::signal_kit::private_session(state, tag)
         } else {
             state
         }
@@ -793,13 +814,21 @@ pub fn render(
             &routes,
             (ask.points, &everything),
             |p| {
-                kept.holding(&(p.track.clone(), p.at), key(&p.track), (start, to))
-                    .is_some()
+                kept.holding(
+                    &(p.track.clone(), p.at),
+                    (key(&p.track), ask.exact),
+                    (start, to),
+                )
+                .is_some()
             },
             |g| {
                 !routes.taps_before_its_fader(g)
                     && kept
-                        .holding(&(g.to_owned(), Probe::PostFader), key(g), (start, to))
+                        .holding(
+                            &(g.to_owned(), Probe::PostFader),
+                            (key(g), ask.exact),
+                            (start, to),
+                        )
                         .is_some()
             },
             has_signal,
@@ -810,7 +839,13 @@ pub fn render(
         let (signals, latencies): (Vec<Vec<f32>>, Vec<u32>) = ask
             .points
             .iter()
-            .filter_map(|p| kept.holding(&(p.track.clone(), p.at), key(&p.track), (start, to)))
+            .filter_map(|p| {
+                kept.holding(
+                    &(p.track.clone(), p.at),
+                    (key(&p.track), ask.exact),
+                    (start, to),
+                )
+            })
             .map(|r| {
                 (
                     line_up(&r.samples, r.start, (from, to), r.latency),
@@ -832,6 +867,7 @@ pub fn render(
             copied: 0,
             reused: 0,
             failures: Vec::new(),
+            chunks: 0,
             plan_ms,
             copy_ms: 0.0,
             prime_ms: 0.0,
@@ -843,7 +879,11 @@ pub fn render(
         .fed
         .iter()
         .filter_map(|g| {
-            let r = kept.holding(&(g.clone(), Probe::PostFader), key(g), (start, to))?;
+            let r = kept.holding(
+                &(g.clone(), Probe::PostFader),
+                (key(g), ask.exact),
+                (start, to),
+            )?;
             Some((
                 g.clone(),
                 Fed {
@@ -861,9 +901,6 @@ pub fn render(
         .flatten()
         .collect();
     let plan_ms = began.elapsed().as_secs_f64() * 1e3;
-    let copying = web_time::Instant::now();
-    let ready = ready(daw, wanted, &mut kept.warm, ask.cuts)?;
-    let copy_ms = copying.elapsed().as_secs_f64() * 1e3;
     // The points asked for, then every rendered track's output to keep.
     let mut probes = ask.points.to_vec();
     probes.extend(planned.rendered.iter().map(|g| ProbeAt {
@@ -872,36 +909,55 @@ pub fn render(
     }));
     let mut only = planned.rendered.clone();
     only.extend(planned.fed.iter().cloned());
-    let renderer = ProjectRenderer::offline(
+    let spans = if ask.exact {
+        vec![(start, start, to)]
+    } else {
+        chunks(start, from, to)
+    };
+    if kept.warm.len() < spans.len() {
+        kept.warm.resize_with(spans.len(), HashMap::new);
+    }
+    let shared = Shared {
         daw,
         song,
-        RATE,
-        Offline {
-            plugins: ready.plugins.clone(),
-            bypass_fx: ask.bypass_fx.clone(),
-            solo: ask.solo.clone(),
-            tap: None,
-            only: Some(only),
-            probes: probes.clone(),
-            fed: fed_map,
-        },
-    );
-    let primed = web_time::Instant::now();
-    renderer.prime(u32::try_from(BLOCK).unwrap_or(1_024));
-    let latencies = renderer.probe_latencies();
-    let prime_ms = primed.elapsed().as_secs_f64() * 1e3;
-    let blocks = web_time::Instant::now();
-    let end = to + u64::from(latencies.iter().copied().max().unwrap_or(0));
-    let raw = render_blocks(&renderer, (start, end), probes.len());
-    let blocks_ms = blocks.elapsed().as_secs_f64() * 1e3;
-    drop(renderer);
-    let n = ask.points.len();
-    let signals: Vec<Vec<f32>> = raw[..n]
-        .iter()
-        .zip(&latencies)
-        .map(|(r, late)| line_up(r, start, (from, to), *late))
+        ask,
+        probes: &probes,
+        only: &only,
+        fed: &fed_map,
+    };
+    let outs: Vec<Result<ChunkOut, String>> = std::thread::scope(|s| {
+        let running: Vec<_> = spans
+            .iter()
+            .zip(kept.warm.iter_mut())
+            .enumerate()
+            .map(|(k, (span, warm))| {
+                let (wanted, shared) = (wanted.clone(), &shared);
+                s.spawn(move || run_chunk(shared, (k, *span), wanted, warm))
+            })
+            .collect();
+        running
+            .into_iter()
+            .map(|r| {
+                r.join()
+                    .unwrap_or_else(|_| Err("a chunk's render panicked".to_owned()))
+            })
+            .collect()
+    });
+    let outs: Vec<ChunkOut> = outs.into_iter().collect::<Result<_, _>>()?;
+    // Each probe, lined up, from the preroll's start to `to`.
+    let lined: Vec<Vec<f32>> = (0..probes.len())
+        .map(|i| {
+            outs.iter()
+                .flat_map(|o| o.lined[i].iter().copied())
+                .collect()
+        })
         .collect();
-    for ((p, samples), late) in probes.iter().zip(raw).zip(&latencies) {
+    let n = ask.points.len();
+    let signals: Vec<Vec<f32>> = lined[..n]
+        .iter()
+        .map(|r| line_up(r, start, (from, to), 0))
+        .collect();
+    for (p, samples) in probes.iter().zip(lined) {
         if !planned.rendered.contains(&p.track) {
             continue;
         }
@@ -910,17 +966,127 @@ pub fn render(
             (p.track.clone(), p.at),
             Recorded {
                 key,
+                exact: ask.exact || spans.len() == 1,
                 start,
-                end,
+                end: to,
                 samples: samples.into(),
-                latency: *late,
+                latency: 0,
                 stamp: 0,
             },
         );
     }
+    let most = |f: fn(&ChunkOut) -> f64| outs.iter().map(f).fold(0.0, f64::max);
+    Ok(Heard {
+        signals,
+        latencies: outs
+            .first()
+            .map(|o| o.latencies[..n].to_vec())
+            .unwrap_or_default(),
+        answered: planned.answered,
+        rendered: planned.rendered.into_iter().collect(),
+        replayed: planned.fed.into_iter().collect(),
+        song_tracks: count(all.len()),
+        copied: outs.iter().map(|o| o.copied).sum(),
+        reused: outs.iter().map(|o| o.reused).sum(),
+        failures: outs
+            .iter()
+            .flat_map(|o| o.failures.iter().cloned())
+            .collect(),
+        chunks: count(outs.len()),
+        plan_ms,
+        copy_ms: most(|o| o.copy_ms),
+        prime_ms: most(|o| o.prime_ms),
+        blocks_ms: most(|o| o.blocks_ms),
+        ms: began.elapsed().as_secs_f64() * 1e3,
+    })
+}
+
+/// The chunks a listen of render frames `start..to` (`from` the span's
+/// first) is rendered in: each one's first rendered frame (a preroll
+/// before its own first), its first kept frame and its end. The first
+/// keeps its preroll too, so what is kept starts at `start`.
+fn chunks(start: u64, from: u64, to: u64) -> Vec<(u64, u64, u64)> {
+    let least = (CHUNK_LEAST * f64::from(RATE)) as u64;
+    let n = ((to - from) / least.max(1)).clamp(1, CHUNKS);
+    let preroll = (PREROLL * f64::from(RATE)) as u64;
+    let edge = |k: u64| from + (to - from) * k / n;
+    (0..n)
+        .map(|k| {
+            if k == 0 {
+                (start, start, edge(1))
+            } else {
+                (edge(k).saturating_sub(preroll), edge(k), edge(k + 1))
+            }
+        })
+        .collect()
+}
+
+/// What every chunk of one render reads.
+struct Shared<'a> {
+    daw: &'a Standalone,
+    song: &'a str,
+    ask: &'a Ask<'a>,
+    probes: &'a [ProbeAt],
+    only: &'a HashSet<String>,
+    fed: &'a HashMap<String, Fed>,
+}
+
+/// What one chunk heard.
+struct ChunkOut {
+    /// Each probe, lined up, over the chunk's kept frames.
+    lined: Vec<Vec<f32>>,
+    latencies: Vec<u32>,
+    copied: u32,
+    reused: u32,
+    failures: Vec<String>,
+    copy_ms: f64,
+    prime_ms: f64,
+    blocks_ms: f64,
+}
+
+/// Render chunk `k` (its frames `(first rendered, first kept, end)`) on
+/// its own copies (`warm` its kept ones), in a Signal session of its own.
+fn run_chunk(
+    c: &Shared<'_>,
+    (k, (first, keep, end)): (usize, (u64, u64, u64)),
+    wanted: Vec<Instance>,
+    warm: &mut HashMap<String, Warm>,
+) -> Result<ChunkOut, String> {
+    let copying = web_time::Instant::now();
+    let tag = format!("{SESSION_TAG}-{k}");
+    let ready = ready(c.daw, wanted, warm, (c.ask.cuts, &tag))?;
+    let copy_ms = copying.elapsed().as_secs_f64() * 1e3;
+    let renderer = ProjectRenderer::offline(
+        c.daw,
+        c.song,
+        RATE,
+        Offline {
+            plugins: ready.plugins.clone(),
+            bypass_fx: c.ask.bypass_fx.clone(),
+            solo: c.ask.solo.clone(),
+            tap: None,
+            only: Some(c.only.clone()),
+            probes: c.probes.to_vec(),
+            fed: c.fed.clone(),
+        },
+    );
+    let primed = web_time::Instant::now();
+    renderer.prime(u32::try_from(BLOCK).unwrap_or(1_024));
+    let latencies = renderer.probe_latencies();
+    let prime_ms = primed.elapsed().as_secs_f64() * 1e3;
+    let blocks = web_time::Instant::now();
+    let last = end + u64::from(latencies.iter().copied().max().unwrap_or(0));
+    let raw = render_blocks(&renderer, (first, last), c.probes.len());
+    let blocks_ms = blocks.elapsed().as_secs_f64() * 1e3;
+    drop(renderer);
+    let lined = raw
+        .iter()
+        .zip(&latencies)
+        .map(|(r, late)| line_up(r, first, (keep, end), *late))
+        .collect();
     for (guid, state, held) in ready.kept {
         if let Some(plugin) = ready.plugins.write().remove(&guid) {
-            kept.warm.insert(
+            warm.insert(
                 guid,
                 Warm {
                     state,
@@ -930,21 +1096,15 @@ pub fn render(
             );
         }
     }
-    Ok(Heard {
-        signals,
-        latencies: latencies[..n].to_vec(),
-        answered: planned.answered,
-        rendered: planned.rendered.into_iter().collect(),
-        replayed: planned.fed.into_iter().collect(),
-        song_tracks: count(all.len()),
+    Ok(ChunkOut {
+        lined,
+        latencies,
         copied: ready.copied,
         reused: ready.reused,
         failures: ready.failures,
-        plan_ms,
         copy_ms,
         prime_ms,
         blocks_ms,
-        ms: began.elapsed().as_secs_f64() * 1e3,
     })
 }
 
@@ -990,10 +1150,15 @@ pub fn forget() -> (u32, u32) {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let counts = (
-        u32::try_from(kept.warm.len()).unwrap_or(u32::MAX),
+        u32::try_from(kept.warm.iter().map(HashMap::len).sum::<usize>()).unwrap_or(u32::MAX),
         u32::try_from(kept.recordings.len()).unwrap_or(u32::MAX),
     );
-    drop_later(kept.warm.drain().map(|(_, w)| w.plugin).collect());
+    drop_later(
+        kept.warm
+            .iter_mut()
+            .flat_map(|w| w.drain().map(|(_, w)| w.plugin))
+            .collect(),
+    );
     kept.recordings.clear();
     counts
 }
@@ -1158,6 +1323,23 @@ mod tests {
         for g in ["out", "sub"] {
             assert_eq!(before[g], after[g], "{g}");
         }
+    }
+
+    #[test]
+    fn a_span_is_cut_in_chunks_each_with_its_own_preroll() {
+        let s = u64::from(RATE);
+        // 12 s from 10 s, a 1 s preroll: three 4 s chunks.
+        let c = chunks(9 * s, 10 * s, 22 * s);
+        assert_eq!(
+            c,
+            vec![
+                (9 * s, 9 * s, 14 * s),
+                (13 * s, 14 * s, 18 * s),
+                (17 * s, 18 * s, 22 * s)
+            ]
+        );
+        // Under two chunks' worth: one.
+        assert_eq!(chunks(0, s, 6 * s).len(), 1);
     }
 
     #[test]

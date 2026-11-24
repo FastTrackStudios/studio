@@ -53,7 +53,7 @@ static LISTEN: ActionMeta = meta(
     concat!(
         "Render offline only what feeds one point of `track` (GUID, path or name) — the track, everything inside it and everything sent into those; the rest of the song is left out — over `from`..`to` (bars `33`, `33:2`; times `12.5s`; sections `Chorus 1`, `Chorus 1 end`), answered from what an earlier listen heard when nothing it hears has changed since (any edit upstream of the point — a parameter, a plugin's state, a fader, an item — is seen and renders again; a kit piece's tracks render together, since their Signal instances hear each other), on copies of its plugins kept warm between calls, and measure it. ",
         at_words!(),
-        ". `solo`: tracks (paths or names) heard alone inside what is rendered, as the solo buttons would. `fresh: true` renders everything again, playing nothing back (to check a played-back answer). Answers `figures`: `lufs` (integrated), `short_term` (LUFS, 3 s windows every second), `short_max`, `true_peak` (dBTP), `peak` and `rms` (dBFS; a full-scale sine reads -3), `crest` (dB), `bands` (dB per third-octave band, centres in `bands_hz`), `correlation` (L/R, -1…1), `width` (side/mid), `balance` (L/R dB); `dynamics`: for each FX that is on before the point on the track's own chain and compresses, gates or limits (or is a Signal instance, whose whole chain it then measures), its `makeup_db` (its resting in-to-out gain), `max_gr_db` and `mean_gr_db` (gain against that rest, dB, ≤ 0) and `gr` (every `hop_s` s; null where its input is below -60 dBFS); `latency` (samples the point was late, put right); `rendered`: how it was answered (`answered`: `replayed` — nothing it hears has changed since an earlier listen heard it, so nothing was rendered; `partly` — the tracks whose key is unchanged played back; `rendered`), the `tracks` rendered and those `replayed`, `of` the song's, plugins copied fresh and reused warm (reset), and any that would not copy; the time taken (`copy_ms`, `prime_ms`, `blocks_ms`, `analysis_ms`, `ms`); and two PNGs, `waveform` (L and R, peak and RMS) and `spectrogram` (20 Hz–20 kHz, -96…0 dBFS), under /tmp/listen/ (`png: false`: none). Touches neither playback nor the song."
+        ". `solo`: tracks (paths or names) heard alone inside what is rendered, as the solo buttons would. `fresh: true` renders everything again, playing nothing back (to check a played-back answer). A span over 6 s is rendered in up to three chunks side by side, each from a 1 s preroll of its own: about twice as fast, within about 0.05 LU of a whole render and a few tenths of a dB on peaks and crest; `exact: true` renders it in one piece, as MIX_MEASURE would to the sample (A/B differences under ~0.3 dB call for it). Answers `figures`: `lufs` (integrated), `short_term` (LUFS, 3 s windows every second), `short_max`, `true_peak` (dBTP), `peak` and `rms` (dBFS; a full-scale sine reads -3), `crest` (dB), `bands` (dB per third-octave band, centres in `bands_hz`), `correlation` (L/R, -1…1), `width` (side/mid), `balance` (L/R dB); `dynamics`: for each FX that is on before the point on the track's own chain and compresses, gates or limits (or is a Signal instance, whose whole chain it then measures), its `makeup_db` (its resting in-to-out gain), `max_gr_db` and `mean_gr_db` (gain against that rest, dB, ≤ 0) and `gr` (every `hop_s` s; null where its input is below -60 dBFS); `latency` (samples the point was late, put right); `rendered`: how it was answered (`answered`: `replayed` — nothing it hears has changed since an earlier listen heard it, so nothing was rendered; `partly` — the tracks whose key is unchanged played back; `rendered`), the `tracks` rendered and those `replayed`, `of` the song's, plugins copied fresh and reused warm (reset), and any that would not copy; the time taken (`copy_ms`, `prime_ms`, `blocks_ms`, `analysis_ms`, `ms`); and two PNGs, `waveform` (L and R, peak and RMS) and `spectrogram` (20 Hz–20 kHz, -96…0 dBFS), under /tmp/listen/ (`png: false`: none). Touches neither playback nor the song."
     ),
     "Mix",
     "",
@@ -106,6 +106,7 @@ struct RenderArg {
     from: String,
     to: String,
     to_file: Option<String>,
+    exact: Option<bool>,
 }
 
 /// LISTEN_AB's arguments, for its schema (it reads its JSON itself: a
@@ -121,6 +122,7 @@ struct AbDoc {
     keep: Option<bool>,
     solo: Option<Vec<String>>,
     png: Option<bool>,
+    exact: Option<bool>,
 }
 
 /// LISTEN's arguments.
@@ -133,6 +135,7 @@ struct ListenArg {
     solo: Option<Vec<String>>,
     png: Option<bool>,
     fresh: Option<bool>,
+    exact: Option<bool>,
 }
 
 /// LISTEN_HITS's arguments.
@@ -148,6 +151,7 @@ struct HitsArg {
     window_pre_ms: Option<f64>,
     png: Option<bool>,
     fresh: Option<bool>,
+    exact: Option<bool>,
 }
 
 /// Where in a track `word` reads it (see `at_words!`); `track` the
@@ -400,6 +404,7 @@ fn rendered_json(h: &render::Heard, path: &dyn Fn(&str) -> String) -> Value {
         "plugins_copied": h.copied,
         "plugins_reused": h.reused,
         "plugin_failures": h.failures,
+        "chunks": h.chunks,
         "plan_ms": r2(h.plan_ms),
         "copy_ms": r2(h.copy_ms),
         "prime_ms": r2(h.prime_ms),
@@ -480,6 +485,7 @@ pub fn listen(
             keyed: &keyed(daw, project),
             fresh: a.fresh,
             cuts: &cuts,
+            exact: a.exact,
         },
     )?;
     let analysed = web_time::Instant::now();
@@ -535,6 +541,7 @@ pub struct ListenArgs<'a> {
     pub solo: Option<&'a [String]>,
     pub png: bool,
     pub fresh: bool,
+    pub exact: bool,
 }
 
 /// The tracks other tracks' plugins key from, which a listen runs
@@ -700,6 +707,7 @@ fn listen_hits(daw: &Standalone, project: &ProjectContext, a: &HitsArg) -> Resul
             keyed: &keyed(daw, project),
             fresh: a.fresh.unwrap_or(false),
             cuts: &std::collections::HashMap::new(),
+            exact: a.exact.unwrap_or(false),
         },
     )?;
     let analysed = web_time::Instant::now();
@@ -815,6 +823,8 @@ pub struct RenderAt<'a> {
     /// The span, seconds.
     pub from: f64,
     pub to: f64,
+    /// Rendered in one piece (see LISTEN's `exact`).
+    pub exact: bool,
 }
 
 /// The audio at a point.
@@ -860,6 +870,7 @@ pub fn render_at(
             keyed: &keyed(daw, project),
             fresh: false,
             cuts: &cuts_of(&point),
+            exact: r.exact,
         },
     )?;
     Ok(Audio {
@@ -890,6 +901,7 @@ fn listen_render(
             at,
             from,
             to,
+            exact: a.exact.unwrap_or(false),
         },
     )?;
     let file = a.to_file.as_ref().map_or_else(
@@ -928,6 +940,7 @@ struct AbArgs {
     keep: bool,
     solo: Option<Vec<String>>,
     png: bool,
+    exact: bool,
 }
 
 /// Read LISTEN_AB's JSON.
@@ -968,6 +981,7 @@ fn ab_args(raw: &[u8]) -> Result<AbArgs, String> {
                 .collect()
         }),
         png: v.get("png").and_then(Value::as_bool).unwrap_or(true),
+        exact: v.get("exact").and_then(Value::as_bool).unwrap_or(false),
     })
 }
 
@@ -999,6 +1013,7 @@ fn listen_ab(
         solo: a.solo.as_deref(),
         png,
         fresh: false,
+        exact: a.exact,
     };
     let before = listen(daw, project, &ask(false))?;
     let a_ms = began.elapsed().as_secs_f64() * 1e3;
@@ -1155,6 +1170,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                     solo: a.solo.as_deref(),
                     png: a.png.unwrap_or(true),
                     fresh: a.fresh.unwrap_or(false),
+                    exact: a.exact.unwrap_or(false),
                 },
             )?;
             span.record("listen.ms", heard.answer["ms"].as_f64().unwrap_or(0.0));
