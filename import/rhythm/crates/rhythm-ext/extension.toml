@@ -1,4 +1,4 @@
-id = "fts.rhythm"
+id = "rhythm"
 name = "Rhythm"
 version = "0.1.0"
 kind = "process"
@@ -8,11 +8,20 @@ authors = ["FastTrackStudios"]
 
 [entry]
 path = "fts-rhythm"
-args = ["serve"]
 
+# Where its crate is, for a development copy built from source (the
+# engine's ENGINE_EXT_DEV): built with `cargo build --bin fts-rhythm`.
+[source]
+git = "https://github.com/FastTrackStudios/rhythm"
+rev = "main"
+path = "crates/rhythm-ext"
+bin = "fts-rhythm"
+
+# The DAW's editing contract (daw-edit): Studio's engine asks the chosen
+# provider where a performance's hits play once moved (`PLACE` →
+# RHYTHM_PLACE).
 [provides]
-"daw.hit-detector" = "0.1.0"
-"daw.rhythm-editor" = "0.1.0"
+"daw.edit" = "0.1.0"
 
 [uses]
 "fts.session" = "^0.1"
@@ -26,6 +35,14 @@ name = "Rhythm: state and available detectors"
 description = "Lists registered hit-detection algorithms and editing strategies provided by this process."
 group = "Rhythm"
 effect = "read_only"
+
+[[actions]]
+id = "RHYTHM_PLACE"
+name = "Rhythm: place moved hits"
+description = "daw.edit's PLACE: where a recorded performance's audio plays once its hits are moved (`hits`: each `at` and `shift` in seconds; `span`; `cut`: `lead` and `guard`; `bounds`). Answers the pieces of the recording to lay on the timeline, in the order they play: each `start`, `end`, `shift` and, where it is drawn out over a gap, `drawn_to`."
+group = "Rhythm"
+effect = "read_only"
+params = '{"type":"object","properties":{"hits":{"type":"array"},"span":{"type":"array"},"cut":{"type":"object"},"bounds":{"type":"array"}},"required":["hits","span"]}'
 
 [[actions]]
 id = "RHYTHM_DETECT"

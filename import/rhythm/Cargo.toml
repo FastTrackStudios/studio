@@ -22,3 +22,18 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rhythm-hits = { path = "crates/rhythm-hits" }
 rhythm-editing = { path = "crates/rhythm-editing" }
+# The DAW's editing contract: what `daw.edit`'s methods take and answer.
+daw-edit = { git = "https://github.com/FastTrackStudios/daw", branch = "main" }
+# Architect's extension runtime: rhythm runs as a process extension of
+# Studio's engine (`Guest`), its actions and `daw.edit` served to it.
+architect-extensions = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", default-features = false }
+
+# Architect's own crates.io forks, which a build of it from git needs too
+# (its root [patch.crates-io]): the ones the extension runtime reaches.
+[patch.crates-io]
+anyrender = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+styx-format = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.1.0" }
+phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
+facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }

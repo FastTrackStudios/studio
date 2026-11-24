@@ -92,6 +92,10 @@ struct Cli {
     #[arg(long, requires = "song", conflicts_with_all = ["predictions", "export_stems", "beat_grid"])]
     quantize_out: Option<PathBuf>,
 
+    /// Keep editable items on the original recordings and use native stretch markers.
+    #[arg(long, requires = "quantize_out")]
+    native_items: bool,
+
     /// Grid divisions per quarter note for the drum project export.
     #[arg(long, default_value_t = 4, value_parser = clap::value_parser!(u32).range(1..=32))]
     quantize_subdivision: u32,

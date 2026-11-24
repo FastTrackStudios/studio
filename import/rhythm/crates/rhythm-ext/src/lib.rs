@@ -1,5 +1,9 @@
-//! Process extension core for `fts.rhythm`: dispatches action calls from either
-//! CLI flags or newline-delimited JSON-RPC over stdio.
+//! Rhythm as an extension of Studio's engine (`rhythm`): an Architect
+//! process extension ([`Rhythm`], served by `fts-rhythm` with no
+//! arguments) that provides the DAW's editing contract (`daw.edit`,
+//! `daw_edit`): `PLACE` is [`RHYTHM_PLACE`](place), where a performance's
+//! hits play once moved. Its other actions (detection, planning, quantize,
+//! rendering) run through [`dispatch`], which the CLI uses too.
 
 use std::path::Path;
 
@@ -234,10 +238,65 @@ fn render_wav(req: RenderRequest) -> Result<Json, String> {
     }))
 }
 
+/// `daw.edit`'s `PLACE`: where the pieces of the recording go once its
+/// hits are moved, by rhythm's placement (`rhythm_editing::placement`).
+///
+/// # Errors
+///
+/// The request is not a `daw_edit::PlaceRequest`.
+pub fn place(params: Json) -> Result<Json, String> {
+    let request: daw_edit::PlaceRequest =
+        serde_json::from_value(params).map_err(|e| format!("invalid PLACE request: {e}"))?;
+    let hits: Vec<rhythm_editing::placement::Hit> = request
+        .hits
+        .iter()
+        .map(|h| rhythm_editing::placement::Hit { at: h.at, shift: h.shift })
+        .collect();
+    let cut = rhythm_editing::placement::Cut {
+        lead: request.cut.lead,
+        guard: request.cut.guard,
+    };
+    let pieces = rhythm_editing::placement::place_within(&hits, request.span, cut, request.bounds)
+        .into_iter()
+        .map(|p| daw_edit::placement::Piece {
+            start: p.start,
+            end: p.end,
+            shift: p.shift,
+            drawn_to: p.drawn_to,
+        })
+        .collect();
+    serde_json::to_value(daw_edit::PlaceAnswer { pieces }).map_err(|e| e.to_string())
+}
+
+/// Rhythm as an Architect extension: every action in its manifest.
+pub struct Rhythm;
+
+impl architect_extensions::linked::Extension for Rhythm {
+    fn manifest(&self) -> &'static str {
+        MANIFEST
+    }
+
+    fn build(&self, ext: &mut architect_extensions::linked::Builder) {
+        ext.action("RHYTHM_PLACE", |args| async move { place(args) });
+        for id in [
+            "RHYTHM_STATE",
+            "RHYTHM_DETECT",
+            "RHYTHM_PLACE_HITS",
+            "RHYTHM_QUANTIZE_PLAN",
+            "RHYTHM_RENDER_PLAN",
+        ] {
+            ext.action(id, move |args| async move {
+                dispatch(&DetectorRegistry::default(), id, args)
+            });
+        }
+    }
+}
+
 pub fn dispatch(registry: &DetectorRegistry, action: &str, params: Json) -> Result<Json, String> {
     match action {
+        "RHYTHM_PLACE" => place(params),
         "RHYTHM_STATE" => Ok(json!({
-            "extension": "fts.rhythm",
+            "extension": "rhythm",
             "version": env!("CARGO_PKG_VERSION"),
             "detectors": registry.list(),
             "strategies": ["hybrid", "slip_only", "stretch_only"],

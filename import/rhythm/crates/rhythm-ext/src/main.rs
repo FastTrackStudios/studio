@@ -9,8 +9,10 @@ use serde_json::{Value as Json, json};
 #[derive(Parser)]
 #[command(name = "fts-rhythm", about = "FastTrackStudio swappable hit-detection & rhythm-editing extension")]
 struct Cli {
+    /// No command: served to the host that started it (Studio's engine),
+    /// as an Architect process extension.
     #[command(subcommand)]
-    cmd: Cmd,
+    cmd: Option<Cmd>,
 }
 
 #[derive(Subcommand)]
@@ -49,7 +51,17 @@ fn main() {
     let cli = Cli::parse();
     let registry = DetectorRegistry::default();
 
-    match cli.cmd {
+    let Some(cmd) = cli.cmd else {
+        // Started by a host (ARCHITECT_EXT_SOCKET): its extension.
+        if let Err(e) =
+            architect_extensions::guest::Guest::extension_with(&rhythm_ext::Rhythm, &|_| None).serve()
+        {
+            eprintln!("fts-rhythm: {e}");
+            std::process::exit(1);
+        }
+        return;
+    };
+    match cmd {
         Cmd::State => {
             let out = dispatch(&registry, "RHYTHM_STATE", Json::Null).expect("state");
             println!("{}", serde_json::to_string_pretty(&out).unwrap());

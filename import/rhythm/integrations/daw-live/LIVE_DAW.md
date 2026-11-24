@@ -50,3 +50,31 @@ The Unbreakable live excerpt used three original acoustic mic excerpts and
 verified 30 items in ten phase groups, with three stretch markers on each
 of the three stretched takes. The batched writes took 164 ms before readback. A pass over the original overlapping comp
 items and verification against a current Studio engine remain future work.
+
+## Studio and Session MCP
+
+`studio_mcp.py` reads the running app's MCP discovery file under
+`$XDG_CONFIG_HOME/fts` (or `~/.config/fts`) and uses the app's Action List.
+Action calls default to Session's engine. Script calls default to the Studio
+desktop host. Use `--host` to choose which action list receives the call, or
+`--discovery` to use an isolated instance.
+
+```sh
+python3 integrations/daw-live/studio_mcp.py run SESSION_TRACKS
+python3 integrations/daw-live/studio_mcp.py run HITS_LIST --args '{"pieces":["Kick"],"limit":10}'
+python3 integrations/daw-live/studio_mcp.py run QUANTIZE --args '{"dry_run":true,"brief":true}'
+python3 integrations/daw-live/studio_mcp.py describe HITS_PLACE
+python3 integrations/daw-live/studio_mcp.py --host studio describe SCRIPT_RUN
+python3 integrations/daw-live/studio_mcp.py script edit.luau --args '{"amount":4}'
+```
+
+`SCRIPT_RUN` runs Luau against the receiving host's actions using
+`actions.run(id, args)`. Studio and its Session engine publish different
+action lists. The current Session engine exposes `HITS_PLACE`, `HITS_STRETCH`
+and `QUANTIZE`. Script access to those actions requires the host to register
+the same engine actions with its scripting runtime.
+
+Studio's existing engine actions use its current drum-edit implementation.
+Connecting them to Rhythm's planner and applying a plan to a full multitrack
+comp requires host integration. Rhythm's current stdio process is also
+separate from Architect's Vox process-extension protocol.

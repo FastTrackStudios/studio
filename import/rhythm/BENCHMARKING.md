@@ -187,3 +187,7 @@ drum edits and references to the original backing media. Open
 `unbreakable.drums.quantized.RPP` for the drum-only project. Keep the generated
 WAVs beside the project files. The edit plan lists each source hit, its target,
 and the rendered segments. Export currently requires a constant-tempo project.
+
+Add `--native-items` to export the full project with editable drum slices,
+shared item groups, and native stretch markers. The project references the
+original recordings directly and needs no generated WAVs.

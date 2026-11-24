@@ -74,8 +74,24 @@ pub(crate) fn run(path: &Path, out: &Path, cli: &Cli) -> Result<(), String> {
     let rate = kit.sample_rate as u32;
     let frames = (kit.duration_secs * kit.sample_rate).round() as usize;
     drop(kit);
-    write_project(&session, out, &plan, rate, frames)?;
-    write_full_copy(&project, &session, out, frames as f64 / f64::from(rate))?;
+    if cli.native_items {
+        std::fs::create_dir(out).map_err(|e| format!("create {}: {e}", out.display()))?;
+        let last_group = project
+            .lines()
+            .filter_map(|line| line.trim_start().strip_prefix("GROUP "))
+            .filter_map(|id| id.trim().parse::<i32>().ok())
+            .max()
+            .unwrap_or(0)
+            .max(0);
+        write_full_copy(&project, &session, out, |key| {
+            native_track_items(key, &session.tracks[key], &plan, last_group)
+        })?;
+    } else {
+        write_project(&session, out, &plan, rate, frames)?;
+        write_full_copy(&project, &session, out, |key| {
+            Ok(stem_item(key, frames as f64 / f64::from(rate)))
+        })?;
+    }
     let report = serde_json::json!({
         "source_project": path, "bpm": session.bpm, "subdivision": cli.quantize_subdivision,
         "hits": hits, "moves": moves, "plan": plan,
@@ -252,7 +268,7 @@ fn write_full_copy(
     project: &str,
     session: &CompedDrumSession,
     out: &Path,
-    duration: f64,
+    items_for: impl Fn(&str) -> Result<String, String>,
 ) -> Result<(), String> {
     let folder = session
         .rpp_path
@@ -271,7 +287,7 @@ fn write_full_copy(
                 .map(|_| *key)
         });
         if let Some(key) = key {
-            replace_track_items(chunk, key, duration, folder, &mut updated)?;
+            replace_track_items(chunk, key, &items_for(key)?, folder, &mut updated)?;
         } else {
             relocate_media(chunk, folder, &mut updated);
         }
@@ -306,7 +322,7 @@ fn relocate_media(text: &str, folder: &Path, out: &mut String) {
 fn replace_track_items(
     chunk: &str,
     key: &str,
-    duration: f64,
+    items: &str,
     folder: &Path,
     out: &mut String,
 ) -> Result<(), String> {
@@ -322,7 +338,7 @@ fn replace_track_items(
         if line.starts_with("    <ITEM") {
             in_item = true;
             if !added {
-                writeln!(out, "    <ITEM\n      POSITION 0\n      LENGTH {duration:.12}\n      GROUPID 2147000000\n      FADEIN 0 0 0 1 0 0\n      FADEOUT 0 0 0 1 0 0\n      NAME \"{key} quantized\"\n      SOFFS 0\n      PLAYRATE 1 1 0 -1 0 0.0025\n      <SOURCE WAVE\n        FILE \"{key}.wav\"\n      >\n    >").unwrap();
+                out.push_str(items);
                 added = true;
             }
         } else if ![
@@ -345,4 +361,74 @@ fn replace_track_items(
         return Err(format!("could not replace the old items on {key}"));
     }
     Ok(())
+}
+
+fn stem_item(key: &str, duration: f64) -> String {
+    format!(
+        "    <ITEM\n      POSITION 0\n      LENGTH {duration:.12}\n      GROUPID 2147000000\n      FADEIN 0 0 0 1 0 0\n      FADEOUT 0 0 0 1 0 0\n      NAME \"{key} quantized\"\n      SOFFS 0\n      PLAYRATE 1 1 0 -1 0 0.0025\n      <SOURCE WAVE\n        FILE \"{key}.wav\"\n      >\n    >\n"
+    )
+}
+
+fn native_track_items(
+    key: &str,
+    track: &crate::rpp::RppTrack,
+    plan: &HybridPlan,
+    last_group: i32,
+) -> Result<String, String> {
+    let mut output = String::new();
+    for (index, segment) in plan.segments.iter().enumerate() {
+        let source_length = segment.source_end - segment.source_start;
+        let timeline_length = segment.timeline_end - segment.timeline_start;
+        if source_length <= 0.0 || timeline_length <= 0.0 {
+            return Err("native edit needs forward source and timeline spans".into());
+        }
+        let ratio = timeline_length / source_length;
+        let time = |s: f64| segment.timeline_start + (s - segment.source_start) * ratio;
+        for item in &track.items {
+            let lo = item.position.max(segment.source_start);
+            let hi = (item.position + item.length).min(segment.source_end);
+            if hi - lo < 1e-7 {
+                continue;
+            }
+            let start = time(lo);
+            let length = time(hi) - start;
+            let offset = item.soffs + lo - item.position;
+            let fade_in = ((item.position + item.fade_in - lo).max(0.0) * ratio)
+                .max(if (lo - segment.source_start).abs() < 1e-7 {
+                    segment.fade_in_s
+                } else {
+                    0.0
+                })
+                .min(length);
+            let fade_out = ((hi - (item.position + item.length - item.fade_out)).max(0.0) * ratio)
+                .max(if (hi - segment.source_end).abs() < 1e-7 {
+                    segment.fade_out_s
+                } else {
+                    0.0
+                })
+                .min(length);
+            let group = last_group
+                .checked_add(i32::try_from(index + 1).map_err(|_| "group ID overflow")?)
+                .ok_or("group ID overflow")?;
+            writeln!(output, "    <ITEM\n      POSITION {start:.12}\n      LENGTH {length:.12}\n      SNAPOFFS 0\n      LOOP 0\n      GROUP {group}\n      FADEIN 1 {fade_in:.12} 0 1 0 0\n      FADEOUT 1 {fade_out:.12} 0 1 0 0\n      NAME \"{key}\"\n      VOLPAN {:.12} 0 1 -1\n      SOFFS {offset:.12}\n      PLAYRATE 1 1 0 -1 0 0.0025", item.vol).unwrap();
+            if !matches!(segment.kind, rhythm_editing::SegmentKind::Slip) {
+                writeln!(
+                    output,
+                    "      SM 0 {offset:.12}\n      SM {length:.12} {:.12}",
+                    offset + hi - lo
+                )
+                .unwrap();
+            }
+            let file = item.file.to_str().ok_or("non-UTF8 source path")?;
+            if file.contains(['"', '\n', '\r']) {
+                return Err(format!("unsupported REAPER source path {file}"));
+            }
+            writeln!(
+                output,
+                "      <SOURCE WAVE\n        FILE \"{file}\"\n      >\n    >"
+            )
+            .unwrap();
+        }
+    }
+    Ok(output)
 }
