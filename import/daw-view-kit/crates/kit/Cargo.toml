@@ -19,6 +19,8 @@ description = "What the DAW views draw with: the track panel, rails, rulers, key
 # (features/midi-editor), on this crate.
 
 [dependencies]
+# Drum hit detection (rhythm).
+rhythm-hits = { workspace = true, optional = true }
 # The process-wide keyboard switch (`utils::keyboard`) the keys honour.
 utils = { workspace = true }
 # The views' contract (its modules are re-exported at the root, so
@@ -192,7 +194,7 @@ default = ["native"]
 signal = ["native"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["daw-view/native", "dep:opentelemetry", "dep:dioxus-native", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu_context", "dep:pollster", "dep:dirs", "dep:winit", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "dsp/hits", "dep:architect", "dep:futures-timer", "dep:builtin", "builtin?/engine"]
+native = ["daw-view/native", "dep:opentelemetry", "dep:dioxus-native", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu_context", "dep:pollster", "dep:dirs", "dep:winit", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "dep:rhythm-hits", "dep:architect", "dep:futures-timer", "dep:builtin", "builtin?/engine"]
 # The browser: the same widgets, hosted in <canvas> elements under
 # dioxus-web and drawn with vello_hybrid's WebGL renderer (keyflow-ui's
 # `wasm-graphics` pattern). See `web_host`.
