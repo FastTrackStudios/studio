@@ -94,6 +94,7 @@ pub fn install(daw: &'static Standalone) {
             Arc::new(bridge::StudioActions::default());
         daw.set_plugin_load_options(daw::standalone::plugin::LoadOptions {
             actions: Some(actions),
+            ..Default::default()
         });
         let spawned = std::thread::Builder::new()
             .name("clap-main".into())
