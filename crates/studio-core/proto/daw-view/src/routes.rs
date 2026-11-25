@@ -236,7 +236,7 @@ impl Routes {
         let known = Arc::clone(&self.known);
         let fresh = Arc::clone(&self.fresh);
         std::thread::Builder::new()
-            .name("session-engine-routes".into())
+            .name("studio-engine-routes".into())
             .spawn(move || {
                 runtime.block_on(async move {
                     let Some(daw) = daw::rpc::Daw::try_get() else {

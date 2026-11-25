@@ -123,7 +123,7 @@ pub fn reply_to(request: &Json, ours: &str, busy: bool) -> Reply {
 /// This binary's build (`studio_engine::link::build_id`: its size and
 /// modification time).
 fn build() -> String {
-    session_engine::studio_engine::link::build_id()
+    studio_engine::studio_engine::link::build_id()
 }
 
 /// Asks the engine at `dir` one thing, returning its answer and the open
@@ -306,7 +306,7 @@ fn spawn_in_own_session(exe: &Path, log_path: &Path) -> Result<(), String> {
 /// (`FTS_ENGINE_LOG`, `info`), never the RUST_LOG of the window that
 /// started it. A panic is logged before the hook that was there runs.
 fn init_tracing() {
-    use session_engine::telemetry;
+    use studio_engine::telemetry;
     use tracing_subscriber::layer::SubscriberExt as _;
     use tracing_subscriber::util::SubscriberInitExt as _;
     let level = std::env::var("FTS_ENGINE_LOG").unwrap_or_else(|_| "info,vox_core=warn".to_owned());
@@ -350,10 +350,10 @@ pub fn engine() -> Result<(), String> {
     crate::meters::publish();
     // Nothing in a song stays unsaved: every open song is written to its
     // file shortly after it changes.
-    session_engine::autosave::start();
+    studio_engine::autosave::start();
     // The engine's algorithms (hit placement, …): the extensions that
     // provide them, and the checkouts run as development copies.
-    session_engine::algorithms::start_now();
+    studio_engine::algorithms::start_now();
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)

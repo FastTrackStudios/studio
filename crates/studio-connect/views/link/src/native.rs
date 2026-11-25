@@ -9,9 +9,9 @@ use anyrender::recording::RenderCommand;
 use architect_scene::paint::PaintMount;
 use architect_scene::paint::{Layer, LayerKey, Scene};
 use dioxus::prelude::*;
+use engine_client::song_model::StudioSession;
+use engine_client::studio_engine::link;
 use serde_json::Value as Json;
-use session_engine_client::song_model::StudioSession;
-use session_engine_client::studio_engine::link;
 
 use crate::Stats;
 
@@ -38,7 +38,7 @@ pub fn problem() -> Option<String> {
 /// Attach this process, a Studio window, to the engine.
 ///
 /// What `studio-desktop`'s window does with `FTS_ENGINE=attach`
-/// (`session_desktop::native::attach_engine`). Once per process, on a
+/// (`engine_host::native::attach_engine`). Once per process, on a
 /// thread of its own; it keeps the link after (an engine that restarts is
 /// attached to again).
 pub fn attach() {
@@ -46,7 +46,7 @@ pub fn attach() {
         return;
     }
     // On a phone the engine is in this process (the `daw` extension links
-    // the views to it, `session_engine_client::open::link_window_here`): nothing
+    // the views to it, `engine_client::open::link_window_here`): nothing
     // to find.
     if cfg!(target_os = "ios") {
         return;
@@ -98,14 +98,14 @@ pub fn attach_at(pid: u32, socket: std::path::PathBuf, mcp: String) -> Result<()
 }
 
 fn attach_to(found: &link::Found) -> Result<(), String> {
-    let target = session_engine_client::open::RemoteTarget::Engine {
+    let target = engine_client::open::RemoteTarget::Engine {
         socket: found.socket.clone(),
     };
-    session_engine_client::open::set_mode(session_engine_client::open::ModeState::remote(
+    engine_client::open::set_mode(engine_client::open::ModeState::remote(
         target.clone(),
         false,
     ));
-    session_engine_client::open::attach(&target).map_err(|e| e.to_string())?;
+    engine_client::open::attach(&target).map_err(|e| e.to_string())?;
     link::set_linked(found.clone());
     Ok(())
 }
@@ -114,7 +114,7 @@ fn attach_to(found: &link::Found) -> Result<(), String> {
 /// names it (a new song or a new set mounts a view again).
 #[must_use]
 pub fn current() -> Option<(String, StudioSession)> {
-    session_engine_client::view_client::peek_set(|view| {
+    engine_client::view_client::peek_set(|view| {
         let set = view.setlist.as_ref()?;
         let song = set.songs.get(set.at)?;
         Some((
@@ -143,7 +143,7 @@ pub fn use_song() -> Signal<Option<(String, StudioSession)>> {
 }
 
 /// The window's mode as Studio's shell has it: `FTS_SESSION_MODE`, else
-/// Live (`session_desktop::native::shell`).
+/// Live (`engine_host::native::shell`).
 #[must_use]
 pub fn mode_from_env() -> session::modes::Mode {
     std::env::var("FTS_SESSION_MODE")
@@ -170,14 +170,13 @@ pub fn use_client_mode() -> dioxus::prelude::Signal<session::modes::Mode> {
 }
 
 /// Whether the `daw` extension's value table carries the tracks' mute and
-/// solo ([`session_engine_client::engine::track_value`]).
+/// solo ([`engine_client::engine::track_value`]).
 ///
 /// Then a pane draws their lit state from it, apart, and lights them in
 /// the same frame as every other pane. One `stat` a call.
 #[must_use]
 pub fn engine_lights_buttons() -> bool {
-    let Ok(name) =
-        architect_scene::anim::Name::new(&session_engine_client::engine::track_value(0, "mute"))
+    let Ok(name) = architect_scene::anim::Name::new(&engine_client::engine::track_value(0, "mute"))
     else {
         return false;
     };
@@ -206,7 +205,7 @@ pub fn engine_lights_buttons_here() -> bool {
 /// song).
 #[must_use]
 pub fn with_engine_values(mount: PaintMount) -> PaintMount {
-    if session_engine_client::actions::is_in_host()
+    if engine_client::actions::is_in_host()
         && let Some(table) = architect_scene::engine::shared::open_engine("daw")
     {
         return mount.with_engine(table);
@@ -220,7 +219,7 @@ pub fn with_engine_values(mount: PaintMount) -> PaintMount {
 ///
 /// The engine refused it, or is not linked.
 pub fn run(id: &str, args: &Json) -> Result<Json, String> {
-    let out = session_engine_client::view_client::run(id, args.to_string().as_bytes())?;
+    let out = engine_client::view_client::run(id, args.to_string().as_bytes())?;
     Ok(serde_json::from_str(&out).unwrap_or(Json::String(out)))
 }
 

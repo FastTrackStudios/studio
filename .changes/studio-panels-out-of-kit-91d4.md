@@ -3,7 +3,7 @@
 "studio-panels" = "none"
 "arrangement-view" = "none"
 "mixer-view" = "none"
-"session-desktop" = "none"
+"engine-host" = "none"
 "studio-app" = "none"
 "studio-arrangement" = "none"
 "studio-mixer" = "none"

@@ -1,13 +1,13 @@
 //! `daw`: Studio's engine as an Architect extension.
 //!
 //! The process runs the engine `studio engine` runs
-//! (`session_engine::engine_host`): one `Standalone`, the set's audio
+//! (`studio_engine::engine_host`): one `Standalone`, the set's audio
 //! engine, the set, the Action List, and the engine's view service on a
 //! Unix socket, published under `$XDG_CONFIG_HOME/fts/engines/` as
 //! `studio engine` publishes itself. Studio's views, installed as
 //! extensions of their own (`studio.arrangement`, `studio.mixer`), find it
 //! there and attach to it exactly as `studio-desktop`'s window attaches to
-//! a `studio engine` it did not start (`session_engine::studio_engine::link`):
+//! a `studio engine` it did not start (`studio_engine::studio_engine::link`):
 //! one engine, one window protocol, nothing redrawn or re-modelled.
 //!
 //! What it opens comes from `FTS_DAW_OPEN` (a song, a `.session` or a
@@ -58,14 +58,14 @@ pub fn opened() -> Option<&'static str> {
 #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
 pub fn start_engine(open: Option<String>) {
     let _ = OPENED.set(open.clone());
-    let args = session_engine::engine_host::Args {
+    let args = studio_engine::engine_host::Args {
         open,
-        ..session_engine::engine_host::Args::default()
+        ..studio_engine::engine_host::Args::default()
     };
     let spawned = std::thread::Builder::new()
         .name("studio-engine".to_owned())
         .spawn(move || {
-            if let Err(e) = session_engine::engine_host::run(&args) {
+            if let Err(e) = studio_engine::engine_host::run(&args) {
                 let _ = STARTED.set(Err(e.to_string()));
             }
         });
@@ -76,7 +76,7 @@ pub fn start_engine(open: Option<String>) {
 
 /// On a phone or tablet: the engine in the app's own process (iOS has no
 /// helper processes), reached over the in-memory link it serves itself on
-/// (`session_engine::open::link_window_here`), the views' client the same
+/// (`studio_engine::open::link_window_here`), the views' client the same
 /// one a desktop window has over a socket. It serves the Action List (MCP)
 /// as `studio engine` does, and opens `open` once it is up.
 #[cfg(target_os = "ios")]
@@ -87,11 +87,11 @@ pub fn start_engine(open: Option<String>) {
     let spawned = std::thread::Builder::new()
         .name("studio-engine".to_owned())
         .spawn(move || {
-            session_engine::open::set_mode(session_engine::open::ModeState::engine());
-            session_engine::open::serve_actions();
-            let up = session_engine::open::link_window_here().map_err(|e| e.to_string());
+            studio_engine::open::set_mode(studio_engine::open::ModeState::engine());
+            studio_engine::open::serve_actions();
+            let up = studio_engine::open::link_window_here().map_err(|e| e.to_string());
             let opened = up.clone().and_then(|()| match open {
-                Some(path) => session_engine::actions::list()
+                Some(path) => studio_engine::actions::list()
                     .run_json(
                         "SESSION_OPEN",
                         json!({ "path": path }).to_string().as_bytes(),
@@ -110,7 +110,7 @@ pub fn start_engine(open: Option<String>) {
 /// The engine's state: whether it is up, where, and the song it has.
 #[cfg(not(target_arch = "wasm32"))]
 fn state() -> Json {
-    let found = session_engine::studio_engine::link::found()
+    let found = studio_engine::studio_engine::link::found()
         .into_iter()
         .find(|f| f.pid == std::process::id());
     json!({
@@ -128,13 +128,13 @@ fn state() -> Json {
 
 /// Runs action `id` of the engine's Action List, awaited: an async one
 /// (`SESSION_ZOOM`, the arrangement's gestures) as much as any.
-/// `session_engine::actions::run` would refuse those here, where a
+/// `studio_engine::actions::run` would refuse those here, where a
 /// runtime is current. A sync one runs off this thread
-/// (`session_engine::off_loop`): this is a handler on the host's
+/// (`studio_engine::off_loop`): this is a handler on the host's
 /// connection, and a render run inline would hold up every call after it.
 #[cfg(not(target_arch = "wasm32"))]
 async fn run(id: &str, args: &Json) -> Result<Json, String> {
-    let out = session_engine::off_loop::run(id, args.to_string().as_bytes())
+    let out = studio_engine::off_loop::run(id, args.to_string().as_bytes())
         .await
         .map_err(|e| e.to_string())?;
     Ok(serde_json::from_slice(&out)
@@ -145,7 +145,7 @@ async fn run(id: &str, args: &Json) -> Result<Json, String> {
 /// set (from 1), its title, or its project's guid.
 #[cfg(not(target_arch = "wasm32"))]
 fn song_project(song: &Json) -> Result<String, String> {
-    let lineup = session_engine::studio_engine::set::lineup().ok_or("no set is open")?;
+    let lineup = studio_engine::studio_engine::set::lineup().ok_or("no set is open")?;
     let found = match song {
         Json::Number(n) => n
             .as_u64()
@@ -164,12 +164,12 @@ fn song_project(song: &Json) -> Result<String, String> {
 }
 
 /// Action `id` of the engine's list, run on song `project` of the set
-/// without going to it (`session_engine::open::in_song`), on a blocking
+/// without going to it (`studio_engine::open::in_song`), on a blocking
 /// thread of its own (as [`run`]): the song's scope is that thread's.
 #[cfg(not(target_arch = "wasm32"))]
 async fn run_in(project: String, id: String, args: &Json) -> Result<Json, String> {
     let bytes = args.to_string();
-    let out = session_engine::off_loop::blocking(move || scoped(&project, &id, &bytes)).await??;
+    let out = studio_engine::off_loop::blocking(move || scoped(&project, &id, &bytes)).await??;
     Ok(serde_json::from_slice(&out)
         .unwrap_or_else(|_| Json::String(String::from_utf8_lossy(&out).into_owned())))
 }
@@ -177,8 +177,8 @@ async fn run_in(project: String, id: String, args: &Json) -> Result<Json, String
 /// [`run_in`]'s work, on the thread it runs on.
 #[cfg(not(target_arch = "wasm32"))]
 fn scoped(project: &str, id: &str, bytes: &str) -> Result<Vec<u8>, String> {
-    let list = session_engine::actions::list();
-    session_engine::open::in_song(project, || {
+    let list = studio_engine::actions::list();
+    studio_engine::open::in_song(project, || {
         match list.run_json(id, bytes.as_bytes()) {
             // An async action: awaited on this thread, so the song it is
             // scoped to holds for all of it.
@@ -267,7 +267,7 @@ impl Extension for Daw {
         .action("DAW_ACTIONS", |_| async {
             // Each as the list describes it; the effect by its name, as a
             // manifest writes it.
-            let infos = session_engine::actions::list().infos();
+            let infos = studio_engine::actions::list().infos();
             Ok(Json::Array(
                 infos
                     .iter()
@@ -293,7 +293,7 @@ impl Extension for Daw {
             ))
         })
         .action("DAW_SONGS", |_| async {
-            let lineup = session_engine::studio_engine::set::lineup();
+            let lineup = studio_engine::studio_engine::set::lineup();
             Ok(json!({
                 "at": lineup.as_ref().map(|l| l.at + 1),
                 "songs": lineup.map(|l| l.songs.iter().enumerate().map(|(i, (title, project))| {

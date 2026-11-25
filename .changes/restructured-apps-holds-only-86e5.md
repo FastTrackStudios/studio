@@ -2,9 +2,9 @@
 "app-shell" = "minor"
 "fts-clap-host" = "minor"
 "guide-plugin" = "minor"
-"session-desktop" = "minor"
-"session-engine" = "minor"
-"session-runtime" = "minor"
+"engine-host" = "minor"
+"studio-engine" = "minor"
+"engine-runtime" = "minor"
 "session-ui" = "minor"
 "xtask-workflows" = "minor"
 ---

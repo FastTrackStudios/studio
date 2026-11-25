@@ -77,7 +77,7 @@ fn call(method: &'static str, args: Json) {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
-    let (Some(handle), Some(rt)) = (handle, session_engine::open::runtime()) else {
+    let (Some(handle), Some(rt)) = (handle, studio_engine::open::runtime()) else {
         return;
     };
     SENT.fetch_add(1, Ordering::Relaxed);
@@ -90,7 +90,7 @@ fn call(method: &'static str, args: Json) {
 
 /// The song the engine has current: its project, title and length.
 fn current() -> Option<(String, String, f64)> {
-    session_engine::studio_engine::set::peek(|view| {
+    studio_engine::studio_engine::set::peek(|view| {
         let set = view.setlist.as_ref()?;
         let song = set.songs.get(set.at)?;
         Some((
@@ -153,7 +153,7 @@ pub fn lead() {
                     timed = Instant::now();
                     retime_if_behind(&project);
                 }
-                let Some((at, playing)) = session_engine::engine::playhead_of(&project) else {
+                let Some((at, playing)) = studio_engine::engine::playhead_of(&project) else {
                     continue;
                 };
                 if song.as_deref() != Some(project.as_str()) {
@@ -161,7 +161,7 @@ pub fn lead() {
                     // and led from here.
                     // Copied out of the set's lock first: opening the file
                     // waits on the engine's runtime.
-                    let opening = session_engine::studio_engine::set::peek(|view| {
+                    let opening = studio_engine::studio_engine::set::peek(|view| {
                         let set = view.setlist.as_ref()?;
                         let current = set.songs.get(set.at)?;
                         Some((current.saved.clone(), current.session.project.clone()))
@@ -223,7 +223,7 @@ pub fn heard(args: &Json) {
     let Some((project, ..)) = current() else {
         return;
     };
-    let Some((at, playing)) = session_engine::engine::playhead_of(&project) else {
+    let Some((at, playing)) = studio_engine::engine::playhead_of(&project) else {
         return;
     };
     let want_playing = state.get("playing").and_then(Json::as_bool);
@@ -231,13 +231,13 @@ pub fn heard(args: &Json) {
     // Run in order, in one task: a pause then a seek must land in that
     // order (Studio's play/pause, pausing, goes back to where play began).
     let run = |steps: Vec<(&'static str, Json)>| {
-        let Some(rt) = session_engine::open::runtime() else {
+        let Some(rt) = studio_engine::open::runtime() else {
             return;
         };
         FOLLOWED.fetch_add(1, Ordering::Relaxed);
         rt.spawn(async move {
             for (id, args) in steps {
-                let out = session_engine::actions::list()
+                let out = studio_engine::actions::list()
                     .run_json_async(id, args.to_string().as_bytes())
                     .await;
                 if let Err(e) = out {

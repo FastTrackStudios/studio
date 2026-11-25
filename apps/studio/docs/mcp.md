@@ -133,7 +133,7 @@ SIGNAL_BLOCK_SET`. Meanwhile, use `signal_run` with `SIGNAL_SET`
 ## Beside the person: revisions, `stale`, `changes`, one undo step
 
 The person edits the same song while an agent works. Every call goes
-through the engine's `AGENT_RUN` (`session_engine::agent`), so:
+through the engine's `AGENT_RUN` (`studio_engine::agent`), so:
 
 - **Every answer carries `revision`**, the song's edit counter (it moves
   on every edit by either side; selection, folds, zoom and the transport
@@ -356,7 +356,7 @@ keeps only traces of 5 ms or more, errors, and spans marked
 `keep = true`, so traces alone count only the slow calls. Two things
 make every call count:
 
-- **Metrics for every run** (`session_engine::telemetry::action_metrics`,
+- **Metrics for every run** (`studio_engine::telemetry::action_metrics`,
   recorded by the engine's `SpanRing` layer as each action span closes):
   the histogram `studio.action.duration` (ms, from the span opening to its
   closing) and the counter `studio.action.calls`, both labelled
@@ -366,7 +366,7 @@ make every call count:
 - **Mixing calls kept whole:** the action span of every `LISTEN*`,
   `MIX_*`, `BLOCK*`, `SIGNAL_BLOCK_SET` and `TRACK_SET` carries
   `keep = true`, so each one is a trace with its fields whatever its
-  length (`session_engine::telemetry::kept_whole`).
+  length (`studio_engine::telemetry::kept_whole`).
 
 Only the engine counts. The app's own actions (menus, keys) run under
 app-shell's subscriber at `warn`, which drops the Action List's span.

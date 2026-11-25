@@ -15,7 +15,7 @@ Steps 1–3 of the research's migration path (§7) are under way:
 
 | step | state |
 |---|---|
-| 1. The boundary inside one process | done, and cut: `session-engine` (`features/engine/engine`, 100 modules) and `session-ui` (`features/engine/ui`, the window); the compiler holds the line |
+| 1. The boundary inside one process | done, and cut: `studio-engine` (`features/engine/engine`, 100 modules) and `session-ui` (`features/engine/ui`, the window); the compiler holds the line |
 | 2. The Action List and set state to the engine | done: the list is the engine's; a window registers its own actions when it attaches; the edit cursor and time selection are engine state; Live's roll-on is the engine's |
 | 3. `studio engine` | runs: the engine, the set, SetAudio, MCP on 47811, the daw facade on a Unix socket (`--listen` adds WS) |
 | 4. The app attaches or spawns | done, and the only way: see Phase C and Phase D |
@@ -29,7 +29,7 @@ the engine directly.
 
 - **Desktop**: always another process. `link::choose` attaches to a
   running engine of the same build or spawns one — by default the app's
-  own binary run as `studio-desktop --session-engine` (`session_desktop::
+  own binary run as `studio-desktop --session-engine` (`engine_host::
   engine_host`, the same code `studio engine` runs), so a window never
   drives an engine of another build; `FTS_STUDIO_BIN` spawns `studio
   engine` from a CLI instead, `FTS_ENGINE=attach` waits for one started by
@@ -77,7 +77,7 @@ the engine directly.
   Versions reads `SESSION_VERSIONS`. A recording pass's takes are settled by
   the engine.
 - **The compiler holds it**: other crates name the engine as
-  `session_engine`, `session-ui` re-exports only the engine modules its
+  `studio_engine`, `session-ui` re-exports only the engine modules its
   window uses, and what reads or writes engine-process state for a window
   is `pub(crate)` (`take_rank::settle_open`, `render_ahead::set`,
   `reference_play::{multitracks, any, load_multitracks}`,
@@ -95,7 +95,7 @@ the engine directly.
 
 ### Phase C: the window on an engine in another process
 
-`FTS_ENGINE=spawn|attach|inprocess` (`session_engine::studio_engine::link`):
+`FTS_ENGINE=spawn|attach|inprocess` (`studio_engine::studio_engine::link`):
 
 - **Discovery**: an engine writes `$XDG_CONFIG_HOME/fts/engines/studio-<pid>.json`
   (`link::Found`: pid, socket, MCP URL, WS); a window reads them newest
@@ -127,7 +127,7 @@ the engine directly.
 
 ### Phase B: two crates
 
-`session-daw` is gone: **`session-engine`** (`features/engine/engine`) is
+`session-daw` is gone: **`studio-engine`** (`features/engine/engine`) is
 the engine — the set, the Action List, MCP, opening, streaming, collab,
 the project file, every edit of a song, `studio_engine::headless`, the
 engine-only tools (`hits`, `prepare`, `reference`, `session-media`,
@@ -237,7 +237,7 @@ $ studio run SESSION_AUDIO
   (`fts_account`, `FTS_ACCOUNT_FILE`), the org from `--org`, else
   `FTS_TASK_ORG`, else the one last picked.
 
-`session-desktop --engine` (the old WRY app's `SessionEngine` +
+`engine-host --engine` (the old WRY app's `SessionEngine` +
 `SetlistService`) and `studio-desktop --engine` (Signal's rig engine,
 ws://:4040) are left as they are: the first is a different engine (no set,
 no Action List) and goes when the WRY app does; the second folds in once
@@ -346,10 +346,10 @@ Borrow only the engine's runtime (no `Standalone`): `task_account.rs`,
 
 | file | reaches | what it does | side |
 |---|---|---|---|
-| session_engine.rs | 16 | the WRY app's own engine (`SessionEngine`, SetlistService) | engine |
+| studio_engine.rs | 16 | the WRY app's own engine (`SessionEngine`, SetlistService) | engine |
 | cli/player.rs | 10 | `studio player`'s own engine per song | engine |
-| lib.rs | 4 | WRY UI buttons drive `session_engine` | mixed |
-| engine_open.rs, engine_server.rs | 3, 3 | `session-desktop --engine` | engine |
+| lib.rs | 4 | WRY UI buttons drive `studio_engine` | mixed |
+| engine_open.rs, engine_server.rs | 3, 3 | `engine-host --engine` | engine |
 | guide.rs | 2 | click/cues into the WRY engine | engine |
 | active_engine.rs | 2 | picks the engine, for its facade clients | view |
 | session_view.rs | 1 | writes `MixerRouting::shared()` from a panel | view writing engine global |

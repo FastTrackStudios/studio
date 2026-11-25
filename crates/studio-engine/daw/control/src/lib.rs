@@ -748,7 +748,7 @@ mod global {
     ///
     /// This was a `OnceLock` on the assumption that a process attaches to one
     /// DAW for its life. That holds inside a REAPER extension, where the DAW
-    /// *is* the host — but not for an external client like session-desktop's
+    /// *is* the host — but not for an external client like engine-host's
     /// Recording Mode, which dials a REAPER over a socket and has to survive
     /// that REAPER being quit and reopened under a new pid. A `OnceLock` left
     /// every `daw::get()` consumer (the Mixer panel, "Open in REAPER", the

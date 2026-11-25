@@ -1160,7 +1160,7 @@ fn to_quarters(
 }
 
 /// The Editor's take as `NOTES_WRITE` takes it: item `item_guid`'s new
-/// contents, in quarter notes (`session_engine::notes_actions`). `None`
+/// contents, in quarter notes (`studio_engine::notes_actions`). `None`
 /// when it will not say itself as JSON.
 #[cfg(feature = "native")]
 #[must_use]

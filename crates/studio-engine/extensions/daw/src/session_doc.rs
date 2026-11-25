@@ -113,7 +113,7 @@ pub fn timing_of(project: &daw_ui::studio::project::Project) -> u64 {
 pub fn timing_now(song: &str) -> Option<daw_ui::studio::project::Project> {
     use daw::service::TempoMap as _;
     use daw_ui::studio::project::{Marker as M, Project, Section, TempoChange};
-    let song = session_engine::song::Song::named_or_current(Some(song)).ok()?;
+    let song = studio_engine::song::Song::named_or_current(Some(song)).ok()?;
     let (daw, ctx) = (song.daw(), song.context());
     let css = |c: u32| format!("#{:06x}", c & 0x00ff_ffff);
     let sections =
@@ -183,7 +183,7 @@ pub fn behind(song: &str, timing: u64) -> bool {
 /// cue list reading the session follows. Nothing when it is not the song
 /// open.
 pub fn retime(song: &str, project: &daw_ui::studio::project::Project) {
-    let Some(rt) = session_engine::open::runtime() else {
+    let Some(rt) = studio_engine::open::runtime() else {
         return;
     };
     // Taken out for the write (it awaits), and put back.
@@ -410,7 +410,7 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
         ));
         return;
     };
-    let Some(rt) = session_engine::open::runtime() else {
+    let Some(rt) = studio_engine::open::runtime() else {
         problem(Some("no runtime to open the session on".to_owned()));
         return;
     };
@@ -476,7 +476,7 @@ fn lead() {
     else {
         return;
     };
-    let Some(rt) = session_engine::open::runtime() else {
+    let Some(rt) = studio_engine::open::runtime() else {
         problem(Some(
             "no runtime to serve the session's presence on".to_owned(),
         ));

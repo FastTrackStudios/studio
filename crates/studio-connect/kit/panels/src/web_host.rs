@@ -906,7 +906,7 @@ fn register_page_actions() {
     if DONE.with(|d| d.replace(true)) {
         return;
     }
-    if let Err(error) = session_engine::web_actions::extend(daw_view_kit::view_actions::register) {
+    if let Err(error) = studio_engine::web_actions::extend(daw_view_kit::view_actions::register) {
         tracing::error!(%error, "page: the window's actions stopped registering");
     }
 }

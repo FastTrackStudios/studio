@@ -91,7 +91,7 @@ arrangement-view = { workspace = true, optional = true, features = ["native"] }
 studio-panels = { workspace = true, optional = true, features = ["native"] }
 # The Editor view.
 midi-editor = { workspace = true, optional = true, features = ["native"] }
-session-engine-client = { workspace = true, optional = true, features = ["native"] }
+engine-client = { workspace = true, optional = true, features = ["native"] }
 # The window's modes (`SESSION_MODE`, this client's own).
 session = { workspace = true, optional = true }
 architect-extensions = { workspace = true, optional = true, features = ["host", "linked", "process"] }
@@ -150,7 +150,7 @@ native = [
     "dep:studio-panels",
     "dep:midi-editor",
     "dep:mixer-view",
-    "dep:session-engine-client",
+    "dep:engine-client",
     "dep:session",
     "dep:architect-extensions",
     "dep:architect-extensions-dioxus",

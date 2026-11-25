@@ -87,7 +87,7 @@ pub fn extensions() -> &'static Extensions {
     EXTENSIONS.get_or_init(|| {
         // The views' windows run inside this app's process, on its thread:
         // an async window action is started, never waited for.
-        session_engine_client::actions::in_host(true);
+        engine_client::actions::in_host(true);
         // The views attach to the engine the app links (use_engine_link),
         // never to whichever engine answers first.
         studio_view_link::attach_by_host();
@@ -370,7 +370,8 @@ fn tell(events: &[architect_extensions::host::Event]) {
 /// The daw extension's package: its manifest and its program
 /// (`daw-extension`, as the engine is found), in Studio's folder.
 fn daw_package() -> Result<std::path::PathBuf, String> {
-    const MANIFEST: &str = include_str!("../../../crates/studio-engine/extensions/daw/extension.toml");
+    const MANIFEST: &str =
+        include_str!("../../../crates/studio-engine/extensions/daw/extension.toml");
     let bin = crate::engine::daw_extension_bin().ok_or("no daw-extension program")?;
     let dir = crate::storage::config_dir()
         .ok_or("no config folder")?

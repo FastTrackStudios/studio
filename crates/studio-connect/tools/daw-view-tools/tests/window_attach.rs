@@ -6,7 +6,7 @@
 use serde_json::json;
 
 fn listed(id: &str) -> Option<bool> {
-    session_engine::actions::list()
+    studio_engine::actions::list()
         .infos()
         .into_iter()
         .find(|i| i.id == id)
@@ -32,7 +32,7 @@ fn a_window_brings_its_actions_and_they_fall_disabled_when_it_goes() {
     );
     drop(window);
     assert_eq!(listed("SESSION_ZOOM"), Some(false));
-    let refused = session_engine::actions::list().run_json(
+    let refused = studio_engine::actions::list().run_json(
         "SESSION_ZOOM",
         json!({"zoom": "Project"}).to_string().as_bytes(),
     );

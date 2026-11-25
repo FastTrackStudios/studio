@@ -3,9 +3,9 @@
 //!
 //! It attaches to the engine the `daw` extension runs exactly as
 //! `studio-desktop`'s window attaches to a `studio engine`
-//! (`session_engine_client::studio_engine::link`, `session_engine_client::open::attach`)
+//! (`engine_client::studio_engine::link`, `engine_client::open::attach`)
 //! ([`attach`]), reads the song through the window protocol's replicas
-//! (`session_engine_client::view_client`) ([`use_song`]), runs the engine's
+//! (`engine_client::view_client`) ([`use_song`]), runs the engine's
 //! actions over that link ([`run`]), and hands Architect's pane input on
 //! as the Blitz events Studio's widgets take ([`input`]). A view's pane
 //! paints its widget as one layer that crosses only when it changed
@@ -15,7 +15,7 @@
 //! needs the other installed.
 //!
 //! **In a browser** (`wasm32`, studio-web) the engine is in the page: the
-//! `daw` extension's browser build opens it (`session_engine::web_engine`,
+//! `daw` extension's browser build opens it (`studio_engine::web_engine`,
 //! hosted by `studio_panels::web_host`) and this crate reads the song it has
 //! current from there ([`current`], [`use_song`]) and runs the page's
 //! Action List ([`call`]). The paint panes, the input hand-over and the

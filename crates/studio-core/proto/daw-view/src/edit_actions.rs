@@ -1,6 +1,6 @@
 //! The arrangement's selection, as the window publishes it every frame
 //! (an edit's scope). Editing what is selected is the engine's
-//! (`session_engine::edit_actions`).
+//! (`studio_engine::edit_actions`).
 
 use daw_edit::scope::Scope;
 

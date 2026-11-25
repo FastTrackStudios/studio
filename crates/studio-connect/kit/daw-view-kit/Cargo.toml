@@ -8,8 +8,8 @@ description = "What the DAW views draw with: the track panel, rails, rulers, key
 
 # What this is, and what it is not.
 #
-# `session-desktop` is the Session app: setlists, songs, charts, the
-# guide. This is its window, a view of `session-engine` — the track panel, the arrangement, the
+# `engine-host` is the Session app: setlists, songs, charts, the
+# guide. This is its window, a view of `studio-engine` — the track panel, the arrangement, the
 # transport and the mixer over a real project — as a library of panels the
 # app mounts (`studio::Arrangement`, `mixer_panel::DawPanels`), plus the
 # headless tools that draw them (`bin/bench`, `bin/blitz_shot`). The

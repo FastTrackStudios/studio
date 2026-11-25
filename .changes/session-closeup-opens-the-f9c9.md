@@ -1,5 +1,5 @@
 ---
-"session-engine" = "patch"
+"studio-engine" = "patch"
 "studio-arrangement" = "patch"
 "studio-mixer" = "patch"
 "studio-view-link" = "patch"

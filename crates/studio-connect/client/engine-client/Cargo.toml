@@ -1,0 +1,85 @@
+[package]
+name = "engine-client"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "What a window needs of Session's engine: the view protocol and its link (`view`, `view_client`), the window's queue, the read-back model, the published overlays and the plain metadata the UI shows"
+
+# What this is, and what it is not.
+#
+# The window's half of `studio-engine`, split out so an edit to the
+# engine's body (placement, quantize, comping, the set, its actions)
+# rebuilds the engine binary and nothing a window is built from. A window
+# (`daw-view-kit`, Studio's views) depends on this crate only; the engine
+# (`studio-engine`) depends on it too and re-exports every module from
+# its old path.
+#
+# What a window module needs of the engine's body when the engine runs in
+# the same process (the old Session window, a test, the engine process
+# itself) it reaches through `body`, which `studio_engine::install` fills.
+# A window linked to an engine in another process (Studio) never fills it:
+# those calls go over the link (`view_client`) or do nothing.
+
+[dependencies]
+# The views' contract: the protocol, the link, the song model, the
+# overlays. This crate is Studio's half beside it.
+daw-view = { workspace = true }
+# Presence held for the process: the session primitive's store.
+fts-session = { workspace = true, features = ["store"] }
+dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
+daw-ui = { workspace = true, features = ["studio"] }
+daw-control = { workspace = true }
+daw-proto = { workspace = true }
+rayon = { workspace = true, optional = true }
+session = { workspace = true, features = ["library", "ui", "web"] }
+keyflow = { workspace = true, features = ["text", "engraver"] }
+engine-runtime = { workspace = true }
+dynamic-template = { workspace = true }
+# The leveler's envelope (`dsp::level`) and the loudness filter gain
+# staging reads by: the math only.
+dsp = { path = "../../plugin-ui/plugin-ui", package = "plugin-ui", features = ["level"] }
+dsp-core = { workspace = true, features = ["audio"] }
+# A drum lane's role (`editor::kit`).
+editor = { workspace = true }
+daw = { workspace = true }
+studio = { workspace = true }
+utils = { workspace = true }
+vello = "0.11"
+dirs = { workspace = true, optional = true }
+timeline = { workspace = true, features = ["actions"] }
+web-time = { workspace = true }
+eyre = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+architect = { workspace = true, optional = true, features = ["vox", "platform", "action-list", "local"] }
+tracing = { workspace = true }
+web-sys = { workspace = true, optional = true, features = [
+    "Window", "Document", "Element", "HtmlElement", "Storage", "MediaQueryList",
+] }
+wasm-bindgen-futures = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true }
+daw-standalone = { workspace = true, features = ["bootstrap"] }
+# A builtin FX parameter's reading (`builtin::engine::reading`).
+builtin = { workspace = true, optional = true, features = ["engine"] }
+num-traits = { workspace = true }
+facet = { workspace = true }
+editing = { workspace = true }
+facet-json = { workspace = true }
+vox = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# The dock's intents (`DockRequest::Intent`): its model only, no UI.
+dock = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.48", default-features = false, features = ["sync", "macros"] }
+
+[features]
+default = ["native"]
+vox = []
+native = ["daw-view/native", "daw-view/local", "session/collab", "dep:dock", "dep:rayon", "dep:dirs", "dep:tokio", "dep:architect", "dep:futures-util", "dep:builtin", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "vox"]
+web = ["daw-view/web", "daw-view/standalone", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "dep:architect", "daw/standalone-session-file", "vox"]
+
+[lints]
+workspace = true

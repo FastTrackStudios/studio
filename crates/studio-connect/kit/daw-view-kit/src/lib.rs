@@ -98,7 +98,7 @@ pub mod window_cursor;
 pub mod zoom;
 
 /// Whether this process's windows are linked into the app that hosts them
-/// (`session_engine::actions::in_host`).
+/// (`studio_engine::actions::in_host`).
 #[cfg(feature = "native")]
 #[must_use]
 pub fn engine_actions_in_host() -> bool {

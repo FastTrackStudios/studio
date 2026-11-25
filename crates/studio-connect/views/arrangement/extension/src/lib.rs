@@ -39,9 +39,9 @@ use architect_extensions_dioxus::PaintPane;
 use architect_scene::paint::PaintMount;
 #[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
-use serde_json::{Value as Json, json};
 #[cfg(not(target_arch = "wasm32"))]
-use session_engine_client::song_model::StudioSession;
+use engine_client::song_model::StudioSession;
+use serde_json::{Value as Json, json};
 #[cfg(not(target_arch = "wasm32"))]
 use studio_view_link::InScope;
 use studio_view_link::Stats;
@@ -128,7 +128,7 @@ fn state() -> Json {
 /// browser) the page's open.
 fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
-    return session_engine_client::view_client::is_linked();
+    return engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
     return studio_panels::web_host::hosted_is_open();
 }

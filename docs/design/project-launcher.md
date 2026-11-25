@@ -249,7 +249,7 @@ One is loaded today by `studio-desktop --guitar` or `--keys`
 (the removed rig app's `/src/front.rs` `preset_from`), which opens the rig view
 on its own engine; inside a song, `RIG_LOAD {track, instrument, profile,
 patch}` puts a rig on a track (`features/engine/engine/src/rig_actions.rs`),
-for guitar and bass only, and only when `session-engine` is built with its
+for guitar and bass only, and only when `studio-engine` is built with its
 `signal` feature. `extensions/daw/Cargo.toml` builds it without, so the
 app's engine has no `RIG_LOAD`.
 
@@ -258,9 +258,9 @@ So the launcher lists rigs, and a setlist's note keeps its **parts**
 `STUDIO_LAUNCHER_PART`), and nothing is loaded. Loading takes, in order:
 
 1. **The engine built with Signal.** `extensions/daw/Cargo.toml` asks
-   `session-engine` for `features = ["native"]`; it needs `"signal"` too
+   `studio-engine` for `features = ["native"]`; it needs `"signal"` too
    (`features/engine/engine/Cargo.toml`: `signal = ["native", "dep:signal-fx",
-   "session-runtime/signal"]`). That brings `signal-fx` and the guitar crate
+   "engine-runtime/signal"]`). That brings `signal-fx` and the guitar crate
    into the engine's build, whose build script embeds the captures and
    frozen Cores from `SIGNAL_RIG_LIBRARY` (`rig-library/`, linked by `just
    assets`; a release build refuses to start without them). The engine's

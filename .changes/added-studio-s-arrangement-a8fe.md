@@ -1,7 +1,7 @@
 ---
 "daw-extension" = "minor"
 "daw-ui" = "minor"
-"session-engine" = "patch"
+"studio-engine" = "patch"
 "session-ui" = "minor"
 "studio-arrangement" = "minor"
 "studio-mixer" = "minor"

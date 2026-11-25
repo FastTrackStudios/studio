@@ -1,6 +1,6 @@
 # Session app on Blitz — plan and handoff
 
-The Session app (`features/engine/host`, `session-desktop`) moves onto Blitz
+The Session app (`features/engine/host`, `engine-host`) moves onto Blitz
 (`dioxus-native`) on desktop and iOS, and becomes a docking app built from
 panels. The web build stays on dioxus-web (custom widgets work there too).
 Started 2026-09-21, most recently worked 2026-09-22.
@@ -119,7 +119,7 @@ prepares it — see `native::launch` in `features/engine/host/src/native/mod.rs`
    the toolbar; `blitz_shot` still has its own older copy of a studio
    window (not yet switched over to the panel — low priority, it's a
    benchmark/test harness, not user-facing).
-2. **Shell on Blitz** — done: `session-desktop`'s `native` feature
+2. **Shell on Blitz** — done: `engine-host`'s `native` feature
    (default on) launches dioxus-native — top bar (traffic lights, views,
    transport, mode, settings), window drag; DAW and Performance views on
    Always On Time.
@@ -138,7 +138,7 @@ prepares it — see `native::launch` in `features/engine/host/src/native/mod.rs`
 ## Running it
 
 ```bash
-cargo run -p session-desktop          # feature `native` is on by default
+cargo run -p engine-host          # feature `native` is on by default
 ```
 
 Opens `sessions/Always On Time` prepared (organize, chart, guide);
@@ -402,7 +402,7 @@ moved into keyflow as a named preset. `ChartView::new` uses it, and so does
 `<line>`, so the two panes can't drift apart. keyflow's own default
 (a thick red line with a notehead glow) is still what keyflow-ui uses.
 Confirmed by eye on native with `FTS_SESSION_AUTOPLAY=1`. The web build
-could NOT be checked: `cargo check -p session-desktop --target
+could NOT be checked: `cargo check -p engine-host --target
 wasm32-unknown-unknown --no-default-features --features session` fails
 before and after this change, because architect's tokio pulls `mio` into
 wasm. That's a separate break.

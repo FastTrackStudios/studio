@@ -755,7 +755,7 @@ impl<D: Tracks + Routing + Items> DawTarget<D> {
     ///
     /// A backend call failed.
     pub fn mute_triggers(&mut self) -> eyre::Result<Vec<String>> {
-        use daw_proto::{routing::SendMode, RouteRef};
+        use daw_proto::{RouteRef, routing::SendMode};
         let muted = self.mute_where(super::is_trigger)?;
         for track in Tracks::all(&self.daw, self.project.clone()) {
             if !super::is_trigger(&track.name) {
@@ -894,7 +894,7 @@ impl<D: Tracks + Routing + Items> DawTarget<D> {
     /// it or in its `Sum` (`Trig`, `T1 Trig`, or a `Trig` folder of them
     /// on a kit the toms could not be split on) gets a pre-FX send from it
     /// onto the piece's channels 3/4, which keys the gate on the piece
-    /// (`session_engine::mix_chains`).
+    /// (`studio_engine::mix_chains`).
     ///
     /// The trigger is then unmuted — a muted track's sends are muted, in
     /// REAPER as here — and taken off its parent instead: alive to key,
@@ -1420,7 +1420,7 @@ impl<D: Tracks + Routing + Items> DawTarget<D> {
     /// A pre-FX send from `trigger` onto `keyed`'s channels 3/4: its
     /// sidechain, which keys the gate on it.
     fn key_from(&self, trigger: &str, keyed: &str) -> eyre::Result<()> {
-        use daw_proto::{routing::SendMode, RouteRef};
+        use daw_proto::{RouteRef, routing::SendMode};
         let source = TrackRef::Guid(trigger.to_owned());
         let Some(index) = Routing::add_send(
             &self.daw,

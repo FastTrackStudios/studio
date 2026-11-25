@@ -335,7 +335,7 @@ exactly where it is since the note lives inside that same folder.
 
 `studio player` plays a setlist for real —
 natively, no REAPER, no browser. It's driven by `daw-standalone` directly
-(the same engine `features/engine/host/src/session_engine.rs` uses for
+(the same engine `features/engine/host/src/studio_engine.rs` uses for
 its in-process setlist player), not the RPC/vox facade that crate builds
 for remote UIs — this is a local CLI, so it calls `Standalone`'s sync
 `Transport`/`Tracks` trait methods directly.

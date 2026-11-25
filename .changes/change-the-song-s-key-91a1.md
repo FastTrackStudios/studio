@@ -1,6 +1,6 @@
 ---
 "session" = "minor"
-"session-engine" = "minor"
+"studio-engine" = "minor"
 "session-ui" = "minor"
 ---
 

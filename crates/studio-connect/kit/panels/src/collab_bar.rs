@@ -40,7 +40,7 @@ mod live {
         crate::studio_engine::link::linked().is_some()
     }
 
-    fn frame() -> Option<std::sync::Arc<session_engine_client::view::LiveFrame>> {
+    fn frame() -> Option<std::sync::Arc<engine_client::view::LiveFrame>> {
         crate::view_client::live()
     }
 

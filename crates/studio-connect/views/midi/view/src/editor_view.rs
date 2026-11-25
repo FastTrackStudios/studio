@@ -484,7 +484,7 @@ fn saved() {
 }
 
 /// Start the saver: one thread committing each take sent as `NOTES_WRITE`
-/// (`session_engine::notes_actions`), in the order they were saved — where
+/// (`studio_engine::notes_actions`), in the order they were saved — where
 /// every action runs (`crate::actions::run`: on the engine, over its link).
 #[cfg(feature = "native")]
 fn saver() -> Option<std::sync::mpsc::Sender<(String, Content)>> {

@@ -1,6 +1,6 @@
 //! A track's own regions and markers, as a window draws them (the marks
 //! the engine sends with a song). Reading, writing and proposing them is
-//! the engine's (`session_engine::track_regions`).
+//! the engine's (`studio_engine::track_regions`).
 
 use facet::Facet;
 

@@ -11,8 +11,8 @@
 use architect_extensions::linked::{Builder, Extension};
 use architect_extensions_dioxus::BuilderExt as _;
 use dioxus::prelude::*;
+use engine_client::song_model::StudioSession;
 use serde_json::json;
-use session_engine_client::song_model::StudioSession;
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
 

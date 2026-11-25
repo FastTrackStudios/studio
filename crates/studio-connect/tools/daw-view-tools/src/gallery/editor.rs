@@ -4,8 +4,8 @@
 //! audio documents for what only an audio take shows.
 
 use daw_theme::gallery::View;
-use midi_editor::expression::Expression;
 use daw_view_kit::mousemap::Mods;
+use midi_editor::expression::Expression;
 
 use crate::golden::Golden;
 

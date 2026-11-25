@@ -34,10 +34,10 @@ use architect_scene::ops::{Receiver, Sender};
 use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
 use dioxus::prelude::*;
+use engine_client::song_model::StudioSession;
 use mixer_view::closeup::RackWidget;
 use mixer_view::tone::Which;
 use peniko::kurbo::Affine;
-use session_engine_client::song_model::StudioSession;
 use studio_mixer::closeup::HostedRack;
 use studio_view_link::{InScope, Stats};
 
@@ -52,13 +52,13 @@ fn session() -> StudioSession {
     // tests in one process, nextest each in its own).
     static OPEN: std::sync::Once = std::sync::Once::new();
     OPEN.call_once(|| {
-        session_engine::open::open_silent(&path).expect("open the golden template");
+        studio_engine::open::open_silent(&path).expect("open the golden template");
     });
     let raw = daw_view_kit::studio::fetch().expect("read it back");
     let planner = daw_view_kit::studio::Planner {
         raw: Arc::new(raw),
         scene: Some("drum-mixing"),
-        kinds: Arc::new(session_engine::plan::Kinds::read(&path)),
+        kinds: Arc::new(studio_engine::plan::Kinds::read(&path)),
     };
     let (project, rows) = planner.plan(&planner.raw);
     let previews = daw_view_kit::studio::previews_of(&project);

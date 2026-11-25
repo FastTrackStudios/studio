@@ -1,5 +1,5 @@
 ---
-"session-desktop" = "minor"
+"engine-host" = "minor"
 "app-shell" = "patch"
 "dock" = "patch"
 ---

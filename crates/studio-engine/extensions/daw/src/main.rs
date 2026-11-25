@@ -11,7 +11,7 @@ fn main() -> std::process::ExitCode {
     // A render worker (`--render-worker`, spawned by an engine with its
     // socket in the environment): renders an agent asked for, apart from
     // the person's session.
-    if let Some(result) = session_engine::render_worker::main_if_worker() {
+    if let Some(result) = studio_engine::render_worker::main_if_worker() {
         return match result {
             Ok(()) => std::process::ExitCode::SUCCESS,
             Err(e) => {

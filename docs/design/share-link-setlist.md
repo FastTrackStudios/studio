@@ -535,7 +535,7 @@ own wasm, as the desktop is Studio's own binary. Architect has the route
    feature that compiles the progress bar, the navigator, the song tabs,
    the lyrics panel, `WebArrangement` and `WebMixer`. The work is a web
    host for each extension, with the engine either in the page
-   (`session-engine/web`) or absent (a listener).
+   (`studio-engine/web`) or absent (a listener).
 3. `cargo xtask dist web --manifest-path apps/desktop/Cargo.toml`
    builds it; `scripts/studio.sh web` calls that instead of
    Architect's `web-bundle.sh`, and the release's web tarball is then

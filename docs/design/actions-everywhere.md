@@ -55,10 +55,10 @@ Why:
    Decided 2026-10-30: like the desktop window, the page's controls run
    named actions. The page runs its own engine in-process (`web_engine`,
    daw-standalone on wasm) with no link to a desktop engine, so it has its
-   own Action List: `session_engine::web_actions` (`web` only). On it:
+   own Action List: `studio_engine::web_actions` (`web` only). On it:
 
    - the actions both lists carry, one description and one argument shape
-     per id (`session_engine::shared_actions`): `TRACK_SET`, `TRACK_ARM`,
+     per id (`studio_engine::shared_actions`): `TRACK_SET`, `TRACK_ARM`,
      `SESSION_SELECT_TRACK`, `SESSION_FOLD`, `TRACK_SHOW_LANES`,
      `SESSION_PHASE` — their decisions (which track a name means, which
      folders a fold opens, which lanes show) shared, carried out through
@@ -101,7 +101,7 @@ count and why: an action's own handler, a browser fallback, or debt with
 the action it should become. `cargo nextest run -p session-ui --test it
 actions_everywhere`.
 
-`session-engine`'s `actions::presses` tests hold the other end: every id
+`studio-engine`'s `actions::presses` tests hold the other end: every id
 a control runs is on the list, every transport move maps to a registered
 action, and the list validates and survives hostile arguments.
 
@@ -117,7 +117,7 @@ action, and the list validates and survives hostile arguments.
 | `SESSION_STOP`, `SESSION_GO_TO_END`, `SESSION_LOOP`, `SESSION_SEEK {at}`, `SESSION_PLAY_FROM {at}` | engine | the transport's moves (`actions::transport_action`) |
 | `SESSION_OPTION {option, on?}` | window | snap, grid, ripple, razor, auto crossfade, lock |
 | `EngineView::ran_in_window` | link | a window action run in the window, said on the engine's list |
-| `ARRANGE_MOVE`, `ARRANGE_TRIM`, `ARRANGE_SLIP`, `ARRANGE_FADE`, `ARRANGE_SPLIT`, `ARRANGE_COPY`, `ARRANGE_DELETE`, `ARRANGE_MARKERS`, `ARRANGE_ITEM_VOLUME`, `ARRANGE_TAKE_VOLUME`, `ARRANGE_EDIT`, `ITEMS_SELECT` `{label?, edits}` | engine | an arrangement gesture's edits, in order, one undo step (`session_engine::arrange_actions`); which id is what the gesture did (`gesture_id`) |
+| `ARRANGE_MOVE`, `ARRANGE_TRIM`, `ARRANGE_SLIP`, `ARRANGE_FADE`, `ARRANGE_SPLIT`, `ARRANGE_COPY`, `ARRANGE_DELETE`, `ARRANGE_MARKERS`, `ARRANGE_ITEM_VOLUME`, `ARRANGE_TAKE_VOLUME`, `ARRANGE_EDIT`, `ITEMS_SELECT` `{label?, edits}` | engine | an arrangement gesture's edits, in order, one undo step (`studio_engine::arrange_actions`); which id is what the gesture did (`gesture_id`) |
 | `Edit::Run(id, args)` | window → engine | a control's action run by the window's edit worker in order with the edits around it (`Applier`) |
 | `RIG_BLOCK_SET {track, block, set?, bypassed?, level_db?, option?}` | engine (`signal`) | one block of a track's signal rig, by id or name: what the FX view's rig faces and bypass buttons commit |
 | `RIG_BLOCKS {track}` | engine (`signal`), read-only | the rig's blocks as they are: what `RIG_BLOCK_SET` changes |
@@ -194,7 +194,7 @@ the song, and **committed when it ends as one named action**:
 `ArrangementWidget::settle` splits its edits into gestures
 (`arrange_edit::gestures`: each undo bracket one, named by its label; a
 bare selection one), and `commit_edits` names each
-(`session_engine::arrange_actions::gesture`) and queues it as
+(`studio_engine::arrange_actions::gesture`) and queues it as
 `Edit::Run(id, args)` — run by the window's edit worker through the
 Action List, in order with the edits before and after it, so a barrier an
 action waits on (`Edit::Done`) still lands after the work. The action's
@@ -350,7 +350,7 @@ calls `Dock::ask(intent)`; with a router installed (`Dock::set_router`) the
 intent goes to the app, else the dock applies it itself (`Dock::apply`).
 The Session window's router (`native/dock.rs::route`) runs each as its
 named action — a screenset's by name, the layout's through
-`session_engine::actions::dock_action` — whose `DockRequest::Intent`
+`studio_engine::actions::dock_action` — whose `DockRequest::Intent`
 comes back to `Dock::apply` at once. The older tile dock
 (`dock::ui::components`, `features/session`'s) is not this window's and
 keeps its `DockActions` callbacks: debt.

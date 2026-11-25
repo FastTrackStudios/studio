@@ -1,5 +1,5 @@
 ---
-"session-desktop" = "patch"
+"engine-host" = "patch"
 "session-ui" = "patch"
 ---
 

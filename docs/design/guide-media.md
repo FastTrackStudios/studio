@@ -105,7 +105,7 @@ three modes:
 
 Session setup from the environment (in `open`): `FTS_BLITZ_OPEN`
 (unfold folders), `FTS_BLITZ_LANES` (show every lane through
-`session_engine::lanes::set_expanded`), `FTS_BLITZ_MODE=edit|record|mix`,
+`studio_engine::lanes::set_expanded`), `FTS_BLITZ_MODE=edit|record|mix`,
 `FTS_BLITZ_SCENE` (row layout), `FTS_BLITZ_ORGANIZE/CHART/GUIDE`
 (prepare), `FTS_BLITZ_STAGE`, `FTS_BLITZ_LEVELS`, `FTS_BLITZ_EXPORT`.
 `FTS_BLITZ_COMP=Folder:take:from:to` already performs **a swipe comp
@@ -157,7 +157,7 @@ Limits that matter here:
 
 ### 2.3 The Action List over MCP
 
-- `session_engine::studio_engine::mcp` serves `crate::actions::list()`
+- `studio_engine::studio_engine::mcp` serves `crate::actions::list()`
   on `http://127.0.0.1:47811/mcp` (`FTS_MCP_PORT`, `FTS_MCP=0`). The
   tools come from `architect_mcp` (architect `v0.9.31`, commit
   `89338f6`, `features/mcp/src/lib.rs`): `actions`, `describe`, `run`,

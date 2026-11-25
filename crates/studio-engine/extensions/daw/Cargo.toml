@@ -1,6 +1,6 @@
 [package]
 name = "daw-extension"
-description = "Studio's engine as an Architect extension: the same engine `studio engine` runs (session-engine, its daw, its Action List), in the extension's process, the song it is asked to open playing. Studio's views (studio.arrangement, studio.mixer) attach to it the way studio-desktop's window does."
+description = "Studio's engine as an Architect extension: the same engine `studio engine` runs (studio-engine, its daw, its Action List), in the extension's process, the song it is asked to open playing. Studio's views (studio.arrangement, studio.mixer) attach to it the way studio-desktop's window does."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -27,7 +27,7 @@ tracing = { workspace = true }
 # The native process: the engine and its launcher (`src/owner.rs`).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
-session-engine = { workspace = true, features = ["native"] }
+studio-engine = { workspace = true, features = ["native"] }
 fts-session = { workspace = true }
 # The song as one file: its session a part of the store (studio one-file).
 song-file = { workspace = true }
@@ -50,7 +50,7 @@ audio = { workspace = true, features = ["io"] }
 # without them (`native` is the domain), its cues the guide's samples.
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
 # (the domain's TTS backend, `session/tts`, behind this crate's `tts`; the
-# engine is session-engine).
+# engine is studio-engine).
 session = { workspace = true }
 
 [lints]

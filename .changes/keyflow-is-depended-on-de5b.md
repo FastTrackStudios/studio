@@ -2,8 +2,8 @@
 "editor" = "none"
 "lyrics-ui" = "none"
 "session" = "none"
-"session-desktop" = "none"
-"session-engine" = "none"
+"engine-host" = "none"
+"studio-engine" = "none"
 "session-ui" = "none"
 "studio-views" = "none"
 ---

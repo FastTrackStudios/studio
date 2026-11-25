@@ -17,7 +17,7 @@
 //! seconds — never hand-typed); key/artist/section-labels come from
 //! `chart_import::chart_to_layout` on the bundled chart. The per-song stem
 //! list + display name + instrument group + default-muted flag replicate the
-//! app's `session_engine.rs` seeding logic (curated table for Praise, folder
+//! app's `studio_engine.rs` seeding logic (curated table for Praise, folder
 //! glob for the other five, click/guide/cue/count → default-muted).
 //!
 //! Run (from repo root, with ffmpeg on PATH):
@@ -36,7 +36,7 @@ use session::keyflow::actions::SectionKind;
 use session::setlist::chart_import::{ChartLayout, chart_to_layout};
 use session::setlist::service::demo::{DemoSong, demo_chart_for, demo_songs_base};
 
-// ── Stem tables, replicated from apps/fasttrackstudio/src/session_engine.rs ──
+// ── Stem tables, replicated from apps/fasttrackstudio/src/studio_engine.rs ──
 
 /// Curated Praise stems: (display name, filename, group). Mirrors
 /// `seed_praise_media`'s STEMS table exactly.
@@ -71,7 +71,7 @@ const PRAISE_STEMS: &[(&str, &str, &str)] = &[
 ];
 
 /// On-disk folder (under `FTS_WORSHIP_STEMS`) for each globbed worship song.
-/// Mirrors `session_engine::WORSHIP_FOLDERS`.
+/// Mirrors `studio_engine::WORSHIP_FOLDERS`.
 const WORSHIP_FOLDERS: &[(&str, &str)] = &[
     (
         "God, I'm Just Grateful",
@@ -86,7 +86,7 @@ const WORSHIP_FOLDERS: &[(&str, &str)] = &[
     ("Who Else", "Who Else _ Gateway Worship _ Ab"),
 ];
 
-/// Instrument-family group for a stem name. Mirrors `session_engine::group_for`.
+/// Instrument-family group for a stem name. Mirrors `studio_engine::group_for`.
 fn group_for(name: &str) -> Option<&'static str> {
     let n = name.to_ascii_lowercase();
     let any = |ks: &[&str]| ks.iter().any(|k| n.contains(k));
@@ -114,7 +114,7 @@ fn group_for(name: &str) -> Option<&'static str> {
 }
 
 /// `true` when a stem is the multitrack's own click/guide/cue/count → default
-/// muted. Mirrors `session_engine::is_click_or_guide`.
+/// muted. Mirrors `studio_engine::is_click_or_guide`.
 fn is_click_or_guide(group: Option<&str>, name: &str) -> bool {
     let hay = format!("{} {}", group.unwrap_or(""), name).to_ascii_lowercase();
     ["click", "guide", "cue", "count"]
@@ -135,7 +135,7 @@ fn home() -> PathBuf {
 }
 
 /// Resolve a song's ordered source stems (WAV paths + display name + group),
-/// exactly as `session_engine::seed_song_media` would.
+/// exactly as `studio_engine::seed_song_media` would.
 fn source_stems(song: &str) -> Vec<SourceStem> {
     if song == "Praise" {
         let dir = std::env::var("FTS_PRAISE_STEMS")

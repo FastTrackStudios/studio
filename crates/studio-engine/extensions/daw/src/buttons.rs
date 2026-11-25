@@ -4,7 +4,7 @@
 //! An edit made in one pane (the arrangement's track panel, the mixer)
 //! goes to the engine, which runs in this process; its track event comes
 //! back here first, and is written into this extension's shared value
-//! table ([`session_engine::engine::track_value`]: 1 lit, 0 not) before
+//! table ([`studio_engine::engine::track_value`]: 1 lit, 0 not) before
 //! any other process hears of it. The host reads the table as it composes,
 //! so every pane drawing a button from it lights it in the same frame: no
 //! pane is a frame behind another, whichever was clicked. The first
@@ -16,7 +16,7 @@ use std::time::Duration;
 use architect_scene::anim::Name;
 use architect_scene::engine::{EngineWriter, Slot};
 use daw_proto::track::TrackEvent;
-use session_engine::engine::{TRACK_PARTS, VALUE_TRACKS, track_value};
+use studio_engine::engine::{TRACK_PARTS, VALUE_TRACKS, track_value};
 
 /// How often the set's current song is looked at, to follow it.
 const LOOK: Duration = Duration::from_millis(250);
@@ -77,7 +77,7 @@ impl Buttons {
 }
 
 fn run(buttons: &Buttons) {
-    let Some(runtime) = session_engine::open::runtime() else {
+    let Some(runtime) = studio_engine::open::runtime() else {
         tracing::warn!("daw: no runtime to follow the tracks' buttons on");
         return;
     };

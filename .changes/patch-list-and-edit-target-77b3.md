@@ -2,7 +2,7 @@
 "arrangement-view" = "none"
 "daw-view-kit" = "none"
 "studio-panels" = "none"
-"session-desktop" = "none"
+"engine-host" = "none"
 "daw-view-tools" = "none"
 ---
 

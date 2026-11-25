@@ -21,7 +21,7 @@ follow. In the web app, on a phone where the phone can carry it.
 
 | Piece | What it is | Engine |
 | --- | --- | --- |
-| `features/engine/daw-web` (`session-daw-web`, `just web-daw`) | Session's DAW view as a page of its own | **The real one**: one `daw_standalone::sync::Standalone` in the page (`session_engine::web_engine`) |
+| `features/engine/daw-web` (`session-daw-web`, `just web-daw`) | Session's DAW view as a page of its own | **The real one**: one `daw_standalone::sync::Standalone` in the page (`studio_engine::web_engine`) |
 | `features/adapters/web/worklet` | Signal's keys and guitar rigs in an `AudioWorklet` | A `Standalone` inside the worklet, for the rig only |
 | `apps/architect/island` (`studio.transport`) | The share link's views (playlist, chart, lyrics, a section ruler) in Architect's sandboxed frames | None: it reads the page's playhead and asks `PLAYHEAD_*` |
 | `features/engine/web`, `apps/studio/web` | Sites | None |
@@ -98,7 +98,7 @@ What it does, measured from the code (`features/engine/runtime`,
         Arrangement · Mixer tabs: the engine's own panels, in the page
 ```
 
-### 2.1 A set from a link (`session_runtime::link`)
+### 2.1 A set from a link (`engine_runtime::link`)
 
 `LinkSet::open(link)` reads the link's own listing,
 `<link>_files.json` (Architect's `files_json`): its notes in list order,
@@ -117,7 +117,7 @@ arrangement and the reference and is never offered the multitracks.
 
 `web_engine::WebSource::Link { url }` opens that set as the page's
 engine. Each song is set to its stems as it opens
-(`session_runtime::reference::hear`, moved out of the desktop's
+(`engine_runtime::reference::hear`, moved out of the desktop's
 `SESSION_HEAR` so both use one rule), in the page's engine only.
 
 ### 2.2 The vault, the rendition and where it is made
@@ -140,7 +140,7 @@ Songs/<Song>/Media/Proxies/Reference.ogg     the reference bounce (+ preview, in
   yet; AAC needs the browser's decoder, which cannot be driven sample
   accurately across 35 streams.
 - **Where it is made:** on the machine that holds the masters, when the
-  song is prepared for a link (`link-prepare`, a bin of `session-engine`
+  song is prepared for a link (`link-prepare`, a bin of `studio-engine`
   over `ingest::prepare`, what `studio ingest` runs before an upload):
   the project's log folded in, a rendition and page index a recording,
   the waveforms (and a coarse copy of each for the link, 80 KB a track,
@@ -245,7 +245,7 @@ layout (`compact`) is not used here: the shell is Architect's.
 
 ```sh
 # 1. Renditions, on a copy (the masters are read, never changed):
-cargo build -p session-engine --bin link-prepare
+cargo build -p studio-engine --bin link-prepare
 target/debug/link-prepare /abs/copy/of/song-folder …
 # 2. A vault whose song notes attach them:
 python3 -I scripts/link-vault.py /abs/copy /abs/vault --setlist "/abs/copy/Set.setlist"

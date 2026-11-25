@@ -749,7 +749,7 @@ impl Transport {
         let state = std::sync::Arc::new(std::sync::Mutex::new(Reading::default()));
         let writer = std::sync::Arc::clone(&state);
         std::thread::Builder::new()
-            .name("session-engine-transport".into())
+            .name("studio-engine-transport".into())
             .spawn(move || {
                 let mut asked = web_time::Instant::now() - std::time::Duration::from_secs(1);
                 let mut last = Reading::default();
@@ -912,7 +912,7 @@ pub fn transport_here(command: Move, seconds: f64) {
     #[cfg(feature = "local")]
     if matches!(command, Move::ToggleRecord) && crate::open::local_engine().is_some() {
         let _ = std::thread::Builder::new()
-            .name("session-engine-record".into())
+            .name("studio-engine-record".into())
             .spawn(|| crate::body::body().record_toggle());
         return;
     }
@@ -1017,7 +1017,7 @@ pub fn transport_following(command: Move, seconds: f64) {
             return;
         };
         std::thread::Builder::new()
-            .name("session-engine-transport-cmd".into())
+            .name("studio-engine-transport-cmd".into())
             .spawn(move || runtime.block_on(run_transport(command, seconds)))
             .ok();
     }
@@ -1186,7 +1186,7 @@ impl Applier {
         let runtime = crate::open::runtime()?;
         let (tx, rx) = std::sync::mpsc::channel::<Edit>();
         std::thread::Builder::new()
-            .name("session-engine-edits".into())
+            .name("studio-engine-edits".into())
             .spawn(move || {
                 // Drain, coalesce, apply. Draining first is what makes
                 // the coalescing work: a hundred queued fader positions
@@ -2137,7 +2137,7 @@ impl Bus {
         let alive = Alive::new();
         let mine = alive.clone();
         std::thread::Builder::new()
-            .name("session-engine-routing".into())
+            .name("studio-engine-routing".into())
             .spawn(move || {
                 runtime.block_on(async move {
                     let _end = scopeguard(move || mine.ended());
@@ -2198,7 +2198,7 @@ impl FxWatch {
         let alive = Alive::new();
         let mine = alive.clone();
         std::thread::Builder::new()
-            .name("session-engine-fx".into())
+            .name("studio-engine-fx".into())
             .spawn(move || {
                 runtime.block_on(async move {
                     let _end = scopeguard(move || mine.ended());
@@ -2370,7 +2370,7 @@ impl Watch {
         let alive = Alive::new();
         let mine = alive.clone();
         std::thread::Builder::new()
-            .name("session-engine-watch".into())
+            .name("studio-engine-watch".into())
             .spawn(move || {
                 runtime.block_on(async move {
                     // Every exit from here marks the handle dead,
@@ -2747,7 +2747,7 @@ impl Meters {
         let alive = Alive::new();
         let mine = alive.clone();
         std::thread::Builder::new()
-            .name("session-engine-meters".into())
+            .name("studio-engine-meters".into())
             .spawn(move || {
                 runtime.block_on(async move {
                     let _end = scopeguard(move || mine.ended());
@@ -2953,7 +2953,7 @@ impl Refresh {
         let alive = Alive::new();
         let mine = alive.clone();
         std::thread::Builder::new()
-            .name("session-engine-refresh".into())
+            .name("studio-engine-refresh".into())
             .spawn(move || {
                 runtime.block_on(async move {
                     let _end = scopeguard(move || mine.ended());

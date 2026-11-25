@@ -1,10 +1,10 @@
-//! One-off manual check: connect to `session-desktop --engine`'s `/vox`
+//! One-off manual check: connect to `engine-host --engine`'s `/vox`
 //! over a real WebSocket and drive the setlist through it — the full
 //! chain (LAN client -> axum -> `reaper_lan_proxy` -> real REAPER
 //! extension -> back) that `studio::test` alone can't exercise, since the
 //! desktop binary is a separate process it doesn't spawn.
 //!
-//! Run with `session-desktop --engine` (Recording Mode, connected to a
+//! Run with `engine-host --engine` (Recording Mode, connected to a
 //! real REAPER) already up on the default port:
 //!   cargo run --example lan_proxy_check -p session
 

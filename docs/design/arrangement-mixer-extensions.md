@@ -9,7 +9,7 @@ for that reason; it is in this file's history.)
 ## 0. In one page
 
 - **`daw`** (`extensions/daw`) runs the engine `studio engine` runs
-  (`session_desktop::engine_host`): one `Standalone`, the set, the Action
+  (`engine_host::engine_host`): one `Standalone`, the set, the Action
   List and the engine's window protocol on a Unix socket, published where
   `studio engine` publishes itself. It opens `FTS_DAW_OPEN` (a song, a
   `.session` or a setlist) or what `DAW_OPEN` names. `DAW_RUN` runs any
@@ -18,8 +18,8 @@ for that reason; it is in this file's history.)
   **`studio.mixer`** (`extensions/mixer`, views `mixer` and `strip`) are
   each a Studio window in a process of its own. They attach to the engine
   as `studio-desktop`'s window attaches to a `studio engine`
-  (`session_engine::studio_engine::link`), read the song from the window
-  protocol's replicas (`session_engine::view_client`), and mount Studio's
+  (`studio_engine::studio_engine::link`), read the song from the window
+  protocol's replicas (`studio_engine::view_client`), and mount Studio's
   own panels with an Architect pane as their host.
 - **`studio-view-link`** (`extensions/link`) is what those processes share
   at build time: the attach, the song as a signal, Architect's pane input
@@ -74,7 +74,7 @@ All additive. The window draws as before.
 - `ArrangementWidget::paint_layers`: the picture and, apart, what moves
   while the song plays (the play cursor with its trail, the track panel's
   level meters). Composed in that order they are `paint_scene`'s picture.
-- `session_engine::view_client`: window asks go to a window with window
+- `studio_engine::view_client`: window asks go to a window with window
   actions.
 
 ## 3. Same pixels

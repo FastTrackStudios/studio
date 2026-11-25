@@ -1,7 +1,7 @@
 ---
 "dock" = "patch"
-"session-desktop" = "patch"
-"session-engine" = "patch"
+"engine-host" = "patch"
+"studio-engine" = "patch"
 "session-ui" = "patch"
 ---
 

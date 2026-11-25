@@ -133,14 +133,14 @@ desktop:
 
 # Stage the fts web bundle (the browser remote) for embedding: tailwind →
 # dx web build (signal rigs + the session setlist remote) →
-# features/engine/host/web-dist/, which `cargo build -p session-desktop
+# features/engine/host/web-dist/, which `cargo build -p engine-host
 # --features embed-web` compiles into the binary (include_dir). On wasm the
 # session feature is only the wire surface (session-proto clients +
 # daw-view-kit); the player itself runs in the engine. web-dist/ is gitignored.
 web-stage: tailwind
     cd features/engine/host && dx build --platform web --release --no-default-features --features signal,session
     rm -rf features/engine/host/web-dist
-    cp -r target/dx/session-desktop/release/web/public features/engine/host/web-dist
+    cp -r target/dx/engine-host/release/web/public features/engine/host/web-dist
 
 # ONE build for the app, shared by every recipe that runs it and by the dev
 # loop (`just dev-test`): dx's `desktop-dev` profile
@@ -264,7 +264,7 @@ macos-pkg:
 # Build the installer and install it for this user (~/Applications, no
 # password), replacing any earlier install.
 macos-install: macos-pkg
-    installer -pkg "target/Session-$(cargo pkgid -p session-desktop | sed 's/.*[#@]//')-macos.pkg" -target CurrentUserHomeDirectory
+    installer -pkg "target/Session-$(cargo pkgid -p engine-host | sed 's/.*[#@]//')-macos.pkg" -target CurrentUserHomeDirectory
 
 # The FX editors' Tailwind sheets (`tailwind-eq`, `-comp`, `-limiter`,
 # `-trigger`, `-eq-standalone`) are recipes of FastTrackStudios/fts-fx, where
@@ -478,7 +478,7 @@ test:
 # apps/desktop) in the build, so cargo unifies
 # the named crates' features with the app's and the tests reuse the window's
 # and engine's artifacts instead of recompiling them another way.
-#   just dev-test session-engine daw-view-kit -- comp
+#   just dev-test studio-engine daw-view-kit -- comp
 [positional-arguments]
 dev-test *ARGS:
     #!/usr/bin/env bash
@@ -1241,7 +1241,7 @@ daw-animate PROJECT="" SIZE="2560x1440":
 mixer-golden SIZE="2560x1440":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build {{dev_build}} -p session-desktop
+    cargo build {{dev_build}} -p engine-host
     # A theme by name is themes/<name>/ or themes/fts-<name>.frame; anything
     # else is a path. `:` layers them.
     theme=""
@@ -1259,7 +1259,7 @@ mixer-golden SIZE="2560x1440":
     FTS_THEME="$theme" \
     FTS_WINDOW_SIZE="{{SIZE}}" \
     FTS_SESSION_PROJECT="$PWD/{{GOLDEN_DIR}}/template.rpp" \
-    {{dev_out}}/session-desktop
+    {{dev_out}}/engine-host
 
 # How far the themed mixer is from the painters' one: regenerates the
 # fts-dark theme from the painters' own drawings (skin::export), shoots the
@@ -1289,7 +1289,7 @@ theme-parity PROJECT="features/dynamic-template/fixtures/golden/template.rpp" SI
 app PROJECT="" CHART="" MODE="":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build {{dev_build}} -p session-desktop
+    cargo build {{dev_build}} -p engine-host
     # A bare binary started from a shell is not a foreground app on macOS
     # (it opens behind whatever is in front); wrapped in a bundle and
     # started with `open`, it comes forward like any app.
@@ -1299,7 +1299,7 @@ app PROJECT="" CHART="" MODE="":
         '<plist version="1.0"><dict>' \
         '<key>CFBundleName</key><string>Session Dev</string>' \
         '<key>CFBundleIdentifier</key><string>app.fasttrackstudio.session.dev</string>' \
-        '<key>CFBundleExecutable</key><string>session-desktop</string>' \
+        '<key>CFBundleExecutable</key><string>engine-host</string>' \
         '<key>CFBundlePackageType</key><string>APPL</string>' \
         '<key>NSHighResolutionCapable</key><true/>' \
         '</dict></plist>' > "$bundle/Contents/Info.plist"
@@ -1309,7 +1309,7 @@ app PROJECT="" CHART="" MODE="":
     # output onto an external volume (-10810).
     mkdir -p "$HOME/Library/Logs/Session Dev"
     log="$HOME/Library/Logs/Session Dev/session-dev.log"
-    envs=(--env "RUST_LOG=${RUST_LOG:-warn,session_engine=info,daw_view_kit=info}" --env RUST_BACKTRACE=1)
+    envs=(--env "RUST_LOG=${RUST_LOG:-warn,studio_engine=info,daw_view_kit=info}" --env RUST_BACKTRACE=1)
     # quote(): a song title can carry an apostrophe (God, I'm Just Grateful).
     project={{quote(PROJECT)}}
     chart={{quote(CHART)}}
@@ -1341,13 +1341,13 @@ app PROJECT="" CHART="" MODE="":
         echo "log: $log"
         exit 0
     fi
-    pkill -f 'Session Dev.app/Contents/MacOS/session-desktop' || true
+    pkill -f 'Session Dev.app/Contents/MacOS/engine-host' || true
     # Let a killed copy go before its bundle is opened again.
     sleep 1
     # A new file, never an overwrite: macOS caches a binary's code signature
     # by file, and launching one rewritten in place fails (-10810).
-    rm -f "$bundle/Contents/MacOS/session-desktop"
-    cp {{dev_out}}/session-desktop "$bundle/Contents/MacOS/session-desktop"
+    rm -f "$bundle/Contents/MacOS/engine-host"
+    cp {{dev_out}}/engine-host "$bundle/Contents/MacOS/engine-host"
     # One signature across rebuilds. The linker's ad-hoc one names the
     # binary by a build hash, so every build is a new app to macOS and it
     # asks again for the removable drive; a real identity and a fixed
@@ -1370,7 +1370,7 @@ app PROJECT="" CHART="" MODE="":
 duo PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build {{dev_build}} -p session-desktop
+    cargo build {{dev_build}} -p engine-host
     # The main screen's usable area, in points: below the menu bar, above
     # the Dock — NOT Finder's desktop bounds, which span every monitor.
     read -r X Y W H < <(swift -e 'import AppKit; let s = NSScreen.main!; let f = s.visibleFrame; print(Int(f.origin.x), Int(s.frame.height - f.maxY), Int(f.width), Int(f.height))' 2>/dev/null)
@@ -1399,7 +1399,7 @@ duo PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
 duo-task SETLIST PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build {{dev_build}} -p session-desktop
+    cargo build {{dev_build}} -p engine-host
     read -r X Y W H < <(swift -e 'import AppKit; let s = NSScreen.main!; let f = s.visibleFrame; print(Int(f.origin.x), Int(s.frame.height - f.maxY), Int(f.width), Int(f.height))' 2>/dev/null)
     left=$((W * ${DUO_SPLIT:-44} / 100))
     right=$((W - left))
@@ -1420,7 +1420,7 @@ duo-task SETLIST PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
 prepare +PROJECTS:
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build {{dev_build}} -p session-engine --bin prepare
+    cargo build {{dev_build}} -p studio-engine --bin prepare
     for p in "$@"; do {{dev_out}}/prepare "$p"; done
 
 studio-song PROJECT CHART="" SIZE="2560x1440":
@@ -1432,7 +1432,7 @@ studio-song PROJECT CHART="" SIZE="2560x1440":
         prep=(FTS_BLITZ_ORGANIZE=1 "FTS_BLITZ_CHART={{CHART}}" FTS_BLITZ_GUIDE=1)
     fi
     env FTS_BLITZ_WINDOW=1 FTS_BLITZ_SIZE="{{SIZE}}" ${prep[@]+"${prep[@]}"} \
-        RUST_LOG="${RUST_LOG:-warn,session_engine=info,daw_view_kit=info}" \
+        RUST_LOG="${RUST_LOG:-warn,studio_engine=info,daw_view_kit=info}" \
         {{dev_out}}/blitz_shot "{{PROJECT}}" /tmp/fts-studio.png
 
 # Everything CI runs, in CI's order, with one command.
@@ -1639,7 +1639,7 @@ rail-evidence:
     dir="$(git rev-parse --git-common-dir)/rail-evidence/$(git rev-parse HEAD)"
     mkdir -p "$dir"
     cargo rail plan evidence --work cargo.test -o "$dir/cargo.test.json" -- \
-      test --workspace --no-run --features session-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+      test --workspace --no-run --features engine-host/cli,web-audio-worklet/guitar,web-audio-worklet/keys
     cargo rail plan evidence --work cargo.build -o "$dir/cargo.build.json" -- check --workspace
     echo "rail evidence: $dir"
 

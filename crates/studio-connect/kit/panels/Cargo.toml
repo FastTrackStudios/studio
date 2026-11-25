@@ -7,7 +7,7 @@ edition.workspace = true
 description = "Studio's app panels around the DAW views: the shell and its bars, the chart, the lyrics, the performer screen, the transport bar, the setlist navigator, collaboration, Setup, the record view, the browser, the web page and the app menu"
 
 # What this is. The panels Studio (and the old Session window,
-# session-desktop) shows around the arrangement and the mixer: the app's
+# engine-host) shows around the arrangement and the mixer: the app's
 # chrome, not the DAW views' kit. They came out of daw-view-kit so the kit
 # depends on daw's contracts and not on Studio's app (app-shell, the
 # setlist, collaboration, the chart editor): daw-view-kit/docs/
@@ -25,10 +25,10 @@ description = "Studio's app panels around the DAW views: the shell and its bars,
 daw-view-kit = { workspace = true }
 # The Editor view the page shows (`web_host`).
 midi-editor = { workspace = true }
-session-engine-client = { workspace = true }
+engine-client = { workspace = true }
 # The engine in this process: the old Session window (`engine`) and a
 # page, whose engine runs in the page (`web`).
-session-engine = { workspace = true, optional = true }
+studio-engine = { workspace = true, optional = true }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }
 blitz-dom = { workspace = true }
@@ -121,11 +121,11 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 [features]
 default = ["native"]
 # daw-view-kit's features, forwarded, with what the panels' own code needs.
-native = ["mixer-view/native", "daw-view-kit/native", "midi-editor/native", "dep:patch-list", "dep:anyrender_vello", "session-engine-client/native", "dep:dioxus-native", "dep:zbus", "dep:dirs", "dep:winit", "dep:tokio", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:futures-channel", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "session/library", "session/project-sync"]
-web = ["dep:session-engine", "session-engine/web", "mixer-view/web", "daw-view-kit/web", "midi-editor/web", "session-engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "session/collab", "dep:architect", "dep:futures-channel"]
+native = ["mixer-view/native", "daw-view-kit/native", "midi-editor/native", "dep:patch-list", "dep:anyrender_vello", "engine-client/native", "dep:dioxus-native", "dep:zbus", "dep:dirs", "dep:winit", "dep:tokio", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:futures-channel", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "session/library", "session/project-sync"]
+web = ["dep:studio-engine", "studio-engine/web", "mixer-view/web", "daw-view-kit/web", "midi-editor/web", "engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "session/collab", "dep:architect", "dep:futures-channel"]
 # The engine in this process (daw-view-kit's `engine`): the chart editor,
 # the hosted page.
-engine = ["dep:session-engine"]
+engine = ["dep:studio-engine"]
 signal = ["native", "daw-view-kit/signal"]
 
 [dev-dependencies]

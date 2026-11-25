@@ -36,7 +36,7 @@ mod native {
         }
         let rt = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
-            .thread_name("session-engine")
+            .thread_name("studio-engine")
             .thread_stack_size(16 * 1024 * 1024)
             .enable_all()
             .build()?;

@@ -2,7 +2,7 @@
 //!
 //! The rack edits settings the window owns ([`crate::tone::Store`]); this
 //! is what turns them into the track's chain — FTS EQ, Comp and Saturate,
-//! put on bypassed by `session_engine::mix_chains` — as the plugins' own
+//! put on bypassed by `studio_engine::mix_chains` — as the plugins' own
 //! parameters, each written in the plugin's own words (`-18.0 dB`, `3.0:1`,
 //! `Low Shelf`, `Triode`) and resolved by the plugin
 //! ([`builtin::engine::setting`]), so no plugin's ranges are assumed here.
@@ -134,7 +134,7 @@ fn reverb(tone: &Tone) -> Vec<(u32, f64)> {
         ("Tone", format!("{:.0}%", (extra.tone + 1.0) * 50.0)),
     ]);
     let mut out = all("FTS Reverb", &settings);
-    // The cuts as the post-EQ's first band and its last (`session_engine::mix_chains`
+    // The cuts as the post-EQ's first band and its last (`studio_engine::mix_chains`
     // puts them there): a cut at the edge of hearing is no cut, the band a bell.
     let band = |n: u32, cut: &str, hz: f32, none: bool| -> Vec<(u32, f64)> {
         const BAND: u32 = 4;

@@ -19,9 +19,9 @@ use architect_scene::paint::{Layer, LayerKey, PaintMount, PaintView, Scene};
 use architect_scene::view::{ViewCtx, ViewInput};
 use blitz_traits::events::{MouseEventButton, MouseEventButtons, UiEvent};
 use dioxus::prelude::*;
+use engine_client::song_model::StudioSession;
 use mixer_view::closeup::RackWidget;
 use mixer_view::tone::Which;
-use session_engine_client::song_model::StudioSession;
 use studio_view_link::{InScope, SceneLayer, Stats, input};
 
 /// The panel's picture: the pane's one layer.

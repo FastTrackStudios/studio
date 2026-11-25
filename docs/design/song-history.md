@@ -40,7 +40,7 @@ restore}`.
   is "Back to …"; SESSION_UNDO takes it back. Nothing of the history is
   rewritten, and every later step can still be gone back to. It works
   after a reopen, because the rows and the whole oplog are in the file.
-  Tests: `session-engine` `history::tests::*` (identical labels stay
+  Tests: `studio-engine` `history::tests::*` (identical labels stay
   separate, restore after reopen, restore is undoable, a mark holds the
   song as it was); `session-format`
   `store::a_noted_step_outlives_compaction_and_opens_as_it_was`.

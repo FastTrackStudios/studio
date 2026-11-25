@@ -1,6 +1,6 @@
 ---
-"session-engine" = "minor"
-"session-desktop" = "patch"
+"studio-engine" = "minor"
+"engine-host" = "patch"
 "dock" = "patch"
 ---
 

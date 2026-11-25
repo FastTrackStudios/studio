@@ -44,10 +44,10 @@ use architect_scene::paint::PaintMount;
 #[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
+use engine_client::song_model::StudioSession;
+#[cfg(not(target_arch = "wasm32"))]
 use mixer_view::mixer_panel::{HostedMixer, Links};
 use serde_json::{Value as Json, json};
-#[cfg(not(target_arch = "wasm32"))]
-use session_engine_client::song_model::StudioSession;
 #[cfg(not(target_arch = "wasm32"))]
 use studio_view_link::InScope;
 use studio_view_link::Stats;
@@ -140,7 +140,7 @@ fn state() -> Json {
 /// browser) the page's open.
 fn linked() -> bool {
     #[cfg(not(target_arch = "wasm32"))]
-    return session_engine_client::view_client::is_linked();
+    return engine_client::view_client::is_linked();
     #[cfg(target_arch = "wasm32")]
     return studio_panels::web_host::hosted_is_open();
 }
@@ -248,11 +248,9 @@ fn Strips(session: Song, shown: Shown) -> Element {
     // same frame as there.
     use_hook(|| {
         let wake = mount.wake_handle();
-        Rc::new(session_engine_client::engine::on_track_event(Arc::new(
-            move || {
-                wake.wake();
-            },
-        )))
+        Rc::new(engine_client::engine::on_track_event(Arc::new(move || {
+            wake.wake();
+        })))
     });
     let surface = studio_view_link::surface();
     rsx! {

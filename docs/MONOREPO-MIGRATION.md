@@ -79,10 +79,10 @@ that every part of Studio reads and writes. It lives in `studio-core/session`.
   | `tts` (`cbx`) | decide: keep (move cbx to `ort` rc.15) or drop |
 
 - **Names from the old app** go too. Rename to what each is now:
-  - `session-engine` → `studio-engine`
-  - `session-runtime` → `engine-runtime`
-  - `session-host` (package `session-desktop`) → `engine-host`, then the engine binary in `apps/studio`
-  - `session-engine-client` → `engine-client`
+  - `studio-engine` → `studio-engine`
+  - `engine-runtime` → `engine-runtime`
+  - `session-host` (package `engine-host`) → `engine-host`, then the engine binary in `apps/studio`
+  - `engine-client` → `engine-client`
   - the REAPER `session-extension` → decide: keep as `reaper-bridge`, or drop with REAPER hosting
 
   Studio's crate names move with them.

@@ -33,15 +33,15 @@ pub struct Readiness {
 /// answer of a process with no engine in it as its default.
 pub trait Body: Send + Sync {
     /// Read the points of interest again on the engine
-    /// (`session_engine::poi::refresh`).
+    /// (`studio_engine::poi::refresh`).
     fn poi_refresh(&self) {}
 
     /// Read the open song's hit markers on the engine and show them to
-    /// every window (`session_engine::hits::overlay`, `view_host::overlay_read`).
+    /// every window (`studio_engine::hits::overlay`, `view_host::overlay_read`).
     fn overlay_read_current(&self) {}
 
     /// Tell every window on this engine that `what` changed
-    /// (`session_engine::studio_engine::view_host::changed`).
+    /// (`studio_engine::studio_engine::view_host::changed`).
     fn view_changed(&self, _song: Option<String>, _what: crate::view::Change) {}
 
     /// [`Self::view_changed`], naming the items
@@ -55,28 +55,28 @@ pub trait Body: Send + Sync {
     }
 
     /// A transport press here, for the live session to follow
-    /// (`session_engine::collab::transport_pressed`).
+    /// (`studio_engine::collab::transport_pressed`).
     fn transport_pressed(&self) {}
 
     /// Record on or off through the Action List
-    /// (`session_engine::record::toggle_through_the_list`).
+    /// (`studio_engine::record::toggle_through_the_list`).
     fn record_toggle(&self) {}
 
     /// How far a streamed song can play from its playhead
-    /// (`session_engine::stream_set::readiness`); `None` when it is not
+    /// (`studio_engine::stream_set::readiness`); `None` when it is not
     /// streaming here.
     fn readiness(&self, _project: &str) -> Option<Readiness> {
         None
     }
 
     /// Whether `project` is stopped on this process's engine (or not a
-    /// song here) (`session_engine::stream_set::is_stopped`).
+    /// song here) (`studio_engine::stream_set::is_stopped`).
     fn is_stopped(&self, _project: &str) -> bool {
         true
     }
 
     /// Whether a track has leveler lanes
-    /// (`session_engine::vocal_level::has_lanes`).
+    /// (`studio_engine::vocal_level::has_lanes`).
     #[cfg(feature = "local")]
     fn vocal_has_lanes(
         &self,
@@ -88,7 +88,7 @@ pub trait Body: Send + Sync {
     }
 
     /// Whether a track's leveler lane is shown
-    /// (`session_engine::vocal_level::lane_shown`).
+    /// (`studio_engine::vocal_level::lane_shown`).
     #[cfg(feature = "local")]
     fn vocal_lane_shown(
         &self,
@@ -99,7 +99,7 @@ pub trait Body: Send + Sync {
         false
     }
 
-    /// A track's leveled items (`session_engine::vocal_level::leveled`).
+    /// A track's leveled items (`studio_engine::vocal_level::leveled`).
     #[cfg(feature = "local")]
     fn vocal_leveled(
         &self,
@@ -110,7 +110,7 @@ pub trait Body: Send + Sync {
         Vec::new()
     }
 
-    /// Run an action on the page's own list (`session_engine::web_actions::run`).
+    /// Run an action on the page's own list (`studio_engine::web_actions::run`).
     #[cfg(feature = "web")]
     fn web_run(
         &self,
@@ -121,7 +121,7 @@ pub trait Body: Send + Sync {
     }
 
     /// Whether `guid`'s recording is still arriving on the page's own
-    /// engine (`session_engine::web_engine::with_engine`); `None` with none.
+    /// engine (`studio_engine::web_engine::with_engine`); `None` with none.
     #[cfg(feature = "web")]
     fn web_partial(&self, _song: &str, _guid: &str) -> Option<bool> {
         None

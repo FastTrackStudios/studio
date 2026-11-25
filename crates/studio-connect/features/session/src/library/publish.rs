@@ -6,7 +6,7 @@
 //! anything — so `studio ingest` can be run again and again over the same
 //! songs: what exists comes back ([`Made::Found`]), what is missing is made
 //! ([`Made::Created`]), what differs is brought in line ([`Made::Updated`]).
-//! Deciding *what* to upload is the caller's (`session_engine::ingest`);
+//! Deciding *what* to upload is the caller's (`studio_engine::ingest`);
 //! this is the Task side of it.
 
 use collection_proto::{CollectionKind, CollectionServiceClient};

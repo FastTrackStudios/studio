@@ -1,6 +1,6 @@
 //! Points of interest as a window draws them: the list, the one stepped
 //! to, and the actions a window's keys press. Reading and writing them on
-//! the song is the engine's (`session_engine::poi`).
+//! the song is the engine's (`studio_engine::poi`).
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};

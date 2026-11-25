@@ -46,12 +46,12 @@ use architect_scene::ops::{Receiver, Sender};
 use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
 use dioxus::prelude::*;
+use engine_client::song_model::StudioSession;
 use mixer_view::mixer_panel::{HostedMixer, Links};
 use peniko::kurbo::Affine;
-use session_engine::engine::{
+use studio_engine::engine::{
     METER_PARTS, METER_TRACKS, TRACK_PARTS, VALUE_TRACKS, meter_fraction, meter_value, track_value,
 };
-use session_engine_client::song_model::StudioSession;
 use studio_mixer::host::Hosted;
 use studio_view_link::{InScope, Stats};
 
@@ -63,7 +63,7 @@ fn fixture() -> std::path::PathBuf {
 /// The song as `blitz_shot` (the app's headless picture) opens it.
 fn session() -> StudioSession {
     let path = fixture();
-    session_engine::open::open_silent(&path).expect("open the golden template");
+    studio_engine::open::open_silent(&path).expect("open the golden template");
     let mut raw = daw_view_kit::studio::fetch().expect("read it back");
     // Some lit: muted, soloed, both (the buttons lit by the engine's
     // values are what is compared).
@@ -83,7 +83,7 @@ fn session() -> StudioSession {
     let planner = daw_view_kit::studio::Planner {
         raw: Arc::new(raw),
         scene: Some("drum-mixing"),
-        kinds: Arc::new(session_engine::plan::Kinds::read(&path)),
+        kinds: Arc::new(studio_engine::plan::Kinds::read(&path)),
     };
     let (project, rows) = planner.plan(&planner.raw);
     let previews = daw_view_kit::studio::previews_of(&project);

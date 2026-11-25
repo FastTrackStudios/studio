@@ -1,6 +1,6 @@
 //! A page of bars and a view's frame, as the engine answers them
 //! (`SESSION_PAGE`, `SESSION_VIEW_SPAN`). Working them out is the engine's
-//! (`session_engine::page`).
+//! (`studio_engine::page`).
 
 use facet::Facet;
 

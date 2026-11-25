@@ -5,7 +5,7 @@
 //! frames Studio's windows draw from over their link) are written into this
 //! extension's shared value table (`architect_scene::engine::shared`, the
 //! file the host maps), one slot a part a track
-//! ([`session_engine::engine::meter_value`]: each channel's peak and hold,
+//! ([`studio_engine::engine::meter_value`]: each channel's peak and hold,
 //! and the louder peak), as the fraction of the meter they light. Only the
 //! frames of the set's current song count. A pane of an extension that uses
 //! a service this one provides reads the table (`studio.mixer`, which uses
@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use architect_scene::anim::Name;
 use architect_scene::engine::{EngineWriter, Slot, shared};
-use session_engine::engine::{
+use studio_engine::engine::{
     METER_PARTS, METER_TRACKS, TRACK_PARTS, VALUE_TRACKS, meter_fraction, meter_value, track_value,
 };
 
@@ -36,7 +36,7 @@ pub fn publish() {
 
 /// The project the set has current.
 pub(crate) fn current_project() -> Option<String> {
-    session_engine::studio_engine::set::peek(|view| {
+    studio_engine::studio_engine::set::peek(|view| {
         let set = view.setlist.as_ref()?;
         set.songs.get(set.at).map(|s| s.project.clone())
     })
@@ -97,7 +97,7 @@ fn run() -> Result<(), String> {
     };
     table.write(&[]);
     tracing::info!(values.path = %path.display(), values.tracks = METER_TRACKS, "daw: the meters are published as values");
-    let runtime = session_engine::open::runtime().ok_or("no runtime to follow the meters on")?;
+    let runtime = studio_engine::open::runtime().ok_or("no runtime to follow the meters on")?;
     // Subscribed again if the stream ends (the engine reopened, a set
     // replaced).
     loop {

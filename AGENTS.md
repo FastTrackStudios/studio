@@ -41,14 +41,14 @@ plugins/    the plugins that need Studio (guide, host), verify/ (bundle load
 features/   one crate per feature, sub-folders allowed. Name a feature for what
             it is; anything host-specific goes under adapters/<host>.
             engine/      Session, not a primitive but the engine: engine/
-                         (`session-engine`: the set, the Action List,
+                         (`studio-engine`: the set, the Action List,
                          `studio engine`; draws nothing), runtime/
-                         (`session-runtime`, host-neutral), view-kit/
+                         (`engine-runtime`, host-neutral), view-kit/
                          (`daw-view-kit`: the kit the DAW views draw with),
                          arrangement/ (`arrangement-view`), mixer/
                          (`mixer-view`), tools/ (`daw-view-tools`: the
                          headless bench and screenshot tools),
-                         host/ (`session-desktop`: its window, CLI module
+                         host/ (`engine-host`: its window, CLI module
                          and engine host, as a library + a binary). Folders
                          moved, package names kept for now.
             Signal's domain and the instruments (features/signal,
@@ -130,7 +130,7 @@ working there.
   the isolated live rig, Session the full DAW, and rigs live in Session
   as tracks. A desktop window can also drive the engine in a process of
   its own (`FTS_ENGINE=spawn|attach`: `studio engine`, found or spawned,
-  outliving the window — `session_engine::studio_engine::link`). In
+  outliving the window — `studio_engine::studio_engine::link`). In
   Studio (apps/desktop) the engine is the `daw` extension (extensions/daw)
   and the DAW and rig views are extensions attached to it. More engines means more processes of the same engine. Read
   **`docs/design/one-engine.md`** before touching rigs, engines, meters or
@@ -256,7 +256,7 @@ for stem separation.
 just check                 # cargo check --workspace
 just test                  # the core test set: cargo nextest run -p <each of the Justfile's test_packages>
 just test-doc              # doctests (nextest cannot run them)
-just app [PROJECT]         # Session (session-desktop, the shared dev build)
+just app [PROJECT]         # Session (engine-host, the shared dev build)
 cargo run -p studio-desktop --bin studio   # Studio (apps/desktop)
 just reaper-test [FILTER]  # Session's #[reaper_test] suites in a real REAPER
 # daw-reaper's REAPER suites: `just reaper daw-test` in FastTrackStudios/studio-adapters

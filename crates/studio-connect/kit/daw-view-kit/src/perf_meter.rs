@@ -1,5 +1,5 @@
 //! The Performance meter: REAPER's (View → Performance Meter), over the
-//! window. The engine reads itself twice a second (`session_engine::
+//! window. The engine reads itself twice a second (`studio_engine::
 //! perf_meter`) and every window follows it (`view_client::perf`); this
 //! draws what it last said:
 //!

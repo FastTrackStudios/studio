@@ -1,8 +1,8 @@
 ---
 "app-shell" = "none"
 "control-surfaces" = "none"
-"session-desktop" = "none"
-"session-engine" = "none"
+"engine-host" = "none"
+"studio-engine" = "none"
 "song" = "none"
 "web-audio-worklet" = "none"
 "xtask-workflows" = "none"

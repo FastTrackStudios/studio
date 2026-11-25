@@ -4474,7 +4474,7 @@ impl ArrangementWidget {
     }
 
     /// A gesture's edits committed as the one named action of what it did
-    /// (`session_engine_client::arrange_actions::gesture`), run on the engine in
+    /// (`engine_client::arrange_actions::gesture`), run on the engine in
     /// order with the edits queued before it ([`Self::commit`]); `label`
     /// the undo step they make.
     fn commit_edits(&self, label: Option<&str>, edits: Vec<crate::engine::Edit>) {

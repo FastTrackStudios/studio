@@ -1,5 +1,5 @@
 ---
-"session-engine" = "patch"
+"studio-engine" = "patch"
 "daw-extension" = "patch"
 ---
 

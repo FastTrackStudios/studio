@@ -26,8 +26,8 @@ use architect_workspace::{
     FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost, ViewInput,
 };
 use dioxus::prelude::*;
+use engine_client::song_model::StudioSession;
 use mixer_view::mixer_panel::{HostedMixer, Links};
-use session_engine_client::song_model::StudioSession;
 use studio_mixer::host::Hosted;
 use studio_view_link::{InScope, Stats};
 
@@ -37,12 +37,12 @@ const SIZE: (u32, u32) = (400, 400);
 fn session() -> StudioSession {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../../../studio-engine/adapters/dynamic-template/fixtures/golden/template.rpp");
-    session_engine::open::open_silent(&path).expect("open the golden template");
+    studio_engine::open::open_silent(&path).expect("open the golden template");
     let raw = daw_view_kit::studio::fetch().expect("read it back");
     let planner = daw_view_kit::studio::Planner {
         raw: Arc::new(raw),
         scene: Some("drum-mixing"),
-        kinds: Arc::new(session_engine::plan::Kinds::read(&path)),
+        kinds: Arc::new(studio_engine::plan::Kinds::read(&path)),
     };
     let (project, rows) = planner.plan(&planner.raw);
     let previews = daw_view_kit::studio::previews_of(&project);

@@ -1,5 +1,5 @@
 ---
-"session-engine" = "minor"
+"studio-engine" = "minor"
 "session-ui" = "patch"
 ---
 

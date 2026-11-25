@@ -29,7 +29,7 @@ mixer-view = { workspace = true, features = ["native"] }
 daw-view-kit = { workspace = true, features = ["native"] }
 studio-panels = { workspace = true, features = ["native"] }
 arrangement-view = { workspace = true, features = ["native"] }
-session-engine-client = { workspace = true, features = ["native"] }
+engine-client = { workspace = true, features = ["native"] }
 blitz-traits = { workspace = true }
 architect-scene = { workspace = true, features = ["paint-ui"] }
 anyrender = { workspace = true }
@@ -43,11 +43,11 @@ mixer-view = { workspace = true, features = ["web"] }
 daw-view-kit = { workspace = true, features = ["web"] }
 studio-panels = { workspace = true, features = ["web"] }
 arrangement-view = { workspace = true, features = ["web"] }
-session-engine-client = { workspace = true, features = ["web"] }
+engine-client = { workspace = true, features = ["web"] }
 
 [dev-dependencies]
 # The tests open a song on an engine in the test's own process.
-session-engine = { workspace = true, features = ["native"] }
+studio-engine = { workspace = true, features = ["native"] }
 mixer-view = { workspace = true, features = ["native"] }
 daw-view-kit = { workspace = true, features = ["native"] }
 studio-panels = { workspace = true, features = ["native", "engine"] }

@@ -1,7 +1,7 @@
 //! The agent's calls beside the person's edits.
 //!
 //! Every action call goes through Studio's `AGENT_RUN` (the engine's,
-//! `session_engine::agent`): its edits are noted as the agent's in the
+//! `studio_engine::agent`): its edits are noted as the agent's in the
 //! song's journal, its answer says the song's `revision`, an
 //! `if_revision` makes it run only if the song has not moved on since
 //! (refused as `stale`, with what changed), and a `step` makes it part of

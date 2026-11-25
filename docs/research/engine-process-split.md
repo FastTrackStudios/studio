@@ -337,7 +337,7 @@ over Wi-Fi or USB, with the Mac accepting the connection [logic-remote].
   `build_in_process_daw` serves `Standalone`'s router on a
   `LocalServer` and hands back a `daw_control::Daw`
   (`daw:crates/daw/standalone/src/bootstrap.rs:45`).
-- A headless Session engine exists. `session-desktop --engine` serves
+- A headless Session engine exists. `engine-host --engine` serves
   "the whole daw facade" over `ws://0.0.0.0:4040/vox` and iroh
   (`features/engine/host/src/engine_server.rs`). Signal's
   `studio-desktop --engine` serves the rig on the same `EngineHost`,
@@ -511,7 +511,7 @@ authoritative; everything can be rebuilt from the engine.
    engine, not the window.
 3. **`studio engine`.** The CLI binary serves the engine: Unix socket by
    default; `--ws`/`--iroh` opt-in; MCP on 47811. Fold
-   `session-desktop --engine` into it, and Signal's `studio-desktop
+   `engine-host --engine` into it, and Signal's `studio-desktop
    --engine` too, once rigs are tracks (`one-engine.md` steps 4–5).
 4. **The app attaches or spawns.** `FTS_ENGINE=inprocess|spawn|<addr>`,
    with in-process as the default until parity. iOS and web stay in-process.
@@ -616,7 +616,7 @@ Repo sources: `docs/design/one-engine.md`, `docs/design/set-engine.md`,
 `docs/research/item-peaks.md`, `daw:crates/daw/standalone/src/bootstrap.rs`,
 `daw:crates/daw/proto/src/peak/service.rs`,
 `daw:crates/daw/proto/src/transport_sync/{service,types}.rs`,
-`features/engine/host/src/{engine_server,session_engine}.rs`,
+`features/engine/host/src/{engine_server,studio_engine}.rs`,
 `features/engine/host/src/cli/mod.rs`,
 the removed rig app's `/src/{engines,engine_main}.rs`,
 `features/engine/ui/src/{actions,mcp_server}.rs`,

@@ -1,7 +1,7 @@
 # Roadmap: apps/studio replaces Studio's other apps
 
 apps/studio (studio-proto until 2026-11-22: a plain Dioxus 0.8 app on Drive)
-becomes Studio. The session's engine and views (session-engine, session-ui,
+becomes Studio. The session's engine and views (studio-engine, session-ui,
 timeline, editor, daw-ui) are this repo's crates, freed from Architect's
 app layer as each phase needs them. Each phase
 ends with the prototype working on Drive, on the web at desktop width and

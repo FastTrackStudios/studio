@@ -1,5 +1,5 @@
 //! A track's automate menu, as the engine reads it. Its envelopes and
-//! their actions are the engine's (`session_engine::automation_actions`).
+//! their actions are the engine's (`studio_engine::automation_actions`).
 
 use facet::Facet;
 

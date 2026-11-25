@@ -76,7 +76,7 @@ fn main() {
         .init();
     // Studio behind the views, as the app installs it: its host, its
     // hooks (keys, docks, the mixer's scenes and phases).
-    session_engine::install();
+    studio_engine::install();
     studio_panels::hooks::install();
 
     let path = std::env::args()
@@ -150,7 +150,7 @@ fn main() {
     // and an audio engine it never uses costs it a dependency on a
     // working sound server — which is how three render tests came to
     // time out at ten minutes each on a box whose audio was fine.
-    let opened = session_engine::open::open_silent(&path).expect("open project");
+    let opened = studio_engine::open::open_silent(&path).expect("open project");
     if let Ok(out) = std::env::var("FTS_BENCH_FOLDER_ITEMS") {
         // The folder items of the open session, folded from the
         // children's REAL peaks — see `folder_items_shot`.
@@ -574,7 +574,7 @@ fn folder_items_shot(palette: &Palette, out: &std::path::Path, width: u32, heigh
     let span = (to - from).max(1e-6);
     let size = (f64::from(width), f64::from(height));
     let pixels_per_sec = size.0 / span;
-    let row_height = size.1 / session_engine::num::coord(folders.len().max(1));
+    let row_height = size.1 / studio_engine::num::coord(folders.len().max(1));
     let pad = (row_height * 0.08).min(12.0);
 
     if let Ok(path) = std::env::var("FTS_BENCH_FOLD") {
@@ -590,7 +590,7 @@ fn folder_items_shot(palette: &Palette, out: &std::path::Path, width: u32, heigh
                 i,
                 Place {
                     x0: (folder.start_secs - from) * pixels_per_sec,
-                    top: session_engine::num::coord(i).mul_add(row_height, pad),
+                    top: studio_engine::num::coord(i).mul_add(row_height, pad),
                     width: folder.length_secs * pixels_per_sec,
                     height: row_height - pad * 2.0,
                 },
@@ -949,15 +949,15 @@ fn mixer_shot(
         .ok()
         .and_then(|slug| dynamic_template::scenes::scene(&slug));
     if let Some(scene) = scene {
-        let kinds = session_engine::plan::Kinds::read(project_file);
-        planned = session_engine::plan::apply_scene(
+        let kinds = studio_engine::plan::Kinds::read(project_file);
+        planned = studio_engine::plan::apply_scene(
             &planned,
             &kinds,
             scene,
-            session_engine::plan::Panel {
-                surface: session_engine::plan::Surface::Mixer,
+            studio_engine::plan::Panel {
+                surface: studio_engine::plan::Surface::Mixer,
                 mode: None,
-                settings: session_engine::settings::Settings::default(),
+                settings: studio_engine::settings::Settings::default(),
                 extent: f64::from(height),
                 active_language: None,
             },
@@ -1082,13 +1082,13 @@ fn mixer_shot(
         live,
         // `FTS_BENCH_LIVE_STRIPS=1`: the Live-mode strips (the short
         // band) — see `strip::shape`.
-        session_engine::settings::Settings {
+        studio_engine::settings::Settings {
             live_strips,
             // `FTS_BENCH_MODE=mix|record`: the strips laid out for that
             // mode, where a theme asks.
             mixing: std::env::var("FTS_BENCH_MODE").as_deref() == Ok("mix"),
             recording: std::env::var("FTS_BENCH_MODE").as_deref() == Ok("record"),
-            ..session_engine::settings::Settings::default()
+            ..studio_engine::settings::Settings::default()
         },
         &settings,
     );
@@ -1151,7 +1151,7 @@ fn mixer_shot(
     // The bench applies no preset, so the map is the identity — built
     // rather than skipped so the shot exercises the same lookup the
     // window does.
-    let map = session_engine::plan::Rows::of(rows.as_slice(), &tracks);
+    let map = studio_engine::plan::Rows::of(rows.as_slice(), &tracks);
 
     let mut image = VelloImageRenderer::new(width, height);
     let mut buffer = Vec::new();
@@ -1210,7 +1210,7 @@ fn mixer_shot(
                 mixer_view::app::MIX,
                 session::mix_phases::MixPhase::Tone,
                 scene.map(|s| s.slug.as_str()),
-                session_engine::settings::Settings::default(),
+                studio_engine::settings::Settings::default(),
                 mixer_view::app::Audience::Engineer,
                 // The bench draws the kit's rails.
                 "drums",
@@ -1513,16 +1513,16 @@ fn plan_dump(path: &std::path::Path, out: &std::path::Path) {
         .and_then(|slug| dynamic_template::scenes::scene(&slug))
         .or_else(|| dynamic_template::scenes::scene("drum-mixing"))
         .map(|scene| scene.slug.as_str());
-    let planner = session_engine::song_model::template_planner(
+    let planner = studio_engine::song_model::template_planner(
         std::sync::Arc::new(raw),
         scene,
-        std::sync::Arc::new(session_engine::plan::Kinds::read(path)),
+        std::sync::Arc::new(studio_engine::plan::Kinds::read(path)),
     );
     let (_, arrange) = planner.plan(&planner.raw);
     let mixer = planner.plan_mixer(
         &planner.raw,
         None,
-        session_engine::settings::Settings::default(),
+        studio_engine::settings::Settings::default(),
         1440.0,
     );
     let mut text = String::new();
@@ -1572,7 +1572,7 @@ fn depths() {
 struct Session {
     project: daw_ui::studio::ProjectRef,
     rows: daw_ui::studio::RowsRef,
-    previews: session_engine::midi::Previews,
+    previews: studio_engine::midi::Previews,
 }
 
 impl Session {
@@ -1583,12 +1583,12 @@ impl Session {
         if let Ok(names) = std::env::var("FTS_BENCH_OPEN") {
             for name in names.split(',').map(str::trim) {
                 for track in raw.tracks.iter().filter(|t| t.is_folder && t.name == name) {
-                    session_engine::folds::toggle(&track.guid, false);
+                    studio_engine::folds::toggle(&track.guid, false);
                 }
             }
         }
         let scene = std::env::var("FTS_BENCH_SCENE").ok();
-        let (project, rows) = session_engine::song_model::plan_rows(&raw, scene.as_deref(), path);
+        let (project, rows) = studio_engine::song_model::plan_rows(&raw, scene.as_deref(), path);
         // Read before anything is recorded, not after: a renderer draws
         // and exits, so there is no later for them to arrive in.
         let previews = daw_view_kit::studio::previews_of(&project);
@@ -1653,7 +1653,7 @@ fn drawn(widget: &ArrangementWidget) -> Counts {
 struct MixerRig {
     mixer: Mixer,
     tracks: Vec<daw_proto::Track>,
-    map: session_engine::plan::Rows,
+    map: studio_engine::plan::Rows,
     settings: mixer_view::tone::Store,
     history: std::collections::HashMap<String, mixer_view::tone::Levels>,
     spectra: std::collections::HashMap<String, mixer_view::tone::Analyser>,
@@ -1708,10 +1708,10 @@ impl MixerRig {
             // which is what the window does the moment anything feeds
             // a spectrum.
             true,
-            session_engine::settings::Settings::default(),
+            studio_engine::settings::Settings::default(),
             &settings,
         );
-        let map = session_engine::plan::Rows::of(rows.as_slice(), &tracks);
+        let map = studio_engine::plan::Rows::of(rows.as_slice(), &tracks);
         Some(Self {
             mixer,
             tracks,
@@ -2318,7 +2318,7 @@ fn studio(
             .edits()
             .borrow()
             .iter()
-            .any(|edit| matches!(edit, session_engine::engine::Edit::SlipItem(..)));
+            .any(|edit| matches!(edit, studio_engine::engine::Edit::SlipItem(..)));
         if !slipped {
             tracing::warn!(
                 "the slip drag never took hold of its item; its row measured a still view"
@@ -2598,10 +2598,10 @@ fn signal_shots(
             layout,
             mixer_view::tone::panels_for(TONE),
             true,
-            session_engine::settings::Settings::default(),
+            studio_engine::settings::Settings::default(),
             &store,
         );
-        let map = session_engine::plan::Rows::of(rows_ref.as_slice(), &tracks);
+        let map = studio_engine::plan::Rows::of(rows_ref.as_slice(), &tracks);
         let mut history = std::collections::HashMap::new();
         let mut spectra = std::collections::HashMap::new();
         let fold = mixer_view::tone::Fold::rest();

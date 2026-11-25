@@ -4,7 +4,7 @@
 //! folds, the FX view's, a close-up — that a control, a
 //! key or a model sets by name. The desktop registers them with the rest
 //! of the window's actions (`crate::window::register`), the page on its own
-//! list (`session_engine::web_actions::extend`).
+//! list (`studio_engine::web_actions::extend`).
 
 use architect::action::{ActionList, ActionMeta, Effect};
 use facet::Facet;

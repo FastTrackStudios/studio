@@ -1,6 +1,6 @@
 # The desktop programs, built as ordinary crane packages —
 # `nix run .#studio-desktop` (Studio, apps/desktop: the `studio` binary),
-# `nix run .#session-desktop` (Session's host, features/engine/host). Not
+# `nix run .#engine-host` (Session's host, features/engine/host). Not
 # the notarized/bundled release artifacts (scripts/desktop/*); a plain
 # native binary for local use (cargoArtifacts = null — the workspace is too
 # large/build.rs-heavy for crane's dummy-src deps split).
@@ -26,13 +26,13 @@
         nativeBuildInputs = config.fts.nativeBuildInputs ++ [ pkgs.python3 ];
       };
 
-      session-desktop = config.fts.craneLib.buildPackage (config.fts.commonArgs // guiArgs // {
-        pname = "session-desktop";
+      engine-host = config.fts.craneLib.buildPackage (config.fts.commonArgs // guiArgs // {
+        pname = "engine-host";
         version = workspaceVersion;
         cargoArtifacts = null;
-        cargoExtraArgs = "--package session-desktop";
+        cargoExtraArgs = "--package engine-host";
         doCheck = false;
-        meta.mainProgram = "session-desktop";
+        meta.mainProgram = "engine-host";
       });
 
       # Studio: the Architect distribution (apps/desktop), its `studio` binary.
@@ -46,6 +46,6 @@
       });
     in
     {
-      packages = { inherit session-desktop studio-desktop; };
+      packages = { inherit engine-host studio-desktop; };
     };
 }

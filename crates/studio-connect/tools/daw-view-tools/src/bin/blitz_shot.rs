@@ -7,7 +7,7 @@
 //! ```
 //!
 //! Nothing here draws the arrangement. The session is opened and planned
-//! the way the app opens it ([`session_engine_client::song_model::StudioSession`]), and
+//! the way the app opens it ([`engine_client::song_model::StudioSession`]), and
 //! the tree is the app's: in a window it is
 //! [`mixer_view::mixer_panel::DawPanels`] — the arrangement panel, its
 //! chrome and the docked mixer, exactly what the desktop shell mounts —
@@ -38,7 +38,7 @@
 //! The session is laid out by `FTS_BLITZ_SCENE` (`drum-mixing` by
 //! default, the app's), and prepared first if `FTS_BLITZ_ORGANIZE`,
 //! `FTS_BLITZ_CHART` or `FTS_BLITZ_GUIDE` ask — see
-//! [`session_engine::prepare`].
+//! [`studio_engine::prepare`].
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -52,7 +52,7 @@ use dioxus_native_dom::DioxusDocument;
 
 use arrangement_view::panel::{ArrangementPanel, PanelEvent, Slot};
 use daw_view_kit::studio::PPS;
-use session_engine::song_model::StudioSession;
+use studio_engine::song_model::StudioSession;
 
 /// The scene the app lays a session out by.
 const SCENE: &str = "drum-mixing";
@@ -60,7 +60,7 @@ const SCENE: &str = "drum-mixing";
 fn main() {
     // Studio behind the views, as the app installs it: its host, its
     // hooks (keys, docks, the mixer's scenes and phases).
-    session_engine::install();
+    studio_engine::install();
     studio_panels::hooks::install();
     // The arrangement the DAW panels show, as the app installs it.
     arrangement_view::arrangement_host::install();
@@ -233,14 +233,14 @@ fn main() {
 /// exists so a render never waits on a sound server — see its docs.
 fn open(path: &std::path::Path, audio: bool) -> StudioSession {
     let opened = if audio {
-        session_engine::open::open_and_serve(path)
+        studio_engine::open::open_and_serve(path)
     } else {
-        session_engine::open::open_silent(path)
+        studio_engine::open::open_silent(path)
     }
     .expect("open project");
     // Organize / build from the chart / generate the guide, if asked —
     // before the view reads the session, so it opens on the prepared one.
-    let prepare = session_engine::prepare::Prepare::from_env();
+    let prepare = studio_engine::prepare::Prepare::from_env();
     if !prepare.is_empty()
         && let Err(e) = prepare.run(&opened)
     {
@@ -249,7 +249,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
     // `FTS_BLITZ_EXPORT=name`: the prepared song written as `name.RPP`
     // beside its source, to finish the mix in REAPER.
     if let Ok(name) = std::env::var("FTS_BLITZ_EXPORT") {
-        match session_engine::mix_export::write_rpp(&opened.daw, &opened.project_guid, &name) {
+        match studio_engine::mix_export::write_rpp(&opened.daw, &opened.project_guid, &name) {
             Ok(done) => {
                 tracing::info!(path = %done.path.display(), chained = ?done.chained, "blitz: exported")
             }
@@ -264,7 +264,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             .and_then(|(a, b)| Some((a.parse::<f64>().ok()?, b.parse::<f64>().ok()?)))
     }) {
         let (heard, kit, mix) =
-            session_engine::gain_stage::heard_levels(&opened.daw, &opened.project_guid, from, to);
+            studio_engine::gain_stage::heard_levels(&opened.daw, &opened.project_guid, from, to);
         for each in &heard {
             tracing::info!(
                 track = %each.name,
@@ -291,15 +291,15 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
     // facade as the keys run them.
     if let Ok(how) = std::env::var("FTS_BLITZ_STAGE") {
         let clear = how == "clear";
-        let said = session_engine::open::block_on_engine(async move {
+        let said = studio_engine::open::block_on_engine(async move {
             let daw = daw::rpc::Daw::try_get().ok_or_else(|| eyre::eyre!("no facade"))?;
             let project = daw.current_project().await?;
             if clear {
-                session_engine::gain_stage::clear_live(&project)
+                studio_engine::gain_stage::clear_live(&project)
                     .await
                     .map(|cleared| format!("cleared {}", cleared.len()))
             } else {
-                session_engine::gain_stage::stage_live(&project)
+                studio_engine::gain_stage::stage_live(&project)
                     .await
                     .map(|report| {
                         format!(
@@ -349,7 +349,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
                 arrangement_view::arrange_edit::Effect::Edit(edit) => Some(edit),
                 _ => None,
             })
-            .filter(|edit| session_engine::engine::apply_now(edit))
+            .filter(|edit| studio_engine::engine::apply_now(edit))
             .count();
         let back = daw_view_kit::studio::fetch().expect("read it back");
         let lane = back
@@ -383,7 +383,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
                     .iter()
                     .any(|n| n.eq_ignore_ascii_case(track.name.trim()))
             {
-                session_engine::folds::toggle(&track.guid, false);
+                studio_engine::folds::toggle(&track.guid, false);
             }
         }
     }
@@ -399,12 +399,12 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             })
             .map(|t| t.guid.clone())
             .collect();
-        let _ = session_engine::lanes::set_expanded(&guids, Some(true));
+        let _ = studio_engine::lanes::set_expanded(&guids, Some(true));
     }
-    let planner = session_engine::song_model::template_planner(
+    let planner = studio_engine::song_model::template_planner(
         Arc::new(raw),
         Some(scene),
-        Arc::new(session_engine::plan::Kinds::read(path)),
+        Arc::new(studio_engine::plan::Kinds::read(path)),
     );
     let (project, rows) = planner.plan(&planner.raw);
     let previews = daw_view_kit::studio::previews_of(&project);

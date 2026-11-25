@@ -171,7 +171,7 @@ fn publish_caret(state: &editor_state::EditorState) {
     let primary = state.selection.primary();
     let rope = state.doc.rope();
     let char_at = |byte: usize| rope.byte_to_char(byte.min(rope.len_bytes()));
-    session_engine_client::presence::set_chart_caret(Some((
+    engine_client::presence::set_chart_caret(Some((
         char_at(primary.anchor),
         char_at(primary.head),
     )));

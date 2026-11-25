@@ -88,22 +88,21 @@ fn move_hits(
     by: f64,
 ) -> Vec<String> {
     let guid = song.mics[mic].clone();
-    let moved: Vec<crate::view::ItemNow> =
-        crate::test_song::on_lane(&song.raw, &guid, 0)
-            .into_iter()
-            .skip(first)
-            .take(slices)
-            .map(|item| crate::view::ItemNow {
-                item: daw_proto::Item {
-                    position: daw_proto::PositionInSeconds::from_seconds(
-                        item.position.as_seconds() + by,
-                    ),
-                    ..item.clone()
-                },
-                take_name: song.raw.names.get(&item.guid).cloned(),
-                midi: false,
-            })
-            .collect();
+    let moved: Vec<crate::view::ItemNow> = crate::test_song::on_lane(&song.raw, &guid, 0)
+        .into_iter()
+        .skip(first)
+        .take(slices)
+        .map(|item| crate::view::ItemNow {
+            item: daw_proto::Item {
+                position: daw_proto::PositionInSeconds::from_seconds(
+                    item.position.as_seconds() + by,
+                ),
+                ..item.clone()
+            },
+            take_name: song.raw.names.get(&item.guid).cloned(),
+            midi: false,
+        })
+        .collect();
     crate::song_model::patch_with(&mut song.raw, moved, &[])
 }
 

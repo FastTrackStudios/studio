@@ -60,7 +60,7 @@ each work with only the engine.
 
 - A process has one audio mode. The `daw` engine plays a set through
   `SetAudio` with render-ahead (200 ms by default,
-  `session_engine::render_ahead`): right for a song's tracks, unusable for
+  `studio_engine::render_ahead`): right for a song's tracks, unusable for
   an instrument played live. The rig needs the duplex engine at the
   interface's quantum (`signal_rig_host::engine::Engine::start_audio`).
 - The rig engine exists and is proven headless: it is what
@@ -148,14 +148,14 @@ What there was:
   `<config>/signal/instrument` (`guitar::instrument`);
 - **the `daw` engine kept no device choice at all**: it opened the
   system's default output at the device's rate
-  (`session_engine::open::open_set_audio`), only the render ahead a pref.
+  (`studio_engine::open::open_set_audio`), only the render ahead a pref.
   Session's own Setup page says as much ("the desktop engine's device
   routing is next").
 
 What there is now:
 
 - the `daw` engine keeps an output device, sample rate and buffer
-  (`session_engine::audio_device`, `~/.config/fts/audio-device.json`,
+  (`studio_engine::audio_device`, `~/.config/fts/audio-device.json`,
   `SESSION_AUDIO_DEVICE`; the `daw` extension's `DAW_AUDIO` adds the
   outputs this machine has) and reopens its device on a change;
 - `studio.audio-settings` is the one surface: each engine's device, rate
@@ -209,7 +209,7 @@ few days, once there is a build to try it in.
    a `distribution.json`). It needs a `web` lib over `architect_web::run`,
    `guest` behind a target cfg in the nine rig crates (a browser has no
    processes), and every linked crate building for wasm32, which is
-   untried for the `stage` bundle (`session-engine/native`). Days for the
+   untried for the `stage` bundle (`studio-engine/native`). Days for the
    crate setup; days to weeks for `stage`.
 2. *Guitar has no rig service in the tab.* Its DSP is there
    (`worklet/src/guitar`: the chain runner, NAM on workers over shared

@@ -170,9 +170,9 @@ fn mixer(
     } else {
         mixer_view::tone::panels_for(TONE)
     };
-    let settings = session_engine::settings::Settings {
+    let settings = studio_engine::settings::Settings {
         live_strips,
-        ..session_engine::settings::Settings::default()
+        ..studio_engine::settings::Settings::default()
     };
     let built = mixer_view::mcp::Mixer::build(
         &stage.palette,
@@ -193,7 +193,7 @@ fn mixer(
     let (mut history, mut spectra) = rack_signal(&tracks, &store);
     let mut inserts = signal_inserts(golden);
     let fold = mixer_view::tone::Fold::rest();
-    let map = session_engine::plan::Rows::of(rows.as_slice(), &tracks);
+    let map = studio_engine::plan::Rows::of(rows.as_slice(), &tracks);
     let clips = clip_latches(golden);
     let at = Affine::translate((rails::SIDE - scroll_x, rails::TOP));
     built.replay(painter, scroll_x, frame.content_width(), at);
@@ -227,7 +227,7 @@ fn mixer(
         mixer_view::app::MIX,
         TONE,
         None,
-        session_engine::settings::Settings::default(),
+        studio_engine::settings::Settings::default(),
         mixer_view::app::Audience::Engineer,
         "drums",
     );

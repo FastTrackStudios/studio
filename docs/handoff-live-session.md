@@ -58,7 +58,7 @@ cargo run -p studio-desktop --features cli --bin studio -- lyrics fetch <Song>.R
   ```
 
   ```bash
-  pid=$(pgrep -f "Session Dev.app/Contents/MacOS/session-desktop" | head -1)
+  pid=$(pgrep -f "Session Dev.app/Contents/MacOS/engine-host" | head -1)
   wid=$(swift winid.swift $pid | grep "name=Session" | awk '{print $1}')
   screencapture -x -o -l $wid out.png   # 2560x1320; crop with sips -c H W --cropOffset Y X
   ```

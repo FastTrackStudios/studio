@@ -3,7 +3,7 @@
 //! dock, the mode it shows.
 
 use daw_view_kit::app::{App, DockAsk};
-use session_engine_client::actions::{self, DockRequest};
+use engine_client::actions::{self, DockRequest};
 
 /// Hand the views Studio's answers: once per process, at start.
 pub fn install() {
@@ -102,13 +102,13 @@ async fn gain_stage(clear: bool) -> Result<String, String> {
     let daw = daw::rpc::Daw::try_get().ok_or("the daw facade is not up")?;
     let project = daw.current_project().await.map_err(|e| e.to_string())?;
     if clear {
-        let cleared = session_engine_client::gain_stage::clear_live(&project)
+        let cleared = engine_client::gain_stage::clear_live(&project)
             .await
             .map_err(|e| e.to_string())?;
         tracing::info!(stage.cleared = cleared.len(), "gain staging cleared");
         return Ok("gain staging cleared".to_owned());
     }
-    let report = session_engine_client::gain_stage::stage_live(&project)
+    let report = engine_client::gain_stage::stage_live(&project)
         .await
         .map_err(|e| e.to_string())?;
     tracing::info!(

@@ -2,7 +2,7 @@
 "daw-view-kit" = "none"
 "midi-editor" = "none"
 "studio-panels" = "none"
-"session-desktop" = "none"
+"engine-host" = "none"
 "studio-app" = "none"
 "daw-view-tools" = "none"
 ---

@@ -33,7 +33,7 @@ pub use crate::stretch::*;
 pub enum Effect {
     /// An edit of the gesture. The window commits a gesture's edits as
     /// one named action when it ends (`ArrangementWidget::settle`:
-    /// `session_engine::arrange_actions` — `ARRANGE_MOVE`, `ITEMS_SELECT`,
+    /// `studio_engine::arrange_actions` — `ARRANGE_MOVE`, `ITEMS_SELECT`,
     /// …), so `watch`, a guide and the CLI see what the hand did; never
     /// sent to the engine one by one.
     Edit(Edit),
@@ -2641,7 +2641,7 @@ pub fn kit_items(project: &Project, only: &[String]) -> Vec<String> {
         }
         inside.insert(track.guid.clone());
         // A piece's Sample track plays notes made from the hits
-        // (`session_engine::drum_samples`): they follow the edit as notes, written
+        // (`studio_engine::drum_samples`): they follow the edit as notes, written
         // where the hits go — cut and moved as audio too, they moved twice.
         let derived = track.name.trim().to_ascii_lowercase().ends_with("sample");
         if !track.is_folder && !derived && (only.is_empty() || only.contains(&track.guid)) {

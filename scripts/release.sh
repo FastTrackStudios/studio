@@ -308,7 +308,7 @@ cmd_next() {
 #
 #   ---
 #   "studio-desktop" = "minor"
-#   "session-desktop" = "patch"
+#   "engine-host" = "patch"
 #   ---
 #
 #   Added offline drafts (signal)
