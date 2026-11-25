@@ -317,3 +317,27 @@ return {best: tries[0], tries};
 
 Here the EQ goes back each time. Add `keep: true` to the best one's
 `listenAb`, or call `studio.signalBlockSet`, to leave it in.
+
+## How long calls take
+
+Every action the engine runs is a span named `action` (`action.id`,
+`action.ok`). It is exported over OTLP as service `studio-engine` when
+`OTEL_EXPORTER_OTLP_ENDPOINT` is set. The collector's tail sampling
+keeps only traces of 5 ms or more, errors, and spans marked
+`keep = true`, so traces alone count only the slow calls. Two things
+make every call count:
+
+- **Metrics for every run** (`session_engine::telemetry::action_metrics`,
+  recorded by the engine's `SpanRing` layer as each action span closes):
+  the histogram `studio.action.duration` (ms, from the span opening to its
+  closing) and the counter `studio.action.calls`, both labelled
+  `action_id` and `ok` (`true`/`false`). In OpenObserve they are the
+  streams `studio_action_duration` (with `_bucket`, `_count`, `_sum`,
+  `_min`, `_max`) and `studio_action_calls`.
+- **Mixing calls kept whole:** the action span of every `LISTEN*`,
+  `MIX_*`, `BLOCK*`, `SIGNAL_BLOCK_SET` and `TRACK_SET` carries
+  `keep = true`, so each one is a trace with its fields whatever its
+  length (`session_engine::telemetry::kept_whole`).
+
+Only the engine counts. The app's own actions (menus, keys) run under
+app-shell's subscriber at `warn`, which drops the Action List's span.
