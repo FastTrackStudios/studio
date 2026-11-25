@@ -12,6 +12,7 @@
 use std::path::Path;
 
 use architect_extensions::guest::{Guest, GuestError};
+use architect_extensions_dioxus::guest::GuestExt as _;
 use frame_view::shown;
 use frame_view::view::FrameSurface;
 use serde_json::Value;

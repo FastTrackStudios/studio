@@ -15,6 +15,8 @@ frame = {path = "../../../studio-core/frame/frame", default-features = false, fe
 architect-workspace = { workspace = true }
 # A process extension's end: its view's VirtualDom, its actions.
 architect-extensions = { workspace = true, features = ["guest"] }
+# `GuestExt::view`: a Dioxus view for a process extension.
+architect-extensions-dioxus = { workspace = true, features = ["guest"] }
 dioxus = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }
