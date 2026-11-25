@@ -22,37 +22,37 @@ use keyflow_proto::Chart;
 use keyflow_proto::chart::types::RhythmElement;
 use keyflow_proto::time::MusicalPositionExt;
 
-/// Charts whose round trip is a known exporter gap: (path relative to the
-/// repo root, why).
+/// Charts whose round trip is a known exporter gap: (path relative to
+/// `crates/studio-core/music`, why).
 const KNOWN_GAPS: &[(&str, &str)] = &[
     (
-        "examples/chordsheet-compat/kf/Scorpions - Sails of Charon.kf",
+        "keyflow-examples/chordsheet-compat/kf/Scorpions - Sails of Charon.kf",
         "a repeat whose only bar is a cue (`|: ^\"SOLO\" :|x4`) is written out by the \
          exporter as the bars before it, so the section grows from 3 bars to 5",
     ),
     (
-        "features/keyflow/tests/data/in_my_room.kf",
+        "keyflow/tests/data/in_my_room.kf",
         "an empty count-in bar exports as `r1`, a whole-note rest, which is not a bar \
          of 6/8; the exporter needs a bar-length rest (or `s`) for empty bars in \
          non-4/4 meters",
     ),
     (
-        "features/keyflow/tests/midi/Broadview - Slow Pulp.kf",
+        "keyflow/tests/midi/Broadview - Slow Pulp.kf",
         "source does not parse with `parse_document` (Chorus: 18 bars against a \
          10-bar header); the MIDI tests read this chart through their own path",
     ),
     (
-        "features/keyflow/tests/midi/Cryin' - Mateus Asato.kf",
+        "keyflow/tests/midi/Cryin' - Mateus Asato.kf",
         "source does not parse with `parse_document` (Chorus: 25 bars against a \
          4-bar header); the MIDI tests read this chart through their own path",
     ),
     (
-        "features/keyflow/tests/midi/For Cryin' Out Loud - FINNEAS.kf",
+        "keyflow/tests/midi/For Cryin' Out Loud - FINNEAS.kf",
         "Intro bar 7 holds a 4.5-beat `B` in 4/4 (a dotted length that overruns \
          the bar); the exporter clamps it to the bar, so the reparse has 4 beats",
     ),
     (
-        "features/proto/examples/vienna.kf",
+        "keyflow-proto/examples/vienna.kf",
         "lowercase `vs verse 1` headers and inline `[lyrics]` lines parse as Intro \
          sections of chords; what the exporter writes back for that misparse \
          (`Ddim /`) reads with other lengths. Fix the source parse first",
