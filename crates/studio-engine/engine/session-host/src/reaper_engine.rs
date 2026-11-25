@@ -56,10 +56,9 @@ pub struct LiveReaper {
 ///
 /// The extension behind the socket is not identified here, and can't be:
 /// the filename carries a pid and nothing else. Anything mounting
-/// `daw-reaper` publishes one — `fts-extensions` in normal use,
-/// `session-extension` under the test harness — and both mount
-/// `session::daw_services::layer_services_with_daw`, so either is a valid
-/// target. A REAPER whose extension *doesn't* mount `SetlistService` is
+/// `daw-reaper` publishes one (`fts-extensions` in normal use), and it
+/// mounts `session::daw_services::layer_services_with_daw`, so it is a
+/// valid target. A REAPER whose extension *doesn't* mount `SetlistService` is
 /// only discoverable as a connect that opens the lane and fails, which
 /// [`connect_to`] reports as a handshake error.
 #[must_use]

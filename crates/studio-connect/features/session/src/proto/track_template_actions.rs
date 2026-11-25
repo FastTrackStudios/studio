@@ -8,7 +8,8 @@
 //! re-running `fts-icons build --install`. That is a sequenced change, not
 //! a refactor.
 //!
-//! `crate::daw_module` registers these and forwards each trigger to
+//! The REAPER `DawModule` that registered these (gone with the old
+//! `session-extension`) forwarded each trigger to
 //! `dynamic_template::daw_module::dispatch_session_command`, which maps the
 //! alias onto the real id (including the two that were renamed:
 //! `ELECTRONIC_DRUMS` → `ELECTRONIC_KIT`, `SYNTH` → `BASS_SYNTH`).

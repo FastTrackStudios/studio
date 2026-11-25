@@ -9,9 +9,8 @@
 //! via `SetlistService`'s async RPC methods — CLI, desktop and web clients.
 //!
 //! They stay declared so the ids exist for those clients and for keymaps,
-//! and so the command palette can list them. `crate::daw_module` registers
-//! them with REAPER for discoverability; triggering one there logs that no
-//! DAW handler is registered, which is the truth.
+//! and so the command palette can list them. (The REAPER `DawModule` that
+//! registered them with REAPER went with the old `session-extension`.)
 //!
 //! The keymap owns *when* these are live: `keymap.styx`'s `keymap_context`
 //! binds them under `when: "tab:performance"`. That is where context is

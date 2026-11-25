@@ -87,7 +87,7 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          and plugin-core are in fts-fx)
             app/         shell (log ring, crash log, update check), launcher
             adapters/    reaper/: the product's own REAPER extensions
-                         (session-extension, daw-reaper-dioxus-ext); web/
+                         (daw-reaper-dioxus-ext); web/
                          (the AudioWorklet). Everything else REAPER, the
                          project formats (DAWproject/AAF, Ableton, Logic,
                          Pro Tools) and `keybinds` are in

@@ -21718,35 +21718,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "session-extension"
-version = "26.10.3"
-dependencies = [
- "architect",
- "axum",
- "crossbeam-channel",
- "daw",
- "daw-extension-runtime",
- "daw-reaper",
- "eyre",
- "fragile",
- "reaper-low",
- "reaper-macros",
- "studio",
- "studio-session",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "session-extension-xtask"
-version = "26.10.3"
-dependencies = [
- "daw",
- "studio",
-]
-
-[[package]]
 name = "session-format"
 version = "26.10.3"
 dependencies = [
