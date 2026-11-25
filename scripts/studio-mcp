@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Studio's MCP for an agent (features/agent-mcp, apps/studio/docs/mcp.md):
+# what `.mcp.json` starts. Builds `studio-mcp` when it is missing or older
+# than its sources (a few seconds: serde_json and std only), then runs it
+# on stdio. It finds the running Studio by its control socket, needs no
+# port or token, and carries on across Studio's restarts.
+#
+# Everything but the protocol goes to stderr: stdout is MCP's.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+src="$root/features/agent-mcp"
+bin="${STUDIO_MCP_BIN:-$root/target/debug/studio-mcp}"
+
+stale() {
+    [[ ! -x "$bin" ]] && return 0
+    [[ -n "$(find "$src" \( -name '*.rs' -o -name Cargo.toml \) -newer "$bin" -print -quit)" ]]
+}
+
+if [[ -z "${STUDIO_MCP_BIN:-}" ]] && stale; then
+    cargo=(cargo)
+    # The dev shell's toolchain when there is one (cargo 1.99.1).
+    if command -v direnv >/dev/null 2>&1 && [[ -f "$root/.envrc" ]]; then
+        cargo=(direnv exec "$root" cargo)
+    fi
+    # `--locked` first, so starting an agent never rewrites Cargo.lock; a
+    # checkout whose lock is behind its manifests builds the way any cargo
+    # command there would.
+    (cd "$root" && { "${cargo[@]}" build --quiet --locked -p studio-mcp \
+        || "${cargo[@]}" build --quiet -p studio-mcp; }) >&2
+fi
+
+exec "$bin" "$@"

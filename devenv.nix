@@ -326,8 +326,10 @@ in
 
   # Claude Code: devenv writes .mcp.json from this (git-ignored: it names
   # this checkout's path). `devenv`: its own MCP (search nixpkgs and devenv
-  # options, https://devenv.sh/mcp/); `session`: Studio's engine's Action
-  # List over MCP, while an engine runs. Teley's MCP is the user's own
+  # options, https://devenv.sh/mcp/); `studio`: the running Studio's Action
+  # List for an agent (scripts/studio-mcp -> features/agent-mcp, on the
+  # app's control socket: no port, no token, survives Studio's restarts;
+  # apps/studio/docs/mcp.md). Teley's MCP is the user's own
   # (`teley-cli mcp --host localhost:8787`), reading what this stack exports.
   claude.code.enable = true;
   claude.code.mcpServers = {
@@ -337,9 +339,10 @@ in
       args = [ "mcp" ];
       env = { DEVENV_ROOT = config.devenv.root; };
     };
-    session = {
-      type = "http";
-      url = "http://127.0.0.1:47811/mcp";
+    studio = {
+      type = "stdio";
+      command = "${config.devenv.root}/scripts/studio-mcp";
+      args = [ ];
     };
   };
 

@@ -62,6 +62,8 @@ members = [
     "features/app/shell",
     "features/app/panels",
     "features/app/version",
+    # Studio's MCP for an agent: stdio, on the app's control socket.
+    "features/agent-mcp",
     "features/library",
     "features/account",
     "features/ui/themer",

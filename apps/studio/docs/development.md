@@ -77,7 +77,8 @@ cd apps/studio && dx build --platform web --release --base-path studio
 
 Every feature is an action on Studio's Action List, served three ways:
 
-- **MCP**: on loopback with a bearer token made fresh each launch. Where it is, and the token, are in `~/.config/fts/studio-mcp.json` (mode `0600`). Never print or commit the token.
+- **MCP for an agent**: `studio-mcp` over stdio, on the control socket (no port, no token, survives restarts), with curated mixing tools, compact answers, pages and jobs. `.mcp.json` names it as `studio`; see [mcp.md](mcp.md).
+- **MCP over HTTP**: on loopback with a bearer token made fresh each launch. Where it is, and the token, are in `~/.config/fts/studio-mcp.json` (mode `0600`). Never print or commit the token.
 - **The control socket**: `$XDG_RUNTIME_DIR/fts/studio.sock`, this user only.
 - **Luau**: `SCRIPT_RUN` runs a script over every action as one step.
 

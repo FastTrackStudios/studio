@@ -55,7 +55,9 @@ nix develop -c dx build --platform linux --renderer native --features native --n
 
 ## Talk to it
 
-There are **two MCP servers**, each with its own Action List.
+**An agent uses the `studio` MCP server** (`scripts/studio-mcp`, in `.mcp.json`; apps/studio/docs/mcp.md). It runs on the app's control socket, so it needs no port or token and keeps working across restarts. It has curated tools (`session_tree`, `mix_state`, `signal_block`, `listen`, `block_measure`, `balance`, …) plus `actions`/`describe`/`run` for everything else. Never write an HTTP helper script for it.
+
+Underneath there are **two Action Lists**. The app's socket also carries the engine's actions (MIX_*, LISTEN*, SESSION_*):
 
 | What | Where it is | What's on it |
 |---|---|---|
