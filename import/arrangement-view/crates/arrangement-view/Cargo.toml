@@ -1,0 +1,60 @@
+[package]
+name = "arrangement-view"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Studio's arrangement, a view only: the recorded scene, its widget and panel, the editing, the ruler, the automation lanes and the Organize tools over daw-view-kit's base."
+
+[dependencies]
+# The kit the arrangement is drawn with (`crate::tcp`, `crate::skin`, …,
+# re-exported at this crate's root).
+daw-view-kit = { workspace = true }
+daw-view = { workspace = true }
+dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
+daw-ui = { workspace = true, features = ["studio"] }
+blitz-dom = { workspace = true }
+blitz-traits = { workspace = true }
+dioxus-native-dom = { workspace = true }
+dioxus-native = { workspace = true, optional = true }
+daw-control = { workspace = true }
+daw-proto = { workspace = true }
+# The chord items' numbers and names — `arrangement::Lettering`.
+keyflow = { workspace = true, features = ["text", "engraver"] }
+# The rides an automation lane edits (`automation_edit`).
+dsp = { workspace = true, features = ["level"] }
+architect-input = { workspace = true }
+# The drum roles a folded kit is read by, and the edit scope.
+daw-edit = { workspace = true }
+# The session primitive: presence (the ghosts).
+fts-session = { workspace = true, features = ["store"] }
+frame = { workspace = true, features = ["host-scene", "live", "theme"] }
+daw = { workspace = true }
+anyrender = { workspace = true }
+vello = "0.11"
+timeline = { workspace = true, features = ["actions"] }
+winit = { version = "0.31.0-beta.4", optional = true }
+web-time = { workspace = true }
+eyre = { workspace = true }
+tracing = { workspace = true }
+web-sys = { workspace = true, optional = true, features = ["Window", "HtmlElement", "CssStyleDeclaration"] }
+wasm-bindgen-futures = { workspace = true, optional = true }
+rustc-hash = { workspace = true }
+num-traits = { workspace = true }
+serde_json = { workspace = true }
+facet-json = { workspace = true }
+
+[features]
+default = ["native"]
+# daw-view-kit's features, forwarded, with what the arrangement's own code
+# needs.
+native = ["daw-view-kit/native", "daw-view/native", "dep:dioxus-native", "dep:winit"]
+web = ["daw-view-kit/web", "daw-view/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures"]
+signal = ["native", "daw-view-kit/signal"]
+
+[dev-dependencies]
+daw-view-kit = { workspace = true, features = ["test-support"] }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true
