@@ -19,10 +19,9 @@ bin = "fts-rhythm"
 
 # The DAW's editing contract (daw-edit): Studio's engine asks the chosen
 # provider where a performance's hits play once moved (`PLACE` →
-# RHYTHM_PLACE) and where a kit's played hits should go (`PLAN` →
-# RHYTHM_PLAN).
+# RHYTHM_PLACE).
 [provides]
-"daw.edit" = "0.3.2"
+"daw.edit" = "0.1.0"
 
 [uses]
 "fts.session" = "^0.1"
@@ -40,18 +39,10 @@ effect = "read_only"
 [[actions]]
 id = "RHYTHM_PLACE"
 name = "Rhythm: place moved hits"
-description = "daw.edit's PLACE: where a recorded performance's audio plays once its hits are moved (`hits`: each `at` and `shift` in seconds; `span`; `cut`: `lead` and `guard`; `bounds`; `takes`: each take's `from`/`to` in recording time; `fill`: `least_rate`, `least_rate_leftover`, `crossfade`, `most_crossfade`, `keep`, `keep_min`). Answers the pieces of the recording to lay on the timeline, in the order they play: each `start`, `end`, `shift`, `crossfade` (how long it sounds over the piece before) and, where its last span is stretched over what is left of a gap, `drawn_from` and `drawn_to`. Each gap is filled without moving a hit: the piece before plays on to just before the next attack in its recording, the piece after reaches back into its own take (past the guard into the previous stroke's decay, no nearer its attack than `keep`), the two crossfade, what is left is stretched (the shortest last span at `least_rate`, else all the decay past its keep only as slow as it must be, down to `least_rate_leftover`); past that the replay reaches nearer, never nearer than `keep_min` (never the transient), and the decay before is stretched at whatever rate fills it (from `keep_min` past its attack if that is the least slowing), flagged `forced_rate` below `least_rate_leftover`. No silence is ever left; `fills` says each (gap, extended, reached_back, replayed_decay, replay_from_attack, crossfade, stretched {from, over, rate}, forced_rate, left: always 0, take_switch)."
+description = "daw.edit's PLACE: where a recorded performance's audio plays once its hits are moved (`hits`: each `at` and `shift` in seconds; `span`; `cut`: `lead` and `guard`; `bounds`). Answers the pieces of the recording to lay on the timeline, in the order they play: each `start`, `end`, `shift` and, where it is drawn out over a gap, `drawn_to`."
 group = "Rhythm"
 effect = "read_only"
-params = '{"type":"object","properties":{"hits":{"type":"array"},"span":{"type":"array"},"cut":{"type":"object"},"bounds":{"type":"array"},"takes":{"type":"array"},"fill":{"type":"object"}},"required":["hits","span"]}'
-
-[[actions]]
-id = "RHYTHM_PLAN"
-name = "Rhythm: plan a drum edit"
-description = "daw.edit's PLAN: where each of a kit's played hits should go. Takes `hits` (id, piece, take, time, peak_db, heard, flags), `notes` (the drum MIDI, mapped to pieces), `bars` (each bar's start, meter and beat length), `sections`, `zones` and `settings` (grid_hint per section, anchors, lock_runs, prefer, plan_fills). Answers every hit's target, reason and confidence; `targets`, `remove`, `delete` and `rides` in an apply's shape; `doubts` (only the hits worth a look, each with two candidates and why); and the lean per half bar."
-group = "Rhythm"
-effect = "read_only"
-params = '{"type":"object","properties":{"hits":{"type":"array"},"notes":{"type":"array"},"bars":{"type":"array"},"sections":{"type":"array"},"zones":{"type":"array"},"settings":{"type":"object"}},"required":["hits","bars"]}'
+params = '{"type":"object","properties":{"hits":{"type":"array"},"span":{"type":"array"},"cut":{"type":"object"},"bounds":{"type":"array"}},"required":["hits","span"]}'
 
 [[actions]]
 id = "RHYTHM_DETECT"

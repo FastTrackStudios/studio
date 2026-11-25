@@ -2,8 +2,7 @@
 //! process extension ([`Rhythm`], served by `fts-rhythm` with no
 //! arguments) that provides the DAW's editing contract (`daw.edit`,
 //! `daw_edit`): `PLACE` is [`RHYTHM_PLACE`](place), where a performance's
-//! hits play once moved, and `PLAN` is [`RHYTHM_PLAN`](plan), where a
-//! kit's played hits should go (`rhythm_editing::plan`). Its other actions (detection, planning, quantize,
+//! hits play once moved. Its other actions (detection, planning, quantize,
 //! rendering) run through [`dispatch`], which the CLI uses too.
 
 use std::path::Path;
@@ -240,113 +239,33 @@ fn render_wav(req: RenderRequest) -> Result<Json, String> {
 }
 
 /// `daw.edit`'s `PLACE`: where the pieces of the recording go once its
-/// hits are moved, each gap filled by rhythm's rule
-/// (`rhythm_editing::placement`: the piece before plays on, the piece after
-/// reaches back, they crossfade, only what is left is stretched, never a
-/// hit moved), and what was done at each gap.
+/// hits are moved, by rhythm's placement (`rhythm_editing::placement`).
 ///
 /// # Errors
 ///
 /// The request is not a `daw_edit::PlaceRequest`.
 pub fn place(params: Json) -> Result<Json, String> {
-    let span = tracing::info_span!(
-        "RHYTHM_PLACE",
-        hits = tracing::field::Empty,
-        takes = tracing::field::Empty,
-        pieces = tracing::field::Empty,
-        "fill.gaps" = tracing::field::Empty,
-        "fill.extended" = tracing::field::Empty,
-        "fill.reached_back" = tracing::field::Empty,
-        "fill.replayed_decay" = tracing::field::Empty,
-        "fill.crossfaded" = tracing::field::Empty,
-        "fill.stretched" = tracing::field::Empty,
-        "fill.slowest" = tracing::field::Empty,
-        "fill.slowest_leftover" = tracing::field::Empty,
-        "fill.forced" = tracing::field::Empty,
-        "fill.left" = tracing::field::Empty,
-        "fill.left_ms" = tracing::field::Empty,
-        "fill.take_stopped" = tracing::field::Empty,
-        "fill.take_crossed" = tracing::field::Empty,
-    );
-    let _in = span.enter();
     let request: daw_edit::PlaceRequest =
         serde_json::from_value(params).map_err(|e| format!("invalid PLACE request: {e}"))?;
-    span.record("hits", request.hits.len());
-    span.record("takes", request.takes.len());
-    let placed = rhythm_editing::placement::place_filled(
-        &request.hits,
-        request.span,
-        request.cut,
-        request.bounds,
-        (&request.takes, request.fill),
-    );
-    let fills = &placed.fills;
-    let count =
-        |f: &dyn Fn(&daw_edit::placement::Filled) -> bool| fills.iter().filter(|x| f(x)).count();
-    span.record("pieces", placed.pieces.len());
-    span.record("fill.gaps", fills.len());
-    span.record("fill.extended", count(&|f| f.extended > 0.0));
-    span.record("fill.reached_back", count(&|f| f.reached_back > 0.0));
-    span.record("fill.replayed_decay", count(&|f| f.replayed_decay > 0.0));
-    span.record("fill.forced", count(&|f| f.forced_rate));
-    span.record("fill.crossfaded", count(&|f| f.crossfade > 0.0));
-    span.record("fill.stretched", count(&|f| f.stretched.is_some()));
-    span.record("fill.left", count(&|f| f.left > 0.0));
-    span.record(
-        "fill.left_ms",
-        fills.iter().map(|f| f.left).sum::<f64>() * 1_000.0,
-    );
-    span.record(
-        "fill.take_stopped",
-        count(&|f| f.take_switch == daw_edit::placement::TakeSwitch::Stopped),
-    );
-    span.record(
-        "fill.take_crossed",
-        count(&|f| f.take_switch == daw_edit::placement::TakeSwitch::Crossed),
-    );
-    if let Some(slowest) = fills
+    let hits: Vec<rhythm_editing::placement::Hit> = request
+        .hits
         .iter()
-        .filter_map(|f| f.stretched.map(|s| s.rate))
-        .reduce(f64::min)
-    {
-        span.record("fill.slowest", slowest);
-    }
-    // The stretches of what the replay left, slower than the least rate.
-    if let Some(slowest) = fills
-        .iter()
-        .filter_map(|f| f.stretched.map(|s| s.rate))
-        .filter(|&rate| rate < request.fill.least_rate - 1e-9)
-        .reduce(f64::min)
-    {
-        span.record("fill.slowest_leftover", slowest);
-    }
-    serde_json::to_value(daw_edit::PlaceAnswer {
-        pieces: placed.pieces,
-        fills: placed.fills,
-    })
-    .map_err(|e| e.to_string())
-}
-
-/// `daw.edit`'s `PLAN`: a target for every played hit of a kit, with why,
-/// the rides and removes, and the doubts (`rhythm_editing::plan`).
-///
-/// # Errors
-///
-/// The request is not a `daw_edit::PlanRequest`.
-pub fn plan(params: Json) -> Result<Json, String> {
-    let span = tracing::info_span!(
-        "RHYTHM_PLAN",
-        hits = tracing::field::Empty,
-        ms = tracing::field::Empty
-    );
-    let _in = span.enter();
-    let request: daw_edit::PlanRequest =
-        serde_json::from_value(params).map_err(|e| format!("invalid PLAN request: {e}"))?;
-    span.record("hits", request.hits.len());
-    let started = std::time::Instant::now();
-    let answer = rhythm_editing::plan::plan(&request);
-    span.record("ms", started.elapsed().as_secs_f64() * 1000.0);
-    serde_json::to_value(answer).map_err(|e| e.to_string())
+        .map(|h| rhythm_editing::placement::Hit { at: h.at, shift: h.shift })
+        .collect();
+    let cut = rhythm_editing::placement::Cut {
+        lead: request.cut.lead,
+        guard: request.cut.guard,
+    };
+    let pieces = rhythm_editing::placement::place_within(&hits, request.span, cut, request.bounds)
+        .into_iter()
+        .map(|p| daw_edit::placement::Piece {
+            start: p.start,
+            end: p.end,
+            shift: p.shift,
+            drawn_to: p.drawn_to,
+        })
+        .collect();
+    serde_json::to_value(daw_edit::PlaceAnswer { pieces }).map_err(|e| e.to_string())
 }
 
 /// Rhythm as an Architect extension: every action in its manifest.
@@ -359,7 +278,6 @@ impl architect_extensions::linked::Extension for Rhythm {
 
     fn build(&self, ext: &mut architect_extensions::linked::Builder) {
         ext.action("RHYTHM_PLACE", |args| async move { place(args) });
-        ext.action("RHYTHM_PLAN", |args| async move { plan(args) });
         for id in [
             "RHYTHM_STATE",
             "RHYTHM_DETECT",
@@ -377,7 +295,6 @@ impl architect_extensions::linked::Extension for Rhythm {
 pub fn dispatch(registry: &DetectorRegistry, action: &str, params: Json) -> Result<Json, String> {
     match action {
         "RHYTHM_PLACE" => place(params),
-        "RHYTHM_PLAN" => plan(params),
         "RHYTHM_STATE" => Ok(json!({
             "extension": "rhythm",
             "version": env!("CARGO_PKG_VERSION"),
@@ -432,106 +349,5 @@ pub fn dispatch(registry: &DetectorRegistry, action: &str, params: Json) -> Resu
             render_wav(req)
         }
         other => Err(format!("unknown action: {other}")),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn plan_answers_daw_edits_plan() {
-        let request = json!({
-            "hits": [
-                {"id": "k", "piece": "Kick", "time": 1.51},
-                {"id": "s", "piece": "Snare", "time": 1.889}
-            ],
-            "bars": [{"bar": 1, "at": 1.5, "beats": 4, "unit": 4, "beat": 0.375}]
-        });
-        let out = dispatch(&DetectorRegistry::default(), "RHYTHM_PLAN", request).unwrap();
-        let answer: daw_edit::PlanAnswer = serde_json::from_value(out).unwrap();
-        assert!((answer.targets["k"] - 1.5).abs() < 1e-9);
-        assert!((answer.targets["s"] - 1.875).abs() < 1e-9);
-        assert!(
-            dispatch(
-                &DetectorRegistry::default(),
-                "RHYTHM_PLAN",
-                json!({"hits": 3})
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn the_manifest_provides_plan() {
-        assert!(MANIFEST.contains("id = \"RHYTHM_PLAN\""));
-        assert!(MANIFEST.contains(&format!("\"daw.edit\" = \"{}\"", daw_edit::VERSION)));
-    }
-
-    /// The properties `action`'s `params` schema declares, from the
-    /// manifest.
-    fn declared(action: &str) -> Vec<String> {
-        let block = MANIFEST
-            .split("[[actions]]")
-            .find(|b| b.contains(&format!("id = \"{action}\"")))
-            .unwrap_or_else(|| panic!("no {action} in the manifest"));
-        let params = block
-            .lines()
-            .find_map(|l| l.strip_prefix("params = '"))
-            .and_then(|l| l.strip_suffix('\''))
-            .unwrap_or_else(|| panic!("{action} declares no params"));
-        let schema: Json = serde_json::from_str(params).unwrap();
-        schema["properties"]
-            .as_object()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect()
-    }
-
-    #[test]
-    fn place_declares_every_field_of_a_full_request() {
-        // The host checks a call against the declared schema: a field
-        // missing there (0.3's takes and fill were) is a refused request.
-        let request = daw_edit::PlaceRequest {
-            hits: vec![daw_edit::placement::Hit {
-                at: 1.0,
-                shift: 0.0,
-            }],
-            span: (0.0, 2.0),
-            cut: daw_edit::placement::Cut::default(),
-            bounds: (Some(-1.0), Some(3.0)),
-            takes: vec![daw_edit::placement::Take { from: 0.0, to: 2.0 }],
-            fill: daw_edit::placement::Fill::default(),
-        };
-        let sent = serde_json::to_value(&request).unwrap();
-        let declared = declared("RHYTHM_PLACE");
-        for key in sent.as_object().unwrap().keys() {
-            assert!(declared.contains(key), "RHYTHM_PLACE's params lack `{key}`");
-        }
-        // And the description names every fill setting.
-        for key in sent["fill"].as_object().unwrap().keys() {
-            assert!(MANIFEST.contains(&format!("`{key}`")), "the fill's `{key}`");
-        }
-    }
-
-    #[test]
-    fn place_answers_with_its_fills() {
-        // The snare 330 ms later after 300: reached back, the last of the
-        // kick's decay stretched at 0.8, said in `fills`.
-        let request = json!({
-            "hits": [{"at": 1.0, "shift": 0.0}, {"at": 1.3, "shift": 0.33}],
-            "span": [0.995, 2.5],
-            "takes": [{"from": 0.0, "to": 3.0}]
-        });
-        let out = dispatch(&DetectorRegistry::default(), "RHYTHM_PLACE", request).unwrap();
-        let answer: daw_edit::PlaceAnswer = serde_json::from_value(out).unwrap();
-        assert_eq!(answer.pieces.len(), 2);
-        let [fill] = answer.fills.as_slice() else {
-            panic!("{:?}", answer.fills)
-        };
-        assert!((fill.stretched.unwrap().rate - 0.8).abs() < 1e-9);
-        assert!(fill.reached_back > 0.0);
-        assert!((answer.pieces[1].start - 1.345).abs() < 1e-9);
     }
 }

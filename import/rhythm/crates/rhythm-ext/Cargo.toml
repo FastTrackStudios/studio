@@ -18,7 +18,6 @@ rhythm-hits = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 daw-edit = { workspace = true }
-tracing = { workspace = true }
 architect-extensions = { workspace = true, features = ["linked-core", "guest"] }
 
 [features]
