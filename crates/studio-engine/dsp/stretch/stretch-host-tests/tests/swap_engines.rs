@@ -3,15 +3,14 @@ use std::path::PathBuf;
 use stretch_abi::SliceSource;
 use stretch_abi::host::EngineRegistry;
 
+/// The cdylibs land in the profile directory the test binary sits under
+/// (`<target>/<profile>/deps/<test>`), whatever the target dir and profile.
 fn plugin_path(stem: &str) -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let target_dir = manifest_dir
+    let exe = std::env::current_exe().expect("test binary path");
+    let target_dir = exe
         .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("target")
-        .join("debug");
+        .and_then(std::path::Path::parent)
+        .expect("test binary under <target>/<profile>/deps");
     let filename = if cfg!(target_os = "macos") {
         format!("lib{stem}.dylib")
     } else if cfg!(target_os = "windows") {
@@ -37,6 +36,7 @@ fn rms(samples: &[f32]) -> f32 {
 }
 
 #[test]
+#[ignore = "needs the stretch-pv and stretch-wsola cdylibs, which cargo test does not build: `cargo build -p stretch-pv -p stretch-wsola` with the same profile first, then run with --ignored"]
 fn dlopen_and_hot_swap_pv_and_wsola() {
     let pv_so = plugin_path("stretch_pv");
     let wsola_so = plugin_path("stretch_wsola");
