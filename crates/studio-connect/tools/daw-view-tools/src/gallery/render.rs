@@ -224,11 +224,11 @@ fn mixer(
     );
     let profile = rails::profile(
         rails::Surface::Mixer,
-        session::modes::Mode::Mix,
+        mixer_view::app::MIX,
         TONE,
         None,
         session_engine::settings::Settings::default(),
-        dynamic_template::scenes::Audience::Engineer,
+        mixer_view::app::Audience::Engineer,
         "drums",
     );
     rails::draw(
