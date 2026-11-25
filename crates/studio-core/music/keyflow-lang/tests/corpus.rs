@@ -19,7 +19,7 @@ fn corpus_files() -> Vec<PathBuf> {
 }
 
 #[test]
-#[ignore = "the orchestral .mxl corpus is not in the repo: `features/examples/mxl` holds transcriptions of commercial scores, which this public repo cannot redistribute. Point it at a local copy and run `cargo test -- --ignored`."]
+#[ignore = "needs the orchestral .mxl corpus (transcriptions of commercial scores, not redistributable) at crates/studio-core/music/keyflow-examples/mxl, which git ignores: copy it there from a local keyflow checkout's examples/mxl and run with --ignored"]
 fn all_corpus_files_parse() {
     let files = corpus_files();
     assert!(
@@ -52,7 +52,7 @@ fn all_corpus_files_parse() {
 }
 
 #[test]
-#[ignore = "the orchestral .mxl corpus is not in the repo: `features/examples/mxl` holds transcriptions of commercial scores, which this public repo cannot redistribute. Point it at a local copy and run `cargo test -- --ignored`."]
+#[ignore = "needs the orchestral .mxl corpus (transcriptions of commercial scores, not redistributable) at crates/studio-core/music/keyflow-examples/mxl, which git ignores: copy it there from a local keyflow checkout's examples/mxl and run with --ignored"]
 fn engine_runs_on_all_corpus_parts_and_invariants_hold() {
     use keyflow_lang::orchestra::{Config, detect_profile, process_part};
     for f in corpus_files() {
@@ -163,7 +163,7 @@ fn engine_runs_on_all_corpus_parts_and_invariants_hold() {
 }
 
 #[test]
-#[ignore = "the orchestral .mxl corpus is not in the repo: `features/examples/mxl` holds transcriptions of commercial scores, which this public repo cannot redistribute. Point it at a local copy and run `cargo test -- --ignored`."]
+#[ignore = "needs the orchestral .mxl corpus (transcriptions of commercial scores, not redistributable) at crates/studio-core/music/keyflow-examples/mxl, which git ignores: copy it there from a local keyflow checkout's examples/mxl and run with --ignored"]
 fn analysis_reports_instrumentation() {
     // Jurassic Park: a full orchestral score — should detect several families.
     let f = corpus_dir().join("theme-from-jurassic-park.mxl");

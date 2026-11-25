@@ -1,11 +1,11 @@
 #![cfg(feature = "manifest")]
 //! Whole-corpus smoke test.
 //!
-//! Ignored: the corpus is our chordsheet.com account backup, committed at
-//! `examples/chordsheet-compat/` — outside this crate, and a fixture lives
-//! inside the crate that reads it. Copy its `chordsheet/` directory to
-//! `features/examples/chordsheet/source/` (and its `manifest.json` beside it)
-//! and run `cargo test -p keyflow-lang --features manifest -- --ignored`.
+//! The corpus is our chordsheet.com account backup, committed at
+//! `crates/studio-core/music/keyflow-examples/chordsheet-compat/` (`chordsheet/`
+//! and `manifest.json` beside it). Ignored: it is a corpus diagnostic, and on
+//! 2026-11-25 three charts fail it (sections that reparse longer than their
+//! header). Run `cargo test -p keyflow-lang --features manifest -- --ignored`.
 //!
 //! What it proves: every chart in the backup imports without panicking, and
 //! the `.kf` it exports parses back into a chart with the same number of
@@ -17,12 +17,13 @@ use std::path::PathBuf;
 use keyflow_lang::chordsheet::manifest::Manifest;
 
 fn corpus() -> Option<PathBuf> {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../keyflow-examples/chordsheet/source");
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../keyflow-examples/chordsheet-compat/chordsheet");
     dir.is_dir().then_some(dir)
 }
 
 #[test]
-#[ignore = "needs a chordsheet.com backup at features/examples/chordsheet/source (copy it from examples/chordsheet-compat)"]
+#[ignore = "corpus diagnostic over the committed chordsheet.com backup; 3 of 204 charts do not round-trip yet"]
 fn every_chart_in_the_backup_round_trips_through_keyflow_text() {
     let Some(dir) = corpus() else {
         panic!("corpus not present — see the module docs");

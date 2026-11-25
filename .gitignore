@@ -84,3 +84,11 @@ local-stack.local.env
 # Written by devenv from devenv.nix (claude.code): they name this checkout or the store.
 /.mcp.json
 /.claude/settings.json
+
+# Local test corpora that cannot be committed (copyrighted or bulky): the
+# orchestral .mxl transcriptions, the Master Rhythm charts and the Wikifonia
+# lead sheets. The tests that read them are #[ignore]d; see their messages for
+# where to copy them from.
+crates/studio-core/music/keyflow-examples/mxl/
+crates/studio-core/music/keyflow-examples/wikifonia/
+crates/studio-core/music/keyflow-examples/png-project-charts/

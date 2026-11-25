@@ -2,8 +2,10 @@
 //! MusicXML-to-MIDI harmony comparison harness.
 //!
 //! This test is ignored by default because it depends on the local, git-ignored
-//! Wikifonia corpus under `reference-data/`. It compares MusicXML `<harmony>`
-//! symbols against Keyflow's detected chords from MuseScore-exported MIDI.
+//! Wikifonia corpus (74 MB: `xml/` and `midi/`) at
+//! `crates/studio-core/music/keyflow-examples/wikifonia`; copy it there from a
+//! local keyflow checkout's `reference-data/wikifonia`. It compares MusicXML
+//! `<harmony>` symbols against Keyflow's detected chords from MuseScore-exported MIDI.
 
 use std::path::{Path, PathBuf};
 
@@ -203,7 +205,7 @@ fn infer_spelling_context(expected: &[ExpectedHarmony]) -> Option<KeySpelling> {
 }
 
 fn corpus_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../reference-data/wikifonia")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../keyflow-examples/wikifonia")
 }
 
 fn collect_files(dir: &Path, extension: &str) -> Vec<PathBuf> {

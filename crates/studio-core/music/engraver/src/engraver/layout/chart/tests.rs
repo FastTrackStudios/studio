@@ -98,8 +98,7 @@ fn create_test_chart() -> Chart {
 
 fn lord_of_the_fight_fixture() -> PathBuf {
     let mut fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    fixture
-        .push("../../features/examples/png-project-charts/02 LORD OF THE FIGHT Master RS.musicxml");
+    fixture.push("../keyflow-examples/png-project-charts/02 LORD OF THE FIGHT Master RS.musicxml");
     fixture
 }
 
@@ -184,7 +183,7 @@ fn chord_node_indices_at_chart_position(
 }
 
 #[test]
-#[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+#[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
 fn lord_of_the_fight_a_major_seven_at_6_4_renders_triangle_seven() {
     let style = test_style();
     let text_font = Arc::new(Vec::new());
@@ -222,7 +221,7 @@ fn lord_of_the_fight_a_major_seven_at_6_4_renders_triangle_seven() {
 }
 
 #[test]
-#[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+#[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
 fn lord_of_the_fight_measure_5_staff_text_uses_expected_placement() {
     let style = test_style();
     let text_font = Arc::new(Vec::new());
@@ -297,7 +296,7 @@ fn lord_of_the_fight_measure_5_staff_text_uses_expected_placement() {
 }
 
 #[test]
-#[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+#[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
 fn lord_of_the_fight_measure_5_add_bass_sits_near_measure_end() {
     let style = test_style();
     let text_font = Arc::new(Vec::new());
@@ -363,7 +362,7 @@ fn lord_of_the_fight_measure_5_add_bass_sits_near_measure_end() {
 }
 
 #[test]
-#[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+#[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
 fn lord_of_the_fight_a_over_c_sharp_at_10_1_has_no_conflicts() {
     let style = test_style();
     let text_font = Arc::new(Vec::new());
@@ -415,7 +414,7 @@ fn lord_of_the_fight_a_over_c_sharp_at_10_1_has_no_conflicts() {
 }
 
 #[test]
-#[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+#[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
 fn lord_of_the_fight_long_endings_start_new_systems() {
     let style = test_style();
     let engine = ChartLayoutEngine::new(style, Arc::new(Vec::new()), Arc::new(Vec::new()));
@@ -459,7 +458,7 @@ fn lord_of_the_fight_long_endings_start_new_systems() {
 }
 
 #[test]
-#[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+#[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
 fn lord_of_the_fight_start_of_system_dynamics_sit_under_clef_prefix() {
     let style = test_style();
     let text_font = Arc::new(Vec::new());
@@ -545,7 +544,7 @@ fn lord_of_the_fight_start_of_system_dynamics_sit_under_clef_prefix() {
 }
 
 #[test]
-#[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+#[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
 fn lord_of_the_fight_repeat_pass_dynamics_stack_under_section_cards() {
     let style = test_style();
     let text_font = Arc::new(Vec::new());
@@ -716,7 +715,7 @@ fn lord_of_the_fight_has_no_disallowed_visual_collisions() {
 }
 
 #[test]
-#[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+#[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
 fn lord_of_the_fight_reports_dead_vertical_space_between_systems() {
     let style = test_style();
     let text_font = Arc::new(Vec::new());

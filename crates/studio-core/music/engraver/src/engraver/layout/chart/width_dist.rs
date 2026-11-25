@@ -950,11 +950,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+    #[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
     fn written_rest_weight_is_sparser_than_visible_chord_content() {
         let mut fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        fixture.push("../../features");
-        fixture.push("examples/png-project-charts/02 LORD OF THE FIGHT Master RS.musicxml");
+        fixture.push("../keyflow-examples");
+        fixture.push("png-project-charts/02 LORD OF THE FIGHT Master RS.musicxml");
         let chart = keyflow_lang::musicxml::import_file(fixture).expect("LotF should import");
         let measures: Vec<&crate::chart::types::Measure> = chart
             .sections
@@ -1025,11 +1025,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+    #[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
     fn lotf_default_measures_do_not_shrink_without_same_line_expansion_pressure() {
         let mut fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        fixture.push("../../features");
-        fixture.push("examples/png-project-charts/02 LORD OF THE FIGHT Master RS.musicxml");
+        fixture.push("../keyflow-examples");
+        fixture.push("png-project-charts/02 LORD OF THE FIGHT Master RS.musicxml");
         let chart = keyflow_lang::musicxml::import_file(fixture).expect("LotF should import");
         let engine = test_engine();
         let report = engine.compare_musicxml_widths(
@@ -1062,11 +1062,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+    #[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
     fn lotf_opening_dense_measures_are_capped_against_written_rests() {
         let mut fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        fixture.push("../../features");
-        fixture.push("examples/png-project-charts/02 LORD OF THE FIGHT Master RS.musicxml");
+        fixture.push("../keyflow-examples");
+        fixture.push("png-project-charts/02 LORD OF THE FIGHT Master RS.musicxml");
         let chart = keyflow_lang::musicxml::import_file(fixture).expect("LotF should import");
         let engine = test_engine();
         let report = engine.compare_musicxml_widths(

@@ -54,14 +54,13 @@ mod tests {
 
     fn fixture(name: &str) -> PathBuf {
         let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        p.push("..");
-        p.push("examples/png-project-charts");
+        p.push("../keyflow-examples/png-project-charts");
         p.push(name);
         p
     }
 
     #[test]
-    #[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+    #[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
     fn imports_lord_of_the_fight_metadata() {
         let chart = import_file(fixture("02 LORD OF THE FIGHT Master RS.musicxml"))
             .expect("musicxml import should succeed");
@@ -89,7 +88,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+    #[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
     fn imports_lord_of_the_fight_measures() {
         use keyflow_proto::chart::notations::RepeatMark;
         use keyflow_proto::chart::types::Measure;
@@ -201,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+    #[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
     fn lord_of_the_fight_keyflow_roundtrip_preserves_semantics_without_annotations() {
         use keyflow_proto::chart::types::Measure;
 
@@ -253,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+    #[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
     fn presence_keyflow_export_expands_cross_section_repeat() {
         let direct = import_file(fixture("04 PRESENCE Master RS.musicxml"))
             .expect("musicxml import should succeed");
@@ -309,7 +308,7 @@ mod tests {
     /// `source_measure_number` so the test stays meaningful no matter how
     /// the importer slices sections.
     #[test]
-    #[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+    #[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
     fn lord_of_the_fight_structure() {
         use keyflow_proto::chart::types::Measure;
         use keyflow_proto::sections::SectionType;

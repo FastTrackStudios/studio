@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 fn in_repo_fixture() -> PathBuf {
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.push("../../features/examples/png-project-charts");
+    p.push("../keyflow-examples/png-project-charts");
     p.push("02 LORD OF THE FIGHT Master RS.musicxml");
     p
 }
@@ -84,7 +84,7 @@ fn check_invariants(path: &Path) {
 }
 
 #[test]
-#[ignore = "the reference chart corpus is not in the repo: `features/examples/png-project-charts`. Drop a local copy in and run `cargo test -- --ignored`."]
+#[ignore = "needs the Master Rhythm chart corpus (commercial songs, not redistributable) at crates/studio-core/music/keyflow-examples/png-project-charts, which git ignores: copy it there from a local keyflow checkout's examples/png-project-charts and run with --ignored"]
 fn lord_of_the_fight_inventory_round_trips() {
     let path = in_repo_fixture();
     check_invariants(&path);
@@ -114,10 +114,14 @@ fn corpus_inventories_round_trip() {
         format!(
             "{home}/task-staging/alan-parsons/org/resources/latest-charts/Games People Play - Score.musicxml"
         ),
-        "/run/media/Development/FastTrackStudio-legacy/keyflow/examples/mxl/the-epic-how-to-train-your-dragon-orchestral-suite.mxl"
-            .to_string(),
-        "/run/media/Development/FastTrackStudio-legacy/keyflow/examples/mxl/theme-from-jurassic-park.mxl"
-            .to_string(),
+        format!(
+            "{}/../keyflow-examples/mxl/the-epic-how-to-train-your-dragon-orchestral-suite.mxl",
+            env!("CARGO_MANIFEST_DIR")
+        ),
+        format!(
+            "{}/../keyflow-examples/mxl/theme-from-jurassic-park.mxl",
+            env!("CARGO_MANIFEST_DIR")
+        ),
     ];
     let mut checked = 0;
     for candidate in candidates {

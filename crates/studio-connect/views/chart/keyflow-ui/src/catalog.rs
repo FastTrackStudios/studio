@@ -13,8 +13,8 @@ pub struct CatalogEntry {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn local_musicxml_catalog() -> Vec<CatalogEntry> {
     let mut entries = Vec::new();
-    let root =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../reference-data/wikifonia/xml");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../../studio-core/music/keyflow-examples/wikifonia/xml");
     collect_musicxml_entries(&root, &mut entries);
     entries.sort_by(|a, b| {
         a.title

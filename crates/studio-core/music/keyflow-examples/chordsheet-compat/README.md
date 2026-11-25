@@ -16,7 +16,7 @@ kf png "examples/chordsheet-compat/kf/THE KILLERS - MR.BRIGHTSIDE.kf" \
   --chart-mode folded --scale 1.5 -o examples/chordsheet-compat/png/mr-brightside-folded.png
 ```
 
-The `#[ignore]`d corpus tests in `features/chordsheet/tests/corpus.rs` still
-read their own copy at `features/examples/chordsheet/`, which stays out of git:
-a test fixture lives inside the crate that reads it, and this directory is
-outside every crate.
+The `#[ignore]`d corpus diagnostics read this directory directly:
+keyflow-lang's `tests/chordsheet_corpus.rs` (import and round trip) and the
+engraver's `tests/chordsheet_engraving.rs` (no stranded bars). Run them with
+`--ignored`.

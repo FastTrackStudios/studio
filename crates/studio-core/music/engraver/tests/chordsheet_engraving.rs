@@ -1,15 +1,16 @@
 //! The chordsheet.com backup, engraved: every chart lays out on the page
-//! without stranding a bar. The backup is not in a clean clone — put a local
-//! copy at `features/examples/chordsheet/source/` (and its `manifest.json`
-//! beside it) and run with `--ignored`. The import side is tested in
-//! keyflow-lang's `chordsheet_corpus`.
+//! without stranding a bar. The backup is committed at
+//! `crates/studio-core/music/keyflow-examples/chordsheet-compat/`. Ignored: on
+//! 2026-11-25 134 of 204 charts still strand bars. Run with `--ignored`. The
+//! import side is tested in keyflow-lang's `chordsheet_corpus`.
 
 use std::path::PathBuf;
 
 use keyflow_lang::chordsheet::manifest::Manifest;
 
 fn corpus() -> Option<PathBuf> {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../keyflow-examples/chordsheet/source");
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../keyflow-examples/chordsheet-compat/chordsheet");
     dir.is_dir().then_some(dir)
 }
 
@@ -20,7 +21,7 @@ fn corpus() -> Option<PathBuf> {
 /// PDFs rather than by any test: a five-bar phrase broken four-and-one, with
 /// the fifth bar alone on a line of its own.
 #[test]
-#[ignore = "needs a chordsheet.com backup at features/examples/chordsheet/source (copy it from examples/chordsheet-compat)"]
+#[ignore = "corpus diagnostic over the committed chordsheet.com backup; 134 of 204 charts still strand a bar"]
 fn every_chart_in_the_backup_engraves_without_stranding_a_bar() {
     use engraver::api::pipeline::ChartMode;
     use engraver::api::pipeline::{ChartPipeline, Preset, PresetOptions};
