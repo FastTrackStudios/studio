@@ -573,6 +573,47 @@ fn an_fx_set_reaches_a_stopped_signal_its_chain_and_a_render_copy() {
     );
 }
 
+/// SIGNAL_FEED's `values_revision` is the chain's, before and after a value
+/// set — read from SIGNAL_REVISIONS where the build has it (no chain
+/// read), else from the chain — and a feed of a still song reads no
+/// chain once it has one.
+#[test]
+fn the_feeds_values_revision_is_the_chains_and_follows_a_set() {
+    let Some((daw, ctx, fx)) = stopped_signal("signal-feed-values") else {
+        return;
+    };
+    let chain = |daw: &daw::standalone::Standalone| {
+        super::signal::forget_chain(&fx);
+        super::signal::chain(daw, &ctx, "Kick/Sum/In", None).expect("its chain")
+    };
+    let before = chain(&daw);
+    let feed = super::signal::feed(&daw, &ctx);
+    assert_eq!(feed.fx.len(), 1, "{feed:?}");
+    assert_eq!(
+        feed.fx[0].values_revision,
+        before["chain"]["values_revision"].as_u64()
+    );
+    let clap_id = chain_param(&before["chain"], "tone.comp", "makeup")
+        .and_then(|p| p["clap_id"].as_str().map(str::to_owned))
+        .expect("the comp's makeup is a slot");
+    fx_set(&daw, &ctx, &clap_id, "3 dB");
+    let fed = super::signal::feed(&daw, &ctx).fx[0].values_revision;
+    let after = chain(&daw);
+    assert_eq!(fed, after["chain"]["values_revision"].as_u64());
+    assert_ne!(fed, feed.fx[0].values_revision, "a value set moves it");
+    // What a feed costs once the chain kept is older than VALUES_FRESH
+    // (every other feed or so, at the mixer's ten a second).
+    let at = std::time::Instant::now();
+    for _ in 0..20 {
+        super::signal::forget_chain(&fx);
+        std::hint::black_box(super::signal::feed(&daw, &ctx));
+    }
+    eprintln!(
+        "a feed of one Signal, its chain stale: {:?}",
+        at.elapsed() / 20
+    );
+}
+
 /// SIGNAL_BLOCK_SET on a stopped Signal: an EQ band past the six the slots
 /// show, and a comp's makeup over a value FX_SET held on it — in the chain
 /// read at once and in a render copy, which plays the makeup.

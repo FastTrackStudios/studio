@@ -64,7 +64,7 @@ static FEED: ActionMeta = meta(
     "SIGNAL_FEED",
     "signal_feed",
     "Signal's live values",
-    "The mixer's live feed of Signal, cheap enough to read ten times a second: `{at_ms, fx: [{track, track_guid, fx_guid, place, name, revision, values_revision, meters: [{id, name, unit, index, value}]}]}`, one row per Signal instance on the song. `revision` is its chain's: when it moved, read SIGNAL_CHAIN again; `values_revision` (the chain's, null from a Signal build without it; at most 250 ms old) moves when a parameter value does: read the values again. A meter's `value` (in its `unit`: dB, %, Hz) is what the block published after its last processed block, read without holding up the audio. The same rows stream to a window in this process (`session_engine::clap_host::signal::feed_hub`).",
+    "The mixer's live feed of Signal, cheap enough to read ten times a second: `{at_ms, fx: [{track, track_guid, fx_guid, place, name, revision, values_revision, meters: [{id, name, unit, index, value}]}]}`, one row per Signal instance on the song. `revision` is its chain's: when it moved, read SIGNAL_CHAIN again; `values_revision` (the chain's, null from a Signal build without it; read as it is now from a Signal build with SIGNAL_REVISIONS, else at most 250 ms old) moves when a parameter value does: read the values again. A meter's `value` (in its `unit`: dB, %, Hz) is what the block published after its last processed block, read without holding up the audio. The same rows stream to a window in this process (`session_engine::clap_host::signal::feed_hub`).",
     "FX",
     "",
 );
@@ -112,9 +112,9 @@ pub struct FeedRow {
     pub revision: u64,
     /// Its parameter values' revision (the chain's `values_revision`):
     /// read the values again when it moved. `None` from a Signal build
-    /// that does not send it. As of the chain's last read, at most
-    /// [`VALUES_FRESH`] ago, until signal/1 has a thread-safe
-    /// `values_revision()`.
+    /// that does not send it. As it is now from a build that answers
+    /// `SIGNAL_REVISIONS`; from an older one, as of the chain's last
+    /// read, at most [`VALUES_FRESH`] ago.
     pub values_revision: Option<u64>,
     pub meters: Vec<MeterValue>,
 }
@@ -145,6 +145,10 @@ struct Kept {
     chain: Option<(u64, Arc<Value>, web_time::Instant)>,
     /// Its meters, as of the chain revision they were read at.
     meters: Option<(u64, Vec<daw::standalone::clap_ext::ModSourceInfo>)>,
+    /// Whether it answers SIGNAL_REVISIONS (`None`: not asked yet). A
+    /// build without it is read for its values' revision through its
+    /// chain.
+    revisions: Option<bool>,
 }
 
 #[derive(Default)]
@@ -154,8 +158,9 @@ struct Cache {
     /// The engine they are from (a process runs one; a test may run more).
     engine: usize,
     by_fx: HashMap<String, Kept>,
-    /// The song's Signal instances, as last found, and when.
-    ports: Option<(u64, web_time::Instant, Vec<Port>)>,
+    /// The song's Signal instances, as last found: at which plugin map
+    /// generation and song revision, and when.
+    ports: Option<(u64, Option<u64>, web_time::Instant, Vec<Port>)>,
 }
 
 static CACHE: Mutex<Option<Cache>> = Mutex::new(None);
@@ -193,6 +198,7 @@ fn client_of(daw: &Standalone, fx_guid: &str) -> Option<SignalPluginClient> {
                     client,
                     chain: None,
                     meters: None,
+                    revisions: None,
                 },
             );
         }
@@ -211,15 +217,23 @@ fn revision_of(daw: &Standalone, fx_guid: &str) -> Option<u64> {
 }
 
 /// The Signal instances on `project`'s tracks, found again when the plugin
-/// map moved or a second has passed (an FX moved keeps its instance).
+/// map moved, or the song did and a second has passed since they were
+/// last found (an FX moved keeps its instance; a song that holds still
+/// is not searched again).
 fn ports(daw: &Standalone, project: &ProjectContext) -> Vec<Port> {
     let generation = daw.with_plugin_map(|m| m.generation());
+    let revision = crate::fx_actions::project_guid(project)
+        .ok()
+        .and_then(|g| daw.project_revision(&g));
     let fresh = with_cache(|c| {
         current(c, (std::ptr::from_ref(daw).addr(), generation));
         c.ports
             .as_ref()
-            .filter(|(g, at, _)| *g == generation && at.elapsed().as_secs_f64() < 1.0)
-            .map(|(_, _, ports)| ports.clone())
+            .filter(|(g, r, at, _)| {
+                *g == generation
+                    && ((revision.is_some() && *r == revision) || at.elapsed().as_secs_f64() < 1.0)
+            })
+            .map(|(_, _, _, ports)| ports.clone())
     });
     if let Some(ports) = fresh {
         return ports;
@@ -250,7 +264,12 @@ fn ports(daw: &Standalone, project: &ProjectContext) -> Vec<Port> {
     }
     with_cache(|c| {
         if c.generation == generation {
-            c.ports = Some((generation, web_time::Instant::now(), found.clone()));
+            c.ports = Some((
+                generation,
+                revision,
+                web_time::Instant::now(),
+                found.clone(),
+            ));
         }
     });
     found
@@ -330,6 +349,68 @@ fn chain_of_port(daw: &Standalone, port: &Port) -> Result<(u64, Arc<Value>, bool
         }
     });
     Ok((rev, chain, false))
+}
+
+/// How `port`'s values' revision was read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ValuesRead {
+    /// SIGNAL_REVISIONS: the counter alone, no chain built.
+    Revisions,
+    /// From the chain kept, read within [`VALUES_FRESH`].
+    Kept,
+    /// The chain read again for it (a build without SIGNAL_REVISIONS).
+    Chain,
+    /// Not read: the instance went, or has no signal/1.
+    None,
+}
+
+/// `port`'s parameter values' revision, as the chain has it: asked of the
+/// plugin alone (`SIGNAL_REVISIONS`, the counter, no chain built) where
+/// the build answers it, else from its chain (read again at most every
+/// [`VALUES_FRESH`]).
+fn values_revision_of(daw: &Standalone, port: &Port) -> (Option<u64>, ValuesRead) {
+    let asks = with_cache(|c| c.by_fx.get(&port.fx_guid).and_then(|k| k.revisions));
+    if asks != Some(false) {
+        let read = daw
+            .with_plugin_instance(&port.fx_guid, |p| {
+                super::plugin_call(|| {
+                    // As for a chain read: what the call lands (a finished
+                    // analysis) names a plugin Studio knows.
+                    if super::automation::caller_of(&port.fx_guid).is_none() {
+                        super::register_plugin(daw, &port.fx_guid, None, p);
+                    }
+                    Some(p.signal()?.run_action("SIGNAL_REVISIONS", "{}"))
+                })
+            })
+            .flatten();
+        let answer = match read {
+            None => return (None, ValuesRead::None),
+            Some(Ok(json)) => serde_json::from_str::<Value>(&json).ok(),
+            Some(Err(_)) => None,
+        };
+        with_cache(|c| {
+            if let Some(k) = c.by_fx.get_mut(&port.fx_guid) {
+                k.revisions = Some(answer.is_some());
+            }
+        });
+        if let Some(answer) = answer {
+            return (
+                answer.get("values_revision").and_then(Value::as_u64),
+                ValuesRead::Revisions,
+            );
+        }
+    }
+    match chain_of_port(daw, port) {
+        Ok((_, chain, cached)) => (
+            chain.get("values_revision").and_then(Value::as_u64),
+            if cached {
+                ValuesRead::Kept
+            } else {
+                ValuesRead::Chain
+            },
+        ),
+        Err(_) => (None, ValuesRead::None),
+    }
 }
 
 /// How long a chain read stands for the plugin's parameter values while
@@ -619,18 +700,29 @@ fn meters_of(
 /// the values read beside the render (no plugin's lock taken for them).
 #[must_use]
 pub fn feed(daw: &Standalone, project: &ProjectContext) -> Feed {
+    let span = tracing::info_span!(
+        "SIGNAL_FEED",
+        signal.feed.instances = tracing::field::Empty,
+        signal.feed.revision_reads = tracing::field::Empty,
+        signal.feed.chain_reads = tracing::field::Empty,
+        signal.feed.chains_kept = tracing::field::Empty,
+    );
+    let _in = span.enter();
     let ports = ports(daw, project);
     let mut rows = Vec::with_capacity(ports.len());
+    let mut reads = [0u64; 3];
     for port in ports {
         let Some(revision) = revision_of(daw, &port.fx_guid) else {
             continue;
         };
         let infos = meters_of(daw, &port, revision);
-        // The values' revision is the chain's: read again at most every
-        // VALUES_FRESH (kept between, while the chain's revision holds).
-        let values_revision = chain_of_port(daw, &port)
-            .ok()
-            .and_then(|(_, chain, _)| chain.get("values_revision").and_then(Value::as_u64));
+        let (values_revision, how) = values_revision_of(daw, &port);
+        match how {
+            ValuesRead::Revisions => reads[0] += 1,
+            ValuesRead::Chain => reads[1] += 1,
+            ValuesRead::Kept => reads[2] += 1,
+            ValuesRead::None => {}
+        }
         let Some(client) = client_of(daw, &port.fx_guid) else {
             continue;
         };
@@ -673,6 +765,10 @@ pub fn feed(daw: &Standalone, project: &ProjectContext) -> Feed {
             meters,
         });
     }
+    span.record("signal.feed.instances", rows.len());
+    span.record("signal.feed.revision_reads", reads[0]);
+    span.record("signal.feed.chain_reads", reads[1]);
+    span.record("signal.feed.chains_kept", reads[2]);
     Feed {
         at_ms: epoch().elapsed().as_secs_f64() * 1e3,
         fx: rows,
