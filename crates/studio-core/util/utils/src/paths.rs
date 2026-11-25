@@ -76,7 +76,7 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 /// The source checkout this process runs from, when it runs from one: the
-/// first directory holding the workspace's `Cargo.lock` and `features/`
+/// first directory holding the workspace's `Cargo.lock` and `crates/studio-core/`
 /// above `$CARGO_MANIFEST_DIR` (set by `cargo run` and `cargo test`), the
 /// executable (a dev build lives in the checkout's `target/`) or the
 /// working directory. `None` for an installed app.
@@ -106,6 +106,6 @@ pub fn checkout_path(rel: impl AsRef<std::path::Path>) -> PathBuf {
 fn find_checkout_above(start: &std::path::Path) -> Option<PathBuf> {
     start
         .ancestors()
-        .find(|dir| dir.join("Cargo.lock").is_file() && dir.join("features").is_dir())
+        .find(|dir| dir.join("Cargo.lock").is_file() && dir.join("crates/studio-core").is_dir())
         .map(std::path::Path::to_path_buf)
 }
