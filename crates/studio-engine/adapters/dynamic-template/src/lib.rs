@@ -312,7 +312,7 @@ pub trait IntoTracks<M: Metadata> {
     ///
     /// # Example
     /// ```ignore
-    /// use crate::{default_config, IntoTracks};
+    /// use dynamic_template::{default_config, IntoTracks};
     /// use monarchy::monarchy_sort;
     ///
     /// let structure = monarchy_sort(vec!["Kick In"], default_config())?;

@@ -32,7 +32,7 @@ pub use shape::{maximal, vocal_fx, Shape};
 /// The fixtures directory, in the checkout this runs from.
 #[must_use]
 pub fn fixtures_dir() -> PathBuf {
-    utils::paths::checkout_path("features/dynamic-template/fixtures/golden")
+    utils::paths::checkout_path("crates/studio-engine/adapters/dynamic-template/fixtures/golden")
 }
 
 /// Every fixture this module builds, in the order they are written.

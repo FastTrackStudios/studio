@@ -319,7 +319,7 @@ pub const BUS_TREE: &[BusSpec] = &[
 ///
 /// # Example
 /// ```
-/// use crate::buses::{bus_for_path, names};
+/// use dynamic_template::buses::{bus_for_path, names};
 ///
 /// assert_eq!(bus_for_path(&["Drums".into()]), Some(names::DRUM));
 /// assert_eq!(bus_for_path(&["Vocals".into(), "BGVs".into()]), Some(names::BGV));

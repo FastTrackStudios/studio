@@ -17,7 +17,7 @@ use vox::service;
 /// # Example
 ///
 /// ```ignore
-/// use crate::proto::{DynamicTemplateServiceClient, OrganizeRequest};
+/// use dynamic_template::proto::{DynamicTemplateServiceClient, OrganizeRequest};
 ///
 /// let client = DynamicTemplateServiceClient::new(handle);
 /// let response = client.organize(OrganizeRequest::new(vec![
