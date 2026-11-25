@@ -101,6 +101,8 @@ pub use session_engine_client::view;
 #[cfg(feature = "native")]
 pub use session_engine_client::view_client;
 #[cfg(feature = "native")]
+pub mod agent;
+#[cfg(feature = "native")]
 pub mod listen;
 #[cfg(feature = "native")]
 pub mod mix_measure;

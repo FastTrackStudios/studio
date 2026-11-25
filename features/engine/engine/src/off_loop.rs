@@ -26,19 +26,43 @@ use architect::action::ActionError;
 /// As `run_json_async`: no such action, bad arguments, a refusal, or a
 /// panic.
 pub async fn run(id: &str, args: &[u8]) -> Result<Vec<u8>, ActionError> {
+    run_by(id, args, crate::agent::By::Person).await
+}
+
+/// [`run`], its edits noted as `by`'s in the song's journal
+/// (`crate::agent`): the person's through the window and the app, the
+/// agent's through `AGENT_RUN`.
+///
+/// # Errors
+/// As [`run`].
+pub async fn run_by(id: &str, args: &[u8], by: crate::agent::By) -> Result<Vec<u8>, ActionError> {
     let list = crate::actions::list();
+    let watch = crate::agent::watch(id);
     if list.is_async(id) || tokio::runtime::Handle::try_current().is_err() {
-        return list.run_json_async(id, args).await;
+        let flight = watch.as_ref().map(|_| crate::agent::InFlight::enter());
+        let out = list.run_json_async(id, args).await;
+        drop(flight);
+        if let Some(w) = watch {
+            w.finish(by, out.is_ok(), args);
+        }
+        return out;
     }
     let (owned, args) = (id.to_owned(), args.to_vec());
-    blocking(move || list.run_json(&owned, &args))
-        .await
-        .unwrap_or_else(|why| {
-            Err(ActionError::Failed {
-                id: id.to_owned(),
-                message: why,
-            })
+    blocking(move || {
+        let _in = crate::agent::InAction::enter();
+        let out = list.run_json(&owned, &args);
+        if let Some(w) = watch {
+            w.finish(by, out.is_ok(), &args);
+        }
+        out
+    })
+    .await
+    .unwrap_or_else(|why| {
+        Err(ActionError::Failed {
+            id: id.to_owned(),
+            message: why,
         })
+    })
 }
 
 /// Run blocking `work` on the runtime's blocking pool under the caller's

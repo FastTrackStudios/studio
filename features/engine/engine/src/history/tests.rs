@@ -192,3 +192,58 @@ fn a_mark_holds_the_song_as_it_was_and_is_gone_back_to_by_name() {
     project_file::restore("marked", MomentRef::Mark(second)).expect("gone back");
     assert_eq!(volume(&daw, "marked"), Some(0.9));
 }
+
+/// An agent's script as one undo step: its three edits taken back by one
+/// undo, to where the person's edit before it left the song, and brought
+/// back by one redo; the person's edit is a step of its own either side.
+#[test]
+fn an_agents_steps_are_undone_and_redone_as_one() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let daw = Standalone::new();
+    song_in(&daw, "grouped", &dir.path().join("Song.session"), 0.5);
+    step(&daw, "grouped", 0.6);
+    assert!(project_file::group_begin("grouped", "Agent: tighten snare"));
+    for v in [0.7, 0.8, 0.9] {
+        step(&daw, "grouped", v);
+    }
+    assert_eq!(
+        project_file::group_end("grouped", "Agent: tighten snare"),
+        Some(3)
+    );
+
+    let undone = project_file::undo(&daw, "grouped").expect("undone");
+    assert_eq!(undone, Undone::Step("Agent: tighten snare".into()));
+    assert_eq!(
+        volume(&daw, "grouped"),
+        Some(0.6),
+        "the person's edit stays"
+    );
+    let undone = project_file::undo(&daw, "grouped").expect("undone");
+    assert_eq!(undone, Undone::Step("Set volume".into()));
+    assert_eq!(volume(&daw, "grouped"), Some(0.5));
+
+    project_file::redo(&daw, "grouped").expect("redone");
+    assert_eq!(volume(&daw, "grouped"), Some(0.6));
+    let redone = project_file::redo(&daw, "grouped").expect("redone");
+    assert_eq!(redone, Undone::Step("Agent: tighten snare".into()));
+    assert_eq!(volume(&daw, "grouped"), Some(0.9));
+}
+
+/// A step made after the agent's comes off first, on its own; the agent's
+/// three then go as one.
+#[test]
+fn a_step_after_an_agents_is_undone_first() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let daw = Standalone::new();
+    song_in(&daw, "after", &dir.path().join("Song.session"), 0.5);
+    assert!(project_file::group_begin("after", "Agent: a"));
+    step(&daw, "after", 0.6);
+    step(&daw, "after", 0.7);
+    assert_eq!(project_file::group_end("after", "Agent: a"), Some(2));
+    step(&daw, "after", 0.8);
+    project_file::undo(&daw, "after").expect("undone");
+    assert_eq!(volume(&daw, "after"), Some(0.7));
+    let undone = project_file::undo(&daw, "after").expect("undone");
+    assert_eq!(undone, Undone::Step("Agent: a".into()));
+    assert_eq!(volume(&daw, "after"), Some(0.5));
+}

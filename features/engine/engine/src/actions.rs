@@ -667,6 +667,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::trigger_from_mics::register(list)?;
     crate::safety_net::register(list)?;
     crate::history::register(list)?;
+    crate::agent::register(list)?;
     crate::edit_reads::register(list)?;
     crate::backup::register(list)?;
     crate::comp_rank::register(list)?;

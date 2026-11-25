@@ -481,6 +481,7 @@ pub fn save(
             }
             let mut open = begin(&daw, &guid, &path, &branch).await?;
             open._remote = Some(watch_remote(&guid, open.bridge.doc().loro()));
+            forget_undo(&guid);
             songs.insert(guid.clone(), open);
         }
         let saved = match songs.get_mut(&guid) {
@@ -939,6 +940,8 @@ pub fn record_steps() {
         daw::standalone::steps::listen(Arc::new(move |project, label| {
             // A CLAP's `hits:` subscriptions follow each step.
             crate::clap_host::step_finished();
+            // The song's revision: a step no watched action made (a drag).
+            crate::agent::step_finished(label);
             if let Ok(tx) = tx.lock()
                 && tx
                     .send((
@@ -1087,6 +1090,8 @@ pub(crate) fn record(project_guid: &str, label: &str, action: Option<&str>) -> R
             .await
             .map_err(|e| e.to_string())?;
             read_at(&guid, revision);
+            // One undo item more in the doc, a quiet one included.
+            with_book(&guid, |b| b.recorded(&label));
             let Some(read) = read else {
                 return Ok(());
             };
@@ -1095,12 +1100,15 @@ pub(crate) fn record(project_guid: &str, label: &str, action: Option<&str>) -> R
             return Ok(());
         }
         open.name_next(&label);
-        let recorded = match tracing::Instrument::instrument(
+        let stepped = tracing::Instrument::instrument(
             open.bridge.local_step(&label),
             tracing::info_span!("bridge.local_step"),
         )
-        .await
-        {
+        .await;
+        if stepped.is_ok() {
+            with_book(&guid, |b| b.recorded(&label));
+        }
+        let recorded = match stepped {
             Ok(true) => tracing::info_span!("project_file.append")
                 .in_scope(|| append_as(open, &label, action.as_deref())),
             Ok(false) => Ok(()),
@@ -1180,7 +1188,55 @@ async fn step_back(
         {
             append(open, pending)?;
         }
+        with_book(guid, |b| b.recorded(pending));
     }
+    // An agent's script on top: every one of its items, as one step.
+    let group = with_book(guid, |b| {
+        if back { b.to_undo() } else { b.to_redo() }.cloned()
+    });
+    if let Some(group) = group {
+        let mut done = 0;
+        for want in undo_groups::plan(&group, back) {
+            let next = if back {
+                open.bridge.next_undo()
+            } else {
+                open.bridge.next_redo()
+            };
+            if next.as_deref() != Some(want.as_str()) {
+                if done == 0 {
+                    break;
+                }
+                tracing::warn!(
+                    project.guid = %guid,
+                    undo.group = %group.name,
+                    undo.done = done,
+                    "an agent's step was taken back only in part: the song's undo is not what its count said"
+                );
+                break;
+            }
+            if one_back(open, back).await?.is_none() {
+                break;
+            }
+            done += 1;
+        }
+        if done > 0 {
+            with_book(guid, |b| if back { b.undone(done) } else { b.redone(done) });
+            return Ok(Undone::Step(group.name));
+        }
+    }
+    let step = one_back(open, back).await?;
+    with_book(guid, |b| {
+        if step.is_some() {
+            if back { b.undone(1) } else { b.redone(1) }
+        }
+    });
+    Ok(step.map_or(Undone::Nothing, Undone::Step))
+}
+
+/// Undo (`back`) or redo one undo item of the song's doc, the engine made
+/// to match and it appended to the file: its name, `None` with nothing to
+/// take back.
+async fn one_back(open: &mut Open, back: bool) -> Result<Option<String>, String> {
     open.name_next(if back { "Undo" } else { "Redo" });
     let step = if back {
         open.bridge.undo().await
@@ -1189,13 +1245,72 @@ async fn step_back(
     }
     .map_err(|e| e.to_string())?;
     let Some(name) = step else {
-        return Ok(Undone::Nothing);
+        return Ok(None);
     };
     append(
         open,
         &format!("{} {name}", if back { "Undo" } else { "Redo" }),
     )?;
-    Ok(Undone::Step(name))
+    Ok(Some(name))
+}
+
+// ── many steps undone as one (`undo_groups`) ────────────────────────────
+
+/// Each song's undo items as this engine counted them, and its groups.
+fn books() -> &'static Mutex<HashMap<String, undo_groups::Book>> {
+    static BOOKS: std::sync::LazyLock<Mutex<HashMap<String, undo_groups::Book>>> =
+        std::sync::LazyLock::new(Default::default);
+    &BOOKS
+}
+
+fn with_book<T>(guid: &str, f: impl FnOnce(&mut undo_groups::Book) -> T) -> T {
+    let mut books = books()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    f(books.entry(guid.to_owned()).or_default())
+}
+
+/// A new bridge on the song `guid`: its doc's undo starts empty.
+fn forget_undo(guid: &str) {
+    books()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(guid);
+}
+
+/// From now, every step of the song `guid` the recorder reads is the
+/// undo step `name`'s, until [`group_end`]: `SESSION_UNDO` takes them
+/// back as one. The steps before it are read first, so none of them is
+/// in it. False when the song is not open from its project file (its
+/// engine's own undo has no groups).
+#[must_use]
+pub fn group_begin(guid: &str, name: &str) -> bool {
+    if !is_open(guid) {
+        return false;
+    }
+    crate::history_marks::settle(crate::history_marks::SETTLE);
+    with_book(guid, |b| b.begin(name));
+    true
+}
+
+/// End the undo step `name` of the song `guid` (its steps read first):
+/// how many of the song's steps it holds, when it is open and made any.
+#[must_use]
+pub fn group_end(guid: &str, name: &str) -> Option<usize> {
+    crate::history_marks::settle(crate::history_marks::SETTLE);
+    with_book(guid, |b| b.end(name)).map(|g| g.labels.len())
+}
+
+/// Drop the undo step `name` of the song `guid` unfinished, its steps
+/// left steps of their own (its agent went away). Whether it was open.
+pub fn group_abandon(guid: &str, name: &str) -> bool {
+    with_book(guid, |b| b.abandon(name))
+}
+
+/// Whether the undo step `name` is being made on the song `guid`.
+#[must_use]
+pub fn group_open(guid: &str, name: &str) -> bool {
+    with_book(guid, |b| b.is_open(name))
 }
 
 /// Open `branch` of the project file at `path` as a new song in `daw`:
@@ -1283,6 +1398,7 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
             .moved_to(project(&daw, &made).await?, Some(direct(&daw)))
             .map_err(|e| e.to_string())?;
         let remote = Some(watch_remote(&made, bridge.doc().loro()));
+        forget_undo(&made);
         open_songs().lock().await.insert(
             made,
             Open {
@@ -1838,6 +1954,7 @@ pub fn live_side(
             let mut open = begin(&daw, &guid, &file, &branch).await?;
             append(&mut open, "Live")?;
             open._remote = Some(watch_remote(&guid, open.bridge.doc().loro()));
+            forget_undo(&guid);
             songs.insert(guid.clone(), open);
         }
         let open = songs.get(&guid).ok_or("the song is not open")?;
@@ -2019,6 +2136,8 @@ fn keep_aside(
 pub fn is_open(guid: &str) -> bool {
     run(async { open_songs().lock().await.contains_key(guid) }).unwrap_or(false)
 }
+
+mod undo_groups;
 
 #[cfg(test)]
 mod tests;
