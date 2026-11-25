@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The workflow-spec verification gate (`just daw-flows`, CI `checks.yml`).
+"""The workflow-spec verification gate (`python3 scripts/tracey-flow-gate.py`; a report, not a CI gate).
 
 The standard (issue #48): every `flow.*` rule in docs/spec/session/
 workflows.md that is marked implemented (`r[impl flow.x]` somewhere in
