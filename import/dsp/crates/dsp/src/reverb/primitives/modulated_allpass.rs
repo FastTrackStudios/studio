@@ -24,6 +24,8 @@ pub struct ModulatedAllpass {
 
     // Modulation state
     mod_phase: f64,
+    /// Where the modulation starts, and starts again on a reset.
+    start_phase: f64,
     current_delay: f64,
     delay_step: f64,
 
@@ -43,6 +45,7 @@ impl ModulatedAllpass {
             buffer: DelayLine::new(num::f64_to_index(DEFAULT_SAMPLE_RATE * BUFFER_SECONDS)),
             samples_processed: 0,
             mod_phase: 0.31, // Arbitrary initial phase
+            start_phase: 0.31,
             current_delay: 100.0,
             delay_step: 0.0,
             sample_delay: 100,
@@ -61,6 +64,7 @@ impl ModulatedAllpass {
     pub fn with_phase(phase: f64) -> Self {
         let mut ap = Self::new();
         ap.mod_phase = phase;
+        ap.start_phase = phase;
         ap
     }
 
@@ -183,11 +187,13 @@ impl ModulatedAllpass {
     )]
     pub fn set_phase(&mut self, phase: f64) {
         self.mod_phase = phase;
+        self.start_phase = phase;
     }
 
     pub fn reset(&mut self) {
         self.clear();
         self.samples_processed = 0;
+        self.mod_phase = self.start_phase;
         self.current_delay = num::count_to_f64(self.sample_delay);
         self.delay_step = 0.0;
     }

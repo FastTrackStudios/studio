@@ -186,8 +186,11 @@ impl AllpassDiffuser {
         }
     }
 
+    /// Every stage as new: its line, and where its modulation is.
     pub fn reset(&mut self) {
-        self.clear();
+        for f in &mut self.filters {
+            f.reset();
+        }
     }
 
     /// `CloudSeed` delay distribution: `d = pow(10, r) * 0.1 * baseDelay`.

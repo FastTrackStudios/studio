@@ -102,6 +102,8 @@ struct RingAp {
     g: f64,
     depth: f64,
     phase: f64,
+    /// Where the LFO starts, and starts again when the ring is cleared.
+    start_phase: f64,
     inc: f64,
 }
 
@@ -115,8 +117,15 @@ impl RingAp {
             g: 0.0,
             depth: 0.0,
             phase,
+            start_phase: phase,
             inc: 0.0,
         }
+    }
+
+    /// Silent, and its LFO back where it started.
+    fn clear(&mut self) {
+        self.line.clear();
+        self.phase = self.start_phase;
     }
 
     #[inline]
@@ -202,7 +211,7 @@ impl InputChain {
 
     pub fn clear(&mut self) {
         for ap in &mut self.stages {
-            ap.line.clear();
+            ap.clear();
         }
     }
 
@@ -508,11 +517,11 @@ impl CloudRing {
 
     pub fn clear(&mut self) {
         for ap in self.stages.iter_mut().flatten() {
-            ap.line.clear();
+            ap.clear();
         }
         for half in &mut self.halves {
-            half.first.line.clear();
-            half.second.line.clear();
+            half.first.clear();
+            half.second.clear();
             half.line1.clear();
             half.line2.clear();
             half.lp1.reset();

@@ -4,3 +4,4 @@
 
 mod mic;
 mod reverb;
+mod reverb_reset;

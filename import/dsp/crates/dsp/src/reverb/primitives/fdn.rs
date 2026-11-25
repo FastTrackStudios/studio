@@ -85,6 +85,9 @@ struct ActiveStages {
     loop_eq: bool,
 }
 
+/// The jitter walk's seed: a reset starts the walk where a new network does.
+const JITTER_SEED: u32 = 0xFD4_517E5;
+
 pub struct Fdn {
     /// Which optional in-loop stages are engaged.
     active: ActiveStages,
@@ -198,7 +201,7 @@ impl Fdn {
             vintage_phase: 0.0,
             vintage_inc: 0.9 / 48_000.0,
             jitter_depth: 0.0,
-            jitter_rng: XorShift32::new(0xFD4_517E5),
+            jitter_rng: XorShift32::new(JITTER_SEED),
         }
     }
 
@@ -545,6 +548,13 @@ impl Fdn {
         }
         self.tc_prev = 0.0;
         self.feedback.fill(0.0);
+        // The tail's motion starts over too: a new network's rotation,
+        // vintage sweep and jitter walk, whatever ran before.
+        self.rot_phase = 0.0;
+        self.rot_cs.fill((1.0, 0.0));
+        self.rot_countdown = 0;
+        self.vintage_phase = 0.0;
+        self.jitter_rng = XorShift32::new(JITTER_SEED);
     }
 
     /// Fill `feedback` from each line's delay output — a fractional read

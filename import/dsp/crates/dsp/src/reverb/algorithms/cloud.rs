@@ -308,9 +308,13 @@ impl Ensemble {
     }
 
     fn reset(&mut self) {
-        for band in &mut self.bands {
+        for (i, band) in self.bands.iter_mut().enumerate() {
             band.env = 0.0;
             band.filter.reset();
+            // The partials and the wobble start where a new ensemble's do.
+            band.phase2 = num::count_to_f64(i) * 0.041;
+            band.phase3 = num::count_to_f64(i) * 0.067;
+            band.lfo = num::count_to_f64(i) / num::count_to_f64(ENSEMBLE_BANDS);
         }
         self.lp.reset();
     }

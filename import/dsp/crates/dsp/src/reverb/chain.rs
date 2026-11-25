@@ -1150,7 +1150,24 @@ impl ReverbChain {
 }
 
 impl Processor for ReverbChain {
+    /// As a new chain with these settings: every ramp lands on its
+    /// value and every line, filter, envelope and phase clears, so what
+    /// plays after a reset never depends on what played before it.
     fn reset(&mut self) {
+        self.mix_smoother.set_immediate(self.mix);
+        self.width_smoother.set_immediate(self.width);
+        self.pan_smoother.set_immediate(self.pan);
+        self.trem_depth_smoother.set_immediate(self.trem_depth);
+        let p = self.effective_params();
+        self.decay_smoother.set_immediate(p.decay);
+        self.damping_smoother.set_immediate(p.damping);
+        self.tilt_smoother.set_immediate(self.output_tilt_db);
+        self.sat_smoother.set_immediate(self.saturation);
+        self.sat_l.set_drive(self.saturation);
+        self.sat_r.set_drive(self.saturation);
+        self.tilt_l.set_tilt_db(self.output_tilt_db);
+        self.tilt_r.set_tilt_db(self.output_tilt_db);
+        self.algorithm.set_params(&p);
         self.algorithm.reset();
         self.predelay.clear();
         self.predelay_r.clear();

@@ -19,6 +19,9 @@ const MOD_UPDATE_RATE: u64 = 8;
 /// Buffer length in seconds.
 const BUFFER_SECONDS: f64 = 2.0;
 
+/// Where the modulation starts, and starts again on a reset.
+const START_PHASE: f64 = 0.31;
+
 pub struct ModulatedDelay {
     buffer: DelayLine,
     samples_processed: u64,
@@ -36,7 +39,7 @@ impl ModulatedDelay {
         let mut d = Self {
             buffer: DelayLine::new(num::f64_to_index(DEFAULT_SAMPLE_RATE * BUFFER_SECONDS)),
             samples_processed: 0,
-            mod_phase: 0.31,
+            mod_phase: START_PHASE,
             current_delay: 100.0,
             delay_step: 0.0,
             sample_delay: 100,
@@ -94,6 +97,7 @@ impl ModulatedDelay {
     pub fn reset(&mut self) {
         self.clear();
         self.samples_processed = 0;
+        self.mod_phase = START_PHASE;
         self.current_delay = num::count_to_f64(self.sample_delay);
         self.delay_step = 0.0;
     }
