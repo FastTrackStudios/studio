@@ -17,6 +17,8 @@ const DEFAULT_SAMPLE_RATE: f64 = 48000.0;
 const MOD_UPDATE_RATE: u64 = 8;
 /// Buffer length in seconds (100ms covers `CloudSeed` diffuser delays).
 const BUFFER_SECONDS: f64 = 0.1;
+/// The most samples [`ModulatedAllpass::process`] runs side by side.
+pub const BLOCK: usize = 32;
 
 pub struct ModulatedAllpass {
     buffer: DelayLine,
@@ -122,6 +124,127 @@ impl ModulatedAllpass {
 
         self.samples_processed = self.samples_processed.saturating_add(1);
         self.allpass_step(input, buf_out)
+    }
+
+    /// [`tick`](Self::tick) over every sample of `buf`, in place, with the
+    /// same arithmetic in the same order for every sample.
+    ///
+    /// A block of up to [`BLOCK`] samples at a time. When the block's read
+    /// position keeps one whole-sample part throughout (the modulation
+    /// moves it a few samples over seconds, so nearly always), reaches
+    /// back further than the block is long, and its taps do not straddle
+    /// the end of the ring, the four taps of every sample are four
+    /// contiguous runs of the ring that the block does not write: the
+    /// interpolation and the allpass then run for the whole block side by
+    /// side in vector registers, and the writes follow. Any other block
+    /// runs sample by sample.
+    #[inline]
+    pub fn process(&mut self, buf: &mut [f64]) {
+        for chunk in buf.chunks_mut(BLOCK) {
+            if !(self.modulation_enabled && self.interpolation_enabled && self.process_wide(chunk))
+            {
+                for x in chunk.iter_mut() {
+                    *x = self.tick(*x);
+                }
+            }
+        }
+    }
+
+    /// The block path of [`process`](Self::process); `false`, with nothing
+    /// changed, when the block is not one it takes.
+    #[inline]
+    fn process_wide(&mut self, buf: &mut [f64]) -> bool {
+        let n = buf.len().min(BLOCK);
+        let Some(buf) = buf.get_mut(..n) else {
+            return false;
+        };
+        // Where each sample reads: the modulation advanced exactly as
+        // `tick_with_mod` advances it, sample by sample.
+        let saved = (
+            self.mod_phase,
+            self.current_delay,
+            self.delay_step,
+            self.samples_processed,
+        );
+        let max_delay = num::count_to_f64(self.buffer.len().saturating_sub(4));
+        let mut pos = [0.0f64; BLOCK];
+        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+        for p in pos.iter_mut().take(n) {
+            if self.samples_processed >= MOD_UPDATE_RATE {
+                self.update_mod();
+                self.samples_processed = 0;
+            }
+            self.current_delay += self.delay_step;
+            *p = self.current_delay.clamp(1.0, max_delay);
+            lo = lo.min(*p);
+            hi = hi.max(*p);
+            self.samples_processed = self.samples_processed.saturating_add(1);
+        }
+        // `read_cubic`'s whole part, the same for every sample of the block.
+        let whole = num::f64_to_index(lo);
+        let (data, write_pos) = self.buffer.raw();
+        let len = data.len();
+        // Sample k's newest tap (`read(whole - 1)`) is ring index
+        // `newest + k`; its oldest (`read(whole + 2)`) `newest + k - 3`.
+        let newest = if write_pos.saturating_add(1) >= whole.saturating_add(3) {
+            Some(write_pos.saturating_add(1).saturating_sub(whole))
+        } else {
+            write_pos
+                .saturating_add(1)
+                .saturating_add(len)
+                .checked_sub(whole)
+        };
+        let runs = newest.filter(|&i| {
+            num::f64_to_index(hi) == whole
+                // Older than anything the block writes.
+                && whole >= BLOCK.saturating_add(2)
+                && i >= 3
+                && i.saturating_add(n) <= len
+        });
+        let taps = runs.and_then(|i| {
+            Some((
+                data.get(i..i.saturating_add(n))?,
+                data.get(i.saturating_sub(1)..i.saturating_add(n).saturating_sub(1))?,
+                data.get(i.saturating_sub(2)..i.saturating_add(n).saturating_sub(2))?,
+                data.get(i.saturating_sub(3)..i.saturating_add(n).saturating_sub(3))?,
+            ))
+        });
+        let Some((t0, t1, t2, t3)) = taps else {
+            (
+                self.mod_phase,
+                self.current_delay,
+                self.delay_step,
+                self.samples_processed,
+            ) = saved;
+            return false;
+        };
+
+        // Catmull-Rom and the allpass, as `read_cubic` and `allpass_step`.
+        let wf = num::count_to_f64(whole);
+        let fb = self.feedback;
+        let mut written = [0.0f64; BLOCK];
+        for (((((x, wr), &p), &y0), &y1), (&y2, &y3)) in buf
+            .iter_mut()
+            .zip(written.iter_mut())
+            .zip(pos.iter())
+            .zip(t0.iter())
+            .zip(t1.iter())
+            .zip(t2.iter().zip(t3.iter()))
+        {
+            let f = p - wf;
+            let a0 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+            let a1 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
+            let a2 = -0.5 * y0 + 0.5 * y2;
+            let a3 = y1;
+            let buf_out = ((a0 * f + a1) * f + a2) * f + a3;
+            let in_val = buf_out.mul_add(fb, *x);
+            *wr = in_val;
+            *x = in_val.mul_add(-fb, buf_out);
+        }
+        if let Some(written) = written.get(..n) {
+            self.buffer.write_block(written);
+        }
+        true
     }
 
     /// Shared Schroeder allpass update: write `input + fb`, output `delayed - fb * written`.

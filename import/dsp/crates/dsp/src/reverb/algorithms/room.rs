@@ -407,4 +407,61 @@ impl ReverbAlgorithm for Room {
 
         (er_l + late_l, er_r + late_r)
     }
+
+    fn process_block(&mut self, left: &mut [f64], right: &mut [f64]) {
+        for (l, r) in left
+            .chunks_mut(crate::reverb::algorithm::STAGE_BLOCK)
+            .zip(right.chunks_mut(crate::reverb::algorithm::STAGE_BLOCK))
+        {
+            if self.vintage {
+                // The Barr ring takes both sides at once, sample by sample.
+                for (l, r) in l.iter_mut().zip(r.iter_mut()) {
+                    (*l, *r) = self.tick(*l, *r);
+                }
+            } else {
+                self.stage_block(l, r);
+            }
+        }
+    }
+}
+
+impl Room {
+    /// [`ReverbAlgorithm::tick`] (the FDN pair, not the Classic ring) over
+    /// at most `STAGE_BLOCK` samples, a stage at a time. Every stage feeds
+    /// only forward, so each sees exactly the inputs, in the order, the
+    /// sample loop gives it.
+    fn stage_block(&mut self, left: &mut [f64], right: &mut [f64]) {
+        use crate::reverb::algorithm::STAGE_BLOCK;
+        let mut er_l = [0.0f64; STAGE_BLOCK];
+        let mut er_r = [0.0f64; STAGE_BLOCK];
+        for (e, x) in er_l.iter_mut().zip(left.iter()) {
+            *e = self.er_l.tick(*x) * self.er_level;
+        }
+        for (e, x) in er_r.iter_mut().zip(right.iter()) {
+            *e = self.er_r.tick(*x) * self.er_level;
+        }
+        self.diffuser_l.process(left);
+        self.diffuser_r.process(right);
+        self.fdn_l.process(left);
+        self.fdn_r.process(right);
+        for ap in &mut self.mod_ap_l {
+            ap.process(left);
+        }
+        for ap in &mut self.mod_ap_r {
+            ap.process(right);
+        }
+        for ((l, r), (el, er)) in left
+            .iter_mut()
+            .zip(right.iter_mut())
+            .zip(er_l.iter().zip(er_r.iter()))
+        {
+            let late_l = self.hf_damp_l.tick(*l);
+            let late_r = self.hf_damp_r.tick(*r);
+            let (late_l, late_r) = dsp_core::audio::stereo::width(late_l, late_r, self.width);
+            let late_l = self.tone_lp_l.tick(late_l) * self.late_level;
+            let late_r = self.tone_lp_r.tick(late_r) * self.late_level;
+            *l = el + late_l;
+            *r = er + late_r;
+        }
+    }
 }

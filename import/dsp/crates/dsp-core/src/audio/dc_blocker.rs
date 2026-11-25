@@ -44,6 +44,20 @@ impl DcBlocker {
         self.y1
     }
 
+    /// [`tick`](Self::tick) over every sample of `buf`, in place, with the
+    /// state in registers across the block.
+    #[inline]
+    pub fn process(&mut self, buf: &mut [f64]) {
+        let (mut x1, mut y1, r) = (self.x1, self.y1, self.r);
+        for x in buf.iter_mut() {
+            y1 = flush(*x - x1 + r * y1);
+            x1 = *x;
+            *x = y1;
+        }
+        self.x1 = x1;
+        self.y1 = y1;
+    }
+
     pub fn reset(&mut self) {
         self.x1 = 0.0;
         self.y1 = 0.0;

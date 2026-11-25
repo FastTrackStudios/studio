@@ -116,6 +116,28 @@ impl Biquad {
         output
     }
 
+    /// [`tick`](Self::tick) on channel `ch` over every sample of `buf`, in
+    /// place, with the state in registers across the block.
+    #[inline]
+    pub fn process(&mut self, buf: &mut [f64], ch: usize) {
+        let (Some(&z1), Some(&z2)) = (self.z1.get(ch), self.z2.get(ch)) else {
+            return;
+        };
+        let (mut z1, mut z2) = (z1, z2);
+        let (b0, b1, b2, a1, a2) = (self.b0, self.b1, self.b2, self.a1, self.a2);
+        for x in buf.iter_mut() {
+            let input = *x;
+            let output = b0 * input + z1;
+            z1 = b1 * input - a1 * output + z2;
+            z2 = crate::audio::denormal::flush(b2 * input - a2 * output);
+            *x = output;
+        }
+        if let (Some(a), Some(b)) = (self.z1.get_mut(ch), self.z2.get_mut(ch)) {
+            *a = z1;
+            *b = z2;
+        }
+    }
+
     // r[impl dsp.biquad.reset]
     pub fn reset(&mut self) {
         self.z1 = [0.0; 2];

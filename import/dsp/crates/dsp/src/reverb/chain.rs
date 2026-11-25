@@ -1680,6 +1680,17 @@ impl ReverbChain {
     /// with every per-sample smoother advanced inside it so a ramp's rate
     /// is independent of the host's buffer size.
     fn render_sub_block(&mut self, block_l: &mut [f64], block_r: &mut [f64], block: &BlockSetup) {
+        // Neither pattern lane fitted (Signal's reverb block never fits
+        // one): nothing the input side computes depends on the algorithm
+        // or the wet side within a sample, so the sub-block runs as three
+        // passes — inputs, the algorithm a stage at a time, outputs. Same
+        // numbers, same order per object. A pattern lane can reset the
+        // algorithm mid-sample, so with one fitted it runs sample by sample.
+        if self.send_mod.is_none() && self.wet_mod.is_none() && block_l.len() <= SMOOTH_BLOCK {
+            self.render_sub_block_passes(block_l, block_r, block);
+            return;
+        }
+
         let &BlockSetup {
             duck_thresh,
             mid_on,
@@ -1772,6 +1783,141 @@ impl ReverbChain {
             if swell_on && self.hall.swell_type == SwellType::WetPlusDry {
                 *out_l *= self.swell_level;
                 *out_r *= self.swell_level;
+            }
+        }
+    }
+
+    /// [`render_sub_block`](Self::render_sub_block) as three passes over
+    /// the sub-block; see there. Every object is advanced sample by sample
+    /// exactly as the one-pass loop advances it: the smoothers the wet side
+    /// reads tick on the wet side, and what the input side hands the wet
+    /// side (the ducker's and the swell's gains) is kept per sample.
+    fn render_sub_block_passes(
+        &mut self,
+        block_l: &mut [f64],
+        block_r: &mut [f64],
+        block: &BlockSetup,
+    ) {
+        let &BlockSetup {
+            duck_thresh,
+            mid_on,
+            swell_on,
+            swell_rate,
+            ..
+        } = block;
+        let n = block_l.len().min(block_r.len()).min(SMOOTH_BLOCK);
+        let mut wet_l = [0.0f64; SMOOTH_BLOCK];
+        let mut wet_r = [0.0f64; SMOOTH_BLOCK];
+        let mut duck = [0.0f64; SMOOTH_BLOCK];
+        let mut swell = [0.0f64; SMOOTH_BLOCK];
+        // Hits to open before each sample's tick.
+        let mut hits = [0u32; SMOOTH_BLOCK];
+
+        // The input side.
+        for i in 0..n {
+            self.decay_smoother.tick();
+            self.damping_smoother.tick();
+            self.sat_smoother.tick();
+            let (a, b) = self.drive_algorithm_input(
+                block_l[i],
+                block_r[i],
+                duck_thresh,
+                swell_on,
+                swell_rate,
+            );
+            wet_l[i] = a;
+            wet_r[i] = b;
+            duck[i] = self.duck_gain;
+            swell[i] = self.swell_level;
+            while self
+                .triggers
+                .get(self.trigger_next)
+                .filter(|_| self.trigger_next < self.trigger_count)
+                .is_some_and(|&at| at <= self.trigger_frame)
+            {
+                hits[i] = hits[i].saturating_add(1);
+                self.trigger_next = self.trigger_next.saturating_add(1);
+            }
+            self.trigger_frame = self.trigger_frame.saturating_add(1);
+        }
+
+        // The algorithm, cut at each hit.
+        let mut from = 0;
+        while from < n {
+            for _ in 0..hits[from] {
+                self.algorithm.trigger();
+            }
+            let to = (from + 1..n).find(|&i| hits[i] > 0).unwrap_or(n);
+            self.algorithm
+                .process_block(&mut wet_l[from..to], &mut wet_r[from..to]);
+            from = to;
+        }
+
+        // The wet side and the mix.
+        for i in 0..n {
+            self.tilt_smoother.tick();
+            let mix = self.mix_smoother.tick();
+            let width = self.width_smoother.tick();
+            let dry_l = block_l[i];
+            let dry_r = block_r[i];
+            self.duck_gain = duck[i];
+            self.swell_level = swell[i];
+            let (mut wet_l, mut wet_r) = (wet_l[i], wet_r[i]);
+            // Wet saturation (gate on the ramped drive, not the raw param,
+            // so a saturation fade-out stays engaged until it lands on 0)
+            if self.sat_l.drive() > 0.0 {
+                wet_l = self.sat_l.tick(wet_l);
+                wet_r = self.sat_r.tick(wet_r);
+            }
+
+            // Output band-shaping (off at 20 Hz / 20 kHz — see the input's).
+            if self.output_hp_freq > HP_OFF_HZ {
+                wet_l = self.output_hp.tick(wet_l, 0);
+                wet_r = self.output_hp.tick(wet_r, 1);
+            }
+            if self.output_lp_freq < LP_OFF_HZ {
+                wet_l = self.output_lp.tick(wet_l, 0);
+                wet_r = self.output_lp.tick(wet_r, 1);
+            }
+
+            // Tilt EQ (gate on the ramped tilt for the same reason)
+            if self.tilt_smoother.value().abs() > 0.01 {
+                wet_l = self.tilt_l.tick(wet_l);
+                wet_r = self.tilt_r.tick(wet_r);
+            }
+
+            // Hall Mid EQ (~1 kHz peak on the wet bus; negative =
+            // the mid-scooped "space for the dry" curve).
+            if mid_on {
+                wet_l = self.mid_eq.tick(wet_l, 0);
+                wet_r = self.mid_eq.tick(wet_r, 1);
+            }
+
+            // Post EQ (`fx.reverb.post-eq`): the 6-band curve on the
+            // final reverb sound, wet path only, with the wet gain
+            // compensated for the curve so shaping never rides the mix.
+            if self.post_eq_any {
+                for (on, filter) in self.post_eq_on.iter().zip(self.post_eq_filters.iter_mut()) {
+                    if *on {
+                        wet_l = filter.tick(wet_l, 0);
+                        wet_r = filter.tick(wet_r, 1);
+                    }
+                }
+                wet_l *= self.post_eq_comp;
+                wet_r *= self.post_eq_comp;
+            }
+
+            let (final_l, final_r) = self.stage_wet(wet_l, wet_r, dry_l, dry_r, width, block);
+
+            // Mix
+            block_l[i] = dry_l.mul_add(1.0 - mix, final_l * mix);
+            block_r[i] = dry_r.mul_add(1.0 - mix, final_r * mix);
+
+            // Hall Swell, Wet+Dry type: volume-pedal feel on the
+            // whole output.
+            if swell_on && self.hall.swell_type == SwellType::WetPlusDry {
+                block_l[i] *= self.swell_level;
+                block_r[i] *= self.swell_level;
             }
         }
     }

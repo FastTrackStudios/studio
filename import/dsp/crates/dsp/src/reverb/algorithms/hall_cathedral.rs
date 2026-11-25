@@ -355,4 +355,54 @@ impl ReverbAlgorithm for HallCathedral {
 
         (er_l + late_l, er_r + late_r)
     }
+
+    fn process_block(&mut self, left: &mut [f64], right: &mut [f64]) {
+        for (l, r) in left
+            .chunks_mut(crate::reverb::algorithm::STAGE_BLOCK)
+            .zip(right.chunks_mut(crate::reverb::algorithm::STAGE_BLOCK))
+        {
+            self.stage_block(l, r);
+        }
+    }
+}
+
+impl HallCathedral {
+    /// [`ReverbAlgorithm::tick`] over at most `STAGE_BLOCK` samples, a
+    /// stage at a time. Every stage below feeds only forward, so each one
+    /// sees exactly the inputs, in the order, the sample loop gives it.
+    fn stage_block(&mut self, left: &mut [f64], right: &mut [f64]) {
+        use crate::reverb::algorithm::STAGE_BLOCK;
+        let mut er_l = [0.0f64; STAGE_BLOCK];
+        let mut er_r = [0.0f64; STAGE_BLOCK];
+        for (e, x) in er_l.iter_mut().zip(left.iter()) {
+            *e = self.er_l.tick(*x) * self.er_level;
+        }
+        for (e, x) in er_r.iter_mut().zip(right.iter()) {
+            *e = self.er_r.tick(*x) * self.er_level;
+        }
+        // The diffusers, then the networks, in place: `left` and `right`
+        // become each side's late field.
+        self.diffuser_l.process(left);
+        self.diffuser_r.process(right);
+        for (x, e) in left.iter_mut().zip(er_r.iter()) {
+            *x = e.mul_add(self.cross_feed, *x);
+        }
+        for (x, e) in right.iter_mut().zip(er_l.iter()) {
+            *x = e.mul_add(self.cross_feed, *x);
+        }
+        self.fdn_l.process(left);
+        self.fdn_r.process(right);
+        for ap in &mut self.mod_ap_l {
+            ap.process(left);
+        }
+        for ap in &mut self.mod_ap_r {
+            ap.process(right);
+        }
+        for (x, e) in left.iter_mut().zip(er_l.iter()) {
+            *x = *e + self.tone_lp_l.tick(*x);
+        }
+        for (x, e) in right.iter_mut().zip(er_r.iter()) {
+            *x = *e + self.tone_lp_r.tick(*x);
+        }
+    }
 }

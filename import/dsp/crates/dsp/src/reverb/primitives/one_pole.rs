@@ -84,6 +84,23 @@ impl Lp1 {
         self.output
     }
 
+    /// [`tick`](Self::tick) over every sample of `buf`, in place, with the
+    /// state in registers across the block.
+    #[inline]
+    pub fn process(&mut self, buf: &mut [f64]) {
+        let (mut output, b0, a1) = (self.output, self.b0, self.a1);
+        for x in buf.iter_mut() {
+            let input = *x;
+            if input == 0.0 && output.abs() < 1e-10 {
+                output = 0.0;
+            } else {
+                output = b0.mul_add(input, a1 * output);
+            }
+            *x = output;
+        }
+        self.output = output;
+    }
+
     pub const fn reset(&mut self) {
         self.output = 0.0;
     }

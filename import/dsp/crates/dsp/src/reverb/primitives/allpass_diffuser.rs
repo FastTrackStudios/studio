@@ -167,6 +167,16 @@ impl AllpassDiffuser {
         x
     }
 
+    /// [`tick`](Self::tick) over every sample of `buf`, in place, a stage
+    /// at a time: each stage sees the same inputs in the same order, since
+    /// nothing flows back from a later stage to an earlier one.
+    #[inline]
+    pub fn process(&mut self, buf: &mut [f64]) {
+        for f in self.filters.iter_mut().take(self.stages) {
+            f.process(buf);
+        }
+    }
+
     /// Sum of the active stages' delays, in samples. A Schroeder allpass
     /// delays its energy by exactly its delay length on average, whatever
     /// its gain — so this is how much longer a feedback loop through the

@@ -85,6 +85,11 @@ struct ActiveStages {
     loop_eq: bool,
 }
 
+/// The most samples [`Fdn::process`] takes at once.
+pub const BLOCK: usize = 32;
+/// The most lines [`Fdn::process`] runs as a block.
+const MAX_BLOCK_LINES: usize = 16;
+
 /// The jitter walk's seed: a reset starts the walk where a new network does.
 const JITTER_SEED: u32 = 0xFD4_517E5;
 
@@ -504,6 +509,172 @@ impl Fdn {
         } else {
             output
         }
+    }
+
+    /// [`tick`](Self::tick) over every sample of `buf` (the input, then
+    /// the output in its place), with the same arithmetic in the same order
+    /// for every sample and every line.
+    ///
+    /// A block of up to [`BLOCK`] samples at a time. Where every line and
+    /// every in-loop allpass reaches back further than the block is long
+    /// (the networks' lines are hundreds of samples and more) and its reads
+    /// are the plain ones (no vintage sweep, no jitter), nothing the block
+    /// reads is written by it: each line's reads are one contiguous run,
+    /// the mix runs sample by sample on them, then each line recirculates
+    /// the whole block and writes it at once. Otherwise the block runs
+    /// sample by sample.
+    pub fn process(&mut self, buf: &mut [f64]) {
+        for chunk in buf.chunks_mut(BLOCK) {
+            if !self.process_block(chunk) {
+                for x in chunk.iter_mut() {
+                    *x = self.tick(*x);
+                }
+            }
+        }
+    }
+
+    /// The block path of [`process`](Self::process); `false`, with nothing
+    /// changed, when the block is not one it takes.
+    fn process_block(&mut self, buf: &mut [f64]) -> bool {
+        let n = buf.len();
+        let lines = self.num_lines;
+        let loop_ap_on = self.loop_ap_coeff.abs() > 1e-4;
+        let reaches = self.lines.iter().take(lines).enumerate().all(|(i, line)| {
+            line.delay_samples >= n
+                && (!loop_ap_on || self.loop_ap.get(i).is_none() || line.loop_ap_len >= n)
+        });
+        if n > BLOCK
+            || lines == 0
+            || lines > MAX_BLOCK_LINES
+            || self.lines.len() < lines
+            || self.feedback.len() < lines
+            || self.vintage
+            || self.jitter_depth > 1e-9
+            || !reaches
+        {
+            return false;
+        }
+        let mut input = [0.0f64; BLOCK];
+        for (i, x) in input.iter_mut().zip(buf.iter()) {
+            *i = *x;
+        }
+
+        // Each line's reads for the block: `read_lines`.
+        let mut bus = [[0.0f64; BLOCK]; MAX_BLOCK_LINES];
+        for (line, row) in self.lines.iter().zip(bus.iter_mut()).take(lines) {
+            if let Some(row) = row.get_mut(..n) {
+                line.delay.read_run(line.delay_samples, row);
+            }
+        }
+
+        // Sample by sample: the output sum, the mix and the rotation, then
+        // the tonal correction — `tick` between `read_lines` and
+        // `recirculate`.
+        let output_scale = 1.0 / num::count_to_f64(lines).sqrt();
+        for (k, out) in buf.iter_mut().enumerate() {
+            for (fb, row) in self.feedback.iter_mut().zip(bus.iter()).take(lines) {
+                *fb = row.get(k).copied().unwrap_or(0.0);
+            }
+            let mut output = 0.0;
+            for fb in self.feedback.iter().take(lines) {
+                output += *fb * output_scale;
+            }
+            self.mix(lines);
+            for (fb, row) in self.feedback.iter().zip(bus.iter_mut()).take(lines) {
+                if let Some(v) = row.get_mut(k) {
+                    *v = *fb;
+                }
+            }
+            *out = if self.t60_mode && self.tc_b.abs() > 1e-9 {
+                let corrected = self.tc_b.mul_add(-self.tc_prev, output) / (1.0 - self.tc_b);
+                self.tc_prev = output;
+                corrected
+            } else {
+                output
+            };
+        }
+
+        // Each line over the block: `recirculate`.
+        let Self {
+            lines: all_lines,
+            loop_ap,
+            decay_eq_on,
+            ..
+        } = self;
+        for (i, (line, row)) in all_lines.iter_mut().zip(bus.iter()).take(lines).enumerate() {
+            let mut ap_in = [0.0f64; BLOCK];
+            let mut ap_out = [0.0f64; BLOCK];
+            let ap = if loop_ap_on { loop_ap.get_mut(i) } else { None };
+            if let (Some(ap), Some(run)) = (ap.as_deref(), ap_in.get_mut(..n)) {
+                ap.read_run(line.loop_ap_len, run);
+            }
+            let g = if i % 2 == 0 {
+                self.loop_ap_coeff
+            } else {
+                -self.loop_ap_coeff
+            };
+            // The line's stages one after another over the block, each with
+            // its state in registers: a stage's samples see exactly what
+            // they did sample by sample, since no stage feeds an earlier one.
+            let mut sig = [0.0f64; BLOCK];
+            let Some(sig) = sig.get_mut(..n) else {
+                continue;
+            };
+            if self.t60_mode {
+                let (g, p) = (line.shelf_g, line.shelf_p);
+                let mut state = line.shelf_state;
+                for (s, fb) in sig.iter_mut().zip(row.iter()) {
+                    let y = g.mul_add(*fb, p * state);
+                    state = flush(y);
+                    *s = y;
+                }
+                line.shelf_state = state;
+            } else {
+                for (s, fb) in sig.iter_mut().zip(row.iter()) {
+                    let mut v = line.damping.tick(*fb) * self.decay_gain;
+                    if self.active.band_split {
+                        let low = line.band_split.tick(v);
+                        let high = v - low;
+                        v = low.mul_add(self.low_decay_mult, high * self.high_decay_mult);
+                    }
+                    *s = v;
+                }
+            }
+            if self.active.decay_eq {
+                for (on, band) in decay_eq_on.iter().zip(line.decay_eq.iter_mut()) {
+                    if *on {
+                        band.process(sig, 0);
+                    }
+                }
+            }
+            if ap.is_some() {
+                for ((s, d), v) in sig.iter_mut().zip(ap_in.iter()).zip(ap_out.iter_mut()) {
+                    let vv = *s - g * *d;
+                    *v = vv;
+                    *s = *d + g * vv;
+                }
+            }
+            if self.active.loop_eq {
+                for s in sig.iter_mut() {
+                    let low = line.eq_low_lp.tick(*s);
+                    *s += (self.eq_low_gain - 1.0) * low;
+                    let lp2 = line.eq_high_lp.tick(*s);
+                    *s += (self.eq_high_gain - 1.0) * (*s - lp2);
+                }
+            }
+            line.dc_blocker.process(sig);
+            let mut written = [0.0f64; BLOCK];
+            for ((w, s), x) in written.iter_mut().zip(sig.iter()).zip(input.iter()) {
+                *w = flush(*x + *s);
+            }
+            if let (Some(ap), Some(v)) = (ap, ap_out.get(..n)) {
+                ap.write_block(v);
+            }
+            if let Some(w) = written.get(..n) {
+                line.delay.write_block(w);
+            }
+        }
+        true
     }
 
     pub fn reset(&mut self) {

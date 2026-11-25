@@ -92,6 +92,62 @@ impl DelayLine {
         ((a0 * frac + a1) * frac + a2) * frac + a3
     }
 
+    /// The buffer and the position the next [`write`](Self::write) goes
+    /// to, for a block reader that works out its own indices: `read(d)`
+    /// is `buffer[(write_pos + len - d) % len]`.
+    #[inline]
+    pub fn raw(&self) -> (&[f64], usize) {
+        (&self.buffer, self.write_pos)
+    }
+
+    /// What [`read`](Self::read)`(delay)` gives at each of the next
+    /// `out.len()` samples, provided the line is not written meanwhile from
+    /// any sample it would read: `out[k]` is the sample written `delay - k`
+    /// writes before now. `delay` at most the line's length.
+    #[inline]
+    pub fn read_run(&self, delay: usize, out: &mut [f64]) {
+        let len = self.buffer.len();
+        if len == 0 || delay > len {
+            out.fill(0.0);
+            return;
+        }
+        let mut at = self.write_pos + len - delay;
+        if at >= len {
+            at -= len;
+        }
+        let mut rest = out;
+        while !rest.is_empty() {
+            let take = (len - at).min(rest.len());
+            let (now, later) = rest.split_at_mut(take);
+            now.copy_from_slice(&self.buffer[at..at + take]);
+            at += take;
+            if at >= len {
+                at = 0;
+            }
+            rest = later;
+        }
+    }
+
+    /// [`write`](Self::write) each sample of `src`, in order.
+    #[inline]
+    pub fn write_block(&mut self, src: &[f64]) {
+        let len = self.buffer.len();
+        if len == 0 {
+            return;
+        }
+        let mut rest = src;
+        while !rest.is_empty() {
+            let take = (len - self.write_pos).min(rest.len());
+            let (now, later) = rest.split_at(take);
+            self.buffer[self.write_pos..self.write_pos + take].copy_from_slice(now);
+            self.write_pos += take;
+            if self.write_pos >= len {
+                self.write_pos = 0;
+            }
+            rest = later;
+        }
+    }
+
     // r[impl dsp.delay.clear]
     pub fn clear(&mut self) {
         self.buffer.fill(0.0);

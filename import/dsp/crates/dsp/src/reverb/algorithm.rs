@@ -308,6 +308,10 @@ pub struct AlgorithmParams {
 /// every measured band its own curve is what lets a fit actually converge.
 pub const DECAY_BANDS: usize = 8;
 
+/// The most samples an algorithm's `process_block` runs a stage over at
+/// once: its scratch lives on the stack, a block this long.
+pub const STAGE_BLOCK: usize = 32;
+
 /// Shortest decay-time multiplier a band may ask for (a tenth of the space's
 /// own decay).
 pub const DECAY_RATE_MIN: f64 = 0.1;
@@ -1059,6 +1063,17 @@ pub trait ReverbAlgorithm: Send {
     fn set_params(&mut self, params: &AlgorithmParams);
     /// Process one stereo sample, return (`left_wet`, `right_wet`).
     fn tick(&mut self, left: f64, right: f64) -> (f64, f64);
+
+    /// [`tick`](Self::tick) over a block: the input in `left`/`right`, the
+    /// wet output written over it. An algorithm whose stages feed only
+    /// forward overrides it to run a stage at a time over the block, with
+    /// the same arithmetic in the same order per stage, so the output is
+    /// the same to the bit.
+    fn process_block(&mut self, left: &mut [f64], right: &mut [f64]) {
+        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+            (*l, *r) = self.tick(*l, *r);
+        }
+    }
 
     /// Keyed from outside, from now on: an algorithm that opens a window on
     /// each hit (Non-Linear) opens it on [`trigger`](Self::trigger) only,
