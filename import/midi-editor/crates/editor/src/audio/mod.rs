@@ -9,7 +9,7 @@
 //!
 //! ## Where the two models line up, and where they do not
 //!
-//! They agree on the important thing. `dsp::tune::NoteBlob` stores
+//! They agree on the important thing. `pitch_core::NoteBlob` stores
 //! `center + drift·amount + modulation·amount`; the editor stores an
 //! integer row plus a curve of semitones relative to it. Those are the
 //! same decomposition with the origin in a different place, so the
@@ -35,7 +35,7 @@
 //! the whole path is testable with no audio, no DSP and no UI.
 
 use crate::doc::{Dimension, ExpressionDoc, Note, NoteId, TimeBase};
-use dsp::tune::model::{NoteBlob, PitchDoc, WarpMarker};
+use pitch_core::model::{NoteBlob, PitchDoc, WarpMarker};
 
 pub mod align;
 pub mod align_hits;

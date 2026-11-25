@@ -161,7 +161,7 @@ impl Sustained for Note {
 #[cfg(feature = "pitch")]
 mod pitch {
     use super::{Sustained, Timed, length_of};
-    use dsp::tune::model::NoteBlob;
+    use pitch_core::model::NoteBlob;
 
     impl Timed for NoteBlob {
         fn onset(&self) -> f64 {
