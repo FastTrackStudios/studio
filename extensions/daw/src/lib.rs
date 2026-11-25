@@ -129,11 +129,12 @@ fn state() -> Json {
 /// Runs action `id` of the engine's Action List, awaited: an async one
 /// (`SESSION_ZOOM`, the arrangement's gestures) as much as any.
 /// `session_engine::actions::run` would refuse those here, where a
-/// runtime is current.
+/// runtime is current. A sync one runs off this thread
+/// (`session_engine::off_loop`): this is a handler on the host's
+/// connection, and a render run inline would hold up every call after it.
 #[cfg(not(target_arch = "wasm32"))]
 async fn run(id: &str, args: &Json) -> Result<Json, String> {
-    let out = session_engine::actions::list()
-        .run_json_async(id, args.to_string().as_bytes())
+    let out = session_engine::off_loop::run(id, args.to_string().as_bytes())
         .await
         .map_err(|e| e.to_string())?;
     Ok(serde_json::from_slice(&out)
@@ -163,12 +164,21 @@ fn song_project(song: &Json) -> Result<String, String> {
 }
 
 /// Action `id` of the engine's list, run on song `project` of the set
-/// without going to it (`session_engine::open::in_song`).
+/// without going to it (`session_engine::open::in_song`), on a blocking
+/// thread of its own (as [`run`]): the song's scope is that thread's.
 #[cfg(not(target_arch = "wasm32"))]
-fn run_in(project: &str, id: &str, args: &Json) -> Result<Json, String> {
-    let list = session_engine::actions::list();
+async fn run_in(project: String, id: String, args: &Json) -> Result<Json, String> {
     let bytes = args.to_string();
-    let out = session_engine::open::in_song(project, || {
+    let out = session_engine::off_loop::blocking(move || scoped(&project, &id, &bytes)).await??;
+    Ok(serde_json::from_slice(&out)
+        .unwrap_or_else(|_| Json::String(String::from_utf8_lossy(&out).into_owned())))
+}
+
+/// [`run_in`]'s work, on the thread it runs on.
+#[cfg(not(target_arch = "wasm32"))]
+fn scoped(project: &str, id: &str, bytes: &str) -> Result<Vec<u8>, String> {
+    let list = session_engine::actions::list();
+    session_engine::open::in_song(project, || {
         match list.run_json(id, bytes.as_bytes()) {
             // An async action: awaited on this thread, so the song it is
             // scoped to holds for all of it.
@@ -182,9 +192,7 @@ fn run_in(project: &str, id: &str, args: &Json) -> Result<Json, String> {
             }
             other => other.map_err(|e| e.to_string()),
         }
-    })?;
-    Ok(serde_json::from_slice(&out)
-        .unwrap_or_else(|_| Json::String(String::from_utf8_lossy(&out).into_owned())))
+    })
 }
 
 /// The outputs this machine has, as the engine could open them.
@@ -253,7 +261,7 @@ impl Extension for Daw {
             let with = args.get("args").unwrap_or(&none);
             match args.get("song").filter(|s| !s.is_null()) {
                 None => run(id, with).await,
-                Some(song) => run_in(&song_project(song)?, id, with),
+                Some(song) => run_in(song_project(song)?, id.to_owned(), with).await,
             }
         })
         .action("DAW_ACTIONS", |_| async {

@@ -1071,7 +1071,10 @@ pub fn render(
     let raw: Vec<Vec<f32>> = (0..probes.len())
         .map(|i| outs.iter().flat_map(|o| o.raw[i].iter().copied()).collect())
         .collect();
-    let latencies: Vec<u32> = outs.first().map(|o| o.latencies.clone()).unwrap_or_default();
+    let latencies: Vec<u32> = outs
+        .first()
+        .map(|o| o.latencies.clone())
+        .unwrap_or_default();
     let n = ask.points.len();
     let signals: Vec<Vec<f32>> = raw[..n]
         .iter()
@@ -1206,7 +1209,10 @@ fn run_chunk(
     // As rendered, not lined up: a recording played back later enters the
     // delay compensation exactly as this track did, so what it feeds is as
     // late (its plugins told the same song time) as in this render.
-    let (from, to) = (if k == 0 { first } else { keep }, if last_chunk { last } else { end });
+    let (from, to) = (
+        if k == 0 { first } else { keep },
+        if last_chunk { last } else { end },
+    );
     let raw = raw
         .iter()
         .map(|r| {
@@ -1374,7 +1380,13 @@ mod tests {
         assert_eq!(p.fed, set(&["sum", "sub"]));
         // Sub changed, and its gate keys from Trig: Trig runs with it (its
         // hits), played back never; Out, which sends into Sub, plays back.
-        let keys = |g: &str| Some(if g == "sub" { vec!["trig".to_owned()] } else { Vec::new() });
+        let keys = |g: &str| {
+            Some(if g == "sub" {
+                vec!["trig".to_owned()]
+            } else {
+                Vec::new()
+            })
+        };
         let p = plan(
             &routes,
             (&points, &everything),
@@ -1398,7 +1410,13 @@ mod tests {
         assert_eq!(p.rendered, everything);
         // A point inside Kick: Kick renders even with a recording of it.
         let inside = [at("kick", Probe::FxOut(0))];
-        let p = plan(&routes, (&inside, &everything), |_| false, |_| true, no_keys);
+        let p = plan(
+            &routes,
+            (&inside, &everything),
+            |_| false,
+            |_| true,
+            no_keys,
+        );
         assert_eq!(p.rendered, set(&["kick"]));
     }
 
@@ -1448,10 +1466,10 @@ mod tests {
         let routes = kit();
         let (all, _) = reach(&routes, ["kick".to_owned()], |_| false);
         let own: HashMap<String, u64> = all.iter().map(|g| (g.clone(), 1)).collect();
-        let before = keys(&routes, &all, &own);
+        let before = keys(&routes, &all, (&own, &Sources::new()));
         let mut changed = own.clone();
         changed.insert("in".into(), 2);
-        let after = keys(&routes, &all, &changed);
+        let after = keys(&routes, &all, (&changed, &Sources::new()));
         for g in ["in", "sum", "kick"] {
             assert_ne!(before[g], after[g], "{g}");
         }
