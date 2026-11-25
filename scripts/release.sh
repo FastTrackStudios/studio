@@ -9,24 +9,24 @@
 #       each PR carries a cargo-rail           branch. A merge to main runs
 #       change file (.changes/*.md)            CI (`CI passed`) and ships
 #                                              NOTHING.
-#   just release [<sha>]  --> tag vYY.M.MICRO on main's newest commit whose
-#       `CI passed` is green (or on <sha>)
+#   just release [<sha>]  --> tag studio-vYY.M.MICRO on main's newest commit
+#       whose `CI passed` is green (or on <sha>)
 #                                              The TAG ships, and only the
-#                                              tag: Studio's node and web
-#                                              tarballs (`studio`), the
-#                                              desktop installers and the
-#                                              one GitHub Release. (The
-#                                              infra repo deploys the node
-#                                              to its NixOS host; this repo
-#                                              deploys nothing.)
+#                                              tag: the desktop installers
+#                                              and the one GitHub Release.
+#                                              This repo deploys nothing.
 #
-#   hotfix, when main can't ship: release/v<latest tag> (from the tag)
+#   hotfix, when main can't ship: release/<latest tag> (from the tag)
 #       <-- PR of `cherry-pick -x` of fixes already on main; once that
 #       line's `CI passed` is green, `just release <sha>` tags it. Nothing
 #       is forward-ported (a release commits nothing). release/* branches
 #       are never merged back.
 #
-# Production is the latest `v*` tag.
+# Production is the latest release tag. Releases are `studio-vYY.M.MICRO`
+# (TAG_PREFIX), one for the whole monorepo. Studio's releases before the
+# monorepo are plain `vYY.M.MICRO` (LEGACY_PREFIX): they still count, for the
+# next version and for where a release's notes start, but nothing new is
+# tagged that way.
 #
 # THE VERSION IS THE TAG. Releases commit no version: every release build
 # runs `release.sh stamp X.Y.Z` first, which records the tag's version in
@@ -36,7 +36,7 @@
 # invocation of it, so writing the release into `[workspace.package]
 # version` recompiled every workspace crate on every release. The version
 # reaches the build through FTS_RELEASE_VERSION alone, read by one crate,
-# `fts-version` (features/app/version), which only the app binaries depend
+# `fts-version` (crates/studio-core/util/fts-version), which only the app binaries depend
 # on: a release recompiles that crate and the binaries. The bundles take it
 # from the tag at bundle time (Info.plist, the AppImage's desktop entry, the
 # image's version.json and labels). The version committed on main is
@@ -45,8 +45,8 @@
 #
 # Versions are CalVer YY.M.MICRO (no leading zeros: Cargo, Apple and the
 # cluster's image-updater filter all need that). The NEXT version is
-# computed, never chosen: take the highest vX.Y.Z tag (tags with a `-`
-# suffix don't count); if its YY.M is this month (UTC) the next is
+# computed, never chosen: take the highest release tag's X.Y.Z (tags with
+# a `-` suffix don't count); if its YY.M is this month (UTC) the next is
 # MICRO+1, otherwise YY.M.0 of this month. Hotfixes use the same rule, so
 # every version is unique and ascending (App Store Connect requires it).
 #
@@ -55,7 +55,7 @@
 # ADDED since the previous tag: major -> "Breaking / Migration", minor ->
 # "Added", patch -> "Fixed and improved", none -> no entry. They go into
 # the GitHub Release; nothing is deleted or committed. A change file a
-# hotfix line already shipped (cherry-picked onto a release/v* line and
+# hotfix line already shipped (cherry-picked onto a release/* line and
 # tagged there) is not listed again. CHANGELOG.md holds the releases up to
 # 26.10.3 and is no longer written.
 #
@@ -66,9 +66,9 @@
 #   scripts/release.sh release [--dry-run] [--yes] [SHA]
 #                                         tag the next version on main's newest
 #                                          commit with a green `CI passed` (or
-#                                          on SHA: on main or release/v*, green)
+#                                          on SHA: on main or release/*, green)
 #                                          and push it: THIS SHIPS
-#   scripts/release.sh hotfix <commit>... release/v<latest tag> from the tag
+#   scripts/release.sh hotfix <commit>... release/<latest tag> from the tag
 #                                          (if missing), a branch with the fixes
 #                                          cherry-picked (-x) from main, its PR
 #   scripts/release.sh notes [TAG|REV]    the release notes of a tag, or the
@@ -80,18 +80,18 @@
 #                                          the job ($GITHUB_ENV); Cargo.toml
 #                                          and Cargo.lock stay as committed
 #   scripts/release.sh image-tag TAG      the image tag of a release tag: the
-#                                          bare CalVer (v26.10.4 -> 26.10.4);
+#                                          bare CalVer (studio-v26.12.0 -> 26.12.0);
 #                                          refuses anything else
 #   scripts/release.sh tag-guard          CI (every tag-triggered job, after
 #                                          stamp): is this tag a release of a
-#                                          green commit on main or release/v*?
+#                                          green commit on main or release/*?
 #   scripts/release.sh publish [TAG]      CI: the GitHub Release for the tag
 #   scripts/release.sh ios-resolve APP TAG
 #                                         CI (studio-ios, desktop, after
 #                                          stamp): refuse a tag that is not
-#                                          vX.Y.Z, whose stamped release
+#                                          studio-vX.Y.Z, whose stamped release
 #                                          version differs, or that is not on
-#                                          main or release/v* and green; print
+#                                          main or release/* and green; print
 #                                          the marketing version
 #   scripts/release.sh ios-release TAG    CI: make sure the tag's GitHub Release
 #                                          exists (idempotent)
@@ -117,6 +117,12 @@ CHANGES_DIR=".changes"
 BUILD_CHECK="${BUILD_CHECK:-CI passed}"
 # How far back `release` looks on main for a green commit.
 SCAN_MAX="${RELEASE_SCAN_MAX:-60}"
+
+# The tag a release makes, and the older form that still counts as one.
+TAG_PREFIX="${RELEASE_TAG_PREFIX:-studio-v}"
+LEGACY_PREFIX="v"
+TAG_RE="^${TAG_PREFIX}[0-9]+\.[0-9]+\.[0-9]+$"
+ANY_TAG_RE="^(${TAG_PREFIX}|${LEGACY_PREFIX})[0-9]+\.[0-9]+\.[0-9]+$"
 
 die() { echo "release: $*" >&2; exit 1; }
 note() { echo "release: $*" >&2; }
@@ -154,14 +160,20 @@ is_semver() { [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; }
 # this shape to order the images).
 is_calver() { [[ "$1" =~ ^[1-9][0-9]\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)$ ]]; }
 
+# The X.Y.Z of a release tag (either prefix), or of a bare version.
+tag_version() { local t="$1"; t="${t#"$TAG_PREFIX"}"; echo "${t#"$LEGACY_PREFIX"}"; }
+is_release_tag() { [[ "$1" =~ $ANY_TAG_RE ]]; }
+
 # true when $1 > $2 (both X.Y.Z)
 gt() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$1" ]; }
 
-# Release tags, newest first. versionsort.suffix=- sorts a `-rc.N` before
-# its release; the grep then drops every suffixed tag anyway.
+# Release tags of either prefix, newest version first (a suffixed tag,
+# `-rc.N`, is not a release and is dropped).
 release_tags() { # [git tag args...]
-    git -c versionsort.suffix=- tag --list 'v[0-9]*' --sort=-v:refname "$@" \
-        | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true
+    local t
+    { git tag --list "$@" | grep -E "$ANY_TAG_RE" || true; } | while read -r t; do
+        printf '%s %s\n' "$(tag_version "$t")" "$t"
+    done | sort -rV | cut -d' ' -f2
 }
 
 # The highest release tag in the repo, on any line (main or a hotfix).
@@ -185,7 +197,7 @@ this_month() {
 next_version() {
     local tag v ym
     tag="$(latest_tag)"; ym="$(this_month)"
-    v="${tag#v}"
+    v="$(tag_version "$tag")"
     if [ -n "$tag" ] && [ "${v%.*}" = "$ym" ]; then
         echo "$ym.$(( ${v##*.} + 1 ))"
     else
@@ -195,9 +207,9 @@ next_version() {
 
 # ── the iOS app (Studio) ────────────────────────────────────────────────
 # Studio, with its `<app>-ios` workflow. The old rig app that built it is
-# gone and apps/desktop has no iOS target yet, so no workflow uploads one
+# gone and apps/studio has no iOS release job yet, so no workflow uploads one
 # today; these helpers stay for that target (Patchbay's iOS app ships from
-# its own repo). Signal's and Session's own App Store records get no new builds. Each is built from the one `v<version>` tag:
+# its own repo). Signal's and Session's own App Store records get no new builds. Each is built from the one `studio-v<version>` tag:
 # its marketing version is the tag's (deploy-testflight.sh writes
 # MARKETING_VER into the Info.plist) and Studio reports it in-app through
 # fts-version (FTS_RELEASE_VERSION, which `stamp` exported). The tag guard
@@ -230,7 +242,7 @@ count_between() {
 # origin must never read that as "nothing there".
 #
 # `--force`: on a tag build, actions/checkout writes the tag as a plain
-# ref to the tagged commit (`+<sha>:refs/tags/vX.Y.Z`), and `just release`
+# ref to the tagged commit (`+<sha>:refs/tags/<tag>`), and `just release`
 # pushes an annotated tag, so a plain `--tags` fetch refuses to "clobber"
 # the local copy and fails, which this would report as origin being
 # unreachable. Origin's tags are the truth here: take them. (Task's first
@@ -239,17 +251,17 @@ fetch() { # <refspec>...
     git fetch --quiet --tags --force origin "$@" || die "cannot fetch from origin ($*): network or auth problem; refusing to guess"
 }
 
-# Every release line on origin: main and the hotfix branches release/v*.
+# Every release line on origin: main and the hotfix branches release/*.
 fetch_lines() {
     fetch "+refs/heads/$MAIN_BRANCH:refs/remotes/origin/$MAIN_BRANCH" \
-        "+refs/heads/release/v*:refs/remotes/origin/release/v*"
+        "+refs/heads/release/*:refs/remotes/origin/release/*"
 }
 
-# The release line (main, or release/vX.Y.Z) whose history holds <sha>,
+# The release line (main, or release/<tag>) whose history holds <sha>,
 # main first. Empty when none does. Needs fetch_lines.
 release_line_of() { # <sha>
     local b
-    for b in "$MAIN_BRANCH" $(git for-each-ref --format='%(refname:lstrip=3)' 'refs/remotes/origin/release/v*'); do
+    for b in "$MAIN_BRANCH" $(git for-each-ref --format='%(refname:lstrip=3)' 'refs/remotes/origin/release/*'); do
         if git merge-base --is-ancestor "$1" "origin/$b" 2>/dev/null; then echo "$b"; return 0; fi
     done
     return 0
@@ -307,8 +319,8 @@ cmd_next() {
 # ── change files (.changes/*.md, written by `cargo rail change add`) ──────
 #
 #   ---
-#   "studio-desktop" = "minor"
-#   "engine-host" = "patch"
+#   "studio-app" = "minor"
+#   "studio-engine" = "patch"
 #   ---
 #
 #   Added offline drafts (signal)
@@ -333,7 +345,7 @@ release_change_files() { # <prev> <sha> [below]
     fi
     [ -n "$added" ] || return 0
     for t in $(other_line_tags "$sha" "$below"); do
-        [ -z "$prev" ] || gt "${t#v}" "${prev#v}" || continue
+        [ -z "$prev" ] || gt "$(tag_version "$t")" "$(tag_version "$prev")" || continue
         shipped+="$(git ls-tree --name-only "$t" "$CHANGES_DIR/" | grep -E '\.md$' || true)"$'\n'
     done
     shipped="$(grep . <<<"$shipped" || true)"
@@ -378,24 +390,24 @@ change_entry() { # <rev> <file>
 }
 
 # Release tags on ANOTHER line than <sha>: neither in its history nor
-# after it (a hotfix tag on a release/v* line, seen from main), newest
+# after it (a hotfix tag on a release/* line, seen from main), newest
 # first. With <below> (the version being described), only the ones older
 # than it: notes of a tag never change once later releases exist.
 other_line_tags() { # <sha> [below]
     local t
     for t in $(release_tags --no-merged "$1" --no-contains "$1"); do
-        [ -z "${2:-}" ] || gt "${2#v}" "${t#v}" || continue
+        [ -z "${2:-}" ] || gt "$(tag_version "$2")" "$(tag_version "$t")" || continue
         echo "$t"
     done
 }
 
-# Hotfix releases tagged on a release/v* line after <prev>: their fixes
+# Hotfix releases tagged on a release/* line after <prev>: their fixes
 # reached main first, so main's next notes say they cover them.
 includes_line() { # <prev> <sha> [below]
     local hot
     hot="$(other_line_tags "$2" "${3:-}" | head -1)"
     [ -n "$hot" ] || return 0
-    if [ -z "$1" ] || gt "${hot#v}" "${1#v}"; then
+    if [ -z "$1" ] || gt "$(tag_version "$hot")" "$(tag_version "$1")"; then
         echo "Includes all changes up to $hot."
     fi
 }
@@ -420,7 +432,7 @@ data_migrations() { # <prev> <sha> [version]
 # and never deploys a migrating release by itself.
 cmd_facts() { # <tag>
     local tag="${1:-}" sha prev
-    [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: facts vX.Y.Z"
+    is_release_tag "$tag" || die "usage: facts ${TAG_PREFIX}X.Y.Z"
     sha="$(git rev-parse -q --verify "$tag^{commit}")" || die "no tag $tag"
     prev="$(last_tag "$sha^")"
     data_migrations "$prev" "$sha" "$tag" | awk -v tag="$tag" '
@@ -444,8 +456,7 @@ cmd_facts() { # <tag>
 BOT_EMAIL="345159799+fts-forge[bot]@users.noreply.github.com"
 cmd_bump_queued() { # <sha>
     local sha="${1:?usage: bump-queued <sha>}" last c
-    last="$(git -c versionsort.suffix=- tag --list 'v[0-9]*' --sort=-v:refname --merged "$sha" \
-        | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+    last="$(last_tag "$sha")"
     local found=1
     while read -r c; do
         if [ "$(git log -1 --format=%ae "$c")" = "$BOT_EMAIL" ] \
@@ -511,7 +522,7 @@ render_notes() { # <prev> <sha> [version]
 cmd_notes() { # [TAG|REV]
     local r="${1:-origin/$MAIN_BRANCH}" sha prev
     sha="$(git rev-parse -q --verify "$r^{commit}")" || die "'$r' is not a tag or commit"
-    if git rev-parse -q --verify "refs/tags/$r" >/dev/null && [[ "$r" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if git rev-parse -q --verify "refs/tags/$r" >/dev/null && is_release_tag "$r"; then
         render_notes "$(last_tag "$sha^")" "$sha" "$r"
     else
         render_notes "$(last_tag "$sha")" "$sha"
@@ -523,10 +534,10 @@ cmd_plan() {
         || note "offline: planning from the local origin/$MAIN_BRANCH and tags"
     local ref="origin/$MAIN_BRANCH" tag mtag next
     tag="$(latest_tag)"; mtag="$(last_tag "$ref")"; next="$(next_version)"
-    echo "production (latest v* tag):  ${tag:-none}"
+    echo "production (latest tag):     ${tag:-none}"
     echo "on $MAIN_BRANCH since ${mtag:-the start}:     $(count_between "$mtag" "$ref") commits"
     echo "change files since ${mtag:-the start}:  $(release_change_files "$mtag" "$ref" | grep -c . || true)"
-    echo "next release:                v$next (CalVer YY.M.MICRO from the highest tag and this month)"
+    echo "next release:                $TAG_PREFIX$next (CalVer YY.M.MICRO from the highest tag and this month)"
     echo "                             just release tags it on $MAIN_BRANCH's newest commit with a green '$BUILD_CHECK'"
     echo "                             (just release --dry-run names that commit)"
     echo "committed version:           $(committed_version_at "$ref") (not the released one: builds stamp the tag's)"
@@ -541,7 +552,7 @@ cmd_plan() {
 }
 
 # Tag the next version on a green commit and push it. THE TAG SHIPS: the
-# node and web tarballs, the installers and the Release all start from it, in
+# installers and the Release start from it, in
 # parallel; nothing here waits for any of them.
 cmd_release() { # [--dry-run] [--yes] [SHA]
     local dry=0 yes=0 want="" sha line tag prev next ltag existing a
@@ -557,9 +568,9 @@ cmd_release() { # [--dry-run] [--yes] [SHA]
     fetch_lines
     tag="$(latest_tag)"
     if [ -n "$want" ]; then
-        sha="$(git rev-parse -q --verify "$want^{commit}")" || die "'$want' is not a commit (fetched origin's main and release/v*)"
+        sha="$(git rev-parse -q --verify "$want^{commit}")" || die "'$want' is not a commit (fetched origin's main and release/*)"
         line="$(release_line_of "$sha")"
-        [ -n "$line" ] || die "$(git rev-parse --short "$sha") is on neither origin/$MAIN_BRANCH nor an origin/release/v* line: only a commit that reached one is released"
+        [ -n "$line" ] || die "$(git rev-parse --short "$sha") is on neither origin/$MAIN_BRANCH nor an origin/release/* line: only a commit that reached one is released"
         require_green "$sha"
     else
         line="$MAIN_BRANCH"
@@ -567,7 +578,7 @@ cmd_release() { # [--dry-run] [--yes] [SHA]
         sha="$(newest_green "$line" "$ltag")"
         [ -n "$sha" ] || die "no commit on $MAIN_BRANCH since ${ltag:-the start} has a green '$BUILD_CHECK' (gh run list -b $MAIN_BRANCH -w checks.yml): wait for the run, or fix main"
     fi
-    existing="$(git tag --points-at "$sha" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+    existing="$(git tag --points-at "$sha" | grep -E "$ANY_TAG_RE" | head -1 || true)"
     [ -z "$existing" ] || die "$(git rev-parse --short "$sha") is already released as $existing: nothing new to ship"
     # Never a commit older than its line's newest release: that would ship
     # a regression under a newer version.
@@ -579,11 +590,11 @@ cmd_release() { # [--dry-run] [--yes] [SHA]
     next="$(next_version)"
     is_calver "$next" || die "next version '$next' is not CalVer YY.M.MICRO"
     if [ -n "$tag" ]; then
-        gt "$next" "${tag#v}" || die "the next version $next is not above the highest tag $tag (the clock, or RELEASE_MONTH?): versions only increase"
+        gt "$next" "$(tag_version "$tag")" || die "the next version $next is not above the highest tag $tag (the clock, or RELEASE_MONTH?): versions only increase"
     fi
-    git rev-parse -q --verify "refs/tags/v$next" >/dev/null && die "tag v$next already exists"
+    git rev-parse -q --verify "refs/tags/$TAG_PREFIX$next" >/dev/null && die "tag $TAG_PREFIX$next already exists"
 
-    echo "release v$next: $(git log -1 --format='%h %s' "$sha")"
+    echo "release $TAG_PREFIX$next: $(git log -1 --format='%h %s' "$sha")"
     echo "  on $line, $(count_between "$prev" "$sha") commits since ${prev:-the start}; highest tag ${tag:-none}; '$BUILD_CHECK' green"
     echo
     echo "── release notes ──"
@@ -592,9 +603,9 @@ cmd_release() { # [--dry-run] [--yes] [SHA]
         local d; d="$(git_deps_moved "$prev" "$sha")"
         [ -z "$d" ] || { echo "── git dependencies moved since $prev ──"; echo "$d"; }
     fi
-    if [ "$dry" = 1 ]; then note "dry run: v$next not tagged"; return 0; fi
+    if [ "$dry" = 1 ]; then note "dry run: $TAG_PREFIX$next not tagged"; return 0; fi
     if [ "$yes" = 0 ] && [ -t 0 ]; then
-        printf 'Push v%s? It ships the node and web tarballs, the installers and the Release. [y/N] ' "$next" >&2
+        printf 'Push %s%s? It ships the installers and the Release. [y/N] ' "$TAG_PREFIX" "$next" >&2
         read -r a
         [ "$a" = y ] || [ "$a" = Y ] || die "not tagged"
     fi
@@ -602,9 +613,9 @@ cmd_release() { # [--dry-run] [--yes] [SHA]
     local ident=()
     git config user.email >/dev/null 2>&1 || [ -n "${GIT_COMMITTER_EMAIL:-}" ] \
         || ident=(-c "user.name=fts-forge[bot]" -c "user.email=fts-forge[bot]@users.noreply.github.com")
-    git ${ident[@]+"${ident[@]}"} tag -a "v$next" "$sha" -m "studio $next"
-    git push --quiet origin "refs/tags/v$next"
-    note "pushed v$next at $(git rev-parse --short "$sha") on $line: studio, desktop and the Release start from the tag"
+    git ${ident[@]+"${ident[@]}"} tag -a "$TAG_PREFIX$next" "$sha" -m "studio $next"
+    git push --quiet origin "refs/tags/$TAG_PREFIX$next"
+    note "pushed $TAG_PREFIX$next at $(git rev-parse --short "$sha") on $line: the installers and the Release start from the tag"
 }
 
 # Record <version> as this checkout's release version: `.release-version`
@@ -616,9 +627,9 @@ cmd_release() { # [--dry-run] [--yes] [SHA]
 # binaries above it. A build outside a GitHub job exports it itself
 # (`export FTS_RELEASE_VERSION=X.Y.Z`); the bundle scripts do, from
 # `release.sh version`. Idempotent.
-cmd_stamp() { # <X.Y.Z | vX.Y.Z>
-    local v="${1:-}"
-    v="${v#v}"
+cmd_stamp() { # <X.Y.Z | a release tag>
+    local v
+    v="$(tag_version "${1:-}")"
     is_semver "$v" || die "usage: release.sh stamp X.Y.Z (got '${1:-}')"
     printf '%s\n' "$v" > "$STAMP_FILE"
     [ "$(version_at)" = "$v" ] || die "stamp: failed to record $v in $STAMP_FILE"
@@ -634,14 +645,14 @@ cmd_stamp() { # <X.Y.Z | vX.Y.Z>
 # sort wrong or be ignored by the cluster.
 cmd_image_tag() { # <tag>
     local t="${1:-}" v
-    v="${t#v}"
-    [ "$t" != "$v" ] || die "'$t' is not a release tag (vYY.M.MICRO)"
-    is_calver "$v" || die "'$t' is not vYY.M.MICRO CalVer (no leading zeros, month 1-12): its image tag would not match the cluster's ^[1-9][0-9]\\.(1[0-2]|[1-9])\\.(0|[1-9][0-9]*)\$"
+    v="$(tag_version "$t")"
+    [ "$t" != "$v" ] || die "'$t' is not a release tag (${TAG_PREFIX}YY.M.MICRO)"
+    is_calver "$v" || die "'$t' is not ${TAG_PREFIX}YY.M.MICRO CalVer (no leading zeros, month 1-12): its image tag would not match the cluster's ^[1-9][0-9]\\.(1[0-2]|[1-9])\\.(0|[1-9][0-9]*)\$"
     echo "$v"
 }
 
 # A hotfix: fixes already merged into main, cherry-picked (-x) onto
-# release/v<latest tag>, as a PR into that branch (the full suite runs on
+# release/<latest tag>, as a PR into that branch (the full suite runs on
 # it, and again once it merges). Then `just release <merged sha>`.
 cmd_hotfix() {
     local tag line branch c first n title body
@@ -701,26 +712,26 @@ cmd_hotfix() {
 cmd_release_only() { return 1; }
 
 # CI, in every tag-triggered job, AFTER `stamp`: the tag that started this
-# run must be vX.Y.Z on a commit of main or of a release/v* hotfix line,
+# run must be studio-vX.Y.Z on a commit of main or of a release/* hotfix line,
 # with `CI passed` green on it (with GH_TOKEN set). The test suite is not
-# run again: that green check is the proof. Stops a stray `v*` tag (on a
+# run again: that green check is the proof. Stops a stray release tag (on a
 # feature branch, on a red commit) from reaching production.
 cmd_tag_guard() {
     local ref="${GITHUB_REF:-}" tag v ok=1 line
     fail() { echo "::error::$*"; ok=0; }
     case "$ref" in
-        refs/tags/v*) tag="${ref#refs/tags/}" ;;
-        *) die "this runs from a v* tag (ref is '${ref:-none}'). Production changes only by tag: just release, or dispatch this workflow with the tag as its ref." ;;
+        refs/tags/"$TAG_PREFIX"*) tag="${ref#refs/tags/}" ;;
+        *) die "this runs from a $TAG_PREFIX* tag (ref is '${ref:-none}'). Production changes only by tag: just release, or dispatch this workflow with the tag as its ref." ;;
     esac
-    [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "tag $tag is not vX.Y.Z"
+    [[ "$tag" =~ $TAG_RE ]] || fail "tag $tag is not ${TAG_PREFIX}X.Y.Z"
     v="$(version_at)"
-    [ "$tag" = "v$v" ] || fail "tag $tag but this checkout's version is $v: run 'release.sh stamp $tag' first"
+    [ "$tag" = "$TAG_PREFIX$v" ] || fail "tag $tag but this checkout's version is $v: run 'release.sh stamp $tag' first"
     if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
         [ "$(git rev-parse "$tag^{commit}")" = "$(git rev-parse HEAD)" ] || fail "this checkout ($(git rev-parse --short HEAD)) is not $tag"
     fi
     fetch_lines
     line="$(release_line_of HEAD)"
-    [ -n "$line" ] || fail "$tag ($(git rev-parse --short HEAD)) is on neither $MAIN_BRANCH nor a release/v* line: releases are tagged there"
+    [ -n "$line" ] || fail "$tag ($(git rev-parse --short HEAD)) is on neither $MAIN_BRANCH nor a release/* line: releases are tagged there"
     [ "$ok" = 1 ] || exit 1
     if [ -n "${GH_TOKEN:-}" ]; then require_green "$(git rev-parse HEAD)"; else note "no GH_TOKEN: '$BUILD_CHECK' not checked here (just release checked it)"; fi
     echo "tag guard: ok ($tag at $(git rev-parse --short HEAD), on $line)"
@@ -769,10 +780,11 @@ tf_render() { # <tag> <version> <body> [<app> <newline>]
 publish_release() { # [tag]
     local v tag="${1:-}" target prev notes line
     if [ -z "$tag" ]; then
-        case "${GITHUB_REF:-}" in refs/tags/v*) tag="${GITHUB_REF#refs/tags/}" ;; esac
+        case "${GITHUB_REF:-}" in refs/tags/"$TAG_PREFIX"*) tag="${GITHUB_REF#refs/tags/}" ;; esac
     fi
-    [ -n "$tag" ] || die "publish needs a tag (an argument, or a run on refs/tags/v*)"
-    v="${tag#v}"
+    [ -n "$tag" ] || die "publish needs a tag (an argument, or a run on refs/tags/$TAG_PREFIX*)"
+    is_release_tag "$tag" || die "'$tag' is not a release tag (${TAG_PREFIX}X.Y.Z)"
+    v="$(tag_version "$tag")"
     is_semver "$v" || die "version '$v' is not X.Y.Z"
     if release_id "$tag" >/dev/null; then
         release_dedupe "$tag"
@@ -780,7 +792,7 @@ publish_release() { # [tag]
         note "release $tag exists — its facts are on it"; return 0
     fi
     # ONE writer creates the draft: release.yml's publish job. The other
-    # callers (desktop, studio) wait for it, and create it themselves
+    # callers (desktop) wait for it, and create it themselves
     # only when it never came (release.yml failed).
     if [ "${PUBLISH_MODE:-create}" = wait ]; then
         local i
@@ -880,16 +892,15 @@ cmd_publish() { publish_release "$@"; }
 
 # CI, first job of desktop.yml (and an <app>-ios.yml), in a checkout of the tag
 # that `stamp` has recorded the tag's version in. TestFlight ships exactly
-# the tag: refuse a tag that is not vX.Y.Z, a checkout whose stamped
+# the tag: refuse a tag that is not studio-vX.Y.Z, a checkout whose stamped
 # release version is not the tag's, a commit that is on neither main nor a
-# release/v* hotfix line. With GH_TOKEN set, `CI passed` must be green on it
+# release/* hotfix line. With GH_TOKEN set, `CI passed` must be green on it
 # too. Prints the marketing version.
 cmd_ios_resolve() { # <app> <tag>
-    local app="${1:-}" tag="${2:-}" v wv sha re line
+    local app="${1:-}" tag="${2:-}" v wv sha line
     ios_check "$app"
-    re='^v[0-9]+\.[0-9]+\.[0-9]+$'
-    [[ "$tag" =~ $re ]] || die "tag '$tag' does not match $re: TestFlight uploads only from a release tag"
-    v="${tag#v}"
+    [[ "$tag" =~ $TAG_RE ]] || die "tag '$tag' does not match $TAG_RE: TestFlight uploads only from a release tag"
+    v="$(tag_version "$tag")"
     wv="$(version_at)"
     [ "$wv" = "$v" ] \
         || die "this checkout's release version is '$wv' but the tag is $tag ($v): the marketing version and the app's own (fts-version, FTS_RELEASE_VERSION) are the tag's, so release.sh stamp $tag first"
@@ -900,7 +911,7 @@ cmd_ios_resolve() { # <app> <tag>
     fetch_lines
     line="$(release_line_of "$sha")"
     [ -n "$line" ] \
-        || die "$tag ($(git rev-parse --short "$sha")) is in neither origin/$MAIN_BRANCH nor an origin/release/v* line: only a release that reached one goes to TestFlight"
+        || die "$tag ($(git rev-parse --short "$sha")) is in neither origin/$MAIN_BRANCH nor an origin/release/* line: only a release that reached one goes to TestFlight"
     if [ -n "${GH_TOKEN:-}" ]; then require_green "$sha"; fi
     note "$tag: marketing version $v, commit $(git rev-parse --short "$sha") on $line, bundle $(ios_bundle_id "$app")"
     if [ -n "${GITHUB_OUTPUT:-}" ]; then
@@ -911,7 +922,7 @@ cmd_ios_resolve() { # <app> <tag>
 
 cmd_ios_release() { # <tag>
     local tag="${1:-}"
-    [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: ios-release vX.Y.Z"
+    [[ "$tag" =~ $TAG_RE ]] || die "usage: ios-release ${TAG_PREFIX}X.Y.Z"
     PUBLISH_MODE="wait" publish_release "$tag"
 }
 
@@ -940,7 +951,7 @@ cmd_ios_record() { # <app> <tag> <marketing> <build> [run-url]
     local app="${1:-}" tag="${2:-}" mv="${3:-}" build="${4:-}" run="${5:-}"
     local body prior line keep out tries=0 max="${RECORD_TRIES:-6}"
     ios_check "$app"
-    [ "$tag" = "v$mv" ] || die "marketing version '$mv' is not the version of tag '$tag'"
+    [ "$tag" = "$TAG_PREFIX$mv" ] || die "marketing version '$mv' is not the version of tag '$tag'"
     [[ "$build" =~ ^[0-9]+$ ]] || die "build number '$build' is not a number"
     release_dedupe "$tag"   # an edit of a tag with several Releases is a 422
     while :; do

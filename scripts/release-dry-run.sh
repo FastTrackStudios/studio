@@ -18,7 +18,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="${GITHUB_REPOSITORY:?}"
 name="dry-run-${GITHUB_RUN_ID:-local$$}-${GITHUB_RUN_ATTEMPT:-1}"
-[[ "$name" != v* ]] || { echo "refusing: $name looks like a release tag" >&2; exit 1; }
+[[ "$name" != v* && "$name" != studio-v* ]] || { echo "refusing: $name looks like a release tag" >&2; exit 1; }
 t="$(mktemp -d)"
 fail=0
 ok() { echo "ok   $*"; }
@@ -89,7 +89,7 @@ if [ "$(sed -n 3p "$t/prev/SHA256SUMS.minisig")" = "trusted comment: studio $nam
 else no "A's sums do not verify"; fi
 
 # 4. Publish: the draft, never Latest (not the highest stable tag).
-highest="$(git tag --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+highest="$(git tag --list 'studio-v[0-9]*' | grep -E '^studio-v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
 draft="$(gh api "repos/$repo/releases/$id" --jq .draft)"
 decision="$(bash "$here/release-publish.sh" decide "$draft" "$name" "${highest:-v0.0.0}")"
 [ "$decision" = publish ] && ok "the draft is published, not Latest ($decision)" || no "decision on the draft: $decision"

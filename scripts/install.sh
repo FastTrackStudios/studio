@@ -1,6 +1,5 @@
 #!/bin/sh
-# Installs Studio (FastTrackStudio's Signal + Session app) from the newest
-# GitHub Release. Needs only sh, curl or wget, and sha256sum or shasum.
+# Installs Studio (FastTrackStudio's app) from the newest GitHub Release. Needs only sh, curl or wget, and sha256sum or shasum.
 #
 #   curl -fsSL https://raw.githubusercontent.com/FastTrackStudios/studio/main/scripts/install.sh | sh
 #
@@ -87,16 +86,24 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # ── Which release ───────────────────────────────────────────────────────────
+# Release tags are studio-vYY.M.MICRO (CalVer); the releases before the
+# monorepo are vYY.M.MICRO, which STUDIO_VERSION can still name (tag=v).
 version="${STUDIO_VERSION:-}"
-version="${version#v}"
+tag="studio-v"
+case "$version" in
+  studio-v*) version="${version#studio-v}" ;;
+  v*) version="${version#v}"; tag="v" ;;
+esac
 if [ -z "$version" ]; then
   say "Finding the newest release..."
   # /releases/latest is the newest release that is not a draft or a
-  # prerelease. Its tag is vYY.M.MICRO (CalVer).
+  # prerelease.
   fetch "https://api.github.com/repos/${repo}/releases/latest" "$work/latest.json" \
     || fail "could not read the newest release from GitHub"
-  version="$(sed -n 's/.*"tag_name": *"v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$work/latest.json" | head -n 1)"
-  [ -n "$version" ] || fail "the newest release has no vX.Y.Z tag; set STUDIO_VERSION"
+  latest="$(sed -n 's/.*"tag_name": *"\([a-z-]*v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$work/latest.json" | head -n 1)"
+  [ -n "$latest" ] || fail "the newest release has no studio-vX.Y.Z tag; set STUDIO_VERSION"
+  version="${latest##*v}"
+  tag="${latest%"$version"}"
 fi
 case "$version" in
   *[!0-9.]* | '') fail "STUDIO_VERSION '$version' is not X.Y.Z" ;;
@@ -109,16 +116,16 @@ say "Installing Studio ${version} (${os} ${arch})"
 # the org key, SHA256SUMS.minisig), written again each time a release build
 # attaches its files: an installer it does not list is not uploaded yet.
 rc=0
-fetch "${base_url}/v${version}/SHA256SUMS" "$work/SHA256SUMS" || rc=$?
+fetch "${base_url}/${tag}${version}/SHA256SUMS" "$work/SHA256SUMS" || rc=$?
 if [ "$rc" -eq 44 ]; then
-  fail "release v${version} has no installers yet (the desktop builds may still be uploading; try again in a few minutes)"
+  fail "release ${tag}${version} has no installers yet (the desktop builds may still be uploading; try again in a few minutes)"
 elif [ "$rc" -ne 0 ]; then
   fail "could not download the release checksums"
 fi
 expected="$(grep " \*\{0,1\}${asset}\$" "$work/SHA256SUMS" | cut -d' ' -f1)"
-[ -n "$expected" ] || fail "${asset} is not in release v${version} yet (the desktop builds may still be uploading; try again in a few minutes)"
+[ -n "$expected" ] || fail "${asset} is not in release ${tag}${version} yet (the desktop builds may still be uploading; try again in a few minutes)"
 say "Downloading ${asset}..."
-fetch "${base_url}/v${version}/${asset}" "$work/${asset}" || fail "could not download ${asset}"
+fetch "${base_url}/${tag}${version}/${asset}" "$work/${asset}" || fail "could not download ${asset}"
 actual="$(checksum "$work/${asset}")"
 [ "$actual" = "$expected" ] || fail "checksum mismatch for ${asset}: not installing it"
 say "Checksum verified."
