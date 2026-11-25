@@ -10,7 +10,7 @@ description = "Ignition in a session: cue lists as lanes and timed items of the 
 [dependencies]
 # The session primitive (FastTrackStudios/session). By rev until it is
 # tagged (session#181-#184).
-session = { workspace = true, features = ["service", "extension", "sync"] }
+session = { path = "../session", package = "session", features = ["service", "extension", "sync"] }
 ignition-show.workspace = true
 ignition-daw-proto.workspace = true
 serde.workspace = true

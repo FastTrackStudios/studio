@@ -7,8 +7,8 @@ license.workspace = true
 publish = false
 
 [dependencies]
-frame = { path = "../..", features = ["figma", "io", "render", "runtime"] }
-frame-architect = { path = "../../../frame-architect", features = ["remote"] }
+frame = {path = "../../crates/studio-core/frame/frame", features = ["figma", "io", "render", "runtime"]}
+frame-architect = {path = "../../crates/studio-core/frame/frame-architect", features = ["remote"]}
 tokio = { workspace = true }
 architect = { workspace = true, features = ["vox"] }
 serde = { workspace = true }
@@ -28,7 +28,7 @@ svg_export = ["frame/render", "frame/svg_export"]
 anyrender = ["frame/anyrender", "frame/render", "dep:kurbo", "dep:peniko", "dep:skrifa", "dep:vello", "dep:winit", "dep:image", "dep:pollster", "svg_export"]
 
 [dev-dependencies]
-frame = { path = "../..", features = ["design"] }
+frame = {path = "../../crates/studio-core/frame/frame", features = ["design"]}
 
 [lints]
 workspace = true

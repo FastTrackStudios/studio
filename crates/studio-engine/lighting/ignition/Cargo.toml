@@ -32,7 +32,7 @@ vox-stream.workspace = true
 tokio = { workspace = true, features = ["rt", "net", "time", "signal", "sync", "macros"] }
 # Following a session's transport (`--clock session:…`, src/session_clock.rs):
 # its host's presence and clock over vox, as the Lighting pane follows it.
-session = { workspace = true, features = ["architect", "sync"] }
+session = { path = "../../../studio-core/session/session", package = "session", features = ["architect", "sync"] }
 crdt = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", features = ["vox"] }
 architect = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", features = ["vox", "connect"] }
 uuid.workspace = true

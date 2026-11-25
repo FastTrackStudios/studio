@@ -10,7 +10,7 @@ publish = false
 # The session primitive (FastTrackStudios/session): its document and the
 # extension service. Pinned by rev until it is tagged (session#179, #181,
 # #182).
-session = { workspace = true, features = ["architect", "service", "extension"] }
+session = { path = "../session", package = "session", features = ["architect", "service", "extension"] }
 crdt = { workspace = true, features = ["vox"] }
 # The chart as typed data in the session (`typed`): the chart model it is
 # made from and read back to.

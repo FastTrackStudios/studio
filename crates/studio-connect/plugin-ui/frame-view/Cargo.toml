@@ -10,7 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-frame = { path = "../frame", default-features = false, features = ["embed"] }
+frame = {path = "../../../studio-core/frame/frame", default-features = false, features = ["embed"]}
 # The kinds registry (the model, no Dioxus).
 architect-workspace = { workspace = true }
 # A process extension's end: its view's VirtualDom, its actions.

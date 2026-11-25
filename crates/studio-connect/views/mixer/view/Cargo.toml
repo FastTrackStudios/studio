@@ -20,7 +20,7 @@ dioxus-native-dom = { workspace = true }
 dioxus-native = { workspace = true, optional = true }
 daw-proto = { workspace = true }
 lucide-dioxus = { workspace = true }
-dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
+dsp = { path = "../../../plugin-ui/plugin-ui", package = "plugin-ui", features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
 fts-audio-ui = { workspace = true }
 frame = { workspace = true, features = ["host-scene", "live", "theme"] }
 anyrender = { workspace = true }

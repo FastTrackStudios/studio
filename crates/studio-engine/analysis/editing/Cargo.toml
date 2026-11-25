@@ -11,7 +11,7 @@ description = "Editing a recorded performance — timing and dynamics, one engin
 # Hit placement is the DAW's (daw-edit): re-exported as `placement`.
 daw-edit.workspace = true
 facet.workspace = true
-dsp = { workspace = true, features = ["level"] }
+dsp = { path = "../../../studio-connect/plugin-ui/plugin-ui", package = "plugin-ui", features = ["level"] }
 num-traits.workspace = true
 
 [dev-dependencies]

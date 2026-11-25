@@ -35,7 +35,7 @@ pitch-core = { workspace = true, optional = true }
 timeline = { workspace = true, features = ["actions"] }
 # The drum roles and families, shared with the arrangement and the engine.
 daw-edit = { workspace = true }
-dsp = { workspace = true, optional = true }
+dsp = { path = "../../../plugin-ui/plugin-ui", package = "plugin-ui", optional = true }
 anyrender = { workspace = true, optional = true }
 anyrender_vello_cpu = { workspace = true, optional = true }
 architect = { workspace = true }
@@ -96,7 +96,7 @@ session-format = { workspace = true }
 guitarpro = { workspace = true }
 hound = { workspace = true }
 image = { workspace = true, default-features = false, features = ["bmp"] }
-dsp = { workspace = true, features = ["level"] }
+dsp = { path = "../../../plugin-ui/plugin-ui", package = "plugin-ui", features = ["level"] }
 midly = { workspace = true }
 png = { workspace = true }
 sha2 = { workspace = true }

@@ -1,7 +1,7 @@
 [package]
 name = "music-convention"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Music production naming conventions as data — instrument classification, metadata parsing, and name cleanup"

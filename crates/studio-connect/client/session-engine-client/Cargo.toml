@@ -38,7 +38,7 @@ session-runtime = { workspace = true }
 dynamic-template = { workspace = true }
 # The leveler's envelope (`dsp::level`) and the loudness filter gain
 # staging reads by: the math only.
-dsp = { workspace = true, features = ["level"] }
+dsp = { path = "../../plugin-ui/plugin-ui", package = "plugin-ui", features = ["level"] }
 dsp-core = { workspace = true, features = ["audio"] }
 # A drum lane's role (`editor::kit`).
 editor = { workspace = true }

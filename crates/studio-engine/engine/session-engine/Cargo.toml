@@ -54,7 +54,7 @@ session-runtime = { workspace = true }
 # this window keeps. See `src/plan.rs`.
 dynamic-template = { workspace = true }
 # The hit detector (native: it reads whole recordings and runs on cores).
-dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
+dsp = { path = "../../../studio-connect/plugin-ui/plugin-ui", package = "plugin-ui", features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
 
 # The expression editor: its engine, its painter and gestures (no
 # dioxus), and the take-to-document conversion.

@@ -65,7 +65,7 @@ fts-sample = { workspace = true, features = ["load"], optional = true }
 hound = { version = "3.5", optional = true }
 facet = { workspace = true, optional = true }
 facet-json = { workspace = true, optional = true }
-ort = { version = "=2.0.0-rc.10", optional = true, default-features = false, features = [
+ort = { version = "=2.0.0-rc.15", optional = true, default-features = false, features = [
     "std",
     "ndarray",
     "download-binaries",

@@ -11,89 +11,9 @@ resolver = "3"
 # longer has: architect-desktop/-web/-mobile/-distribution, -sites, -bases,
 # -media, -playhead, -launcher-*). Their folders stay until they are
 # deleted; apps/studio is the one app.
-exclude = [
-    "apps/desktop",
-    "apps/web",
-    "apps/mobile",
-    "features/distribution",
-    "features/island",
-    "features/app/launcher",
-    "features/setlists",
-    "features/productions",
-    "extensions/launcher",
-    # Signal's rig as extensions: written against signal's
-    # stack/studio-distribution (guitar's dock panels, PanelHost), which
-    # the pinned signal revision does not have yet. Back when signal is
-    # pinned past it.
-    "extensions/rig",
-    "extensions/rig-link",
-    "extensions/rig-switches",
-    "extensions/rig-setlist",
-    "extensions/rig-browser",
-    "extensions/rig-grid",
-    "extensions/rig-macros",
-    "extensions/rig-status",
-    "extensions/audio-settings",
-    "extensions/keys",
-]
+exclude = [ "crates/studio-connect/views/rig/audio-settings", "crates/studio-connect/views/rig/browser", "crates/studio-connect/views/rig/grid", "crates/studio-connect/views/rig/keys", "crates/studio-connect/views/rig/link", "crates/studio-connect/views/rig/macros", "crates/studio-connect/views/rig/setlist", "crates/studio-connect/views/rig/status", "crates/studio-connect/views/rig/switches", "crates/studio-engine/extensions/rig", "crates/studio-engine/analysis/rhythm-daw-live"]
 
-members = [
-    # Studio's views and engine as Architect runtime extensions (studio#519).
-    "extensions/daw",
-    "extensions/arrangement",
-    "extensions/mixer",
-    "extensions/lyrics",
-    "extensions/navigator",
-    # Studio, the app (studio-proto until 2026-11-22): a plain Dioxus app on
-    # Drive and app-shell, growing into the session (apps/studio/docs/ROADMAP.md).
-    "apps/studio",
-    "apps/studio/crates/session-sync",
-    "extensions/link",
-    "extensions/tempo-map",
-    "features/tempo-map",
-    "features/song-file",
-    "features/editing",
-    "features/ui/dock",
-    "features/ui/transport-ui",
-    "features/ui/lyrics-ui",
-    "features/adapters/web/worklet",
-    "features/session",
-    "features/dynamic-template",
-    "features/app/shell",
-    "features/app/panels",
-    "features/app/version",
-    # Studio's MCP for an agent: stdio, on the app's control socket.
-    "features/agent-mcp",
-    "features/library",
-    "features/account",
-    "features/ui/themer",
-    "features/control-surfaces",
-    # ── session ──
-    "xtask/session-reaper",
-    "features/adapters/reaper/daw-reaper-dioxus-ext",
-    "features/adapters/reaper/tests/daw-reaper-dioxus-ext-test",
-    "features/engine/host",
-    "features/engine/client",
-    "features/engine/engine",
-    "features/engine/runtime",
-    "features/engine/tools",
-    "features/patch-list",
-    "features/adapters/reaper/session-extension",
-    "features/adapters/reaper/session-extension/xtask",
-    "features/song",
-    "features/studio-views",
-    # ── daw ──
-    "xtask/devtools",
-    "xtask/workflows",
-    # ── processor ──
-    "plugins/host",
-    "xtask/plugins",
-    "xtask/kit-sheet",
-    # ── signal ──
-    "plugins/guide",
-    # ── frame's plugin faces (frame itself is a git dependency) ──
-    "features/ui/plugin-faces",
-]
+members = ["crates/studio-engine/adapters/studio", "crates/studio-connect/features/session", "apps/studio", "crates/studio-connect/client/account", "crates/studio-connect/client/session-engine-client", "crates/studio-connect/features/keybinds", "crates/studio-connect/features/library", "crates/studio-connect/features/patch-list", "crates/studio-connect/features/studio-views", "crates/studio-connect/kit/audio-controls", "crates/studio-connect/kit/daw-ui", "crates/studio-connect/kit/daw-view-kit", "crates/studio-connect/kit/dock", "crates/studio-connect/kit/panels", "crates/studio-connect/kit/studio-shell", "crates/studio-connect/kit/timeline", "crates/studio-connect/kit/transport-ui", "crates/studio-connect/mcp", "crates/studio-connect/plugin-ui/frame-editor", "crates/studio-connect/plugin-ui/frame-view", "crates/studio-connect/plugin-ui/fts-audio-ui", "crates/studio-connect/plugin-ui/plugin-faces", "crates/studio-connect/plugin-ui/plugin-ui", "crates/studio-connect/plugin-ui/preset-browser", "crates/studio-connect/theme/daw-theme", "crates/studio-connect/theme/themer", "crates/studio-connect/tools/daw-view-tools", "crates/studio-connect/views/arrangement/extension", "crates/studio-connect/views/arrangement/view", "crates/studio-connect/views/chart/editor-keyflow", "crates/studio-connect/views/chart/extension", "crates/studio-connect/views/chart/keyflow-ui", "crates/studio-connect/views/lighting/live-ui", "crates/studio-connect/views/lighting/pane", "crates/studio-connect/views/lighting/vendor/bevy_pbr", "crates/studio-connect/views/lighting/viz", "crates/studio-connect/views/link", "crates/studio-connect/views/lyrics/extension", "crates/studio-connect/views/lyrics/lyrics-ui", "crates/studio-connect/views/midi/expression-editor", "crates/studio-connect/views/midi/view", "crates/studio-connect/views/mixer/extension", "crates/studio-connect/views/mixer/view", "crates/studio-connect/views/navigator", "crates/studio-connect/views/rig/grid-ui", "crates/studio-connect/views/rig/perform-ui", "crates/studio-connect/views/rig/shell", "crates/studio-connect/views/rig/tone3000", "crates/studio-connect/views/rig/widgets", "crates/studio-core/frame/frame", "crates/studio-core/frame/frame-architect", "crates/studio-core/frame/frame-doc", "crates/studio-core/music/color-palette", "crates/studio-core/music/engraver", "crates/studio-core/music/keyflow", "crates/studio-core/music/keyflow-annotate", "crates/studio-core/music/keyflow-lang", "crates/studio-core/music/keyflow-proto", "crates/studio-core/music/monarchy", "crates/studio-core/music/monarchy-derive", "crates/studio-core/music/music-catalog", "crates/studio-core/music/music-convention", "crates/studio-core/music/tree-sitter-keyflow", "crates/studio-core/proto/daw-edit", "crates/studio-core/proto/daw-module", "crates/studio-core/proto/daw-proto", "crates/studio-core/proto/daw-timeline", "crates/studio-core/proto/daw-view", "crates/studio-core/proto/ignition-daw-proto", "crates/studio-core/proto/ignition-proto", "crates/studio-core/proto/signal-content-proto", "crates/studio-core/proto/signal-proto", "crates/studio-core/proto/signal-rigs-proto", "crates/studio-core/session/ignition-session", "crates/studio-core/session/keyflow-session", "crates/studio-core/session/session", "crates/studio-core/session/session-format", "crates/studio-core/session/session-sync", "crates/studio-core/session/song", "crates/studio-core/session/song-file", "crates/studio-core/util/fts-version", "crates/studio-core/util/utils", "crates/studio-engine/adapters/ableton", "crates/studio-engine/adapters/control-surfaces", "crates/studio-engine/adapters/daw-actions", "crates/studio-engine/adapters/dynamic-template", "crates/studio-engine/adapters/interchange", "crates/studio-engine/adapters/logic", "crates/studio-engine/adapters/protools", "crates/studio-engine/adapters/reaper/adapters/daw-audio-sync", "crates/studio-engine/adapters/reaper/adapters/daw-bridge", "crates/studio-engine/adapters/reaper/adapters/daw-extension-runtime", "crates/studio-engine/adapters/reaper/adapters/daw-reaper", "crates/studio-engine/adapters/reaper/adapters/daw-reaper/xtask", "crates/studio-engine/adapters/reaper/adapters/dynamic-template-extension", "crates/studio-engine/adapters/reaper/adapters/fts-icons", "crates/studio-engine/adapters/reaper/adapters/reaper-config", "crates/studio-engine/adapters/reaper/adapters/reaper-dioxus", "crates/studio-engine/adapters/reaper/adapters/reaper-embed", "crates/studio-engine/adapters/reaper/adapters/reaper-hwnd", "crates/studio-engine/adapters/reaper/adapters/reaper-input", "crates/studio-engine/adapters/reaper/adapters/reaper-input-config", "crates/studio-engine/adapters/reaper/adapters/reaper-kbd", "crates/studio-engine/adapters/reaper/adapters/reaper-launcher", "crates/studio-engine/adapters/reaper/adapters/signal-extension", "crates/studio-engine/adapters/reaper/adapters/signal-reaper-controller", "crates/studio-engine/adapters/reaper/adapters/swell-ui", "crates/studio-engine/adapters/reaper/adapters/tests/daw-perf-test", "crates/studio-engine/adapters/reaper/dawfile-reaper", "crates/studio-engine/adapters/reaper/studio/daw-reaper-dioxus-ext", "crates/studio-engine/adapters/reaper/studio/session-extension", "crates/studio-engine/adapters/reaper/studio/session-extension/xtask", "crates/studio-engine/adapters/reaper/studio/tests/daw-reaper-dioxus-ext-test", "crates/studio-engine/analysis/editing", "crates/studio-engine/analysis/keyflow-daw-analysis", "crates/studio-engine/analysis/pitch-core", "crates/studio-engine/analysis/rhythm-bench", "crates/studio-engine/analysis/rhythm-editing", "crates/studio-engine/analysis/rhythm-hits", "crates/studio-engine/analysis/stem-separation", "crates/studio-engine/analysis/tempo-map", "crates/studio-engine/daw/allocator", "crates/studio-engine/daw/audio", "crates/studio-engine/daw/audio-graph", "crates/studio-engine/daw/audio/sample", "crates/studio-engine/daw/clap-ext", "crates/studio-engine/daw/control", "crates/studio-engine/daw/daw", "crates/studio-engine/daw/midi", "crates/studio-engine/daw/plugin-host", "crates/studio-engine/daw/standalone", "crates/studio-engine/daw/sync", "crates/studio-engine/daw/test-macro", "crates/studio-engine/daw/transport-sync", "crates/studio-engine/dsp/dsp", "crates/studio-engine/dsp/dsp-core", "crates/studio-engine/dsp/effects", "crates/studio-engine/dsp/effects/models/comp", "crates/studio-engine/dsp/effects/models/delay", "crates/studio-engine/dsp/effects/models/eq", "crates/studio-engine/dsp/effects/models/gate", "crates/studio-engine/dsp/effects/models/reverb", "crates/studio-engine/dsp/effects/models/saturate", "crates/studio-engine/dsp/plugin-processors", "crates/studio-engine/dsp/stretch/stretch-abi", "crates/studio-engine/dsp/stretch/stretch-host-tests", "crates/studio-engine/dsp/stretch/stretch-pv", "crates/studio-engine/dsp/stretch/stretch-wsola", "crates/studio-engine/engine/session-engine", "crates/studio-engine/engine/session-host", "crates/studio-engine/engine/session-runtime", "crates/studio-engine/extensions/daw", "crates/studio-engine/extensions/pitch", "crates/studio-engine/extensions/rhythm", "crates/studio-engine/extensions/tempo-map", "crates/studio-engine/lighting/beams", "crates/studio-engine/lighting/colour", "crates/studio-engine/lighting/core", "crates/studio-engine/lighting/daslight", "crates/studio-engine/lighting/daw", "crates/studio-engine/lighting/dmx", "crates/studio-engine/lighting/effects", "crates/studio-engine/lighting/fixture", "crates/studio-engine/lighting/ignition", "crates/studio-engine/lighting/ignition-engine", "crates/studio-engine/lighting/playback", "crates/studio-engine/lighting/profile", "crates/studio-engine/lighting/rig", "crates/studio-engine/lighting/show", "crates/studio-engine/lighting/vendor/gdtf", "crates/studio-engine/plugins/family-clap", "crates/studio-engine/plugins/fx/comp", "crates/studio-engine/plugins/fx/delay", "crates/studio-engine/plugins/fx/eq", "crates/studio-engine/plugins/fx/eq-standalone", "crates/studio-engine/plugins/fx/gate", "crates/studio-engine/plugins/fx/level", "crates/studio-engine/plugins/fx/limiter", "crates/studio-engine/plugins/fx/meter", "crates/studio-engine/plugins/fx/mic", "crates/studio-engine/plugins/fx/modulation", "crates/studio-engine/plugins/fx/pitch", "crates/studio-engine/plugins/fx/reverb", "crates/studio-engine/plugins/fx/saturate", "crates/studio-engine/plugins/fx/trigger", "crates/studio-engine/plugins/fx/tune", "crates/studio-engine/plugins/fx/unison", "crates/studio-engine/plugins/guide", "crates/studio-engine/plugins/plugin-core", "crates/studio-engine/plugins/signal/nam", "crates/studio-engine/plugins/signal/sampler", "crates/studio-engine/plugins/signal/signal", "crates/studio-engine/signal/core", "crates/studio-engine/signal/core-clap", "crates/studio-engine/signal/nam", "crates/studio-engine/signal/rigs/drums", "crates/studio-engine/signal/rigs/ekit", "crates/studio-engine/signal/rigs/fretted", "crates/studio-engine/signal/rigs/fx", "crates/studio-engine/signal/rigs/guitar", "crates/studio-engine/signal/rigs/host", "crates/studio-engine/signal/rigs/keys", "crates/studio-engine/signal/rigs/keys/wurli", "crates/studio-engine/signal/rigs/kontrol", "crates/studio-engine/signal/rigs/orchestra", "crates/studio-engine/signal/rigs/perform-store", "crates/studio-engine/signal/rigs/synth", "crates/studio-engine/signal/rigs/synth-rig", "crates/studio-engine/signal/sampler", "crates/studio-engine/signal/signal", "crates/studio-engine/signal/signal/browser", "crates/studio-engine/signal/signal/content-client", "crates/studio-engine/signal/signal/content-library", "crates/studio-engine/signal/signal/controller", "crates/studio-engine/signal/signal/daw-bridge", "crates/studio-engine/signal/signal/grid", "crates/studio-engine/signal/signal/import", "crates/studio-engine/signal/signal/live", "crates/studio-engine/signal/signal/macromod", "crates/studio-engine/signal/signal/space", "crates/studio-engine/signal/signal/storage", "crates/studio-engine/signal/vendor/tone3000", "crates/studio-engine/signal/vendor/valverig-nam", "crates/studio-engine/web/worklet", "vendor/wasm-streams-0.4", "xtask/clap-host", "xtask/devtools", "xtask/frame-cli", "xtask/frame-mcp", "xtask/kf", "xtask/kit-sheet", "xtask/plugins", "xtask/session-reaper", "xtask/workflows"]
 
 [workspace.package]
 version = "26.10.3"
@@ -105,7 +25,7 @@ repository = "https://github.com/FastTrackStudios/session"
 
 [workspace.dependencies]
 # Drum hit detection (fts-fx's `dsp::hits`, now FastTrackStudios/rhythm).
-rhythm-hits = { git = "https://github.com/FastTrackStudios/rhythm", rev = "1c748920c270fac3ee93f4c28aadf39d106376cc" }
+rhythm-hits = {path = "crates/studio-engine/analysis/rhythm-hits"}
 # Studio, the app (apps/studio): Drive (FastTrackStudios/drive, every crate
 # at one rev; no tags yet) and app-shell (the window, by tag, declared in
 # apps/studio's manifest: its package name is the same as
@@ -114,7 +34,7 @@ rhythm-hits = { git = "https://github.com/FastTrackStudios/rhythm", rev = "1c748
 # by the dioxus lines of [patch.crates-io]. To work on Drive beside this
 # repo, patch `[patch."https://github.com/FastTrackStudios/drive"]` with
 # paths (never committed).
-session-sync = { path = "apps/studio/crates/session-sync" }
+session-sync = {path = "crates/studio-core/session/session-sync"}
 drive-dioxus = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
 drive-client = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
 drive-spine = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
@@ -127,51 +47,50 @@ drive-local = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d
 # is `session` too. session `main` (#189 merged: the shared clock is
 # Architect's presence clock; it pins Architect by tag, and Studio's patch table moves that to Studio's own, as it
 # does).
-fts-session = { package = "session", git = "https://github.com/FastTrackStudios/session", rev = "04e90dace4724ac6d49a60c59ce14237e9f8261e", default-features = false, features = ["architect", "extension", "lead"] }
-signal-space = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-signal-tone3000 = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
+fts-session = {path = "crates/studio-core/session/session", package = "session", default-features = false, features = ["architect", "extension", "lead"]}
+signal-space = {path = "crates/studio-engine/signal/signal/space"}
+signal-tone3000 = {path = "crates/studio-connect/views/rig/tone3000"}
 # The effects live in FastTrackStudios/fts-fx (studio#510): `dsp-core`,
 # `dsp`, `fts-audio-ui`, `plugin-core`, `preset-browser` and the plugin
 # crates `builtin` runs in-process, all at ONE rev (move every line
 # together). Working on both at once: a local [patch], never committed
 # (docs/fts-fx.md has the table).
-fts-audio-ui = { git = "https://github.com/FastTrackStudios/plugins", rev = "8a3abfe4639b4db9f64a452bf90b64ec96f5c577" }
-timeline = { git = "https://github.com/FastTrackStudios/daw-view-kit", rev = "a7217417048b836dc09595d699f4a15ce915ea6d" }
-editing = { path = "features/editing" }
-dock = { path = "features/ui/dock" }
-transport-ui = { path = "features/ui/transport-ui" }
-lyrics-ui = { path = "features/ui/lyrics-ui", default-features = false }
+fts-audio-ui = {path = "crates/studio-connect/plugin-ui/fts-audio-ui"}
+timeline = {path = "crates/studio-connect/kit/timeline"}
+editing = {path = "crates/studio-engine/analysis/editing"}
+dock = {path = "crates/studio-connect/kit/dock"}
+transport-ui = {path = "crates/studio-connect/kit/transport-ui"}
+lyrics-ui = {path = "crates/studio-connect/views/lyrics/lyrics-ui", default-features = false}
 # Frame, the design and control-surface engine, from its own repo
 # (FastTrackStudios/frame), pinned by rev: the core crate, which has no
 # architect, vox or Dioxus dependency. A local checkout goes under the build
 # as a never-committed [patch] (docs/frame.md).
-frame = { git = "https://github.com/FastTrackStudios/frame", rev = "1f6311abc5eeef87c5226155a4838a6f58984410" }
-web-audio-worklet = { path = "features/adapters/web/worklet" }
-editor = { git = "https://github.com/FastTrackStudios/midi-editor", rev = "05b04d328b7c40d9309dc50245588fbdbe6a780a" }
+frame = {path = "crates/studio-core/frame/frame"}
+web-audio-worklet = {path = "crates/studio-engine/web/worklet"}
+editor = {path = "crates/studio-connect/views/midi/expression-editor"}
 # The MIDI editor as a Studio view (expression, the Editor panel), over
 # daw-view-kit and editor.
-midi-editor = { git = "https://github.com/FastTrackStudios/midi-editor", rev = "05b04d328b7c40d9309dc50245588fbdbe6a780a", default-features = false }
-session = { path = "features/session" }
-synth = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-sampler = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-guitar = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-protools = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
-ableton = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
-logic = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
-daw-ui = { git = "https://github.com/FastTrackStudios/daw-view-kit", rev = "a7217417048b836dc09595d699f4a15ce915ea6d" }
-dynamic-template = { path = "features/dynamic-template", default-features = false }
-dsp-core = { git = "https://github.com/FastTrackStudios/dsp", rev = "75d475b01e96eed4a5ddad8ad6799396f220dd82" }
-keys = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-ekit = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-drums = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-keybinds = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
-themer = { path = "features/ui/themer", default-features = false }
-launcher = { path = "features/app/launcher" }
-preset-browser = { git = "https://github.com/FastTrackStudios/plugins", rev = "8a3abfe4639b4db9f64a452bf90b64ec96f5c577" }
-control-surfaces = { path = "features/control-surfaces" }
+midi-editor = {path = "crates/studio-connect/views/midi/view", default-features = false}
+session = { path = "crates/studio-connect/features/session", package = "studio-session" }
+synth = {path = "crates/studio-engine/signal/rigs/synth"}
+sampler = {path = "crates/studio-engine/signal/sampler"}
+guitar = {path = "crates/studio-engine/signal/rigs/guitar"}
+protools = {path = "crates/studio-engine/adapters/protools"}
+ableton = {path = "crates/studio-engine/adapters/ableton"}
+logic = {path = "crates/studio-engine/adapters/logic"}
+daw-ui = {path = "crates/studio-connect/kit/daw-ui"}
+dynamic-template = {path = "crates/studio-engine/adapters/dynamic-template", default-features = false}
+dsp-core = {path = "crates/studio-engine/dsp/dsp-core"}
+keys = {path = "crates/studio-engine/signal/rigs/keys"}
+ekit = {path = "crates/studio-engine/signal/rigs/ekit"}
+drums = {path = "crates/studio-engine/signal/rigs/drums"}
+keybinds = {path = "crates/studio-connect/features/keybinds"}
+themer = {path = "crates/studio-connect/theme/themer", default-features = false}
+preset-browser = {path = "crates/studio-connect/plugin-ui/preset-browser"}
+control-surfaces = {path = "crates/studio-engine/adapters/control-surfaces"}
 # The effects and their faces: plugins' `plugin-ui`, which re-exports
 # FastTrackStudios/dsp with each module's `ui` at the paths fts-fx had.
-dsp = { package = "plugin-ui", git = "https://github.com/FastTrackStudios/plugins", rev = "8a3abfe4639b4db9f64a452bf90b64ec96f5c577" }
+dsp = { path = "crates/studio-engine/dsp/dsp" }
 # Razor edit areas: a rectangle of time by row, and the set algebra over
 # it. Dependency-free and shared by the expression editor and the
 # arrangement, so the two cannot disagree about what an area is.
@@ -186,12 +105,12 @@ dsp = { package = "plugin-ui", git = "https://github.com/FastTrackStudios/plugin
 # path-deps-only — it left the tree so it can track upstream.
 nice-plug = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 nice-plug-xtask = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
-app-shell = { path = "features/app/shell" }
+app-shell = {path = "crates/studio-connect/kit/studio-shell"}
 # The release version a shipped binary reports (FTS_RELEASE_VERSION at build
 # time). Binaries only: see its Cargo.toml.
-fts-version = { path = "features/app/version" }
-library = { path = "features/library" }
-fts-account = { path = "features/account" }
+fts-version = {path = "crates/studio-core/util/fts-version"}
+library = {path = "crates/studio-connect/features/library"}
+fts-account = {path = "crates/studio-connect/client/account"}
 # Canonical MIDI facade. Defaults OFF at the root: daw-proto re-exports
 # `midicore::MidiEvent` and must not drag midicore's `vox` service traits
 # (nor the `midir` feature — midicore-midir pins midir 0.10/alsa-sys 0.3,
@@ -217,65 +136,65 @@ ropey = "1.6"
 # root manifest declares the same versions, git pins and patches as this
 # one: bump a pin there and here together, or Cargo.lock grows a second
 # copy. Working on both at once: AGENTS.md, "Co-developing across repos".
-daw-proto = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-control = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-proto = {path = "crates/studio-core/proto/daw-proto"}
+daw-control = {path = "crates/studio-engine/daw/control"}
 # The DAW's editing contract and its built-in algorithms (hit placement):
 # what Studio's engine asks an edit algorithm, and answers without one.
-daw-edit = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-edit = {path = "crates/studio-core/proto/daw-edit"}
 # The timeline state every view and the engine share (the cursors, the
 # time selection, what is selected, the clipboard).
-daw-timeline = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-timeline = {path = "crates/studio-core/proto/daw-timeline"}
 # The contract the views are built on (daw#51): the EngineView protocol and
 # a window's link, the song model, transport, selection and overlays. Each
 # consumer picks native or web (and the engine's app, local).
-daw-view = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0", default-features = false }
-daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+daw-view = {path = "crates/studio-core/proto/daw-view", default-features = false}
+daw-module = {path = "crates/studio-core/proto/daw-module"}
+daw-transport-sync = {path = "crates/studio-engine/daw/transport-sync"}
+daw-audio-graph = {path = "crates/studio-engine/daw/audio-graph"}
 # The theme spec the views implement and the packs' loader (daw#52): a
 # commit of its own until the daw lines above move to one that has it.
-daw-theme = { git = "https://github.com/FastTrackStudios/daw", rev = "5f2b06d985f85b2d69974cdfc802ee0864507694" }
+daw-theme = {path = "crates/studio-connect/theme/daw-theme"}
 # The device layer (enumeration, opening), for the audio settings (DAW_AUDIO).
-audio = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-test-macro = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-utils = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-midi = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+audio = {path = "crates/studio-engine/daw/audio"}
+daw-test-macro = {path = "crates/studio-engine/daw/test-macro"}
+utils = {path = "crates/studio-core/util/utils"}
+midi = {path = "crates/studio-engine/daw/midi"}
 # Defaults OFF at the root so lean consumers (probe-only scanners, the
 # iOS-clean session-guide) don't drag the pack engine in; each consumer
 # names the features it needs ("load" / "write" / "engine").
-fts-sample = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0", default-features = false }
+fts-sample = {path = "crates/studio-engine/daw/audio/sample", default-features = false}
 # The engine: `daw` is the facade (its engine is opt-in, `standalone`),
 # `daw-standalone` the engine, `session-format` the session document,
 # `dawfile-reaper` the `.rpp` reader the engine loads and saves with,
 # `signal-plugin-host` CLAP/VST3 hosting, `builtin` the effects as engine
 # blocks, `daw-sync` DAWs kept in step (network, Ableton Link). The engine
 # takes the effects from fts-fx at the rev above.
-daw = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-standalone = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-session-format = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-dawfile-reaper = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-signal-plugin-host = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0", default-features = false }
+daw = {path = "crates/studio-engine/daw/daw"}
+daw-standalone = {path = "crates/studio-engine/daw/standalone"}
+session-format = {path = "crates/studio-core/session/session-format"}
+dawfile-reaper = {path = "crates/studio-engine/adapters/reaper/dawfile-reaper"}
+signal-plugin-host = {path = "crates/studio-engine/daw/plugin-host", default-features = false}
 # The effects Studio runs in-process: Signal's signal-effects (daw has none).
-builtin = { package = "signal-effects", git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-daw-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
+builtin = {path = "crates/studio-engine/dsp/effects", package = "signal-effects"}
+daw-sync = {path = "crates/studio-engine/daw/sync"}
 
 # ── daw domain (wave 2) ───────────────────────────────────────────────
 # The `daw` facade is the public API surface for the daw domain (above,
 # from the daw repo); daw-proto, daw-control, daw-standalone, dawfile-* are
 # internal to it, and consumers outside the domain go through the facade.
-studio = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
-daw-actions = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+studio = { path = "crates/studio-engine/adapters/studio" }
+daw-actions = {path = "crates/studio-engine/adapters/daw-actions"}
 fts-devtools = { path = "xtask/devtools" }
 xtask-workflows = { path = "xtask/workflows" }
-audio-controls = { git = "https://github.com/FastTrackStudios/daw-view-kit", rev = "a7217417048b836dc09595d699f4a15ce915ea6d" }
+audio-controls = {path = "crates/studio-connect/kit/audio-controls"}
 # default = all-formats; the daw facade opts into formats individually,
 # so the root entry keeps defaults OFF and consumers that want every
 # importer set `default-features = true`.
-daw-reaper = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252", default-features = false }
+daw-reaper = {path = "crates/studio-engine/adapters/reaper/adapters/daw-reaper", default-features = false}
 # Extension runtime — integrated REAPER extension helpers
-daw-extension-runtime = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
-reaper-dioxus = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
-daw-reaper-dioxus-ext = { path = "features/adapters/reaper/daw-reaper-dioxus-ext" }
+daw-extension-runtime = {path = "crates/studio-engine/adapters/reaper/adapters/daw-extension-runtime"}
+reaper-dioxus = {path = "crates/studio-engine/adapters/reaper/adapters/reaper-dioxus"}
+daw-reaper-dioxus-ext = {path = "crates/studio-engine/adapters/reaper/studio/daw-reaper-dioxus-ext"}
 
 # ── session domain (wave 3) ───────────────────────────────────────────
 # `session` is the facade — the only public API surface for the session
@@ -287,14 +206,12 @@ daw-reaper-dioxus-ext = { path = "features/adapters/reaper/daw-reaper-dioxus-ext
 # Durable Song + Arrangement vault-folder schema (stored counterpart to
 # session_proto::Song). Keyflow-agnostic: charts are stored as references
 # (relative paths / attachment ids), never embedded keyflow::Chart types.
-song = { path = "features/song" }
+song = {path = "crates/studio-core/session/song"}
 # Song libraries and setlists as notes of an Architect vault project, shared
 # by an Architect share link (studio#386).
-setlists = { path = "features/setlists" }
 # Productions in other DAWs (Ableton sets, Pro Tools sessions, REAPER and
 # Logic projects) as project notes with a stage, found by a scan (studio#396).
-productions = { path = "features/productions" }
-studio-views = { path = "features/studio-views" }
+studio-views = {path = "crates/studio-connect/features/studio-views"}
 
 # ── keyflow domain — its own repo since the 2026-08 split ─────────────
 # (FastTrackStudios/keyflow: the chart language, its formats, the LSP and
@@ -316,16 +233,16 @@ studio-views = { path = "features/studio-views" }
 # defaults OFF here; consumers name the formats they use.
 # The facade defaults OFF too: each consumer names its tier (`text`,
 # `svg` for wasm, `engraver` for the full engraver with the GPU renderer).
-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
-keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
-keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
-keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
-keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
-keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
-tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+keyflow = {path = "crates/studio-core/music/keyflow", default-features = false}
+keyflow-proto = {path = "crates/studio-core/music/keyflow-proto"}
+keyflow-lang = {path = "crates/studio-core/music/keyflow-lang", default-features = false}
+keyflow-daw-analysis = {path = "crates/studio-engine/analysis/keyflow-daw-analysis"}
+keyflow-ui = {path = "crates/studio-connect/views/chart/keyflow-ui"}
+keyflow-cli = {path = "xtask/kf"}
+tree-sitter-keyflow = {path = "crates/studio-core/music/tree-sitter-keyflow"}
 # Engraver — defaults OFF at the root (the full `engraver` feature drags
 # wgpu/vello + PDF export); consumers opt into `svg`/`wgpu`/`engraver`.
-engraver = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
+engraver = {path = "crates/studio-core/music/engraver", default-features = false}
 
 # ── signal domain (wave 4) ────────────────────────────────────────────
 # `signal` is the facade — the only public API surface for the signal
@@ -367,7 +284,7 @@ world-sys = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1"
 # The saturator's five circuits and their profiles — what its selector
 # picks from, applied through the plugin's own `apply`.
 # signal's rigs in the session engine: the bass rig, the kit's voices.
-signal-fx = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
+signal-fx = {path = "crates/studio-engine/signal/rigs/fx"}
 # signal's in-process rig engine (NAM, convolver, the sampler), from the
 # sibling checkout as daw is: both resolve daw to ../daw, so its
 # processors are the session engine's `PluginInstance`s.
@@ -521,7 +438,7 @@ sha2 = "0.10"
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 
 # ── Dynamic session templates (subtree-imported into the tree) ────────
-patch-list = { path = "features/patch-list" }
+patch-list = {path = "crates/studio-connect/features/patch-list"}
 
 # ── music-convention (its own repo since 2026-08-15) ──────────────────
 # The canonical music-production taxonomy (instrument groups + the REAPER
@@ -529,10 +446,10 @@ patch-list = { path = "features/patch-list" }
 # dynamic-template runs on. These lived here as subtree copies until the
 # repo split; the in-tree copies were byte-identical to the extracted
 # repo and have been deleted in favour of the tag.
-music-catalog = { git = "https://github.com/FastTrackStudios/music-convention", tag = "v0.1.3" }
-color-palette = { git = "https://github.com/FastTrackStudios/music-convention", tag = "v0.1.3" }
-monarchy = { git = "https://github.com/FastTrackStudios/music-convention", tag = "v0.1.3" }
-monarchy_derive = { git = "https://github.com/FastTrackStudios/music-convention", tag = "v0.1.3" }
+music-catalog = {path = "crates/studio-core/music/music-catalog"}
+color-palette = {path = "crates/studio-core/music/color-palette"}
+monarchy = {path = "crates/studio-core/music/monarchy"}
+monarchy_derive = {path = "crates/studio-core/music/monarchy-derive"}
 
 # ── MusicXML parsing (keyflow) ─────────────────────────────────────────
 musicxml = "1.1"
@@ -770,8 +687,8 @@ editor-crdt = { git = "https://github.com/FastTrackStudios/editor", rev = "6817d
 # folded into it at keyflow v0.2.8). Defaults off: no `.kf` fence
 # renderer, so no engraver. Renamed because task's older `editor-keyflow`
 # (below, for the site) has the same package name.
-keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
-editor-keyflow = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+keyflow-editor-lang = {path = "crates/studio-connect/views/chart/editor-keyflow", package = "editor-keyflow", default-features = false}
+editor-keyflow = { path = "crates/studio-connect/views/chart/editor-keyflow" }
 editor-keyflow-lang = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 view-knowledge-graph = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 
@@ -851,78 +768,75 @@ vox-codegen = "0.10.0-rc.5"
 # ── from daw's workspace (joined into studio) ──
 
 # ── from processor's workspace (joined into studio) ──
-signal-nam = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
+signal-nam = {path = "crates/studio-engine/signal/nam"}
 web-time = "1"
 
-signal-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-signal-import = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
+signal-proto = {path = "crates/studio-core/proto/signal-proto"}
+signal-import = {path = "crates/studio-engine/signal/signal/import"}
 # Session's app as a library (features/engine/host): its window, CLI and
 # engine host. No default features: each dependent picks its set.
-session-desktop = { path = "features/engine/host", default-features = false }
+session-desktop = {path = "crates/studio-engine/engine/session-host", default-features = false}
 # Session's engine, and its window (a view of it): features chosen by each
 # dependent (`native` on a desktop, `web` in a page).
-song-file = { path = "features/song-file" }
-session-engine = { path = "features/engine/engine", default-features = false }
+song-file = {path = "crates/studio-core/session/song-file"}
+session-engine = {path = "crates/studio-engine/engine/session-engine", default-features = false}
 # The window's half of the engine (`view`, `view_client`, the read-back
 # model): what daw-view-kit and Studio's views depend on instead of the engine.
-session-engine-client = { path = "features/engine/client", default-features = false }
+session-engine-client = {path = "crates/studio-connect/client/session-engine-client", default-features = false}
 # Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
-session-runtime = { path = "features/engine/runtime" }
+session-runtime = {path = "crates/studio-engine/engine/session-runtime"}
 # The views and what they draw with: their own repos (daw-view-kit,
 # arrangement-view, mixer-view, midi-editor), each pinned at one revision;
 # a local checkout is patched in by path from an uncommitted override.
-daw-view-kit = { git = "https://github.com/FastTrackStudios/daw-view-kit", rev = "a7217417048b836dc09595d699f4a15ce915ea6d", default-features = false }
+daw-view-kit = {path = "crates/studio-connect/kit/daw-view-kit", default-features = false}
 # Studio's app panels around the views (the shell, the chart, the lyrics,
 # the transport bar, …), out of daw-view-kit.
-studio-panels = { path = "features/app/panels", default-features = false }
-mixer-view = { git = "https://github.com/FastTrackStudios/mixer-view", rev = "687f9fc6a64fa4990740e333ae5c6dff609c29a2", default-features = false }
-arrangement-view = { git = "https://github.com/FastTrackStudios/arrangement-view", rev = "7fca85ebb3365dfa9abd0c1f889817193e64e38f", default-features = false }
-studio-view-link = { path = "extensions/link" }
+studio-panels = {path = "crates/studio-connect/kit/panels", default-features = false}
+mixer-view = {path = "crates/studio-connect/views/mixer/view", default-features = false}
+arrangement-view = {path = "crates/studio-connect/views/arrangement/view", default-features = false}
+studio-view-link = {path = "crates/studio-connect/views/link"}
 # Studio's engine, arrangement and mixer extensions as libraries: what
 # Studio's distribution (apps/desktop) links in. Each is also its own
 # process program (a development copy shadows the linked one).
-daw-extension = { path = "extensions/daw" }
-studio-arrangement = { path = "extensions/arrangement" }
-studio-mixer = { path = "extensions/mixer" }
-studio-lyrics = { path = "extensions/lyrics" }
-studio-navigator = { path = "extensions/navigator" }
-studio-launcher = { path = "extensions/launcher" }
+daw-extension = {path = "crates/studio-engine/extensions/daw"}
+studio-arrangement = {path = "crates/studio-connect/views/arrangement/extension"}
+studio-mixer = {path = "crates/studio-connect/views/mixer/extension"}
+studio-lyrics = {path = "crates/studio-connect/views/lyrics/extension"}
+studio-navigator = {path = "crates/studio-connect/views/navigator"}
 # The island's views (features/island): drawn in frames by its own
 # web bundle, and linked into studio-web (`studio_island::view`).
-studio-island = { path = "features/island" }
 # Studio's compiled-in extensions, listed once for the desktop app and studio-web.
-studio-extensions = { path = "features/distribution", default-features = false }
 # Signal's rigs as extensions (docs/design/signal-extensions.md): the
 # engine (a process), what its views share at build time, and the views.
-rig-extension = { path = "extensions/rig" }
-studio-rig-link = { path = "extensions/rig-link" }
-studio-rig-switches = { path = "extensions/rig-switches" }
-studio-rig-setlist = { path = "extensions/rig-setlist" }
-studio-rig-browser = { path = "extensions/rig-browser" }
-studio-rig-grid = { path = "extensions/rig-grid" }
-studio-rig-macros = { path = "extensions/rig-macros" }
-studio-rig-status = { path = "extensions/rig-status" }
-studio-audio-settings = { path = "extensions/audio-settings" }
-studio-keys = { path = "extensions/keys" }
+rig-extension = {path = "crates/studio-engine/extensions/rig"}
+studio-rig-link = {path = "crates/studio-connect/views/rig/link"}
+studio-rig-switches = {path = "crates/studio-connect/views/rig/switches"}
+studio-rig-setlist = {path = "crates/studio-connect/views/rig/setlist"}
+studio-rig-browser = {path = "crates/studio-connect/views/rig/browser"}
+studio-rig-grid = {path = "crates/studio-connect/views/rig/grid"}
+studio-rig-macros = {path = "crates/studio-connect/views/rig/macros"}
+studio-rig-status = {path = "crates/studio-connect/views/rig/status"}
+studio-audio-settings = {path = "crates/studio-connect/views/rig/audio-settings"}
+studio-keys = {path = "crates/studio-connect/views/rig/keys"}
 # Tempo maps from stems: the algorithms and their measurements (no UI),
 # and the extension that runs them (`studio.tempo-map`, a process).
-tempo-map = { path = "features/tempo-map" }
-studio-tempo-map = { path = "extensions/tempo-map" }
+tempo-map = {path = "crates/studio-engine/analysis/tempo-map"}
+studio-tempo-map = {path = "crates/studio-engine/extensions/tempo-map"}
 # Keyflow's chart extension and Ignition's lighting extension, linked into
 # the distribution the same way (`pane`: Ignition's room as the GPU
 # process view the app hosts).
-keyflow-extension = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
-ignition-pane = { git = "https://github.com/FastTrackStudios/Ignition", rev = "b9a90c27979bc53b955fe0716d7b19707972ccd0", default-features = false, features = ["pane"] }
-signal-rig-host = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-signal-rigs-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-signal-rig-shell = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
+keyflow-extension = {path = "crates/studio-connect/views/chart/extension"}
+ignition-pane = {path = "crates/studio-connect/views/lighting/pane", default-features = false, features = ["pane"]}
+signal-rig-host = {path = "crates/studio-engine/signal/rigs/host"}
+signal-rigs-proto = {path = "crates/studio-core/proto/signal-rigs-proto"}
+signal-rig-shell = {path = "crates/studio-connect/views/rig/shell"}
 # The widgets the rigs share (the on-screen piano), for the keys extension.
-signal-widgets = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-signal-rig-perform-ui = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-signal-content-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-signal-content-library = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-signal-content-client = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
-signal-synth-rig = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
+signal-widgets = {path = "crates/studio-connect/views/rig/widgets"}
+signal-rig-perform-ui = {path = "crates/studio-connect/views/rig/perform-ui"}
+signal-content-proto = {path = "crates/studio-core/proto/signal-content-proto"}
+signal-content-library = {path = "crates/studio-engine/signal/signal/content-library"}
+signal-content-client = {path = "crates/studio-engine/signal/signal/content-client"}
+signal-synth-rig = {path = "crates/studio-engine/signal/rigs/synth-rig"}
 
 # ── from patchbay's workspace (joined into studio) ──
 socket2 = { version = "0.6", features = ["all"] }
@@ -980,7 +894,7 @@ objc2-core-foundation = { version = "0.3", default-features = false }
 objc2-foundation = { version = "0.3.2", default-features = false }
 objc2-media-player = "0.3"
 objc2-ui-kit = "0.3"
-ort = { version = "=2.0.0-rc.10", default-features = false }
+ort = { version = "=2.0.0-rc.15", default-features = false }
 pipewire = "0.10"
 pprof = "0.15"
 pretty_assertions = "1.4"
@@ -1015,6 +929,153 @@ ebur128 = "0.1"
 libm = { version = "0.2", default-features = false }
 rustfft = "6.2"
 test-that = { version = "0.5.2", default-features = false }
+ignition-proto = {path = "crates/studio-core/proto/ignition-proto"}
+ignition-daw-proto = {path = "crates/studio-core/proto/ignition-daw-proto"}
+ignition-colour = {path = "crates/studio-engine/lighting/colour"}
+ignition-rig = {path = "crates/studio-engine/lighting/rig"}
+ignition-show = {path = "crates/studio-engine/lighting/show"}
+ignition-session = {path = "crates/studio-core/session/ignition-session"}
+ignition-effects = {path = "crates/studio-engine/lighting/effects"}
+ignition-playback = {path = "crates/studio-engine/lighting/playback"}
+ignition-core = {path = "crates/studio-engine/lighting/core"}
+ignition-dmx = {path = "crates/studio-engine/lighting/dmx"}
+ignition-daw = {path = "crates/studio-engine/lighting/daw"}
+ignition-fixture = {path = "crates/studio-engine/lighting/fixture"}
+ignition-profile = {path = "crates/studio-engine/lighting/profile"}
+ignition-daslight = {path = "crates/studio-engine/lighting/daslight"}
+ignition-viz = {path = "crates/studio-connect/views/lighting/viz"}
+ignition-beams = {path = "crates/studio-engine/lighting/beams"}
+architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.0", features = ["otel"] }
+ignition-live-ui = {path = "crates/studio-connect/views/lighting/live-ui"}
+bevy = { git = "https://github.com/bevyengine/bevy", rev = "948cc8270204b46fd37353eb786144a677d0c0ce", default-features = false }
+daw-allocator = {path = "crates/studio-engine/daw/allocator"}
+daw-clap-ext = {path = "crates/studio-engine/daw/clap-ext"}
+stretch-pv = {path = "crates/studio-engine/dsp/stretch/stretch-pv"}
+arc-swap = "1.7"
+atomic_float = "1.1"
+memmap2 = "0.9"
+clack-extensions = { git = "https://github.com/prokopyl/clack", rev = "f874e858ad576c601367b3038af5088a4e671744", features = [
+    "clack-host",
+    # Bridge host windows (winit 0.30) into CLAP embedded GUIs (fts-clap-host, in Studio).
+    "raw-window-handle_06",
+    "audio-ports",
+    "note-ports",
+    # Piano-roll key labels (FTS Guide names its click/count/section keys).
+    "note-name",
+    "params",
+    "state",
+    "latency",
+    "gui",
+    "timer",
+    "log",
+    "thread-check",
+    "tail",
+] }
+clap-sys = "0.5"
+clack-host = { git = "https://github.com/prokopyl/clack", rev = "f874e858ad576c601367b3038af5088a4e671744" }
+clack-plugin = { git = "https://github.com/prokopyl/clack", rev = "f874e858ad576c601367b3038af5088a4e671744" }
+criterion = "0.5"
+libloading = "0.8"
+nom = "8"
+raw-window-handle-06 = { version = "0.6", package = "raw-window-handle" }
+rusty_link = "0.4"
+ruzstd = "0.8"
+styx-format = { version = "5.0.0-rc.5" }
+turso = { version = "0.8.2", default-features = false }
+vst3 = "0.3"
+once_cell = "1.20"
+figcraft-collab = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-color = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-doc = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-geom = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-layout = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-pathops = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-text = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-engine = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1", default-features = false }
+figma-api = { git = "https://github.com/gridaco/figma-api-rust.git" }
+proptest = "1"
+roxmltree = "0.20"
+vello = "0.11"
+zip = { version = "2", default-features = false }
+keyflow-annotate = {path = "crates/studio-core/music/keyflow-annotate"}
+editor-vim = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+pitch-core = {path = "crates/studio-engine/analysis/pitch-core"}
+music-convention = {path = "crates/studio-core/music/music-convention"}
+plugin-core = {path = "crates/studio-engine/plugins/plugin-core"}
+family-clap = {path = "crates/studio-engine/plugins/family-clap"}
+plugin-processors = {path = "crates/studio-engine/dsp/plugin-processors", default-features = false}
+plugin-ui = {path = "crates/studio-connect/plugin-ui/plugin-ui"}
+nice-plug-dioxus = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
+bytemuck = "1"
+naga = "30"
+rhythm-editing = {path = "crates/studio-engine/analysis/rhythm-editing"}
+comp-plugin = {path = "crates/studio-engine/plugins/fx/comp"}
+delay-plugin = {path = "crates/studio-engine/plugins/fx/delay"}
+eq-plugin = {path = "crates/studio-engine/plugins/fx/eq"}
+gate-plugin = {path = "crates/studio-engine/plugins/fx/gate"}
+level-plugin = {path = "crates/studio-engine/plugins/fx/level"}
+limiter-plugin = {path = "crates/studio-engine/plugins/fx/limiter"}
+meter-plugin = {path = "crates/studio-engine/plugins/fx/meter"}
+mic-plugin = {path = "crates/studio-engine/plugins/fx/mic"}
+modulation-plugin = {path = "crates/studio-engine/plugins/fx/modulation"}
+pitch-plugin = {path = "crates/studio-engine/plugins/fx/pitch"}
+reverb-plugin = {path = "crates/studio-engine/plugins/fx/reverb"}
+saturate-plugin = {path = "crates/studio-engine/plugins/fx/saturate"}
+tune-plugin = {path = "crates/studio-engine/plugins/fx/tune"}
+unison-plugin = {path = "crates/studio-engine/plugins/fx/unison"}
+signal-core = {path = "crates/studio-engine/signal/core", default-features = false}
+signal-dsp-core = {path = "crates/studio-engine/dsp/dsp-core", package = "dsp-core", default-features = false}
+signal-dsp = {path = "crates/studio-engine/dsp/dsp", package = "dsp", default-features = false}
+kontrol = {path = "crates/studio-engine/signal/rigs/kontrol"}
+neural-amp-modeler = { git = "https://github.com/FastTrackStudios/neural-amp-modeler-rs", rev = "bd6a156e5280d9ba30a8f50f5d39b0310feb8780" }
+signal-core-clap = {path = "crates/studio-engine/signal/core-clap"}
+facet-toml = { version = "0.50.0-rc.5" }
+lumen-blocks = { git = "https://github.com/FastTrackStudios/lumen-blocks", tag = "v0.3.1" }
+rusb = "0.9"
+hidapi = "2"
+walkdir = "2"
+tone3000 = "0.1"
+signal = {path = "crates/studio-engine/signal/signal"}
+signal-browser = {path = "crates/studio-engine/signal/signal/browser", default-features = false}
+signal-grid = {path = "crates/studio-engine/signal/signal/grid"}
+signal-grid-ui = {path = "crates/studio-connect/views/rig/grid-ui"}
+signal-controller = {path = "crates/studio-engine/signal/signal/controller"}
+signal-live = {path = "crates/studio-engine/signal/signal/live"}
+signal-storage = {path = "crates/studio-engine/signal/signal/storage"}
+signal-daw-bridge = {path = "crates/studio-engine/signal/signal/daw-bridge"}
+signal-rig-perform-store = {path = "crates/studio-engine/signal/rigs/perform-store"}
+signal-macromod = {path = "crates/studio-engine/signal/signal/macromod"}
+openwurli-dsp = {path = "crates/studio-engine/signal/rigs/keys/wurli"}
+bhtsne = "0.5"
+flate2 = "1"
+ratatui = "0.30"
+wiremock = "0.6"
+wasm-bindgen-test = "0.3"
+stretch-abi = {path = "crates/studio-engine/dsp/stretch/stretch-abi"}
+interchange = {path = "crates/studio-engine/adapters/interchange"}
+daw-audio-sync = {path = "crates/studio-engine/adapters/reaper/adapters/daw-audio-sync"}
+reaper-embed = {path = "crates/studio-engine/adapters/reaper/adapters/reaper-embed"}
+reaper-launcher = {path = "crates/studio-engine/adapters/reaper/adapters/reaper-launcher"}
+reaper-config = {path = "crates/studio-engine/adapters/reaper/adapters/reaper-config"}
+reaper-kbd = {path = "crates/studio-engine/adapters/reaper/adapters/reaper-kbd"}
+reaper-hwnd = {path = "crates/studio-engine/adapters/reaper/adapters/reaper-hwnd"}
+figue = { version = "5.0.0-rc.5" }
+dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
+swell-ui = {path = "crates/studio-engine/adapters/reaper/adapters/swell-ui"}
+cocoa = "0.26"
+objc = "0.2.7"
+bitflags = "2.11"
+crossbeam = "0.8"
+helgoboss-midi = "0.4"
+camino = "1.2"
+enumflags2 = "0.7"
+bincode = "1"
+cfb = "0.10"
+display-info = "0.5"
+keyboard-types = "0.8"
+plist = "1"
+quick-xml = "0.41"
+x11-dl = "2.21"
 
 [patch.crates-io]
 # app-shell-native (the one app's Blitz window) names the published
@@ -1033,14 +1094,14 @@ wasm-streams = { path = "vendor/wasm-streams-0.4" }
 # Ignition's fork of gdtf 0.3.0 (a parsed matrix's rows: its vendor/gdtf
 # FTS-PATCH.md), for its visualizer, which studio-web links (Ignition's
 # room in a browser). The same revision as ignition-pane.
-gdtf = { git = "https://github.com/FastTrackStudios/Ignition", rev = "b9a90c27979bc53b955fe0716d7b19707972ccd0" }
+gdtf = {path = "crates/studio-engine/lighting/vendor/gdtf"}
 # tone3000 on reqwest 0.12's ring-backed rustls instead of 0.13's `rustls`,
 # whose only backend is aws-lc-rs: aws-lc-sys's build script (a cmake C
 # build) was 186 s of a 375 s clean `cargo check --workspace`, all of it on
 # the critical path. tone3000 was the only crate in the graph asking for it.
 # See vendor/tone3000/FTS-PATCH.md; drop it once upstream lets a consumer
 # pick the TLS backend.
-tone3000 = { git = "https://github.com/FastTrackStudios/signal", rev = "81defbda9bd1b2739ab7f89160f0f1d719126a03" }
+tone3000 = {path = "crates/studio-engine/signal/vendor/tone3000"}
 # Vendored one-line fix: parse_schema_bytes rejected every real schema
 # exchange with "schema decode consumed N of M bytes" — it compared
 # phon_schema::schema_from_bytes's owned-allocation byte count (added in
@@ -1160,6 +1221,20 @@ phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" 
 # same as task's own [patch] table no longer needs to redirect it either.
 
 # ── Lints — merged union of the dissolved workspaces' policies ─────────
+valverig-nam = {path = "crates/studio-engine/signal/vendor/valverig-nam"}
+
+[patch."https://github.com/FastTrackStudios/blitz"]
+blitz-dom = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-traits = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-paint = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-shell = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-net = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-html = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+anyrender = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+
+[patch."https://github.com/FastTrackStudios/vendor"]
+dioxus-native-dom = { git = "https://www.github.com/FastTrackStudios/vendor", rev = "25bf4bcdfd0b6acb268ca91a93bc8ff8da683a96" }
+
 [workspace.lints.rust]
 # Flipped from "allow" 2026-07-28 (task cleanup): the blanket allows are
 # WHY ~30k lines of dead code accumulated silently. The task tree is
@@ -1438,7 +1513,7 @@ opt-level = 3
 # fog: its vendor/bevy_pbr FTS-PATCH.md), for every Bevy crate of the
 # visualizer studio-web links. The same revision as ignition-pane.
 [patch."https://github.com/bevyengine/bevy"]
-bevy_pbr = { git = "https://github.com/FastTrackStudios/Ignition", rev = "b9a90c27979bc53b955fe0716d7b19707972ccd0" }
+bevy_pbr = {path = "crates/studio-connect/views/lighting/vendor/bevy_pbr"}
 
 [patch."https://github.com/DioxusLabs/dioxus"]
 dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
@@ -1457,27 +1532,6 @@ dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.
 # Cargo.lock holds the `www.` ones only. Keep each rev equal to the
 # [workspace.dependencies] above. Goes when keyflow pins the daw repo at
 # the revision Studio does.
-[patch."https://github.com/FastTrackStudios/daw"]
-daw                = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-edit           = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-timeline       = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-view           = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-standalone     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-session-format     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-dawfile-reaper     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-signal-plugin-host = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-sync           = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-proto          = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-control        = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-module         = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-transport-sync = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-daw-test-macro     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-utils              = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-midi               = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-audio              = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-fts-sample         = { git = "https://www.github.com/FastTrackStudios/daw", rev = "d7262bea41d40b8c5c38a44266ecdc57a9f92ca0" }
-
-# from processor
 [profile.dev.package.signal-effects]
 opt-level = 3
 
@@ -1661,3 +1715,5 @@ vault-live = { git = "https://www.github.com/FastTrackStudios/architect", rev = 
 vault-obsidian = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 vault-proto = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 architect-process-view = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-workspace-hack = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+architect-telemetry = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }

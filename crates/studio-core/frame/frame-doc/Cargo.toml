@@ -26,7 +26,7 @@ uuid = { workspace = true }
 [dev-dependencies]
 # The round-trip test: the parity scenarios (Figma exports) and the plugin faces.
 frame = { path = "../frame", features = ["figma"] }
-plugin-faces = { path = "../../examples/plugin-faces" }
+plugin-faces = { path = "../../../studio-connect/plugin-ui/plugin-faces" }
 
 # figcraft's font catalog turns on `yeslogic-fontconfig-sys/dlopen` (through
 # fontique 0.11). Cargo unifies that feature with the fontique 0.12 every

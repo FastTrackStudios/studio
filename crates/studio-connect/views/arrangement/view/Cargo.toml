@@ -22,7 +22,7 @@ daw-proto = { workspace = true }
 # The chord items' numbers and names — `arrangement::Lettering`.
 keyflow = { workspace = true, features = ["text", "engraver"] }
 # The rides an automation lane edits (`automation_edit`).
-dsp = { workspace = true, features = ["level"] }
+dsp = { path = "../../../plugin-ui/plugin-ui", package = "plugin-ui", features = ["level"] }
 architect-input = { workspace = true }
 # The drum roles a folded kit is read by, and the edit scope.
 daw-edit = { workspace = true }
