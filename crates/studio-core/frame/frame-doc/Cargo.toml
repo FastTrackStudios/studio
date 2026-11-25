@@ -33,6 +33,7 @@ plugin-faces = { path = "../../../studio-connect/plugin-ui/plugin-faces" }
 # Blitz/parley consumer links, and fontique 0.12 built without its own
 # `fontconfig-dlopen` then fails to find the linked symbols. Aligning it here,
 # where figcraft enters the graph, saves every consumer the workaround
-# (docs/figcraft-fork.md).
+# (docs/figcraft-fork.md). `std` is what parley turns on in the full graph;
+# without it frame-doc does not build on its own.
 [target.'cfg(target_os = "linux")'.dependencies]
-fontique = { version = "0.12", default-features = false, features = ["fontconfig-dlopen"] }
+fontique = { version = "0.12", default-features = false, features = ["std", "fontconfig-dlopen"] }
