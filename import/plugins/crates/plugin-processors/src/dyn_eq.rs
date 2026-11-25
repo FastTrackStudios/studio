@@ -134,22 +134,22 @@ pub fn targets() -> &'static [ParamSpec] {
 /// Each band's applied gain (dB) after the last piece: what a meter reads.
 pub const SOURCES: &[ModSourceSpec] = &[
     ModSourceSpec {
-        id: "band.1.live",
+        id: "band1_gain",
         name: "Band 1 Gain",
         unit: Unit::Db,
     },
     ModSourceSpec {
-        id: "band.2.live",
+        id: "band2_gain",
         name: "Band 2 Gain",
         unit: Unit::Db,
     },
     ModSourceSpec {
-        id: "band.3.live",
+        id: "band3_gain",
         name: "Band 3 Gain",
         unit: Unit::Db,
     },
     ModSourceSpec {
-        id: "band.4.live",
+        id: "band4_gain",
         name: "Band 4 Gain",
         unit: Unit::Db,
     },
