@@ -442,6 +442,10 @@ impl BlockProcessor for FamilyBlock {
         self.engine.keyed();
     }
 
+    fn hits_known(&mut self, known: bool) {
+        self.engine.hits_known(known);
+    }
+
     fn mod_sources(&self) -> &'static [ModSourceSpec] {
         self.engine.mod_sources()
     }
