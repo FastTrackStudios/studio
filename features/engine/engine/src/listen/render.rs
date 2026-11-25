@@ -51,7 +51,7 @@ use daw::service::ProjectContext;
 use daw_proto::routing::SendMode;
 use daw_standalone::audio_engine::render::ProjectRenderer;
 use daw_standalone::audio_engine::render::offline::{
-    Copying, Fed, Offline, Probe, ProbeAt, copy_plugin, hosted,
+    Copying, Fed, Offline, Probe, ProbeAt, Record, copy_plugin, hosted,
 };
 use daw_standalone::plugin::{PluginInstance, Plugins};
 use daw_standalone::sync::Standalone;
@@ -1691,8 +1691,12 @@ pub fn render(
         let job = jobs.iter().find(|j| j.spec == s).expect("its job");
         // Each probe as rendered, from the preroll's start until it reached
         // `to`, late by its latency.
-        let raw: Vec<Vec<f32>> = (0..job.probes.len())
-            .map(|i| outs.iter().flat_map(|o| o.raw[i].iter().copied()).collect())
+        // One chunk's recordings are kept as they are; chunks are joined.
+        let raw: Vec<Arc<[f32]>> = (0..job.probes.len())
+            .map(|i| match outs.as_slice() {
+                [one] => one.raw[i].clone(),
+                _ => outs.iter().flat_map(|o| o.raw[i].iter().copied()).collect(),
+            })
             .collect();
         let latencies: Vec<u32> = outs
             .first()
@@ -1737,7 +1741,7 @@ pub fn render(
                     cold: ask.cold,
                     start,
                     end: covered(&samples),
-                    samples: samples.into(),
+                    samples,
                     latency: *late,
                     stamp: 0.into(),
                 },
@@ -1864,7 +1868,7 @@ struct ChunkOut {
     /// Each probe as it came out, late by its latency, over the chunk's
     /// kept render frames (the first chunk's from its preroll's start, the
     /// last's on until every probe has reached the span's end).
-    raw: Vec<Vec<f32>>,
+    raw: Vec<Arc<[f32]>>,
     latencies: Vec<u32>,
     /// What reached the master over the same frames (empty unless asked),
     /// and how late.
@@ -1943,8 +1947,10 @@ fn run_chunk(
             only: Some(c.only.clone()),
             probes: c.probes.to_vec(),
             fed: c.fed.clone(),
+            record: None,
         },
     );
+    let mut renderer = renderer;
     let primed = web_time::Instant::now();
     let song_latency = renderer.prime(u32::try_from(BLOCK).unwrap_or(1_024));
     let latencies = renderer.probe_latencies();
@@ -1960,7 +1966,21 @@ fn run_chunk(
                 .unwrap_or(0)
                 .max(master_latency),
         );
-    let (raw, master) = render_blocks(&renderer, (first, last), (c.probes.len(), c.master));
+    // As rendered, not lined up: a recording played back later enters the
+    // delay compensation exactly as this track did, so what it feeds is as
+    // late (its plugins told the same song time) as in this render. Each
+    // probe is recorded over the frames kept: the first chunk's from its
+    // preroll's start, the last's on until every probe has reached the end.
+    let (from, to) = (
+        if k == 0 { first } else { keep },
+        if last_chunk { last } else { end },
+    );
+    renderer.record(Record {
+        start: from,
+        frames: to - from,
+    });
+    let master = render_blocks(&renderer, (first, last), c.master);
+    let raw = renderer.take_recordings();
     let blocks_ms = blocks.elapsed().as_secs_f64() * 1e3;
     drop(renderer);
     let meters = if c.meters.is_empty() {
@@ -1968,20 +1988,14 @@ fn run_chunk(
     } else {
         signal_meters(&ready.plugins, c.meters, &serde_json::json!({}))
     };
-    // As rendered, not lined up: a recording played back later enters the
-    // delay compensation exactly as this track did, so what it feeds is as
-    // late (its plugins told the same song time) as in this render.
-    let (from, to) = (
-        if k == 0 { first } else { keep },
-        if last_chunk { last } else { end },
-    );
-    let cut = |r: &Vec<f32>| {
-        r.get(((from - first) * 2) as usize..((to - first) * 2) as usize)
+    let master = if c.master {
+        master
+            .get(((from - first) * 2) as usize..((to - first) * 2) as usize)
             .map(<[f32]>::to_vec)
             .unwrap_or_default()
+    } else {
+        Vec::new()
     };
-    let raw = raw.iter().map(cut).collect();
-    let master = if c.master { cut(&master) } else { Vec::new() };
     // A cold render's copies are not kept: no cold render reuses one, and
     // every Signal instance alive makes the next copies slower to make.
     if c.cold {
@@ -2020,18 +2034,11 @@ fn run_chunk(
     })
 }
 
-/// The renderer's blocks over render frames `start..end`: every probe's
-/// signal as it came, interleaved stereo, and (when `master`) what
-/// reached the master.
-fn render_blocks(
-    renderer: &ProjectRenderer,
-    (start, end): (u64, u64),
-    (probes, master): (usize, bool),
-) -> (Vec<Vec<f32>>, Vec<f32>) {
+/// The renderer's blocks over render frames `start..end` (its probes
+/// recorded as it goes, [`Record`]), and (when `master`) what reached the
+/// master, interleaved stereo.
+fn render_blocks(renderer: &ProjectRenderer, (start, end): (u64, u64), master: bool) -> Vec<f32> {
     let frames = (end - start) as usize;
-    let mut out: Vec<Vec<f32>> = (0..probes)
-        .map(|_| Vec::with_capacity(frames * 2))
-        .collect();
     let mut sum: Vec<f32> = Vec::with_capacity(if master { frames * 2 } else { 0 });
     let mut at = start;
     while at < end {
@@ -2042,14 +2049,9 @@ fn render_blocks(
             sum.extend_from_slice(got);
             sum.resize(sum.len() + (n * 2 - got.len()), 0.0);
         }
-        renderer.with_probes(|got| {
-            for (dst, src) in out.iter_mut().zip(got) {
-                dst.extend_from_slice(&src[..(n * 2).min(src.len())]);
-            }
-        });
         at += n as u64;
     }
-    (out, sum)
+    sum
 }
 
 /// A probe's signal (from render frame `start`, `late` samples late) as

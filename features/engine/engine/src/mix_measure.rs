@@ -185,6 +185,11 @@ pub struct RenderRow {
     pub tracks_rendered: u32,
     pub tracks_replayed: u32,
     pub realtime_factor: f64,
+    /// Copying the plugins, priming them, rendering the span's blocks, ms
+    /// (the rest of `ms` is planning, recording and writing the file).
+    pub copy_ms: f64,
+    pub prime_ms: f64,
+    pub blocks_ms: f64,
 }
 
 /// A span rendered: master and the tracks asked for, each exactly
@@ -883,6 +888,9 @@ fn render(daw: &Standalone, project: &ProjectContext, a: &RenderArg) -> Result<R
         tracks_rendered: cost.rendered,
         tracks_replayed: cost.replayed,
         realtime_factor: (((to - from) / (rendered.ms / 1e3).max(1e-9)) * 100.0).round() / 100.0,
+        copy_ms: rendered.copy_ms,
+        prime_ms: rendered.prime_ms,
+        blocks_ms: rendered.blocks_ms,
     };
     span.record("mix.seconds", out.seconds);
     span.record("mix.latency", out.latency);
