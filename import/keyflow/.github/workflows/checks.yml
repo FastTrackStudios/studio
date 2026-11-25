@@ -1,0 +1,207 @@
+# keyflow's full suite: fmt, cargo check --workspace, the wasm check and
+# nextest, one job each (studio's CI shape), and `CI passed`, the one status
+# that says they all succeeded. Branch protection requires it, with pr.yml's
+# `PR checks`.
+#
+# Where the builds run:
+#   - push to main, workflow_dispatch: the THEBATTLESHIP pool
+#     (`[self-hosted, thebattleship]`, 8 slots), the same pool as studio's
+#     and architect's CI, so the jobs run side by side and kache shares
+#     their artifacts with every other fleet repo and local build.
+#   - pull_request: the keyflow runner (`[self-hosted, keyflow]`). keyflow is
+#     public, and the pool's job gate refuses every pull_request event from
+#     a public repo; the per-repo runner takes them, one job at a time.
+# Either way nix and devenv live on the host: no installer, no rust-cache
+# (.github/actions/shared-rust). Every `run` step runs in the repo's devenv
+# shell, the same nix rustc store path as a local shell.
+#
+# No cargo-rail test selection (studio's Rail plan): this workspace builds
+# and tests in a few minutes warm, so every run is the full set.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # A draft runs nothing (every job below is skipped); marking it ready
+    # starts the run.
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+# A PR's new push supersedes its old run; a push to main never cancels one,
+# so every main commit gets a verdict.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  # Formatting, the lockfile and the workflows: hosted, compiles nothing.
+  # The same steps as pr.yml's `PR checks`, here so a push to main gets them.
+  gates:
+    name: Gates
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show active-toolchain
+      - name: Restore cargo's dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-deps-${{ runner.os }}-
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+      - name: Manifests + lockfile
+        if: ${{ !cancelled() }}
+        run: cargo metadata --locked --format-version 1 > /dev/null
+      - name: actionlint
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/actionlint.tar.gz" "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
+
+  # Saves the registry + git deps the hosted jobs restore, from main only
+  # (a PR's own copy would evict main's in the 10 GB cache budget).
+  deps-cache:
+    name: Dependency cache
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore cargo's dependencies
+        id: deps
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-deps-${{ runner.os }}-
+      - name: Fetch cargo's dependencies
+        if: ${{ steps.deps.outputs.cache-hit != 'true' }}
+        run: cargo fetch --locked
+      - name: Save cargo's dependencies
+        if: ${{ steps.deps.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
+  check:
+    name: Check
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && fromJSON('["self-hosted","keyflow"]') || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: devenv shell -- bash -e {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/shared-rust
+        with:
+          kind: check
+      - name: cargo check --workspace
+        run: cargo check --workspace
+
+  # Task's and Studio's web apps build these crates for the browser.
+  # `--workspace` builds them for the host, which does not compile the
+  # WebGL surface or any `cfg(target_arch = "wasm32")` block, so a
+  # browser-only break sails through Check. The recipe holds the exact
+  # package/feature set.
+  wasm:
+    name: Wasm
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && fromJSON('["self-hosted","keyflow"]') || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: devenv shell -- bash -e {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/shared-rust
+        with:
+          kind: wasm
+      - name: wasm check (just wasm-check)
+        run: just wasm-check
+
+  # The whole workspace, the tree-sitter grammar's build script included.
+  # Doctests are `just test-doc` (nextest does not run them).
+  tests:
+    name: Tests
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && fromJSON('["self-hosted","keyflow"]') || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: devenv shell -- bash -e {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/shared-rust
+        with:
+          kind: tests
+      - name: cargo nextest
+        run: cargo nextest run --workspace --no-fail-fast
+
+  # Advisory clippy, main only (studio's Lint): reports, never blocks, and
+  # is not part of `CI passed`.
+  lint:
+    name: Lint
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: [self-hosted, thebattleship]
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: devenv shell -- bash -e {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/shared-rust
+        with:
+          kind: lint
+      - name: cargo clippy (advisory, does not block)
+        continue-on-error: true
+        run: cargo clippy --workspace --no-deps --all-targets --keep-going -- --cap-lints warn
+
+  # The status branch protection requires. It passes only when every job
+  # above succeeded; a skipped or cancelled job fails it. Skipped itself on a
+  # draft PR, with the jobs it needs.
+  ci-passed:
+    name: CI passed
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    needs: [gates, check, wasm, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every required job succeeded
+        env:
+          RESULTS: gates=${{ needs.gates.result }} check=${{ needs.check.result }} wasm=${{ needs.wasm.result }} tests=${{ needs.tests.result }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do [ "${r#*=}" = success ] || { echo "::error::${r%%=*}: ${r#*=}"; exit 1; }; done

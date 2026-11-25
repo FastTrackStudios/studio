@@ -1,0 +1,20 @@
+//! Export module for generating output from the scene graph.
+//!
+//! This module provides exporters for various output formats:
+//! - SVG for vector graphics with semantic IDs
+//! - PDF for high-quality print output (WASM compatible via printpdf)
+//!
+//! All exporters take a SceneNode and produce output in the target format.
+
+// PDF export pulls in the printpdf/svg2pdf/usvg stack; only available with
+// the `pdf` feature (printpdf's azul dep doesn't build for iOS). SVG export
+// is pure-CPU and available under `svg`.
+pub mod follow;
+#[cfg(feature = "pdf")]
+pub mod pdf;
+pub mod svg;
+
+pub use follow::{BarBox, Follow, add_follow, add_follow_pages, bar_boxes};
+#[cfg(feature = "pdf")]
+pub use pdf::{PdfExportConfig, PdfExportError, PdfSerializer};
+pub use svg::{SvgExportConfig, SvgSerializer};

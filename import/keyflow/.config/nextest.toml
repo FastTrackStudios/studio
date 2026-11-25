@@ -1,0 +1,18 @@
+[profile.default]
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+# The expression editor's screenshot harness paints ~49 scenes through a
+# CPU rasterizer in one test, so it is legitimately minutes long rather
+# than hung. Without this the suite is red out of the box on a clean
+# tree, which trains everyone to ignore a red run.
+[[profile.default.overrides]]
+filter = 'test(=shoot_every_scene)'
+slow-timeout = { period = "60s", terminate-after = 10 }
+
+# Every bar of the development vault through note input's write-back
+# (keyflow-lang's edit_vault): since every bar is editable (#122) it takes
+# about 21 s on a loaded build host, close to the 30 s a hung test is
+# given, so it is legitimately long rather than hung.
+[[profile.default.overrides]]
+filter = 'test(=every_bar_of_the_vault_is_found_and_written_back_unchanged)'
+slow-timeout = { period = "60s", terminate-after = 3 }

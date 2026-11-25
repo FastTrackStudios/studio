@@ -1,0 +1,74 @@
+[package]
+name = "editor-keyflow"
+description = "Keyflow for the Editor: .kf fences to inline SVG (engraver's CPU-only svg tier, wasm-friendly), and highlighting + live IDE diagnostics as editor decorations."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# The fence-renderer trait this crate implements. The dependency points
+# THIS way on purpose: editor-state must not know about keyflow, so the
+# chart renderer registers itself instead. See `Fences`.
+editor-state = { workspace = true }
+# CPU-only layout + SVG export from keyflow's engraver. `svg` drops
+# the wgpu/vello GPU stack and the PDF deps, leaving a pure-Rust path
+# (kurbo/peniko/skrifa/smufl) that compiles for wasm32.
+engraver = { workspace = true, default-features = false, features = ["svg"], optional = true }
+# The parser and its highlighter (keyflow-lang's wasm-clean `highlighting`
+# feature — no facade, no tokio). Powers `lang`, and `highlight_html` for
+# source-visible fences.
+keyflow-lang = { workspace = true, features = ["highlighting"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# Font subsetting for `font_subset`, optional.
+#
+# `allsorts` rather than the obvious `subsetter`: that one REMOVES the
+# cmap table (it targets PDF CID embedding, where the PDF supplies its
+# own), and an engraved SVG addresses glyphs by character, so a browser
+# needs a cmap to look them up in. allsorts generates one, and takes a
+# `CmapTarget::Unicode` for exactly this case. `ttf-parser` maps the
+# characters to glyph ids through the face's own cmap first.
+allsorts = { version = "0.16", optional = true }
+ttf-parser = { version = "0.25", optional = true }
+
+dioxus = { workspace = true, optional = true }
+editor-view = { workspace = true, optional = true }
+editor-vim = { workspace = true, optional = true }
+
+# The host control API's cross-thread queue and its drain on the UI thread.
+# Both crates are already in the lock file through dioxus, so this adds no
+# package; it names them here so the queue works on wasm, where tokio is out.
+futures-channel = { version = "0.3", optional = true }
+futures-util = { version = "0.3", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1.49", features = ["time", "rt"], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { version = "0.3", features = ["futures"], optional = true }
+
+[dev-dependencies]
+png = "0.17"
+dioxus-test = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+dioxus-ssr = { workspace = true }
+tokio = { version = "1.49", features = ["macros", "rt", "time"] }
+
+[features]
+default = ["render"]
+preview = ["render"]
+view = ["preview", "dep:dioxus", "dep:editor-view", "dep:editor-vim", "dep:futures-channel", "dep:futures-util", "dep:tokio", "dep:gloo-timers"]
+native = ["view", "editor-view/native"]
+web = ["view", "editor-view/web"]
+# `.kf` fences → inline SVG.
+render = ["dep:engraver"]
+# Subset `@font-face` rules for a page of charts — see `font_subset`.
+# `allsorts` is a large dependency and nothing in a browser needs it, so
+# only a host-side build (a static-page renderer, a dev server) turns
+# this on.
+subset = ["render", "dep:allsorts", "dep:ttf-parser"]
+
+[lints]
+workspace = true

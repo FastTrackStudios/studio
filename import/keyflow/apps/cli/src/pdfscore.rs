@@ -1,0 +1,159 @@
+//! `kf pdf-score`: read an engraved PDF back into a score and engrave it
+//! again at any page size — a Letter page, or a phone screen.
+
+use std::path::{Path, PathBuf};
+
+use engraver::score::layout::{LayoutOptions, layout_part};
+use keyflow::engraver::fonts::ChartFontBundle;
+
+/// How each bar goes on the chart staff (`--style`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum ChartStyle {
+    /// Comping as rhythmic slashes, single-note lines as notes.
+    Auto,
+    /// Every bar as chord names over rhythmic slashes.
+    Rhythm,
+    /// Every bar's notes written out.
+    Notation,
+}
+
+impl From<ChartStyle> for engraver::pdfscore::Style {
+    fn from(s: ChartStyle) -> Self {
+        match s {
+            ChartStyle::Auto => Self::Auto,
+            ChartStyle::Rhythm => Self::Rhythm,
+            ChartStyle::Notation => Self::Notation,
+        }
+    }
+}
+
+/// Output format for `kf pdf-score`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Format {
+    Svg,
+    Png,
+    Pdf,
+}
+
+pub struct Args<'a> {
+    pub input: &'a Path,
+    pub out_dir: Option<&'a Path>,
+    pub format: Format,
+    /// Page size in points.
+    pub width: f64,
+    pub height: f64,
+    /// Staff space in points.
+    pub spatium: f64,
+    pub margin: f64,
+    pub scale: f32,
+    /// Also write the chart as keyflow text (`<stem>.kf`).
+    pub kf: bool,
+    pub artist: Option<&'a str>,
+    pub style: ChartStyle,
+}
+
+pub fn cmd_pdf_score(args: &Args<'_>) -> Result<(), String> {
+    let bytes =
+        std::fs::read(args.input).map_err(|e| format!("read {}: {e}", args.input.display()))?;
+    let pages = engraver::pdfscore::read_pdf(&bytes).map_err(|e| e.to_string())?;
+    let rec = engraver::pdfscore::recognize(&pages);
+    let r = &rec.report;
+    println!(
+        "{}: {} system(s), {} staves, {} measures, {} notes, {} rests, {} ties, repeats {:?}",
+        args.input.display(),
+        r.systems,
+        r.staves,
+        r.measures,
+        r.notes,
+        r.rests,
+        r.ties,
+        r.repeats
+    );
+    for (i, m) in rec
+        .score
+        .parts
+        .first()
+        .map_or(&[][..], |p| &p.measures[..])
+        .iter()
+        .enumerate()
+    {
+        if let Some(label) = &m.ending {
+            let span = match m.ending_bars {
+                0 => "no bracket found".to_string(),
+                n => format!(
+                    "{n} bar(s), {}",
+                    if m.ending_open { "open" } else { "closed" }
+                ),
+            };
+            println!("  ending {label} at bar {}: {span}", i + 1);
+        }
+    }
+    for w in &r.warnings {
+        println!("  ! {w}");
+    }
+    if rec.score.parts.is_empty() || rec.score.parts[0].measures.is_empty() {
+        return Err("no music recognised".into());
+    }
+
+    let stem = args
+        .input
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "score".into());
+    let out_dir: PathBuf = args
+        .out_dir
+        .map_or_else(|| PathBuf::from(&stem), Path::to_path_buf);
+    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+
+    if args.kf {
+        let path = out_dir.join(format!("{stem}.kf"));
+        std::fs::write(
+            &path,
+            engraver::pdfscore::to_keyflow_with(&rec.score, args.artist, args.style.into()),
+        )
+        .map_err(|e| e.to_string())?;
+        println!("{}", path.display());
+    }
+
+    let options = LayoutOptions {
+        page_width: args.width,
+        page_height: args.height,
+        spatium: args.spatium,
+        margin: args.margin,
+        // Spacing scales with the staff size, so a phone page keeps the
+        // proportions of a printed one.
+        system_gap: 74.0 * args.spatium / 6.5,
+        title_block_height: 84.0 * args.spatium / 6.5,
+        ..LayoutOptions::default()
+    };
+    let layout = layout_part(&rec.score, 0, &options);
+    let fonts = ChartFontBundle::shared()?;
+    let base = out_dir.join(format!("{stem} {:.0}x{:.0}", args.width, args.height));
+    match args.format {
+        Format::Pdf => {
+            let pdf = engraver::score::render::pdf(&layout, fonts)?;
+            let path = PathBuf::from(format!("{}.pdf", base.display()));
+            std::fs::write(&path, pdf).map_err(|e| e.to_string())?;
+            println!("{} ({} page(s))", path.display(), layout.pages.len());
+        }
+        Format::Svg | Format::Png => {
+            for (i, svg) in engraver::score::render::svg_pages(&layout, fonts)
+                .iter()
+                .enumerate()
+            {
+                let p = if args.format == Format::Svg {
+                    let p = PathBuf::from(format!("{}.p{}.svg", base.display(), i + 1));
+                    std::fs::write(&p, svg).map_err(|e| e.to_string())?;
+                    p
+                } else {
+                    let p = PathBuf::from(format!("{}.p{}.png", base.display(), i + 1));
+                    std::fs::write(&p, crate::parts::svg_to_png(svg, args.scale)?)
+                        .map_err(|e| e.to_string())?;
+                    p
+                };
+                println!("{}", p.display());
+            }
+        }
+    }
+    Ok(())
+}

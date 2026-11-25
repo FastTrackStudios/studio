@@ -1,0 +1,656 @@
+//! Leaf helpers for [`ChartLayoutEngine`].
+//!
+//! Section labels, measure numbers, count-in text, barline + page-frame
+//! helpers — anything that's a one- or two-line delegate to another
+//! module, or a small piece of self-contained geometry. Splits the
+//! engine impl into something readable without changing behaviour.
+
+use kurbo::Point;
+use peniko::Color;
+
+use crate::Chart;
+use crate::engraver::layout::context::LayoutContext;
+use crate::engraver::layout::text_metrics::TextFontMetrics;
+use crate::engraver::layout::tlayout::{
+    BarlineType, ClefType, MarginLabelParams, layout_margin_label,
+    rehearsal_mark::RehearsalMarkStyle,
+};
+use crate::engraver::scene::id::{ElementType, SemanticId};
+use crate::engraver::scene::node::SceneNode;
+use crate::engraver::scene::paint::{FontStyle, FontWeight, PaintCommand, TextAnchor};
+use crate::sections::SectionType;
+
+use super::{ChartLayoutEngine, count_in_renderer, page_rendering, section_layout};
+
+impl ChartLayoutEngine {
+    /// Lay out one repeat-pass label in the margin.
+    ///
+    /// Drawing the labels and reserving the dynamic slots beneath them
+    /// have to agree on where each one sits, so both ask here rather
+    /// than each building its own `MarginLabelParams`.
+    #[allow(clippy::too_many_arguments)]
+    fn layout_pass_label(
+        &self,
+        pass_label: &str,
+        section: &crate::sections::Section,
+        page_x: f64,
+        margin_width: f64,
+        staff_y: f64,
+        staff_height: f64,
+        ctx: &LayoutContext<'_>,
+    ) -> (crate::layout::tlayout::RehearsalMarkLayoutData, SceneNode) {
+        let section_type =
+            section_type_for_pass_label(pass_label).unwrap_or_else(|| section.section_type.clone());
+        let (section_type_name, abbreviation) = self.section_type_to_strings(&section_type);
+        layout_margin_label(
+            &MarginLabelParams {
+                section_type: section_type_name,
+                abbreviation,
+                number: None,
+                letter: None,
+                comment: None,
+                label_override: Some(pass_label.to_string()),
+                page_x,
+                margin_width,
+                staff_y,
+                staff_height,
+                style: self.get_section_theme(&section_type),
+                ..Default::default()
+            },
+            ctx,
+        )
+    }
+
+    /// Create a section label scene node.
+    #[allow(clippy::too_many_arguments)]
+    /// `x4` over the closing barline of a repeat.
+    ///
+    /// Right-aligned to the barline and sitting above the staff, where
+    /// chordsheet.com and every lead sheet put it.
+    pub(super) fn create_repeat_count_label(
+        &self,
+        passes: usize,
+        barline_x: f64,
+        staff_y: f64,
+        id: u64,
+    ) -> SceneNode {
+        let spatium = self.config.spatium;
+        let font_size = spatium * 2.0;
+        SceneNode::leaf(
+            SemanticId::new(ElementType::RehearsalMark, id),
+            vec![PaintCommand::Text {
+                text: format!("x{passes}"),
+                font_family: "FreeSans".to_string(),
+                font_size,
+                // Clear of the repeat bracket, which reaches the top staff
+                // line and a little above it.
+                position: Point::new(barline_x - spatium * 0.6, staff_y - spatium * 1.9),
+                // The count belongs to the repeat sign, so it wears its colour.
+                color: super::constants::REPEAT_COLOR,
+                anchor: TextAnchor::End,
+                weight: FontWeight::Bold,
+                style: FontStyle::Normal,
+            }],
+        )
+    }
+
+    /// A folded section, drawn as a rule across the page with its name on it.
+    ///
+    /// Stands where the staff would have been: a line the full content width,
+    /// the section's name set into a gap at its centre. The coloured capsule
+    /// in the left margin is drawn as it always is, so the eye finds the
+    /// section the same way it does anywhere else — this only replaces the
+    /// bars, which say nothing the section it repeats did not already say.
+    pub(super) fn draw_section_rule(
+        &self,
+        section: &crate::sections::Section,
+        x: f64,
+        staff_y: f64,
+        width: f64,
+        staff_height: f64,
+        ctx: &LayoutContext<'_>,
+        id: u64,
+    ) -> SceneNode {
+        let spatium = self.config.spatium;
+        let y = staff_y + staff_height / 2.0;
+        let thickness = spatium * 0.16;
+
+        let name = section_layout::section_label(&section.section_type, section.number, None);
+        let font_size = spatium * 1.5;
+        let text_metrics = TextFontMetrics::new(self.text_font_data.clone());
+        let text_width = text_metrics.horizontal_advance(&name, font_size);
+        // A gap for the name to sit in, so the rule reads as one line through
+        // the label rather than as two lines colliding with it.
+        let gap = text_width + spatium * 2.0;
+        let centre = x + width / 2.0;
+        let left_end = (centre - gap / 2.0).max(x);
+        let right_start = (centre + gap / 2.0).min(x + width);
+
+        let mut commands = vec![
+            PaintCommand::line(
+                Point::new(x, y),
+                Point::new(left_end, y),
+                Color::BLACK,
+                thickness,
+            ),
+            PaintCommand::line(
+                Point::new(right_start, y),
+                Point::new(x + width, y),
+                Color::BLACK,
+                thickness,
+            ),
+            PaintCommand::Text {
+                text: name.clone(),
+                font_family: "FreeSans".to_string(),
+                font_size,
+                // Nudged up by roughly half a cap height so the text sits on
+                // the rule rather than hanging from it.
+                position: Point::new(centre, y + font_size * 0.34),
+                color: Color::BLACK,
+                anchor: TextAnchor::Middle,
+                weight: FontWeight::Bold,
+                style: FontStyle::Normal,
+            },
+        ];
+        let _ = ctx;
+        commands.shrink_to_fit();
+
+        let mut node = SceneNode::leaf(SemanticId::new(ElementType::RehearsalMark, id), commands);
+        node.metadata.insert("folded_section".to_string(), name);
+        node
+    }
+
+    pub(super) fn create_section_label(
+        &self,
+        section: &crate::sections::Section,
+        page_x: f64,
+        margin_width: f64,
+        staff_y: f64,
+        staff_height: f64,
+        letter: Option<char>,
+        ctx: &LayoutContext<'_>,
+        id: u64,
+    ) -> SceneNode {
+        let mut container = SceneNode::group(SemanticId::new(ElementType::RehearsalMark, id));
+        if let Some(label_text) = section.metadata.get("repeat_pass.labels") {
+            container
+                .metadata
+                .insert("section_label_text".to_string(), label_text.clone());
+            let mut y = staff_y;
+            let pass_gap = repeat_pass_label_gap(staff_height);
+            for pass_label in repeat_pass_label_parts(label_text) {
+                let (layout, label_node) = self.layout_pass_label(
+                    pass_label,
+                    section,
+                    page_x,
+                    margin_width,
+                    y,
+                    staff_height,
+                    ctx,
+                );
+                container.add_child(label_node);
+                y += layout.height + pass_gap;
+            }
+            return container;
+        }
+
+        let (_, label_node) = layout_margin_label(
+            &self.margin_label_params(section, page_x, margin_width, staff_y, staff_height, letter),
+            ctx,
+        );
+        container.add_child(label_node);
+        container
+    }
+
+    /// The capsule parameters for a section's margin label.
+    ///
+    /// Shared with [`Self::section_label_height`] so the height the folded rule
+    /// centres itself on is the height the capsule is actually drawn at.
+    fn margin_label_params(
+        &self,
+        section: &crate::sections::Section,
+        page_x: f64,
+        margin_width: f64,
+        staff_y: f64,
+        staff_height: f64,
+        letter: Option<char>,
+    ) -> MarginLabelParams {
+        let (section_type, abbreviation) = self.section_type_to_strings(&section.section_type);
+        // The capsule text is assembled by the shared `section_label` helper so
+        // it can never drift from `chart_section_timeline`'s label. It equals
+        // what `layout_margin_label` would build from
+        // section_type/abbreviation/number/letter, so rendering is unchanged.
+        let label_override = Some(section_layout::section_label(
+            &section.section_type,
+            section.number,
+            letter,
+        ));
+        MarginLabelParams {
+            section_type,
+            abbreviation,
+            number: section.number,
+            letter,
+            comment: section.comment.clone(),
+            label_override,
+            page_x,
+            margin_width,
+            staff_y,
+            staff_height,
+            style: self.get_section_theme(&section.section_type),
+            ..Default::default()
+        }
+    }
+
+    /// How tall this section's margin capsule comes out.
+    ///
+    /// A folded row draws its rule through the middle of the capsule, so it
+    /// has to know how far down the middle is before it draws anything.
+    pub(super) fn section_label_height(
+        &self,
+        section: &crate::sections::Section,
+        page_x: f64,
+        margin_width: f64,
+        staff_y: f64,
+        staff_height: f64,
+        letter: Option<char>,
+        ctx: &LayoutContext<'_>,
+    ) -> f64 {
+        if let Some(label_text) = section.metadata.get("repeat_pass.labels") {
+            let pass_gap = repeat_pass_label_gap(staff_height);
+            let mut height = 0.0;
+            for (index, pass_label) in repeat_pass_label_parts(label_text).into_iter().enumerate() {
+                let (layout, _) = self.layout_pass_label(
+                    pass_label,
+                    section,
+                    page_x,
+                    margin_width,
+                    staff_y,
+                    staff_height,
+                    ctx,
+                );
+                height += layout.height;
+                if index > 0 {
+                    height += pass_gap;
+                }
+            }
+            return height;
+        }
+        layout_margin_label(
+            &self.margin_label_params(section, page_x, margin_width, staff_y, staff_height, letter),
+            ctx,
+        )
+        .0
+        .height
+    }
+
+    pub(super) fn repeat_pass_dynamic_slots(
+        &self,
+        section: &crate::sections::Section,
+        page_x: f64,
+        margin_width: f64,
+        staff_y: f64,
+        staff_height: f64,
+        ctx: &LayoutContext<'_>,
+    ) -> Vec<f64> {
+        let Some(label_text) = section.metadata.get("repeat_pass.labels") else {
+            return Vec::new();
+        };
+
+        let mut y = staff_y;
+        let pass_gap = repeat_pass_label_gap(staff_height);
+        let mut slots = Vec::new();
+        for pass_label in repeat_pass_label_parts(label_text) {
+            let (layout, _) = self.layout_pass_label(
+                pass_label,
+                section,
+                page_x,
+                margin_width,
+                y,
+                staff_height,
+                ctx,
+            );
+            slots.push(y + layout.height + pass_gap * 0.72);
+            y += layout.height + pass_gap;
+        }
+        slots
+    }
+
+    /// Create a measure number scene node.
+    ///
+    /// Renders the measure number above the staff, positioned at the start
+    /// of the measure. Based on MuseScore's measure number placement:
+    /// left-aligned to the visible staff start, 2 spatiums above staff.
+    pub(super) fn create_measure_number(
+        &self,
+        measure_number: i32,
+        measure_x: f64,
+        staff_y: f64,
+        id: u64,
+    ) -> SceneNode {
+        let spatium = self.config.spatium;
+        let y_offset = -2.0 * spatium;
+        let font_size = spatium * 1.6;
+
+        let text_command = PaintCommand::text(
+            measure_number.to_string(),
+            "FreeSans",
+            font_size,
+            Point::new(measure_x, staff_y + y_offset),
+            Color::from_rgb8(100, 100, 100),
+        );
+
+        let mut node = SceneNode::leaf(
+            SemanticId::new(ElementType::MeasureNumber, id),
+            vec![text_command],
+        );
+        node.metadata
+            .insert("measure_number".to_string(), measure_number.to_string());
+        node
+    }
+
+    /// Compute section letters for consecutive repeats of the same section.
+    pub(super) fn compute_section_letters(
+        &self,
+        sections: &[crate::ChartSection],
+    ) -> std::collections::HashMap<usize, char> {
+        section_layout::compute_section_letters(sections)
+    }
+
+    /// Map the proto-side ChartClef onto the engraver's ClefType. Defaults
+    /// to Bass for charts that don't declare a clef.
+    pub(super) fn chart_clef_for(&self, chart: &Chart) -> ClefType {
+        use crate::chart::ChartClef;
+        match chart.initial_clef {
+            // No clef declared → bass by default.
+            Some(ChartClef::Bass) | None => ClefType::Bass,
+            Some(ChartClef::Alto) => ClefType::Alto,
+            Some(ChartClef::Tenor) => ClefType::Tenor,
+            // Percussion has no SMuFL clef glyph in our font set yet —
+            // fall back to Treble so prefix layout still measures sensibly.
+            Some(ChartClef::Treble) | Some(ChartClef::Percussion) => ClefType::Treble,
+        }
+    }
+
+    /// The clef a section is drawn in: its own (`\clef` inside it), else
+    /// the chart's.
+    pub(super) fn section_proto_clef(
+        &self,
+        chart: &Chart,
+        section: &crate::chart::types::ChartSection,
+    ) -> crate::chart::ChartClef {
+        section
+            .clef
+            .unwrap_or_else(|| self.chart_proto_clef_for(chart))
+    }
+
+    /// [`Self::section_proto_clef`] as the engraver's clef type.
+    pub(super) fn section_clef_for(
+        &self,
+        chart: &Chart,
+        section: &crate::chart::types::ChartSection,
+    ) -> ClefType {
+        use crate::chart::ChartClef;
+        match section.clef {
+            Some(ChartClef::Bass) => ClefType::Bass,
+            Some(ChartClef::Alto) => ClefType::Alto,
+            Some(ChartClef::Tenor) => ClefType::Tenor,
+            Some(ChartClef::Treble | ChartClef::Percussion) => ClefType::Treble,
+            None => self.chart_clef_for(chart),
+        }
+    }
+
+    /// Proto-side clef (untranslated) for callers that need to feed
+    /// `melody_pitch_to_line_for_clef` or other pitch-mapping code.
+    pub(super) fn chart_proto_clef_for(&self, chart: &Chart) -> crate::chart::ChartClef {
+        chart.initial_clef.unwrap_or(crate::chart::ChartClef::Bass)
+    }
+
+    /// A section's melodies, expanded across measure boundaries and
+    /// stamped with the chart-level clef.
+    ///
+    /// The clef stamp matters: `pitch → staff line` mapping reads it to
+    /// pick the middle-line pitch, so a melody expanded without it maps
+    /// against the wrong clef. Both layout passes need the pair done
+    /// together, which is why they take it from here rather than calling
+    /// `expand_melodies_across_measures` and remembering the second step.
+    pub(super) fn expanded_melody_data(
+        &self,
+        chart: &Chart,
+        section: &crate::chart::types::ChartSection,
+        beats_per_measure: f64,
+    ) -> std::collections::HashMap<usize, super::types::MeasureMelodyData> {
+        let key_signature = super::key_signature_fifths(chart);
+        let mut melody_data_map = super::expand_melodies_across_measures(
+            section.measures(),
+            beats_per_measure,
+            key_signature,
+        );
+        let chart_proto_clef = self.section_proto_clef(chart, section);
+        for md in melody_data_map.values_mut() {
+            md.clef = chart_proto_clef;
+        }
+        melody_data_map
+    }
+
+    pub(super) fn section_type_to_strings(&self, section_type: &SectionType) -> (String, String) {
+        (section_type.full_name(), section_type.abbreviation())
+    }
+
+    pub(super) fn get_section_theme(&self, section_type: &SectionType) -> RehearsalMarkStyle {
+        section_layout::get_section_theme(section_type)
+    }
+
+    pub(super) fn draw_staff_lines(&self, x: f64, y: f64, width: f64) -> Vec<PaintCommand> {
+        page_rendering::draw_staff_lines(x, y, width, self.config.spatium)
+    }
+
+    pub(super) fn draw_barline(
+        &self,
+        x: f64,
+        y: f64,
+        height: f64,
+        barline_type: BarlineType,
+    ) -> SceneNode {
+        page_rendering::draw_barline(x, y, height, barline_type, self.config.spatium)
+    }
+
+    /// Pick the [`BarlineType`] for the line that *closes* a measure, given
+    /// its style + end-repeat decoration. End-repeat wins over stylistic
+    /// choices (matches MuseScore's BarLineType precedence).
+    pub(super) fn end_barline_type(measure: &crate::chart::types::Measure) -> BarlineType {
+        use crate::chart::notations::{BarlineStyle, RepeatMark};
+        match measure.end_repeat {
+            RepeatMark::Backward => return BarlineType::EndRepeat,
+            RepeatMark::Forward | RepeatMark::None => {}
+        }
+        match measure.end_barline {
+            BarlineStyle::LightHeavy | BarlineStyle::HeavyHeavy => BarlineType::End,
+            BarlineStyle::LightLight => BarlineType::Double,
+            BarlineStyle::Dashed => BarlineType::Dashed,
+            BarlineStyle::HeavyLight | BarlineStyle::Normal | BarlineStyle::None => {
+                BarlineType::Single
+            }
+        }
+    }
+
+    pub(super) fn add_page_background(
+        &self,
+        root: &mut SceneNode,
+        page_x: f64,
+        page_y: f64,
+        page_width: f64,
+        page_height: f64,
+    ) {
+        if self.config.snippet_mode || !self.config.use_page_offsets {
+            page_rendering::add_snippet_background(root, page_x, page_y, page_width, page_height);
+        } else {
+            page_rendering::add_page_background(root, page_x, page_y, page_width, page_height);
+        }
+    }
+
+    /// Add page footer with "Created with FastTrackStudio" text.
+    ///
+    /// Paper only. A snippet has no paper to sign: `layout_snippet` lays
+    /// the chart out on a 10000pt-tall scratch page and then shrinks the
+    /// page to the content it measures, so a footer pinned to the bottom
+    /// of that scratch page IS content — the crop grows to ~10041pt and
+    /// the "snippet" comes out as a strip of blank white a hundred
+    /// screens tall, with the music in the top 80pt.
+    ///
+    /// The guard used to be `metadata.title.is_none()`, standing in for
+    /// "this is a snippet". It held only because the snippets anyone
+    /// looked at were titleless; the site's landing-page hero has a title
+    /// and rendered exactly that way.
+    pub(super) fn add_page_footer(
+        &self,
+        root: &mut SceneNode,
+        page_x: f64,
+        page_y: f64,
+        page_width: f64,
+        page_height: f64,
+        metadata: &crate::SongMetadata,
+    ) {
+        if self.config.snippet_mode || metadata.title.is_none() {
+            return;
+        }
+        page_rendering::add_page_footer(root, page_x, page_y, page_width, page_height);
+        if let Some(name) = metadata.transcriber.as_deref().filter(|n| !n.is_empty()) {
+            page_rendering::add_transcriber_credit(
+                root,
+                page_x,
+                page_y,
+                page_width,
+                page_height,
+                name,
+            );
+        }
+    }
+
+    /// Title header on first page (title, subtitle, composer, tempo, count-in snippet).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn add_title_header(
+        &self,
+        root: &mut SceneNode,
+        page_x: f64,
+        page_y: f64,
+        page_width: f64,
+        metadata: &crate::SongMetadata,
+        tempo: Option<&crate::time::Tempo>,
+        count_in_measures: usize,
+        time_signature: (u8, u8),
+        has_pushed_first_chord: bool,
+        count_in_labels: Vec<String>,
+    ) -> (f64, Vec<count_in_renderer::CountInBeatGeometry>) {
+        let count_in_config = if count_in_measures > 0 {
+            Some(page_rendering::CountInHeaderConfig {
+                num_measures: count_in_measures,
+                beats_per_measure: time_signature.0,
+                beat_unit: time_signature.1,
+                has_pushed_chord: has_pushed_first_chord,
+                measure_numbers: count_in_labels,
+            })
+        } else {
+            None
+        };
+
+        page_rendering::add_title_header_with_count_in(page_rendering::TitleHeaderParams {
+            root,
+            page_x,
+            page_y,
+            page_width,
+            margins: &self.config.margins,
+            spatium: self.config.spatium,
+            metadata,
+            tempo,
+            count_in: count_in_config.as_ref(),
+        })
+    }
+}
+
+/// Per-measure labels for a count-in snippet: a countdown into the downbeat, so
+/// `n` count-in measures are labelled `-(n-1) ..= 0` (e.g. `-1, 0` for a 2-bar
+/// count-in) and the first real measure is `1`.
+pub(super) fn count_in_countdown_labels(n: usize) -> Vec<String> {
+    (0..n)
+        .map(|i| (i as i64 - (n as i64 - 1)).to_string())
+        .collect()
+}
+
+fn repeat_pass_label_parts(labels: &str) -> impl Iterator<Item = &str> {
+    labels
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+}
+
+fn repeat_pass_label_gap(staff_height: f64) -> f64 {
+    staff_height * 0.65
+}
+
+fn section_type_for_pass_label(label: &str) -> Option<SectionType> {
+    let prefix = label.split_whitespace().next()?;
+    SectionType::parse(prefix).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engraver::layout::context::{LayoutConfiguration, LayoutContext};
+    use crate::engraver::style::MStyle;
+    use crate::sections::Section;
+    use std::sync::Arc;
+
+    fn make_engine() -> ChartLayoutEngine {
+        let style = Box::leak(Box::new(MStyle::default()));
+        ChartLayoutEngine::new(style, Arc::new(Vec::new()), Arc::new(Vec::new()))
+    }
+
+    fn make_ctx() -> LayoutContext<'static> {
+        let style = Box::leak(Box::new(MStyle::default()));
+        LayoutContext::new_for_test(LayoutConfiguration::default(), style)
+    }
+
+    fn collect_text(node: &SceneNode, out: &mut Vec<String>) {
+        for command in &node.commands {
+            if let PaintCommand::Text { text, .. } = command {
+                out.push(text.clone());
+            }
+        }
+        for child in &node.children {
+            collect_text(child, out);
+        }
+    }
+
+    #[test]
+    fn repeat_pass_labels_render_as_separate_margin_cards() {
+        let engine = make_engine();
+        let ctx = make_ctx();
+        let mut section = Section::new(SectionType::Chorus);
+        section.set_metadata("repeat_pass.labels", "CH 1\nCH 2");
+
+        let node = engine.create_section_label(&section, 0.0, 72.0, 100.0, 20.0, None, &ctx, 1);
+
+        assert_eq!(
+            node.children.len(),
+            2,
+            "each repeat pass should get its own card"
+        );
+        let mut text = Vec::new();
+        collect_text(&node, &mut text);
+        assert_eq!(text, vec!["CH 1", "CH 2"]);
+    }
+
+    #[test]
+    fn measure_numbers_align_to_staff_start() {
+        let engine = make_engine();
+        let node = engine.create_measure_number(19, 144.0, 80.0, 1);
+
+        let [PaintCommand::Text { position, .. }] = node.commands.as_slice() else {
+            panic!("measure number should render as text");
+        };
+        assert_eq!(
+            position.x, 144.0,
+            "measure number should not shift left into the section-card lane"
+        );
+    }
+}
