@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "adtof-frame-rnn",
+      "name": "ADTOF Frame_RNN (5-class drums)",
+      "task": "drum_transcription",
+      "license": "CC BY-NC-SA 4.0",
+      "tier": "non_commercial",
+      "filename": "adtof_frame_rnn.onnx",
+      "sha256": "189ca3c2bc7339a5f0fdc0bb11069d4bcc4fafabd142e945228c368c379b6227",
+      "url": "https://huggingface.co/thebluescreen/adtof-drums-onnx/resolve/main/adtof_frame_rnn.onnx",
+      "sample_rate_hz": 44100,
+      "notes": "2.17 MB ONNX with embedded log-freq spectrogram. 100 fps, output [batch, T, 5] = [BD, SD, TT, HH, CY]."
+    },
+    {
+      "id": "beat-this-small0",
+      "name": "Beat This! (small0)",
+      "task": "beat_downbeat",
+      "license": "MIT",
+      "tier": "permissive",
+      "filename": "beat_this_small0.onnx",
+      "url": "https://huggingface.co/nilsbc/beat-this-onnx/resolve/main/beat_this_small0.onnx",
+      "sample_rate_hz": 22050,
+      "notes": "MIT 50 fps beat and downbeat tracker. Requires beat-this-logmel.",
+      "sha256": "53fda6e96afae7f44d898fa5f020272eda967a92839306bf7a3d0898fb8a0d9a"
+    },
+    {
+      "id": "beat-this-logmel",
+      "name": "Beat This! log-mel frontend",
+      "task": "beat_features",
+      "license": "MIT",
+      "tier": "permissive",
+      "filename": "logmel.onnx",
+      "url": "https://huggingface.co/nilsbc/beat-this-onnx/resolve/main/logmel.onnx",
+      "sha256": "f5afa499f5a42b05ea89a214561170cd4b76f92d67d3227f7c9833e8d79bbb43",
+      "sample_rate_hz": 22050
+    },
+    {
+      "id": "inverse-drum-machine",
+      "name": "Inverse Drum Machine",
+      "task": "drum_transcription_and_separation",
+      "license": "Apache-2.0",
+      "tier": "permissive",
+      "filename": "inverse_drum_machine.onnx",
+      "url": "https://github.com/bernardo-torres/inverse-drum-machine",
+      "sample_rate_hz": 44100,
+      "notes": "Apache-2.0 joint drum transcription & separation candidate for built-in distribution."
+    },
+    {
+      "id": "larsnet",
+      "name": "LarsNet (5-stem drum separator)",
+      "task": "drum_separation",
+      "license": "CC BY-NC 4.0",
+      "tier": "non_commercial",
+      "filename": "larsnet.onnx",
+      "url": "https://github.com/polimi-ispl/larsnet",
+      "sample_rate_hz": 44100,
+      "notes": "~562 MB 5-stem drum separator (Kick, Snare, Toms, Hi-Hat, Cymbals). Optional downloadable pack only."
+    }
+  ]
+}

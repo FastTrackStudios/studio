@@ -1,0 +1,18 @@
+[package]
+name = "rhythm-bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared Crescendum album benchmark harness for swappable rhythm & drum hit detectors"
+
+[dependencies]
+clap.workspace = true
+hound.workspace = true
+rayon.workspace = true
+rhythm-editing.workspace = true
+rhythm-hits = { path = "../rhythm-hits" }
+serde.workspace = true
+serde_json.workspace = true
+
+[features]
+onnx = ["rhythm-hits/onnx"]

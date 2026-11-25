@@ -1,0 +1,241 @@
+{
+  "beats": {
+    "f1_50ms": 0.7039106145251397,
+    "f1_70ms": 0.7328910614525139,
+    "matches_50ms": 4032,
+    "matches_70ms": 4198,
+    "predicted": 4429,
+    "reference": 7027
+  },
+  "cpu_rtf": 0.11838887271021034,
+  "downbeats": {
+    "f1_50ms": 0.6293546544831525,
+    "f1_70ms": 0.6510565391205025,
+    "matches_50ms": 1102,
+    "matches_70ms": 1140,
+    "predicted": 1746,
+    "reference": 1756
+  },
+  "engine": "fts.hits.beat-this",
+  "mode": "bus-only",
+  "reference": "REAPER project beat grid",
+  "song_count": 9,
+  "songs": [
+    {
+      "beats": {
+        "f1_50ms": 0.6482164821648216,
+        "f1_70ms": 0.6592865928659286,
+        "matches_50ms": 527,
+        "matches_70ms": 536,
+        "predicted": 538,
+        "reference": 1088
+      },
+      "downbeats": {
+        "f1_50ms": 0.620253164556962,
+        "f1_70ms": 0.6329113924050633,
+        "matches_50ms": 147,
+        "matches_70ms": 150,
+        "predicted": 202,
+        "reference": 272
+      },
+      "duration_secs": 343.3639166666667,
+      "elapsed_secs": 58.018870769,
+      "median_grid_bpm": 189.9999999999946,
+      "median_predicted_bpm": 96.77419354838639,
+      "session_bpm": 190.0,
+      "song": "Chained expectations"
+    },
+    {
+      "beats": {
+        "f1_50ms": 0.3442265795206972,
+        "f1_70ms": 0.3485838779956427,
+        "matches_50ms": 79,
+        "matches_70ms": 80,
+        "predicted": 86,
+        "reference": 373
+      },
+      "downbeats": {
+        "f1_50ms": 0.36507936507936506,
+        "f1_70ms": 0.38095238095238093,
+        "matches_50ms": 23,
+        "matches_70ms": 24,
+        "predicted": 32,
+        "reference": 94
+      },
+      "duration_secs": 124.41658333333334,
+      "elapsed_secs": 30.478635437,
+      "median_grid_bpm": 180.00000000000065,
+      "median_predicted_bpm": 90.90909090908941,
+      "session_bpm": 180.0,
+      "song": "Intro"
+    },
+    {
+      "beats": {
+        "f1_50ms": 0.6406130268199234,
+        "f1_70ms": 0.6467432950191571,
+        "matches_50ms": 418,
+        "matches_70ms": 422,
+        "predicted": 424,
+        "reference": 881
+      },
+      "downbeats": {
+        "f1_50ms": 0.7704918032786885,
+        "f1_70ms": 0.7868852459016393,
+        "matches_50ms": 141,
+        "matches_70ms": 144,
+        "predicted": 145,
+        "reference": 221
+      },
+      "duration_secs": 293.41502083333336,
+      "elapsed_secs": 57.106946494,
+      "median_grid_bpm": 179.99999999999872,
+      "median_predicted_bpm": 90.90909090909089,
+      "session_bpm": 180.0,
+      "song": "Kornesque "
+    },
+    {
+      "beats": {
+        "f1_50ms": 0.6213058419243986,
+        "f1_70ms": 0.6364261168384879,
+        "matches_50ms": 452,
+        "matches_70ms": 463,
+        "predicted": 471,
+        "reference": 984
+      },
+      "downbeats": {
+        "f1_50ms": 0.5678391959798995,
+        "f1_70ms": 0.5979899497487438,
+        "matches_50ms": 113,
+        "matches_70ms": 119,
+        "predicted": 152,
+        "reference": 246
+      },
+      "duration_secs": 421.56966666666665,
+      "elapsed_secs": 53.406283235,
+      "median_grid_bpm": 139.99999999999935,
+      "median_predicted_bpm": 71.42857142857113,
+      "session_bpm": 140.0,
+      "song": "The ballad"
+    },
+    {
+      "beats": {
+        "f1_50ms": 0.6505246166263116,
+        "f1_70ms": 0.6908797417271993,
+        "matches_50ms": 403,
+        "matches_70ms": 428,
+        "predicted": 499,
+        "reference": 740
+      },
+      "downbeats": {
+        "f1_50ms": 0.7122507122507122,
+        "f1_70ms": 0.7521367521367521,
+        "matches_50ms": 125,
+        "matches_70ms": 132,
+        "predicted": 166,
+        "reference": 185
+      },
+      "duration_secs": 261.02785416666666,
+      "elapsed_secs": 26.79420663,
+      "median_grid_bpm": 170.0000000000006,
+      "median_predicted_bpm": 157.89473684210716,
+      "session_bpm": 170.0,
+      "song": "heavify"
+    },
+    {
+      "beats": {
+        "f1_50ms": 0.848879248011569,
+        "f1_70ms": 0.8792480115690527,
+        "matches_50ms": 587,
+        "matches_70ms": 608,
+        "predicted": 631,
+        "reference": 752
+      },
+      "downbeats": {
+        "f1_50ms": 0.79,
+        "f1_70ms": 0.8,
+        "matches_50ms": 158,
+        "matches_70ms": 160,
+        "predicted": 212,
+        "reference": 188
+      },
+      "duration_secs": 281.71633333333335,
+      "elapsed_secs": 22.346658618,
+      "median_grid_bpm": 160.0,
+      "median_predicted_bpm": 157.89473684210716,
+      "session_bpm": 160.0,
+      "song": "it knows my name"
+    },
+    {
+      "beats": {
+        "f1_50ms": 0.7290780141843972,
+        "f1_70ms": 0.7659574468085106,
+        "matches_50ms": 514,
+        "matches_70ms": 540,
+        "predicted": 599,
+        "reference": 811
+      },
+      "downbeats": {
+        "f1_50ms": 0.5531914893617021,
+        "f1_70ms": 0.574468085106383,
+        "matches_50ms": 130,
+        "matches_70ms": 135,
+        "predicted": 270,
+        "reference": 200
+      },
+      "duration_secs": 321.2443333333333,
+      "elapsed_secs": 21.991595101,
+      "median_grid_bpm": 142.49999999999596,
+      "median_predicted_bpm": 142.85714285713743,
+      "session_bpm": 180.0,
+      "song": "set in stone"
+    },
+    {
+      "beats": {
+        "f1_50ms": 0.8426229508196721,
+        "f1_70ms": 0.8622950819672132,
+        "matches_50ms": 514,
+        "matches_70ms": 526,
+        "predicted": 562,
+        "reference": 658
+      },
+      "downbeats": {
+        "f1_50ms": 0.588495575221239,
+        "f1_70ms": 0.6017699115044248,
+        "matches_50ms": 133,
+        "matches_70ms": 136,
+        "predicted": 287,
+        "reference": 165
+      },
+      "duration_secs": 239.043375,
+      "elapsed_secs": 14.755161791,
+      "median_grid_bpm": 164.99999999999852,
+      "median_predicted_bpm": 166.66666666666694,
+      "session_bpm": 165.0,
+      "song": "the plague"
+    },
+    {
+      "beats": {
+        "f1_50ms": 0.7917586460632818,
+        "f1_70ms": 0.8756438557763061,
+        "matches_50ms": 538,
+        "matches_70ms": 595,
+        "predicted": 619,
+        "reference": 740
+      },
+      "downbeats": {
+        "f1_50ms": 0.567741935483871,
+        "f1_70ms": 0.6021505376344086,
+        "matches_50ms": 132,
+        "matches_70ms": 140,
+        "predicted": 280,
+        "reference": 185
+      },
+      "duration_secs": 277.3523333333333,
+      "elapsed_secs": 18.550011952,
+      "median_grid_bpm": 160.0,
+      "median_predicted_bpm": 157.89473684210716,
+      "session_bpm": 160.0,
+      "song": "unbreakable"
+    }
+  ]
+}

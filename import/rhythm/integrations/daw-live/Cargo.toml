@@ -1,0 +1,17 @@
+[package]
+name = "rhythm-daw-live"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[workspace]
+
+[dependencies]
+# Match the studio-adapters daw-bridge pin and its Vox wire version.
+daw = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
+rhythm-editing = { path = "../../crates/rhythm-editing" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.48", features = ["net", "rt-multi-thread", "macros"] }
+vox = { version = "=0.10.0-rc.7", default-features = false, features = ["runtime"] }
+vox-stream = "=0.10.0-rc.7"

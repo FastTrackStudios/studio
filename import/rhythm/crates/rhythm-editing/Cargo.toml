@@ -1,0 +1,16 @@
+[package]
+name = "rhythm-editing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Pure DAW-free per-hit placement and hybrid slip-vs-stretch drum editing planner (prototype for daw-editing)"
+
+[dependencies]
+serde = { workspace = true }
+daw-edit = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

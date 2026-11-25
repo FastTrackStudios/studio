@@ -1,0 +1,16 @@
+diff --git a/features/adapters/reaper/daw-reaper/src/item.rs b/features/adapters/reaper/daw-reaper/src/item.rs
+index aceb8b4..be11cf8 100644
+--- a/features/adapters/reaper/daw-reaper/src/item.rs
++++ b/features/adapters/reaper/daw-reaper/src/item.rs
+@@ -823 +823 @@ impl Items for crate::Reaper {
+-            Some(format!("{:p}", new_item.as_ptr()))
++            (new_item != item_ptr).then(|| item_guid_string(medium, new_item))
+diff --git a/features/adapters/reaper/daw-reaper/src/services.rs b/features/adapters/reaper/daw-reaper/src/services.rs
+index 37e5bfa..e05871d 100644
+--- a/features/adapters/reaper/daw-reaper/src/services.rs
++++ b/features/adapters/reaper/daw-reaper/src/services.rs
+@@ -36 +36 @@ use daw_proto::{
+-    plugin_loader, project, region, resource, routing, screenset, song_files, take, tempo_map,
++    plugin_loader, project, region, resource, routing, screenset, song_files, stretch_marker, take, tempo_map,
+@@ -62,0 +63 @@ impl Services for Reaper {
++            stretch_marker::Service,
