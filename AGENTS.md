@@ -1,551 +1,157 @@
-# studio — Repo Instructions
+# studio: repo instructions
 
-**studio is FastTrackStudio's audio/music product in one repo**: **Studio,
-the one app** (`apps/studio`: a Dioxus app on Architect's application
-framework and app-shell, its features extensions compiled in: the
-session's arrangement, mixer, lyrics and navigator here, Keyflow's chart
-and Ignition's lighting from their repos), the Session engine
-they run, and the CLAP/VST3 plugins that need Studio. It is the merger, in
-October 2026, of the former session, daw, processor, signal, patchbay and
-frame repos; since then the DAW itself (FastTrackStudios/daw), Patchbay,
-Frame (`docs/frame.md`), Signal's library side (the rigs, the sampler,
-NAM, FastTrackStudios/signal) and the adapters (REAPER, the project
-formats, keybinds and the `studio` umbrella crate,
-FastTrackStudios/studio-adapters) are repos of their own again, taken by
-git (studio#510). One Cargo workspace, one lockfile, one `target/`, one
-flake.
+**One repository, one app, one release.** Studio (`apps/studio`) is the
+app, for web, desktop and iOS. Under it are three groups of small crates:
+`studio-core` (shared data and contracts), `studio-connect` (the UI) and
+`studio-engine` (the DAW engine). In November 2026 it absorbed the daw,
+signal, dsp, plugins, keyflow, frame, music-convention, rhythm, pitch,
+stretch, stem-separation, Ignition, session and studio-adapters repos, the
+view kit and the arrangement, mixer and MIDI views, and the theme packs,
+with their history. Their own READMEs, AGENTS, docs and CI are in
+`docs/imported/<repo>/`, kept as reference. The migration's state and what
+is still being untangled: `docs/MONOREPO-MIGRATION.md`.
 
-## Layout
+"Session" now means only the `.session` file format (`studio-core/session`).
+The old Session app is gone; its engine crates are `studio-engine`,
+`engine-runtime`, `engine-host` and `engine-client`.
 
-```
-apps/       studio/    Studio, THE app (package `studio-app`, app and binary
-                       `Studio`): one Dioxus app for desktop, iOS and the
-                       browser, on Architect's application framework and
-                       app-shell(-extensions), with Drive as optional sync.
-                       Its features are extensions, linked in and
-                       overridable while it runs. Developing it:
-                       apps/studio/docs/development.md. Never
-                       `-p app-shell`: features/app/shell has the same
-                       package name.
-            desktop/, web/, mobile/: retired, out of the workspace
-                       (studio#676 deletes them)
-            Nothing else is an app: Session is the engine in features/engine,
-            Signal is extensions (here, extensions/rig*, and its library in
-            FastTrackStudios/signal).
-extensions/ Studio's views and engine as Architect runtime extensions (daw,
-            arrangement, mixer, lyrics, navigator, link, rig*, keys,
-            tempo-map, …)
-plugins/    the plugins that need Studio (guide, host), verify/ (bundle load
-            checks); the effects' plugins are in FastTrackStudios/fts-fx,
-            the nam, signal and sampler plugins in FastTrackStudios/signal
-features/   one crate per feature, sub-folders allowed. Name a feature for what
-            it is; anything host-specific goes under adapters/<host>.
-            engine/      Session, not a primitive but the engine: engine/
-                         (`studio-engine`: the set, the Action List,
-                         `studio engine`; draws nothing), runtime/
-                         (`engine-runtime`, host-neutral), view-kit/
-                         (`daw-view-kit`: the kit the DAW views draw with),
-                         arrangement/ (`arrangement-view`), mixer/
-                         (`mixer-view`), tools/ (`daw-view-tools`: the
-                         headless bench and screenshot tools),
-                         host/ (`engine-host`: its window, CLI module
-                         and engine host, as a library + a binary). Folders
-                         moved, package names kept for now.
-            Signal's domain and the instruments (features/signal,
-                         features/rigs), the sampler and NAM are in
-                         FastTrackStudios/signal, taken by git (see
-                         "Signal"). The effects (`dsp`, `dsp-core`) are in
-                         FastTrackStudios/fts-fx (docs/fts-fx.md), `builtin`
-                         in FastTrackStudios/daw with the engine.
-            editor/      the editor: piano roll, drum lanes, curves
-            timeline/    the editing engine the arrangement and the editor
-                         share (docs/design/timeline.md)
-            editing/     editing a recorded performance — quantize, groove,
-                         leveling — with a profile per material, drums
-                         first (docs/design/editing.md)
-            setlists/    song libraries and setlists as notes of an
-                         Architect vault project, charts engraved beside
-                         them, a setlist shared by an Architect share link
-                         (`studio setlist …`; studio#386)
-            productions/ the Ableton sets, Pro Tools sessions, REAPER and
-                         Logic projects a studio has, found by a scan and
-                         kept as project notes of an Architect vault with
-                         a stage; an Ableton show set's songs as a setlist
-                         (`studio productions …`; studio#396)
-            tempo-map/   tempo maps from a recording's stems: onsets,
-                         beats, the snap to hits, the backbeat's phase,
-                         bar 1, one tempo point per bar in any meter, and
-                         the measurements and benchmark that say how good
-                         a map is (no UI; `tempo-map bench`). Its Action
-                         List is the extension `studio.tempo-map`
-                         (`extensions/tempo-map`, a process: rebuilt and
-                         swapped under a running Studio)
-            session/, song/, input/,
-            chords/, formats/, control-surfaces/,
-            dynamic-template/, patch-list/, distribution/, island/, …
-            ui/*         shared UI: daw-ui, dock, plugin-faces, … (fts-audio-ui
-                         and plugin-core are in fts-fx)
-            app/         shell (log ring, crash log, update check), launcher
-            adapters/    reaper/: the product's own REAPER extensions
-                         (daw-reaper-dioxus-ext); web/
-                         (the AudioWorklet). Everything else REAPER, the
-                         project formats (DAWproject/AAF, Ableton, Logic,
-                         Pro Tools) and `keybinds` are in
-                         FastTrackStudios/studio-adapters, taken by git
-                         at one `rev`; to work on both, patch
-                         `[patch."https://github.com/FastTrackStudios/studio-adapters"]`
-                         with paths (never committed; its README)
-xtask/      devtools, plugins (the bundler), session-reaper, workflows (every
-            .github/workflows file)
-docs/       design/ (one-engine.md), per-domain notes (signal, frame, …),
-            agents/, guides, specs. The DAW's own notes are in
-            FastTrackStudios/daw (docs/)
-nix/        flake modules (toolchain, shells, packages), reaper-config,
-            vendored flakes
-scripts/    helper scripts the Justfile calls (stack-overrides.py writes the
-            local stack's cargo overrides)
-```
+## The dev shell
 
-There is no `vendor/`, `crates/` or `deploy/`: patched third-party crates
-(dioxus-test among them) are in FastTrackStudios/vendor, taken by git; the
-server is deployed to a NixOS host from the infra repo, from the release's
-node tarball (no image).
+Run every cargo, dx and just command in this checkout's dev shell
+(`devenv.nix`): direnv loads it, or prefix a command with
+`devenv shell --`. The default PATH has carried cargo 1.98.1. Its builds
+compile everything again and share no kache keys with anyone. The pin is
+1.99.1 (`rust-toolchain.toml`). Check with `cargo --version` before a long
+build. Every `just` recipe enters the shell itself (`scripts/dev-shell.sh`).
+Commit and push from the shell too: the prek hooks' shellcheck and
+actionlint come from it.
 
-Some features carry their own `AGENTS.md` / `README.md`
-(`features/dynamic-template`, `features/editor`, …) — read it before
-working there.
+## Layout and the boundary rule
 
-## The model
+| Group | Path | May depend on |
+|---|---|---|
+| core | `crates/studio-core/{proto,session,music,frame,util}` | core |
+| connect | `crates/studio-connect/{client,theme,kit,views,plugin-ui,features,mcp,tools}` | core, connect |
+| engine | `crates/studio-engine/{engine,daw,dsp,signal,analysis,lighting,adapters,extensions,plugins,web,vendor}` | core, engine |
+| app | `apps/studio` | everything |
+| tools | `xtask/`, `vendor/` | anything |
 
-- **daw is the DAW alone; `studio` (FastTrackStudios/studio-adapters) is
-  the umbrella.** The DAW
-  (FastTrackStudios/daw) knows nothing of REAPER or of any product. REAPER, the project formats, the
-  UI, control surfaces and the daw CLI are the adapters' and the
-  product's: `studio`'s features (`reaper`, `file`, `cli`, `test-harness`)
-  in studio-adapters, `daw-ui` and `control-surfaces` here.
-- **One engine.** A process runs ONE daw engine: one `Standalone`, one
-  project, one realtime audio engine on one device. A rig is a folder of
-  tracks in that project (`signal_rig_host::engine::{Engine, Rig}`), not an
-  engine of its own. Signal and Session both just run the DAW: Signal is
-  the isolated live rig, Session the full DAW, and rigs live in Session
-  as tracks. A desktop window can also drive the engine in a process of
-  its own (`FTS_ENGINE=spawn|attach`: `studio engine`, found or spawned,
-  outliving the window — `studio_engine::studio_engine::link`). In
-  Studio (apps/desktop) the engine is the `daw` extension (extensions/daw)
-  and the DAW and rig views are extensions attached to it. More engines means more processes of the same engine. Read
-  **`docs/design/one-engine.md`** before touching rigs, engines, meters or
-  MIDI.
-- **The apps share their shell**: the log ring / crash log / flight log,
-  the update check and the iOS scene delegate (`app_shell::ios_scene`)
-  are `features/app/shell`; prefs are `utils::prefs`. Session and Signal
-  do not keep copies.
-- **Faces are frame documents.** Control surfaces and plugin faces are
-  `.frame` documents rendered by `frame` (FastTrackStudios/frame, pinned by
-  `rev` in the root `Cargo.toml`; `docs/frame.md`). `just faces` generates the
-  plugin faces into `features/ui/plugin-faces/generated` (not kept in git; the apps
-  read them at runtime).
-
-## Crate rules
-
-- **One crate per feature, with cargo features** — not `-proto` / `-ui` /
-  `-dsp` sibling crates. A feature's wire types, UI and engine are features
-  of its one crate (fts-fx's `dsp`: `eq-native`, `eq-ui`, `eq-profiles`, …).
-- **Path deps inside the repo, declared once** in the root
-  `[workspace.dependencies]` and consumed as `x.workspace = true`.
-  `default-features = false` cannot be set on a workspace-inherited dep —
-  put it on the `[workspace.dependencies]` entry.
-- **Git deps across repos, pinned to a tag** (architect, keyflow, editor,
-  music-convention, neural-amp-modeler-rs, the `vendor` repo), or to a
-  `rev` (fts-fx: the effects, every crate at one rev; `docs/fts-fx.md`). The base
-  and the engine from FastTrackStudios/daw are pinned to one revision
-  until that repo cuts a tag. The branch
-  pins that remain say why in Cargo.toml (nice-plug's `fts-baseview-03`,
-  reaper-rs, task's `editor`).
-- **The root `[patch]` tables**, all live: `crates-io` (the vendor repo's
-  vox-phon / phon / phon-jit / styx-format / facet-core / baseview /
-  anyrender_* / winit-uikit / wgpu-hal / raw-window-metal forks, the FTS
-  blitz tag, pipewire-rs past 0.10.0); `DioxusLabs/dioxus` (the vendor
-  repo's dioxus-native{,-dom} and dioxus-core);
-  `FastTrackStudios/daw` (hands keyflow's git dep, which still names the
-  daw repo's old tag, the `daw` and `fts-sample` Studio builds: every
-  daw-repo crate Studio builds, named on the `www.` host because a patch
-  may not point back at its own source; goes when keyflow pins the daw
-  repo at Studio's revision). One architect `[patch]`, on the
-  `www.github.com` spelling (end of Cargo.toml): keyflow names Architect
-  there, and the table hands those crates Studio's own tag, so an
-  Architect PATCH release needs no keyflow release (a minor still goes
-  through keyflow). The daw and fts-fx repos (pinned by `rev`) pin
-  Architect on the plain URL, the same source as Studio, so they move
-  first: `Cargo.lock` holds one architect source besides task@main's own
-  older one, none on www. Bump with `just bump-architect vX.Y.Z`
-  (docs/agents/release-workflow.md, "Moving the Architect and Keyflow
-  pins", which also says how local dev overrides must patch both
-  spellings, from a cargo config file); it waits (exit 4) while daw or
-  fts-fx is behind. A `[patch]` **cannot rename a crate**.
-- **Co-developing across repos**: override with a local checkout —
-  `[patch."https://github.com/FastTrackStudios/architect"] architect =
-  { path = "../architect/architect" }` — and never commit it; the paths are
-  machine-specific.
-- **The base and the engine** live in FastTrackStudios/daw at the paths
-  they had here (studio#510): the base (`daw-proto`, `daw-control`,
-  `daw-module`, `daw-transport-sync`, `daw-audio-graph`, `daw-allocator`,
-  `daw-test-macro`, `utils`, `midi`, `audio`, `fts-sample`;
-  `daw:crates/daw/proto`, `daw:features/midi`, …) and the engine (the `daw`
-  facade, `daw-standalone`, `session-format`, `dawfile-reaper`,
-  `signal-plugin-host`, `builtin`, `daw-sync`; `daw:crates/daw/standalone`,
-  `daw:features/dsp/builtin`, …). Their tests run there. A change to one
-  of them is a PR there, then a bump of the one `rev` here, on every line
-  that names the daw repo: the root `[workspace.dependencies]` and the
-  daw `[patch]` table (which hands keyflow's old daw tag the same crates,
-  on the `www.` host). To work on both at once, check the daw repo out
-  beside this one and, in that `[patch]` table, replace the `www.` lines
-  with paths, **never committed**:
-
-  ```toml
-  [patch."https://github.com/FastTrackStudios/daw"]
-  daw                = { path = "../daw/crates/daw/daw" }
-  daw-standalone     = { path = "../daw/crates/daw/standalone" }
-  session-format     = { path = "../daw/crates/daw/session-format" }
-  dawfile-reaper     = { path = "../daw/features/adapters/reaper/dawfile-reaper" }
-  signal-plugin-host = { path = "../daw/features/plugin-host" }
-  builtin            = { path = "../daw/features/dsp/builtin" }
-  daw-sync           = { path = "../daw/features/sync" }
-  daw-proto          = { path = "../daw/crates/daw/proto" }
-  daw-control        = { path = "../daw/crates/daw/control" }
-  daw-module         = { path = "../daw/crates/daw/module" }
-  daw-transport-sync = { path = "../daw/crates/daw/transport-sync" }
-  daw-audio-graph    = { path = "../daw/crates/daw/audio-graph" }
-  daw-allocator      = { path = "../daw/crates/daw/allocator" }
-  daw-test-macro     = { path = "../daw/crates/daw/macros" }
-  utils              = { path = "../daw/crates/daw/utils" }
-  midi               = { path = "../daw/features/midi" }
-  audio              = { path = "../daw/features/audio" }
-  fts-sample         = { path = "../daw/features/audio/sample" }
-  ```
-
-  All of them, not just the one you edit: the engine's own path
-  dependencies then come from the checkout too, and a crate left on the
-  `www.` line would be a second copy whose types do not unify. `cargo
-  check` then rewrites `Cargo.lock`: do not commit that either (`git
-  checkout Cargo.lock` when done). A patch that does get committed fails
-  `PR checks`: the paths do not exist on the runner.
-- **`include_str!` / `@import` across a repo boundary does not work** (a
-  git dep has no stable path on disk). Export the bytes from the owning
-  crate (`architect_ui::THEME_CSS`), or resolve the path with
-  `cargo metadata` the way `just _lumen-link` and `just _web-tw-link` do.
-- **Architect idiom**: services are `#[architect::rpc]` traits (at most 4
-  params per method — a Facet constraint); live updates are `#[subscribe]`
-  streams from `architect::PubSub` hubs, never Tx-parameter subscriptions;
-  transports are `architect::axum_ws` + `LayerRouter` server-side and
-  `vox_core::initiator_on(link).establish::<Client>()` client-side.
-- **Async**: `tokio::sync::*` for locks and channels;
-  `architect::platform::{spawn, sleep, timeout}` for tasks and timers
-  (tokio on native, browser timers on wasm).
+- **The exception:** `crates/studio-engine/plugins/*` (CLAP/VST3 bundles
+  with their own GUI) may depend on `crates/studio-connect/plugin-ui/*`.
+  Nothing depends on a bundle.
+- **The promise:** no core or engine crate (the bundles aside) resolves
+  Dioxus, Blitz, app-shell or a studio-connect crate. The engine builds,
+  runs and is tested without the UI; the UI joins an engine, or opens a
+  session with none running.
+- `boundaries.toml` holds the rules, and `scripts/boundaries.py` checks
+  them (`just boundaries`; it runs in `just check`, local CI and CI). Every
+  declared path dependency counts, optional and dev ones included.
+- Today's violations are the allow-list at the end of `boundaries.toml`.
+  It **only shrinks**: a new violation fails, and so does an entry that no
+  longer occurs (`just boundaries tighten` removes those). Fix a new
+  violation in the code (move the type down to studio-core, or the UI out
+  to studio-connect). Never add an entry.
+- **Before working in a group, read its `AGENTS.md`**
+  (`crates/studio-core/AGENTS.md`, `crates/studio-connect/AGENTS.md`,
+  `crates/studio-engine/AGENTS.md`): the group's own rules.
 
 ## Build and test
 
-Dev shell: `nix develop` (or direnv `use flake`) — the Rust 1.99.1 pin with
-wasm (plus iOS on darwin, Android on Linux), `dx`, wasm-bindgen,
-tailwindcss, tracey, mold, and the native headers (alsa, pipewire, jack).
-It sources `.env` (gitignored) on entry. `nix develop .#ci` is what CI
-runs in, and `.#reaper-test` runs the REAPER suites. Use the
-[stem-seperation repo](https://github.com/FastTrackStudios/stem-seperation)
-for stem separation.
-
 ```bash
-just check                 # cargo check --workspace
-just test                  # the core test set: cargo nextest run -p <each of the Justfile's test_packages>
-just test-doc              # doctests (nextest cannot run them)
-just app [PROJECT]         # Session (engine-host, the shared dev build)
-cargo run -p studio-desktop --bin studio   # Studio (apps/desktop)
-just reaper-test [FILTER]  # Session's #[reaper_test] suites in a real REAPER
-# daw-reaper's REAPER suites: `just reaper daw-test` in FastTrackStudios/studio-adapters
-just plugins-bundle [names] && just plugins-link   # .clap/.vst3 into target/bundled, linked into ~/.clap, ~/.vst3
-just faces                 # generate the plugin faces
-just assets                # link the big binaries (see Assets)
+just studio        # the desktop app under dx serve (Blitz); builds the engine first
+just engine        # the engine headless (daw-extension --engine); `status`, `stop`
+just web           # the web app under dx serve
+just check         # cargo check --workspace + just boundaries
+just check-web     # the browser builds for wasm32 (studio-app --features web, Keyflow's editor)
+just test <group>  # core | connect | engine | app | tools | all; extra args go to nextest
+just ci-local      # the PR gate on this machine, for what `cargo rail plan` says you touched
+just ci            # what CI runs after a merge, in its order
 ```
 
-The suite is a core set (cut on 2026-10-24 from 11 317 tests to ~650): the
-crates in the Justfile's `test_packages` — the DSP math, the session
-format, the engine, the timeline, the wire types, every effect's parameter
-round-trip. `just test`, local CI and CI build and run exactly those. A
-crate gains a place there when it gains tests worth running on every change.
+- **Use the recipes, not your own `cargo -p` sets.** Cargo unifies
+  features per invocation, so a different package set compiles the shared
+  crates another way, under another kache key. `just test <group>` always
+  builds the same set: the group's members, minus `[test] skip` in
+  `boundaries.toml`.
+- **One build for working:** dx's `desktop-dev` profile for the host
+  triple, into `target/<host>/desktop-dev`. The window, the engine and the
+  recipes share it; `release-fast` and `--release` are for shipping and
+  measuring.
+- Developing the app itself (the engine it finds, its actions, overriding
+  an extension while it runs): `apps/studio/docs/development.md`.
+- Your own target dir in a worktree, named `target` (`CARGO_TARGET_DIR`
+  set to `…/target`); kache keys stay stable only that way. Keep worktrees
+  outside the checkout. Load the `kache` skill when a build misses, and the
+  `build-performance` skill before touching a `[profile.*]`.
+- Cargo never collects `target/`: `just disk`, `just sweep`.
 
-**Studio itself (apps/studio): [apps/studio/docs/development.md](apps/studio/docs/development.md)** (build, run, the engine, its actions, overriding an extension live, co-developing with other repos). The older stack: **`just dev`** (everything, rebuilt on save:
-the issuer, Studio's node on a copy of the test vault with its share link,
-the web app, the site; `architect=local` / `keyflow=local` put the sibling
-checkouts under it), **`just demo`** (the quickest look, nothing watched),
-**`just website`** (Architect's public site); the same names in Architect
-and Keyflow. `docs/local-stack.md` says what starts and what a save costs.
-**Verify share-page and extension UI work on this stack, with screenshots
-at 390 px wide (`SCREENSHOTS=<dir> just dev-smoke`, or the browser at that
-width), BEFORE opening a PR**: a release takes hours to reach a phone, and
-every share-page bug found so far was found there. `just daw-dev` is the
-DAW's dev loop (it was `just dev`).
+## The workspace
 
-**Before you push: `just install-hooks`, once per clone.** It installs the
-prek hooks (`prek.toml`): rustfmt, shellcheck and actionlint on the staged
-files at commit, and **local CI** at push (`scripts/ci-local-hook.sh` ->
-`just ci-local`): the static guards (fmt, change files, rail config, the
-generated workflows + actionlint), then the tests, `cargo
-check --workspace` and the wasm check for what `cargo rail plan` says the
-change affects, on your warm target dir. Green, it posts the **`Local CI`**
-commit status ("passed in 6m12s on host: checks 21s, plan 8s, tests …") on
-the pushed commit — and on every open layer of a `gh stack` the tree
-contains, so one run on the top covers the stack. Run `just ci-local`
-before pushing a long change: the pass it records makes the push instant.
-`SKIP=local-ci git push` skips it; the PR can merge without it, since
-`Local CI` is not required. `just rail-evidence` on a clean `main` lets later runs narrow a docs or
-CI change; `just ci-churn` checks a warm build recompiles nothing after
-the CI prep.
-
-**What GitHub runs.** A PR into `main` gets one free job, **`PR checks`**
-(`pr.yml`: fmt, change files, the lockfile, the rail config — compiles
-nothing). `main` requires only `PR checks`; `Local CI` (the pre-push
-hook's status) is an indicator, not a gate. A DRAFT PR runs no job (each
-reports skipped); marking it ready starts the run, and every push after
-that runs again, so mark a PR ready before waiting on its checks. **`CI`**
-(`checks.yml`: `Gates`, `Rail plan`, `Check` + advisory clippy, `Wasm`,
-`Tests` and `Apple builds` (on airlock: the macOS app linked and held
-to the .dmg's no-/nix/store guard; studio#444), aggregated as
-**`CI passed`**, which `just release` requires) runs after every merge to `main`,
-NARROWED by `cargo rail plan` to what the merge reaches since the newest
-green commit with rail evidence (`Check` records that evidence on the pool
-as it builds; no base, the full set). Hotfix PRs into `release/**` and a
-run by hand get the full set. `main` may go red:
-releases are cut by hand, and `just release` tags only a commit whose
-`CI passed` is green. Plan, gates, the macOS release tooling and the
-aggregator run on GitHub's free runners. The builds — `Check`, `Tests` (the
-core test set) and `Wasm` — run side by side on THEBATTLESHIP, in a pool of
-three runners sharing one warm cache (`Codys-Wright/nix-config`
-hosts/THEBATTLESHIP/github-runners.nix): `studio-main` for every check,
-a hotfix PR's included, so the check target dirs are built once;
-`studio-release` (and airlock's `studio-release-mac`) build only release
-artifacts from a tag: the node and web tarballs, the AppImage, the
-`.dmg`. A newer merge queues behind the running run (only the newest waits),
-so every run that starts finishes and records rail's evidence; a release job is never
-cancelled. Each pool's cache
-is capped at 200 GB. No WarpBuild, no snapshots, no schedule. No tailwind step anywhere
-(committed sheets); `just ci-boundaries` is
-manual, not CI.
-
-**`just ci`** runs everything a merge to `main` runs, in the same order,
-and stops at the first failure: lockfile drift, `cargo fmt --check`, the
-generated workflows (`just workflows-check`), the rail config, `cargo check
---workspace`, the wasm checks, then (after `just assets`) the core test set.
-`just ci <step>` starts from a step (`lockfile`, `fmt`, `workflows`, `rail`,
-`check`, `wasm`, `nextest`). The workflow-spec checklist (`just daw-flows`)
-is a report you run by hand, not a gate.
-
-**The workflows are generated.** Every file in `.github/workflows/` is
-written by `xtask/workflows` (`just workflows`); edit the Rust, never the
-YAML — `Gates` and `just ci-local` fail when they differ. The jobs run
-without nix (rustup + apt + pinned tool binaries). The release builds
-(`studio`, `desktop`) keep their own runners. This repo deploys nothing:
-the infra repo runs the release's node tarball on a NixOS host. There is
-no image and, until apps/desktop gains an iOS target, no TestFlight build.
-`just ci` refuses to start with less than 25 GB free: a full disk shows up as
-mold dying with a bus error, which reads as a broken toolchain
-(`just sweep-incremental` is the always-safe reclaim). It says nothing
-about the tag builds (signing, notarization), which
-have their own runners and reasons to be red. The REAPER integration
-suites (`just reaper-test`, `just reaper daw-test`) are not in CI at all:
-they need a licensed REAPER, so run them locally.
-
-**Build performance / disk** — read the `build-performance` skill before
-touching a `[profile.*]` knob, benchmarking a build, or when the disk
-fills up. The short version:
-
-- Dev debuginfo is `line-tables-only`; need a debugger? `--profile dev-dbg`.
-- mold is the Linux linker — `direnv reload` after pulling, or links fail
-  with `cannot find -fuse-ld=mold`. `target.<triple>.rustflags` REPLACES
-  `build.rustflags`, so a new global flag goes in both.
-- Dependencies build at opt-level 1, with an allowlist back at 3 for
-  audio-thread crates. A dev run of a rig must never xrun: extend the
-  allowlist, never raise `package."*"`.
-- **One build for working**: the window (`dx serve`), the engine, the
-  app recipes and `just dev-test` all build dx's `desktop-dev` profile (the
-  dev profile) for the host triple, into `target/<host>/desktop-dev`. Another profile, `--target` or
-  feature set makes cargo recompile every shared crate. The app must be
-  fast in this build; `release-fast` and `--release` are for shipping and
-  measuring only.
-- Cargo never GCs `target/`: `just disk`, `just sweep`, `just sweep-all`,
-  `just sweep-incremental`.
-- **kache is the rustc wrapper**, set by the fleet in `~/.cargo/config.toml`
-  (never in this repo): a crate whose key is in the shared store is restored,
-  not compiled, so a new worktree or runner builds warm. Keep keys stable —
-  no `env!("CARGO_MANIFEST_DIR")` outside tests (`utils::paths::checkout_path`),
-  no absolute paths in build-script output, target dirs named `target`.
-  Load the `kache` skill when a build misses or code adds `env!`, generated
-  files or rustflags. Check `uptime` / `pgrep -c rustc` before benchmarking.
+- One workspace, one `Cargo.lock`, one toolchain, one set of profiles.
+  Every internal crate is a path dependency declared once in the root
+  `[workspace.dependencies]`, consumed as `x.workspace = true`.
+  `default-features = false` goes on that entry, never on a consumer.
+- External pins (drive, architect, app-shell, editor, the forks) live in
+  one block of the root `Cargo.toml`, by `rev` or tag. One Dioxus line,
+  through `[patch.crates-io]`. A `[patch]` cannot rename a crate.
+- Two packages are named `app-shell`: the workspace's
+  (`crates/studio-connect/kit/studio-shell`) and FastTrackStudios/app-shell.
+  Spell `-p` with a path or a version when you mean one of them.
+- **No `include_str!`/`include_bytes!` outside the crate's own folder**,
+  and test fixtures live inside the crate that reads them. A path that
+  climbs out of a crate broke on every move so far. `env!("CARGO_MANIFEST_DIR")`
+  only in tests (`utils::paths::checkout_path` otherwise).
+- Async: `tokio::sync::*` for locks and channels;
+  `architect::platform::{spawn, sleep, timeout}` for tasks and timers (it
+  works on wasm too).
+- The workflows in `.github/workflows/` are generated by `xtask/workflows`
+  (`just workflows`). Edit the Rust, never the YAML; CI fails on drift.
 
 ## Assets
 
-Big binaries (test fixtures over 1 MB, research captures, the rigs' NAM
-captures and IRs) are not in git. They live in the private repos
-`studio-assets` and `rig-models`; `assets.txt` lists each file or
-directory and where it goes (the rigs' captures into `rig-library/`, which
-also holds the guitar's frozen Cores: the guitar crate is in a public repo
-and reads them from there, `rig-library/README.md`), and `just assets` clones those repos into
-`.assets/` and symlinks everything into place (relative links). A new
-worktree gets them by itself: after `git worktree add`, prek's
-post-checkout hook (`just install-hooks`) runs `scripts/worktree-setup.sh`,
-which copy-on-write clones the main checkout's `.assets/` clones, links
-`.env` and generates the plugin faces in the background (`just
-worktree-setup` by hand). Keep worktrees outside the checkout: one inside
-it (`.claude/worktrees/*`) reads both `.cargo/config.toml` files, gets
-every rustflag twice and shares no kache keys. A new large file goes into
-one of those repos plus a line in `assets.txt` (and `.gitignore`), never
-into this repo.
+Big binaries (fixtures over 1 MB, research captures, the rigs' captures
+and IRs) live in the private `studio-assets`, `rig-models` and
+`mic-models` repos. `assets.txt` says where each goes, and `just assets`
+links them into place. A new worktree gets them from the post-checkout
+hook (`just worktree-setup` by hand). A new large file goes into one of
+those repos and `assets.txt`, never into git here.
+
+## Logging
+
+Load the `logging-best-practices` skill (`.claude/skills/`) before writing
+any log or debug output. The span is the wide event: enrich it with
+`architect_telemetry::wide::set`. Never commit `println!`, `eprintln!` or
+`dbg!` in library or server code. Reproduce a bug in a failing test
+instead.
+
+## Process
+
+- **Others work in this checkout at the same time.** Stage only the paths
+  you changed (`git add <paths>`, never `-A`), and commit them with
+  `git commit -- <paths>`, which leaves other people's staged work alone.
+  If `.git/index.lock` exists, wait and retry.
+- **Branches, PRs and releases:** load the `release-workflow` skill;
+  studio's specifics are `docs/agents/release-workflow.md`. Every PR that
+  changes a crate carries a change file (`cargo rail change add <crates>
+  --bump <none|patch|minor|major> -m "<note>"`).
+- **One release for the repo:** `just release` tags `studio-vYY.M.MICRO` on
+  main's newest green commit, and the tag ships. The `vYY.M.MICRO` tags are
+  Studio's releases from before the monorepo; they still count for the
+  next version and the notes.
+- **CI:** a PR gets `PR checks` (the gates that compile nothing) and
+  `Affected crates` (`cargo rail plan` against the base: check, tests,
+  wasm). `CI` (`checks.yml`) runs after every merge to main, narrowed by
+  rail; `just release` requires its `CI passed`. Mark a draft PR ready to
+  run its checks. `just install-hooks` once per clone: local CI on push.
+- Issues: GitHub Issues on `FastTrackStudios/studio` (`docs/agents/issue-tracker.md`).
+- Project skills are in `.claude/skills/`: load the matching one before
+  the work it covers (`blitz-design` for any Blitz UI, `rust-testing`,
+  `reaper-testing`, `drum-mixing`, `ignition-domain`, the `song-*` ones).
 
 ## Licence
 
-**GPL-3.0-or-later.** The workspace `license` field, every FTS-owned crate
-and `LICENSE` at the root say so; a new crate inherits it with
-`license.workspace = true` and does not declare its own.
-
-Vendored code keeps the licence of the code it vendors, because it is not
-ours to change: everything in FastTrackStudios/vendor (dioxus-test,
-facet-swift, the dioxus crates,
-baseview, anyrender_*, wgpu-hal, winit-uikit, raw-window-metal — MIT
-and/or Apache-2.0; `world`, the WORLD vocoder — BSD-3-Clause). Incoming code must be GPL-compatible (MIT,
-BSD, Apache-2.0 — keep the notice and licence text); code cannot go the
-other way.
-
-## Signal, plugin and DSP rules
-
-Signal is the live-rig domain. Its crates (the rigs, the domain core —
-proto, live, storage, controller, rig-host, grid, tone3000, …, with its
-docs in `signal:features/signal/docs/` —, the sampler, NAM and the nam,
-signal and sampler plugins) are in **FastTrackStudios/signal** since
-studio#510, pinned here by one `rev` (every crate of that repo at the same
-revision, root `Cargo.toml`). Its REAPER extensions (`signal-extension`,
-`signal-reaper-controller`) are in FastTrackStudios/studio-adapters. Here:
-only its extensions (`extensions/rig*`, `extensions/keys`), compiled into
-Studio (apps/desktop). `docs/signal/domain-model.md` explains the rig
-model. A change to a signal crate is a PR there, then a bump of the `rev`
-here; to work on both, check signal out beside this repo and patch
-`[patch."https://github.com/FastTrackStudios/signal"]` with paths to every
-crate Studio builds from it (never committed; its README has the table).
-The rigs' private captures reach the guitar crate's build through
-`SIGNAL_RIG_LIBRARY` (`.cargo/config.toml` → `rig-library/`, linked by
-`just assets`). The effects' own code (`dsp`, `dsp-core`, the effect
-plugins, `fts-audio-ui`, `plugin-core`, `preset-browser`) is in
-FastTrackStudios/fts-fx; the rules below that speak of `features/dsp/*`
-hold there and in signal (`nam`). `docs/fts-fx.md`
-says how to work on both at once.
-
-**Detachable GUI (strict)**: the rig engine is headless; every GUI —
-desktop, phone, browser, plugin editor — is a vox client of it.
-
-**GUI rendering** — signal and plugin UI renders identically standalone,
-as a CLAP/VST3 editor and embedded in REAPER, through one pipeline:
-`nice-plug-dioxus` / `dioxus_native` → Blitz (Vello + wgpu):
-
-- Never `dioxus::desktop::LaunchBuilder` for this UI (WebKit/WRY breaks
-  plugin parity).
-- **Inline styles only** — Blitz does not load external stylesheets.
-  Inline `style`, or a static string via `document::Style { {CSS} }`;
-  never `document::Stylesheet { href }`, no Tailwind `asset!()` —
-  `include_str!` the compiled sheet (`just tailwind`, `just signal-tailwind`,
-  `just tailwind-eq`, …). Components must lay out correctly without
-  Tailwind; classes are additive only.
-- Root `App` components take no props (context via
-  `use_context_provider`), so one component serves standalone and as a
-  plugin editor.
-- Blitz's gaps: no `position: fixed`/`sticky` (absolute positions against
-  the immediate parent; mount overlays at the root with `inset: 0`), no
-  `overflow: auto` (use `overflow-y: scroll`, or `hidden` to clip), no
-  `text-overflow`, no CSS `fill`/`stroke` on SVG (use presentation
-  attributes), no `vertical-align`, `text-shadow`, blend modes, 3D
-  transforms, multi-column or container queries. Inside a plugin
-  `use_effect` never runs, `autofocus` is ignored unless the node is
-  already in the document, `MountedData::set_focus` panics from an event
-  handler, and there is no `placeholder`. Load the **`blitz-design`
-  skill** before building or refactoring this UI.
-
-**Processing cores** (`daw:crates/daw/audio-graph`, the engines in
-`features/dsp/*`, the sampler engine) build for native, WASM/AudioWorklet
-and embedded `no_std`: `#![no_std]` + `alloc` (gate `std` behind an
-additive feature); no heap allocation on the hot path (pre-allocate in
-`reset()`; `process()` never calls `Vec::push`/`Box::new`); no threads and
-no task spawning; no platform I/O (cpal, web-sys and MIDI drivers live in
-adapter crates); keep the `AudioNode: Send` bound.
-
-**Effects do not depend on products**: nothing in `features/dsp/*` may
-depend on `features/rigs`, `features/session` or an app. If an effect
-needs something from a product, the dependency points the wrong way — the
-product adapts to the effect (`builtin` makes the effects daw engine
-blocks, a contract both products already speak).
-
-**Parameters must parse the string they print** — a host's parameter list
-is text in, text out; each effect's `tests/param_round_trip.rs` holds that
-line. Tempo-synced times use `dsp_core::time` (note values, dotted and
-triplet); do not grow a second table.
-
-**Realtime lints**: `signal:features/{dsp,rigs}/clippy.toml` (and
-`daw:features/audio/clippy.toml` in the daw repo) add the
-audio-thread rules (`disallowed-methods` for locks, `env::var`, sleeps;
-`too-large-for-stack`). Clippy reads the nearest `clippy.toml`, so they hold
-under those trees and nowhere else — keep the three copies identical, and
-keep the shared settings in step with the root one.
-
-## Logging & tracing — wide events, ALWAYS
-
-Before writing ANY log or debug output, load the `logging-best-practices`
-skill (`.claude/skills/logging-best-practices/` — read `rules/fts-rust.md`
-first). The rules are not optional:
-
-- **The span IS the wide event.** `architect` opens one span per vox RPC,
-  `tower_http` one per HTTP request. Enrich it with
-  `architect_telemetry::wide::set("namespace.field", value)` — one
-  context-rich event per request, never scattered log lines.
-- **Never `println!`/`eprintln!`/`dbg!` in server or library code** — not
-  in committed code, and not as debug scaffolding either. To chase a bug,
-  reproduce it in a failing unit test or query the span fields; if you
-  must watch a live process, use `tracing` with structured fields behind
-  `RUST_LOG` and delete it before committing.
-- Follow the established field names (`org.slug`, `auth.*`, `perm.*`,
-  `media.*`, `share.*`); record the **shape**, never the secret (no
-  tokens, no passwords, no raw note paths/URIs in fields).
-- Denials/refusals get ONE `tracing::warn!` line (alertable); allowed
-  outcomes ride the span only.
-- New surface = new fields: any new HTTP route or RPC service sets its
-  outcome fields on the span (`rules/fts-rust.md` lists the field
-  conventions, e.g. `auth.outcome`).
-
-## Agent skills and process
-
-- **Branches, PRs and releases: tag-from-main.** Load the
-  `release-workflow` skill before branching, opening or merging a PR, or
-  releasing; studio's specifics are in `docs/agents/release-workflow.md`,
-  which wins where they differ (studio has no release PRs).
-  Branch from `origin/main` (`feat/sta-123-slug`), open the PR into `main`
-  with a conventional title and `.github/pull_request_template.md` filled
-  in, add a change file for every crate you change (`cargo rail change add
-  <crates> --bump <none|patch|minor|major> -m "<note> (signal|session)"`).
-  A lone PR squash-merges; a stack merges with merge commits titled with
-  each PR's title and body, so `main`'s first-parent history is one
-  conventional commit per PR (read history and bisect with
-  `--first-parent`). Don't wait on CI: once your local checks pass, push,
-  mark the PR ready and report; the orchestrator merges in batches
-  (`merge_batch.sh`), checks `main`'s CI once per batch and fixes forward.
-  There is no `dev` branch. Releases are CalVer tags pushed
-  by `just release` (main's newest commit with a green `CI passed`, or
-  `just release <sha>`); the tag alone starts the release builds, each of
-  which stamps the tag's version into its checkout, so the version
-  committed on main is not the released one. The notes come from the
-  change files added since the previous tag, never from commits. Never edit the workspace
-  version; `CHANGELOG.md` ends at 26.10.3.
-- Issues: GitHub Issues on `FastTrackStudios/studio` via `gh` — see
-  `docs/agents/issue-tracker.md`; the triage labels (`needs-triage`,
-  `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) in
-  `docs/agents/triage-labels.md`; domain docs in `docs/agents/domain.md`.
-- **Shipping a change: the `ship-stack` skill** — one concern per layer of
-  a `gh stack`, commit through the prek hooks, `just ci-local` on the top,
-  `gh stack submit --auto`, every layer `Local CI: success`, merge, then
-  `CI passed` on main.
-- Project skills live in `.claude/skills/` (build-performance,
-  logging-best-practices, blitz-design, rust-testing, reaper-testing, architect-actions,
-  signalpack, reaper-theme-*, …) — load the matching one before the work
-  it covers.
+GPL-3.0-or-later: a new crate inherits `license.workspace = true`.
+Vendored code keeps its own licence (FastTrackStudios/vendor, `vendor/`).
+Incoming code must be GPL-compatible (MIT, BSD, Apache-2.0, with its
+notice). Model weights under a non-commercial licence ship only as an
+optional download, never in git.
