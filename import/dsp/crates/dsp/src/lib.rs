@@ -36,5 +36,7 @@ pub mod reverb;
 pub mod saturate;
 #[cfg(feature = "stack")]
 pub mod stack;
+#[cfg(feature = "transient")]
+pub mod transient;
 #[cfg(feature = "trigger")]
 pub mod trigger;

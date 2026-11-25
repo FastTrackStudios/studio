@@ -52,6 +52,7 @@ saturate = ["dep:dsp-core", "dep:libm"]
 saturate-analysis = ["saturate", "std"]
 saturate-profiles = ["saturate", "std"]
 stack = ["dep:libm"]
+transient = ["dep:dsp-core", "dep:libm"]
 trigger = ["std", "dep:dsp-core", "dsp-core/audio", "eq", "dep:rustfft"]
 
 [dependencies]
