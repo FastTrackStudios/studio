@@ -16,8 +16,8 @@
 //! seam and why it is drawn there.
 //!
 //! ```
-//! use crate::doc::{Note, NoteId};
-//! use crate::ops::quantize::{self, QuantizeConfig};
+//! use editor::doc::{Note, NoteId};
+//! use editor::ops::quantize::{self, QuantizeConfig};
 //!
 //! // Two 16ths on a 96-ppq grid, both a tick late.
 //! let mut notes = vec![
