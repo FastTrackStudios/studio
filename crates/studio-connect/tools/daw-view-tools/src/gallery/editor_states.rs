@@ -3,7 +3,7 @@
 //! area across the melody), set on the editor directly.
 
 use daw_theme::gallery::View;
-use daw_view_kit::expression::Expression;
+use midi_editor::expression::Expression;
 
 use crate::golden::Golden;
 

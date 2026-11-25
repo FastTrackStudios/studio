@@ -156,7 +156,7 @@ fn mixer(
     stage: &Stage,
     shot: &Shot,
 ) {
-    use daw_view_kit::rails;
+    use mixer_view::rails;
 
     let (w, h) = (f64::from(shot.size.width), f64::from(shot.size.height));
     let rows = &planned.strips;
@@ -354,7 +354,7 @@ fn fx(painter: &mut impl PaintScene, planned: &Planned, shot: &Shot) {
 fn editor(painter: &mut impl PaintScene, golden: &Golden, stage: &Stage, shot: &Shot) {
     let size = (f64::from(shot.size.width), f64::from(shot.size.height));
     let mut view = super::editor::open(golden, shot.view, size);
-    view.set_look(daw_view_kit::expression::look_of(&stage.palette));
+    view.set_look(midi_editor::expression::look_of(&stage.palette));
     if shot.frame.overlay == Overlay::Menu {
         super::editor::open_menu(&mut view, size);
     }

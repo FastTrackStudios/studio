@@ -331,10 +331,10 @@ impl Plugin for FtsGuide {
         // it was played instead of at the block boundary — quantising to
         // the block audibly flams against a click.
         while let Some(event) = context.next_event() {
-            if let NoteEvent::NoteOn { timing, note, .. } = event {
-                if let Some(trigger) = trigger_for_midi_note(note) {
-                    self.engine.trigger(timing as usize, trigger);
-                }
+            if let NoteEvent::NoteOn { timing, key, .. } = event
+                && let Some(trigger) = key.number().and_then(trigger_for_midi_note)
+            {
+                self.engine.trigger(timing as usize, trigger);
             }
         }
 

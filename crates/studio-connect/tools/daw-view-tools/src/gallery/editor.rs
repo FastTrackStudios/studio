@@ -1,10 +1,10 @@
 //! The MIDI editor, opened headlessly: the view the window docks
-//! (`daw_view_kit::expression::Expression`), on the golden session's takes
+//! (`midi_editor::expression::Expression`), on the golden session's takes
 //! the way the window opens one from the engine's, and on the editor's own
 //! audio documents for what only an audio take shows.
 
 use daw_theme::gallery::View;
-use daw_view_kit::expression::Expression;
+use midi_editor::expression::Expression;
 use daw_view_kit::mousemap::Mods;
 
 use crate::golden::Golden;

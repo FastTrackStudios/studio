@@ -150,8 +150,8 @@ pub fn stage_session() -> Result<(Golden, Planned), Error> {
 /// The golden session's rows and strips, folded the way the windows fold.
 fn plan(golden: &Golden) -> Planned {
     let kinds = session_engine::plan::Kinds::default();
-    let (project, rows) = daw_view_kit::studio::plan_rows_with(&golden.project, None, &kinds);
-    let strips = daw_view_kit::studio::plan_strips_with(&golden.project, None, &kinds);
+    let (project, rows) = session_engine::song_model::plan_rows_with(&golden.project, None, &kinds);
+    let strips = session_engine::song_model::plan_strips_with(&golden.project, None, &kinds);
     Planned {
         project,
         rows,
