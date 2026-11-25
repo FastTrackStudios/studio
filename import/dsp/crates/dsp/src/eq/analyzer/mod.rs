@@ -75,4 +75,3 @@ pub use analyzer::{Analyzer, AnalyzerSnapshot, AudioFeed};
 pub use settings::{AnalyzerSettings, MagType, Range, Resolution, SpectrumSlot, Speed, StereoType};
 pub use sharing::InstanceId;
 pub use window::WindowKind;
-

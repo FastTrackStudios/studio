@@ -377,10 +377,39 @@ impl DynBand {
             lp * self.side_makeup
         };
         let d = self.detector.tick(filtered_side, side);
+        self.apply(left, right, d, false);
+    }
 
+    /// Process one stereo sample in place at drive `drive` (0..1) given by
+    /// the caller instead of the detector: a band keyed by events it knows
+    /// (a drum's placed hits), whose envelope is the caller's. The detector
+    /// is left where it was.
+    #[inline]
+    pub fn tick_driven(&mut self, left: &mut f64, right: &mut f64, drive: f64) {
+        if !self.params.enabled {
+            return;
+        }
+        let d = drive.clamp(0.0, 1.0);
+        if self.params.modulate_only {
+            let target = self.params.base_gain_db + d * self.params.range_db;
+            self.applied_gain_db += (target - self.applied_gain_db) * self.gain_smooth_coeff;
+            return;
+        }
+        self.apply(left, right, d, true);
+    }
+
+    /// The base → target crossfade at drive `d`, smoothed, and the band's
+    /// filter run over the sample. With `snap`, a gain within a millionth
+    /// of a decibel of its target lands on it, so a driven band at rest is
+    /// exactly its base (a null at 0 dB) rather than approaching it forever.
+    #[inline]
+    fn apply(&mut self, left: &mut f64, right: &mut f64, d: f64, snap: bool) {
         // Base → target crossfade, smoothed, cheap gain-only retune.
         let target = self.params.base_gain_db + d * self.params.range_db;
         self.applied_gain_db += (target - self.applied_gain_db) * self.gain_smooth_coeff;
+        if snap && (target - self.applied_gain_db).abs() < 1.0e-6 {
+            self.applied_gain_db = target;
+        }
         self.filter.set_gain_db(self.applied_gain_db);
 
         match self.params.placement {
@@ -416,5 +445,56 @@ impl DynBand {
         self.side_lp2.reset();
         self.detector.reset();
         self.applied_gain_db = self.params.base_gain_db;
+    }
+}
+
+#[cfg(test)]
+mod driven_tests {
+    use super::*;
+
+    fn sine(n: usize, hz: f64, sr: f64) -> impl Iterator<Item = f64> {
+        (0..n).map(move |i| {
+            (core::f64::consts::TAU * hz * dsp_core::num::count_to_f64(i) / sr).sin() * 0.5
+        })
+    }
+
+    /// Driven at zero, a band at 0 dB base is a null; driven at one, it sits
+    /// at its range; let go, it returns to an exact null.
+    #[test]
+    fn a_driven_band_is_its_base_at_rest_and_its_range_when_driven() {
+        let sr = 48_000.0;
+        let mut b = DynBand::new(sr);
+        b.params.freq_hz = 1000.0;
+        b.params.q = 1.0;
+        b.params.range_db = -6.0;
+        b.update(sr);
+        b.reset();
+        let peak = |b: &mut DynBand, d: f64, n: usize| -> (f64, f64) {
+            let mut max = 0.0_f64;
+            let mut err = 0.0_f64;
+            for (i, x) in sine(n, 1000.0, sr).enumerate() {
+                let (mut l, mut r) = (x, x);
+                b.tick_driven(&mut l, &mut r, d);
+                if i > n / 2 {
+                    max = max.max(l.abs());
+                    err = err.max((l - x).abs());
+                }
+            }
+            (max, err)
+        };
+        let (_, err) = peak(&mut b, 0.0, 4800);
+        assert!(err == 0.0, "at rest it is a null: {err}");
+        let (max, _) = peak(&mut b, 1.0, 9600);
+        let db = 20.0 * (max / 0.5).log10();
+        assert!((db + 6.0).abs() < 0.3, "driven: {db} dB");
+        let _ = peak(&mut b, 0.0, 48_000);
+        assert!(
+            b.live_gain_db() == 0.0,
+            "back on its base: {}",
+            b.live_gain_db()
+        );
+        // Its filter state has rung out once the gain is home.
+        let (_, err) = peak(&mut b, 0.0, 9600);
+        assert!(err < 1.0e-9, "a null again: {err}");
     }
 }
