@@ -1,0 +1,32 @@
+[package]
+name = "frame-desktop"
+description = "Frame desktop player: runs a control surface live against an engine, hot-reloading its markup."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "frame"
+path = "src/main.rs"
+
+[dependencies]
+frame = { path = "../..", features = ["anyrender", "design", "io", "render", "runtime"] }
+frame-architect = { path = "../../../frame-architect", features = ["library", "remote"] }
+serde_json = { workspace = true }
+kurbo = { workspace = true }
+peniko = { workspace = true }
+vello = { workspace = true }
+winit = { workspace = true }
+pollster = { workspace = true }
+image = { version = "0.25" }  # frame's own version (not the workspace's)
+# `--engine`: the background runtime that owns the remote engine link.
+tokio = { workspace = true }
+architect = { workspace = true, features = ["platform"] }
+
+[dev-dependencies]
+frame-architect = { path = "../../../frame-architect", features = ["library"] }
+architect = { workspace = true, features = ["platform", "vox", "local"] }
+
+[lints]
+workspace = true

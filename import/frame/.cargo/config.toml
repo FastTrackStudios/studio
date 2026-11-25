@@ -1,0 +1,38 @@
+[alias]
+xtask = "run --package xtask --"
+
+# The rustflags tables are Studio's, in the same order and with the same
+# flags, so kache keys Frame's builds of shared crates (Dioxus, Blitz,
+# architect, …) the same as Studio's and the store is shared across repos.
+# Keep them in step with Studio's .cargo/config.toml. CI must not set
+# RUSTFLAGS or CARGO_TARGET_*_RUSTFLAGS: either replaces these tables.
+
+# Frame pointers, so samply/perf can unwind. `target.<triple>.rustflags`
+# REPLACES `build.rustflags`, so each target table repeats the flag.
+[build]
+rustflags = ["-C", "force-frame-pointers=yes"]
+
+# mold (from the dev shell) and x86-64-v3 (AVX2/FMA) on Linux.
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+  "-C", "force-frame-pointers=yes",
+  "-C", "link-arg=-fuse-ld=mold",
+  "-C", "target-cpu=x86-64-v3",
+]
+
+[target.x86_64-apple-darwin]
+rustflags = [
+  "-C", "force-frame-pointers=yes",
+  "-C", "target-cpu=x86-64-v3",
+]
+
+[target.wasm32-unknown-unknown]
+rustflags = [
+  "-C", "force-frame-pointers=yes",
+  "--cfg", 'getrandom_backend="wasm_js"',
+]
+
+# Git dependencies fetch through the git CLI, so credentials and SSH work
+# the way they do for `git`.
+[net]
+git-fetch-with-cli = true

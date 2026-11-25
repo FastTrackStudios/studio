@@ -1,0 +1,130 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # A draft runs nothing; marking it ready starts the run.
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+# WHO CANCELS WHOM:
+#
+#   pull request   one group per PR; a newer push cancels the older run.
+#   push           one group per branch, QUEUED, not cancelled: the running
+#                  run finishes, and of the pushes that land meanwhile only
+#                  the newest waits. A cancelled run leaves no green commit
+#                  on main behind it.
+#   dispatch       its own group (the run id): never cancelled.
+concurrency:
+  group: checks-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'push' && github.ref || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# No RUSTFLAGS / CARGO_TARGET_*_RUSTFLAGS / RUSTC_WRAPPER here: either
+# rustflags variable would replace the tables in .cargo/config.toml, and with
+# them the kache keys Frame shares with Studio. `-D warnings` goes on clippy.
+env:
+  # Terse, stable logs: this is CI, not a terminal.
+  CARGO_TERM_COLOR: never
+  # A CI run is a fresh tree; incremental output only bloats the cache.
+  CARGO_INCREMENTAL: "0"
+
+# WHERE EACH JOB RUNS. Pull requests run on GitHub-hosted ubuntu-latest: the
+# repo is public, and the THEBATTLESHIP pool refuses pull_request jobs from
+# public repos. Pushes run on THEBATTLESHIP's shared `thebattleship` pool,
+# whose target dir stays warm from one push to the next. The hosted and pool
+# composite actions set up either kind (.github/actions/hosted-devenv-rust,
+# .github/actions/battleship-devenv-rust).
+#
+# TOOLCHAIN. Every command runs as `devenv shell -- <command>` in the devenv.nix
+# shell: the fleet's rust 1.99.1 pin, mold, the native libraries and just. The
+# rustflags (frame pointers, mold) come from .cargo/config.toml only.
+jobs:
+  lint:
+    name: Lint (fmt + clippy + boundary)
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/hosted-devenv-rust
+        if: ${{ runner.environment == 'github-hosted' }}
+        with:
+          job: lint
+      - uses: ./.github/actions/battleship-devenv-rust
+        if: ${{ runner.environment == 'self-hosted' }}
+        with:
+          job: lint
+      - name: fmt
+        run: devenv shell -- cargo fmt --all -- --check
+      - name: clippy
+        if: ${{ !cancelled() }}
+        run: devenv shell -- cargo clippy --workspace --all-targets -- -D warnings
+      # `frame` (core) has no architect, vox, Dioxus or figcraft in its
+      # normal dependency tree; the integration is frame-architect.
+      - name: core boundary
+        if: ${{ !cancelled() }}
+        run: devenv shell -- just boundary
+
+  check:
+    name: Check
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/hosted-devenv-rust
+        if: ${{ runner.environment == 'github-hosted' }}
+        with:
+          job: check
+      - uses: ./.github/actions/battleship-devenv-rust
+        if: ${{ runner.environment == 'self-hosted' }}
+        with:
+          job: check
+      - name: just check
+        run: devenv shell -- just check
+      - name: just test
+        run: devenv shell -- just test
+
+  # An app pinning Frame by tag, as the README shows, built against this
+  # commit: the snippet and its [patch] tables stay true.
+  consumer:
+    name: Consumer
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/hosted-devenv-rust
+        if: ${{ runner.environment == 'github-hosted' }}
+        with:
+          job: consumer
+      - uses: ./.github/actions/battleship-devenv-rust
+        if: ${{ runner.environment == 'self-hosted' }}
+        with:
+          job: consumer
+      - name: just consumer
+        run: devenv shell -- just consumer
+
+  # The one status to require on main: it passes only when every job above
+  # succeeded; a skipped or cancelled job fails it. On a draft PR every job,
+  # this one included, is skipped (a skipped required status passes);
+  # marking the PR ready runs them all.
+  ci:
+    name: ci
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    needs: [lint, check, consumer]
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    steps:
+      - name: all checks passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "lint/check/consumer: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done

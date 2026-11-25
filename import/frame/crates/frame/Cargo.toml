@@ -1,0 +1,111 @@
+[package]
+name = "frame"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Frame: the design and control-surface engine — documents, surfaces, motion, feeds and themes, with rendering, IO, libraries, Figma import and the live and embedded hosts behind features"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# A host's anyrender `PaintScene` (Blitz's) as a paint target: the
+# anyrender crate alone, the same 0.14 Blitz and architect use.
+host-scene = ["dep:anyrender"]
+anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:image", "dep:peniko", "dep:pollster", "dep:skrifa", "dep:vello", "dep:winit", "svg_export"]
+cpu = ["dep:image", "dep:vello_cpu"]
+design = ["io", "render", "runtime"]
+dsp = []
+embed = ["cpu", "dep:peniko", "dep:skrifa", "render", "runtime"]
+figma = ["dep:base64", "dep:figma-api", "dep:zip"]
+io = ["dep:chrono", "dep:facet-styx", "dep:loro", "dep:zip"]
+live = ["anyrender", "dep:peniko", "dep:vello", "io", "render", "runtime"]
+nice-plug = ["cpu", "dep:nice-plug-core"]
+render = ["dep:base64", "dep:peniko", "dep:roxmltree", "dep:skrifa", "dep:taffy", "image/gif", "image/jpeg", "image/webp"]
+runtime = ["dep:miniz_oxide"]
+svg_export = ["dep:fixed", "dep:rust_decimal", "dep:svg"]
+theme = ["render"]
+
+[dependencies]
+anyrender = { workspace = true, optional = true }
+anyrender_svg = { workspace = true, optional = true }
+anyrender_vello = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+blake3 = { workspace = true }
+chrono = { workspace = true, features = ["clock", "serde", "std", "wasmbind"], optional = true }
+facet = { workspace = true }
+facet-styx = { workspace = true, optional = true }
+figma-api = { workspace = true, optional = true }
+fixed = { workspace = true, optional = true }
+image = { workspace = true, features = ["png"], optional = true }
+kurbo = { workspace = true }
+loro = { workspace = true, optional = true }
+miniz_oxide = { workspace = true, optional = true }
+nice-plug-core = { workspace = true, optional = true }
+peniko = { workspace = true, optional = true }
+pollster = { workspace = true, optional = true }
+roxmltree = { workspace = true, optional = true }
+rust_decimal = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+skrifa = { version = "0.26", optional = true }
+svg = { workspace = true, optional = true }
+taffy = { workspace = true, optional = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+vello = { workspace = true, optional = true }
+vello_cpu = { workspace = true, features = ["std", "u8_pipeline"], optional = true }
+winit = { workspace = true, optional = true }
+zip = { workspace = true, features = ["deflate"], optional = true }
+
+[dev-dependencies]
+# Its own tests and examples, with the features they need (see their
+# required-features): a plain `cargo test` of the workspace builds them all.
+frame = { path = ".", features = ["anyrender", "cpu", "design", "dsp", "embed", "figma", "host-scene", "io", "live", "nice-plug", "render", "runtime", "theme"] }
+facet = { workspace = true }
+facet-json = { workspace = true }
+kurbo = { workspace = true }
+peniko = { workspace = true }
+pollster = { workspace = true }
+proptest = { workspace = true }
+serde_json = { workspace = true }
+vello = { workspace = true }
+wgpu = { workspace = true }
+
+[[example]]
+name = "strips"
+required-features = ["cpu", "embed", "runtime"]
+
+[[example]]
+name = "strip_bench"
+path = "examples/strip_bench.rs"
+required-features = ["theme"]
+
+[[example]]
+name = "face_bench"
+path = "examples/face_bench.rs"
+required-features = ["live"]
+
+[[example]]
+name = "face_frames"
+path = "examples/face_frames.rs"
+required-features = ["live"]
+
+
+[[test]]
+name = "loro_scene"
+path = "tests/loro_scene.rs"
+required-features = ["figma", "io"]
+
+[[test]]
+name = "theme_host"
+path = "tests/theme_host.rs"
+required-features = ["embed", "theme"]
+
+[[example]]
+name = "theme_host_bench"
+path = "examples/theme_host_bench.rs"
+required-features = ["theme"]
