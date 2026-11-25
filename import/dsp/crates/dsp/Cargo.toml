@@ -89,3 +89,7 @@ dsp = { path = ".", features = [
 name = "it"
 path = "tests/it/main.rs"
 required-features = ["mic", "reverb"]
+
+[[example]]
+name = "reverb_costs"
+required-features = ["reverb"]
