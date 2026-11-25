@@ -128,6 +128,7 @@ fn engine() -> &'static Standalone {
     daw.set_plugin_load_options(daw::standalone::plugin::LoadOptions {
         actions: Some(Arc::new(StudioActions::default())),
         automation: Some(Arc::new(StudioAutomation::new(daw))),
+        ..daw::standalone::plugin::LoadOptions::default()
     });
     daw
 }

@@ -30,6 +30,7 @@
 pub mod automation;
 pub mod bridge;
 pub mod signal;
+pub mod timeline;
 pub mod topics;
 
 #[cfg(test)]
@@ -99,6 +100,9 @@ pub fn install(daw: &'static Standalone) {
         daw.set_plugin_load_options(daw::standalone::plugin::LoadOptions {
             actions: Some(actions),
             automation: Some(Arc::new(automation::StudioAutomation::new(daw))),
+            // host-timeline/1: each instance reads its own track's MIDI
+            // ahead of the playhead (`timeline`).
+            timeline: true,
         });
         let spawned = std::thread::Builder::new()
             .name("clap-main".into())
@@ -116,14 +120,17 @@ pub fn install(daw: &'static Standalone) {
 
 /// One turn of the engine's main loop for plugins: each CLAP's
 /// main-thread request run, its rescans noticed (and every cached copy of
-/// its parameters refreshed), the events it subscribed to delivered.
-pub fn pump(daw: &Standalone) {
+/// its parameters refreshed), its timeline bound and kept current, the
+/// events it subscribed to delivered.
+pub fn pump(daw: &'static Standalone) {
     let guids: Vec<String> = daw.with_plugin_map(|m| m.guids().map(str::to_owned).collect());
     let step = take_step();
     let outbox = topics::Outbox::gather(daw, step);
     let mut live = Vec::new();
     for guid in &guids {
         let known = automation::caller_of(guid).is_some();
+        let timeline = timeline::for_fx(daw, guid);
+        timeline.refresh();
         let turn = daw.with_plugin_instance(guid, |p| {
             plugin_call(|| {
                 if !known {
@@ -131,12 +138,16 @@ pub fn pump(daw: &Standalone) {
                     // names a plugin Studio knows.
                     register_plugin(daw, guid, None, p);
                 }
+                if !p.timeline_bound() {
+                    p.bind_timeline(Some(timeline.clone()));
+                }
                 if p.wants_main_thread() {
                     p.pump_main_thread();
                 }
                 let sink = p.event_sink();
                 if let Some(sink) = &sink {
                     outbox.deliver(sink);
+                    timeline.deliver(sink);
                 }
                 (p.param_info_revision(), sink)
             })
@@ -168,6 +179,7 @@ pub fn pump(daw: &Standalone) {
             topics::automation_edited(caller, &event);
         }
     }
+    timeline::forget_gone(&guids);
     signal::publish_feed(daw);
 }
 
