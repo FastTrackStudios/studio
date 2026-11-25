@@ -119,6 +119,8 @@ pub mod off_loop;
 #[cfg(feature = "native")]
 pub mod signal_kit;
 #[cfg(feature = "native")]
+pub mod render_worker;
+#[cfg(feature = "native")]
 pub mod signal_offline;
 #[cfg(feature = "native")]
 pub mod vocal_level;

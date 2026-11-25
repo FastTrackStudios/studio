@@ -135,6 +135,8 @@ daw-standalone = { workspace = true, features = ["bootstrap", "rpp-project-wasm"
 dawfile-reaper = { workspace = true, optional = true }
 # An FX's state as base64 (FX_STATE / FX_STATE_SET).
 base64 = { workspace = true, optional = true }
+# The render worker's crash handler (`render_worker::crash`).
+libc = { workspace = true }
 # The FTS processors as built-in FX (desktop: they are nice-plug plugins).
 builtin = { workspace = true, optional = true, features = ["engine"] }
 realfft = { workspace = true, optional = true }

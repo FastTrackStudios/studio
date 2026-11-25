@@ -8,6 +8,19 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> std::process::ExitCode {
+    // A render worker (`--render-worker`, spawned by an engine with its
+    // socket in the environment): renders an agent asked for, apart from
+    // the person's session.
+    if let Some(result) = session_engine::render_worker::main_if_worker() {
+        return match result {
+            Ok(()) => std::process::ExitCode::SUCCESS,
+            Err(e) => {
+                use std::io::Write as _;
+                let _ = writeln!(std::io::stderr(), "daw-extension: render worker: {e}");
+                std::process::ExitCode::FAILURE
+            }
+        };
+    }
     let arg = std::env::args().nth(1);
     let result = match arg.as_deref() {
         Some("--engine") => daw_extension::owner::engine(),

@@ -633,11 +633,13 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     #[cfg(feature = "native")]
     crate::mix_sends::register(list)?;
     #[cfg(feature = "native")]
-    crate::mix_measure::register(list)?;
+    crate::render_worker::register_routed(list, crate::mix_measure::register)?;
     #[cfg(feature = "native")]
     crate::mix_state::register(list)?;
     #[cfg(feature = "native")]
-    crate::listen::register(list)?;
+    crate::render_worker::register_routed(list, crate::listen::register)?;
+    #[cfg(feature = "native")]
+    crate::render_worker::register(list)?;
     #[cfg(feature = "native")]
     crate::mix_snapshot::register(list)?;
     #[cfg(feature = "native")]

@@ -1058,6 +1058,28 @@ pub fn with_open_store<T: Send>(
     })?
 }
 
+/// `read` the doc of the song `guid`, open from its project file, as its
+/// bridge holds it, once every step read is in it: what the render worker's
+/// copy of the song is synced from (`crate::render_worker`).
+///
+/// # Errors
+/// The song is not open from its project file.
+#[cfg(feature = "native")]
+pub(crate) fn with_song_doc<T: Send>(
+    guid: &str,
+    read: impl FnOnce(&session::sync::loro::LoroDoc) -> T + Send,
+) -> Result<T, String> {
+    let guid = guid.to_owned();
+    written(WRITE_WAIT);
+    run(async move {
+        let songs = open_songs().lock().await;
+        let open = songs
+            .get(&guid)
+            .ok_or("the song is not open from its project file (a .session)")?;
+        Ok(read(open.bridge.doc().loro()))
+    })?
+}
+
 /// How many steps the engine finished that the recorder has not recorded
 /// yet: what a call waits on to be a step of its own
 /// (`history_marks::settle`).
