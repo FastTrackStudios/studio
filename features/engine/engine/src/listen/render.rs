@@ -1199,7 +1199,9 @@ fn run_chunk(
             only: Some(c.only.clone()),
             probes: c.probes.to_vec(),
             fed: c.fed.clone(),
-            record: None,
+            // What daw adds later (`record`: probes over a whole span) left
+            // at its default: handed over block by block.
+            ..Offline::default()
         },
     );
     let primed = web_time::Instant::now();
