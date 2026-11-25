@@ -102,18 +102,28 @@ pub fn curated() -> Vec<Tool> {
         tool!(
             "listen",
             "LISTEN",
-            "Render only what feeds one point of a track, offline, and measure it: LUFS, short-term max, true peak, peak, RMS, crest, third-octave bands, width, correlation, and per compressor/gate (or Signal instance) its make-up and gain reduction. `at`: `post-fader` (default), `pre-fx`, `post-fx`, `input`, `fx:<n>:in|out`, `block:<id>:pre|post`. Fast on repeats (unchanged inputs replay). Series are dropped by default; `detail: \"full\"` keeps them. Read-only."
+            "Render only what feeds one point of a track, offline, and measure it: LUFS, short-term max, true peak, peak, RMS, crest, third-octave bands, width, correlation, and per compressor/gate (or Signal instance) its make-up, gain reduction and each block's meters. `at`: `post-fader` (default), `pre-fx`, `post-fx`, `input`, `fx:<n>:in|out`, `block:<id>:pre|post`. Many points in ONE render: `points: [{track, at}, …]` (answers `points: [{track, at, figures, dynamics, latency}]`) — far faster than a call each. Fast on repeats (unchanged inputs replay; `fresh: true` renders again). Series are dropped by default; `detail: \"full\"` keeps them. Read-only."
         ),
         Tool {
             name: "block_measure",
-            description: "What one Signal block does, in one call: LISTEN at `block:<id>:pre` and `:post` on `track` over `from`..`to`, answered as the input and output figures and their difference — `gain_db` (its loudness change), `crest_db` (transients squeezed < 0 or opened > 0), peak and width changes, the instance's gain reduction — and with `bands: true` the band-by-band EQ curve it applied. Read-only.",
+            description: "What one Signal block does, in one render (LISTEN_BLOCK: its input and output heard side by side) on `track` over `from`..`to`, answered as the input and output figures and their difference — `gain_db` (its loudness change), `crest_db` (transients squeezed < 0 or opened > 0), peak and width changes, the instance's gain reduction — and with `bands: true` the band-by-band EQ curve it applied. Read-only.",
             exec: Exec::Composite(block_measure),
             schema: Some(block_measure_schema),
         },
         tool!(
             "listen_ab",
             "LISTEN_AB",
-            "Before/after a change, level-matched: listens at one point, runs `change` (a list of `{action, args}`, e.g. `{\"action\": \"SIGNAL_BLOCK_SET\", \"args\": {…}}`) as one undo step, listens again, and puts the mix back unless `keep: true`. Answers `a`, `b`, `difference` and `matched` — the difference with the loudness change (`gain_db`) taken out, so what is left is tone and dynamics."
+            "Before/after a change, level-matched: listens at one point (or each of `points: [{track, at}]`, in one render, answered per point), runs `change` (a list of `{action, args}`, e.g. `{\"action\": \"SIGNAL_BLOCK_SET\", \"args\": {…}}`) as one undo step, listens again, and puts the mix back unless `keep: true`. Answers `a`, `b`, `difference` and `matched` — the difference with the loudness change (`gain_db`) taken out, so what is left is tone and dynamics."
+        ),
+        tool!(
+            "listen_render",
+            "LISTEN_RENDER",
+            "The audio at one point (as listen's `track`/`at`) over `from`..`to` written to a WAV (48 kHz float, stereo; `to_file`, under /tmp/listen/ unless given): what a tool that needs the audio itself reads. `points: [{track, at}]` renders many at once, a WAV each (`to_file` then a folder): `files: [{track, at, file, lufs, true_peak, latency}]`. Read-only."
+        ),
+        tool!(
+            "listen_cache",
+            "LISTEN_CACHE",
+            "What listen, block_measure, listen_ab, listen_render and mix_measure keep between calls to replay unchanged tracks: `recordings`, `mb`, `limit_mb`, `evicted`, `warm_copies`. `limit_mb` sets the bound; `forget: true` drops everything (the next listen renders afresh)."
         ),
         tool!(
             "listen_hits",
@@ -128,7 +138,7 @@ pub fn curated() -> Vec<Tool> {
         tool!(
             "mix_measure",
             "MIX_MEASURE",
-            "Render a span offline through the whole mix and measure each of `tracks` (default: the Drums folder and everything in it) and the master: LUFS, short max, true peak, peak, RMS, crest, width, balance, `share_db` of its folder; `bypass_signal: true` adds raw numbers and Signal's gain per track. One flat row a track; bands only with `with_bands: true`. A whole song takes minutes: it becomes a job (see `job`). Read-only."
+            "Render a span offline through the whole mix and measure each of `tracks` (default: the Drums folder and everything in it) and the master (`master: false` leaves it out and renders far less): LUFS, short max, true peak, crest, width, `share_db` of its folder; `bypass_signal: true` adds raw LUFS and Signal's gain per track. Unchanged tracks replay from earlier renders (`answered`, `tracks_rendered`, `tracks_replayed`, `realtime_factor` say how); `exact: false` renders in chunks on warm copies (LISTEN's speed, ~0.05 LU); `full: true` renders the whole song afresh. Answers a table (`columns`, `rows`: a row a track, folders end in `/`); `detail: \"params\"` every number a track as objects, `with_bands: true` each track's bands. A whole song takes minutes: it becomes a job (see `job`). Read-only."
         ),
         Tool {
             name: "balance",
@@ -235,7 +245,7 @@ pub fn generic() -> Vec<Tool> {
         },
         Tool {
             name: "run",
-            description: "Run any action by `id` with `args` (an object). Answers known to be big (MIX_STATE, SESSION_TRACKS, LISTEN, MIX_MEASURE, FX_PARAMS) are compacted as their curated tools do; `detail: \"full\"` for the raw answer. Big answers page (`more`); long calls become jobs (`job`).",
+            description: "Run any action by `id` with `args` (an object). Answers known to be big (MIX_STATE, SESSION_TRACKS, LISTEN, LISTEN_BLOCK, LISTEN_AB, MIX_MEASURE, FX_PARAMS) are compacted as their curated tools do; `detail: \"full\"` for the raw answer. Big answers page (`more`); long calls become jobs (`job`).",
             exec: Exec::Composite(run),
             schema: Some(run_schema),
         },
@@ -319,14 +329,14 @@ pub fn extras(id: &str) -> Value {
                 json!({"type": "boolean", "description": "Add each choice parameter's choices."}),
             );
         }
-        "LISTEN" | "LISTEN_AB" => {
+        "LISTEN" | "LISTEN_AB" | "LISTEN_BLOCK" => {
             p.insert("detail".into(), json!({"type": "string", "enum": ["summary", "full"], "description": "`full` keeps the per-second and per-hop series."}));
         }
         "MIX_MEASURE" => {
             p.insert("with_bands".into(), json!({"type": "boolean", "description": "Keep each track's bands (dropped by default)."}));
             p.insert(
                 "detail".into(),
-                json!({"type": "string", "enum": ["summary", "full"]}),
+                json!({"type": "string", "enum": ["summary", "params", "full"], "description": "`summary` (default): a table, a row a track; `params`: every number, an object a track; `full`: the raw answer."}),
             );
         }
         _ => {}
@@ -394,7 +404,8 @@ pub fn run_action(ctx: &Ctx<'_>, id: &str, args: &Value) -> Result<Value, Failur
     {
         o.entry("params").or_insert(json!(false));
     }
-    let answer = ctx.run(id, &up)?;
+    let mut answer = ctx.run(id, &up)?;
+    crate::recall::block_meters(id, &mut answer, &up);
     Ok(match id {
         "MIX_STATE" => shape::mix_state(&answer, detail),
         "SESSION_TRACKS" => {
@@ -414,6 +425,7 @@ pub fn run_action(ctx: &Ctx<'_>, id: &str, args: &Value) -> Result<Value, Failur
         }
         "LISTEN" => shape::listen(&answer, detail),
         "LISTEN_AB" => shape::listen_ab(&answer, detail),
+        "LISTEN_BLOCK" => shape::listen_block(&answer, detail),
         "MIX_MEASURE" => {
             let bands = args
                 .get("with_bands")
@@ -488,6 +500,8 @@ fn block_measure_schema() -> Value {
         "block": {"type": "string", "description": "The block's chain id (`tone.comp`), as signal_block lists them."},
         "solo": {"type": "array", "items": {"type": "string"}},
         "exact": {"type": "boolean", "description": "Render in one piece (differences under ~0.3 dB call for it)."},
+        "fresh": {"type": "boolean", "description": "Render everything again, nothing played back."},
+        "png": {"type": "boolean", "description": "Draw each side's waveform and spectrogram under /tmp/listen/."},
         "bands": {"type": "boolean", "description": "Add the band-by-band difference (the EQ curve it applied)."},
     }), &span_props()), "required": ["track", "block", "from", "to"]})
 }
@@ -497,21 +511,46 @@ fn block_measure(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
     let block = need(args, "block")?;
     let mut base = Map::new();
     base.insert("track".into(), json!(track));
-    for key in ["from", "to", "solo", "exact"] {
+    for key in ["from", "to", "solo", "exact", "fresh", "png"] {
         if let Some(v) = args.get(key) {
             base.insert(key.into(), v.clone());
         }
     }
-    let at = |side: &str| {
-        let mut a = base.clone();
-        a.insert("at".into(), json!(format!("block:{block}:{side}")));
-        Value::Object(a)
-    };
-    ctx.job.step(format!("1/2 LISTEN block:{block}:pre"));
-    let pre = upstream::run(ctx.up, "LISTEN", &at("pre"), &ctx.job.cancel)?;
-    ctx.job.step(format!("2/2 LISTEN block:{block}:post"));
-    let post = upstream::run(ctx.up, "LISTEN", &at("post"), &ctx.job.cancel)?;
     let bands = args.get("bands").and_then(Value::as_bool).unwrap_or(false);
+    let mut both = Value::Object(base.clone());
+    if let Some(o) = both.as_object_mut() {
+        o.insert("block".into(), json!(block));
+    }
+    ctx.job.step(format!("LISTEN_BLOCK {block}"));
+    let (pre, post, heard) = match upstream::run(ctx.up, "LISTEN_BLOCK", &both, &ctx.job.cancel) {
+        Ok(mut h) => {
+            crate::recall::block_meters("LISTEN_BLOCK", &mut h, &both);
+            let mut post = h.get("post").cloned().unwrap_or(Value::Null);
+            if let (Some(o), Some(b)) = (post.as_object_mut(), h.get("bands_hz")) {
+                o.insert("bands_hz".into(), b.clone());
+            }
+            let mut pre = h.get("pre").cloned().unwrap_or(Value::Null);
+            if let Some(o) = pre.as_object_mut() {
+                o.insert("from".into(), h.get("from").cloned().unwrap_or(Value::Null));
+                o.insert("to".into(), h.get("to").cloned().unwrap_or(Value::Null));
+            }
+            (pre, post, Some(h))
+        }
+        // A Studio from before LISTEN_BLOCK: its two sides, a LISTEN each.
+        Err(e) if e.get("code").and_then(Value::as_str) == Some("unknown") => {
+            let at = |side: &str| {
+                let mut a = base.clone();
+                a.insert("at".into(), json!(format!("block:{block}:{side}")));
+                Value::Object(a)
+            };
+            ctx.job.step(format!("1/2 LISTEN block:{block}:pre"));
+            let pre = upstream::run(ctx.up, "LISTEN", &at("pre"), &ctx.job.cancel)?;
+            ctx.job.step(format!("2/2 LISTEN block:{block}:post"));
+            let post = upstream::run(ctx.up, "LISTEN", &at("post"), &ctx.job.cancel)?;
+            (pre, post, None)
+        }
+        Err(e) => return Err(e),
+    };
     let mut out = shape::block_diff(block, &pre, &post, bands);
     if let Some(o) = out.as_object_mut() {
         o.insert(
@@ -523,6 +562,14 @@ fn block_measure(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
             pre.get("from").cloned().unwrap_or(Value::Null),
         );
         o.insert("to".into(), pre.get("to").cloned().unwrap_or(Value::Null));
+        if let Some(h) = &heard {
+            let compact = shape::listen_block(h, Detail::Summary);
+            for key in ["rendered", "ms"] {
+                if let Some(v) = compact.get(key) {
+                    o.insert(key.into(), v.clone());
+                }
+            }
+        }
     }
     Ok(out)
 }

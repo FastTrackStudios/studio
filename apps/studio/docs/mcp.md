@@ -47,11 +47,13 @@ listed the tools, the bridge sends `tools/list_changed` once it answers.
 | `sections` | SESSION_SECTIONS | section names, usable as `from`/`to` everywhere |
 | `mix_state` | MIX_STATE | a track and what is in it: fader, sends, FX, Signal chain with only changed params (`detail: params`/`full`) |
 | `signal_block` | SIGNAL_CHAIN | one Signal block by track + block id, every param with its default; without `block`, the chain |
-| `listen` | LISTEN | measure one point (`at`: post-fader, pre-fx, `block:<id>:pre`…) |
-| `block_measure` | LISTEN ×2 | a block's input vs output in one call: `gain_db`, `crest_db`, gain reduction, `bands` curve |
-| `listen_ab` | LISTEN_AB | try a change and put it back; `matched` is the level-matched difference |
+| `listen` | LISTEN | measure one point (`at`: post-fader, pre-fx, `block:<id>:pre`…), or many in one render (`points: [{track, at}]`) |
+| `block_measure` | LISTEN_BLOCK | a block's input vs output in one render: `gain_db`, `crest_db`, gain reduction, `bands` curve |
+| `listen_ab` | LISTEN_AB | try a change and put it back; `matched` is the level-matched difference (per point with `points`) |
+| `listen_render` | LISTEN_RENDER | a point's audio as a WAV, or a WAV per point of `points` (`to_file` a folder) |
+| `listen_cache` | LISTEN_CACHE | what the renders keep to replay unchanged tracks; `limit_mb`, `forget` |
 | `listen_hits`, `listen_align` | LISTEN_HITS, LISTEN_ALIGN | a drum piece's averaged hit; mic alignment |
-| `mix_measure` | MIX_MEASURE | the whole mix rendered, one flat row a track (`with_bands`) |
+| `mix_measure` | MIX_MEASURE | the whole mix rendered, a table a row a track (`master`, `exact`, `full`; `detail: params`, `with_bands`) |
 | `balance` | SESSION_TRACKS + MIX_MEASURE | every folder's LUFS against a reference (`under`, `depth`) |
 | `track_set`, `fx_params`, `fx_set` | TRACK_SET, FX_PARAMS, FX_SET | faders, plain FX |
 | `signal_block_set` | SIGNAL_BLOCK_SET | a block's params by id, and its bypass |
@@ -93,6 +95,41 @@ SIGNAL_BLOCK_SET`. Meanwhile, use `signal_run` with `SIGNAL_SET`
   bad arguments, plus the bridge's `did_you_mean`: the closest track paths
   for `no track X`, and the closest action ids for an unknown action.
 
+- **Many points, one render.** `listen`, `listen_ab` and `listen_render`
+  take `points: [{track, at}, …]` (with `track` too, that point first).
+  The points share one render and its replays, so ten mics cost about one
+  listen, not ten. `listen` then answers
+  `{from, to, points: [{track, at, figures, dynamics, latency}], rendered, ms}`,
+  `listen_ab` `{points: [{track, at, a, b, difference, matched}], …}`,
+  `listen_render` `{files: [{track, at, file, lufs, true_peak, latency}], …}`.
+- **`block_measure` is one LISTEN_BLOCK.** Its answer is
+  `{block, track, from, to, pre, post, difference, gain_db, crest_db,
+  dynamics, rendered, ms}` (`bands: true` adds `bands`, `bands_hz`); it
+  takes `solo`, `exact`, `fresh` and `png` as LISTEN does. Against a Studio
+  from before LISTEN_BLOCK it listens twice, with the same answer.
+- **`mix_measure` is a table.** By default it answers how it was rendered
+  (`answered`, `tracks_rendered`, `tracks_replayed`, `realtime_factor`,
+  `cache_mb`, `latency`, `ms`), then `columns` (`path`, `lufs`,
+  `short_max`, `true_peak`, `crest`, `width`, `share_db`, and `raw_lufs`,
+  `signal_gain_db` with `bypass_signal`, `latency` when one is late) and
+  `rows`, one array a track, numbers to 0.1. Folders end in `/`, the
+  master is `MASTER`. 66 tracks fit in about 5 KB. `detail: "params"` gives
+  every number as an object a track, `detail: "full"` Studio's answer,
+  `with_bands: true` a `bands` column. `master: false` leaves the master
+  out and renders far less; `exact: false` renders in chunks on warm
+  copies (about 0.05 LU off); `full: true` renders everything afresh.
+- **Block meters on a replay.** LISTEN replays an unchanged point without
+  rendering, and the engine then answers `dynamics[].blocks: null` with
+  `blocks_why`. The bridge remembers the meters of every point it saw
+  rendered (same track, `at`, span, `solo` and `exact`) and puts them back
+  into a replay whose figures are bit-identical, marked `blocks_from`.
+  A point first heard as a replay (rendered by someone else, or before the
+  bridge started) still comes back null: `fresh: true` renders it. The
+  real fix is the engine's: keep each Signal instance's block meters with
+  the recording in the listen cache (`listen.rs`, `listen_points`: store
+  `heard.meters` beside the recording under the same key and answer them
+  on `Answered::Replayed`). Then this costs nothing and can go.
+
 ## Workflows
 
 - **Get your bearings:** `session_tree {under: "Drums"}`, then `sections`,
@@ -100,6 +137,8 @@ SIGNAL_BLOCK_SET`. Meanwhile, use `signal_run` with `SIGNAL_SET`
 - **What a compressor does:** `block_measure {track: "Kick/Sum/In",
   block: "tone.comp", from: "CH 1", to: "CH 1 end"}` gives `gain_db`,
   `crest_db` and `dynamics[].max_gr_db`.
+- **Every mic at once:** `listen {from, to, points: [{track:
+  "Kick/Sum/In", at: "post-fx"}, {track: "Snare/Top", at: "post-fx"}, …]}`.
 - **Try a change:** `listen_ab {track, from, to, change: [{action:
   "SIGNAL_BLOCK_SET", args: {track, block, params}}]}`. Read `matched`,
   the level-matched difference. The mix is put back unless `keep: true`.
@@ -155,7 +194,7 @@ The script sees:
 
 | | |
 |---|---|
-| `studio.<tool>(args)` | any tool in the table above, by its name or in camelCase: `studio.listen`, `studio.blockMeasure`, `studio.mixMeasure`, `studio.balance`, `studio.trackSet`, `studio.signalBlockSet`, `studio.signalRun`, `studio.mixSnapshot`, `studio.mixRestore`, `studio.sessionTree`, `studio.actions`, `studio.describe`, … Its answer is the tool's own: compacted the same way (`detail` works), but whole. Paging only applies to what the script returns, and long calls are waited for inside (no `job`). |
+| `studio.<tool>(args)` | any tool in the table above, by its name or in camelCase: `studio.listen`, `studio.blockMeasure`, `studio.listenRender`, `studio.mixMeasure`, `studio.balance`, `studio.trackSet`, `studio.signalBlockSet`, `studio.signalRun`, `studio.mixSnapshot`, `studio.mixRestore`, `studio.sessionTree`, `studio.actions`, `studio.describe`, … Its answer is the tool's own: compacted the same way (`detail` works), but whole. Paging only applies to what the script returns, and long calls are waited for inside (no `job`). |
 | `studio.run(id, args)` | any action, with Studio's own answer (not compacted). |
 | `studio.snapshot(name)` | MIX_SNAPSHOT `{name}`: a checkpoint to `studio.mixRestore({name})` to. |
 | `studio.all([…])` | `Promise.all` over promises, or over functions that return them. Up to 8 calls run at once; more wait for a free slot. |
@@ -208,6 +247,9 @@ const tracks = (await studio.sessionTree({under: "Drums", view: "list", fields: 
 log(`${tracks.length} mics`);
 const heard = await studio.all(tracks.map((track) =>
   studio.listen({track, from: args.from, to: args.to, at: "post-fx", fresh: true})));
+// Or one render for all of them (the kit's pieces render together anyway):
+//   const heard = (await studio.listen({from: args.from, to: args.to, fresh: true,
+//     points: tracks.map((track) => ({track, at: "post-fx"}))})).points;
 const rows = [];
 heard.forEach((h, i) => {
   for (const d of h.dynamics ?? [])

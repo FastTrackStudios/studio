@@ -562,19 +562,33 @@ fn rendered(r: &Value) -> Value {
     round(&r, 0)
 }
 
-/// LISTEN, compact: its figures, dynamics without the per-hop series,
-/// and what it rendered by count.
-#[must_use]
-pub fn listen(v: &Value, detail: Detail) -> Value {
-    if detail == Detail::Full {
-        return v.clone();
-    }
+/// One point of a listen, compact: its figures without the series, its
+/// dynamics without the per-hop series, no PNG paths when none were drawn.
+fn point(v: &Value) -> Value {
     let mut out = v.as_object().cloned().unwrap_or_default();
     if let Some(f) = v.get("figures") {
         out.insert("figures".into(), figures(f));
     }
     if let Some(d) = v.get("dynamics") {
         out.insert("dynamics".into(), dynamics(d));
+    }
+    if out.get("png").is_some_and(Value::is_null) {
+        out.remove("png");
+    }
+    Value::Object(out)
+}
+
+/// LISTEN, compact: its figures, dynamics without the per-hop series,
+/// and what it rendered by count — of its one point, or of each of its
+/// `points`.
+#[must_use]
+pub fn listen(v: &Value, detail: Detail) -> Value {
+    if detail == Detail::Full {
+        return v.clone();
+    }
+    let mut out = point(v).as_object().cloned().unwrap_or_default();
+    if let Some(ps) = v.get("points").and_then(Value::as_array) {
+        out.insert("points".into(), ps.iter().map(point).collect());
     }
     if let Some(r) = v.get("rendered") {
         out.insert("rendered".into(), rendered(r));
@@ -588,6 +602,31 @@ pub fn listen(v: &Value, detail: Detail) -> Value {
     round(&Value::Object(out), 2)
 }
 
+/// `LISTEN_BLOCK`, compact: `pre` and `post` as LISTEN's points, the
+/// difference without series, what it rendered by count.
+#[must_use]
+pub fn listen_block(v: &Value, detail: Detail) -> Value {
+    if detail == Detail::Full {
+        return v.clone();
+    }
+    let mut out = v.as_object().cloned().unwrap_or_default();
+    for key in ["pre", "post"] {
+        if let Some(p) = v.get(key) {
+            out.insert(key.into(), point(p));
+        }
+    }
+    if let Some(d) = v.get("difference") {
+        out.insert("difference".into(), figures(d));
+    }
+    if let Some(r) = v.get("rendered") {
+        out.insert("rendered".into(), rendered(r));
+    }
+    if let Some(x) = out.get("bands_hz").map(|x| round(x, 0)) {
+        out.insert("bands_hz".into(), x);
+    }
+    round(&Value::Object(out), 2)
+}
+
 /// `LISTEN_AB`, compact, with the difference level-matched.
 ///
 /// `matched` takes the loudness change out (`gain_db`), so what is left
@@ -595,27 +634,39 @@ pub fn listen(v: &Value, detail: Detail) -> Value {
 /// making it louder or quieter — the comparison a level-matched A/B hears.
 #[must_use]
 pub fn listen_ab(v: &Value, detail: Detail) -> Value {
-    let mut out = if detail == Detail::Full {
-        v.as_object().cloned().unwrap_or_default()
-    } else {
-        let mut o = v.as_object().cloned().unwrap_or_default();
-        for key in ["a", "b"] {
-            if let Some(f) = v.get(key) {
-                o.insert(key.into(), figures(f));
+    let compact = |row: &Value| -> Value {
+        let mut o = row.as_object().cloned().unwrap_or_default();
+        if detail != Detail::Full {
+            for key in ["a", "b", "difference"] {
+                if let Some(f) = row.get(key) {
+                    o.insert(key.into(), figures(f));
+                }
+            }
+            for key in ["a_rendered", "b_rendered"] {
+                if let Some(r) = row.get(key) {
+                    o.insert(key.into(), rendered(r));
+                }
+            }
+            if o.get("png").is_some_and(Value::is_null) {
+                o.remove("png");
             }
         }
-        if let Some(d) = v.get("difference") {
-            o.insert("difference".into(), figures(d));
+        if let Some(d) = row.get("difference") {
+            o.insert("matched".into(), matched(d));
         }
-        o
+        Value::Object(o)
     };
-    if let Some(d) = v.get("difference") {
-        out.insert("matched".into(), matched(d));
+    let mut out = compact(v);
+    if let (Some(ps), Some(o)) = (
+        v.get("points").and_then(Value::as_array),
+        out.as_object_mut(),
+    ) {
+        o.insert("points".into(), ps.iter().map(compact).collect());
     }
     if detail == Detail::Full {
-        Value::Object(out)
+        out
     } else {
-        round(&Value::Object(out), 2)
+        round(&out, 2)
     }
 }
 
@@ -745,25 +796,115 @@ fn measured(t: &Value, bands: bool) -> Value {
     round(&Value::Object(out), 2)
 }
 
-/// `MIX_MEASURE`, compact: one flat row a track, bands only when asked.
+/// The columns of `MIX_MEASURE`'s table, in order: those any row has.
+const MEASURE_COLUMNS: &[&str] = &[
+    "path",
+    "lufs",
+    "short_max",
+    "true_peak",
+    "crest",
+    "width",
+    "share_db",
+    "raw_lufs",
+    "signal_gain_db",
+    "latency",
+];
+
+/// What `MIX_MEASURE` says of itself, kept above its rows.
+const MEASURE_HEAD: &[&str] = &[
+    "from",
+    "to",
+    "post_fader",
+    "latency",
+    "answered",
+    "tracks_rendered",
+    "tracks_replayed",
+    "realtime_factor",
+    "cache_mb",
+    "ms",
+];
+
+/// A row's path as the table writes it: folders end in `/`, the master
+/// is `MASTER`.
+fn table_path(r: &Value) -> String {
+    match text(r, "kind") {
+        "folder" => format!("{}/", text(r, "path").trim_end_matches('/')),
+        "master" => "MASTER".to_owned(),
+        _ => text(r, "path").to_owned(),
+    }
+}
+
+/// `MIX_MEASURE`, compact.
+///
+/// [`Detail::Summary`] (the default) is a table — `columns` and one
+/// `rows` entry a track, numbers to 0.1 — of the figures a balance is
+/// read from, with how it was rendered above it: 66 tracks in a few kB.
+/// [`Detail::Params`] is one flat object a track with every number;
+/// `bands` adds each track's bands to either.
 #[must_use]
 pub fn measure(v: &Value, detail: Detail, bands: bool) -> Value {
     if detail == Detail::Full {
         return v.clone();
     }
-    let mut out = v.as_object().cloned().unwrap_or_default();
-    let tracks: Vec<Value> = v
+    let flat: Vec<Value> = v
         .get("tracks")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .map(|t| measured(t, bands))
         .collect();
-    out.insert("tracks".into(), Value::Array(tracks));
-    if !bands {
-        out.remove("bands_hz");
+    if detail == Detail::Params {
+        let mut out = v.as_object().cloned().unwrap_or_default();
+        out.insert("tracks".into(), Value::Array(flat));
+        if !bands {
+            out.remove("bands_hz");
+        }
+        return round(&Value::Object(out), 2);
     }
-    round(&Value::Object(out), 2)
+    let mut columns: Vec<&str> = MEASURE_COLUMNS
+        .iter()
+        .copied()
+        .filter(|c| *c == "path" || flat.iter().any(|r| r.get(*c).is_some()))
+        .collect();
+    if bands {
+        columns.push("bands");
+    }
+    let rows: Vec<Value> = flat
+        .iter()
+        .map(|r| {
+            Value::Array(
+                columns
+                    .iter()
+                    .map(|c| match *c {
+                        "path" => json!(table_path(r)),
+                        c => round(r.get(c).unwrap_or(&Value::Null), 1),
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    let mut out = Map::new();
+    for key in MEASURE_HEAD {
+        if let Some(x) = v.get(*key).filter(|x| !x.is_null()) {
+            out.insert((*key).into(), round(x, 2));
+        }
+    }
+    if let Some(f) = v
+        .get("plugin_failures")
+        .filter(|f| f.as_array().is_some_and(|a| !a.is_empty()))
+    {
+        out.insert("plugin_failures".into(), f.clone());
+    }
+    if bands && let Some(b) = v.get("bands_hz") {
+        out.insert("bands_hz".into(), round(b, 0));
+    }
+    out.insert("columns".into(), json!(columns));
+    out.insert("rows".into(), Value::Array(rows));
+    out.insert(
+        "note".into(),
+        json!("a row a track (folders end in `/`); `detail: \"params\"` for every number, `full` for the raw answer"),
+    );
+    Value::Object(out)
 }
 
 /// A balance read off `MIX_MEASURE`: each track's loudness against
@@ -1072,8 +1213,8 @@ mod tests {
     }
 
     #[test]
-    fn a_measure_is_one_flat_row_a_track() {
-        let m = measure(&measured_mix(), Detail::Summary, false);
+    fn a_measure_with_params_is_one_flat_row_a_track() {
+        let m = measure(&measured_mix(), Detail::Params, false);
         assert_eq!(
             m["tracks"][0],
             json!({"path": "Drums/Kick", "kind": "folder", "parent": "Drums", "lufs": -18.0,
@@ -1081,6 +1222,99 @@ mod tests {
         );
         assert_eq!(m["tracks"][2]["latency"], json!(64));
         assert!(m.get("bands_hz").is_none());
+    }
+
+    #[test]
+    fn a_measure_is_a_table_of_the_key_figures() {
+        let mut v = measured_mix();
+        v["answered"] = json!("partly");
+        v["tracks_rendered"] = json!(1);
+        v["tracks_replayed"] = json!(2);
+        v["realtime_factor"] = json!(3.456);
+        v["plugin_failures"] = json!([]);
+        v["copy_ms"] = json!(12.0);
+        let m = measure(&v, Detail::Summary, false);
+        assert_eq!(
+            m["columns"],
+            json!([
+                "path",
+                "lufs",
+                "short_max",
+                "true_peak",
+                "share_db",
+                "latency"
+            ])
+        );
+        assert_eq!(
+            m["rows"][0],
+            json!(["Drums/Kick/", -18.0, -16.0, -1.0, -3.0, null])
+        );
+        assert_eq!(m["rows"][2], json!(["Bass", -16.0, -14.0, -3.0, null, 64]));
+        assert_eq!(m["answered"], json!("partly"));
+        assert_eq!(m["realtime_factor"], json!(3.46));
+        assert!(m.get("plugin_failures").is_none() && m.get("copy_ms").is_none());
+        assert!(m.get("bands_hz").is_none());
+        let b = measure(&v, Detail::Summary, true);
+        assert_eq!(b["rows"][0][6], json!([-30.0]));
+        assert_eq!(b["bands_hz"], json!([32.0]));
+    }
+
+    #[test]
+    fn a_measure_of_66_tracks_stays_small() {
+        let tracks: Vec<Value> = (0..66)
+            .map(|i| json!({"path": format!("Drums/Kick/T{i}"), "kind": "track", "parent": "Drums/Kick", "latency": 0,
+                "numbers": {"lufs": -18.123_456, "short_max": -16.2, "true_peak": -1.1, "peak": -1.3, "rms": -20.0,
+                    "crest": 14.0, "correlation": 0.9, "width": 0.1, "balance": 0.0, "bands": vec![-30.0; 31]},
+                "share_db": -3.0}))
+            .collect();
+        let v = json!({"from": 0.0, "to": 10.0, "tracks": tracks, "bands_hz": vec![100.0; 31]});
+        let small = measure(&v, Detail::Summary, false).to_string().len();
+        let full = v.to_string().len();
+        assert!(small < 6_000 && small * 5 < full, "{small} vs {full}");
+    }
+
+    #[test]
+    fn many_points_are_each_compact() {
+        let v = json!({"from": 1.0, "to": 2.0, "bands_hz": [99.9], "rendered": {"tracks": ["a"], "replayed": ["b", "c"]},
+            "points": [
+                {"track": "Kick", "at": "post-fader", "png": null, "figures": {"lufs": -20.123, "short_term": [1.0]},
+                 "dynamics": [{"fx": "#1 Signal", "gr": [1.0], "max_gr_db": -3.0, "blocks": [{"block": "tone.comp"}]}]},
+                {"track": "Snare", "at": "pre-fx", "figures": {"lufs": -22.0, "short_term": [1.0]}, "dynamics": []}]});
+        let s = listen(&v, Detail::Summary);
+        assert_eq!(s["points"][0]["figures"], json!({"lufs": -20.12}));
+        assert!(s["points"][0].get("png").is_none());
+        assert_eq!(
+            s["points"][0]["dynamics"][0],
+            json!({"fx": "#1 Signal", "max_gr_db": -3.0, "blocks": [{"block": "tone.comp"}]})
+        );
+        assert_eq!(s["points"][1]["track"], json!("Snare"));
+        assert_eq!(s["rendered"]["replayed"], json!(2));
+        assert_eq!(s["bands_hz"], json!([100.0]));
+    }
+
+    #[test]
+    fn an_ab_of_many_points_is_matched_point_by_point() {
+        let v = json!({"points": [
+            {"track": "Kick", "a": {"lufs": -20.0}, "b": {"lufs": -18.0}, "difference": {"lufs": 2.0, "peak": 3.0}},
+            {"track": "Snare", "a": {"lufs": -20.0}, "b": {"lufs": -20.0}, "difference": {"lufs": 0.0, "peak": -1.0}}],
+            "a_rendered": {"tracks": ["x"], "replayed": []}});
+        let s = listen_ab(&v, Detail::Summary);
+        assert_eq!(s["points"][0]["matched"]["peak"], json!(1.0));
+        assert_eq!(s["points"][1]["matched"]["peak"], json!(-1.0));
+        assert_eq!(s["a_rendered"]["tracks"], json!(1));
+        assert!(s.get("matched").is_none());
+    }
+
+    #[test]
+    fn a_listen_block_is_compact() {
+        let v = json!({"track": "Kick", "block": "tone.comp", "pre": {"figures": {"lufs": -20.0, "short_term": [1.0]}, "png": null},
+            "post": {"figures": {"lufs": -21.0, "short_term": [1.0]}, "dynamics": [{"gr": [1.0], "max_gr_db": -2.0}]},
+            "difference": {"lufs": -1.0, "short_term": [0.0]}, "rendered": {"tracks": [], "replayed": ["a"]}});
+        let s = listen_block(&v, Detail::Summary);
+        assert_eq!(s["pre"], json!({"figures": {"lufs": -20.0}}));
+        assert_eq!(s["post"]["dynamics"], json!([{"max_gr_db": -2.0}]));
+        assert_eq!(s["difference"], json!({"lufs": -1.0}));
+        assert_eq!(s["rendered"]["replayed"], json!(1));
     }
 
     #[test]

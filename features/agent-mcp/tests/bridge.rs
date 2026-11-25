@@ -71,6 +71,18 @@ fn answer(method: &str, params: &Value) -> Value {
         ("run", "SIGNAL_CHAIN") => {
             json!({"result": {"track": "Drums/Kick/Sum/In", "chain": signal_chain()}})
         }
+        // LISTEN_BLOCK for the gate only: the comp stands for a Studio
+        // from before it (block_measure then listens twice).
+        ("run", "LISTEN_BLOCK") if args["block"] == "tone.gate" => {
+            json!({"result": {"track": "Drums/Kick/Sum/In", "block": "tone.gate", "from": 73.5, "to": 85.5,
+                "pre": {"track": "Drums/Kick/Sum/In", "at": "block:tone.gate:pre", "png": null,
+                        "figures": {"lufs": -20.0, "crest": 18.0, "peak": -1.0, "short_term": [-20.0]}, "dynamics": []},
+                "post": {"track": "Drums/Kick/Sum/In", "at": "block:tone.gate:post", "png": null,
+                         "figures": {"lufs": -23.0, "crest": 20.0, "peak": -1.0, "short_term": [-23.0]},
+                         "dynamics": [{"fx": "#1 Signal Dev", "gr": [0.0], "max_gr_db": -30.0, "blocks": null, "blocks_why": "replayed"}]},
+                "difference": {"lufs": -3.0}, "bands_hz": [], "rendered": {"answered": "replayed", "tracks": [], "replayed": ["a", "b"]},
+                "ms": 12.0}})
+        }
         ("run", "LISTEN") => {
             let at = args["at"].as_str().unwrap_or_default();
             let (lufs, crest) = if at.ends_with(":pre") {
@@ -402,6 +414,16 @@ fn a_blocks_effect_is_one_call() {
     assert!(!error, "{v}");
     assert_eq!(v["gain_db"], json!(-2.0));
     assert_eq!(v["crest_db"], json!(-6.0));
+    let (error, g) = s.call(
+        "block_measure",
+        json!({"track": "Kick/Sum/In", "block": "tone.gate", "from": "CH 1", "to": "CH 1 end"}),
+    );
+    assert!(!error, "{g}");
+    assert_eq!(g["gain_db"], json!(-3.0));
+    assert_eq!(g["crest_db"], json!(2.0));
+    assert_eq!(g["from"], json!(73.5));
+    assert_eq!(g["rendered"]["replayed"], json!(2));
+    assert_eq!(g["dynamics"][0]["max_gr_db"], json!(-30.0));
     let (_, b) = s.call(
         "signal_block",
         json!({"track": "Kick/Sum/In", "block": "comp"}),

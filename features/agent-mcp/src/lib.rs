@@ -22,6 +22,7 @@
 
 pub mod jobs;
 pub mod page;
+pub mod recall;
 pub mod script;
 pub mod server;
 pub mod shape;
