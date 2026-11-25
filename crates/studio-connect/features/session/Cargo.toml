@@ -149,10 +149,6 @@ gloo-timers = { workspace = true, optional = true }
 futures = { workspace = true }
 web-sys = { workspace = true, features = ["Window", "Performance"] }
 
-[[bin]]
-name = "session"
-path = "src/main.rs"
-
 [[example]]
 name = "tts_smoke"
 required-features = ["tts"]

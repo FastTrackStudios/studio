@@ -42,6 +42,57 @@ Plan: `fts-home/docs/monorepo-plan.md`. Scripts and logs:
 `fts-rhythm` binaries, devenv state and machine-specific lockfiles. The four
 patches in `fasttrackstudio/handoff/patches/` are not applied yet.
 
+## First `cargo check --workspace` (2026-11-25)
+
+5 min 49 s with kache, 2,247 crates compiled; **9 crates, 119 errors** (log:
+`monorepo-import/check.jsonl`). Crates downstream of these were skipped, so
+more may follow.
+
+| Crate | Errors | Cause |
+|---|---|---|
+| `cbx` (git dep, chatterbox TTS, via studio-session's `tts`) | 52 | written against `ort` rc.10; the workspace is on rc.15 (rhythm-hits needs it; `ort` links natively, so only one version can exist) |
+| `keybinds` | 44 | `include_str!` paths into the REAPER adapter's keymaps, broken by the move |
+| `trigger`, `family-clap`, `effects` | 15 | nice-plug API drift between the plugins and signal branches |
+| `dynamic-template` | 4 | `monarchy::Group` field renamed in the in-tree music-convention |
+| `rhythm` (extension) | 2 | `rhythm_editing` gained `crossfade` / `drawn_from` |
+| `frame-mcp`, `frame-view` | 2 | an include path; an architect API change |
+
+## The old Session app goes
+
+"Session" is now only the file format (`<Title>.session`, a Loro document)
+that every part of Studio reads and writes. It lives in `studio-core/session`.
+**Everything left from the old Session app is removed:**
+
+- **`crates/studio-connect/features/session`** (package `studio-session`, key
+  `session`), the old app's crate, is dissolved. 16 crates depend on it
+  (the engine, the guide plugin, `apps/studio`, panels, views) through about
+  450 `session::…` references. Its stub binary and two tools are already
+  deleted. Move each module to where it belongs, then delete the crate:
+
+  | Module(s) | Goes to |
+  |---|---|
+  | `sync`, `proto`, `keyflow` | the format: `studio-core/session` (`session-sync`, `session`, `keyflow-session`) |
+  | `modes`, `mode_phases`, `playback`, `routing`, `track_manager`, `comping`, `count_in`, `key*`, `guitar_grow`, `reference`, `review`, `cache`, `daw_module`, `event_bus`, `rpc_services`, `host`/`services` | the engine: `studio-engine/engine` |
+  | `guide` | `studio-engine` (with the guide plugin) |
+  | `library`, `setlist`, `song`, `vault_sync`, `project_sync`, `load_selection`, `open_link` | `studio-connect/features/library` (or the format, where it is document code) |
+  | `ui`, `lyrics`, `color`, `strip_width` | `studio-connect` (kit or views) |
+  | `tts` (`cbx`) | decide: keep (move cbx to `ort` rc.15) or drop |
+
+- **Names from the old app** go too. Rename to what each is now:
+  - `session-engine` → `studio-engine`
+  - `session-runtime` → `engine-runtime`
+  - `session-host` (package `session-desktop`) → `engine-host`, then the engine binary in `apps/studio`
+  - `session-engine-client` → `engine-client`
+  - the REAPER `session-extension` → decide: keep as `reaper-bridge`, or drop with REAPER hosting
+
+  Studio's crate names move with them.
+- **Overlapping format crates** in `studio-core/session` merge down to the
+  format and its file I/O: `session` (the primitive), `session-format`
+  (`Song.session`, Loro + Turso), `song-file` (`<Title>.session` on disk),
+  `song` (stored Song/Arrangement) and `session-sync` (live document). Keyflow's
+  and Ignition's lanes stay as `keyflow-session` / `ignition-session`, or fold
+  into their crates as `session` modules.
+
 ## The fix-up work
 
 Work in this worktree's branch, or in worktrees branched from `monorepo` under
