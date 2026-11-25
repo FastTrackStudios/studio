@@ -104,7 +104,7 @@ static ALIGN: ActionMeta = meta(
     "LISTEN_ALIGN",
     "listen_align",
     "Align a piece's mics",
-    "Find how each mic of a drum piece (`piece`, as LISTEN_HITS: its mics read where they reach the sum, its hits from its hit markers between `from` and `to`) should be moved (an offset within `max_ms`, 3 unless given), turned over (`invert: false` forbids it) and phase-shaped by all-pass sections (`allpass: false` forbids it) — the Signal `align` block's: up to two RBJ second-order all-pass biquads `{hz, q}` (30–400 Hz, Q 0.5–2) and one first-order `{hz}`, flat in magnitude and without latency, chosen one at a time while one gains more than 0.1 dB — so that the piece's sum is fullest — scored on the sum, over the hits only, not on how alike two mics are: `level` (the sum's power), `low` (below 150 Hz) and `attack` (its transients over the first 10 ms: the power of its first difference), each in dB against the sum as it is, added into `score`; within 0.1 dB the smaller move wins. Mics are taken in turn (the most of the sum first, the reference mic left where it is), each against the sum with the ones before it set. Answers per mic: `now` (its offset and polarity against the reference, what it adds to the sum), `candidates` (the best offsets and polarities, and the best rotation, each `{delay_samples, delay_ms, invert, allpass: [{hz, q}] (a first-order section `{hz, order: 1}`), gains: {level, low, attack, score}}`, ready for the align block), `chosen` (the best, when it gains more than 0.2 dB; else none); and `predicted` (the whole sum's gains with every chosen fix). `apply: true` makes the fixes, confirms them and keeps them only if the sum is better: on a track whose Signal instance has the `align` block, through it (added in its first phase if missing; `delay_samples`, `invert`, `allpass.<n>.hz`, `allpass.<n>.q`, `allpass.first.hz` — a parameter it does not have is listed in `not_applied`), else only a polarity, through the track's polarity (the rest listed in `not_applied`); then the hits are heard again and `measured` says what the sum gained; worse on `score`, and the mix is put back as it was (as LISTEN_AB puts it back). A PNG of the sum's averaged hit before and after (and each fixed mic) goes under /tmp/listen/. `exact` as LISTEN.",
+    "Find how each mic of a drum piece (`piece`, as LISTEN_HITS: its mics read where they reach the sum, its hits from its hit markers between `from` and `to`) should be moved (an offset within `max_ms`, 3 unless given), turned over (`invert: false` forbids it) and phase-shaped by all-pass sections (`allpass: false` forbids it) — the Signal `align` block's: up to two RBJ second-order all-pass biquads `{hz, q}` (30–400 Hz, Q 0.5–2) and one first-order `{hz}`, flat in magnitude and without latency, chosen one at a time while one gains more than 0.1 dB — so that the piece's sum is fullest — scored on the sum, over the hits only, not on how alike two mics are: `level` (the sum's power), `low` (below 150 Hz) and `attack` (its transients over the first 10 ms: the power of its first difference), each in dB against the sum as it is, added into `score`; within 0.1 dB the smaller move wins. Mics are taken in turn (the most of the sum first, the reference mic left where it is), each against the sum with the ones before it set. Answers per mic: `now` (its offset and polarity against the reference, what it adds to the sum), `candidates` (the best offsets and polarities, and the best rotation, each `{delay_samples, delay_ms, invert, allpass: [{hz, q}] (a first-order section `{hz, order: 1}`), gains: {level, low, attack, score}}`, ready for the align block), `chosen` (the best, when it gains more than 0.2 dB; else none); and `predicted` (the whole sum's gains with every chosen fix). `apply: true` makes the fixes, confirms them and keeps them only if the sum is better: on a track whose Signal instance has the `align` block, through it (SIGNAL_RUN → SIGNAL_ANALYZE {block, values: {delay_samples, invert, allpass: [{hz, q}], first_order: {hz}}}, the block added first with SIGNAL_BLOCK_ADD {phase: rescue, kind: align, first: true} when the instance has none), else only a polarity, through the track's polarity (the rest listed in `not_applied`); then the hits are heard again and `measured` says what the sum gained; worse on `score`, and the mix is put back as it was (as LISTEN_AB puts it back). A PNG of the sum's averaged hit before and after (and each fixed mic) goes under /tmp/listen/. `exact` as LISTEN.",
     "Mix",
     "",
 );
@@ -610,7 +610,7 @@ pub struct ListenArgs<'a> {
 /// whenever it reaches what they key: the kit's triggers (each one's
 /// Signal instance publishes its piece's hits to the session, and the
 /// piece's gates follow them), each with its piece's mics.
-fn keyed(daw: &Standalone, project: &ProjectContext) -> Vec<render::Keyed> {
+pub(crate) fn keyed(daw: &Standalone, project: &ProjectContext) -> Vec<render::Keyed> {
     let (kit, _) = crate::hits::kit(daw, project);
     kit.into_iter()
         .map(|p| render::Keyed {
@@ -1290,9 +1290,37 @@ fn search(
     Searched { candidates, chosen }
 }
 
-/// Set `fix` on `track` (guid): through its Signal instance's `align`
-/// block when it has one (added if missing), else only its polarity
-/// through the track's. What could not be set, in words.
+/// A fix as the `align` block's `SIGNAL_ANALYZE {values}` takes it:
+/// `delay_samples`, `invert`, `allpass: [{hz, q}]` (its second-order
+/// sections, at most two; one left out is off) and `first_order: {hz}` (0:
+/// off).
+#[must_use]
+pub fn align_values(fix: &align::Fix) -> Value {
+    let second: Vec<Value> = fix
+        .allpass
+        .iter()
+        .filter_map(|s| match s {
+            align::Section::Second { hz, q } => Some(json!({ "hz": hz, "q": q })),
+            align::Section::First { .. } => None,
+        })
+        .collect();
+    let first = fix.allpass.iter().find_map(|s| match s {
+        align::Section::First { hz } => Some(*hz),
+        align::Section::Second { .. } => None,
+    });
+    json!({
+        "delay_samples": fix.delay,
+        "invert": fix.invert,
+        "allpass": second,
+        "first_order": { "hz": first.unwrap_or(0.0) },
+    })
+}
+
+/// Set `fix` on `track` (guid) through its Signal instance's `align` block
+/// (`SIGNAL_ANALYZE {block, values}`), adding the block at the head of its
+/// first phase when the instance has none. A track without a Signal
+/// instance that has the block gets only its polarity, through the track.
+/// What could not be set, in words.
 fn set_fix(
     daw: &Standalone,
     project: &ProjectContext,
@@ -1304,39 +1332,26 @@ fn set_fix(
             .map_err(|e| format!("{id}: {e}"))
             .map(|b| serde_json::from_slice(&b).unwrap_or(Value::Null))
     };
-    let align_block = |chain: &Value| -> Option<Value> {
+    let align_block = || -> Option<String> {
+        let chain = crate::clap_host::signal::chain(daw, project, track, None).ok()?;
         chain["chain"]["phases"]
             .as_array()?
             .iter()
             .filter_map(|p| p["blocks"].as_array())
             .flatten()
             .find(|b| b["kind"] == "align")
-            .cloned()
+            .and_then(|b| b["id"].as_str().map(str::to_owned))
     };
-    let chain = crate::clap_host::signal::chain(daw, project, track, None).ok();
-    let mut block = chain.as_ref().and_then(align_block);
-    if block.is_none()
-        && let Some(c) = &chain
-    {
-        let phase = c["chain"]["phases"]
-            .as_array()
-            .and_then(|p| {
-                p.iter()
-                    .map(|p| p["id"].as_str())
-                    .find(|id| *id != Some("source"))
-                    .flatten()
-            })
-            .unwrap_or("rescue")
-            .to_owned();
+    let mut why_not = String::from("no Signal instance on the track");
+    let mut block = align_block();
+    if block.is_none() && crate::clap_host::signal::chain(daw, project, track, None).is_ok() {
         let added = run(
             "SIGNAL_RUN",
-            json!({ "track": track, "action": "SIGNAL_BLOCK_ADD", "args": { "phase": phase, "kind": "align" } }),
+            json!({ "track": track, "action": "SIGNAL_BLOCK_ADD", "args": { "phase": "rescue", "kind": "align", "first": true } }),
         );
-        if added.is_ok() {
-            block = crate::clap_host::signal::chain(daw, project, track, None)
-                .ok()
-                .as_ref()
-                .and_then(align_block);
+        match added {
+            Ok(_) => block = align_block(),
+            Err(e) => why_not = format!("its Signal would not add an align block: {e}"),
         }
     }
     let Some(block) = block else {
@@ -1350,72 +1365,25 @@ fn set_fix(
             run("TRACK_SET", json!({ "track": track, "phase": !phase }))?;
         }
         if fix.delay != 0 {
-            left.push(format!(
-                "delay {} samples (no Signal align block on the track)",
-                fix.delay
-            ));
+            left.push(format!("delay {} samples ({why_not})", fix.delay));
         }
         if !fix.allpass.is_empty() {
             left.push(format!(
-                "{} all-pass section(s) (no Signal align block on the track)",
+                "{} all-pass section(s) ({why_not})",
                 fix.allpass.len()
             ));
         }
         return Ok(left);
     };
-    // Each parameter by its CLAP id, normalized over its range.
-    let value = |id: &str, v: f64| -> Option<(String, String)> {
-        let p = block["params"].as_array()?.iter().find(|p| p["id"] == id)?;
-        let clap = p["clap_id"].as_str()?;
-        let (lo, hi) = (p["min"].as_f64()?, p["max"].as_f64()?);
-        let n = if hi > lo {
-            ((v - lo) / (hi - lo)).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        Some((format!("@{clap}"), format!("={n:.6}")))
-    };
-    // The sections, as the block names them (its second-order ones
-    // `allpass.<n>.hz`/`.q`, its first-order one `allpass.first.hz`; a
-    // section's `.on` switch where it has one). What the block does not
-    // name is said, not guessed.
-    let mut wanted: Vec<(String, f64)> = vec![
-        ("delay_samples".into(), fix.delay as f64),
-        ("invert".into(), if fix.invert { 1.0 } else { 0.0 }),
-    ];
-    let mut second = 0;
-    for s in &fix.allpass {
-        match s {
-            align::Section::Second { hz, q } => {
-                second += 1;
-                wanted.push((format!("allpass.{second}.on"), 1.0));
-                wanted.push((format!("allpass.{second}.hz"), *hz));
-                wanted.push((format!("allpass.{second}.q"), *q));
-            }
-            align::Section::First { hz } => {
-                wanted.push(("allpass.first.on".into(), 1.0));
-                wanted.push(("allpass.first.hz".into(), *hz));
-            }
-        }
-    }
-    let mut left = Vec::new();
-    let mut set = serde_json::Map::new();
-    for (id, v) in &wanted {
-        match value(id, *v) {
-            Some((k, n)) => {
-                set.insert(k, Value::String(n));
-            }
-            None if id.ends_with(".on") => {}
-            None => left.push(format!(
-                "{id} = {v} (the align block has no such parameter)"
-            )),
-        }
-    }
     run(
-        "FX_SET",
-        json!({ "track": track, "fx": "Signal", "set": set }),
+        "SIGNAL_RUN",
+        json!({
+            "track": track,
+            "action": "SIGNAL_ANALYZE",
+            "args": { "block": block, "values": align_values(fix), "source_revision": "LISTEN_ALIGN" },
+        }),
     )?;
-    Ok(left)
+    Ok(Vec::new())
 }
 
 /// `LISTEN_ALIGN`.

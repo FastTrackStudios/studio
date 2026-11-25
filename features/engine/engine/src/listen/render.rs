@@ -18,10 +18,13 @@
 //!   plugins' states, and the keys of everything feeding it. A listen
 //!   whose points all have a recording under their current key, covering
 //!   its span, renders nothing. Otherwise a track whose key is unchanged
-//!   is played back in place (`Offline::fed`) — but only where no Signal
-//!   instance must run: Signal's instances in one session hear each other
-//!   (a folder's chain follows its children's ports), so once one of them
-//!   renders, every Signal track the listen reaches renders with it.
+//!   is played back in place (`Offline::fed`). A Signal instance's output
+//!   depends only on its own input and the hits of the pieces its keys
+//!   follow (`key.from` in its `signal.chain/1`), so a rendered Signal
+//!   track renders with the tracks it keys from (they publish those hits
+//!   as they run) and nothing else of its session; a track's key carries
+//!   its key sources' keys. When what a track keys from can't be read,
+//!   everything the listen reaches renders.
 //! - **The plugins' copies**, each with its live instance's state
 //!   fingerprint: a copy whose plugin is unchanged is reused, reset (CLAP's
 //!   `reset`: its buffers, voices and envelopes cleared, still activated),
@@ -451,11 +454,11 @@ pub fn reach_keyed(routes: &Routes, roots: &[String], keyed: &[Keyed]) -> HashSe
 fn keys(
     routes: &Routes,
     reached: &HashSet<String>,
-    own: &HashMap<String, u64>,
+    (own, sources): (&HashMap<String, u64>, &Sources),
 ) -> HashMap<String, u64> {
     fn key_of(
         g: &str,
-        routes: &Routes,
+        (routes, sources): (&Routes, &Sources),
         own: &HashMap<String, u64>,
         done: &mut HashMap<String, u64>,
         on_path: &mut HashSet<String>,
@@ -467,7 +470,12 @@ fn keys(
         own.get(g).copied().unwrap_or(0).hash(&mut h);
         if on_path.insert(g.to_owned()) {
             for f in routes.feeders(g) {
-                key_of(f, routes, own, done, on_path).hash(&mut h);
+                key_of(f, (routes, sources), own, done, on_path).hash(&mut h);
+            }
+            // What its blocks key from: a change there changes what it
+            // plays, though none of its audio comes this way.
+            for f in sources.get(g).into_iter().flatten().flatten() {
+                key_of(f, (routes, sources), own, done, on_path).hash(&mut h);
             }
             on_path.remove(g);
         }
@@ -478,9 +486,65 @@ fn keys(
     let mut done = HashMap::new();
     let mut on_path = HashSet::new();
     for g in reached {
-        key_of(g, routes, own, &mut done, &mut on_path);
+        key_of(g, (routes, sources), own, &mut done, &mut on_path);
     }
     done
+}
+
+/// Per track with a Signal instance, the tracks its blocks key from; a
+/// track missing has none, `None` is unknown (see [`key_sources`]).
+type Sources = HashMap<String, Option<Vec<String>>>;
+
+/// What each Signal track's blocks key from: every `key.from` of its
+/// instances' `signal.chain/1` (a port, which is the track's path), as
+/// track GUIDs. `None` for a track whose chain can't be read, or names a
+/// port no track has: its dependencies are unknown.
+fn key_sources(
+    daw: &Standalone,
+    live: &HashMap<String, Vec<Instance>>,
+    all: &[daw_proto::Track],
+) -> Sources {
+    let paths = crate::mix_sends::paths(all);
+    let by_path: HashMap<&str, &str> = paths
+        .iter()
+        .map(|(g, p)| (p.as_str(), g.as_str()))
+        .collect();
+    let from_of = |i: &Instance| -> Option<Vec<String>> {
+        let json = daw
+            .with_plugin_instance(&i.guid, |p| {
+                p.signal()
+                    .map(|s| crate::clap_host::plugin_call(|| s.chain()))
+            })
+            .flatten()?
+            .ok()?;
+        let chain: serde_json::Value = serde_json::from_str(&json).ok()?;
+        chain["phases"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|p| p["blocks"].as_array())
+            .flatten()
+            .filter_map(|b| b["key"]["from"].as_str())
+            .map(|port| by_path.get(port).map(|g| (*g).to_owned()))
+            .collect()
+    };
+    live.iter()
+        .filter_map(|(track, fx)| {
+            let signal: Vec<&Instance> = fx
+                .iter()
+                .filter(|i| crate::signal_kit::is_signal_bundle(&i.name))
+                .collect();
+            if signal.is_empty() {
+                return None;
+            }
+            let from: Option<Vec<String>> = signal
+                .into_iter()
+                .map(from_of)
+                .collect::<Option<Vec<Vec<String>>>>()
+                .map(|v| v.concat());
+            Some((track.clone(), from))
+        })
+        .collect()
 }
 
 /// A fingerprint of a plugin's state.
@@ -707,13 +771,19 @@ struct Plan {
 
 /// What a listen of `points` reaching `everything` renders, given which
 /// points have a recording (`recorded`), which tracks' output does
-/// (`replayable`), and which tracks carry a Signal instance (`coupled`).
+/// (`replayable`), and what each track's plugins key from (`sources`:
+/// the tracks whose Signal instances publish the hits its blocks follow;
+/// `None` when that is unknown, and everything renders).
+///
+/// A rendered track's key sources render with it, played back never: what
+/// is needed of them is the hits they publish as they run, not their
+/// audio. What else of the session runs makes no difference to it.
 fn plan(
     routes: &Routes,
     (points, everything): (&[ProbeAt], &HashSet<String>),
     recorded: impl Fn(&ProbeAt) -> bool,
     replayable: impl Fn(&str) -> bool,
-    coupled: impl Fn(&str) -> bool,
+    sources: impl Fn(&str) -> Option<Vec<String>>,
 ) -> Plan {
     if points.iter().all(&recorded) {
         return Plan {
@@ -729,15 +799,43 @@ fn plan(
         .filter(|p| p.at != Probe::PostFader)
         .map(|p| p.track.as_str())
         .collect();
+    let everything_rendered = || Plan {
+        answered: Answered::Rendered,
+        rendered: everything.clone(),
+        fed: HashSet::new(),
+    };
     let roots: Vec<String> = points.iter().map(|p| p.track.clone()).collect();
-    let (reached, fed) = reach(routes, roots, |g| !inside.contains(g) && replayable(g));
-    let rendered: HashSet<String> = reached.difference(&fed).cloned().collect();
-    if fed.is_empty() || rendered.iter().any(|g| coupled(g)) {
-        return Plan {
-            answered: Answered::Rendered,
-            rendered: everything.clone(),
-            fed: HashSet::new(),
+    let stop = |g: &str| !inside.contains(g) && replayable(g);
+    let (reached, mut fed) = reach(routes, roots, stop);
+    let mut rendered: HashSet<String> = reached.difference(&fed).cloned().collect();
+    let mut todo: Vec<String> = rendered.iter().cloned().collect();
+    while let Some(g) = todo.pop() {
+        let Some(from) = sources(&g) else {
+            return everything_rendered();
         };
+        for s in from {
+            if rendered.contains(&s) {
+                continue;
+            }
+            if !everything.contains(&s) {
+                return everything_rendered();
+            }
+            fed.remove(&s);
+            rendered.insert(s.clone());
+            todo.push(s.clone());
+            // What feeds a source: played back where it can be.
+            let (more, stopped) = reach(routes, routes.feeders(&s).cloned(), stop);
+            for m in more.difference(&stopped) {
+                if rendered.insert(m.clone()) {
+                    fed.remove(m);
+                    todo.push(m.clone());
+                }
+            }
+            fed.extend(stopped.into_iter().filter(|m| !rendered.contains(m)));
+        }
+    }
+    if fed.is_empty() {
+        return everything_rendered();
     }
     Plan {
         answered: Answered::Partly,
@@ -777,8 +875,28 @@ pub fn render(
         sends_into(daw, project, &all),
     );
     let roots: Vec<String> = ask.points.iter().map(|p| p.track.clone()).collect();
-    let everything = reach_keyed(&routes, &roots, ask.keyed);
+    let mut everything = reach_keyed(&routes, &roots, ask.keyed);
     let mut live = instances(daw, song, &everything);
+    // What the reached Signal tracks key from runs too (it publishes the
+    // hits they follow), with what feeds it.
+    let mut sources = key_sources(daw, &live, &all);
+    loop {
+        let extra: Vec<String> = sources
+            .values()
+            .flatten()
+            .flatten()
+            .filter(|g| !everything.contains(*g))
+            .cloned()
+            .collect();
+        if extra.is_empty() {
+            break;
+        }
+        let (more, _) = reach(&routes, extra, |_| false);
+        let new: HashSet<String> = more.difference(&everything).cloned().collect();
+        live.extend(instances(daw, song, &new));
+        everything.extend(new);
+        sources = key_sources(daw, &live, &all);
+    }
     // The song as this render reads it: its solos and bypasses.
     let prints = ProjectRenderer::offline(
         daw,
@@ -791,17 +909,19 @@ pub fn render(
         },
     )
     .track_prints();
-    let keys = keys(&routes, &everything, &own_prints(prints, &live, ask.cuts));
+    let keys = keys(
+        &routes,
+        &everything,
+        (&own_prints(prints, &live, ask.cuts), &sources),
+    );
     let (start, from, to) = frames_of(ask.from, ask.to);
     let mut kept = kept()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let key = |g: &str| keys.get(g).copied();
-    let has_signal = |g: &str| {
-        live.get(g).is_some_and(|i| {
-            i.iter()
-                .any(|i| crate::signal_kit::is_signal_bundle(&i.name))
-        })
+    let sources_of = |g: &str| match sources.get(g) {
+        Some(known) => known.clone(),
+        None => Some(Vec::new()),
     };
     let planned = if ask.fresh {
         Plan {
@@ -831,7 +951,7 @@ pub fn render(
                         )
                         .is_some()
             },
-            has_signal,
+            sources_of,
         )
     };
     let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
@@ -925,6 +1045,7 @@ pub fn render(
         only: &only,
         fed: &fed_map,
     };
+    let chunk_count = spans.len();
     let outs: Vec<Result<ChunkOut, String>> = std::thread::scope(|s| {
         let running: Vec<_> = spans
             .iter()
@@ -932,7 +1053,8 @@ pub fn render(
             .enumerate()
             .map(|(k, (span, warm))| {
                 let (wanted, shared) = (wanted.clone(), &shared);
-                s.spawn(move || run_chunk(shared, (k, *span), wanted, warm))
+                let last = k + 1 == chunk_count;
+                s.spawn(move || run_chunk(shared, ((k, last), *span), wanted, warm))
             })
             .collect();
         running
@@ -944,20 +1066,20 @@ pub fn render(
             .collect()
     });
     let outs: Vec<ChunkOut> = outs.into_iter().collect::<Result<_, _>>()?;
-    // Each probe, lined up, from the preroll's start to `to`.
-    let lined: Vec<Vec<f32>> = (0..probes.len())
-        .map(|i| {
-            outs.iter()
-                .flat_map(|o| o.lined[i].iter().copied())
-                .collect()
-        })
+    // Each probe as rendered, from the preroll's start until it reached
+    // `to`, late by its latency.
+    let raw: Vec<Vec<f32>> = (0..probes.len())
+        .map(|i| outs.iter().flat_map(|o| o.raw[i].iter().copied()).collect())
         .collect();
+    let latencies: Vec<u32> = outs.first().map(|o| o.latencies.clone()).unwrap_or_default();
     let n = ask.points.len();
-    let signals: Vec<Vec<f32>> = lined[..n]
+    let signals: Vec<Vec<f32>> = raw[..n]
         .iter()
-        .map(|r| line_up(r, start, (from, to), 0))
+        .zip(&latencies)
+        .map(|(r, late)| line_up(r, start, (from, to), *late))
         .collect();
-    for (p, samples) in probes.iter().zip(lined) {
+    let covered = |r: &[f32]| start + (r.len() / 2) as u64;
+    for ((p, samples), late) in probes.iter().zip(raw).zip(&latencies) {
         if !planned.rendered.contains(&p.track) {
             continue;
         }
@@ -968,9 +1090,9 @@ pub fn render(
                 key,
                 exact: ask.exact || spans.len() == 1,
                 start,
-                end: to,
+                end: covered(&samples),
                 samples: samples.into(),
-                latency: 0,
+                latency: *late,
                 stamp: 0,
             },
         );
@@ -1033,8 +1155,10 @@ struct Shared<'a> {
 
 /// What one chunk heard.
 struct ChunkOut {
-    /// Each probe, lined up, over the chunk's kept frames.
-    lined: Vec<Vec<f32>>,
+    /// Each probe as it came out, late by its latency, over the chunk's
+    /// kept render frames (the first chunk's from its preroll's start, the
+    /// last's on until every probe has reached the span's end).
+    raw: Vec<Vec<f32>>,
     latencies: Vec<u32>,
     copied: u32,
     reused: u32,
@@ -1048,7 +1172,7 @@ struct ChunkOut {
 /// its own copies (`warm` its kept ones), in a Signal session of its own.
 fn run_chunk(
     c: &Shared<'_>,
-    (k, (first, keep, end)): (usize, (u64, u64, u64)),
+    ((k, last_chunk), (first, keep, end)): ((usize, bool), (u64, u64, u64)),
     wanted: Vec<Instance>,
     warm: &mut HashMap<String, Warm>,
 ) -> Result<ChunkOut, String> {
@@ -1079,10 +1203,17 @@ fn run_chunk(
     let raw = render_blocks(&renderer, (first, last), c.probes.len());
     let blocks_ms = blocks.elapsed().as_secs_f64() * 1e3;
     drop(renderer);
-    let lined = raw
+    // As rendered, not lined up: a recording played back later enters the
+    // delay compensation exactly as this track did, so what it feeds is as
+    // late (its plugins told the same song time) as in this render.
+    let (from, to) = (if k == 0 { first } else { keep }, if last_chunk { last } else { end });
+    let raw = raw
         .iter()
-        .zip(&latencies)
-        .map(|(r, late)| line_up(r, first, (keep, end), *late))
+        .map(|r| {
+            r.get(((from - first) * 2) as usize..((to - first) * 2) as usize)
+                .map(<[f32]>::to_vec)
+                .unwrap_or_default()
+        })
         .collect();
     for (guid, state, held) in ready.kept {
         if let Some(plugin) = ready.plugins.write().remove(&guid) {
@@ -1097,7 +1228,7 @@ fn run_chunk(
         }
     }
     Ok(ChunkOut {
-        lined,
+        raw,
         latencies,
         copied: ready.copied,
         reused: ready.reused,
@@ -1222,48 +1353,52 @@ mod tests {
     }
 
     #[test]
-    fn nothing_changed_is_replayed_and_a_signal_track_rendering_renders_them_all() {
+    fn nothing_changed_is_replayed_and_a_change_renders_what_it_reaches_and_its_keys() {
         let routes = kit();
         let everything = reach_keyed(&routes, &["kick".to_owned()], &[]);
+        let everything: HashSet<String> = everything.into_iter().chain(["trig".into()]).collect();
         let points = [at("kick", Probe::PostFader)];
-        let p = plan(
-            &routes,
-            (&points, &everything),
-            |_| true,
-            |_| true,
-            |_| true,
-        );
+        let no_keys = |_: &str| Some(Vec::new());
+        let p = plan(&routes, (&points, &everything), |_| true, |_| true, no_keys);
         assert_eq!(p.answered, Answered::Replayed);
-        // Kick changed, its feeders not: Kick alone renders, unless it
-        // carries Signal — then everything it reaches does.
+        // Kick changed, its feeders not: Kick alone renders.
         let p = plan(
             &routes,
             (&points, &everything),
             |_| false,
             |g| g != "kick",
-            |_| false,
+            no_keys,
         );
         assert_eq!(p.answered, Answered::Partly);
         assert_eq!(p.rendered, set(&["kick"]));
         assert_eq!(p.fed, set(&["sum", "sub"]));
+        // Sub changed, and its gate keys from Trig: Trig runs with it (its
+        // hits), played back never; Out, which sends into Sub, plays back.
+        let keys = |g: &str| Some(if g == "sub" { vec!["trig".to_owned()] } else { Vec::new() });
         let p = plan(
             &routes,
             (&points, &everything),
             |_| false,
-            |g| g != "kick",
-            |g| g == "kick",
+            |g| g != "kick" && g != "sub",
+            keys,
+        );
+        assert_eq!(p.answered, Answered::Partly);
+        assert_eq!(p.rendered, set(&["kick", "sub", "trig"]));
+        assert_eq!(p.fed, set(&["sum", "out"]));
+        // What Sub keys from unknown: everything renders.
+        let unknown = |g: &str| if g == "sub" { None } else { Some(Vec::new()) };
+        let p = plan(
+            &routes,
+            (&points, &everything),
+            |_| false,
+            |g| g != "kick" && g != "sub",
+            unknown,
         );
         assert_eq!(p.answered, Answered::Rendered);
         assert_eq!(p.rendered, everything);
         // A point inside Kick: Kick renders even with a recording of it.
         let inside = [at("kick", Probe::FxOut(0))];
-        let p = plan(
-            &routes,
-            (&inside, &everything),
-            |_| false,
-            |_| true,
-            |_| false,
-        );
+        let p = plan(&routes, (&inside, &everything), |_| false, |_| true, no_keys);
         assert_eq!(p.rendered, set(&["kick"]));
     }
 

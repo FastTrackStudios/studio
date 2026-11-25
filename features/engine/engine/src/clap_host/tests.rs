@@ -286,7 +286,7 @@ fn signal_dev_on_a_track_is_read_and_driven() {
     let daw = daw::standalone::Standalone::new();
     daw.set_plugin_load_options(daw::standalone::plugin::LoadOptions {
         actions: Some(Arc::new(StudioActions::default())),
-        ..Default::default()
+        ..daw::standalone::plugin::LoadOptions::default()
     });
     let ctx = crate::clap_fx::test_support::drum_song(&daw, "signal-ext");
     let track = crate::actions::resolve(&daw, &ctx, "Drums/Kick/Sum/In").expect("the track");

@@ -142,6 +142,8 @@ struct Kept {
 struct Cache {
     /// The plugin map's generation the clients are from.
     generation: u64,
+    /// The engine they are from (a process runs one; a test may run more).
+    engine: usize,
     by_fx: HashMap<String, Kept>,
     /// The song's Signal instances, as last found, and when.
     ports: Option<(u64, web_time::Instant, Vec<Port>)>,
@@ -155,9 +157,10 @@ fn with_cache<R>(f: impl FnOnce(&mut Cache) -> R) -> R {
 }
 
 /// The cache, its clients dropped when the plugin map moved on.
-fn current(cache: &mut Cache, generation: u64) {
-    if cache.generation != generation {
+fn current(cache: &mut Cache, (engine, generation): (usize, u64)) {
+    if cache.generation != generation || cache.engine != engine {
         cache.generation = generation;
+        cache.engine = engine;
         cache.by_fx.clear();
         cache.ports = None;
     }
@@ -167,7 +170,7 @@ fn current(cache: &mut Cache, generation: u64) {
 fn client_of(daw: &Standalone, fx_guid: &str) -> Option<SignalPluginClient> {
     let generation = daw.with_plugin_map(|m| m.generation());
     if let Some(kept) = with_cache(|c| {
-        current(c, generation);
+        current(c, (std::ptr::from_ref(daw).addr(), generation));
         c.by_fx.get(fx_guid).map(|k| k.client)
     }) {
         return kept;
@@ -203,7 +206,7 @@ fn revision_of(daw: &Standalone, fx_guid: &str) -> Option<u64> {
 fn ports(daw: &Standalone, project: &ProjectContext) -> Vec<Port> {
     let generation = daw.with_plugin_map(|m| m.generation());
     let fresh = with_cache(|c| {
-        current(c, generation);
+        current(c, (std::ptr::from_ref(daw).addr(), generation));
         c.ports
             .as_ref()
             .filter(|(g, at, _)| *g == generation && at.elapsed().as_secs_f64() < 1.0)
@@ -296,6 +299,11 @@ fn chain_of_port(daw: &Standalone, port: &Port) -> Result<(u64, Arc<Value>, bool
     let read = daw
         .with_plugin_instance(&port.fx_guid, |p| {
             super::plugin_call(|| {
+                // Known before it runs: what it writes through
+                // host-automation/1 names a plugin Studio knows.
+                if super::automation::caller_of(&port.fx_guid).is_none() {
+                    super::register_plugin(daw, &port.fx_guid, None, p);
+                }
                 let s = p.signal()?;
                 Some((s.revision(), s.chain()))
             })
@@ -375,6 +383,16 @@ pub fn run(
     let answer = daw
         .with_plugin_instance(&port.fx_guid, |p| {
             super::plugin_call(|| {
+                // Known before it runs: what it writes through
+                // host-automation/1 names a plugin Studio knows.
+                if super::automation::caller_of(&port.fx_guid).is_none() {
+                    super::register_plugin(
+                        daw,
+                        &port.fx_guid,
+                        Some((project.clone(), port.track_guid.clone())),
+                        p,
+                    );
+                }
                 let s = p.signal()?;
                 Some(if action.eq_ignore_ascii_case("list") {
                     s.list_actions()
