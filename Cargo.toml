@@ -1422,22 +1422,24 @@ dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.
 # [workspace.dependencies] above. Goes when keyflow pins the daw repo at
 # the revision Studio does.
 [patch."https://github.com/FastTrackStudios/daw"]
-daw                = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-standalone     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-session-format     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-dawfile-reaper     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-signal-plugin-host = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-builtin            = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-sync           = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-proto          = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-control        = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-module         = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-transport-sync = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-test-macro     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-utils              = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-midi               = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-audio              = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-fts-sample         = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
+daw                = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/daw" }
+daw-standalone     = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/standalone" }
+session-format     = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/session-format" }
+dawfile-reaper     = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/features/adapters/reaper/dawfile-reaper" }
+signal-plugin-host = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/features/plugin-host" }
+builtin            = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/features/dsp/builtin" }
+daw-sync           = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/features/sync" }
+daw-proto          = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/proto" }
+daw-control        = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/control" }
+daw-module         = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/module" }
+daw-transport-sync = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/transport-sync" }
+daw-test-macro     = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/macros" }
+utils              = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/utils" }
+midi               = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/features/midi" }
+audio              = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/features/audio" }
+fts-sample         = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/features/audio/sample" }
+daw-audio-graph    = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/audio-graph" }
+daw-allocator      = { path = "/run/media/Development/fasttrackstudio/.worktrees/daw-one-file/crates/daw/allocator" }
 
 # from processor
 [profile.dev.package.builtin]
@@ -1655,3 +1657,7 @@ vault-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag =
 architect-media = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 architect-playhead = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 architect-process-view = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+
+# LOCAL-ONLY (one-file session) — never commit
+[patch."https://github.com/FastTrackStudios/session"]
+session = { path = "/run/media/Development/fasttrackstudio/.worktrees/session-one-file/crates/session" }
