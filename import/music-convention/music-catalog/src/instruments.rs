@@ -22,7 +22,7 @@ pub mod groups {
     pub const FIDDLE: Color = palette::rose::S600;
     pub const VOCALS: Color = palette::pink::S500;
     pub const CHOIR: Color = palette::purple::S300;
-    pub const ORCHESTRA: Color = palette::purple::S600;
+    pub const ORCHESTRA: Color = palette::stone::S600;
     pub const SFX: Color = palette::teal::S500;
     pub const GUIDE: Color = palette::slate::S400;
     pub const REFERENCE: Color = palette::slate::S500;
@@ -98,9 +98,9 @@ pub mod synths {
 pub mod orchestra {
     use super::*;
 
-    pub const STRINGS: Color = palette::amber::S800;
-    pub const WOODWINDS: Color = palette::sky::S300;
-    pub const BRASS: Color = palette::amber::S500;
+    pub const STRINGS: Color = palette::green::S600;
+    pub const WOODWINDS: Color = palette::blue::S500;
+    pub const BRASS: Color = palette::yellow::S500;
     pub const HARP: Color = palette::purple::S400;
     pub const PERCUSSION: Color = palette::orange::S600;
 
