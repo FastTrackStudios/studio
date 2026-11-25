@@ -57,9 +57,9 @@ preset-browser = { path = "crates/preset-browser" }
 # dsp-core = { path = "../dsp/crates/dsp-core" }
 # Pinned by rev, the one Signal and Studio take: a branch here and a rev
 # there are two sources to cargo, and two copies of every dsp crate.
-dsp = { git = "https://github.com/FastTrackStudios/dsp", rev = "e4c98107a5bfae459cb14dc3425ba6f013c53d44" }
+dsp = { git = "https://github.com/FastTrackStudios/dsp", rev = "fad3a7619c89c40268d91d6af43e5f1a389e61dc" }
 pitch-core = { git = "https://github.com/FastTrackStudios/pitch", rev = "94f8ecba5c83fff581df65707d9adf984f2cd137" }
-dsp-core = { git = "https://github.com/FastTrackStudios/dsp", rev = "e4c98107a5bfae459cb14dc3425ba6f013c53d44" }
+dsp-core = { git = "https://github.com/FastTrackStudios/dsp", rev = "fad3a7619c89c40268d91d6af43e5f1a389e61dc" }
 
 # FastTrackStudio's CLAP extensions (signal/1 for the family CLAPs), from
 # the daw repo.

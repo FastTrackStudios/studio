@@ -521,10 +521,29 @@ pub mod reverb {
         ParamSpec::new("extra_b", "Character B", Unit::Percent, 0.0, 1.0, 0.5),
     ];
 
+    #[expect(
+        clippy::struct_excessive_bools,
+        reason = "independent facts about its key (wired, every hit placed, a hit this piece, what the chain was told), each read on its own"
+    )]
     pub struct ReverbEngine {
         chain: ReverbChain,
         l: Vec<f64>,
         r: Vec<f64>,
+        /// Another lane keys it ([`BlockProcessor::keyed`]): a hit-driven
+        /// space (Non-Linear) opens on that lane's hits, not its own input's
+        /// onsets, which on a sum full of bleed it never hears.
+        wired: bool,
+        /// The host placed every hit: a gap is the song's, never a dead
+        /// trigger's, so it never falls back to its own detector.
+        hits_known: bool,
+        /// Frames since the last hit, and how long without one before a
+        /// keyed space listens to its own input again (a gate's ten
+        /// seconds): a dead trigger never silences the lane for good.
+        since_hit: usize,
+        fail_open_after: usize,
+        hit_this_piece: bool,
+        /// What the chain was last told (keyed or not).
+        keyed_now: bool,
     }
 
     impl ReverbEngine {
@@ -542,6 +561,12 @@ pub mod reverb {
                 chain,
                 l: vec![0.0; max_block],
                 r: vec![0.0; max_block],
+                wired: false,
+                hits_known: false,
+                since_hit: 0,
+                fail_open_after: dsp_core::num::f64_to_index(f64::from(sample_rate) * 10.0),
+                hit_this_piece: false,
+                keyed_now: false,
             }
         }
     }
@@ -579,10 +604,24 @@ pub mod reverb {
 
         fn reset(&mut self) {
             self.chain.reset();
+            self.since_hit = 0;
+            self.hit_this_piece = false;
+            self.keyed_now = self.wired;
+            self.chain.set_keyed(self.wired);
         }
 
         fn process(&mut self, left: &mut [f32], right: &mut [f32]) {
             let n = left.len().min(right.len()).min(self.l.len());
+            if core::mem::take(&mut self.hit_this_piece) {
+                self.since_hit = 0;
+            } else {
+                self.since_hit = self.since_hit.saturating_add(n);
+            }
+            let keyed = self.wired && (self.hits_known || self.since_hit < self.fail_open_after);
+            if keyed != self.keyed_now {
+                self.keyed_now = keyed;
+                self.chain.set_keyed(keyed);
+            }
             let (Some(l), Some(r)) = (self.l.get_mut(..n), self.r.get_mut(..n)) else {
                 return;
             };
@@ -603,6 +642,25 @@ pub mod reverb {
                 *d = narrow(*s);
                 *e = narrow(*t);
             }
+        }
+
+        fn keyed(&mut self) {
+            self.wired = true;
+            self.keyed_now = true;
+            self.since_hit = 0;
+            self.chain.set_keyed(true);
+        }
+
+        fn hits_known(&mut self, known: bool) {
+            self.hits_known = known;
+        }
+
+        /// A hit of the lane that keys it, `offset` frames into the next
+        /// piece: a hit-driven space opens its window on that frame.
+        fn hit(&mut self, offset: u32, _velocity: f32) {
+            self.hit_this_piece = true;
+            self.chain
+                .trigger_at(usize::try_from(offset).unwrap_or(usize::MAX));
         }
     }
 }
@@ -822,5 +880,78 @@ pub mod delay {
     fn set2(a: &mut f64, b: &mut f64, v: f64) -> bool {
         let changed = set1(a, v);
         set1(b, v) || changed
+    }
+}
+
+#[cfg(all(test, feature = "reverb"))]
+mod keyed_reverb_tests {
+    use crate::BlockProcessor;
+
+    /// A snare sum: loud bleed throughout, the snare ~6 dB over it at
+    /// `hits` (never the +12 dB Non-Linear's own detector needs).
+    fn snare_sum(frames: usize, hits: &[usize]) -> alloc::vec::Vec<f32> {
+        let mut x = 0x2468_ace0_u32;
+        let mut out: alloc::vec::Vec<f32> = (0..frames)
+            .map(|_| {
+                x = x.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                0.3 * (crate::util_f32(usize::try_from(x >> 8).unwrap_or(0)) / 8_388_608.0 - 1.0)
+            })
+            .collect();
+        for &h in hits {
+            for (i, s) in out.iter_mut().enumerate().skip(h).take(4_800) {
+                let t = crate::util_f32(i.saturating_sub(h));
+                *s += 0.6
+                    * libm::expf(-t / 1_200.0)
+                    * libm::sinf(t * 200.0 * core::f32::consts::TAU / 48_000.0);
+            }
+        }
+        out
+    }
+
+    fn peak(x: &[f32]) -> f32 {
+        x.iter().fold(0.0, |m, s| m.max(s.abs()))
+    }
+
+    /// The Non-Linear block keyed by a snare's hits (placed): a gated burst
+    /// per hit on a sum its own detector can't hear, silence between.
+    #[test]
+    fn a_keyed_nonlinear_bursts_on_each_hit() {
+        let Some(Ok(mut verb)) =
+            crate::algorithms::build("reverb", Some("nonlinear"), 48_000.0, 512)
+        else {
+            panic!("the nonlinear reverb");
+        };
+        let set = |v: &mut crate::algorithms::FamilyBlock, id: &str, x: f32| {
+            let i = v
+                .params()
+                .iter()
+                .position(|p| p.id == id)
+                .unwrap_or_else(|| panic!("{id}"));
+            v.set_param(i, x);
+        };
+        set(&mut verb, "decay", 0.08);
+        set(&mut verb, "extra_a", 0.3);
+        set(&mut verb, "mix", 1.0);
+        verb.keyed();
+        verb.hits_known(true);
+        verb.reset();
+        let hits = [24_000_usize, 84_000];
+        let input = snare_sum(48_000 * 3, &hits);
+        let mut out = alloc::vec::Vec::new();
+        for (b, piece) in input.chunks(512).enumerate() {
+            for &h in &hits {
+                if (b * 512..(b + 1) * 512).contains(&h) {
+                    verb.hit(u32::try_from(h - b * 512).unwrap_or(0), 1.0);
+                }
+            }
+            let (mut l, mut r) = (piece.to_vec(), piece.to_vec());
+            verb.process(&mut l, &mut r);
+            out.extend(l);
+        }
+        assert!(peak(&out[..hits[0]]) < 1e-6, "silent before the first hit");
+        for &h in &hits {
+            assert!(peak(&out[h..h + 12_000]) > 0.05, "a burst at {h}");
+            assert!(peak(&out[h + 12_500..h + 30_000]) < 1e-6, "shut after {h}");
+        }
     }
 }

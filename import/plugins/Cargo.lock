@@ -4098,7 +4098,7 @@ checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 [[package]]
 name = "dsp"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/dsp?rev=e4c98107a5bfae459cb14dc3425ba6f013c53d44#e4c98107a5bfae459cb14dc3425ba6f013c53d44"
+source = "git+https://github.com/FastTrackStudios/dsp?rev=fad3a7619c89c40268d91d6af43e5f1a389e61dc#fad3a7619c89c40268d91d6af43e5f1a389e61dc"
 dependencies = [
  "crossbeam-channel",
  "dsp-core",
@@ -4117,7 +4117,7 @@ dependencies = [
 [[package]]
 name = "dsp-core"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/dsp?rev=e4c98107a5bfae459cb14dc3425ba6f013c53d44#e4c98107a5bfae459cb14dc3425ba6f013c53d44"
+source = "git+https://github.com/FastTrackStudios/dsp?rev=fad3a7619c89c40268d91d6af43e5f1a389e61dc#fad3a7619c89c40268d91d6af43e5f1a389e61dc"
 dependencies = [
  "atomic_float",
  "ebur128",
