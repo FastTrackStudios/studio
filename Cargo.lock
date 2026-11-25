@@ -23899,6 +23899,7 @@ dependencies = [
  "futures",
  "keyflow",
  "serde_json",
+ "studio-views",
  "tempfile",
 ]
 

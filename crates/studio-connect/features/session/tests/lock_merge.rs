@@ -3,11 +3,11 @@
 //! engine, and its own edit stays in its engine and out of the doc;
 //! unlocking merges both ways, and neither side's edit is lost. A device
 //! that joins while locked keeps its engine until it unlocks.
+#![cfg(feature = "engine")]
+
 // The crate is package `studio-session` (lib `studio_session`); its tests
 // still say `session`, which the old package was called.
 use studio_session as session;
-
-#![cfg(feature = "engine")]
 
 use std::sync::Arc;
 
