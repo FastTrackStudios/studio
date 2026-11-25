@@ -247,25 +247,20 @@ fn render_wav(req: RenderRequest) -> Result<Json, String> {
 pub fn place(params: Json) -> Result<Json, String> {
     let request: daw_edit::PlaceRequest =
         serde_json::from_value(params).map_err(|e| format!("invalid PLACE request: {e}"))?;
-    let hits: Vec<rhythm_editing::placement::Hit> = request
-        .hits
-        .iter()
-        .map(|h| rhythm_editing::placement::Hit { at: h.at, shift: h.shift })
-        .collect();
-    let cut = rhythm_editing::placement::Cut {
-        lead: request.cut.lead,
-        guard: request.cut.guard,
-    };
-    let pieces = rhythm_editing::placement::place_within(&hits, request.span, cut, request.bounds)
-        .into_iter()
-        .map(|p| daw_edit::placement::Piece {
-            start: p.start,
-            end: p.end,
-            shift: p.shift,
-            drawn_to: p.drawn_to,
-        })
-        .collect();
-    serde_json::to_value(daw_edit::PlaceAnswer { pieces }).map_err(|e| e.to_string())
+    // rhythm_editing's placement types are daw_edit's, re-exported, so the
+    // request's hits, cut, takes and fill pass straight through.
+    let placed = rhythm_editing::placement::place_filled(
+        &request.hits,
+        request.span,
+        request.cut,
+        request.bounds,
+        (&request.takes, request.fill),
+    );
+    serde_json::to_value(daw_edit::PlaceAnswer {
+        pieces: placed.pieces,
+        fills: placed.fills,
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Rhythm as an Architect extension: every action in its manifest.
