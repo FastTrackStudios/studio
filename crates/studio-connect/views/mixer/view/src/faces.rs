@@ -42,10 +42,10 @@ pub struct FrameFace {
 }
 
 /// Where frame's faces are: `FTS_FRAME_DIR`, else frame's generated
-/// faces in this repo (`features/ui/plugin-faces/generated`, made by `just faces`).
+/// faces in this repo (`crates/studio-connect/plugin-ui/plugin-faces/generated`, made by `just faces`).
 pub(crate) fn design_dir() -> std::path::PathBuf {
     std::env::var_os("FTS_FRAME_DIR").map_or_else(
-        || utils::paths::checkout_path("features/ui/plugin-faces/generated"),
+        || utils::paths::checkout_path("crates/studio-connect/plugin-ui/plugin-faces/generated"),
         Into::into,
     )
 }
