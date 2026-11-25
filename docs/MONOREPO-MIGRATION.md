@@ -61,37 +61,90 @@ more may follow.
 
 "Session" is now only the file format (`<Title>.session`, a Loro document)
 that every part of Studio reads and writes. It lives in `studio-core/session`.
-**Everything left from the old Session app is removed:**
+Everything left from the old Session app has been removed or renamed
+(2026-11-25):
 
-- **`crates/studio-connect/features/session`** (package `studio-session`, key
-  `session`), the old app's crate, is dissolved. 16 crates depend on it
-  (the engine, the guide plugin, `apps/studio`, panels, views) through about
-  450 `session::…` references. Its stub binary and two tools are already
-  deleted. Move each module to where it belongs, then delete the crate:
+- **The REAPER `session-extension` is removed** (owner's decision), with its
+  `xtask`, its workspace and `boundaries.toml` entries, and what existed only
+  for it in the old crate: `host` (the router, `DawModule` list and action
+  registration it mounted), `daw_module` (`SessionDaw`) and `rpc_services`
+  (`SessionModeServiceImpl`, served only through `layer_control_surfaces`).
+- **The engine crates are renamed:** `session-engine` -> `studio-engine`,
+  `session-runtime` -> `engine-runtime`, `session-host` (package
+  `session-desktop`) -> `engine-host`, `session-engine-client` ->
+  `engine-client`. engine-host's own in-process engine module is
+  `live_engine`. Kept on purpose: the `--session-engine` flag the window
+  spawns its engine with, engine-host's `session` / `session-domain` cargo
+  features, and the app's bundle identifier.
+- **`studio-session` (key `session`) is dissolved.** Each module went here:
 
-  | Module(s) | Goes to |
-  |---|---|
-  | `sync`, `proto`, `keyflow` | the format: `studio-core/session` (`session-sync`, `session`, `keyflow-session`) |
-  | `modes`, `mode_phases`, `playback`, `routing`, `track_manager`, `comping`, `count_in`, `key*`, `guitar_grow`, `reference`, `review`, `cache`, `daw_module`, `event_bus`, `rpc_services`, `host`/`services` | the engine: `studio-engine/engine` |
-  | `guide` | `studio-engine` (with the guide plugin) |
-  | `library`, `setlist`, `song`, `vault_sync`, `project_sync`, `load_selection`, `open_link` | `studio-connect/features/library` (or the format, where it is document code) |
-  | `ui`, `lyrics`, `color`, `strip_width` | `studio-connect` (kit or views) |
-  | `tts` (`cbx`) | decide: keep (move cbx to `ort` rc.15) or drop |
+  | Module(s) | Now | Group |
+  |---|---|---|
+  | `proto` (setlist, song and mode services; the action traits) | `studio-proto` (`studio-core/proto/studio-proto`) | core |
+  | `sync`: `align`, `crop`, `diff`, `doc`, `hold`, `model`, `slug`, `transport`, `drift`, `relay`, `net`, `clock`; `presence` | `session-sync` (`net` and `clock` behind feature `net`; presence is the primitive's). Its old copies of the same files are gone. | core |
+  | `library` (+ `publish`), `project_sync` | `library-sync` (`studio-core/session/library-sync`, features `publish`, `project-sync`) | core |
+  | `sync`: `bridge`, `direct`, `engine`, `whole` | `engine-sync` (`studio-engine/engine/engine-sync`; re-exports `session-sync`) | engine |
+  | `setlist`, `song`, `keyflow`, `guide` (+ `tts`), `key`, `key_actions`, `key_change`, `modes`, `mode_phases`, `playback`, `routing`, `track_manager`, `guitar_grow`, `comping`, `count_in`, `reference`, `review`, `cache`, `event_bus`, `color`, `lyrics`, `load_selection`, `vault_sync`, `SessionServices` / `daw_services` / `register_all_actions` | `engine-domain` (`studio-engine/engine/engine-domain`; re-exports `studio-proto` as `proto` and `engine-sync` as `sync`) | engine |
+  | `ui` (components, layouts, signals, shell), `open_link`, `strip_width` | `studio-ui` (`studio-connect/kit/studio-ui`, features `web`, `desktop`, `chart-editor`) | connect |
+  | `section_kinds`, `mix_phases` (re-exports) | callers name `fts_session::…` | core |
 
-- **Names from the old app** go too. Rename to what each is now:
-  - `studio-engine` → `studio-engine`
-  - `engine-runtime` → `engine-runtime`
-  - `session-host` (package `engine-host`) → `engine-host`, then the engine binary in `apps/studio`
-  - `engine-client` → `engine-client`
-  - the REAPER `session-extension` → decide: keep as `reaper-bridge`, or drop with REAPER hosting
+  Edges across a group line that the move made visible (they were all inside
+  the one crate before) and that the untangle step should remove:
+  - connect crates (`panels`, `engine-client`, `daw-ui`, `link`, the
+    mixer/arrangement extensions, `daw-view-tools`, `apps/studio`) still
+    depend on `engine-domain` for `modes::Mode`, `mode_phases`,
+    `keyflow::actions` / `from_chart` / `time_signature`, `key`, `lyrics` and
+    `load_selection`. `Mode` and its current-mode state should move to
+    `studio-proto`, with the REAPER layout as a hook that `engine-domain` sets.
+  - `studio-ui`'s mixer uses `dynamic-template` (an engine adapter) for its
+    track grouping; `studio-engine` and `engine-host` use `studio-ui`.
+  - `session-sync` (core) depends on `daw-transport-sync` for `Position` and
+    the clock estimator. That crate has no dependencies and belongs in core.
+  - `engine-domain` is still one large crate (~25k lines). `guide` (with its
+    TTS) and `song` are the next to split out, `guide` beside the guide
+    plugin; `setlist` and `keyflow` depend on each other, so they move
+    together.
+  - `engine-domain`'s `README.md` and `AGENTS.md` are the old app's, moved
+    as they were; rewrite them with the AGENTS/README pass.
+- **TTS stays** (owner's decision), and stays opt-in for now:
+  `bearcove/cbx` is vendored as `crates/studio-engine/vendor/cbx` (its
+  licences and a NOTICE; ported to ort 2.0.0-rc.15, its CHANGELOG says how,
+  and `tts_smoke` synthesized with it once). Turning `tts` back on (in
+  engine-host's `session`, daw-extension's dependency, engine-domain's
+  dev-dependency) is fix-up item 8. ort rc.15 allows one ONNX Runtime
+  environment per process, and `rhythm-hits` and cbx each make their own:
+  hand cbx rhythm-hits' (`SessionConfig::environment`) before both run in
+  one engine.
 
-  Studio's crate names move with them.
-- **Overlapping format crates** in `studio-core/session` merge down to the
-  format and its file I/O: `session` (the primitive), `session-format`
-  (`Song.session`, Loro + Turso), `song-file` (`<Title>.session` on disk),
-  `song` (stored Song/Arrangement) and `session-sync` (live document). Keyflow's
-  and Ignition's lanes stay as `keyflow-session` / `ignition-session`, or fold
-  into their crates as `session` modules.
+### Next: consolidate the format crates (planned, not done)
+
+Five crates in `studio-core/session` overlap. Merge them into the format and
+its file I/O:
+
+| Crate | What it is | Used by |
+|---|---|---|
+| `session` (key `fts-session`) | the primitive: structure, timeline, per-extension data, transport, presence, sync | 10 crates |
+| `session-format` | the daw's project as a Loro doc (round-trips DAWproject and RPP) and its Turso store | 12 crates |
+| `song-file` | `<Title>.session` on disk: the store holding the project, timing, charts, cues and branches; the old-pair converter (and a bin) | daw-extension |
+| `song` | the stored Song/Arrangement schema (vault folder) | none |
+| `session-sync` | the live document, its diff, relay and network lanes | 5 crates |
+
+1. **Remove `song`**: nothing depends on it. If library code still wants
+   its vault-folder schema, fold it into `library-sync`.
+2. **Fold `song-file` into `session-format`** as `session_format::file`
+   (`open`, `new`, `convert`, `media`), with its bin as an example or an
+   xtask. It already depends on `session-format` and has one user.
+3. **Fold `session-sync` into the primitive** as `session::doc` (the engine
+   project's document next to the session's own) behind a `live` feature,
+   with `net` / `clock` behind `net`. `engine-sync` then re-exports
+   `session::live`. Check first that the primitive's `sync` module and
+   session-sync's `transport` / `presence` don't define the same things
+   twice; keep one of each.
+4. **Rename** `session-format` -> `session-file` (the format on disk) once
+   `song-file` is in it, so the crates are the primitive (`session`) and its
+   file (`session-file`). `keyflow-session` and `ignition-session` stay as
+   lanes, or become `session` modules in their own crates.
+5. Each step is one commit that keeps `cargo check --workspace` passing.
 
 ## The fix-up work
 
@@ -108,9 +161,9 @@ cargo command** (`devenv shell -- …`): the `cargo` on the default PATH is
      `examples/` now find `studio-core/music/keyflow-examples`
    - the `dsp` alias: studio and view crates that meant `plugin-ui` now name it
      with `package = "plugin-ui"`
-   - `session`: studio's crate is package `studio-session` (key `session`);
-     imported crates that meant the primitive use `package = "session"`
-   - `ort` moved to 2.0.0-rc.15 in keyflow-lang and studio-session
+   - `session` is the primitive (key `fts-session`, or `package = "session"`);
+     the old app's crate (`studio-session`) is dissolved, see above
+   - `ort` moved to 2.0.0-rc.15 in keyflow-lang and the guide's TTS
    - music-convention moved from edition 2021 to 2024
    - imported crates now get the workspace's lints and `[profile]`s
 2. **Apply or discard** each patch in `fasttrackstudio/handoff/patches/`, as that
@@ -121,7 +174,7 @@ cargo command** (`devenv shell -- …`): the `cargo` on the default PATH is
 4. **Rename the duplicate and misleading names**: `studio-shell` (package
    `app-shell`, clashes with the app-shell repo), `expression-editor` (package
    `editor`, clashes with the editor repo).
-5. **Two binaries in `apps/studio`**: the UI and the engine (`session-host`
+5. **Two binaries in `apps/studio`**: the UI and the engine (`engine-host`
    becomes the engine binary). Fold `lighting/ignition` and
    `lighting/ignition-engine` into it.
 6. **`boundaries.toml`** for the three groups; the Justfile, xtask workflows,
