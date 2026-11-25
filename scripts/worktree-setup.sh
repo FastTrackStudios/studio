@@ -9,7 +9,7 @@
 #            crate above it compile different inputs from the main
 #            checkout's (no kache hits) into an app with no captures.
 #   faces    the plugin faces (`just faces` into
-#            features/ui/plugin-faces/generated, not in git): the window
+#            crates/studio-connect/plugin-ui/plugin-faces/generated, not in git): the window
 #            and the guitar rig read them at run time. Generated from this
 #            worktree's own sources, in the background — the build does not
 #            need them, so the checkout does not wait. kache serves the
@@ -64,11 +64,11 @@ fi
 # The plugin faces, written to a fresh directory and swapped in, so an
 # interrupted run never leaves a half-written set behind. In the dev shell
 # when outside it (its toolchain and flags are the ones the cache knows).
-faces=features/ui/plugin-faces/generated
+faces=crates/studio-connect/plugin-ui/plugin-faces/generated
 gen_faces() {
     local tmp="$faces.tmp.$$" run=()
-    if [[ -z ${IN_NIX_SHELL:-} ]] && command -v nix >/dev/null; then
-        run=(nix develop "$top" --command)
+    if [[ ${DEVENV_ROOT:-} != "$top" ]] && command -v devenv >/dev/null; then
+        run=(devenv shell --)
     fi
     rm -rf "$tmp"
     if timeout 1800 ${run[@]+"${run[@]}"} cargo run -q --release -p plugin-faces -- "$tmp"; then

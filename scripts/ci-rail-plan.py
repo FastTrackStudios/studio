@@ -32,10 +32,11 @@ import json
 import sys
 from typing import NoReturn
 
-# Leaf entry point of the browser build the wasm job checks: studio-web
-# (apps/web, `just web-wasm-check`). rail's selection already includes
-# reverse dependencies, so membership is enough.
-WASM = {"studio-web"}
+# The leaves of the browser builds the wasm job checks (`just check-web`):
+# the web app (apps/studio --features web) and Keyflow's chart editor.
+# rail's selection already includes reverse dependencies, so membership is
+# enough.
+WASM = {"studio-app", "editor-keyflow", "keyflow", "keyflow-ui"}
 
 # A change to CI's own definition (.config/rail.toml `ci-infra`): smoke the
 # tests job end to end on the workflows crate — tiny, and CI's own code.

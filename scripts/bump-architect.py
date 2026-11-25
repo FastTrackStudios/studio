@@ -88,7 +88,7 @@ FOLLOWED = ("dioxuslabs/dioxus", "fasttrackstudios/blitz", "fasttrackstudios/edi
             "fasttrackstudios/vendor", "fasttrackstudios/lucide",
             "fasttrackstudios/dioxus-components", "fasttrackstudios/lumen-blocks")
 NOTES = (".config/duplicate-deps.toml",)
-CHANGE_CRATE = "studio-desktop"
+CHANGE_CRATE = "studio-app"
 # The org's release key (public half): what signs every SHA256SUMS.
 ORG_RELEASE_KEY = "RWRh9Gk9qaStQMhku4THMidEYrQsmAEsm2dDprUkZxShEtqfIcroM8Od"
 

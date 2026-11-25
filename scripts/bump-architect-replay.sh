@@ -72,7 +72,7 @@ replay() {
     else
         local new
         new="$(git -C "$scratch" status --porcelain -- .changes | sed -n 's/^?? //p')"
-        if [ "$(wc -w <<<"$new")" -ne 1 ] || ! grep -qx '"studio-desktop" = "patch"' "$scratch/$new"; then
+        if [ "$(wc -w <<<"$new")" -ne 1 ] || ! grep -qx '"studio-app" = "patch"' "$scratch/$new"; then
             echo "FAIL $base -> $tag $*: expected one new change file for studio (patch), got: ${new:-none}" >&2
             fail=1
         fi

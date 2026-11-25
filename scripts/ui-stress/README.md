@@ -2,11 +2,11 @@
 
 See the [developer and agent guide](GUIDE.md) for baseline comparisons, phase isolation, crash diagnosis and interpretation.
 
-`just ee-stress` copies Set in Stone and its audio to a retained temporary practice directory, mounts the real `WorkstationApp` in `dioxus-test`, waits for track/item loading and waveform previews, and dispatches input through the Blitz DOM event handler. No window, desktop focus, mouse automation, keyboard automation, or audio device is required.
+`just editor stress` copies Set in Stone and its audio to a retained temporary practice directory, mounts the real `WorkstationApp` in `dioxus-test`, waits for track/item loading and waveform previews, and dispatches input through the Blitz DOM event handler. No window, desktop focus, mouse automation, keyboard automation, or audio device is required.
 
 ```sh
-just ee-stress set-in-stone 120 dev
-just ee-stress unbreakable 240 release true
+just editor stress set-in-stone 120 dev
+just editor stress unbreakable 240 release true
 ```
 
 Arguments: song, frames per phase, Cargo profile, enforce budget. The last command fails if any measured DOM frame exceeds 8.333 ms. Source projects and audio are never edited; practice copies and reports remain in temporary directories printed by the command. Use `EXPRESSION_EDITOR_PRACTICE_ALBUM` for a different album location and `TMPDIR` for temporary storage.

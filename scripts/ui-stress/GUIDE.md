@@ -11,7 +11,7 @@ There is no OS mouse/keyboard driver and no second implementation of the UI.
 From the repository root:
 
 ```sh
-just ee-stress set-in-stone 120 dev
+just editor stress set-in-stone 120 dev
 ```
 
 This builds the harness, creates a fresh practice copy of Set in Stone and its
@@ -22,8 +22,8 @@ The printed temporary directories are retained for inspection and practice.
 The arguments are `SONG FRAMES PROFILE ENFORCE`:
 
 ```sh
-just ee-stress unbreakable 120 release
-just ee-stress set-in-stone 240 release true
+just editor stress unbreakable 120 release
+just editor stress set-in-stone 240 release true
 ```
 
 `true` makes a completed run fail if **any** measured DOM frame exceeds
@@ -39,16 +39,16 @@ Dioxus or Blitz versions merely to run this test.
 
 ## Iterate faster
 
-`ee-stress` is the recipe of record: a fresh copy, all eight phases, 120
+`just editor stress` is the recipe of record: a fresh copy, all eight phases, 120
 frames. It is not the loop you want while trying six ideas an hour.
 
 ```sh
-just ee-bench                                  # cached staging, 40 frames
-just ee-bench set-in-stone 120 drum_pan        # one phase, full length
-just ee-bench-compare BASELINE_DIR CANDIDATE_DIR
+just editor bench                                  # cached staging, 40 frames
+just editor bench set-in-stone 120 drum_pan        # one phase, full length
+just editor bench-compare BASELINE_DIR CANDIDATE_DIR
 ```
 
-`ee-bench` reuses ONE staging per song under
+`just editor bench` reuses ONE staging per song under
 `/tmp/fts-drum-practice-cache` (`EXPRESSION_EDITOR_PRACTICE_CACHE` moves
 it). That is worth more than the copy it saves: peaks are cached as
 REAPER-compatible `.reapeaks` sidecars beside the media, and a fresh copy
@@ -68,11 +68,11 @@ direction the way 120 does, and — measured, not theorised — it leaves the
 drum camera clamped at the edge of the song, where the pan and vertical
 phases move nothing and report sub-millisecond medians for an idle
 window. Confirm anything you intend to report with a 120-frame
-`ee-stress`, and read the `Moved` column before you believe a number.
+`just editor stress`, and read the `Moved` column before you believe a number.
 
 ## Protect source material
 
-Use `just ee-stress` or `just ee-practice-prepare` to stage recordings. The practice
+Use `just editor stress` or `just editor practice-prepare` to stage recordings. The practice
 workflow copies files, remaps project references and redirects save/render paths;
 it does not use hard links. The benchmark itself performs navigation gestures,
 not audio rendering or editing commands.
@@ -167,7 +167,7 @@ label headless throughput or CPU screenshot speed as monitor FPS.
 - `samples.jsonl`: incremental completed-frame journal; survives a later crash.
 - `workstation.png`: final full-workstation image, painted outside measurement.
 - `failed-gesture.png`: diagnostic image when a preflight gesture has no effect.
-- `run.log`: captured by `just ee-stress`, or by the redirection shown above.
+- `run.log`: captured by `just editor stress`, or by the redirection shown above.
 
 `report.json` records source project, loaded track/item counts, viewport, profile,
 OS/architecture, CPU/load, Git revision/status, and `dom_nodes` — a node
@@ -273,8 +273,8 @@ keys dioxus diffs them positionally and pairs a node with whichever one
 now sits at its index.
 
 
-Both `just ee-practice` and `just ee-webview` tee everything to
-`target/ee-<which>.log`, and `just ee-log [which] [lines]` reads it back
+Both `just editor practice` and `just editor webview` tee everything to
+`target/ee-<which>.log`, and `just editor log [which] [lines]` reads it back
 with repeated messages collapsed to a count. A thousand copies of one
 warning then read as one fact rather than a wall of scrollback, and it
 gives an agent something to look at that is not a screenshot of a
@@ -439,7 +439,7 @@ carrying the same gestures the old `svg` had. Four things cost real time
 to find, all of them invisible in a code review:
 
 - **Verify with pixels, not with reading.** Render the same fixture
-  before and after (`just ee-shots shoot_stack`) and diff them with
+  before and after (`just editor shots shoot_stack`) and diff them with
   `scripts/ui-stress/imagediff.py`. That found two defects here that
   looked perfectly correct in the source.
 - **SVG's `text y` is a baseline; `crate::text::draw` positions the
@@ -503,16 +503,16 @@ a green report. Reduce the reproduction, fix the underlying behavior, and rerun 
 
 ## Code map and regression commands
 
-- [Harness entry point](../../features/editor/examples/stress.rs):
+- [Harness entry point](../../crates/studio-connect/views/midi/expression-editor/examples/stress.rs):
   load/stage, readiness, validation, measurement and raw output.
-- [Input workload](../../features/editor/examples/stress_support/input.rs):
+- [Input workload](../../crates/studio-connect/views/midi/expression-editor/examples/stress_support/input.rs):
   pane coordinates, DOM input and phase assertions.
 - [Report tool](run.py): distributions and strict budget gate; never sends input.
-- [Workstation](../../features/editor/src/standalone/workstation.rs):
+- [Workstation](../../crates/studio-connect/views/midi/expression-editor/src/standalone/workstation.rs):
   the production root shared by the window and headless test.
-- [Mixer](../../features/editor/src/standalone/workstation/mixer.rs):
+- [Mixer](../../crates/studio-connect/views/midi/expression-editor/src/standalone/workstation/mixer.rs):
   viewport-based strip mounting and scroll subscription.
-- [Practice workflow](../../features/editor/PRACTICE.md):
+- [Practice workflow](../../crates/studio-connect/views/midi/expression-editor/PRACTICE.md):
   safe copies and the opt-in audio/project preservation regression.
 
 ```sh
@@ -533,7 +533,7 @@ its numbers are not directly comparable to the old workload.
 
 ## Measuring the WebView window
 
-`ee-stress` and `ee-bench` above drive the **Blitz** DOM through
+`just editor stress` and `just editor bench` above drive the **Blitz** DOM through
 `dioxus-test`. The WebView build has no such seam — the engine owns
 layout and paint — so it is measured by driving a real window on a
 display of its own:

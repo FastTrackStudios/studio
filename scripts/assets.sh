@@ -17,7 +17,7 @@
 # APFS), so no bytes are copied and nothing is fetched. It is a real
 # directory inside the worktree on purpose. The guitar rig's build script
 # embeds every capture by its canonical path relative to OUT_DIR
-# (signal:features/rigs/guitar/build.rs), so a symlink to the main checkout's
+# (crates/studio-engine/signal/rigs/guitar/build.rs), so a symlink to the main checkout's
 # .assets would put that checkout's location in the generated source, and
 # `guitar` and everything above it (the engine, the window, the app) would
 # key differently in kache from the main checkout's build — and a path

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Studio (apps/desktop, the `studio` binary) for macOS
+# Build Studio (apps/studio, the `Studio` program) for macOS
 # as a Developer-ID signed, notarized, stapled .dmg: the installer attached
 # to the release's GitHub Release, and what scripts/install.sh installs.
 #
@@ -36,14 +36,15 @@
 set -euo pipefail
 
 app=studio
-# Studio is its distribution of Architect (apps/desktop, the cargo package
-# `studio-desktop`, run as `studio`), with its engine in the bundle: the
-# `daw` process extension in Contents/Resources/extensions/daw, where the
-# distribution looks for what it ships (apps/desktop/src/lib.rs SHIPPED).
-crate=studio-desktop; built=studio; bin=studio; title=Studio
+# Studio is apps/studio (the cargo package `studio-app`, its program
+# `Studio`), drawn by Blitz (`--features native`), with its engine beside
+# it in Contents/MacOS: `daw-extension`, which the app finds next to its own
+# program (apps/studio/docs/development.md, "The engine").
+crate=studio-app; built=Studio; bin=Studio; title=Studio
 engine_crate=daw-extension; engine_bin=daw-extension
-features=""
-icon=apps/desktop/icon-1024.png
+features="--no-default-features --features native"
+# TODO(monorepo): Studio's own icon, in apps/studio, once it has one.
+icon=crates/studio-engine/engine/engine-host/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
 category=public.app-category.music
 mic="Studio plays your rigs and records your sessions: it listens to your audio interface's inputs."
 
@@ -92,9 +93,11 @@ if [ "${SKIP_BUILD:-}" = 1 ]; then
 else
     # zlib from the macOS SDK, not the dev shell's (macos-libs.sh).
     libs="$(bash "$SCRIPT_DIR/macos-libs.sh" config)"
-    echo "=== cargo build --profile $PROFILE -p $crate -p $engine_crate $features --config $libs ==="
+    # Two builds: the app's --no-default-features is not the engine's.
+    echo "=== cargo build --profile $PROFILE -p $engine_crate; -p $crate $features (--config $libs) ==="
+    devenv shell -- cargo build --profile "$PROFILE" -p "$engine_crate" --config "$libs"
     # shellcheck disable=SC2086
-    devenv shell -- cargo build --profile "$PROFILE" -p "$crate" -p "$engine_crate" $features --config "$libs"
+    devenv shell -- cargo build --profile "$PROFILE" -p "$crate" $features --config "$libs"
 fi
 for built_bin in "$BIN" "$ENGINE"; do
     [ -x "$built_bin" ] || { echo "ERROR: the build produced no $built_bin" >&2; exit 1; }
@@ -110,11 +113,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$bin"
 chmod +x "$APP/Contents/MacOS/$bin"
 
-# The engine's package: its manifest and its program, out of Contents/MacOS
-# (only the bundle's main program belongs there).
-ENGINE_PKG="$APP/Contents/Resources/extensions/daw"
-mkdir -p "$ENGINE_PKG"
-cp "$ROOT/extensions/daw/extension.toml" "$ENGINE_PKG/extension.toml"
+# The engine beside the app's program, where the app looks for it.
+ENGINE_PKG="$APP/Contents/MacOS"
 cp "$ENGINE" "$ENGINE_PKG/$engine_bin"
 chmod +x "$ENGINE_PKG/$engine_bin"
 

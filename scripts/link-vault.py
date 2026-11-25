@@ -5,7 +5,7 @@
         [--library VAULT] [--title TITLE] [--masters]
 
 `<songs folder>` holds one folder per song, each prepared by `link-prepare`
-(features/engine/engine/src/bin/link-prepare.rs): its `.session` with its log
+(crates/studio-engine/engine/studio-engine/src/bin/link-prepare.rs): its `.session` with its log
 folded in, a rendition of every recording it plays in a `Proxies/` beside
 the master (Ogg Vorbis and its page index) and its reference bounce in
 `Media/Proxies/`. `--setlist` is the set's order, one song folder per line

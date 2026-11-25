@@ -2,11 +2,10 @@
 # Build Studio for Linux as an AppImage: the installer attached to the
 # release's GitHub Release, and what scripts/install.sh installs.
 #
-# Studio is Studio's distribution of Architect (apps/desktop, the cargo
-# package `studio-desktop`, run as `studio`), with its engine beside it:
-# the `daw` process extension (extensions/daw, the program `daw-extension`)
-# in `extensions/daw/`, where the distribution looks for what it ships
-# (`Distribution::shipped`, apps/desktop/src/lib.rs `SHIPPED`).
+# Studio is apps/studio (the cargo package `studio-app`, its program
+# `Studio`, run as `studio`), drawn by Blitz (`--features native`), with
+# its engine beside it: `daw-extension`, which the app finds next to its
+# own program (apps/studio/docs/development.md, "The engine").
 #
 #   scripts/desktop/linux.sh     # -> target/desktop/Studio-<version>-linux-x86_64.AppImage
 #
@@ -48,10 +47,11 @@ set -euo pipefail
 app=studio
 # The cargo target, and the name it runs under: Linux names a window's app
 # after its program.
-crate=studio-desktop; built=studio; bin=studio; title=Studio; features=""
-# The engine: its crate and program, and its package's folder in the bundle.
-engine_crate=daw-extension; engine_bin=daw-extension; engine_pkg=extensions/daw
-icon=apps/desktop/icon-1024.png
+crate=studio-app; built=Studio; bin=studio; title=Studio; features="--no-default-features --features native"
+# The engine: its crate and program, beside the app's in the bundle.
+engine_crate=daw-extension; engine_bin=daw-extension
+# TODO(monorepo): Studio's own icon, in apps/studio, once it has one.
+icon=crates/studio-engine/engine/engine-host/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
 comment="Sets, charts, lighting and the DAW, in one app"
 categories="AudioVideo;Audio;Music;"
 
@@ -86,9 +86,11 @@ ENGINE="${CARGO_TARGET_DIR:-$ROOT/target}/$PROFILE/$engine_bin"
 if [ "${SKIP_BUILD:-}" = 1 ]; then
     echo "=== SKIP_BUILD=1: reusing $BIN and $ENGINE ==="
 else
-    echo "=== cargo build --profile $PROFILE -p $crate -p $engine_crate $features ==="
+    # Two builds: the app's --no-default-features is not the engine's.
+    echo "=== cargo build --profile $PROFILE -p $engine_crate; -p $crate $features ==="
+    cargo build --profile "$PROFILE" -p "$engine_crate"
     # shellcheck disable=SC2086
-    cargo build --profile "$PROFILE" -p "$crate" -p "$engine_crate" $features
+    cargo build --profile "$PROFILE" -p "$crate" $features
 fi
 [ -x "$BIN" ] || { echo "ERROR: the build produced no $BIN" >&2; exit 1; }
 [ -x "$ENGINE" ] || { echo "ERROR: the build produced no $ENGINE" >&2; exit 1; }
@@ -100,13 +102,11 @@ AD="$WORK/$title.AppDir"
 mkdir -p "$AD/usr/bin" "$AD/usr/lib" "$AD/usr/share/applications" "$AD/usr/share/icons/hicolor/256x256/apps"
 cp "$BIN" "$AD/usr/bin/$bin"
 chmod u+w "$AD/usr/bin/$bin"
-# The engine's package beside the app: its manifest and its program.
-mkdir -p "$AD/usr/bin/$engine_pkg"
-cp "$ROOT/extensions/daw/extension.toml" "$AD/usr/bin/$engine_pkg/extension.toml"
-cp "$ENGINE" "$AD/usr/bin/$engine_pkg/$engine_bin"
-chmod u+w "$AD/usr/bin/$engine_pkg/$engine_bin"
+# The engine beside the app.
+cp "$ENGINE" "$AD/usr/bin/$engine_bin"
+chmod u+w "$AD/usr/bin/$engine_bin"
 # Every program of the bundle.
-PROGRAMS=("$AD/usr/bin/$bin" "$AD/usr/bin/$engine_pkg/$engine_bin")
+PROGRAMS=("$AD/usr/bin/$bin" "$AD/usr/bin/$engine_bin")
 
 # Not bundled: the user's graphics stack (driver-matched), and glibc itself.
 excluded() {
@@ -138,9 +138,8 @@ echo "=== bundled ${#seen[@]} libraries; taken from the host at run time: $(sort
 # Nothing may point into /nix/store.
 # shellcheck disable=SC2016 # $ORIGIN is for the dynamic loader, not the shell
 patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/../lib' "$AD/usr/bin/$bin"
-# The engine is two folders further down (usr/bin/extensions/daw).
 # shellcheck disable=SC2016
-patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/../../../lib' "$AD/usr/bin/$engine_pkg/$engine_bin"
+patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/../lib' "$AD/usr/bin/$engine_bin"
 for f in "$AD"/usr/lib/*; do
     # shellcheck disable=SC2016
     patchelf --set-rpath '$ORIGIN' "$f" 2>/dev/null || true

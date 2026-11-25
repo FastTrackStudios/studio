@@ -1,7 +1,7 @@
 """Compare two screenshots structurally. No third-party deps (no PIL, no numpy).
 
 For porting a pane from DOM to a painted scene, this is the check that
-matters: render the SAME fixture both ways and diff them. `just ee-shots
+matters: render the SAME fixture both ways and diff them. `just editor shots
 shoot_stack` writes into target/gui-shots/expression-editor/, so keeping a
 copy before the port and diffing after tells you whether the picture
 survived. It caught two real defects in the drum stack port that reading

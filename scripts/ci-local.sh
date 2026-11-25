@@ -8,16 +8,17 @@
 #                                     scripts/ci-local-hook.sh, runs this
 #                                     detached, after the push)
 #
-# PRs into main run only the free `PR checks` (pr.yml: fmt, change files,
-# the lockfile, the rail config) plus the `Local CI` status this posts. The
-# rest of the PR gate runs HERE: the static guards (the generated
-# workflows + actionlint), then the tests, `cargo check
-# --workspace` and the wasm check for what the change affects: `cargo rail
-# plan` from BASE (default: the merge-base with origin/main) through
+# PRs into main run `PR checks` (pr.yml: the compile-nothing gates) and
+# `Affected crates` (pr.yml: the affected crates checked and tested), plus
+# the `Local CI` status this posts. This runs the same here, on this
+# machine's warm target dir: the static guards (the generated workflows +
+# actionlint, the group rules of boundaries.toml), then the tests, `cargo
+# check --workspace` and the wasm check for what the change affects: `cargo
+# rail plan` from BASE (default: the merge-base with origin/main) through
 # cargo's reverse-dependency graph, turned into gates by
 # scripts/ci-rail-plan.py. The full set runs on THEBATTLESHIP after every
-# merge to main (checks.yml), which is what catches two PRs that pass alone and
-# break together.
+# merge to main (checks.yml), which is what catches two PRs that pass alone
+# and break together.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -121,6 +122,8 @@ checks() {
   cargo rail config validate --strict
   echo "── generated workflows + actionlint ──"
   just workflows-check
+  echo "── the group rules (boundaries.toml) ──"
+  python3 scripts/boundaries.py check --edges
   # The release tooling's end-to-end test (~40 s), when it changed. CI's
   # Gates runs it with GNU tools and `Release tooling (macOS)` with only
   # macOS's own, so a GNU-only spelling can't slip in from either side.
@@ -130,6 +133,12 @@ checks() {
   fi
 }
 phase checks checks
+
+# The promise (no core or engine crate resolves the UI) is a `cargo tree`
+# per member, a couple of minutes: when a manifest or the lockfile changed.
+if [ -n "$(git diff --name-only "$base" HEAD -- '*Cargo.toml' Cargo.lock boundaries.toml)" ]; then
+  phase boundaries python3 scripts/boundaries.py check
+fi
 
 # Rail evidence for the base, if `just rail-evidence` recorded it on this
 # machine: without it a changed file outside a crate's sources (docs, CI
@@ -155,16 +164,18 @@ timings+=("plan $(dur $((SECONDS - t)))")
 gate() { printf '%s\n' "$gates" | sed -n "s/^$1=//p" | head -1; }
 echo "ci-local: check=$(gate check) tests=$(gate tests) wasm=$(gate wasm) filter=$(gate test_filter)"
 
-# The test build is the core test set (`just test_packages`, the same list
-# CI's Tests job builds): the crates that still have tests. rail decides
-# which of their tests RUN (the filter); a crate outside the set has none.
+# The tests: the packages rail selected (every group's, when it selected the
+# whole workspace), minus boundaries.toml's [test] skip, the same set CI's
+# jobs build (scripts/boundaries.py packages --tested).
 tests() {
   just assets >/dev/null
-  local filter=() f pkgs=() p
-  for p in $(just --evaluate test_packages); do pkgs+=(-p "$p"); done
-  f="$(gate test_filter)"
-  [ -n "$f" ] && filter=(-E "$f" --no-tests=pass)
-  cargo nextest run "${pkgs[@]}" --no-fail-fast ${filter[@]+"${filter[@]}"}
+  local pkgs=() p sel
+  sel=" $(gate test_packages) "
+  while read -r p; do
+    if [ "$sel" = "  " ] || [[ "$sel" == *" $p "* ]]; then pkgs+=(-p "$p"); fi
+  done < <(python3 scripts/boundaries.py packages all --tested)
+  [ "${#pkgs[@]}" -gt 0 ] || { echo "ci-local: no tested package affected"; return 0; }
+  cargo nextest run "${pkgs[@]}" --no-fail-fast --no-tests=pass
 }
 if [ "$(gate tests)" = true ]; then
   phase tests tests
@@ -173,7 +184,7 @@ if [ "$(gate check)" = true ] || [ "$(gate cargo)" = true ]; then
   phase check cargo check --workspace
 fi
 if [ "$(gate wasm)" = true ]; then
-  wasm() { just web-wasm-check; }
+  wasm() { just check-web; }
   phase wasm wasm
 fi
 
