@@ -9,16 +9,16 @@
 
 use std::fmt::Write;
 
-use crate::proto::synth::{SynthEvent, SynthRigClient, SynthRigStreamClient};
-use crate::proto::{
-    BrowseItem, SynthEnvelope, SynthFilter, SynthGlobals, SynthLayer, SynthMapping, SynthNode,
-    SynthPreset, SynthStatus, SynthZone,
-};
 use dioxus::prelude::*;
 use midi::proto::MidiEvent;
 use midi_ui::MidiMonitorPanel;
 use signal_proto::tagging::{StructuredTag, TagCategory, TagSet};
 use signal_widgets::Piano;
+use synth::proto::synth::{SynthEvent, SynthRigClient, SynthRigStreamClient};
+use synth::proto::{
+    BrowseItem, SynthEnvelope, SynthFilter, SynthGlobals, SynthLayer, SynthMapping, SynthNode,
+    SynthPreset, SynthStatus, SynthZone,
+};
 
 /// Which top-level view the remote is showing.
 #[derive(Clone, Copy, PartialEq, Eq)]

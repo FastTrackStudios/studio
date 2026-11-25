@@ -1,0 +1,20 @@
+[package]
+name = "synth-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The synth rig's editor: the Dioxus half of `synth`, drawn from its vox clients, so the rig itself builds headless"
+
+[lints]
+workspace = true
+
+[dependencies]
+architect = { workspace = true, features = ["atom", "platform", "vox"] }
+dioxus = { workspace = true }
+fts-audio-ui = { workspace = true }
+midi = { workspace = true }
+midi-ui = { workspace = true }
+signal-proto = { workspace = true }
+signal-widgets = { workspace = true, features = ["piano"] }
+synth = { workspace = true }
