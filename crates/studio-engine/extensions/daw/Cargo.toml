@@ -13,6 +13,11 @@ doctest = false
 name = "daw-extension"
 path = "src/main.rs"
 
+[features]
+# Spoken section cues (chatterbox TTS, ONNX Runtime). Off by default: the cbx
+# git dependency is written against ort rc.10 and the workspace is on rc.15.
+tts = ["session/tts"]
+
 [dependencies]
 architect-extensions = { workspace = true, features = ["linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest"] }
@@ -44,8 +49,9 @@ audio = { workspace = true, features = ["io"] }
 # where ONNX Runtime has binaries; on a phone or tablet the engine runs
 # without them (`native` is the domain), its cues the guide's samples.
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
-# (the domain's TTS backend, `session/tts`; the engine is session-engine).
-session = { workspace = true, features = ["tts"] }
+# (the domain's TTS backend, `session/tts`, behind this crate's `tts`; the
+# engine is session-engine).
+session = { workspace = true }
 
 [lints]
 workspace = true

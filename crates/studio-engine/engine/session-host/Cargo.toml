@@ -85,8 +85,8 @@ signal = ["native", "daw-view-kit/signal", "studio-panels/signal", "mixer-view/s
 # without the TTS backend: `tts` pulls ort/ONNX Runtime, which publishes no
 # prebuilt binary for aarch64-apple-ios (ort-sys' build.rs panics outright
 # with "downloaded binaries not available for target aarch64-apple-ios").
-# Desktop behaviour is unchanged -- `session` still implies `tts`.
-session = ["session-domain", "tts"]
+# `session` no longer implies `tts`: the cbx (chatterbox) git dependency is written against ort rc.10 and the workspace is on rc.15, so `tts` does not build until cbx moves; it is opt-in until then.
+session = ["session-domain"]
 # Everything Session is except the TTS backend. The iOS build uses this:
 #   dx build --no-default-features --features "session-domain,charts"
 # The guide still runs; spoken section cues fall back to the synthesized
@@ -123,7 +123,7 @@ session-domain = [
 # by Session (chart parsing), so this is additive; a charts-only build gets it
 # independently.
 charts = ["dep:keyflow"]
-# Chatterbox TTS backend for the guide's spoken cues. Auto-enabled by Session.
+# Chatterbox TTS backend for the guide's spoken cues. Opt-in (see `session`).
 # Models are NEVER downloaded implicitly; TTS only *activates* at runtime when
 # FTS_TTS=1 and a voice wav exists at ~/.config/fts/tts-voice.wav (the flake
 # provides onnxruntime + ORT_DYLIB_PATH). Cached cues keep loading regardless;

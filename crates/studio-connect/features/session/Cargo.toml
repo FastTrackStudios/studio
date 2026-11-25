@@ -103,7 +103,8 @@ vox-types = { workspace = true }
 [dev-dependencies]
 # Its own tests and examples, with the features they need (see their
 # required-features): a plain `cargo test` of the workspace builds them all.
-session = { path = ".", package = "studio-session", features = ["engine", "net", "tts", "ui"] }
+# Not `tts`: the cbx (chatterbox) git dependency is written against ort rc.10 and the workspace is on rc.15, so `tts` does not build until cbx moves; it is opt-in until then (tts_smoke needs `--features tts`).
+session = { path = ".", package = "studio-session", features = ["engine", "net", "ui"] }
 architect = { workspace = true, features = ["local", "platform", "vox"] }
 crdt = { workspace = true, features = ["vox"] }
 daw = { workspace = true, features = ["standalone"] }
