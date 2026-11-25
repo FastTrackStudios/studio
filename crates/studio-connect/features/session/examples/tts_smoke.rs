@@ -13,14 +13,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::path::Path::new(&voice).exists()
     );
     eprintln!("[smoke] loading Chatterbox (downloads ONNX model from HF)…");
-    let cfg = session::guide::engine::ChatterboxTtsConfig::with_voice(&voice, "fts");
-    let mut tts = session::guide::engine::ChatterboxTts::load(cfg)?;
+    let cfg = studio_session::guide::engine::ChatterboxTtsConfig::with_voice(&voice, "fts");
+    let mut tts = studio_session::guide::engine::ChatterboxTts::load(cfg)?;
     eprintln!(
         "[smoke] model loaded; voice_id={}",
-        session::guide::engine::TtsRenderer::voice_id(&tts)
+        studio_session::guide::engine::TtsRenderer::voice_id(&tts)
     );
     eprintln!("[smoke] synthesizing 'Chorus'…");
-    let audio = session::guide::engine::TtsRenderer::render(&mut tts, "Chorus")?;
+    let audio = studio_session::guide::engine::TtsRenderer::render(&mut tts, "Chorus")?;
     eprintln!(
         "[smoke] OK: {} samples @ {} Hz",
         audio.samples.len(),

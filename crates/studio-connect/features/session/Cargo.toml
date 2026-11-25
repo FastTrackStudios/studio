@@ -25,7 +25,7 @@ net = ["dep:crdt", "dep:futures"]
 # native only): its branches as `session` docs on the account's driver.
 project-sync = ["dep:crdt", "dep:task-dial", "dep:dirs", "dep:fts-account", "fts-account/sync", "dep:session-format", "session-format/sync"]
 reaper = ["studio/reaper", "dep:daw-actions", "dep:daw-reaper", "dep:daw-sync", "dep:reaper-high", "dep:reaper-low", "dep:reaper-medium"]
-tts = ["dep:chatterbox-rs", "dep:ort", "ort/load-dynamic"]
+tts = ["dep:chatterbox-rs", "chatterbox-rs/load-dynamic", "dep:ort", "ort/load-dynamic"]
 # The presentation components (`ui::components`): the progress bar, the
 # lyrics panel (`components::lyrics`, ticking on a thread natively and on
 # the browser's timer on a page), the mixer, … — props only, so Session's
@@ -103,7 +103,7 @@ vox-types = { workspace = true }
 [dev-dependencies]
 # Its own tests and examples, with the features they need (see their
 # required-features): a plain `cargo test` of the workspace builds them all.
-# Not `tts`: the cbx (chatterbox) git dependency is written against ort rc.10 and the workspace is on rc.15, so `tts` does not build until cbx moves; it is opt-in until then (tts_smoke needs `--features tts`).
+# Not `tts`: TTS is opt-in until cbx is ported to ort rc.15 and turned back on (deferred; docs/MONOREPO-MIGRATION.md). tts_smoke needs `--features tts`.
 session = { path = ".", package = "studio-session", features = ["engine", "net", "ui"] }
 architect = { workspace = true, features = ["local", "platform", "vox"] }
 crdt = { workspace = true, features = ["vox"] }

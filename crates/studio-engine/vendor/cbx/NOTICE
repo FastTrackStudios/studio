@@ -1,0 +1,10 @@
+chatterbox-rs (cbx)
+Copyright the cbx authors, https://github.com/bearcove/cbx
+Licensed under the Apache License, Version 2.0 or the MIT license, at your
+option (LICENSE-APACHE, LICENSE-MIT).
+
+Vendored into FastTrackStudio Studio from upstream commit
+65093a0c259b6d8e1e66c5c9f121d521ea36ab6e ("Make core modules public for
+library usage", 2026-03), and modified: ported from ort 2.0.0-rc.10 to
+2.0.0-rc.15 (and ndarray 0.16 to 0.17), the version the rest of the
+workspace links. The changes are listed in CHANGELOG.md under "Vendored".

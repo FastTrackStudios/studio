@@ -4740,7 +4740,6 @@ dependencies = [
 [[package]]
 name = "chatterbox-rs"
 version = "0.1.0"
-source = "git+https://github.com/bearcove/cbx#65093a0c259b6d8e1e66c5c9f121d521ea36ab6e"
 dependencies = [
  "anyhow",
  "bincode",
@@ -4748,10 +4747,11 @@ dependencies = [
  "half",
  "hf-hub",
  "hound",
- "ndarray 0.16.1",
+ "ndarray 0.17.2",
  "ort",
  "serde",
  "serde_json",
+ "tempfile",
  "tokenizers 0.22.2",
  "ureq 2.12.1",
  "urlencoding",
@@ -17592,7 +17592,6 @@ dependencies = [
  "ort-sys",
  "smallvec 1.16.4",
  "tracing",
- "ureq 3.4.0",
 ]
 
 [[package]]
@@ -26442,16 +26441,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "972d7902c8735f2695410b8aed7df6ed12a47394aa1c8d7af49f0497b731a94d"
 dependencies = [
  "base64 0.23.1",
- "der 0.8.3",
  "log",
- "native-tls",
  "percent-encoding",
  "rustls",
  "rustls-pki-types",
  "socks",
  "ureq-proto",
  "utf8-zero",
- "webpki-root-certs",
  "webpki-roots 1.0.9",
 ]
 

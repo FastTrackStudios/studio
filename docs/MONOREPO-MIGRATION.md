@@ -128,3 +128,4 @@ cargo command** (`devenv shell -- …`): the `cargo` on the default PATH is
    AGENTS.md and README for the new layout; prune the unused architect patches.
 7. **Run the real thing**: `just studio`, open a song, play, render, MCP.
    Then the force-merge into `main` (plan, phase 4).
+8. TTS: vendor bearcove/cbx and port it to ort rc.15, then turn `tts` back on (deferred).

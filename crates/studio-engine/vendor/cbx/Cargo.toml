@@ -1,0 +1,46 @@
+[package]
+name = "chatterbox-rs"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+publish = false
+description = "Chatterbox TTS on ONNX Runtime (vendored from bearcove/cbx 65093a0, ported to ort 2.0.0-rc.15; see NOTICE)"
+
+# Vendored third-party code: upstream's own style, so not the workspace's
+# lints.
+
+[features]
+# Enable optional ONNX Runtime execution providers.
+# Note: Some EPs require building/using a compatible ONNX Runtime build for your platform.
+coreml = ["ort/coreml"]
+directml = ["ort/directml"]
+cuda = ["ort/cuda"]
+# ONNX Runtime found at run time (ORT_DYLIB_PATH), as Studio's guide uses it.
+load-dynamic = ["ort/load-dynamic"]
+
+[[bin]]
+name = "cbx"
+path = "src/bin/cbx.rs"
+
+[[bin]]
+name = "chatterbox-onnx"
+path = "src/bin/chatterbox_onnx.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+bincode = { workspace = true }
+half = "2.7.1"
+hf-hub = "0.4.3"
+hound = { workspace = true }
+# ort 2.0.0-rc.15 takes ndarray 0.17 (upstream: 0.16 with ort rc.10).
+ndarray = "0.17"
+ort = { workspace = true, features = ["std", "ndarray", "half", "api-23"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokenizers = { version = "0.22.2", default-features = false, features = ["onig"] }
+ureq = { workspace = true }
+urlencoding = "2.1.3"
+
+[dev-dependencies]
+tempfile = { workspace = true }
