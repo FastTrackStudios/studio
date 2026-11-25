@@ -63,8 +63,8 @@ pub const DESCRIPTION: &str = "Run JavaScript (QuickJS) that drives Studio: many
 `studio.run(id, args)`: any action, Studio's own answer. `studio.snapshot(name)`: MIX_SNAPSHOT, a checkpoint to `mixRestore` to. \
 `studio.all([promises or functions])`: side by side (8 calls at once at most) — start calls without `await` and await them together. \
 A failed call throws an Error with `.code`, `.message`, `.failure` (Studio's) — catch it or the script fails with it. `log(...)` (or `console.log`) lines come back with the answer. \
-Answers `{result, log, calls, ms}`; an uncaught error answers its message, `line`, `source` (that line) and the log so far. \
-Each mutating call is its own undo step in the person's session: snapshot first when making several. Sandboxed: no files, network, processes or timers; 64 MB; `timeout` (300 s, 3600 at most) covers everything.";
+Answers `{result, log, calls, ms, revision, undo}`; an uncaught error answers its message, `line`, `source` (that line) and the log so far. \
+All the script's edits are ONE undo step in the person's session, `Agent: <name>` (`name`; answered as `undo`), so they undo it at once; what ran before a failure stays done. Answers carry the song's `revision`: pass it as `if_revision` to a change that relies on a read (`stale` thrown if the person moved the song on). Sandboxed: no files, network, processes or timers; 64 MB; `timeout` (300 s, 3600 at most) covers everything.";
 
 /// The `script` tool's schema.
 #[must_use]
@@ -73,6 +73,7 @@ pub fn schema() -> Value {
         "source": {"type": "string", "description": "The JavaScript: the body of an async function — `await` each studio call, `return` the answer."},
         "args": {"description": "Any JSON, read by the script as `args`."},
         "timeout": {"type": "number", "minimum": 1, "maximum": MAX_TIMEOUT_S, "description": "Seconds the whole script may take (300 unless given)."},
+        "name": {"type": "string", "description": "What it does, naming the one undo step its edits make: `Agent: <name>` (`tighten snare`; `Agent: script` unless given)."},
     }, "required": ["source"]})
 }
 
@@ -239,6 +240,12 @@ pub fn run(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
         .unwrap_or(TIMEOUT_S)
         .min(MAX_TIMEOUT_S);
     let input = args.get("args").cloned().unwrap_or(Value::Null);
+    // Every edit the script makes one undo step, named for it.
+    let step = crate::agent::step_name(args.get("name").and_then(Value::as_str), "script");
+    let ctx = &Ctx {
+        step: Some(&step),
+        ..*ctx
+    };
     let started = Instant::now();
     let deadline = started
         .checked_add(Duration::from_secs_f64(timeout))
@@ -251,7 +258,15 @@ pub fn run(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
         deadline,
         stop: Arc::new(AtomicBool::new(false)),
     };
-    run.go(&input)
+    let outcome = run.go(&input);
+    let undo = crate::agent::end_step(ctx, &step);
+    let with_undo = |mut v: Value| {
+        if let Some(o) = v.as_object_mut() {
+            o.insert("undo".into(), json!(undo));
+        }
+        v
+    };
+    outcome.map(with_undo).map_err(with_undo)
 }
 
 /// One script's run.
@@ -352,12 +367,14 @@ impl Run<'_, '_> {
                 in_flight = in_flight.saturating_add(1);
                 let child = self.ctx.job.child(&req.name);
                 running.push(child.clone());
-                let up = self.ctx.up;
+                let (up, agent, step) = (self.ctx.up, self.ctx.agent, self.ctx.step);
                 let tx = tx.clone();
                 scope.spawn(move || {
                     let ctx = Ctx {
                         up,
                         job: child.as_ref(),
+                        agent,
+                        step,
                     };
                     let outcome = serde_json::from_str::<Value>(&req.args)
                         .map_err(|e| failure("bad_args", format!("not JSON: {e}")))
@@ -592,7 +609,7 @@ fn call(ctx: &Ctx<'_>, name: &str, args: &Value) -> Result<Value, Failure> {
             .filter(|s| !s.is_empty())
             .ok_or_else(|| failure("bad_args", "studio.run(id, args): `id` is missing"))?;
         let inner = args.get("args").cloned().unwrap_or_else(|| json!({}));
-        return ctx.run(id, &inner);
+        return ctx.run(id, &inner).map(|a| read_at(a, ctx));
     }
     let all = tools::all();
     let Some(tool) = all
@@ -601,9 +618,20 @@ fn call(ctx: &Ctx<'_>, name: &str, args: &Value) -> Result<Value, Failure> {
     else {
         return Err(failure("unknown", format!("no studio.{name}")));
     };
-    match tool.exec {
+    let answer = match tool.exec {
         Exec::Action(id) => tools::run_action(ctx, id, &args),
         Exec::Composite(f) => f(ctx, &args),
+    }?;
+    Ok(read_at(answer, ctx))
+}
+
+/// A call's answer with the song's `revision` it read, when it is an
+/// object (a list stays a list, for the script to `.filter`).
+fn read_at(answer: Value, ctx: &Ctx<'_>) -> Value {
+    if answer.is_object() {
+        crate::agent::with_revision(answer, ctx.job.revision())
+    } else {
+        answer
     }
 }
 

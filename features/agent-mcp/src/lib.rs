@@ -18,8 +18,12 @@
 //! - **Jobs** ([`jobs`]): a call that outlives its wait answers a job id
 //!   at once, and `job` waits for its result.
 //! - **Scripts** ([`script`]): JavaScript that chains many calls — loops,
-//!   conditions, renders side by side — in one tool call.
+//!   conditions, renders side by side — in one tool call, one undo step.
+//! - **Beside the person** ([`agent`]): every answer says the song's
+//!   `revision`; an edit with `if_revision` is refused as `stale` once the
+//!   song moved on; `changes {since}` says what moved and who moved it.
 
+pub mod agent;
 pub mod jobs;
 pub mod page;
 pub mod recall;

@@ -42,6 +42,12 @@ pub struct Job {
     pub background: AtomicBool,
     /// The calls it runs side by side ([`Job::child`]): cancelled with it.
     children: Mutex<Vec<Weak<Self>>>,
+    /// The song's revision as its last call to Studio said it: what its
+    /// answer carries.
+    revision: Arc<Mutex<Option<u64>>>,
+    /// Its parent's, told too: a script's answer carries the revision of
+    /// the last call any of its calls made.
+    parent_revision: Option<Arc<Mutex<Option<u64>>>>,
 }
 
 impl Job {
@@ -56,6 +62,8 @@ impl Job {
             cancel: Cancel::default(),
             background: AtomicBool::new(false),
             children: Mutex::new(Vec::new()),
+            revision: Arc::default(),
+            parent_revision: None,
         }
     }
 
@@ -64,7 +72,9 @@ impl Job {
     /// stopped, and cancelled when this job is. Not listed in `jobs`.
     #[must_use]
     pub fn child(&self, tool: &str) -> Arc<Self> {
-        let child = Arc::new(Self::new(format!("{}.{tool}", self.id), tool));
+        let mut child = Self::new(format!("{}.{tool}", self.id), tool);
+        child.parent_revision = Some(Arc::clone(&self.revision));
+        let child = Arc::new(child);
         if self.cancel.is_cancelled() {
             child.cancel.cancel();
         }
@@ -73,6 +83,21 @@ impl Job {
         children.push(Arc::downgrade(&child));
         drop(children);
         child
+    }
+
+    /// Studio said the song is at `revision` (the latest answer wins: an
+    /// engine restarted counts from 0 again).
+    pub fn saw_revision(&self, revision: u64) {
+        *self.revision.lock().unwrap_or_else(PoisonError::into_inner) = Some(revision);
+        if let Some(parent) = &self.parent_revision {
+            *parent.lock().unwrap_or_else(PoisonError::into_inner) = Some(revision);
+        }
+    }
+
+    /// The song's revision as its calls last said it, if any did.
+    #[must_use]
+    pub fn revision(&self) -> Option<u64> {
+        *self.revision.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Say what it is doing now.

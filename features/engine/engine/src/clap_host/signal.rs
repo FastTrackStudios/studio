@@ -10,7 +10,11 @@
 //! (`mod_source_value`, lock-free on the plugin's side): read here
 //! without the plugin's lock, through a client kept from the instance and
 //! trusted only while the engine's plugin map has not changed since
-//! (`Standalone::with_plugin_map`'s generation).
+//! (`Standalone::with_plugin_map`'s generation). So are the chain's two
+//! revisions, from a Signal build with `signal-revisions/1`: the feed
+//! then calls no plugin at all. From an older build its values' revision
+//! is asked on the plugin's main thread, but never waited for: a plugin a
+//! render has is skipped, its last answer kept (`signal.feed.busy`).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
@@ -149,6 +153,9 @@ struct Kept {
     /// build without it is read for its values' revision through its
     /// chain.
     revisions: Option<bool>,
+    /// Its values' revision as last read: what the feed says while the
+    /// plugin is busy.
+    values: Option<u64>,
 }
 
 #[derive(Default)]
@@ -189,7 +196,15 @@ fn client_of(daw: &Standalone, fx_guid: &str) -> Option<SignalPluginClient> {
     }) {
         return kept;
     }
-    let client = daw.with_plugin_instance(fx_guid, |p| p.signal())?;
+    // Kept by its cell as it was loaded: no plugin's lock.
+    let (generation, client) = daw.with_plugin_map(|m| {
+        (
+            m.generation(),
+            m.cell(fx_guid)
+                .map(daw::standalone::plugin::PluginCell::signal),
+        )
+    });
+    let client = client?;
     with_cache(|c| {
         if c.generation == generation {
             c.by_fx.insert(
@@ -199,6 +214,7 @@ fn client_of(daw: &Standalone, fx_guid: &str) -> Option<SignalPluginClient> {
                     chain: None,
                     meters: None,
                     revisions: None,
+                    values: None,
                 },
             );
         }
@@ -313,6 +329,32 @@ fn port_on(
 /// `port`'s chain, read from the plugin only when its revision moved; and
 /// whether it was the kept one.
 fn chain_of_port(daw: &Standalone, port: &Port) -> Result<(u64, Arc<Value>, bool), String> {
+    chain_read(daw, port, Wait::Yes).map_err(|e| match e {
+        ChainError::Busy => unreachable!("a waiting read is never turned away"),
+        ChainError::Failed(why) => why,
+    })
+}
+
+/// Whether a read of a plugin waits for a render that has it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Wait {
+    Yes,
+    /// Turned away instead: the feed's, which keeps its last answer.
+    No,
+}
+
+/// Why a chain was not read.
+enum ChainError {
+    /// A render has the plugin (a [`Wait::No`] read).
+    Busy,
+    Failed(String),
+}
+
+fn chain_read(
+    daw: &Standalone,
+    port: &Port,
+    wait: Wait,
+) -> Result<(u64, Arc<Value>, bool), ChainError> {
     let revision = revision_of(daw, &port.fx_guid);
     if let Some(rev) = revision
         && let Some(kept) = with_cache(|c| {
@@ -324,24 +366,34 @@ fn chain_of_port(daw: &Standalone, port: &Port) -> Result<(u64, Arc<Value>, bool
     {
         return Ok((kept.0, kept.1, true));
     }
-    let read = daw
-        .with_plugin_instance(&port.fx_guid, |p| {
-            super::plugin_call(|| {
-                // Known before it runs: what it writes through
-                // host-automation/1 names a plugin Studio knows.
-                if super::automation::caller_of(&port.fx_guid).is_none() {
-                    super::register_plugin(daw, &port.fx_guid, None, p);
-                }
-                let s = p.signal()?;
-                Some((s.revision(), s.chain()))
-            })
+    let read_it = |p: &mut dyn daw::standalone::plugin::PluginInstance| {
+        super::plugin_call(|| {
+            // Known before it runs: what it writes through
+            // host-automation/1 names a plugin Studio knows.
+            if super::automation::caller_of(&port.fx_guid).is_none() {
+                super::register_plugin(daw, &port.fx_guid, None, p);
+            }
+            let s = p.signal()?;
+            Some((s.revision(), s.chain()))
         })
-        .flatten()
-        .ok_or_else(|| format!("{} on {} has no signal/1", port.name, port.track))?;
-    let (rev, json) = (read.0, read.1.map_err(|e| e.to_string())?);
+    };
+    let read = match wait {
+        Wait::Yes => daw.with_plugin_instance_reading(&port.fx_guid, read_it),
+        Wait::No => daw
+            .try_with_plugin_instance_reading(&port.fx_guid, read_it)
+            .map_err(|_| ChainError::Busy)?,
+    }
+    .flatten()
+    .ok_or_else(|| {
+        ChainError::Failed(format!("{} on {} has no signal/1", port.name, port.track))
+    })?;
+    let (rev, json) = (
+        read.0,
+        read.1.map_err(|e| ChainError::Failed(e.to_string()))?,
+    );
     let chain: Arc<Value> = Arc::new(
         serde_json::from_str(&json)
-            .map_err(|e| format!("{}'s chain is not JSON: {e}", port.name))?,
+            .map_err(|e| ChainError::Failed(format!("{}'s chain is not JSON: {e}", port.name)))?,
     );
     with_cache(|c| {
         if let Some(k) = c.by_fx.get_mut(&port.fx_guid) {
@@ -354,39 +406,66 @@ fn chain_of_port(daw: &Standalone, port: &Port) -> Result<(u64, Arc<Value>, bool
 /// How `port`'s values' revision was read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ValuesRead {
-    /// SIGNAL_REVISIONS: the counter alone, no chain built.
+    /// `signal-revisions/1`: the counter, read beside the render, no
+    /// plugin called.
+    LockFree,
+    /// SIGNAL_REVISIONS on its main thread: the counter alone, no chain
+    /// built (a build without `signal-revisions/1`).
     Revisions,
     /// From the chain kept, read within [`VALUES_FRESH`].
     Kept,
     /// The chain read again for it (a build without SIGNAL_REVISIONS).
     Chain,
+    /// A render had the plugin: its last answer kept, never waited for.
+    Busy,
     /// Not read: the instance went, or has no signal/1.
     None,
 }
 
-/// `port`'s parameter values' revision, as the chain has it: asked of the
-/// plugin alone (`SIGNAL_REVISIONS`, the counter, no chain built) where
-/// the build answers it, else from its chain (read again at most every
-/// [`VALUES_FRESH`]).
+/// `port`'s values' revision as last read, for a plugin that was busy.
+fn kept_values(port: &Port) -> Option<u64> {
+    with_cache(|c| c.by_fx.get(&port.fx_guid).and_then(|k| k.values))
+}
+
+/// `port`'s parameter values' revision, as the chain has it: read beside
+/// the render (`signal-revisions/1`) where the build has it; else asked of
+/// the plugin alone (`SIGNAL_REVISIONS`, the counter, no chain built), or
+/// from its chain (read again at most every [`VALUES_FRESH`]) — never
+/// waiting for a render that has the plugin.
 fn values_revision_of(daw: &Standalone, port: &Port) -> (Option<u64>, ValuesRead) {
+    let (answer, how) = values_read(daw, port);
+    if answer.is_some() {
+        with_cache(|c| {
+            if let Some(k) = c.by_fx.get_mut(&port.fx_guid) {
+                k.values = answer;
+            }
+        });
+    }
+    (answer, how)
+}
+
+fn values_read(daw: &Standalone, port: &Port) -> (Option<u64>, ValuesRead) {
+    if let Some(client) = client_of(daw, &port.fx_guid) {
+        let generation = with_cache(|c| c.generation);
+        let lock_free = daw.with_plugin_map(|m| {
+            (m.generation() == generation && m.contains_key(&port.fx_guid))
+                .then(|| client.values_revision())
+                .flatten()
+        });
+        if let Some(values) = lock_free {
+            return (Some(values), ValuesRead::LockFree);
+        }
+    }
     let asks = with_cache(|c| c.by_fx.get(&port.fx_guid).and_then(|k| k.revisions));
     if asks != Some(false) {
-        let read = daw
-            .with_plugin_instance(&port.fx_guid, |p| {
-                super::plugin_call(|| {
-                    // As for a chain read: what the call lands (a finished
-                    // analysis) names a plugin Studio knows.
-                    if super::automation::caller_of(&port.fx_guid).is_none() {
-                        super::register_plugin(daw, &port.fx_guid, None, p);
-                    }
-                    Some(p.signal()?.run_action("SIGNAL_REVISIONS", "{}"))
-                })
-            })
-            .flatten();
+        let read = daw.try_with_plugin_instance_reading(&port.fx_guid, |p| {
+            super::plugin_call(|| Some(p.signal()?.run_action("SIGNAL_REVISIONS", "{}")))
+        });
         let answer = match read {
-            None => return (None, ValuesRead::None),
-            Some(Ok(json)) => serde_json::from_str::<Value>(&json).ok(),
-            Some(Err(_)) => None,
+            Err(_) => return (kept_values(port), ValuesRead::Busy),
+            Ok(None | Some(None)) => return (None, ValuesRead::None),
+            Ok(Some(Some(Ok(json)))) => serde_json::from_str::<Value>(&json).ok(),
+            Ok(Some(Some(Err(_)))) => None,
         };
         with_cache(|c| {
             if let Some(k) = c.by_fx.get_mut(&port.fx_guid) {
@@ -400,7 +479,7 @@ fn values_revision_of(daw: &Standalone, port: &Port) -> (Option<u64>, ValuesRead
             );
         }
     }
-    match chain_of_port(daw, port) {
+    match chain_read(daw, port, Wait::No) {
         Ok((_, chain, cached)) => (
             chain.get("values_revision").and_then(Value::as_u64),
             if cached {
@@ -409,7 +488,8 @@ fn values_revision_of(daw: &Standalone, port: &Port) -> (Option<u64>, ValuesRead
                 ValuesRead::Chain
             },
         ),
-        Err(_) => (None, ValuesRead::None),
+        Err(ChainError::Busy) => (kept_values(port), ValuesRead::Busy),
+        Err(ChainError::Failed(_)) => (None, ValuesRead::None),
     }
 }
 
@@ -682,12 +762,20 @@ fn meters_of(
     }) {
         return kept.1;
     }
-    let infos = daw
-        .with_plugin_instance(&port.fx_guid, |p| {
-            super::plugin_call(|| p.signal().map(|s| s.mod_sources()))
-        })
-        .flatten()
-        .unwrap_or_default();
+    let read = daw.try_with_plugin_instance_reading(&port.fx_guid, |p| {
+        super::plugin_call(|| p.signal().map(|s| s.mod_sources()))
+    });
+    let Ok(read) = read else {
+        // A render has it: the meters as last read, read again next time.
+        return with_cache(|c| {
+            c.by_fx
+                .get(&port.fx_guid)
+                .and_then(|k| k.meters.clone())
+                .map(|(_, infos)| infos)
+                .unwrap_or_default()
+        });
+    };
+    let infos = read.flatten().unwrap_or_default();
     with_cache(|c| {
         if let Some(k) = c.by_fx.get_mut(&port.fx_guid) {
             k.meters = Some((revision, infos.clone()));
@@ -703,14 +791,16 @@ pub fn feed(daw: &Standalone, project: &ProjectContext) -> Feed {
     let span = tracing::info_span!(
         "SIGNAL_FEED",
         signal.feed.instances = tracing::field::Empty,
+        signal.feed.lock_free = tracing::field::Empty,
         signal.feed.revision_reads = tracing::field::Empty,
         signal.feed.chain_reads = tracing::field::Empty,
         signal.feed.chains_kept = tracing::field::Empty,
+        signal.feed.busy = tracing::field::Empty,
     );
     let _in = span.enter();
     let ports = ports(daw, project);
     let mut rows = Vec::with_capacity(ports.len());
-    let mut reads = [0u64; 3];
+    let mut reads = [0u64; 5];
     for port in ports {
         let Some(revision) = revision_of(daw, &port.fx_guid) else {
             continue;
@@ -721,6 +811,8 @@ pub fn feed(daw: &Standalone, project: &ProjectContext) -> Feed {
             ValuesRead::Revisions => reads[0] += 1,
             ValuesRead::Chain => reads[1] += 1,
             ValuesRead::Kept => reads[2] += 1,
+            ValuesRead::LockFree => reads[3] += 1,
+            ValuesRead::Busy => reads[4] += 1,
             ValuesRead::None => {}
         }
         let Some(client) = client_of(daw, &port.fx_guid) else {
@@ -769,6 +861,8 @@ pub fn feed(daw: &Standalone, project: &ProjectContext) -> Feed {
     span.record("signal.feed.revision_reads", reads[0]);
     span.record("signal.feed.chain_reads", reads[1]);
     span.record("signal.feed.chains_kept", reads[2]);
+    span.record("signal.feed.lock_free", reads[3]);
+    span.record("signal.feed.busy", reads[4]);
     Feed {
         at_ms: epoch().elapsed().as_secs_f64() * 1e3,
         fx: rows,

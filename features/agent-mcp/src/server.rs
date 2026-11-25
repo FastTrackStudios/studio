@@ -48,6 +48,8 @@ pub struct Bridge {
     schemas: Mutex<BTreeMap<&'static str, (Value, String)>>,
     /// A tool list was given while Studio did not answer: say when it does.
     listed_without: AtomicBool,
+    /// What it knows of Studio's agent door (`AGENT_RUN`).
+    agent: Arc<crate::agent::Agent>,
 }
 
 impl Bridge {
@@ -61,6 +63,7 @@ impl Bridge {
             notify,
             schemas: Mutex::new(BTreeMap::new()),
             listed_without: AtomicBool::new(false),
+            agent: Arc::default(),
         }
     }
 
@@ -182,6 +185,12 @@ impl Bridge {
         }
         if let Some(props) = schema.get_mut("properties").and_then(Value::as_object_mut) {
             props.insert("wait".into(), wait);
+            // A change the song may have moved on under.
+            if matches!(tool.exec, Exec::Action(_))
+                && effect.as_deref().is_some_and(|e| e != "read-only")
+            {
+                props.insert("if_revision".into(), tools::if_revision_schema());
+            }
         }
         if let Some(o) = schema.as_object_mut() {
             o.remove("description");
@@ -276,10 +285,13 @@ impl Bridge {
         };
         let wait = wait_of(&mut args, self.config.wait);
         let up = self.up.clone();
+        let agent = Arc::clone(&self.agent);
         let job = self.jobs.spawn(name, move |job: &Job| {
             let ctx = Ctx {
                 up: up.as_ref(),
                 job,
+                agent: agent.as_ref(),
+                step: None,
             };
             match tool.exec {
                 Exec::Action(id) => tools::run_action(&ctx, id, &args),
@@ -315,11 +327,16 @@ impl Bridge {
         match state {
             State::Done(Ok(v)) => {
                 self.reached();
+                // Every answer says the song's revision it read.
+                let v = crate::agent::with_revision(v, job.revision());
                 ok(&self.pages.fit(v, self.config.budget))
             }
-            State::Done(Err(f)) => {
+            State::Done(Err(mut f)) => {
                 if f.get("code").and_then(Value::as_str) != Some("unavailable") {
                     self.reached();
+                }
+                if let (Some(r), Some(o)) = (job.revision(), f.as_object_mut()) {
+                    o.entry("revision").or_insert(json!(r));
                 }
                 err(&self.enrich(f))
             }

@@ -9,23 +9,30 @@ use serde_json::{Map, Value, json};
 
 use crate::jobs::Job;
 use crate::shape::{self, Detail};
-use crate::upstream::{self, Failure, Upstream, failure};
+use crate::upstream::{Failure, Upstream, failure};
 
-/// What a tool runs on: Studio and the job it is.
+/// What a tool runs on: Studio, the job it is, what the bridge knows of
+/// Studio's agent door, and the undo step its edits join (a script's, a
+/// batch's).
+#[derive(Clone, Copy)]
 pub struct Ctx<'a> {
     pub up: &'a dyn Upstream,
     pub job: &'a Job,
+    pub agent: &'a crate::agent::Agent,
+    pub step: Option<&'a str>,
 }
 
 impl Ctx<'_> {
-    /// Run action `id`, saying so as the job's step.
+    /// Run action `id` for the agent (`crate::agent::run`: its edits the
+    /// agent's, `if_revision` honoured, the song's revision noted), saying
+    /// so as the job's step.
     ///
     /// # Errors
     ///
-    /// Studio's failure.
+    /// Studio's failure, or `stale`.
     pub fn run(&self, id: &str, args: &Value) -> Result<Value, Failure> {
         self.job.step(id);
-        upstream::run(self.up, id, args, &self.job.cancel)
+        crate::agent::run(self, id, args)
     }
 
     /// A protocol method (`actions`, `describe`, `batch`, `watch`).
@@ -146,6 +153,11 @@ pub fn curated() -> Vec<Tool> {
             exec: Exec::Composite(balance),
             schema: Some(balance_schema),
         },
+        tool!(
+            "changes",
+            "SESSION_CHANGES",
+            "What changed in the song after revision `since` (every answer says the `revision` it read): each edit, oldest first, with `by` (`person` in the window, `agent` through these tools), its action and what it named (track, block, `fields` it set), and the `revision` now. Paged (`offset`, `limit`, `next`). Call it when an edit comes back `stale`, or before relying on an old read. Read-only."
+        ),
         // ── changing the mix ──
         tool!(
             "track_set",
@@ -245,13 +257,13 @@ pub fn generic() -> Vec<Tool> {
         },
         Tool {
             name: "run",
-            description: "Run any action by `id` with `args` (an object). Answers known to be big (MIX_STATE, SESSION_TRACKS, LISTEN, LISTEN_BLOCK, LISTEN_AB, MIX_MEASURE, FX_PARAMS) are compacted as their curated tools do; `detail: \"full\"` for the raw answer. Big answers page (`more`); long calls become jobs (`job`).",
+            description: "Run any action by `id` with `args` (an object). Answers known to be big (MIX_STATE, SESSION_TRACKS, LISTEN, LISTEN_BLOCK, LISTEN_AB, MIX_MEASURE, FX_PARAMS) are compacted as their curated tools do; `detail: \"full\"` for the raw answer. `if_revision`: run a change only if the song is still at that revision (else `stale`). Big answers page (`more`); long calls become jobs (`job`).",
             exec: Exec::Composite(run),
             schema: Some(run_schema),
         },
         Tool {
             name: "batch",
-            description: "Run several actions (`steps`: each `{id, args}`), in order, stopping at the first failure unless `stop_on_error: false`; each step is its own undo step, nothing is rolled back. At most 64. `parallel: true` runs read-only steps side by side (refused if one is not read-only). A step's args may take an earlier step's answer: `{\"$ref\": \"steps.0.figures.lufs\"}` (steps count from 0; dots into objects and lists). Anything more (loops, conditions, arithmetic): `script`.",
+            description: "Run several actions (`steps`: each `{id, args}`), in order, stopping at the first failure unless `stop_on_error: false`; all their edits are ONE undo step, `Agent: <name>` (answered as `undo`), nothing rolled back on a failure. `if_revision` holds for the first step. At most 64. `parallel: true` runs read-only steps side by side (refused if one is not read-only). A step's args may take an earlier step's answer: `{\"$ref\": \"steps.0.figures.lufs\"}` (steps count from 0; dots into objects and lists). Anything more (loops, conditions, arithmetic): `script`.",
             exec: Exec::Composite(batch),
             schema: Some(batch_schema),
         },
@@ -522,7 +534,7 @@ fn block_measure(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
         o.insert("block".into(), json!(block));
     }
     ctx.job.step(format!("LISTEN_BLOCK {block}"));
-    let (pre, post, heard) = match upstream::run(ctx.up, "LISTEN_BLOCK", &both, &ctx.job.cancel) {
+    let (pre, post, heard) = match ctx.run("LISTEN_BLOCK", &both) {
         Ok(mut h) => {
             crate::recall::block_meters("LISTEN_BLOCK", &mut h, &both);
             let mut post = h.get("post").cloned().unwrap_or(Value::Null);
@@ -544,9 +556,9 @@ fn block_measure(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
                 Value::Object(a)
             };
             ctx.job.step(format!("1/2 LISTEN block:{block}:pre"));
-            let pre = upstream::run(ctx.up, "LISTEN", &at("pre"), &ctx.job.cancel)?;
+            let pre = ctx.run("LISTEN", &at("pre"))?;
             ctx.job.step(format!("2/2 LISTEN block:{block}:post"));
-            let post = upstream::run(ctx.up, "LISTEN", &at("post"), &ctx.job.cancel)?;
+            let post = ctx.run("LISTEN", &at("post"))?;
             (pre, post, None)
         }
         Err(e) => return Err(e),
@@ -598,7 +610,7 @@ fn balance(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
         .unwrap_or_default();
     if tracks.is_empty() {
         ctx.job.step("1/2 SESSION_TRACKS");
-        let all = upstream::run(ctx.up, "SESSION_TRACKS", &json!({}), &ctx.job.cancel)?;
+        let all = ctx.run("SESSION_TRACKS", &json!({}))?;
         let under = args.get("under").and_then(Value::as_str);
         let depth = args
             .get("depth")
@@ -634,7 +646,7 @@ fn balance(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
         }
     }
     ctx.job.step("2/2 MIX_MEASURE");
-    let measured = upstream::run(ctx.up, "MIX_MEASURE", &m, &ctx.job.cancel)?;
+    let measured = ctx.run("MIX_MEASURE", &m)?;
     shape::balance(&measured, reference).map_err(|e| failure("failed", e))
 }
 
@@ -663,16 +675,19 @@ fn run_schema() -> Value {
         "args": {"type": "object", "description": "Its arguments, as `describe` says."},
         "ticket": {"type": "string", "description": "A person's approval, retrying a call that asked for one."},
         "detail": {"type": "string", "enum": ["summary", "params", "full"]},
+        "if_revision": if_revision_schema(),
     }, "required": ["id"]})
 }
 
 fn run(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
     let id = need(args, "id")?;
     let mut inner = args.get("args").cloned().unwrap_or_else(|| json!({}));
-    if let Some(d) = args.get("detail")
-        && let Some(o) = inner.as_object_mut()
-    {
-        o.insert("detail".into(), d.clone());
+    if let Some(o) = inner.as_object_mut() {
+        for key in ["detail", "if_revision"] {
+            if let Some(v) = args.get(key) {
+                o.insert(key.into(), v.clone());
+            }
+        }
     }
     if let Some(ticket) = args.get("ticket").and_then(Value::as_str) {
         ctx.job.step(id);
@@ -691,7 +706,15 @@ fn batch_schema() -> Value {
         "steps": {"type": "array", "maxItems": MAX_STEPS, "items": {"type": "object", "properties": {"id": {"type": "string"}, "args": {"type": "object"}, "ticket": {"type": "string"}}, "required": ["id"]}},
         "stop_on_error": {"type": "boolean", "description": "false: run every step, whatever fails (default true)."},
         "parallel": {"type": "boolean", "description": "Run the steps side by side; every one must be read-only (LISTEN, MIX_STATE, …)."},
+        "name": {"type": "string", "description": "The undo step its edits make, as `Agent: <name>` (`Agent: batch` unless given)."},
+        "if_revision": if_revision_schema(),
     }, "required": ["steps"]})
+}
+
+/// The schema of `if_revision`, on every tool that changes the song.
+#[must_use]
+pub fn if_revision_schema() -> Value {
+    json!({"type": "integer", "minimum": 0, "description": "Make the change only if the song is still at this revision (the `revision` an answer gave): if it moved on (the person edited, or another call did), nothing runs and the call fails `stale` with the changes since."})
 }
 
 /// The most steps one batch runs (Studio's own limit).
@@ -796,13 +819,6 @@ fn batch(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
         .and_then(Value::as_array)
         .ok_or_else(|| bad("`steps` is missing (a list of `{id, args}`)"))?;
     let refs = steps.iter().any(|s| s.get("args").is_some_and(has_ref));
-    if !parallel && !refs {
-        let mut plain = args.clone();
-        if let Some(o) = plain.as_object_mut() {
-            o.remove("parallel");
-        }
-        return ctx.method("batch", &plain);
-    }
     if steps.len() > MAX_STEPS {
         return Err(bad(format!(
             "{} steps; a batch runs at most {MAX_STEPS} — split it, or use `script`",
@@ -828,23 +844,36 @@ fn batch(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
         .get("stop_on_error")
         .and_then(Value::as_bool)
         .unwrap_or(true);
+    // Every edit of the batch one undo step.
+    let step = crate::agent::step_name(args.get("name").and_then(Value::as_str), "batch");
+    let ctx = Ctx {
+        step: Some(&step),
+        ..*ctx
+    };
     let mut done: Vec<Option<Value>> = Vec::new();
     let mut results = Vec::new();
-    for (i, (step, id)) in steps.iter().zip(&ids).enumerate() {
+    for (i, (s, id)) in steps.iter().zip(&ids).enumerate() {
         ctx.job
             .step(format!("{}/{} {id}", i.saturating_add(1), steps.len()));
-        let outcome = resolve(
-            &step.get("args").cloned().unwrap_or_else(|| json!({})),
-            &done,
-        )
-        .map_err(bad)
-        .and_then(|a| {
-            let mut params = json!({"id": id, "args": a});
-            if let (Some(t), Some(o)) = (step.get("ticket"), params.as_object_mut()) {
-                o.insert("ticket".into(), t.clone());
-            }
-            ctx.up.call("run", &params, &ctx.job.cancel)
-        });
+        let outcome = resolve(&s.get("args").cloned().unwrap_or_else(|| json!({})), &done)
+            .map_err(bad)
+            .and_then(|mut a| {
+                // The batch's `if_revision` holds for its first step: each
+                // step after it moves the song on itself.
+                if i == 0
+                    && let (Some(r), Some(o)) = (args.get("if_revision"), a.as_object_mut())
+                {
+                    o.entry("if_revision").or_insert_with(|| r.clone());
+                }
+                match s.get("ticket") {
+                    Some(t) => ctx.up.call(
+                        "run",
+                        &json!({"id": id, "args": a, "ticket": t}),
+                        &ctx.job.cancel,
+                    ),
+                    None => ctx.run(id, &a),
+                }
+            });
         let failed = outcome.is_err();
         results.push(step_result(i, id, &outcome));
         done.push(outcome.ok());
@@ -852,7 +881,12 @@ fn batch(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
             break;
         }
     }
-    Ok(batch_answer(&results, steps.len()))
+    let undo = crate::agent::end_step(&ctx, &step);
+    let mut out = batch_answer(&results, steps.len());
+    if let Some(o) = out.as_object_mut() {
+        o.insert("undo".into(), json!(undo));
+    }
+    Ok(out)
 }
 
 fn batch_answer(results: &[Value], of: usize) -> Value {
@@ -910,8 +944,16 @@ fn batch_parallel(ctx: &Ctx<'_>, steps: &[Value], ids: &[&str]) -> Result<Value,
                     let id = ids.get(base.saturating_add(k)).copied().unwrap_or_default();
                     let child = ctx.job.child(id);
                     let args = step.get("args").cloned().unwrap_or_else(|| json!({}));
-                    let up = ctx.up;
-                    scope.spawn(move || upstream::run(up, id, &args, &child.cancel))
+                    let (up, agent) = (ctx.up, ctx.agent);
+                    scope.spawn(move || {
+                        let ctx = Ctx {
+                            up,
+                            job: child.as_ref(),
+                            agent,
+                            step: None,
+                        };
+                        crate::agent::run(&ctx, id, &args)
+                    })
                 })
                 .collect();
             for h in handles {
@@ -957,8 +999,11 @@ its close mics, a `Trig` (keys its gate, never heard), a `Sample`, and a `Fund`/
 given) answers `{job, state: \"running\"}`: call `job {job}` to wait for its result (renders of a \
 whole song take minutes). Mix by measurement: listen/block_measure for one point, \
 mix_measure/balance across the mix, listen_ab to try a change level-matched and put it back, \
-mix_snapshot before a series of changes. Changes are undo steps in the person's session: say what \
+mix_snapshot before a series of changes. Changes are undo steps in the person's session (a script's or batch's all one, `Agent: <name>`): say what \
 you change. \
+\n\nThe person edits too. Every answer says the song's `revision`; pass it back as `if_revision` on a change \
+that relies on what you read, and it is refused `stale` (nothing run) if the song moved on since — \
+`changes {since}` says what changed and who changed it. \
 \n\nMany calls at once: `script` runs JavaScript over every tool (`studio.listen`, `studio.trackSet`, \
 …) — loops, conditions, renders side by side — in one call; `batch` with `parallel: true` runs \
 read-only steps side by side.";

@@ -394,11 +394,22 @@ fn a_cancelled_script_stops_its_calls() {
     }
 }
 
+/// A plain batch is run by the bridge, a step at a time, so its edits are
+/// one undo step (Studio's own batch made each its own).
 #[test]
-fn a_plain_batch_is_studios_own() {
+fn a_plain_batch_runs_its_steps_in_order() {
     let s = session(10.0);
-    let (_, v) = s.call("batch", json!({"steps": [{"id": "LISTEN"}]}));
-    assert_eq!(v["studio"], json!(true));
+    let (error, v) = s.call(
+        "batch",
+        json!({"steps": [{"id": "LISTEN", "args": {"track": "Kick"}}]}),
+    );
+    assert!(!error, "{v}");
+    assert_eq!(v["ran"], json!(1));
+    assert_eq!(
+        v["results"][0]["result"]["figures"]["lufs"].as_f64(),
+        Some(-20.0)
+    );
+    assert!(s.ran("batch").is_empty(), "not Studio's own batch");
 }
 
 #[test]

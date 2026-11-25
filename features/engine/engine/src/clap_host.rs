@@ -118,52 +118,148 @@ pub fn install(daw: &'static Standalone) {
     });
 }
 
+/// What the pump knows of one instance between its turns: what it needs
+/// to tell, without the plugin's lock, whether this turn has anything to
+/// do there.
+#[derive(Clone)]
+struct Visited {
+    /// The instance it was learnt from ([`PluginCell::instance`]): another
+    /// under the same guid is visited afresh.
+    ///
+    /// [`PluginCell::instance`]: daw::standalone::plugin::PluginCell::instance
+    instance: u64,
+    /// Its `host-events/1`, as of its last visit (valid while the instance
+    /// is the same).
+    sink: Option<daw::standalone::clap_ext::host::EventSink>,
+    /// Whether host-automation/1 was last tried for it (and when), for an
+    /// instance not yet on the song: tried again at most every second.
+    registered_tried: web_time::Instant,
+    /// How many times the pump took its lock.
+    visits: u64,
+}
+
+/// Each instance as the pump last visited it, by FX guid.
+static VISITED: Mutex<Option<HashMap<String, Visited>>> = Mutex::new(None);
+
+/// How often an instance Studio could not place on the song (no track
+/// found for it yet) is tried again for host-automation/1.
+const REGISTER_AGAIN: Duration = Duration::from_secs(1);
+
 /// One turn of the engine's main loop for plugins: each CLAP's
 /// main-thread request run, its rescans noticed (and every cached copy of
 /// its parameters refreshed), its timeline bound and kept current, the
 /// events it subscribed to delivered.
+///
+/// A plugin's lock is taken only where there is something to do: a new
+/// instance (registered, its timeline bound), one that asked for its main
+/// thread (`request_callback`), one with events due — read beside a
+/// render from what each plugin publishes ([`PluginNotices`]). A song
+/// that holds still costs no plugin a wait, where every turn used to
+/// take every plugin's lock, behind whatever render had it.
+///
+/// [`PluginNotices`]: daw::standalone::plugin::PluginNotices
 pub fn pump(daw: &'static Standalone) {
-    let guids: Vec<String> = daw.with_plugin_map(|m| m.guids().map(str::to_owned).collect());
+    type Cells = Vec<(
+        String,
+        u64,
+        Option<Arc<daw::standalone::plugin::PluginNotices>>,
+    )>;
+    let cells: Cells = daw.with_plugin_map(|m| {
+        m.guids()
+            .filter_map(|g| {
+                let cell = m.cell(g)?;
+                Some((g.to_owned(), cell.instance(), cell.notices().cloned()))
+            })
+            .collect()
+    });
+    let guids: Vec<String> = cells.iter().map(|(g, _, _)| g.clone()).collect();
     let step = take_step();
     let outbox = topics::Outbox::gather(daw, step);
+    let mut visited = VISITED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take()
+        .unwrap_or_default();
     let mut live = Vec::new();
-    for guid in &guids {
+    let mut visits = 0usize;
+    for (guid, instance, notices) in &cells {
         let known = automation::caller_of(guid).is_some();
         let timeline = timeline::for_fx(daw, guid);
         timeline.refresh();
-        let turn = daw.with_plugin_instance(guid, |p| {
-            plugin_call(|| {
-                if !known {
-                    // Before its main thread runs: a write it makes there
-                    // names a plugin Studio knows.
-                    register_plugin(daw, guid, None, p);
-                }
-                if !p.timeline_bound() {
-                    p.bind_timeline(Some(timeline.clone()));
-                }
-                if p.wants_main_thread() {
-                    p.pump_main_thread();
-                }
-                let sink = p.event_sink();
-                if let Some(sink) = &sink {
-                    outbox.deliver(sink);
-                    timeline.deliver(sink);
-                }
-                (p.param_info_revision(), sink)
-            })
+        let seen = visited.get(guid).filter(|v| v.instance == *instance);
+        let due = seen.is_none_or(|v| {
+            notices.as_ref().is_some_and(|n| n.wants_main_thread())
+                || (!known && v.sink.is_some() && v.registered_tried.elapsed() >= REGISTER_AGAIN)
+                || v.sink
+                    .as_ref()
+                    .is_some_and(|s| outbox.has_for(s) || timeline.due(s))
         });
-        let Some((revision, sink)) = turn else {
+        if due {
+            visits += 1;
+            // Its main thread run may change what it holds (an editor's
+            // task): counted as a touch then, a read otherwise.
+            let main = notices.as_ref().is_none_or(|n| n.wants_main_thread());
+            let visit = |p: &mut dyn daw::standalone::plugin::PluginInstance| {
+                plugin_call(|| {
+                    if !known {
+                        // Before its main thread runs: a write it makes
+                        // there names a plugin Studio knows.
+                        register_plugin(daw, guid, None, p);
+                    }
+                    if !p.timeline_bound() {
+                        p.bind_timeline(Some(timeline.clone()));
+                    }
+                    if p.wants_main_thread() {
+                        p.pump_main_thread();
+                    }
+                    let sink = p.event_sink();
+                    if let Some(sink) = &sink {
+                        outbox.deliver(sink);
+                        timeline.deliver(sink);
+                    }
+                    sink
+                })
+            };
+            let turn = if main {
+                daw.with_plugin_instance(guid, visit)
+            } else {
+                daw.with_plugin_instance_reading(guid, visit)
+            };
+            let Some(sink) = turn else {
+                visited.remove(guid);
+                continue;
+            };
+            let registered_tried = if known {
+                seen.map_or_else(web_time::Instant::now, |v| v.registered_tried)
+            } else {
+                web_time::Instant::now()
+            };
+            visited.insert(
+                guid.clone(),
+                Visited {
+                    instance: *instance,
+                    sink,
+                    registered_tried,
+                    visits: seen.map_or(0, |v| v.visits) + 1,
+                },
+            );
+        }
+        let Some(v) = visited.get(guid) else {
             continue;
         };
-        live.extend(sink);
+        live.extend(v.sink);
+        let revision = notices.as_ref().map_or(0, |n| n.param_info());
         if rescanned(guid, revision) {
             refresh_params(daw, guid);
             // Its parameters again, for host-automation/1.
-            let _ = daw.with_plugin_instance(guid, |p| {
+            let _ = daw.with_plugin_instance_reading(guid, |p| {
                 plugin_call(|| register_plugin(daw, guid, None, p))
             });
         }
     }
+    visited.retain(|g, _| guids.iter().any(|l| l == g));
+    *VISITED.lock().unwrap_or_else(PoisonError::into_inner) = Some(visited);
+    PUMP_VISITS.fetch_add(visits as u64, Ordering::Relaxed);
     topics::retain_live(&live);
     forget_gone(&guids);
     automation::retain(&guids);
@@ -181,6 +277,29 @@ pub fn pump(daw: &'static Standalone) {
     }
     timeline::forget_gone(&guids);
     signal::publish_feed(daw);
+}
+
+/// How many times the pump took a plugin's lock, since the process
+/// started.
+static PUMP_VISITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many times the [`pump`] took a plugin's lock so far: what
+/// `ENGINE_STATUS` and the tests read. A song holding still adds none.
+#[must_use]
+pub fn pump_visits() -> u64 {
+    PUMP_VISITS.load(Ordering::Relaxed)
+}
+
+/// How many times the [`pump`] took `fx_guid`'s plugin's lock, this
+/// instance of it.
+#[must_use]
+pub fn pump_visits_of(fx_guid: &str) -> u64 {
+    VISITED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .and_then(|m| m.get(fx_guid))
+        .map_or(0, |v| v.visits)
 }
 
 /// Hand `copy`, a render's copy of FX `fx_guid`'s plugin, the `hits:`

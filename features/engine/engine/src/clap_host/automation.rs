@@ -58,6 +58,9 @@ struct Book {
     seen: HashMap<(String, u32), Vec<(f64, f64)>>,
     /// Per caller: the undo step it has open.
     open: HashMap<Caller, String>,
+    /// Per caller: the song's revision its lanes were last looked at, and
+    /// the FX they were: a song that holds still is not looked at again.
+    checked: HashMap<Caller, (String, u64)>,
 }
 
 static BOOK: Mutex<Option<Book>> = Mutex::new(None);
@@ -77,7 +80,11 @@ pub fn register(caller: Caller, registered: Registered) {
 
 /// Forget every plugin not among `live` FX.
 pub fn retain(live: &[String]) {
-    with_book(|b| b.plugins.retain(|_, r| live.contains(&r.fx_guid)));
+    with_book(|b| {
+        b.plugins.retain(|_, r| live.contains(&r.fx_guid));
+        let plugins = &b.plugins;
+        b.checked.retain(|c, _| plugins.contains_key(c));
+    });
 }
 
 /// The registered plugin of FX `fx_guid`.
@@ -437,6 +444,21 @@ pub fn user_edits(daw: &Standalone) -> Vec<(Caller, AutomationEdit)> {
         with_book(|b| b.plugins.iter().map(|(c, r)| (*c, r.clone())).collect());
     let mut out = Vec::new();
     for (caller, r) in plugins {
+        // Every edit moves the song's revision: none since the last look,
+        // no lane can differ.
+        let revision = crate::fx_actions::project_guid(&r.project)
+            .ok()
+            .and_then(|g| daw.project_revision(&g));
+        if let Some(revision) = revision {
+            let still = with_book(|b| {
+                b.checked
+                    .insert(caller, (r.fx_guid.clone(), revision))
+                    .is_some_and(|(fx, was)| fx == r.fx_guid && was == revision)
+            });
+            if still {
+                continue;
+            }
+        }
         let lanes: Vec<u32> =
             Automation::envelopes(daw, r.project.clone(), TrackRef::Guid(r.track_guid.clone()))
                 .into_iter()

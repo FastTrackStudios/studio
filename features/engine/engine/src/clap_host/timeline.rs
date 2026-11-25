@@ -123,6 +123,19 @@ impl TrackTimeline {
         false
     }
 
+    /// Whether [`deliver`](Self::deliver) has anything to do for `sink`'s
+    /// plugin: a timeline subscription not yet started, or a revision it
+    /// was not sent. Read without the plugin.
+    #[must_use]
+    pub fn due(&self, sink: &EventSink) -> bool {
+        if super::topics::subscriptions_of(sink, &super::topics::Topic::Timeline).is_empty() {
+            return false;
+        }
+        let revision = self.revision.load(Ordering::Acquire);
+        let state = self.state();
+        !state.wanted || (state.sent != revision && revision != 0)
+    }
+
     /// Send `sink`'s `timeline` subscriptions the revision, if it moved
     /// since it was last sent. Main thread for plugins.
     pub fn deliver(&self, sink: &EventSink) {

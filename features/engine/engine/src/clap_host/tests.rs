@@ -747,3 +747,301 @@ fn a_comps_makeup_set_through_the_state_holds() {
         "the copy plays it: {gain_db:.2} dB"
     );
 }
+
+// ── Nothing waits on a still song ───────────────────────────────────────
+
+/// SIGNAL_FEED while a render holds the Signal instance (its cell locked,
+/// as a render-ahead chunk holds it): answered at once, the values'
+/// revision as last read — never waiting for the plugin, which used to
+/// cost the feed a render chunk per instance (26–93 ms).
+#[test]
+fn the_feed_never_waits_for_a_render_holding_signal() {
+    let Some((daw, ctx, fx)) = stopped_signal("signal-feed-busy") else {
+        return;
+    };
+    let warm = super::signal::feed(&daw, &ctx);
+    assert_eq!(warm.fx.len(), 1, "{warm:?}");
+    let held = std::sync::Barrier::new(2);
+    let done = std::sync::atomic::AtomicBool::new(false);
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            daw.with_plugin_map(|m| {
+                let _render = m
+                    .cell(&fx)
+                    .and_then(|c| c.try_lock_spinning(1))
+                    .expect("the plugin, as a render takes it");
+                held.wait();
+                let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+                while !done.load(std::sync::atomic::Ordering::Acquire)
+                    && std::time::Instant::now() < until
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+            });
+        });
+        held.wait();
+        let at = std::time::Instant::now();
+        let busy = super::signal::feed(&daw, &ctx);
+        let took = at.elapsed();
+        done.store(true, std::sync::atomic::Ordering::Release);
+        eprintln!("a feed while a render holds Signal: {took:?}");
+        assert!(
+            took < std::time::Duration::from_millis(50),
+            "the feed waited {took:?}"
+        );
+        assert_eq!(busy.fx.len(), 1);
+        assert_eq!(busy.fx[0].revision, warm.fx[0].revision);
+        assert_eq!(busy.fx[0].values_revision, warm.fx[0].values_revision);
+        assert_eq!(busy.fx[0].meters.len(), warm.fx[0].meters.len());
+    });
+}
+
+/// The pump takes a plugin's lock on its first sight and when it asks for
+/// its main thread — not on every turn of a song that holds still.
+#[test]
+fn a_still_song_is_pumped_without_taking_its_plugins() {
+    let Some((daw, _ctx, fx)) = stopped_signal("signal-pump-still") else {
+        return;
+    };
+    let daw: &'static daw::standalone::Standalone = Box::leak(Box::new(daw));
+    // The first turns: seen, registered, any main-thread work it asked for.
+    for _ in 0..3 {
+        super::pump(daw);
+    }
+    let settled = super::pump_visits_of(&fx);
+    assert!(settled >= 1, "seen once at least");
+    let asked = daw.with_plugin_map(|m| {
+        m.cell(&fx)
+            .and_then(|c| c.notices().map(|n| n.wants_main_thread()))
+    });
+    for _ in 0..20 {
+        super::pump(daw);
+    }
+    let after = super::pump_visits_of(&fx);
+    eprintln!(
+        "pump visits of a still Signal: {settled} settling, {} over 20 turns (asked: {asked:?})",
+        after - settled
+    );
+    assert!(
+        after - settled <= 1,
+        "a still plugin is not taken every turn: {} visits in 20",
+        after - settled
+    );
+}
+
+/// Autosave's fingerprint of a song with Signal: the same while it holds
+/// still, read from the plugin once, and moved by a value set through
+/// SIGNAL_BLOCK_SET and by FX_SET — what a save must not miss.
+#[test]
+fn a_signal_change_moves_the_fingerprint_a_still_one_does_not() {
+    let Some((daw, ctx, fx)) = stopped_signal("signal-fingerprint") else {
+        return;
+    };
+    let song = crate::fx_actions::project_guid(&ctx).expect("the song");
+    let print = || daw::standalone::digest::fingerprint(&daw, &song).expect("a print");
+    let still = print();
+    let at = std::time::Instant::now();
+    for _ in 0..10 {
+        assert_eq!(print(), still, "a still song keeps its print");
+    }
+    eprintln!("a still Signal song's print: {:?}", at.elapsed() / 10);
+    super::signal::block_set(
+        &daw,
+        &ctx,
+        &serde_json::json!({
+            "track": "Kick/Sum/In",
+            "block": "tone.comp",
+            "params": { "makeup": 2.0 },
+        }),
+    )
+    .expect("a block set");
+    let set = print();
+    assert_ne!(set, still, "SIGNAL_BLOCK_SET moves it");
+    let before = super::signal::chain(&daw, &ctx, "Kick/Sum/In", None).expect("its chain");
+    let clap_id = chain_param(&before["chain"], "tone.comp", "makeup")
+        .and_then(|p| p["clap_id"].as_str().map(str::to_owned))
+        .expect("the comp's makeup is a slot");
+    fx_set(&daw, &ctx, &clap_id, "4 dB");
+    assert_ne!(print(), set, "FX_SET moves it");
+    let _ = fx;
+}
+
+/// A Signal build with `signal-revisions/1` tells its host when its state
+/// changed (`clap_host_state.mark_dirty`), even through a call the host
+/// made only to read: the host's saved copy of it is then read again.
+#[test]
+fn signal_marks_its_state_dirty_when_a_value_moves() {
+    let Some((daw, _ctx, fx)) = stopped_signal("signal-mark-dirty") else {
+        return;
+    };
+    let client = daw
+        .with_plugin_map(|m| m.cell(&fx).and_then(|c| c.signal()))
+        .expect("signal/1");
+    if client.values_revision().is_none() {
+        eprintln!("skipped: this Signal Dev has no signal-revisions/1");
+        return;
+    }
+    let state_of = || {
+        daw.with_plugin_map(|m| {
+            m.cell(&fx)
+                .and_then(|c| c.notices().map(|n| n.state()))
+                .expect("a CLAP tells")
+        })
+    };
+    let before = state_of();
+    let args = serde_json::json!({
+        "block": "tone.comp",
+        "params": { "makeup": 1.5 },
+    });
+    // Through a reading call: no touch counted, so only the plugin's own
+    // word can move its key.
+    let ran = daw
+        .with_plugin_instance_reading(&fx, |p| {
+            super::plugin_call(|| {
+                p.signal()
+                    .map(|s| s.run_action("SIGNAL_BLOCK_SET", &args.to_string()))
+            })
+        })
+        .flatten()
+        .expect("ran");
+    assert!(ran.is_ok(), "{ran:?}");
+    assert!(state_of() > before, "Signal marked its state dirty");
+    // A read that changes nothing marks nothing.
+    let after = state_of();
+    let _ = daw.with_plugin_instance_reading(&fx, |p| {
+        super::plugin_call(|| p.signal().map(|s| s.run_action("SIGNAL_REVISIONS", "{}")))
+    });
+    assert_eq!(state_of(), after);
+}
+
+/// What a still song costs the engine's idle threads, with `SIGNALS`
+/// Signal instances on as many tracks while a render takes each plugin in
+/// turn for 20 ms (a render-ahead chunk): the pump's turn (every 50 ms),
+/// autosave's look (every 2 s) and the mixer's feed (ten a second) — and
+/// the same work done the way it was (every plugin taken each pump turn,
+/// SIGNAL_REVISIONS asked of every instance on its main thread each feed,
+/// every state read each look). `SIGNAL_DEV_CLAP` picks the Signal build.
+/// `--ignored --nocapture` to see it.
+#[test]
+#[ignore = "a measurement"]
+fn what_a_still_song_costs_at_idle() {
+    use std::time::{Duration, Instant};
+    const SIGNALS: usize = 24;
+    let Some(clap) = signal_dev() else {
+        eprintln!("skipped: no Signal Dev.clap on this machine");
+        return;
+    };
+    let daw = daw::standalone::Standalone::new();
+    daw.set_plugin_load_options(daw::standalone::plugin::LoadOptions {
+        actions: Some(Arc::new(StudioActions::default())),
+        ..daw::standalone::plugin::LoadOptions::default()
+    });
+    let guid = "idle-cost";
+    daw.seed_project(daw_proto::ProjectInfo {
+        guid: guid.into(),
+        name: guid.into(),
+        path: String::new(),
+    });
+    let ctx = daw::service::ProjectContext::Project(guid.into());
+    let mut fx = Vec::new();
+    for i in 0..SIGNALS {
+        let track =
+            daw::service::Tracks::add(&daw, ctx.clone(), &format!("T{i}"), None).expect("a track");
+        let chain = daw::service::FxChainContext::Track(track);
+        let g = crate::clap_fx::add(&daw, &ctx, &chain, &clap, u32::MAX).expect("Signal loads");
+        daw.with_plugin_instance(&g, |p| {
+            if !p.is_prepared() {
+                p.prepare(48_000.0, 512).expect("activates");
+            }
+        });
+        fx.push(g);
+    }
+    let daw: &'static daw::standalone::Standalone = Box::leak(Box::new(daw));
+    let lock_free = daw
+        .with_plugin_map(|m| m.cell(&fx[0]).and_then(|c| c.signal()))
+        .and_then(|c| c.values_revision())
+        .is_some();
+    for _ in 0..3 {
+        super::pump(daw);
+    }
+    let _ = daw::standalone::digest::fingerprint(daw, guid);
+    let _ = super::signal::feed(daw, &ctx);
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let time = |n: usize, f: &mut dyn FnMut()| {
+        let (mut total, mut worst) = (Duration::ZERO, Duration::ZERO);
+        for _ in 0..n {
+            let at = Instant::now();
+            f();
+            let took = at.elapsed();
+            total += took;
+            worst = worst.max(took);
+        }
+        (total / u32::try_from(n).unwrap_or(1), worst)
+    };
+    std::thread::scope(|s| {
+        // The render: each plugin in turn, 20 ms at a time.
+        s.spawn(|| {
+            while !stop.load(std::sync::atomic::Ordering::Acquire) {
+                for g in &fx {
+                    daw.with_plugin_map(|m| {
+                        if let Some(_held) = m.cell(g).and_then(|c| c.try_lock_spinning(1)) {
+                            std::thread::sleep(Duration::from_millis(20));
+                        }
+                    });
+                }
+            }
+        });
+        let feed_new = time(10, &mut || {
+            std::hint::black_box(super::signal::feed(daw, &ctx));
+        });
+        let feed_old = time(3, &mut || {
+            for g in &fx {
+                std::hint::black_box(daw.with_plugin_instance(g, |p| {
+                    super::plugin_call(|| {
+                        p.signal().map(|s| s.run_action("SIGNAL_REVISIONS", "{}"))
+                    })
+                }));
+            }
+        });
+        let pump_new = time(10, &mut || super::pump(daw));
+        let pump_old = time(3, &mut || {
+            for g in &fx {
+                std::hint::black_box(daw.with_plugin_instance(g, |p| {
+                    (
+                        p.wants_main_thread(),
+                        p.event_sink().is_some(),
+                        p.param_info_revision(),
+                    )
+                }));
+            }
+        });
+        let look_new = time(10, &mut || {
+            std::hint::black_box(daw::standalone::digest::fingerprint(daw, guid));
+        });
+        let look_old = time(3, &mut || {
+            for g in &fx {
+                std::hint::black_box(daw.save_plugin_state(g).map(|s| s.len()));
+            }
+        });
+        stop.store(true, std::sync::atomic::Ordering::Release);
+        eprintln!(
+            "{SIGNALS} Signal instances, a render holding each 20 ms in turn \
+             (signal-revisions/1: {lock_free}); mean / worst:\n\
+             feed:  {:?} / {:?} now, {:?} / {:?} before\n\
+             pump:  {:?} / {:?} now, {:?} / {:?} before\n\
+             look:  {:?} / {:?} now, {:?} / {:?} before",
+            feed_new.0,
+            feed_new.1,
+            feed_old.0,
+            feed_old.1,
+            pump_new.0,
+            pump_new.1,
+            pump_old.0,
+            pump_old.1,
+            look_new.0,
+            look_new.1,
+            look_old.0,
+            look_old.1,
+        );
+    });
+}

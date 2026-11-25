@@ -130,6 +130,35 @@ SIGNAL_BLOCK_SET`. Meanwhile, use `signal_run` with `SIGNAL_SET`
   `heard.meters` beside the recording under the same key and answer them
   on `Answered::Replayed`). Then this costs nothing and can go.
 
+## Beside the person: revisions, `stale`, `changes`, one undo step
+
+The person edits the same song while an agent works. Every call goes
+through the engine's `AGENT_RUN` (`session_engine::agent`), so:
+
+- **Every answer carries `revision`**, the song's edit counter (it moves
+  on every edit by either side; selection, folds, zoom and the transport
+  do not count). An action's own `revision` (SIGNAL_CHAIN's) moves to
+  `action_revision`; a non-object answer becomes `{answer, revision}`.
+  Inside a script, object answers carry it too.
+- **`if_revision`** on any mutating tool, `run`, a batch (its first step)
+  or a script's call: if the song moved on, nothing runs and the call
+  fails `{code: "stale", error, revision, since, complete, changes: [..10],
+  more}`. Read again, retry with the new revision.
+- **`changes {since, offset?, limit?}`** (SESSION_CHANGES): `{revision,
+  since, complete, total, by_person, by_agent, offset, next?, changes:
+  [{revision, by, action?, label, kind, track?, block?, fields?, at}]}`.
+  A bounded journal of the last 2000 edits; `complete: false` when older
+  ones were forgotten or the engine restarted.
+- **One undo step per script or batch**: `script {name}` and `batch
+  {name}` make every edit `Agent: <name>` (`Agent: script`/`Agent: batch`
+  by default), answered as `undo` (null when nothing changed). One
+  SESSION_UNDO takes it all back, one SESSION_REDO brings it back. Only
+  for a song open from its project file; what the person does while a
+  script runs folds into the step.
+
+Against a Studio without `AGENT_RUN` the bridge runs actions directly as
+before and refuses `if_revision` as `unsupported`.
+
 ## Workflows
 
 - **Get your bearings:** `session_tree {under: "Drums"}`, then `sections`,
@@ -160,8 +189,8 @@ revision this server answers in by default (it also accepts the
 2025-03-26 and 2024-11-05 handshakes, but takes one message a line,
 never a batch array). So chaining calls is a tool's job:
 
-- **`batch`** runs a list of `{id, args}` steps in order, each its own
-  undo step, nothing rolled back. Two additions on top of Studio's own
+- **`batch`** runs a list of `{id, args}` steps in order, all one undo
+  step, nothing rolled back. Two additions on top of Studio's own
   batch:
   - `parallel: true` runs the steps side by side (8 at once), when every
     one is read-only (LISTEN, MIX_STATE, …). A mutating step makes the
@@ -216,10 +245,10 @@ answers `isError` with the failure's `code` and `error`, plus:
 
 The rules:
 
-- **Each mutating call is an undo step** in the person's session, the
-  same as when the tools are called one by one. A script that changes
-  several things should `await studio.snapshot("before …")` first and
-  say what it changed. If it fails halfway, what ran stays done:
+- **All of a script's edits are one undo step** (`Agent: <name>`) in
+  the person's session. A script that changes several things should
+  still `await studio.snapshot("before …")` first and say what it
+  changed. If it fails halfway, what ran stays done:
   `mix_restore` puts the mix back.
 - **The sandbox.** QuickJS has its own built-ins only. There is no module
   loader, no `std` or `os`, no `fetch` and no timers, so a script reaches

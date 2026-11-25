@@ -9,6 +9,13 @@
 //! of edits is one save, not twenty), is saved into its `Song.session` as
 //! one step of its history, named `Autosave`.
 //!
+//! A look reads each plugin's state again only when it may have changed
+//! (`digest::fingerprint`: a host call reached the plugin, it marked its
+//! state dirty or sent a value of its own, its editor is open, or the
+//! read is a minute old), so a song that holds still costs nothing to
+//! look at. Each look is one span, `autosave.look`: the songs looked at,
+//! the plugin states read, the songs saved.
+//!
 //! Beside each file, `Song.session.log` gets a line for every time the
 //! song is seen open for the first time in this engine (`opened`), every
 //! autosave (`saved`), and the engine's end when it ends in order
@@ -51,9 +58,25 @@ pub fn start() {
                 let Some(daw) = crate::open::local_engine() else {
                     continue;
                 };
-                for guid in open_songs() {
-                    look(daw, &guid, &mut seen);
-                }
+                let span = tracing::info_span!(
+                    "autosave.look",
+                    autosave.songs = tracing::field::Empty,
+                    autosave.state_reads = tracing::field::Empty,
+                    autosave.saved = tracing::field::Empty,
+                );
+                let _in = span.enter();
+                let reads = daw::standalone::digest::state_reads();
+                let songs = open_songs();
+                let saved = songs
+                    .iter()
+                    .filter(|guid| look(daw, guid, &mut seen))
+                    .count();
+                span.record("autosave.songs", songs.len());
+                span.record(
+                    "autosave.state_reads",
+                    daw::standalone::digest::state_reads().saturating_sub(reads),
+                );
+                span.record("autosave.saved", saved);
             }
         });
     if let Err(error) = spawned {
@@ -70,14 +93,14 @@ fn open_songs() -> Vec<String> {
 }
 
 /// One look at one song: logged when first seen, saved when it changed
-/// and has held still since the last look.
-fn look(daw: &'static Standalone, guid: &str, seen: &mut HashMap<String, Seen>) {
+/// and has held still since the last look. Whether it was saved.
+fn look(daw: &'static Standalone, guid: &str, seen: &mut HashMap<String, Seen>) -> bool {
     let Some(now) = daw::standalone::digest::fingerprint(daw, guid) else {
-        return;
+        return false;
     };
     let Some(known) = seen.get_mut(guid) else {
         let Some(file) = file_of(daw, guid) else {
-            return;
+            return false;
         };
         log(&file, "opened", now);
         seen.insert(
@@ -88,12 +111,12 @@ fn look(daw: &'static Standalone, guid: &str, seen: &mut HashMap<String, Seen>) 
                 last: now,
             },
         );
-        return;
+        return false;
     };
     let still = known.last == now;
     known.last = now;
     if now == known.saved || !still {
-        return;
+        return false;
     }
     let (file, branch) = crate::project_file::save_target(&known.file);
     match crate::project_file::save(daw, guid, &file, &branch, "Autosave") {
@@ -101,9 +124,11 @@ fn look(daw: &'static Standalone, guid: &str, seen: &mut HashMap<String, Seen>) 
             crate::projects::mark_saved(daw, guid);
             known.saved = now;
             log(&known.file, "saved", now);
+            true
         }
         Err(error) => {
             tracing::warn!(song.file = %known.file.display(), %error, "autosave: the song was not saved");
+            false
         }
     }
 }

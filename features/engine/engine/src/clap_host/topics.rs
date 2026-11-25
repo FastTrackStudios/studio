@@ -297,6 +297,12 @@ impl Outbox {
         }
     }
 
+    /// Whether any of its events goes to `sink`'s plugin.
+    #[must_use]
+    pub fn has_for(&self, sink: &EventSink) -> bool {
+        self.events.iter().any(|(_, to, _, _)| to.same_plugin(sink))
+    }
+
     /// How many events it holds.
     #[must_use]
     pub fn len(&self) -> usize {
