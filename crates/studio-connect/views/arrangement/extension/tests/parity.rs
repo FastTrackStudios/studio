@@ -84,11 +84,11 @@ fn session() -> StudioSession {
             t.soloed = solo;
         }
     }
-    let planner = daw_view_kit::studio::Planner {
-        raw: Arc::new(raw),
-        scene: Some("drum-mixing"),
-        kinds: Arc::new(studio_engine::plan::Kinds::read(&path)),
-    };
+    let planner = engine_client::song_model::template_planner(
+        Arc::new(raw),
+        Some("drum-mixing"),
+        Arc::new(engine_client::plan::Kinds::read(&path)),
+    );
     let (project, rows) = planner.plan(&planner.raw);
     let previews = daw_view_kit::studio::previews_of(&project);
     StudioSession {
