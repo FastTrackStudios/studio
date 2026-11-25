@@ -6,6 +6,12 @@ license.workspace = true
 authors.workspace = true
 description = "Swappable pitch detection, note segmentation, scale correction, and pitch-blob resynthesis"
 
+[features]
+# WORLD resynthesis of an edited `PitchDoc` (`render`): builds the WORLD
+# vocoder (C++, through world-sys), so it is opt-in.
+render = ["dep:world-sys"]
+
 [dependencies]
 realfft = { workspace = true }
 serde = { workspace = true }
+world-sys = { workspace = true, optional = true }

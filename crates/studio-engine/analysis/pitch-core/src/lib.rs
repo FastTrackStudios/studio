@@ -9,6 +9,8 @@ pub mod detect;
 pub mod dna;
 pub mod model;
 pub mod note;
+#[cfg(feature = "render")]
+pub mod render;
 pub mod tracker;
 
 pub use analyze::{AnalyzeConfig, TuneAnalysis, analyze};
