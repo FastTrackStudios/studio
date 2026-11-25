@@ -910,7 +910,7 @@ pub async fn apply(
     if structure {
         apply_structure(&mut handles, &target.tracks).await?;
     }
-    apply_parts(&mut handles, &parts, blobs, ids).await?;
+    apply_parts(&mut handles, &parts, blobs, ids, direct).await?;
     // What the facade cannot set, set in daw-standalone's own state —
     // last, over what the calls above made, so the engine holds exactly
     // the doc's.
@@ -930,15 +930,28 @@ async fn apply_parts(
     parts: &[(&TrackState, Vec<TrackField>)],
     blobs: &dyn Blobs,
     ids: &mut EngineIds,
+    direct: Option<&dyn Direct>,
 ) -> daw_control::Result<()> {
+    // The new FX's states load once every chain is built, side by side
+    // ([`Pending::finish`]): a song opening loads hundreds.
+    let mut pending = Pending::default();
+    let mut built = Ok(());
     for (track, fields) in parts {
         if fields.contains(&TrackField::Fx) {
-            apply_fx(handles, track, false, blobs, ids).await?;
+            built = apply_fx(handles, track, false, blobs, ids, &mut pending).await;
         }
-        if fields.contains(&TrackField::InputFx) {
-            apply_fx(handles, track, true, blobs, ids).await?;
+        if built.is_ok() && fields.contains(&TrackField::InputFx) {
+            built = apply_fx(handles, track, true, blobs, ids, &mut pending).await;
+        }
+        if built.is_err() {
+            break;
         }
     }
+    // What was added is finished even when a later chain failed, as it
+    // was when each FX was finished as it was added.
+    let finished = pending.finish(direct).await;
+    built?;
+    finished?;
     for (track, fields) in parts {
         if fields.contains(&TrackField::Sends) {
             apply_sends(handles, track).await?;
@@ -968,10 +981,11 @@ async fn apply_project(
         &settings.monitoring_fx,
         blobs,
         ids,
+        None,
     )
     .await?;
     let master = project.tracks().master().await?;
-    apply_chain(&master.fx_chain(), &settings.master.fx, blobs, ids).await?;
+    apply_chain(&master.fx_chain(), &settings.master.fx, blobs, ids, None).await?;
     let transport = project.transport();
     transport.set_loop(settings.looping).await?;
     transport.set_metronome(settings.metronome).await?;
@@ -2029,14 +2043,86 @@ async fn apply_fx(
     input: bool,
     blobs: &dyn Blobs,
     ids: &mut EngineIds,
+    pending: &mut Pending,
 ) -> daw_control::Result<()> {
     let Some(handle) = handles.get(&track.guid).await? else {
         return Ok(());
     };
     if input {
-        apply_chain(&handle.input_fx_chain(), &track.input_fx, blobs, ids).await
+        apply_chain(
+            &handle.input_fx_chain(),
+            &track.input_fx,
+            blobs,
+            ids,
+            Some(pending),
+        )
+        .await
     } else {
-        apply_chain(&handle.fx_chain(), &track.fx, blobs, ids).await
+        apply_chain(&handle.fx_chain(), &track.fx, blobs, ids, Some(pending)).await
+    }
+}
+
+/// New FX waiting for their state: added to their chains, their state
+/// loaded and their switches set only once every chain is built, so the
+/// loads run side by side.
+#[derive(Default)]
+struct Pending {
+    fx: Vec<PendingFx>,
+}
+
+/// One new FX's state and switches, set in that order as
+/// [`apply_chain`] sets an FX it finishes at once.
+struct PendingFx {
+    handle: daw_control::FxHandle,
+    state: Option<Vec<u8>>,
+    enabled: bool,
+    offline: bool,
+}
+
+impl Pending {
+    /// Load every state — side by side in the engine when it is in this
+    /// process ([`daw_standalone::sync::Standalone::set_state_chunks`]),
+    /// one by one through the facade otherwise — then set each FX's
+    /// switches. The first failure is the answer, once all have run.
+    async fn finish(self, direct: Option<&dyn Direct>) -> daw_control::Result<()> {
+        let standalone = direct.and_then(Direct::standalone);
+        let mut first: daw_control::Result<()> = Ok(());
+        let mut keep = |r: daw_control::Result<()>| {
+            if first.is_ok() {
+                first = r;
+            }
+        };
+        match standalone {
+            Some(sa) => {
+                let loads: Vec<_> = self
+                    .fx
+                    .iter()
+                    .filter_map(|fx| Some((fx.handle.target(), fx.state.clone()?)))
+                    .collect();
+                if let Some(at) = self.fx.first().map(|fx| fx.handle.project_context()) {
+                    for loaded in sa.set_state_chunks(&at, loads) {
+                        keep(loaded.map_err(|e| engine_error(&e)));
+                    }
+                }
+            }
+            None => {
+                for fx in &self.fx {
+                    if let Some(bytes) = &fx.state {
+                        keep(fx.handle.set_state_chunk(bytes.clone()).await);
+                    }
+                }
+            }
+        }
+        for fx in &self.fx {
+            let switched = if fx.enabled {
+                fx.handle.enable().await
+            } else {
+                fx.handle.disable().await
+            };
+            keep(switched);
+            keep(fx.handle.set_offline(fx.offline).await);
+        }
+        first
     }
 }
 
@@ -2048,6 +2134,7 @@ async fn apply_chain(
     fx: &[FxState],
     blobs: &dyn Blobs,
     ids: &mut EngineIds,
+    mut pending: Option<&mut Pending>,
 ) -> daw_control::Result<()> {
     let wanted: std::collections::HashSet<String> =
         fx.iter().map(|f| ids.fx.engine(&f.guid)).collect();
@@ -2087,7 +2174,17 @@ async fn apply_chain(
             };
             let info = h.info().await?;
             ids.fx.bind(&fx.guid, &info.guid);
-            if let Some(bytes) = fx.state.as_deref().and_then(|name| blobs.get(name)) {
+            let state = fx.state.as_deref().and_then(|name| blobs.get(name));
+            if let Some(pending) = pending.as_deref_mut() {
+                pending.fx.push(PendingFx {
+                    handle: h,
+                    state,
+                    enabled: fx.enabled,
+                    offline: fx.offline,
+                });
+                continue;
+            }
+            if let Some(bytes) = state {
                 h.set_state_chunk(bytes).await?;
             }
             h

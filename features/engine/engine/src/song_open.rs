@@ -73,9 +73,11 @@ impl OpenSession for StudioSession {
         media: crate::open::Media,
     ) -> eyre::Result<(Self, String)> {
         // A song's opening, its own unit of work: where the time went,
-        // stage by stage (`PERF_RECENT`).
+        // stage by stage (`PERF_RECENT`), and `song.ready_ms`, from asked
+        // to open to ready to play (its plugins loaded and activated).
         let span = tracing::info_span!(
             "song.open",
+            song.ready_ms = tracing::field::Empty,
             song.tracks = tracing::field::Empty,
             open.engine_ms = tracing::field::Empty,
             open.prepare_ms = tracing::field::Empty,
@@ -113,6 +115,7 @@ impl OpenSession for StudioSession {
         span.record("open.engine_ms", engine_ms);
         span.record("open.prepare_ms", prepare_ms);
         span.record("open.read_ms", read_ms);
+        span.record("song.ready_ms", opening.elapsed().as_secs_f64() * 1e3);
         // One line per song: where its opening went.
         tracing::info!(
             song.name = %opened.name,

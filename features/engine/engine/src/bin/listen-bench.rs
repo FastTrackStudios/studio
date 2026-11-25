@@ -15,7 +15,10 @@
 //! Two lines stand in for what a person does in Studio:
 //! `@play <from seconds> <seconds>` plays the song from there on a thread
 //! of its own, block by block at real time — what the audio device's
-//! callback does — and `@wait <seconds>` lets time pass.
+//! callback does — and prints when its first audible block came (`@play`,
+//! `first_audio_ms` from the play, `since_open_ms` from the open's start);
+//! `@wait <seconds>` lets time pass. With `RUST_LOG=info` every span's
+//! time goes to stderr as it closes.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -23,6 +26,7 @@ use std::time::Instant;
 fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
@@ -51,7 +55,7 @@ fn main() -> eyre::Result<()> {
                 .split_whitespace()
                 .filter_map(|w| w.parse::<f64>().ok());
             let (from, seconds) = (words.next().unwrap_or(0.0), words.next().unwrap_or(5.0));
-            players.push(play(from, seconds)?);
+            players.push(play(from, seconds, opening)?);
             continue;
         }
         if let Some(rest) = line.strip_prefix("@wait ") {
@@ -87,7 +91,7 @@ fn main() -> eyre::Result<()> {
 /// Play the open song from `from` for `seconds`, block by block at real
 /// time on a thread of its own: the audio callback's renders, with no
 /// device.
-fn play(from: f64, seconds: f64) -> eyre::Result<std::thread::JoinHandle<()>> {
+fn play(from: f64, seconds: f64, opening: Instant) -> eyre::Result<std::thread::JoinHandle<()>> {
     use daw::service::ProjectContext;
     use daw_standalone::audio_engine::render::ProjectRenderer;
     const RATE: u32 = 48_000;
@@ -107,8 +111,19 @@ fn play(from: f64, seconds: f64) -> eyre::Result<std::thread::JoinHandle<()>> {
             let began = Instant::now();
             let start = (from * f64::from(RATE)) as u64;
             let blocks = (seconds * f64::from(RATE) / BLOCK as f64) as u64;
+            let mut heard = false;
             for b in 0..blocks {
-                renderer.render_block(start + b * BLOCK as u64, BLOCK);
+                let block = renderer.render_block(start + b * BLOCK as u64, BLOCK);
+                if !heard && block.samples.iter().any(|s| s.abs() > 1e-5) {
+                    heard = true;
+                    let out = serde_json::json!({
+                        "action": "@play",
+                        "first_audio_ms": began.elapsed().as_secs_f64() * 1e3,
+                        "since_open_ms": opening.elapsed().as_secs_f64() * 1e3,
+                        "block": b,
+                    });
+                    println!("{out}");
+                }
                 let due = (b + 1) as f64 * BLOCK as f64 / f64::from(RATE);
                 let ahead = due - began.elapsed().as_secs_f64();
                 if ahead > 0.0 {

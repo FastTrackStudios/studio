@@ -970,3 +970,116 @@ fn a_step_read_from_the_journal_is_the_engine_read_whole() {
         );
     });
 }
+
+/// `song` opened in place into `daw` as `guid`, reaching the engine in
+/// this process (`direct`) or through its facade alone.
+async fn opened(daw: &Standalone, guid: &str, song: &Song, in_process: bool) -> Bridge {
+    daw.seed_project(info(guid));
+    let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+        .await
+        .expect("a facade");
+    let project = facade.daw.project(guid.to_owned()).await.expect("the song");
+    Bridge::join(
+        project,
+        song.media.clone(),
+        song.doc.fork(),
+        song.blobs.clone(),
+        in_process.then(|| direct(daw)).flatten(),
+    )
+    .await
+    .expect("joined")
+}
+
+/// A song whose FX hold state, one switched off and one offline: their
+/// states are loaded together once every chain is built
+/// (`Standalone::set_state_chunks`), and the song is the one the facade
+/// builds FX by FX — each FX's state, switch and offline as the doc has
+/// them.
+#[test]
+fn fx_states_loaded_together_open_the_song_the_facade_opens() {
+    let blobs = Arc::new(MemoryBlobs::default());
+    let eq = blobs.put(b"eq: low shelf +2 dB");
+    let comp = blobs.put(b"comp: 4:1, 10 ms");
+    let mut model = synthetic();
+    let fx = |guid: &str, plugin: &str, state: &str, enabled: bool, offline: bool| FxState {
+        guid: guid.into(),
+        plugin: plugin.into(),
+        name: plugin.into(),
+        enabled,
+        offline,
+        state: Some(state.to_owned()),
+        ..FxState::default()
+    };
+    for track in &mut model.tracks {
+        track.fx = vec![
+            fx(
+                &format!("{{EQ {}}}", track.guid),
+                "ReaEQ",
+                &eq,
+                false,
+                false,
+            ),
+            fx(
+                &format!("{{COMP {}}}", track.guid),
+                "ReaComp",
+                &comp,
+                true,
+                true,
+            ),
+        ];
+    }
+    let doc = SessionDoc::new();
+    doc.write(&model, ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs,
+    };
+    runtime().block_on(async {
+        let together = Standalone::new();
+        let one_by_one = Standalone::new();
+        let a = opened(&together, "song", &song, true).await;
+        let b = opened(&one_by_one, "song", &song, false).await;
+        // What the loads set: each FX's place, plugin, state and switches
+        // (the facade alone leaves its parameters at their defaults, which
+        // the in-process engine sets from the doc: not compared).
+        let loaded = |daw: &Standalone| {
+            daw.read_project("song", |p| {
+                let mut fx: Vec<String> = p
+                    .fx_chains
+                    .iter()
+                    .flat_map(|(chain, entries)| {
+                        entries.iter().enumerate().map(move |(i, e)| {
+                            format!(
+                                "{chain:?} {i} {} {} {} {:?}",
+                                e.fx.name, e.fx.enabled, e.fx.offline, e.state_chunk
+                            )
+                        })
+                    })
+                    .collect();
+                fx.sort();
+                fx
+            })
+            .expect("the song")
+        };
+        let (fx_a, fx_b) = (loaded(&together), loaded(&one_by_one));
+        assert_eq!(fx_a, fx_b, "the FX alike, state and switches");
+        assert_eq!(fx_a.len(), model.tracks.len() * 2);
+        assert!(
+            fx_a.iter().any(|f| f.contains("low shelf")),
+            "the EQ's state"
+        );
+        assert!(
+            fx_a.iter().any(|f| f.contains("4:1")),
+            "the compressor's state"
+        );
+        let shown: Vec<_> = a.shown.tracks.iter().flat_map(|t| t.fx.iter()).collect();
+        assert_eq!(shown.len(), model.tracks.len() * 2);
+        for f in shown {
+            let is_eq = f.plugin == "ReaEQ";
+            assert_eq!(f.enabled, !is_eq, "{} enabled as the doc has it", f.guid);
+            assert_eq!(f.offline, !is_eq, "{} offline as the doc has it", f.guid);
+            assert_eq!(f.state.as_deref(), Some(if is_eq { &*eq } else { &*comp }));
+        }
+    });
+}
