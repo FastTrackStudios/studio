@@ -1060,6 +1060,18 @@ pub trait ReverbAlgorithm: Send {
     /// Process one stereo sample, return (`left_wet`, `right_wet`).
     fn tick(&mut self, left: f64, right: f64) -> (f64, f64);
 
+    /// Keyed from outside, from now on: an algorithm that opens a window on
+    /// each hit (Non-Linear) opens it on [`trigger`](Self::trigger) only,
+    /// never on its input's own onsets, which on a drum sum full of bleed
+    /// it can't hear. Unkeyed it detects them again. Others ignore it.
+    fn set_keyed(&mut self, keyed: bool) {
+        let _ = keyed;
+    }
+
+    /// A hit at the next [`tick`](Self::tick): a hit-driven algorithm opens
+    /// its window there. Others ignore it.
+    fn trigger(&mut self) {}
+
     /// Replace this algorithm's impulse response. No-op for algorithms
     /// that don't support IRs. Returns `true` if the IR was accepted.
     /// Convolution overrides this.

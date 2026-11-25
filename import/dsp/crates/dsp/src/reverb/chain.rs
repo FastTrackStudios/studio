@@ -160,6 +160,9 @@ const HP_OFF_HZ: f64 = 20.0;
 /// At or above this the input/output low-passes are off.
 const LP_OFF_HZ: f64 = 19_999.0;
 
+/// Hits [`ReverbChain::trigger_at`] takes in one block.
+pub const MAX_TRIGGERS: usize = 16;
+
 /// Full reverb processing chain.
 ///
 /// Signal flow:
@@ -169,6 +172,15 @@ const LP_OFF_HZ: f64 = 19_999.0;
 pub struct ReverbChain {
     // Algorithm
     algorithm: Box<dyn ReverbAlgorithm>,
+    /// Keyed from outside ([`Self::set_keyed`]), kept across an algorithm
+    /// switch.
+    keyed: bool,
+    /// Hits for the next `process`, as frame offsets into it
+    /// ([`Self::trigger_at`]), and where the block's sample loop is.
+    triggers: [usize; MAX_TRIGGERS],
+    trigger_count: usize,
+    trigger_next: usize,
+    trigger_frame: usize,
     algorithm_type: AlgorithmType,
     variant: usize,
 
@@ -409,6 +421,11 @@ impl ReverbChain {
 
         Self {
             algorithm: algorithms::create(AlgorithmType::Room, 0, sample_rate),
+            keyed: false,
+            triggers: [0; MAX_TRIGGERS],
+            trigger_count: 0,
+            trigger_next: 0,
+            trigger_frame: 0,
             algorithm_type: AlgorithmType::Room,
             variant: 0,
             predelay: DelayLine::new(max_predelay.saturating_add(1)),
@@ -632,6 +649,26 @@ impl ReverbChain {
         self.algorithm.supports_ir_loading()
     }
 
+    /// Keyed from outside, from now on: an algorithm that opens a window on
+    /// each hit (Non-Linear) opens it on [`Self::trigger_at`]'s hits only,
+    /// its onset detector off ([`ReverbAlgorithm::set_keyed`]). Kept across
+    /// an algorithm switch.
+    pub fn set_keyed(&mut self, keyed: bool) {
+        self.keyed = keyed;
+        self.algorithm.set_keyed(keyed);
+    }
+
+    /// A hit `offset` frames into the next [`Processor::process`]: a
+    /// hit-driven algorithm opens its window on that frame (Non-Linear has
+    /// no pre-delay ahead of it, so on the frame the hit arrives). At most
+    /// [`MAX_TRIGGERS`] a block; more are dropped. No allocation.
+    pub fn trigger_at(&mut self, offset: usize) {
+        if let Some(slot) = self.triggers.get_mut(self.trigger_count) {
+            *slot = offset;
+            self.trigger_count = self.trigger_count.saturating_add(1);
+        }
+    }
+
     /// Switch to a different algorithm type and/or variant. Resets algorithm state.
     pub fn set_algorithm(&mut self, algo: AlgorithmType) {
         self.set_algorithm_variant(algo, self.variant);
@@ -644,6 +681,7 @@ impl ReverbChain {
             self.algorithm_type = algo;
             self.variant = variant;
             self.algorithm = algorithms::create(algo, variant, self.sample_rate);
+            self.algorithm.set_keyed(self.keyed);
             if let Some(tx) = &self.ir_trash_tx {
                 self.algorithm.set_ir_trash_sender(tx.clone());
             }
@@ -1154,6 +1192,7 @@ impl Processor for ReverbChain {
     /// value and every line, filter, envelope and phase clears, so what
     /// plays after a reset never depends on what played before it.
     fn reset(&mut self) {
+        self.trigger_count = 0;
         self.mix_smoother.set_immediate(self.mix);
         self.width_smoother.set_immediate(self.width);
         self.pan_smoother.set_immediate(self.pan);
@@ -1309,6 +1348,11 @@ impl Processor for ReverbChain {
 
     fn process(&mut self, left: &mut [f64], right: &mut [f64]) {
         let n = left.len().min(right.len());
+        if let Some(t) = self.triggers.get_mut(..self.trigger_count) {
+            t.sort_unstable();
+        }
+        self.trigger_next = 0;
+        self.trigger_frame = 0;
 
         self.drain_ir_queues();
         let block = self.begin_block();
@@ -1349,6 +1393,9 @@ impl Processor for ReverbChain {
 
             block_start = block_end;
         }
+        // A hit past the block's end (an offset beyond it) is dropped, not
+        // carried: the caller hands each block its own.
+        self.trigger_count = 0;
     }
 }
 
@@ -1654,6 +1701,18 @@ impl ReverbChain {
 
             let (alg_in_l, alg_in_r) =
                 self.drive_algorithm_input(dry_l, dry_r, duck_thresh, swell_on, swell_rate);
+
+            // A hit on this frame: the algorithm opens its window here.
+            while self
+                .triggers
+                .get(self.trigger_next)
+                .filter(|_| self.trigger_next < self.trigger_count)
+                .is_some_and(|&at| at <= self.trigger_frame)
+            {
+                self.algorithm.trigger();
+                self.trigger_next = self.trigger_next.saturating_add(1);
+            }
+            self.trigger_frame = self.trigger_frame.saturating_add(1);
 
             // Algorithm
             let (mut wet_l, mut wet_r) = self.algorithm.tick(alg_in_l, alg_in_r);

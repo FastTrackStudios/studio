@@ -76,6 +76,11 @@ pub struct NonLinear {
     /// Samples until another hit may open a window (a hit's own ring
     /// must not retrigger it).
     onset_holdoff: usize,
+    /// Keyed from outside ([`ReverbAlgorithm::set_keyed`]): windows open
+    /// on triggers only, the onset detector off.
+    keyed: bool,
+    /// A trigger for the next tick.
+    triggered: bool,
     // Shape
     shape: EnvelopeShape,
     // BigSky MX extras: Chop (amplitude mod on the decay), explicit
@@ -119,6 +124,8 @@ impl NonLinear {
             onset_fast: 0.0,
             onset_slow: 0.0,
             onset_holdoff: 0,
+            keyed: false,
+            triggered: false,
             shape: EnvelopeShape::Reverse,
             mx: NonLinearParams::default(),
             chop_phase: 0.0,
@@ -244,6 +251,7 @@ impl ReverbAlgorithm for NonLinear {
         self.onset_fast = 0.0;
         self.onset_slow = 0.0;
         self.onset_holdoff = 0;
+        self.triggered = false;
         self.chop_phase = 0.0;
         self.late_fdn.reset();
         self.late_env = 0.0;
@@ -253,9 +261,18 @@ impl ReverbAlgorithm for NonLinear {
     }
 
     fn set_sample_rate(&mut self, sample_rate: f64) {
-        let mx = self.mx;
+        let (mx, keyed) = (self.mx, self.keyed);
         *self = Self::new(sample_rate);
         self.set_nonlinear_params(&mx);
+        self.keyed = keyed;
+    }
+
+    fn set_keyed(&mut self, keyed: bool) {
+        self.keyed = keyed;
+    }
+
+    fn trigger(&mut self) {
+        self.triggered = true;
     }
 
     fn set_params(&mut self, params: &AlgorithmParams) {
@@ -356,7 +373,14 @@ impl ReverbAlgorithm for NonLinear {
         follow(&mut self.onset_fast, ONSET_FAST_S, self.sample_rate);
         follow(&mut self.onset_slow, ONSET_SLOW_S, self.sample_rate);
         self.onset_holdoff = self.onset_holdoff.saturating_sub(1);
-        if self.onset_holdoff == 0
+        if core::mem::take(&mut self.triggered) {
+            // A hit the host knows (a drum's placed or detected hits): it
+            // opens the window where it is, every one (a flam's second
+            // stroke too: it was placed).
+            self.env_position = Some(0);
+            self.onset_holdoff = num::f64_to_index(ONSET_HOLDOFF_S * self.sample_rate);
+        } else if !self.keyed
+            && self.onset_holdoff == 0
             && self.onset_fast > ONSET_FLOOR
             && self.onset_fast > was_slow * ONSET_RATIO
         {
