@@ -1,0 +1,91 @@
+[package]
+name = "session"
+description = "The primitive FastTrackStudio's music software agrees on: song structure, a generic timeline, per-extension data, transport as data and playback sync"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# Playback sync with realtime guarantees: the lock-free snapshot, clock
+# offset estimation, drift correction (from daw-transport-sync).
+sync = ["dep:web-time"]
+# Presence held for the process (`presence::store`): what a collaboration
+# driver publishes and a view paints.
+store = ["dep:web-time"]
+# The session as an Architect document: a Loro doc in the shape
+# `docs/design/session.md` gives, of crdt's `DocKind` `fts.session`.
+# crdt without its sync transport and without Architect's workspace-hack
+# (patched out at the root: vendor/no-workspace-hack).
+architect = ["dep:loro", "dep:crdt", "dep:uuid"]
+# What a runtime extension may ask of the session its host holds: plain
+# requests, one `handle` every host answers with (no transport: the host
+# serves it as `fts.session`).
+service = ["architect"]
+# The `fts.session` service over vox (`session::host`): the caller from the
+# call's principal, what it may do from the permission engine. Named `vox`
+# because `#[architect::rpc]` emits `cfg(feature = "vox")` into the crate
+# that uses it.
+# `fts.session` as an Architect extension service: the provider's actions
+# hand `session::extension::answer` their JSON and the caller's id.
+extension = ["service", "dep:facet-json"]
+# The session host's transport, published (`session::lead`, native only):
+# its presence served (Architect's, which carries its clock), `lead/play`
+# published.
+lead = ["vox", "sync", "crdt/vox", "dep:tokio"]
+vox = ["service", "dep:architect", "architect/vox", "dep:architect-permissions", "dep:thiserror", "dep:vox"]
+
+[dependencies]
+facet = { workspace = true }
+facet-json = { workspace = true, optional = true }
+loro = { workspace = true, optional = true }
+crdt = { workspace = true, optional = true }
+architect = { workspace = true, optional = true }
+# A session file's document id (`session::file`): named, never made here,
+# so no `v4` (and no getrandom in a wasm build).
+uuid = { version = "1", optional = true }
+architect-permissions = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+vox = { workspace = true, optional = true }
+# Clocks that also run in a page (`sync`, `presence::store`).
+web-time = { workspace = true, optional = true }
+
+# The leader's presence host, its join and its tasks (`session::lead`):
+# a server, so native only; `--all-features` on wasm enables nothing here.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+architect = { workspace = true, optional = true, features = ["host", "connect"] }
+tokio = { workspace = true, optional = true, features = ["rt", "time"] }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "sync_sim"
+required-features = ["sync"]
+
+[dev-dependencies]
+# tests/session/file.rs: session files on disk.
+tempfile = "3"
+# The document tests drive Loro directly: two replicas, an undo manager.
+loro = { workspace = true }
+# tests/sync_e2e.rs: two peers through Architect's real sync path, in
+# process (DocSyncHost and PresenceHost over `LocalServer`).
+crdt = { workspace = true, features = ["vox"] }
+architect = { workspace = true, features = ["vox", "local", "host", "connect"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+uuid = { workspace = true }
+# tests/session/host.rs: the gate and a vox memory link.
+vox = { workspace = true }
+architect-permissions = { workspace = true }
+
+[[test]]
+name = "sync_e2e"
+required-features = ["architect", "sync", "service"]
+
+# Following a playhead across two processes or machines (the shared clock:
+# Architect's presence clock, architect#845).
+[[example]]
+name = "follow"
+required-features = ["vox", "sync"]

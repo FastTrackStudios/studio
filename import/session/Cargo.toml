@@ -1,0 +1,80 @@
+[workspace]
+resolver = "3"
+members = ["crates/session"]
+exclude = ["vendor/no-workspace-hack"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["FastTrackStudio"]
+repository = "https://github.com/FastTrackStudios/session"
+rust-version = "1.99"
+
+# Pins: the same versions Studio's root Cargo.toml pins, so a Cargo.lock that
+# holds both resolves each to one source.
+[workspace.dependencies]
+facet = { version = "0.50.0-rc.5" }
+facet-json = { version = "0.50.0-rc.7" }
+# `std::time::Instant` panics in a browser; `web-time`'s is the same API
+# over `performance.now()`.
+web-time = "1"
+# The CRDT Architect documents are made of; the version Architect v0.12.6
+# and Studio pin.
+loro = { version = "1.12", default-features = false }
+# Architect's documents: the kind and schema stamp, `History`, and (feature
+# `vox`, tests) the sync transport, and the shared clock presence is
+# stamped in (architect#845), by the release tag that carries it; Studio
+# pins the same tag.
+crdt = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", default-features = false }
+architect = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", default-features = false }
+architect-permissions = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+thiserror = "2"
+# Architect's pin (its root Cargo.toml).
+vox = { version = "0.10.0-rc.7", default-features = false, features = ["runtime"] }
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", default-features = false }
+
+[patch.crates-io]
+# The fleet's wire forks, as Studio's root `[patch.crates-io]` pins them,
+# so a Cargo.lock holding both has one copy of each (vox's schema exchange
+# runs over them).
+facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.1" }
+vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }
+phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.1" }
+phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
+
+# Architect's workspace-hack, patched out: see vendor/no-workspace-hack.
+[patch."https://github.com/FastTrackStudios/architect"]
+architect-workspace-hack = { path = "vendor/no-workspace-hack" }
+
+# Studio's lints, as Studio's root Cargo.toml declares them.
+[workspace.lints.rust]
+dead_code = "warn"
+unused = "warn"
+unused_unsafe = "warn"
+# architect's attribute macros emit `cfg_attr(feature = "fake", ...)` into
+# the calling crate; declare the name (as Studio's workspace does).
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("fake"))'] }
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "allow"
+private_intra_doc_links = "allow"
+redundant_explicit_links = "allow"
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+unchecked_time_subtraction = "deny"
+todo = "deny"
+string_slice = "deny"
+panic_in_result_fn = "deny"
+panic = "deny"
+exit = "deny"
+as_conversions = "deny"
