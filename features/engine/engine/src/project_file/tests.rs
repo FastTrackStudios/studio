@@ -358,3 +358,40 @@ fn a_mark_waits_on_no_write_and_lands_between_the_steps_around_it() {
         "the mark holds the step before it"
     );
 }
+
+/// A song opened as an alternative (an arrangement: `Song.session/Live`)
+/// and saved into its own file, as SESSION_SAVE and a chart's rebuild do
+/// (the file named, not the branch), saves to the alternative it is: the
+/// song as recorded (the file's main branch) is left as it was.
+#[test]
+fn an_alternative_saved_into_its_own_file_saves_to_itself() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let daw = Standalone::new();
+    seed_song(&daw, "recorded-song");
+    set_verb(&daw, "recorded-song", 0.5);
+    let file = dir.path().join("Song.session");
+    saved(&daw, "recorded-song", &file);
+    super::fork(&daw, "recorded-song", &file, "Live").expect("forked");
+    let live = super::load(&daw, "Live", &file, "Live").expect("the alternative opens");
+    set_verb(&daw, &live, 0.25);
+    super::record(&live, "Quieter", None).expect("read");
+    crate::session_file::save_session(&daw, &live, &file).expect("saved");
+    let volume = |path: &Path| {
+        SessionDoc::from_loro(super::doc_of(path).expect("it opens"))
+            .read()
+            .tracks
+            .iter()
+            .find(|t| t.name == "Verb")
+            .map(|t| t.volume)
+    };
+    assert_eq!(
+        volume(&file.join("Live")),
+        Some(0.25),
+        "the alternative holds its edit"
+    );
+    assert_eq!(
+        volume(&file),
+        Some(0.5),
+        "the song as recorded is as it was"
+    );
+}

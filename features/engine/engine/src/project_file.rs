@@ -464,6 +464,21 @@ pub fn save(
     let label = label.to_owned();
     run(async move {
         let mut songs = open_songs().lock().await;
+        // A song opened as an alternative (`Song.session/Live`) and saved
+        // into its own file with no branch named (SESSION_SAVE, a chart's
+        // rebuild: they know the file, not the branch) saves to the
+        // alternative it is. Saving it to the main branch wrote it over
+        // the song as recorded.
+        let branch = match songs.get(&guid) {
+            Some(open)
+                if open.path == path
+                    && branch == session_format::store::MAIN
+                    && open.branch != session_format::store::MAIN =>
+            {
+                open.branch.clone()
+            }
+            _ => branch,
+        };
         let same = songs
             .get(&guid)
             .is_some_and(|open| open.path == path && open.branch == branch);
