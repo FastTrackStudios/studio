@@ -274,6 +274,8 @@ pub fn render_span(daw: &Standalone, project: &str, span: &Span<'_>) -> Result<R
         let state = daw.save_plugin_state(&guid).unwrap_or_default();
         match copy_plugin(daw, &name, state, how) {
             Ok((copy, _)) => {
+                // The song's placed hits, as the live instance has them.
+                crate::clap_host::hand_copy(daw, &guid, &*copy);
                 plugins.write().insert(guid.clone(), copy);
                 fx_guids.push(guid);
                 copied += 1;

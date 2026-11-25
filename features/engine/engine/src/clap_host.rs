@@ -183,6 +183,28 @@ pub fn pump(daw: &'static Standalone) {
     signal::publish_feed(daw);
 }
 
+/// Hand `copy`, a render's copy of FX `fx_guid`'s plugin, the `hits:`
+/// events its live instance was last sent ([`topics::replay_hits`]), so
+/// a render keys on the song's placed hits as playback does. How many it
+/// was handed; 0 for a plugin without host-events/1 or a FX with no live
+/// instance.
+pub fn hand_copy(
+    daw: &Standalone,
+    fx_guid: &str,
+    copy: &dyn daw::standalone::plugin::PluginInstance,
+) -> usize {
+    let Some(to) = copy.event_sink() else {
+        return 0;
+    };
+    let Some(from) = daw
+        .with_plugin_instance(fx_guid, |p| p.event_sink())
+        .flatten()
+    else {
+        return 0;
+    };
+    topics::replay_hits(&from, &to)
+}
+
 /// Know `p` (FX `fx_guid`'s live plugin, its lock held by the caller) for
 /// host-automation/1: its FX, its track and song (`at`, or found on the
 /// song open now), and its parameter ids.

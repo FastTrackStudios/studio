@@ -62,6 +62,14 @@ static PLUGIN: std::sync::LazyLock<Plugin> = std::sync::LazyLock::new(|| {
     Plugin(p)
 });
 
+/// A second plugin in memory: a render's copy of [`PLUGIN`].
+static COPY: std::sync::LazyLock<Plugin> = std::sync::LazyLock::new(|| {
+    // SAFETY: as PLUGIN's.
+    let mut p: clap_plugin = unsafe { std::mem::zeroed() };
+    p.get_extension = Some(plugin_ext);
+    Plugin(p)
+});
+
 // ── A host whose host_data is Studio's actions ──────────────────────────
 
 struct ByHostData;
@@ -337,4 +345,36 @@ fn signal_dev_on_a_track_is_read_and_driven() {
     }
     let session = super::signal::session(&daw, &ctx);
     assert_eq!(session["ports"], 1);
+}
+
+/// A render's copy of a plugin is subscribed to nothing and the pump never
+/// reaches it: it is handed the last event of each of its original's
+/// `hits:` subscriptions (and nothing else), so its gates know the song's
+/// placed hits as the live instance does.
+#[test]
+fn a_renders_copy_is_handed_its_originals_placed_hits() {
+    let original = unsafe { EventSink::query(&raw const PLUGIN.0) }.unwrap();
+    let copy = unsafe { EventSink::query(&raw const COPY.0) }.unwrap();
+    assert!(!original.same_plugin(&copy));
+    let topic = "hits:Drums/Toms/Tom 4-copy-test";
+    let hits = topics::subscribe(Topic::parse(topic).unwrap(), original);
+    let transport = topics::subscribe(Topic::Transport, original);
+    // Before anything was sent, there is nothing to hand.
+    assert_eq!(topics::replay_hits(&original, &copy), 0);
+    let event =
+        r#"{"piece":"Tom 4","hits":[{"time":1.0,"velocity":100},{"time":16.0,"velocity":100}]}"#;
+    topics::record_sent(hits, event);
+    topics::record_sent(transport, r#"{"state":"playing"}"#);
+    GOT.lock().unwrap().retain(|(_, t, _)| t != topic);
+    assert_eq!(topics::replay_hits(&original, &copy), 1, "the hits alone");
+    let got: Vec<_> = GOT
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(_, t, _)| t == topic)
+        .cloned()
+        .collect();
+    assert_eq!(got, vec![(0, topic.to_owned(), event.to_owned())]);
+    topics::unsubscribe(hits);
+    topics::unsubscribe(transport);
 }

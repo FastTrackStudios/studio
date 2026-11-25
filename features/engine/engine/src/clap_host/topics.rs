@@ -78,6 +78,9 @@ struct Sub {
     sink: EventSink,
     /// What it was last sent, by fingerprint: `None` before its first.
     sent: Option<u64>,
+    /// A `hits:` subscription's last event, to hand a render's copy of its
+    /// plugin ([`replay_hits`]).
+    last: Option<String>,
     /// Events waiting to go (a job's).
     queued: Vec<String>,
 }
@@ -106,6 +109,7 @@ pub fn subscribe(topic: Topic, sink: EventSink) -> u64 {
                 topic,
                 sink,
                 sent: None,
+                last: None,
                 queued: Vec::new(),
             },
         );
@@ -142,6 +146,41 @@ pub fn subscriptions_of(sink: &EventSink, topic: &Topic) -> Vec<u64> {
             .map(|(id, _)| *id)
             .collect()
     })
+}
+
+/// Send `copy` (a render's copy of `original`'s plugin, subscribed to
+/// nothing and never reached by the pump) the last event of each of
+/// `original`'s `hits:` subscriptions, as subscription 0: the copy then
+/// knows the song's placed hits as the live instance does — without them
+/// a Signal gate keyed by another track's trigger falls back to its own
+/// input after 10 s without a hit, and a render of a long span plays the
+/// bleed the live instance shuts. How many events it sent. Call it from
+/// the thread that owns the copy, before it renders.
+pub fn replay_hits(original: &EventSink, copy: &EventSink) -> usize {
+    let events: Vec<(String, String)> = with_subs(|s| {
+        s.by_id
+            .values()
+            .filter(|sub| matches!(sub.topic, Topic::Hits(_)) && sub.sink.same_plugin(original))
+            .filter_map(|sub| Some((sub.topic.name(), sub.last.clone()?)))
+            .collect()
+    });
+    for (topic, event) in &events {
+        copy.send(0, topic, event);
+    }
+    events.len()
+}
+
+/// Subscription `id` was sent `event` (as [`Outbox::gather`] records it).
+#[cfg(test)]
+pub(super) fn record_sent(id: u64, event: &str) {
+    with_subs(|s| {
+        if let Some(sub) = s.by_id.get_mut(&id) {
+            sub.sent = Some(fingerprint(event));
+            if matches!(sub.topic, Topic::Hits(_)) {
+                sub.last = Some(event.to_owned());
+            }
+        }
+    });
 }
 
 /// A job finished: its event, to every `job` subscriber.
@@ -217,6 +256,9 @@ impl Outbox {
                 };
                 if sub.sent != Some(*print) {
                     sub.sent = Some(*print);
+                    if matches!(sub.topic, Topic::Hits(_)) {
+                        sub.last = Some(event.clone());
+                    }
                     out.events.push((*id, sub.sink, name, event.clone()));
                 }
             }

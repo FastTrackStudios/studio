@@ -660,6 +660,7 @@ fn ready(
         if let Some(cut) = cuts.get(&i.guid) {
             let (mut copy, _) = copy_plugin(daw, &i.name, i.state, how)?;
             cut_copy(&mut *copy, cut)?;
+            crate::clap_host::hand_copy(daw, &i.guid, &*copy);
             out.copied += 1;
             plugins.write().insert(i.guid, copy);
             continue;
@@ -689,6 +690,9 @@ fn ready(
         };
         match copy {
             Ok(copy) => {
+                // The song's placed hits as the live instance has them now
+                // (a warm copy's may be an edit step old).
+                crate::clap_host::hand_copy(daw, &i.guid, &*copy);
                 plugins.write().insert(i.guid.clone(), copy);
                 out.kept.push((i.guid, print, i.held));
             }
@@ -1071,7 +1075,10 @@ pub fn render(
     let raw: Vec<Vec<f32>> = (0..probes.len())
         .map(|i| outs.iter().flat_map(|o| o.raw[i].iter().copied()).collect())
         .collect();
-    let latencies: Vec<u32> = outs.first().map(|o| o.latencies.clone()).unwrap_or_default();
+    let latencies: Vec<u32> = outs
+        .first()
+        .map(|o| o.latencies.clone())
+        .unwrap_or_default();
     let n = ask.points.len();
     let signals: Vec<Vec<f32>> = raw[..n]
         .iter()
@@ -1206,7 +1213,10 @@ fn run_chunk(
     // As rendered, not lined up: a recording played back later enters the
     // delay compensation exactly as this track did, so what it feeds is as
     // late (its plugins told the same song time) as in this render.
-    let (from, to) = (if k == 0 { first } else { keep }, if last_chunk { last } else { end });
+    let (from, to) = (
+        if k == 0 { first } else { keep },
+        if last_chunk { last } else { end },
+    );
     let raw = raw
         .iter()
         .map(|r| {
@@ -1374,7 +1384,13 @@ mod tests {
         assert_eq!(p.fed, set(&["sum", "sub"]));
         // Sub changed, and its gate keys from Trig: Trig runs with it (its
         // hits), played back never; Out, which sends into Sub, plays back.
-        let keys = |g: &str| Some(if g == "sub" { vec!["trig".to_owned()] } else { Vec::new() });
+        let keys = |g: &str| {
+            Some(if g == "sub" {
+                vec!["trig".to_owned()]
+            } else {
+                Vec::new()
+            })
+        };
         let p = plan(
             &routes,
             (&points, &everything),
@@ -1398,7 +1414,13 @@ mod tests {
         assert_eq!(p.rendered, everything);
         // A point inside Kick: Kick renders even with a recording of it.
         let inside = [at("kick", Probe::FxOut(0))];
-        let p = plan(&routes, (&inside, &everything), |_| false, |_| true, no_keys);
+        let p = plan(
+            &routes,
+            (&inside, &everything),
+            |_| false,
+            |_| true,
+            no_keys,
+        );
         assert_eq!(p.rendered, set(&["kick"]));
     }
 
