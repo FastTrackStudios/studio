@@ -231,6 +231,18 @@ pub fn path_for(source: &Path) -> PathBuf {
     dir.join(format!("{stem}.fts-session"))
 }
 
+/// The song file and arrangement a song path names when it is a branch of
+/// a one-file song (`Song.session/Live`): its parent is the song's store,
+/// and it is no file of its own.
+fn arrangement_of(source: &Path) -> Option<(PathBuf, String)> {
+    let file = source.parent()?;
+    let branch = source.file_name()?.to_string_lossy().into_owned();
+    (!source.exists()
+        && file.is_file()
+        && session_format::sniff_path(file) == session_format::FileFormat::Store)
+        .then(|| (file.to_path_buf(), branch))
+}
+
 /// `#rrggbb` as the session's colour.
 fn color(css: Option<&str>) -> Option<u32> {
     let hex = css?.strip_prefix('#')?;
@@ -370,15 +382,22 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
     if open.as_ref().is_some_and(|o| o.song == song) {
         return;
     }
+    // An arrangement (`Song.session/Live`) is a branch of its song's one
+    // file: its own session, in that file.
+    let branch = source
+        .filter(|_| std::env::var_os("FTS_DAW_SESSION").is_none())
+        .and_then(arrangement_of);
     // The song's one file holds its session, once its folder is converted:
     // a store with no `.fts-session` left beside it.
-    let one_file = source
-        .filter(|_| std::env::var_os("FTS_DAW_SESSION").is_none())
-        .filter(|s| {
-            session_format::sniff_path(s) == session_format::FileFormat::Store
-                && !path_for(s).exists()
-        })
-        .map(Path::to_path_buf);
+    let one_file = branch.as_ref().map(|(file, _)| file.clone()).or_else(|| {
+        source
+            .filter(|_| std::env::var_os("FTS_DAW_SESSION").is_none())
+            .filter(|s| {
+                session_format::sniff_path(s) == session_format::FileFormat::Store
+                    && !path_for(s).exists()
+            })
+            .map(Path::to_path_buf)
+    });
     let path = one_file.clone().or_else(|| {
         std::env::var_os("FTS_DAW_SESSION")
             .map(PathBuf::from)
@@ -398,9 +417,14 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
     let opened = rt.block_on(async {
         let held = if one_file.is_some() {
             Held::One(
-                song_file::SongFile::open(&path)
-                    .await
-                    .map_err(|e| e.to_string())?,
+                song_file::SongFile::open_branch(
+                    &path,
+                    branch
+                        .as_ref()
+                        .map_or(session_format::store::MAIN, |(_, b)| b),
+                )
+                .await
+                .map_err(|e| e.to_string())?,
             )
         } else if path.exists() {
             Held::Pair(SessionFile::open(&path).await.map_err(|e| e.to_string())?)

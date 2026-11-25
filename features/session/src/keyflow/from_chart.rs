@@ -217,7 +217,8 @@ fn stamp_chart<D: ChartDaw>(
     super::actions::ensure_core_lanes(daw);
     let stamped = stamp_song_with_default_tempo_native(daw, project, &song)
         .map_err(|e| eyre::eyre!("{e}"))
-        .and_then(|_| stamp_meter_changes(daw, project, layout));
+        .and_then(|_| name_own_sections(daw, project, layout))
+        .and_then(|()| stamp_meter_changes(daw, project, layout));
     let folder = stamped
         .and_then(|_| match keyflow_folder(daw, project) {
             Some(_) => Ok(()),
@@ -238,6 +239,31 @@ fn stamp_chart<D: ChartDaw>(
     })
 }
 
+/// A section with a name of its own (`[End]`, `[Hook]`) has its region
+/// named so: the insert actions name a region by its kind, and a section
+/// that is none of the kinds is stamped as an instrumental one.
+fn name_own_sections<D: ChartDaw>(
+    daw: &D,
+    project: &ProjectContext,
+    layout: &ChartLayout,
+) -> eyre::Result<()> {
+    use crate::proto::ruler_lanes::CoreLane;
+    let sections = Regions::all(daw, project.clone())
+        .into_iter()
+        .filter(|r| r.lane == Some(CoreLane::Sections.lane_index()))
+        .collect::<Vec<_>>();
+    for laid in &layout.sections {
+        let Some(name) = &laid.name else { continue };
+        let region = sections
+            .iter()
+            .find(|r| (r.time_range.start_seconds() - laid.start_seconds).abs() < 1e-3);
+        if let Some(id) = region.and_then(|r| r.id) {
+            Regions::rename(daw, project.clone(), id, name)?;
+        }
+    }
+    Ok(())
+}
+
 /// The chart's meter changes, as time-signature points on the tempo map —
 /// at the chart's one tempo, so the tempo is unchanged and only the meter
 /// moves: a bar of 2/4, and 4/4 again after it. The grid, the ruler and the
@@ -247,6 +273,19 @@ fn stamp_meter_changes<D: ChartDaw>(
     project: &ProjectContext,
     layout: &ChartLayout,
 ) -> eyre::Result<()> {
+    // The opening meter is a point at 0 too. The project's default meter
+    // alone is not kept: the tempo map is what a song saves, and opened
+    // again its first point is its meter, so a song in 3/4 with no point
+    // came back in 4/4, and one that turned to 3/4 later opened in 3/4.
+    if !layout.meter_changes.first().is_some_and(|c| c.0 <= 1e-9) {
+        let index = daw.add_tempo_point(project.clone(), 0.0, layout.tempo_bpm)?;
+        daw.set_time_signature_at_point(
+            project.clone(),
+            index,
+            i32::try_from(layout.time_sig_num).unwrap_or(4),
+            i32::try_from(layout.time_sig_den).unwrap_or(4),
+        )?;
+    }
     for &(seconds, num, den) in &layout.meter_changes {
         let index = daw.add_tempo_point(project.clone(), seconds, layout.tempo_bpm)?;
         daw.set_time_signature_at_point(

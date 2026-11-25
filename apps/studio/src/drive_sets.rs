@@ -358,6 +358,7 @@ async fn read(
             setfile::Song::Id { hint, .. } | setfile::Song::Title(hint) => hint.to_string(),
             setfile::Song::Path(p) => setfile::title_of(&setfile::folder(path, p), &[]),
         };
+        let arrangement = setfile::arrangement(line).1.map(str::to_owned);
         let Some((s, l, folder)) = place else {
             // No session found (or none yet): the song by its title.
             acts[a].songs.push(FileSong {
@@ -366,6 +367,7 @@ async fn read(
                     location: location.into(),
                     chart: crate::reference::pick_chart(&hint, &charts).cloned(),
                     folder: String::new(),
+                    arrangement,
                 },
                 title: hint,
             });
@@ -390,6 +392,7 @@ async fn read(
                 space: s,
                 location: l,
                 folder,
+                arrangement,
             },
             title,
         });

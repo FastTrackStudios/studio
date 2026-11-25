@@ -24,6 +24,11 @@
 //! A comment directly above a song (no blank line between) names the act
 //! the songs under it belong to; a commented-out song is not played and
 //! names nothing.
+//!
+//! A song line ending `@<Arrangement>` plays that arrangement of the song
+//! (`songs/last-christmas@Live`): its own branch of the song's session
+//! file (`Last Christmas.session/Live`), with its own structure and chart.
+//! Without one, the song plays as recorded (the file's main branch).
 
 // A browser has no disk: what reads and writes it is the native build's.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -74,7 +79,9 @@ static KINDS: std::sync::Mutex<Vec<(String, Kind)>> = std::sync::Mutex::new(Vec:
 /// Notes the kind of the set named `name`, as its file says, for the
 /// session that opens it.
 pub fn note_kind(name: &str, kind: Kind) {
-    let mut kinds = KINDS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut kinds = KINDS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     kinds.retain(|(n, _)| n != name);
     kinds.push((name.to_owned(), kind));
 }
@@ -102,8 +109,24 @@ pub enum Song<'a> {
     Path(&'a str),
 }
 
-/// Read a song line.
+/// A song line and the arrangement it plays (`…@Live`), when it names one.
+pub fn arrangement(line: &str) -> (&str, Option<&str>) {
+    match line.rsplit_once('@') {
+        Some((song, name))
+            if !song.trim().is_empty()
+                && !name.trim().is_empty()
+                && !name.contains(['/', '\\']) =>
+        {
+            (song.trim_end(), Some(name.trim()))
+        }
+        _ => (line, None),
+    }
+}
+
+/// Read a song line (the arrangement it names, if any, left out:
+/// [`arrangement`]).
 pub fn song(line: &str) -> Song<'_> {
+    let (line, _) = arrangement(line);
     if let Some(t) = title_line(line) {
         return Song::Title(t);
     }
@@ -326,6 +349,36 @@ sleeptalker
 # better-strangers
 # berenstein
 ";
+
+    #[test]
+    fn a_song_line_names_its_arrangement() {
+        assert_eq!(
+            arrangement("songs/last-christmas@Live"),
+            ("songs/last-christmas", Some("Live"))
+        );
+        assert_eq!(
+            arrangement("songs/last-christmas"),
+            ("songs/last-christmas", None)
+        );
+        assert_eq!(
+            song("songs/last-christmas@Live"),
+            Song::Path("songs/last-christmas")
+        );
+        assert_eq!(
+            song("df5b7031-b10a-44db-ac67-45af7bdcb8d6  Cinematic Intro@Big Intro"),
+            Song::Id {
+                id: "df5b7031-b10a-44db-ac67-45af7bdcb8d6",
+                hint: "Cinematic Intro"
+            }
+        );
+        assert_eq!(
+            arrangement("df5b7031-b10a-44db-ac67-45af7bdcb8d6  Cinematic Intro@Big Intro").1,
+            Some("Big Intro")
+        );
+        // Not an arrangement: nothing after the `@`, or a path after it.
+        assert_eq!(arrangement("songs/a@"), ("songs/a@", None));
+        assert_eq!(arrangement("me@host/songs/a"), ("me@host/songs/a", None));
+    }
 
     #[test]
     fn acts_are_the_comments_above_songs() {

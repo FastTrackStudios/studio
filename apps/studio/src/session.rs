@@ -91,6 +91,40 @@ impl View {
     }
 }
 
+/// The screensets, by number and name, and the view each brings up:
+/// `SESSION_SCREENSET` in Studio's window (the engine's own recalls the old
+/// Session window's dock).
+pub const SCREENSETS: [(u8, &str, View); 7] = [
+    (1, "Performance", View::Lighting),
+    (2, "Overview", View::Overview),
+    (3, "Session", View::Arrangement),
+    (4, "Mix", View::Mixer),
+    (5, "Edit", View::Editor),
+    (6, "Charts", View::Chart),
+    (7, "Signal", View::Fx),
+];
+
+/// The screenset `name` names (its number or its name, any case): its name
+/// and its view.
+///
+/// # Errors
+///
+/// No screenset is called that.
+pub fn screenset(name: &str) -> Result<(&'static str, View), String> {
+    let name = name.trim();
+    SCREENSETS
+        .iter()
+        .find(|(n, s, _)| name == n.to_string() || name.eq_ignore_ascii_case(s))
+        .map(|(_, s, v)| (*s, *v))
+        .ok_or_else(|| {
+            let all: Vec<String> = SCREENSETS
+                .iter()
+                .map(|(n, s, _)| format!("{n} {s}"))
+                .collect();
+            format!("no screenset {name}: one of {}", all.join(", "))
+        })
+}
+
 /// Where a view of the session is.
 pub fn route(view: View) -> Route {
     Route::SessionPage {
@@ -403,7 +437,8 @@ mod native {
             })
     }
 
-    /// The Stage for `view`, its chart on `followed`'s session.
+    /// The Stage for `view`, its chart on `followed`'s session; in one
+    /// window ([`crate::instance::single_window`]), its main window alone.
     fn stage_for(view: View, set: &str, followed: Option<&hosted::Followed>) -> Workspace {
         let names = crate::stage::Names {
             set: set.to_owned(),
@@ -412,7 +447,40 @@ mod native {
                 .unwrap_or_default(),
             kind: crate::setfile::kind_of(set),
         };
-        crate::stage::stage(area_now(), &names, page_for(view))
+        let single = crate::instance::single_window();
+        crate::stage::with_centre(area_now(), &names, centre(view), page_for(view), !single)
+    }
+
+    /// The Stage pane `view` fills the main window with: the chart (the
+    /// Charts screenset) always; in one window the lyrics and the lighting
+    /// too. `None`: the Stage's own main window, or the app's page.
+    fn centre(view: View) -> Option<&'static str> {
+        match view {
+            View::Chart => Some(crate::stage::CHART),
+            View::Lyrics if crate::instance::single_window() => Some(crate::stage::LYRICS),
+            View::Lighting if crate::instance::single_window() => Some(crate::stage::SHOW),
+            _ => None,
+        }
+    }
+
+    /// The main window's first pane when it shows `view`, when that is not
+    /// the Stage's own: what tells whether it must be laid out again.
+    fn centre_key(view: View) -> Option<String> {
+        centre(view)
+            .map(str::to_owned)
+            .or_else(|| page_for(view).map(|p| p.id.0))
+    }
+
+    /// Whether `pane`, first in the main window, is one [`centre_key`]
+    /// names (the Stage's own main window starts with the progress bar).
+    fn is_centre(pane: &str) -> bool {
+        pane.starts_with(hosted::PAGE)
+            || [
+                crate::stage::CHART,
+                crate::stage::LYRICS,
+                crate::stage::SHOW,
+            ]
+            .contains(&pane)
     }
 
     /// daw-view-kit's Setup, Editor or FX panel over the song the engine has
@@ -543,15 +611,15 @@ mod native {
             }
             // The main window's centre: the Stage's, or the app's page;
             // the other windows as they are.
-            let want = page_for(view).map(|p| p.id);
+            let want = centre_key(view);
             let now = layout
                 .peek()
                 .windows
                 .first()
                 .and_then(app_shell::Window::first_group)
-                .and_then(|g| g.current_tab().cloned());
-            let on_page = now.as_ref().is_some_and(|p| p.0.starts_with(hosted::PAGE));
-            if want != now.filter(|_| on_page) {
+                .and_then(|g| g.current_tab().cloned())
+                .map(|p| p.0);
+            if want != now.filter(|p| is_centre(p)) {
                 let next = stage_for(view, &set_title, followed.peek().as_ref());
                 ui.apply(move |w| {
                     *w = next;
