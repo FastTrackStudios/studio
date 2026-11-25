@@ -16,6 +16,8 @@ workspace = true
 [features]
 default = []
 multiband = ["dsp/multiband"]
+# Vocal and drum leveling (no face of its own): `dsp::level`, passed through.
+level = ["dsp/level"]
 stack = ["dsp/stack"]
 stack-host = [
     "stack",

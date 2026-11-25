@@ -8,6 +8,9 @@
 #[cfg(feature = "multiband")]
 pub use ::dsp::multiband;
 
+#[cfg(feature = "level")]
+pub use ::dsp::level;
+
 #[cfg(feature = "comp")]
 pub mod comp {
     pub use ::dsp::comp::*;
