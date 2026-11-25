@@ -378,3 +378,26 @@ fn a_renders_copy_is_handed_its_originals_placed_hits() {
     topics::unsubscribe(hits);
     topics::unsubscribe(transport);
 }
+
+/// A plugin subscribes while it loads, before it is on a chain: the pump
+/// keeps that subscription until it is, and drops it once the plugin,
+/// seen on a chain, is gone from it.
+#[test]
+fn a_subscription_made_before_its_plugin_is_on_a_chain_is_kept() {
+    let loading = unsafe { EventSink::query(&raw const COPY.0) }.unwrap();
+    let other = unsafe { EventSink::query(&raw const PLUGIN.0) }.unwrap();
+    let topic = Topic::parse("hits:Drums/Toms/Tom 4-retain-test").unwrap();
+    let id = topics::subscribe(topic.clone(), loading);
+    topics::retain_live(&[other]);
+    assert_eq!(
+        topics::subscriptions_of(&loading, &topic),
+        vec![id],
+        "kept while the plugin is not on its chain yet"
+    );
+    topics::retain_live(&[other, loading]);
+    topics::retain_live(&[other]);
+    assert!(
+        topics::subscriptions_of(&loading, &topic).is_empty(),
+        "dropped once its plugin, seen on a chain, is gone"
+    );
+}

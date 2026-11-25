@@ -83,7 +83,17 @@ struct Sub {
     last: Option<String>,
     /// Events waiting to go (a job's).
     queued: Vec<String>,
+    /// When it was made, and whether its plugin has been seen on a chain
+    /// since ([`retain_live`]).
+    made: web_time::Instant,
+    seen: bool,
 }
+
+/// How long a subscription of a plugin not yet seen on a chain is kept: a
+/// plugin subscribes while it loads (FX_RELOAD restores its state before
+/// it goes on the chain), and a render's copy, never on one, subscribes
+/// too.
+const UNSEEN_KEPT: std::time::Duration = std::time::Duration::from_secs(30);
 
 #[derive(Default)]
 struct Subs {
@@ -111,6 +121,8 @@ pub fn subscribe(topic: Topic, sink: EventSink) -> u64 {
                 sent: None,
                 last: None,
                 queued: Vec::new(),
+                made: web_time::Instant::now(),
+                seen: false,
             },
         );
         id
@@ -127,12 +139,21 @@ pub fn count() -> usize {
     with_subs(|s| s.by_id.len())
 }
 
-/// Drop every subscription whose plugin is not among `live`: a plugin
-/// taken off its chain subscribes no longer.
+/// Drop every subscription whose plugin is not among `live` but was: a
+/// plugin taken off its chain subscribes no longer. One whose plugin was
+/// never among them — still loading, not on its chain yet — is kept for
+/// [`UNSEEN_KEPT`]: dropping it would leave a reloaded plugin (one that
+/// subscribed while its state was restored) without its events for good.
 pub fn retain_live(live: &[EventSink]) {
     with_subs(|s| {
-        s.by_id
-            .retain(|_, sub| live.iter().any(|l| l.same_plugin(&sub.sink)));
+        s.by_id.retain(|_, sub| {
+            if live.iter().any(|l| l.same_plugin(&sub.sink)) {
+                sub.seen = true;
+                true
+            } else {
+                !sub.seen && sub.made.elapsed() < UNSEEN_KEPT
+            }
+        });
     });
 }
 
