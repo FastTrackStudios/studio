@@ -1470,10 +1470,10 @@ mod tests {
         let routes = kit();
         let (all, _) = reach(&routes, ["kick".to_owned()], |_| false);
         let own: HashMap<String, u64> = all.iter().map(|g| (g.clone(), 1)).collect();
-        let before = keys(&routes, &all, &own);
+        let before = keys(&routes, &all, (&own, &Sources::new()));
         let mut changed = own.clone();
         changed.insert("in".into(), 2);
-        let after = keys(&routes, &all, &changed);
+        let after = keys(&routes, &all, (&changed, &Sources::new()));
         for g in ["in", "sum", "kick"] {
             assert_ne!(before[g], after[g], "{g}");
         }

@@ -533,9 +533,9 @@ fn targets_current(song: &str, current: Option<&str>) -> bool {
 impl EngineView for ViewHost {
     async fn run(&self, call: ActionCall) -> Result<String, ViewError> {
         let span = tracing::info_span!("view.run", action.id = %call.id, action.outcome = tracing::field::Empty);
-        let ran = crate::actions::list()
-            .run_json_async(&call.id, call.args.as_bytes())
-            .await;
+        // Off the connection's driver: a render run from here must not
+        // hold up the window's other calls (`crate::off_loop`).
+        let ran = crate::off_loop::run(&call.id, call.args.as_bytes()).await;
         match ran {
             Ok(out) => {
                 span.record("action.outcome", "ok");
