@@ -169,6 +169,30 @@ pub trait BlockProcessor: Send {
         let _ = (offset, velocity);
     }
 
+    /// How many named outputs it has beside the audio it processes in place
+    /// (a multi-mic sampler's ports: `in`, `oh`, `room`). 0 for an effect:
+    /// its one output is its in-place audio. When it has some, the in-place
+    /// audio is still its first, so a chain is unchanged by them.
+    fn output_count(&self) -> usize {
+        0
+    }
+
+    /// Output `index`'s name, what a send by port names (`room`).
+    fn output_name(&self, index: usize) -> Option<&str> {
+        let _ = index;
+        None
+    }
+
+    /// Output `index`'s audio over the last piece [`process`](Self::process)
+    /// rendered (as long as that piece), at the block's own level: what a
+    /// send by port copies to another lane. `None` past
+    /// [`output_count`](Self::output_count). Built and filled without
+    /// allocating.
+    fn output(&self, index: usize) -> Option<(&[f32], &[f32])> {
+        let _ = index;
+        None
+    }
+
     /// The modulation sources it exposes, in index order.
     fn mod_sources(&self) -> &'static [ModSourceSpec] {
         &[]

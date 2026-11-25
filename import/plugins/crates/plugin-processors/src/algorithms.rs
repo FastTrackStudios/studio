@@ -446,6 +446,18 @@ impl BlockProcessor for FamilyBlock {
         self.engine.hits_known(known);
     }
 
+    fn output_count(&self) -> usize {
+        self.engine.output_count()
+    }
+
+    fn output_name(&self, index: usize) -> Option<&str> {
+        self.engine.output_name(index)
+    }
+
+    fn output(&self, index: usize) -> Option<(&[f32], &[f32])> {
+        self.engine.output(index)
+    }
+
     fn mod_sources(&self) -> &'static [ModSourceSpec] {
         self.engine.mod_sources()
     }
