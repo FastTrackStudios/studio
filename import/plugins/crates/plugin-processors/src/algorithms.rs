@@ -690,6 +690,80 @@ mod tests {
         assert!(l.iter().all(|s| s.is_finite()));
     }
 
+    /// The level (dB) `block` leaves a `hz` sine at, settled, at 48 kHz.
+    fn gain_at(block: &mut FamilyBlock, hz: f32) -> f64 {
+        let n = 256;
+        let mut phase = 0.0_f32;
+        let (mut sum_in, mut sum_out) = (0.0_f64, 0.0_f64);
+        for chunk in 0..400 {
+            let mut l: Vec<f32> = (0..n)
+                .map(|_| {
+                    phase += core::f32::consts::TAU * hz / 48_000.0;
+                    phase.sin() * 0.25
+                })
+                .collect();
+            let input = l.clone();
+            let mut r = l.clone();
+            block.process(&mut l, &mut r);
+            if chunk >= 200 {
+                sum_in += input.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>();
+                sum_out += l.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>();
+            }
+        }
+        10.0 * (sum_out / sum_in).log10()
+    }
+
+    /// A control named like one of the target's choices (`low_cut`, the
+    /// channel strip's knob, and `low_cut`, the band shape) must not shadow
+    /// it: the channel strip's low cut was a band-pass at gain 0, so it
+    /// passed every kit's audio unchanged.
+    #[test]
+    fn a_channel_strip_low_cut_cuts() {
+        let ch = find("eq", Some("channel")).unwrap_or_else(|| panic!("channel"));
+        let control = |id: &str| {
+            ch.controls
+                .iter()
+                .position(|c| c.id == id)
+                .unwrap_or_else(|| panic!("no control {id}"))
+        };
+        let lc = control("low_cut");
+        let hc = control("high_cut");
+        let shape = |b: usize| {
+            crate::engines::targets_of(ch.engine)
+                .and_then(|t| t.iter().position(|t| t.id == format!("band.{b}.shape")))
+                .unwrap_or_else(|| panic!("band.{b}.shape"))
+        };
+        let mut values: Vec<f32> = ch.controls.iter().map(|c| c.default).collect();
+        values[lc] = 220.0;
+        values[hc] = 8_000.0;
+        let targets: BTreeMap<usize, f32> = ch.targets_for(&values).collect();
+        assert_eq!(
+            targets.get(&shape(1)).copied(),
+            Some(3.0),
+            "band 1 is a Low Cut"
+        );
+        assert_eq!(
+            targets.get(&shape(5)).copied(),
+            Some(4.0),
+            "band 5 is a High Cut"
+        );
+
+        // Built, then its value set: what a block from a spec, a state load
+        // and a render copy all are (a fresh block, its values set).
+        for _ in 0..2 {
+            let mut block =
+                FamilyBlock::new(ch.clone(), 48_000.0, 256).unwrap_or_else(|e| panic!("{e}"));
+            block.set_param(lc, 220.0);
+            let low = gain_at(&mut block, 63.0);
+            assert!(low < -20.0, "63 Hz under a 220 Hz low cut: {low} dB");
+            let mid = gain_at(&mut block, 2_000.0);
+            assert!(mid.abs() < 0.5, "2 kHz passes: {mid} dB");
+            block.reset();
+            let again = gain_at(&mut block, 63.0);
+            assert!(again < -20.0, "after a reset: {again} dB");
+        }
+    }
+
     #[test]
     fn a_downloaded_algorithm_is_validated_then_runs() {
         let file = r#"

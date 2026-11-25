@@ -10,7 +10,9 @@
 //!
 //! - Numbers, the algorithm's control ids, the target's choice names
 //!   (`bell`, `low_shelf`: the engine's labels, lowercased, spaces as `_`),
-//!   and the algorithm's curves (breakpoint tables) by name.
+//!   and the algorithm's curves (breakpoint tables) by name. In a choice
+//!   target's expression a choice name wins over a control of the same id
+//!   (`band.1.shape low_cut` is the shape, beside a `low_cut` knob).
 //! - `? :`, `|| &&`, `== != < <= > >=`, `+ -`, `* /`, `^`, unary `- !`.
 //! - Functions: `abs min max clamp(x,lo,hi) pow exp log10 sqrt floor round
 //!   db_to_gain gain_to_db curve(x, name) lerp(a,b,t)`.
@@ -335,12 +337,15 @@ impl Parser<'_> {
                     let pops = isize::try_from(n).unwrap_or(1) - 1;
                     return self.emit(op, -pops);
                 }
-                if let Some(i) = self.scope.controls.iter().position(|c| *c == name) {
-                    return self.emit(Op::Control(u16::try_from(i).unwrap_or(u16::MAX)), 1);
-                }
+                // A choice target's own choices first: a control named like
+                // one (a channel strip's `low_cut` knob) must not shadow the
+                // shape `low_cut`, which would set the shape to the knob's Hz.
                 let n = norm_name(&name);
                 if let Some(i) = self.scope.choices.iter().position(|c| norm_name(c) == n) {
                     return self.emit(Op::Const(crate::util_f32(i)), 1);
+                }
+                if let Some(i) = self.scope.controls.iter().position(|c| *c == name) {
+                    return self.emit(Op::Control(u16::try_from(i).unwrap_or(u16::MAX)), 1);
                 }
                 match name.as_str() {
                     "true" => self.emit(Op::Const(1.0), 1),
@@ -588,6 +593,11 @@ mod tests {
                 < 1e-6
         );
         assert_eq!(run("lf_bell ? bell : low_shelf", &[("lf_bell", 0.0)]), 1.0);
+        assert_eq!(
+            run("low_shelf", &[("low_shelf", 500.0)]),
+            1.0,
+            "a choice name wins over a control of the same id"
+        );
         assert!((run("curve(g, q)", &[("g", 7.5)]) - 1.05).abs() < 1e-6);
         assert_eq!(run("clamp(x, 0, 1)", &[("x", 3.0)]), 1.0);
         assert_eq!(run("x > 2 && x < 4", &[("x", 3.0)]), 1.0);
