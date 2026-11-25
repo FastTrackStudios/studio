@@ -1,0 +1,13 @@
+[package]
+name = "stretch-wsola"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Time-domain WSOLA stretch/pitch engine implementing stretch-abi"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+stretch-abi = { workspace = true }
