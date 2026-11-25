@@ -92,3 +92,7 @@ local-stack.local.env
 crates/studio-core/music/keyflow-examples/mxl/
 crates/studio-core/music/keyflow-examples/wikifonia/
 crates/studio-core/music/keyflow-examples/png-project-charts/
+
+# keyflow test artefacts: PDFs some tests write on every run for a human to look
+# at; nothing reads them back.
+crates/studio-core/music/keyflow/tests/output/
