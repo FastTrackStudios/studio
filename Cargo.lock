@@ -18750,6 +18750,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-mcp"
+version = "26.10.3"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "studio-mixer"
 version = "26.10.3"
 dependencies = [
