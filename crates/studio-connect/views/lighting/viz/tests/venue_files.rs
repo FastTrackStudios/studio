@@ -16,7 +16,7 @@ fn rooms() -> Vec<(&'static str, Venue)> {
     ["norco", "riverside"]
         .into_iter()
         .filter_map(|name| {
-            let dir = format!("{}/../data/venues/{name}", env!("CARGO_MANIFEST_DIR"));
+            let dir = format!("{}/../../../../studio-engine/lighting/data/venues/{name}", env!("CARGO_MANIFEST_DIR"));
             Venue::load(dir).ok().map(|v| (name, v))
         })
         .collect()

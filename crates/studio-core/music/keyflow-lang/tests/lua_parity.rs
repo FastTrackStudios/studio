@@ -19,7 +19,7 @@ use keyflow_lang::orchestra::{Config, PartOutput, ProfileKind, process_part};
 
 fn run(part_name: &str, profile: ProfileKind) -> PartOutput {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../examples/mxl/theme-from-jurassic-park.mxl");
+        .join("../keyflow-examples/mxl/theme-from-jurassic-park.mxl");
     let score = keyflow_lang::orchestra::score::load(&path).expect("parse");
     let part = score
         .parts

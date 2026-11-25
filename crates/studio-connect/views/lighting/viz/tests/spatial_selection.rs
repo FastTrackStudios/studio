@@ -18,7 +18,7 @@ use ignition_viz::Venue;
     reason = "test fixture load failure is the test failure; see the doc comment"
 )]
 fn venue() -> Venue {
-    Venue::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../data/venues/norco"))
+    Venue::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../studio-engine/lighting/data/venues/norco"))
         .expect("the Norco venue extract")
 }
 

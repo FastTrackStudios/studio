@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 /// Every `.RPP` in the fixture corpus, plus anything `DAW_RPP_CORPUS` adds.
 fn corpus() -> Vec<PathBuf> {
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../features/adapters/reaper/dawfile-reaper/tests/fixtures")
+        .join("../../../studio-engine/adapters/reaper/dawfile-reaper/tests/fixtures")
         .canonicalize()
         .expect("dawfile-reaper fixtures are part of the tree");
 

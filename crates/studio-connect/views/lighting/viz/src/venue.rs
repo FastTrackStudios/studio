@@ -1560,7 +1560,7 @@ mod tests {
 
     fn data(rel: &str) -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../data")
+            .join("../../../../studio-engine/lighting/data")
             .join(rel)
     }
 

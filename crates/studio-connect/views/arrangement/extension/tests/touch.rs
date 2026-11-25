@@ -37,7 +37,7 @@ const H: u32 = 780;
 
 fn session() -> StudioSession {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../features/dynamic-template/fixtures/golden/template.rpp");
+        .join("../../../../studio-engine/adapters/dynamic-template/fixtures/golden/template.rpp");
     session_engine::open::open_silent(&path).expect("open the golden template");
     let raw = daw_view_kit::studio::fetch().expect("read it back");
     let planner = daw_view_kit::studio::Planner {

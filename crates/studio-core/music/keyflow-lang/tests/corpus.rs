@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 fn corpus_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../examples/mxl")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../keyflow-examples/mxl")
 }
 
 fn corpus_files() -> Vec<PathBuf> {

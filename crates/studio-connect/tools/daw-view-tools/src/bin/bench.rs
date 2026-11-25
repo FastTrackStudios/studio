@@ -2419,7 +2419,7 @@ fn faces_bench(which: &str) {
     let dir = std::env::var_os("FTS_FRAME_DIR").map_or_else(
         || {
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../features/ui/plugin-faces/generated")
+                .join("../../plugin-ui/plugin-faces/generated")
         },
         Into::into,
     );

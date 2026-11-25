@@ -1041,7 +1041,7 @@ mod tests {
 
     fn gdtf(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../data/gdtf")
+            .join("../../../../studio-engine/lighting/data/gdtf")
             .join(name)
     }
 

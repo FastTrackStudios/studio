@@ -46,7 +46,7 @@ fn point(t: f64, v: f64) -> EnvelopePoint {
 /// is the design, so the test has to respect it.
 fn scenario_one() -> (DawProject, EntityId) {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../features/adapters/reaper/dawfile-reaper/tests/fixtures/setlist/song_a.RPP");
+        .join("../../../studio-engine/adapters/reaper/dawfile-reaper/tests/fixtures/setlist/song_a.RPP");
     let (mut project, _) = DawProject::import_rpp_file(&fixture).expect("import fixture");
 
     let item = project.edit(|d| {

@@ -448,16 +448,17 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 
 #[test]
 fn both_apps_register_the_performer_panels_through_one_function() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..");
     // The function itself registers every id where it lives.
     let reg = performer_registry(BODIES);
     for (id, region) in performer::ids::ALL {
         let p = reg.get(id).unwrap_or_else(|| panic!("{id} not registered"));
         assert_eq!(p.region, region, "{id}");
     }
-    // Session's mount (features/engine), and every other source there.
+    // Session's mount (the engine crates, once features/engine), and every
+    // other source there.
     let mut files = Vec::new();
-    rust_files(&root.join("features/engine"), &mut files);
+    rust_files(&root.join("crates/studio-engine/engine"), &mut files);
     assert!(!files.is_empty(), "no app sources under {}", root.display());
     let mut mounts = Vec::new();
     for f in &files {

@@ -23,7 +23,7 @@ fn meshes(node: &GdtfNode) -> usize {
 /// r[verify viz.gdtf-aliases] - exact name or alias covers every venue model
 #[test]
 fn every_venue_fixture_resolves_to_a_profile_with_a_real_mesh() {
-    let venues = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../data/venues"));
+    let venues = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../studio-engine/lighting/data/venues"));
     let library = GdtfLibrary::load_default();
     assert!(
         !library.is_empty(),
@@ -74,7 +74,7 @@ fn every_venue_fixture_resolves_to_a_profile_with_a_real_mesh() {
 /// r[verify viz.gdtf-aliases] - a generated profile beats a downloaded one of the same name
 #[test]
 fn generated_profile_wins_over_downloaded_of_same_name() {
-    let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../data/gdtf"));
+    let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../studio-engine/lighting/data/gdtf"));
     let top = GdtfLibrary::load_dir(&dir).expect("load data/gdtf");
     let generated = GdtfLibrary::load_dir(&dir.join("generated")).expect("load generated");
     assert!(top.len() >= generated.len());

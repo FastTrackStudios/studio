@@ -27,7 +27,7 @@ use ignition_viz::venue::Venue;
 use serde_json::Value;
 
 fn norco() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../data/venues/norco")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../studio-engine/lighting/data/venues/norco")
 }
 
 /// Copy the shipped venue somewhere writable.

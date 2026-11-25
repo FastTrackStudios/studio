@@ -73,7 +73,7 @@ pub fn profile_path() -> std::path::PathBuf {
     let candidates = [
         std::path::PathBuf::from(&path),
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../features/lighting")
+            .join("../../../../studio-engine/lighting")
             .join(&path),
     ];
     candidates

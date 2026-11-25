@@ -389,7 +389,7 @@ mod tests {
     fn file_profile() -> ignition_core::Profile {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../features/lighting/data/profiles/ignition.ig-profile"
+            "/../../../../studio-engine/lighting/data/profiles/ignition.ig-profile"
         );
         serde_json::from_str(&std::fs::read_to_string(path).expect("profile file"))
             .expect("profile parses")

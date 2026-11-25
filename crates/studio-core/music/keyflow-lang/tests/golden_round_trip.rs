@@ -61,15 +61,15 @@ const KNOWN_GAPS: &[(&str, &str)] = &[
 
 /// Directories holding the `.kf` corpus, relative to the repo root.
 const CORPUS_DIRS: &[&str] = &[
-    "examples/chordsheet-compat/kf",
-    "features/keyflow/tests/midi",
-    "features/keyflow/tests/data",
-    "features/lang/tests/fixtures",
-    "features/proto/examples",
+    "keyflow-examples/chordsheet-compat/kf",
+    "keyflow/tests/midi",
+    "keyflow/tests/data",
+    "keyflow-lang/tests/fixtures",
+    "keyflow-proto/examples",
 ];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
 fn corpus() -> Vec<PathBuf> {

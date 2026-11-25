@@ -296,7 +296,7 @@ mod tests {
     use crate::venue::Venue;
 
     fn norco() -> Option<Venue> {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../data/venues/norco");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../studio-engine/lighting/data/venues/norco");
         Venue::load(dir).ok()
     }
 
@@ -330,7 +330,7 @@ mod tests {
     /// r[verify patch.venue-layer.optional] - a room works with no layer
     #[test]
     fn a_venue_with_no_layer_loads_and_is_unchanged() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../data/venues/norco");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../studio-engine/lighting/data/venues/norco");
         if !dir.join("fixtures.json").exists() {
             return;
         }

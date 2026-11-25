@@ -96,7 +96,7 @@ fn start_with(
     more: &[String],
 ) -> (std::process::Child, Socket) {
     let (host, guest) = Socket::pair().unwrap();
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_ignition"));
     command
         .args([

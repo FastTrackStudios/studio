@@ -28,7 +28,7 @@ fn stage1_and_full(
     Vec<keyflow_lang::orchestra::score::TempoPoint>,
 ) {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../examples/mxl/theme-from-jurassic-park.mxl");
+        .join("../keyflow-examples/mxl/theme-from-jurassic-park.mxl");
     let score = keyflow_lang::orchestra::score::load(&path).expect("parse");
     let part = score
         .parts
@@ -149,7 +149,7 @@ fn mirror_matches_full_engine_strings_celli() {
 #[test]
 #[ignore = "the orchestral .mxl corpus is not in the repo: `features/examples/mxl` holds transcriptions of commercial scores, which this public repo cannot redistribute. Point it at a local copy and run `cargo test -- --ignored`."]
 fn mirror_matches_full_engine_across_corpus() {
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../examples/mxl");
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../keyflow-examples/mxl");
     let mut files: Vec<_> = std::fs::read_dir(&dir)
         .unwrap()
         .filter_map(|e| e.ok())

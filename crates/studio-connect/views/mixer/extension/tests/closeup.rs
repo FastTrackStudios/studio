@@ -47,7 +47,7 @@ const SIZE: (u32, u32) = (1280, 752);
 
 fn session() -> StudioSession {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../features/dynamic-template/fixtures/golden/template.rpp");
+        .join("../../../../studio-engine/adapters/dynamic-template/fixtures/golden/template.rpp");
     // Once a process: the engine opens one song (`cargo test` runs both
     // tests in one process, nextest each in its own).
     static OPEN: std::sync::Once = std::sync::Once::new();

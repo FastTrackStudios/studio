@@ -1332,7 +1332,7 @@ mod tests {
     /// against. Tests that need it skip when the checkout doesn't have
     /// it (a shallow clone, or a CI job without the data tree).
     fn real_gdtf_files() -> Vec<std::path::PathBuf> {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../data/gdtf");
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../studio-engine/lighting/data/gdtf");
         let Ok(entries) = std::fs::read_dir(&dir) else {
             return Vec::new();
         };
@@ -1397,7 +1397,7 @@ mod tests {
     // r[verify viz.emitter-at-beam-node] - a par lights from its lens, not its sockets
     #[test]
     fn a_pars_emitter_is_at_the_lens_and_fires_out_of_it() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../data/gdtf");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../studio-engine/lighting/data/gdtf");
         for file in [
             "Chauvet@SlimPAR_Pro_Q_USB@Version_1.gdtf",
             "generated/U_King@Uking_Par@ignition.gdtf",
@@ -1437,7 +1437,7 @@ mod tests {
     #[test]
     fn a_model_less_geometry_node_is_not_an_emitter() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../data/gdtf/Chauvet@SlimPAR_Pro_Q_USB@Version_1.gdtf");
+            .join("../../../../studio-engine/lighting/data/gdtf/Chauvet@SlimPAR_Pro_Q_USB@Version_1.gdtf");
         if !path.exists() {
             return;
         }
@@ -1465,7 +1465,7 @@ mod tests {
         assert_eq!(scales.get("minigobomovingheadlight11ch"), Some(&1.5));
 
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../data/gdtf/generated/ZKYMZL@Mini_Gobo_Moving_Head_Light_11ch@ignition.gdtf");
+            .join("../../../../studio-engine/lighting/data/gdtf/generated/ZKYMZL@Mini_Gobo_Moving_Head_Light_11ch@ignition.gdtf");
         if !path.exists() {
             return;
         }
@@ -1981,7 +1981,7 @@ mod tests {
     #[test]
     fn a_pars_emitter_world_transform_is_its_beam_nodes() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../data/gdtf/generated/U_King@36_LED_Par_Can@ignition.gdtf");
+            .join("../../../../studio-engine/lighting/data/gdtf/generated/U_King@36_LED_Par_Can@ignition.gdtf");
         if !path.exists() {
             return;
         }
@@ -2086,7 +2086,7 @@ mod tests {
     #[test]
     fn a_bars_cells_are_siblings_under_one_node() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
-            "../data/gdtf/American_DJ@Ultra_Bar_12@Close_-_Needs_Work_on_Strobes_and_Programs.gdtf",
+            "../../../../studio-engine/lighting/data/gdtf/American_DJ@Ultra_Bar_12@Close_-_Needs_Work_on_Strobes_and_Programs.gdtf",
         );
         if !path.exists() {
             return;

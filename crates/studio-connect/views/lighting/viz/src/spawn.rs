@@ -2870,7 +2870,7 @@ mod body_and_bar_tests {
         use bevy::MinimalPlugins;
         use bevy::app::App;
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
-            "../data/gdtf/American_DJ@Ultra_Bar_12@Close_-_Needs_Work_on_Strobes_and_Programs.gdtf",
+            "../../../../studio-engine/lighting/data/gdtf/American_DJ@Ultra_Bar_12@Close_-_Needs_Work_on_Strobes_and_Programs.gdtf",
         );
         if !path.exists() {
             return;
@@ -2991,7 +2991,7 @@ mod body_and_bar_tests {
 
     fn ultra_bar_beams() -> Option<Vec<(Vec3, Quat)>> {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
-            "../data/gdtf/American_DJ@Ultra_Bar_12@Close_-_Needs_Work_on_Strobes_and_Programs.gdtf",
+            "../../../../studio-engine/lighting/data/gdtf/American_DJ@Ultra_Bar_12@Close_-_Needs_Work_on_Strobes_and_Programs.gdtf",
         );
         if !path.exists() {
             return None;

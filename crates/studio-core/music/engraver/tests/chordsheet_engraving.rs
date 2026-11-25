@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use keyflow_lang::chordsheet::manifest::Manifest;
 
 fn corpus() -> Option<PathBuf> {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../examples/chordsheet/source");
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../keyflow-examples/chordsheet/source");
     dir.is_dir().then_some(dir)
 }
 

@@ -42,7 +42,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
 /// Every venue directory that has a `fixtures.json`, the way

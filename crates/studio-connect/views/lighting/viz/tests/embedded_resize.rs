@@ -17,7 +17,7 @@ fn a_resize_keeps_rendering() {
     };
     let venue = ignition_viz::venue::Venue::load(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../data/venues/norco"
+        "/../../../../studio-engine/lighting/data/venues/norco"
     ))
     .expect("norco loads");
     let config = ignition_viz::VizConfig::headless(venue, 640, 360);

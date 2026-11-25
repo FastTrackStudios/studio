@@ -12,7 +12,7 @@ use std::path::PathBuf;
 fn every_generated_profile_imports_in_every_mode() {
     let dir = PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../data/gdtf/generated"
+        "/../../../../studio-engine/lighting/data/gdtf/generated"
     ));
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return; // nothing generated yet
@@ -78,7 +78,7 @@ fn generated_profiles_assemble_to_their_specs_physical_size() {
     use ignition_viz::gdtf_geometry::import_geometry;
     let dir = PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../data/gdtf/generated"
+        "/../../../../studio-engine/lighting/data/gdtf/generated"
     ));
     // (file, spec width/length/height in metres — see data/fixtures).
     // Profiles without a pigtail: the cable stub is left out of the
@@ -132,7 +132,7 @@ fn the_mini_gobo_movers_emitter_is_on_the_head() {
     use ignition_viz::gdtf_geometry::import_geometry;
     let path = PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../data/gdtf/generated/ZKYMZL@Mini_Gobo_Moving_Head_Light_11ch@ignition.gdtf"
+        "/../../../../studio-engine/lighting/data/gdtf/generated/ZKYMZL@Mini_Gobo_Moving_Head_Light_11ch@ignition.gdtf"
     ));
     if !path.exists() {
         return;

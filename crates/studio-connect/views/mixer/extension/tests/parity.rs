@@ -57,7 +57,7 @@ use studio_view_link::{InScope, Stats};
 
 fn fixture() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../features/dynamic-template/fixtures/golden/template.rpp")
+        .join("../../../../studio-engine/adapters/dynamic-template/fixtures/golden/template.rpp")
 }
 
 /// The song as `blitz_shot` (the app's headless picture) opens it.

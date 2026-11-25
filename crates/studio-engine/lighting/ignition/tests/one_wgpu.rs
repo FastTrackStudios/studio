@@ -109,7 +109,7 @@ fn split_majors<'a>(all: &'a [Package<'a>]) -> BTreeMap<&'a str, BTreeMap<&'a st
 }
 
 fn lockfile() -> String {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.lock");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../Cargo.lock");
     std::fs::read_to_string(path).expect("the workspace's Cargo.lock")
 }
 
