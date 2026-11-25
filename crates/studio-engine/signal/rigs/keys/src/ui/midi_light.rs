@@ -8,7 +8,7 @@
 use crate::proto::keys::KeysRigClient;
 use dioxus::prelude::*;
 use midi::proto::MidiEvent;
-use midi::ui::MidiMonitorPanel;
+use midi_ui::MidiMonitorPanel;
 
 use crate::ui::state::held_notes;
 

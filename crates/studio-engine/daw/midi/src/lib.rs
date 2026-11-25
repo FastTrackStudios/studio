@@ -21,8 +21,6 @@ pub mod midir;
 #[cfg(feature = "pipewire")]
 pub mod pipewire;
 pub mod proto;
-#[cfg(feature = "ui")]
-pub mod ui;
 #[cfg(feature = "webmidi")]
 pub mod webmidi;
 

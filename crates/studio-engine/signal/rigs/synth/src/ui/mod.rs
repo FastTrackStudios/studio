@@ -16,7 +16,7 @@ use crate::proto::{
 };
 use dioxus::prelude::*;
 use midi::proto::MidiEvent;
-use midi::ui::MidiMonitorPanel;
+use midi_ui::MidiMonitorPanel;
 use signal_proto::tagging::{StructuredTag, TagCategory, TagSet};
 use signal_widgets::Piano;
 

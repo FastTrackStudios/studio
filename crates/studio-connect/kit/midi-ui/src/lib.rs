@@ -1,12 +1,12 @@
-//! midicore's reusable MIDI-monitor display.
+//! The MIDI-monitor display every rig's editor shows (split out of `midi`, which stays headless).
 //!
 //! [`MidiMonitorPanel`] renders a rolling list of [`MidiEvent`]s — colour-coded
 //! by [`MidiKind`], one line each via the event's `Display` — so any rig's
 //! remote GUI shows "what MIDI is arriving" identically. Inline styles only
 //! (Blitz-safe), no external CSS.
 
-use crate::proto::{MidiEvent, MidiKind};
 use dioxus::prelude::*;
+use midi::{MidiEvent, MidiKind};
 
 /// Accent colour for a MIDI message category (drives the monitor's per-line
 /// dot + text tint). Public so callers can match the taxonomy elsewhere.
@@ -23,7 +23,7 @@ pub fn kind_color(kind: MidiKind) -> &'static str {
 }
 
 /// A MIDI monitor panel: newest events at the bottom, colour-coded, with a
-/// running total. `events` is oldest-first (as [`MidiMonitor::recent`] returns).
+/// running total. `events` is oldest-first (as [`midi::MidiMonitor::recent`] returns).
 /// `count` is the running total seen (0 if unknown). `title` labels the panel.
 #[component]
 pub fn MidiMonitorPanel(events: Vec<MidiEvent>, count: u64, title: String) -> Element {

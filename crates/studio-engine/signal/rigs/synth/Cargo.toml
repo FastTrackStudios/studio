@@ -11,7 +11,7 @@ workspace = true
 
 [features]
 default = ["vox"]
-ui = ["dep:dioxus", "dep:fts-audio-ui", "midi/ui", "signal-widgets/piano", "dep:signal-widgets", "architect/atom", "architect/platform", "architect/vox"]
+ui = ["dep:dioxus", "dep:fts-audio-ui", "dep:midi-ui", "signal-widgets/piano", "dep:signal-widgets", "architect/atom", "architect/platform", "architect/vox"]
 vox = ["architect/vox", "dep:vox"]
 
 [dependencies]
@@ -21,7 +21,8 @@ facet = { workspace = true }
 facet-styx = { workspace = true }
 flate2 = { workspace = true }
 fts-audio-ui = { workspace = true, optional = true }
-midi = { workspace = true, features = ["ui"] }
+midi = { workspace = true }
+midi-ui = { workspace = true, optional = true }
 sampler = { workspace = true }
 signal-proto = { workspace = true }
 signal-widgets = { workspace = true, optional = true }

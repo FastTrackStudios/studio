@@ -12,7 +12,7 @@ use crate::proto::{
 };
 use dioxus::prelude::*;
 use midi::proto::MidiEvent;
-use midi::ui::MidiMonitorPanel;
+use midi_ui::MidiMonitorPanel;
 use signal_widgets::Piano;
 
 /// Live drum-rig view-state: seeded once, then folded from the event stream.

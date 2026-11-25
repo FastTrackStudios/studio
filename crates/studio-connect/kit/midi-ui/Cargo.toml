@@ -1,0 +1,14 @@
+[package]
+name = "midi-ui"
+description = "The MIDI monitor panel a rig's editor shows: the Dioxus half of `midi`, which stays headless for the engine."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+dioxus = { workspace = true }
+midi = { workspace = true, default-features = false }
+
+[lints]
+workspace = true

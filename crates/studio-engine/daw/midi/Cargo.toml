@@ -17,14 +17,12 @@ midir-jack = ["midir", "midir/jack"]
 midir-pipewire = ["midir-jack"]
 native = ["coremidi", "dep:crossbeam-channel", "dep:eyre", "dep:tracing", "pipewire", "webmidi"]
 pipewire = ["dep:eyre", "dep:libspa", "dep:libspa-sys", "dep:pipewire", "dep:tracing"]
-ui = ["dep:dioxus"]
 vox = []
 webmidi = ["dep:js-sys", "dep:tracing", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:web-sys"]
 
 [dependencies]
 architect = { workspace = true, features = ["vox"] }
 crossbeam-channel = { workspace = true, optional = true }
-dioxus = { workspace = true, optional = true }
 eyre = { workspace = true, optional = true }
 facet = { workspace = true }
 midir = { workspace = true, optional = true }

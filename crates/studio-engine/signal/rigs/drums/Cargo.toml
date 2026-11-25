@@ -12,7 +12,7 @@ workspace = true
 [features]
 default = ["vox"]
 pipewire = []
-ui = ["dep:dioxus", "midi/ui", "dep:signal-widgets", "signal-widgets/piano", "architect/atom", "architect/platform"]
+ui = ["dep:dioxus", "dep:midi-ui", "dep:signal-widgets", "signal-widgets/piano", "architect/atom", "architect/platform"]
 vox = ["architect/vox", "dep:vox"]
 
 [dependencies]
@@ -21,7 +21,8 @@ daw = { workspace = true }
 dioxus = { workspace = true, optional = true }
 facet = { workspace = true }
 builtin = { workspace = true }
-midi = { workspace = true, features = ["midir", "native", "ui", "vox"] }
+midi = { workspace = true, features = ["midir", "native", "vox"] }
+midi-ui = { workspace = true, optional = true }
 signal-plugin-host = { workspace = true }
 signal-rig-host = { workspace = true }
 # The drums' own profiles, songs and setlists (apart from the guitar's).
