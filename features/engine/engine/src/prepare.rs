@@ -1156,6 +1156,27 @@ mod tests {
         assert!(names.iter().any(|n| n == "End"), "{names:?}");
     }
 
+    /// A section that repeats (`|: … :|x4`) lasts as long as it is played:
+    /// the sections after it start after every pass, as the recording
+    /// plays them and as Keyflow's chart counts its bars.
+    #[cfg(feature = "native")]
+    #[test]
+    fn a_repeat_lasts_as_long_as_it_is_played() {
+        // 60 BPM 4/4: a bar is 4 s. VS 2 bars (0-8 s), OUT 2 written bars
+        // played 3 times (8-32 s), [End] 1 bar (32-36 s).
+        const VAMP: &str =
+            "Vamp Song - Test\n#C 60bpm 4/4\n\nVS 2\nC\nG\n\nOUT 2\n|: F | G :|x3\n\n[End] 1\nC\n";
+        let layout = session::setlist::chart_import::chart_to_layout(VAMP).expect("laid out");
+        let spans: Vec<(f64, f64, u32)> = layout
+            .sections
+            .iter()
+            .map(|s| (s.start_seconds, s.end_seconds, s.measures))
+            .collect();
+        assert_eq!(spans, [(0.0, 8.0, 2), (8.0, 32.0, 6), (32.0, 36.0, 1)]);
+        assert_eq!(layout.measure_starts.len(), 9, "every bar as played");
+        assert_eq!(layout.song_end_seconds, 36.0);
+    }
+
     #[test]
     fn filing_folders_do_not_name_an_artist() {
         assert!(names_an_artist("crescendum-2026-10-08"));

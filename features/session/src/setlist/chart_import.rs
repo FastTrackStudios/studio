@@ -139,47 +139,76 @@ pub fn chart_to_layout(chart_text: &str) -> Result<ChartLayout, ChartImportError
     let mut measure_starts: Vec<f64> = Vec::new();
     let mut meter_changes: Vec<(f64, u32, u32)> = Vec::new();
     let mut meter = header;
-    let mut at = 0.0_f64;
-    for cs in &chart.sections {
-        let s = &cs.section;
-        let kind = SectionKind::from_section_type(&s.section_type);
-        let measures = s
-            .measure_count
-            .and_then(|m| u32::try_from(m).ok())
-            .filter(|m| *m > 0)
-            .unwrap_or_else(|| kind.default_measure_count());
-        // The parsed bars carry their meters; a section whose bars do not
-        // add up to its count (the parser did not expand it) is its count
-        // at the prevailing meter.
-        let bars: Vec<(u8, u8)> = cs.measures().iter().map(|m| m.time_signature).collect();
-        let bars = if bars.len() == measures as usize {
-            bars
-        } else {
-            vec![meter; measures as usize]
-        };
-        let start_seconds = at;
-        for bar in bars {
-            if bar != meter {
-                meter_changes.push((at, u32::from(bar.0), u32::from(bar.1)));
-                meter = bar;
+    let laid = |kind: SectionKind, s: &keyflow::text::sections::Section, start: f64| LaidSection {
+        kind,
+        label: s.comment.clone(),
+        name: match &s.section_type {
+            keyflow::SectionType::Custom(name) if !name.trim().is_empty() => {
+                Some(name.trim().to_owned())
             }
-            measure_starts.push(at);
-            at += quarters_in(bar) * quarter;
+            _ => None,
+        },
+        number: s.number,
+        start_seconds: start,
+        end_seconds: start,
+        measures: 0,
+    };
+    // The count-in first: its bars at the opening meter, before bar 1.
+    let mut at = 0.0_f64;
+    if let Some(cs) = chart.sections.first() {
+        let kind = SectionKind::from_section_type(&cs.section.section_type);
+        if kind == SectionKind::CountIn {
+            let bars = cs
+                .section
+                .measure_count
+                .and_then(|m| u32::try_from(m).ok())
+                .filter(|m| *m > 0)
+                .unwrap_or_else(|| kind.default_measure_count());
+            let mut count = laid(kind, &cs.section, at);
+            for _ in 0..bars {
+                measure_starts.push(at);
+                at += quarters_in(header) * quarter;
+            }
+            count.end_seconds = at;
+            count.measures = bars;
+            sections.push(count);
         }
-        sections.push(LaidSection {
-            kind,
-            label: s.comment.clone(),
-            name: match &s.section_type {
-                keyflow::SectionType::Custom(name) if !name.trim().is_empty() => {
-                    Some(name.trim().to_owned())
-                }
-                _ => None,
-            },
-            number: s.number,
-            start_seconds,
-            end_seconds: at,
-            measures,
-        });
+    }
+    // Then every bar as it is played (a `|: … :|x4` four times, each
+    // ending on its own pass, the chart's tempo changes), as Keyflow counts
+    // a chart's bars: each section as long as it is played. Laid out from
+    // the written bars alone, a repeat was played once and everything
+    // after it came early.
+    let played =
+        keyflow::text::bar_times::bar_times(&chart, keyflow::text::bar_times::BarClock::at(at));
+    let mut current: Option<(usize, LaidSection)> = None;
+    for bar in &played {
+        let Some(cs) = chart.sections.get(bar.section) else {
+            continue;
+        };
+        let written = cs
+            .measures()
+            .get(bar.index)
+            .map_or(meter, |m| m.time_signature);
+        if written != meter {
+            meter_changes.push((bar.start, u32::from(written.0), u32::from(written.1)));
+            meter = written;
+        }
+        measure_starts.push(bar.start);
+        if current.as_ref().is_none_or(|(at, _)| *at != bar.section) {
+            if let Some((_, done)) = current.take() {
+                sections.push(done);
+            }
+            let kind = SectionKind::from_section_type(&cs.section.section_type);
+            current = Some((bar.section, laid(kind, &cs.section, bar.start)));
+        }
+        if let Some((_, open)) = current.as_mut() {
+            open.end_seconds = bar.end;
+            open.measures += 1;
+        }
+    }
+    if let Some((_, done)) = current.take() {
+        sections.push(done);
     }
 
     // The leading CountIn section (if any) is the count-in; the first musical
