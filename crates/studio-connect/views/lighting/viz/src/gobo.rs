@@ -711,7 +711,7 @@ impl GoboLibrary {
 pub fn gdtf_files() -> Vec<PathBuf> {
     let candidates = [
         PathBuf::from("data/gdtf"),
-        utils::paths::checkout_path("features/lighting/data/gdtf"),
+        utils::paths::checkout_path("crates/studio-engine/lighting/data/gdtf"),
     ];
     let Some(dir) = candidates.into_iter().find(|d| d.is_dir()) else {
         return Vec::new();

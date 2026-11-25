@@ -168,9 +168,11 @@ impl Args {
             body_glow: false,
             labels: false,
             select: None,
-            assets_dir: utils::paths::checkout_path("features/lighting/viz/assets")
-                .to_string_lossy()
-                .into_owned(),
+            assets_dir: utils::paths::checkout_path(
+                "crates/studio-connect/views/lighting/viz/assets",
+            )
+            .to_string_lossy()
+            .into_owned(),
             screen_content: Some("screens/rockstars-logo.webp".to_string()),
             canvas_content: std::collections::HashMap::default(),
             overlay: None,

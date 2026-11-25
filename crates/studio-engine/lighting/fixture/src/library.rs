@@ -249,7 +249,7 @@ fn resolve_path(relative: &str) -> PathBuf {
     if here.exists() {
         return here;
     }
-    let from_root = utils::paths::checkout_path("features/lighting").join(relative);
+    let from_root = utils::paths::checkout_path("crates/studio-engine/lighting").join(relative);
     if from_root.exists() {
         return from_root;
     }

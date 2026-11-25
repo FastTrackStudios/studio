@@ -344,7 +344,8 @@ const EXAMPLE_LIBRARY: &[(&str, &str)] = &[
 /// `<config>/signal/library`, which a user creates.
 #[must_use]
 pub fn example_library() -> PathBuf {
-    let checkout = utils::paths::checkout_path("features/sampler/examples/library");
+    let checkout =
+        utils::paths::checkout_path("crates/studio-engine/signal/sampler/examples/library");
     if checkout.is_dir() {
         return checkout;
     }

@@ -14,9 +14,9 @@ fn main() {
     // The editor's `editor.*` tokens, as the app writes them.
     midi_editor::install();
     let palette = daw_view_kit::palette::Palette::from_theme(&daw_ui::theming::Theme::dark());
-    let out = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "features/engine/view-kit/themes/fts-dark.frame".to_owned());
+    let out = std::env::args().nth(1).unwrap_or_else(|| {
+        "crates/studio-connect/kit/daw-view-kit/themes/fts-dark.frame".to_owned()
+    });
     let themes = vec![(out, daw_view_kit::skin::export::fts_dark(&palette))];
     for (out, markup) in themes {
         // Compiled before it is written: a theme the mixer would refuse is

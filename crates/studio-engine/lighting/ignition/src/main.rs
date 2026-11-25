@@ -56,7 +56,7 @@ fn lighting_root() -> PathBuf {
     [cwd.join("features/lighting"), cwd.clone()]
         .into_iter()
         .find(|dir| dir.join("data/venues").is_dir())
-        .unwrap_or_else(|| utils::paths::checkout_path("features/lighting"))
+        .unwrap_or_else(|| utils::paths::checkout_path("crates/studio-engine/lighting"))
 }
 
 #[derive(Debug)]
@@ -757,8 +757,10 @@ impl Follow for Follower {
                     let mut lit: Vec<String> = out
                         .iter()
                         .filter(|((_, attr), v)| {
-                            matches!(attr, ignition_core::Attribute::Dimmer | ignition_core::Attribute::Strobe)
-                                && **v > 0.001
+                            matches!(
+                                attr,
+                                ignition_core::Attribute::Dimmer | ignition_core::Attribute::Strobe
+                            ) && **v > 0.001
                         })
                         .map(|((chan, attr), v)| format!("{chan}:{attr:?}={v:.2}"))
                         .collect();
@@ -772,8 +774,10 @@ impl Follow for Follower {
                         list.cues.len(),
                         lit.join(" ")
                     );
-                    if let Ok(mut file) =
-                        std::fs::OpenOptions::new().create(true).append(true).open(path)
+                    if let Ok(mut file) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(path)
                     {
                         let _ = std::io::Write::write_all(&mut file, line.as_bytes());
                     }

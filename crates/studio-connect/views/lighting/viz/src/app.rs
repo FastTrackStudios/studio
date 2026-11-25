@@ -178,9 +178,11 @@ impl VizConfig {
             canvas_content: std::collections::HashMap::default(),
             canvas_focus: std::collections::HashMap::default(),
             canvas: None,
-            assets_dir: utils::paths::checkout_path("features/lighting/viz/assets")
-                .to_string_lossy()
-                .into_owned(),
+            assets_dir: utils::paths::checkout_path(
+                "crates/studio-connect/views/lighting/viz/assets",
+            )
+            .to_string_lossy()
+            .into_owned(),
             output: false,
             loopback: false,
             body_glow: false,

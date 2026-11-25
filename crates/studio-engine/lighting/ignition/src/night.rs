@@ -108,7 +108,8 @@ pub static VENUE_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceL
 #[must_use]
 pub fn venue_ambient(venue_dir: &Path) -> Option<f32> {
     let doc: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(venue_dir.join("venue.ig-venue")).ok()?).ok()?;
+        serde_json::from_str(&std::fs::read_to_string(venue_dir.join("venue.ig-venue")).ok()?)
+            .ok()?;
     let v = doc.get("look")?.get("ambient")?.as_f64()?;
     v.to_string().parse::<f32>().ok()
 }

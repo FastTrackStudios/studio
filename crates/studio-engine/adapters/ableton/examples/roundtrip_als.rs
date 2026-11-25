@@ -1,7 +1,7 @@
 use ableton::*;
 
 fn main() {
-    let path = "features/adapters/ableton/tests/fixtures/ableton/LucidDreaming.als";
+    let path = "crates/studio-engine/adapters/ableton/tests/fixtures/ableton/LucidDreaming.als";
     println!("Reading: {path}");
     let set = read_live_set(path).expect("failed to parse");
     println!(

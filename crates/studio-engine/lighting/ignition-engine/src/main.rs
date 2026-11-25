@@ -19,7 +19,7 @@ struct FixtureRecord {
 
 // r[impl files.venue] - smoke check only: reads fixtures.json and screens.json from the venue directory
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let path = "features/lighting/data/venues/norco/fixtures.json";
+    let path = "crates/studio-engine/lighting/data/venues/norco/fixtures.json";
     let raw = fs::read_to_string(path)?;
     let fixtures: Vec<FixtureRecord> = serde_json::from_str(&raw)?;
 

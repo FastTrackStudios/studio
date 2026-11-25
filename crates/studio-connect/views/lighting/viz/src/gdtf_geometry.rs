@@ -956,7 +956,7 @@ impl GdtfLibrary {
     pub fn load_default() -> Self {
         let candidates = [
             PathBuf::from("data/gdtf"),
-            utils::paths::checkout_path("features/lighting/data/gdtf"),
+            utils::paths::checkout_path("crates/studio-engine/lighting/data/gdtf"),
         ];
         for dir in candidates {
             if !dir.is_dir() {
@@ -1332,7 +1332,8 @@ mod tests {
     /// against. Tests that need it skip when the checkout doesn't have
     /// it (a shallow clone, or a CI job without the data tree).
     fn real_gdtf_files() -> Vec<std::path::PathBuf> {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../studio-engine/lighting/data/gdtf");
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../studio-engine/lighting/data/gdtf");
         let Ok(entries) = std::fs::read_dir(&dir) else {
             return Vec::new();
         };
@@ -1397,7 +1398,8 @@ mod tests {
     // r[verify viz.emitter-at-beam-node] - a par lights from its lens, not its sockets
     #[test]
     fn a_pars_emitter_is_at_the_lens_and_fires_out_of_it() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../studio-engine/lighting/data/gdtf");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../studio-engine/lighting/data/gdtf");
         for file in [
             "Chauvet@SlimPAR_Pro_Q_USB@Version_1.gdtf",
             "generated/U_King@Uking_Par@ignition.gdtf",
@@ -1436,8 +1438,9 @@ mod tests {
     // r[verify viz.emitter-at-beam-node] - model-less sockets are not emitters
     #[test]
     fn a_model_less_geometry_node_is_not_an_emitter() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../../studio-engine/lighting/data/gdtf/Chauvet@SlimPAR_Pro_Q_USB@Version_1.gdtf");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../../../studio-engine/lighting/data/gdtf/Chauvet@SlimPAR_Pro_Q_USB@Version_1.gdtf",
+        );
         if !path.exists() {
             return;
         }

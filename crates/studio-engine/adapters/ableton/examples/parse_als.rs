@@ -2,8 +2,8 @@ use ableton::*;
 
 fn main() {
     for path in &[
-        "features/adapters/ableton/tests/fixtures/ableton/Farmhouse.als",
-        "features/adapters/ableton/tests/fixtures/ableton/LucidDreaming.als",
+        "crates/studio-engine/adapters/ableton/tests/fixtures/ableton/Farmhouse.als",
+        "crates/studio-engine/adapters/ableton/tests/fixtures/ableton/LucidDreaming.als",
     ] {
         println!("\n{}", "=".repeat(60));
         println!("Parsing: {path}");

@@ -37,16 +37,16 @@ fn dump_session(path: &str, label: &str) {
 
 fn main() {
     let fixtures = [
-        "features/adapters/protools/tests/fixtures/protools/wonder-session.ptx",
-        "features/adapters/protools/tests/fixtures/protools/studio-session-2.ptx",
-        "features/adapters/protools/tests/fixtures/protools/studio-comp-session.ptx",
-        "features/adapters/protools/tests/fixtures/protools/orchestral-session.ptx",
-        "features/adapters/protools/tests/fixtures/protools/choir-session.ptx",
-        "features/adapters/protools/tests/fixtures/protools/studio-tracking-session.ptx",
-        "features/adapters/protools/tests/fixtures/protools/worship-session.ptx",
-        "features/adapters/protools/tests/fixtures/protools/live-concert-session.ptx",
-        "features/adapters/protools/tests/fixtures/protools/GodnessOfGod.ptx",
-        "features/adapters/protools/tests/fixtures/protools/goodplaylists2.ptf",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/wonder-session.ptx",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/studio-session-2.ptx",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/studio-comp-session.ptx",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/orchestral-session.ptx",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/choir-session.ptx",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/studio-tracking-session.ptx",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/worship-session.ptx",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/live-concert-session.ptx",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/GodnessOfGod.ptx",
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/goodplaylists2.ptf",
     ];
     for path in &fixtures {
         let label = std::path::Path::new(path)

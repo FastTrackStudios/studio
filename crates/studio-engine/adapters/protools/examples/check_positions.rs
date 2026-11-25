@@ -1,6 +1,7 @@
 fn main() {
     let path = std::env::args().nth(1).unwrap_or_else(|| {
-        "features/adapters/protools/tests/fixtures/protools/studio-session-2.ptx".to_string()
+        "crates/studio-engine/adapters/protools/tests/fixtures/protools/studio-session-2.ptx"
+            .to_string()
     });
     let session = protools::read_session(&path, 48000).unwrap();
     let rate = session.session_sample_rate;
