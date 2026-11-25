@@ -166,6 +166,27 @@ pub fn forget_overrides(daw: &Standalone, project_guid: &str, fx_guid: &str) {
     });
 }
 
+/// Let go of the values the host holds over the plugin `fx_guid`'s
+/// parameters `ids` (CLAP ids): the plugin's own values are heard again.
+/// How many it held.
+pub fn forget_params(daw: &Standalone, project_guid: &str, fx_guid: &str, ids: &[u32]) -> usize {
+    if ids.is_empty() {
+        return 0;
+    }
+    daw.write_project(project_guid, |p| {
+        let mut let_go = 0;
+        for entry in p.fx_chains.values_mut().flatten() {
+            if entry.fx.guid == fx_guid {
+                for id in ids {
+                    let_go += usize::from(entry.params.remove(id).is_some());
+                }
+            }
+        }
+        let_go
+    })
+    .unwrap_or(0)
+}
+
 /// Load `state` into the hosted plugin `fx_guid` and make it what the
 /// plugin is set to ([`forget_overrides`]).
 ///

@@ -788,6 +788,8 @@ fn settle(
                         },
                     )
                     .map_err(|e| e.to_string())?;
+                    // A Signal chain kept by Studio has the old value.
+                    crate::clap_host::signal::forget_chain(&fx.guid);
                     let now = Effects::parameter(daw, project.clone(), target.clone(), param.index)
                         .map_or_else(String::new, |p| p.formatted);
                     // As asked: `Post Freq 6`, not the name all six share.
@@ -796,6 +798,23 @@ fn settle(
                 .unwrap_or_else(|e| format!("{which}: {e}"))
         })
         .collect()
+}
+
+/// `FX_SET`: `set` (parameter → the plugin's words) on the FX `fx` of
+/// `track`; what each now reads, or why not.
+///
+/// # Errors
+/// No such track or FX.
+pub(crate) fn set(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    (track, fx): (&str, &str),
+    set: &std::collections::HashMap<String, String>,
+) -> Result<Vec<String>, String> {
+    let (target, fx) = target(daw, project, track, fx)?;
+    let said = settle(daw, project, (&target, &fx), set);
+    crate::actions::list().changed("fx", &fx.guid);
+    Ok(said)
 }
 
 /// The slot `which` names by its CLAP id (`@b014`): the plugin's
@@ -1150,10 +1169,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     })?;
     list.register(&SET, Effect::Mutating, |a: SetArg| {
         let (daw, project) = song()?;
-        let (target, fx) = target(daw, &project, &a.track, &a.fx)?;
-        let said = settle(daw, &project, (&target, &fx), &a.set);
-        crate::actions::list().changed("fx", &fx.guid);
-        Ok(said)
+        set(daw, &project, (&a.track, &a.fx), &a.set)
     })?;
     list.register(&ADD, Effect::Mutating, |a: AddArg| {
         let (daw, project) = song()?;

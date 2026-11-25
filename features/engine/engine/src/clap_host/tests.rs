@@ -401,3 +401,308 @@ fn a_subscription_made_before_its_plugin_is_on_a_chain_is_kept() {
         "dropped once its plugin, seen on a chain, is gone"
     );
 }
+
+// ── Setting a Signal block's parameters, the transport stopped ──────────
+
+/// The Signal Dev bundle the tests load: `SIGNAL_DEV_CLAP` (a build being
+/// tested), else `~/.clap/Signal Dev.clap`.
+fn signal_dev() -> Option<std::path::PathBuf> {
+    std::env::var_os("SIGNAL_DEV_CLAP")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.exists())
+        .or_else(|| crate::clap_fx::bundle("Signal Dev"))
+}
+
+/// A song with Signal Dev on `Drums/Kick/Sum/In`, activated and never
+/// processed (a stopped transport), a Tone EQ and a Tone comp added.
+fn stopped_signal(
+    song: &str,
+) -> Option<(
+    daw::standalone::Standalone,
+    daw::service::ProjectContext,
+    String,
+)> {
+    let Some(clap) = signal_dev() else {
+        eprintln!("skipped: no Signal Dev.clap on this machine");
+        return None;
+    };
+    let daw = daw::standalone::Standalone::new();
+    daw.set_plugin_load_options(daw::standalone::plugin::LoadOptions {
+        actions: Some(Arc::new(StudioActions::default())),
+        ..daw::standalone::plugin::LoadOptions::default()
+    });
+    let ctx = crate::clap_fx::test_support::drum_song(&daw, song);
+    let track = crate::actions::resolve(&daw, &ctx, "Drums/Kick/Sum/In").expect("the track");
+    let chain = daw::service::FxChainContext::Track(track);
+    let fx = crate::clap_fx::add(&daw, &ctx, &chain, &clap, u32::MAX).expect("Signal Dev loads");
+    if daw.with_plugin_instance(&fx, |p| p.signal().is_some()) != Some(true) {
+        eprintln!("skipped: {} has no signal/1", clap.display());
+        return None;
+    }
+    daw.with_plugin_instance(&fx, |p| {
+        if !p.is_prepared() {
+            p.prepare(48_000.0, 512).expect("activates");
+        }
+    });
+    for (kind, after) in [("eq", None), ("comp", Some("tone.eq"))] {
+        let mut args = serde_json::json!({ "phase": "tone", "kind": kind });
+        if let Some(a) = after {
+            args["after"] = a.into();
+        }
+        super::signal::run(
+            &daw,
+            &ctx,
+            ("Kick/Sum/In", None),
+            "SIGNAL_BLOCK_ADD",
+            &args.to_string(),
+        )
+        .expect("a block added");
+    }
+    Some((daw, ctx, fx))
+}
+
+/// Parameter `id` of block `block` in a signal.chain/1.
+fn chain_param(chain: &serde_json::Value, block: &str, id: &str) -> Option<serde_json::Value> {
+    chain["phases"]
+        .as_array()?
+        .iter()
+        .flat_map(|p| p["blocks"].as_array().cloned().unwrap_or_default())
+        .find(|b| b["id"] == block)?["params"]
+        .as_array()?
+        .iter()
+        .find(|p| p["id"] == id)
+        .cloned()
+}
+
+fn value_of(chain: &serde_json::Value, block: &str, id: &str) -> f64 {
+    chain_param(chain, block, id)
+        .and_then(|p| p["value"].as_f64())
+        .unwrap_or_else(|| panic!("no {block} {id} in {chain}"))
+}
+
+/// A render's copy of `fx` as LISTEN makes one (the live instance's
+/// state into a new instance): its chain, and the gain in dB it gives a
+/// -40 dBFS tone (under any compressor's threshold).
+fn render_copy(
+    daw: &daw::standalone::Standalone,
+    ctx: &daw::service::ProjectContext,
+    fx: &str,
+    tone_hz: f32,
+) -> (serde_json::Value, f64) {
+    use daw_standalone::audio_engine::render::offline::{Copying, copy_plugin, hosted};
+    let song = crate::fx_actions::project_guid(ctx).expect("a song");
+    let (_, name) = hosted(daw, &song)
+        .into_iter()
+        .find(|(g, _)| g == fx)
+        .expect("hosted");
+    let state = daw.save_plugin_state(fx).expect("its state");
+    let (mut copy, _) = copy_plugin(daw, &name, state, Copying::default()).expect("a copy");
+    let chain: serde_json::Value = serde_json::from_str(
+        &copy
+            .signal()
+            .expect("signal/1")
+            .chain()
+            .expect("the copy's chain"),
+    )
+    .expect("JSON");
+    copy.prepare(48_000.0, 512).expect("the copy activates");
+    let tone: Vec<f32> = (0..48_000)
+        .map(|i| 0.01 * (std::f32::consts::TAU * tone_hz * i as f32 / 48_000.0).sin())
+        .collect();
+    let (mut l, mut r) = (vec![0.0; tone.len()], vec![0.0; tone.len()]);
+    for at in (0..tone.len()).step_by(512) {
+        let end = (at + 512).min(tone.len());
+        copy.process_block(
+            &tone[at..end],
+            &tone[at..end],
+            &mut l[at..end],
+            &mut r[at..end],
+            &daw_standalone::plugin::PluginEvents::EMPTY,
+        )
+        .expect("the copy plays");
+    }
+    // The second half: past any attack.
+    let rms =
+        |x: &[f32]| (x.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>() / x.len() as f64).sqrt();
+    let half = tone.len() / 2;
+    (chain, 20.0 * (rms(&l[half..]) / rms(&tone[half..])).log10())
+}
+
+/// FX_SET `@clap_id` to `text` on the Signal Dev on `Drums/Kick/Sum/In`.
+fn fx_set(
+    daw: &daw::standalone::Standalone,
+    ctx: &daw::service::ProjectContext,
+    clap_id: &str,
+    text: &str,
+) {
+    let set = std::iter::once((format!("@{clap_id}"), text.to_owned())).collect();
+    let said = crate::fx_actions::set(daw, ctx, ("Drums/Kick/Sum/In", "Signal Dev"), &set)
+        .expect("FX_SET");
+    assert!(said.iter().all(|s| s.contains(" = ")), "FX_SET: {said:?}");
+}
+
+/// FX_SET on a Signal instance that is not processing (activated, the
+/// transport stopped) lands in Signal itself: its chain read and a render
+/// copy made right after (from its state) both have the new value — and
+/// the copy plays it.
+#[test]
+fn an_fx_set_reaches_a_stopped_signal_its_chain_and_a_render_copy() {
+    let Some((daw, ctx, fx)) = stopped_signal("signal-fx-set-stopped") else {
+        return;
+    };
+    let before = super::signal::chain(&daw, &ctx, "Kick/Sum/In", None).expect("its chain");
+    assert!((value_of(&before["chain"], "tone.comp", "makeup")).abs() < 1e-6);
+    let clap_id = chain_param(&before["chain"], "tone.comp", "makeup")
+        .and_then(|p| p["clap_id"].as_str().map(str::to_owned))
+        .expect("the comp's makeup is a slot");
+    fx_set(&daw, &ctx, &clap_id, "6 dB");
+    let after = super::signal::chain(&daw, &ctx, "Kick/Sum/In", None).expect("its chain");
+    assert!(
+        (value_of(&after["chain"], "tone.comp", "makeup") - 6.0).abs() < 1e-3,
+        "the chain read has it: {}",
+        chain_param(&after["chain"], "tone.comp", "makeup").unwrap()
+    );
+    let (copy, gain_db) = render_copy(&daw, &ctx, &fx, 220.0);
+    assert!(
+        (value_of(&copy, "tone.comp", "makeup") - 6.0).abs() < 1e-3,
+        "the copy's state has it"
+    );
+    assert!(
+        (gain_db - 6.0).abs() < 0.5,
+        "the copy plays it: {gain_db:.2} dB"
+    );
+}
+
+/// SIGNAL_BLOCK_SET on a stopped Signal: an EQ band past the six the slots
+/// show, and a comp's makeup over a value FX_SET held on it — in the chain
+/// read at once and in a render copy, which plays the makeup.
+#[test]
+fn a_signal_block_set_reaches_a_band_past_the_slots_and_a_comps_makeup() {
+    let Some((daw, ctx, fx)) = stopped_signal("signal-block-set") else {
+        return;
+    };
+    let listed = super::signal::run(&daw, &ctx, ("Kick/Sum/In", None), "list", "{}").unwrap();
+    if !listed["result"].to_string().contains("SIGNAL_BLOCK_SET") {
+        eprintln!("skipped: this Signal Dev has no SIGNAL_BLOCK_SET");
+        return;
+    }
+    let set = super::signal::block_set(
+        &daw,
+        &ctx,
+        &serde_json::json!({
+            "track": "Kick/Sum/In",
+            "block": "tone.eq",
+            "params": { "band.7.used": true, "band.7.freq": 450, "band.7.gain": "-6 dB", "band.7.shape": "Bell" },
+        }),
+    )
+    .expect("the EQ set");
+    assert_eq!(set["block"]["id"], "tone.eq", "{set}");
+    let band = |chain: &serde_json::Value| {
+        (
+            value_of(chain, "tone.eq", "band.7.freq"),
+            value_of(chain, "tone.eq", "band.7.gain"),
+        )
+    };
+    let read = super::signal::chain(&daw, &ctx, "Kick/Sum/In", None).unwrap();
+    assert_eq!(band(&read["chain"]), (450.0, -6.0));
+    assert!(
+        chain_param(&read["chain"], "tone.eq", "band.7.freq").unwrap()["clap_id"].is_null(),
+        "band 7 is past the slots"
+    );
+
+    // A value FX_SET holds on the makeup (sent with every block played) is
+    // let go: the block's own value is the one heard.
+    let clap_id = chain_param(&read["chain"], "tone.comp", "makeup").unwrap()["clap_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let index = crate::fx_actions::slot_named(&daw, &fx, &format!("@{clap_id}"))
+        .unwrap()
+        .unwrap();
+    fx_set(&daw, &ctx, &clap_id, "3 dB");
+    let set = super::signal::block_set(
+        &daw,
+        &ctx,
+        &serde_json::json!({ "track": "Kick/Sum/In", "block": "comp", "params": { "makeup": 9 } }),
+    )
+    .expect("the makeup set");
+    assert_eq!(set["let_go"], 1, "{set}");
+    let read = super::signal::chain(&daw, &ctx, "Kick/Sum/In", None).unwrap();
+    assert!((value_of(&read["chain"], "tone.comp", "makeup") - 9.0).abs() < 1e-3);
+    let held = daw::service::Effects::parameter(
+        &daw,
+        ctx.clone(),
+        daw::service::FxTarget {
+            context: daw::service::FxChainContext::Track(
+                crate::actions::resolve(&daw, &ctx, "Drums/Kick/Sum/In").unwrap(),
+            ),
+            fx: daw::service::FxRef::Guid(fx.clone()),
+        },
+        index,
+    )
+    .unwrap();
+    assert!(
+        (held.value - 9.0 / 24.0).abs() < 1e-3,
+        "FX_PARAMS reads it: {held:?}"
+    );
+
+    let (copy, gain_db) = render_copy(&daw, &ctx, &fx, 450.0);
+    assert_eq!(band(&copy), (450.0, -6.0), "the copy has band 7");
+    assert!((value_of(&copy, "tone.comp", "makeup") - 9.0).abs() < 1e-3);
+    // A 450 Hz tone: band 7's -6 dB at its centre, then the 9 dB makeup.
+    assert!(
+        (gain_db - 3.0).abs() < 0.5,
+        "the copy plays both: {gain_db:.2} dB"
+    );
+}
+
+/// The comp's makeup set through the state (FX_STATE, the preset edited,
+/// FX_STATE_SET — what agents did before SIGNAL_BLOCK_SET): the chain read
+/// and a render copy have it.
+#[test]
+fn a_comps_makeup_set_through_the_state_holds() {
+    let Some((daw, ctx, fx)) = stopped_signal("signal-makeup-state") else {
+        return;
+    };
+    let read = super::signal::chain(&daw, &ctx, "Kick/Sum/In", None).unwrap();
+    let clap_id = chain_param(&read["chain"], "tone.comp", "makeup").unwrap()["clap_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    // A value FX_SET held before.
+    fx_set(&daw, &ctx, &clap_id, "3 dB");
+    let saved = daw.save_plugin_state(&fx).unwrap();
+    let len = u64::from_le_bytes(saved[..8].try_into().unwrap()) as usize;
+    let mut outer: serde_json::Value = serde_json::from_slice(&saved[8..8 + len]).unwrap();
+    let text: String =
+        serde_json::from_str(outer["fields"]["signal-state"].as_str().unwrap()).unwrap();
+    let mut state: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let comp = state["preset"]["lanes"][0]["blocks"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|b| b["id"] == "comp")
+        .unwrap();
+    comp["params"]["makeup"] = 12.0.into();
+    outer["fields"]["signal-state"] = serde_json::to_string(&state.to_string()).unwrap().into();
+    let body = serde_json::to_vec(&outer).unwrap();
+    let mut blob = (body.len() as u64).to_le_bytes().to_vec();
+    blob.extend_from_slice(&body);
+    let song = crate::fx_actions::project_guid(&ctx).unwrap();
+    crate::clap_fx::load_state(&daw, &song, &fx, &blob).expect("FX_STATE_SET");
+    let read = super::signal::chain(&daw, &ctx, "Kick/Sum/In", None).unwrap();
+    assert!(
+        (value_of(&read["chain"], "tone.comp", "makeup") - 12.0).abs() < 1e-3,
+        "the chain read: {}",
+        chain_param(&read["chain"], "tone.comp", "makeup").unwrap()
+    );
+    let (copy, gain_db) = render_copy(&daw, &ctx, &fx, 220.0);
+    assert!(
+        (value_of(&copy, "tone.comp", "makeup") - 12.0).abs() < 1e-3,
+        "the copy's state"
+    );
+    assert!(
+        (gain_db - 12.0).abs() < 0.5,
+        "the copy plays it: {gain_db:.2} dB"
+    );
+}

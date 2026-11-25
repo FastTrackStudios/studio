@@ -28,7 +28,7 @@ static CHAIN: ActionMeta = meta(
     "SIGNAL_CHAIN",
     "signal_chain",
     "Signal chain on a track",
-    "The Signal chain on `track` (a GUID, a path like `Drums/Kick/Sum/In`, any tail of it, or a name), as its Signal instance gives it: `{track, track_guid, fx: {guid, place, name}, revision, cached, chain}`. `chain` is the plugin's `signal.chain/1` — `schema`, `revision`, `session` (the shared session it is in, or null), `port` (its track in the kit), `mode` (`per-track` or `kit`), `midi` (what its note input plays; `publishes_hits`), `phases` (each `{id, name, bypass, makeup_db, blocks}`; a block `{id (stable: rescue.gate), kind (eq, comp, gate, saturate, reverb, delay, nam, sampler, trigger, clap…), name, bypass, backend (linked or clap), status (ok, unavailable, error), key ({from, via: hits|midi|self} or null), params, meters}`; a param `{id, clap_id (the FX parameter slot, FX_PARAM_SET sets it), name, value, normalized, text, unit, min, max, default, choices}`; a meter `{id, name, unit, index}` — its live value is in SIGNAL_FEED) and `macros`. The chain is read from the plugin when its revision moved since the last read, or that read is older than 250 ms (a parameter value moves without the revision); otherwise it is the kept one (`cached: true`). `fx` (a name, or `#place`) picks one when the track holds more than one Signal instance. Structural changes (bypass a block or a phase, add, remove, move a block) are SIGNAL_RUN's (`SIGNAL_SET`, `SIGNAL_BLOCK_ADD`, …); a parameter's value is FX_PARAM_SET on its `clap_id`.",
+    "The Signal chain on `track` (a GUID, a path like `Drums/Kick/Sum/In`, any tail of it, or a name), as its Signal instance gives it: `{track, track_guid, fx: {guid, place, name}, revision, cached, chain}`. `chain` is the plugin's `signal.chain/1` — `schema`, `revision`, `session` (the shared session it is in, or null), `port` (its track in the kit), `mode` (`per-track` or `kit`), `midi` (what its note input plays; `publishes_hits`), `phases` (each `{id, name, bypass, makeup_db, blocks}`; a block `{id (stable: rescue.gate), kind (eq, comp, gate, saturate, reverb, delay, nam, sampler, trigger, clap…), name, bypass, backend (linked or clap), status (ok, unavailable, error), key ({from, via: hits|midi|self} or null), params, meters}`; a param `{id, clap_id (the FX parameter slot, FX_PARAM_SET sets it), name, value, normalized, text, unit, min, max, default, choices}`; a meter `{id, name, unit, index}` — its live value is in SIGNAL_FEED) and `macros`. The chain is read from the plugin when its revision moved since the last read, or that read is older than 250 ms (a parameter value moves without the revision); otherwise it is the kept one (`cached: true`). `fx` (a name, or `#place`) picks one when the track holds more than one Signal instance. Structural changes (bypass a block or a phase, add, remove, move a block) are SIGNAL_RUN's (`SIGNAL_SET`, `SIGNAL_BLOCK_ADD`, …); a parameter's value is SIGNAL_BLOCK_SET by its `id` (any parameter, a slot or not), or FX_SET on its `clap_id` (`@<clap_id>`; slots only).",
     "FX",
     "",
 );
@@ -38,6 +38,15 @@ static RUN: ActionMeta = meta(
     "signal_run",
     "Run a Signal action",
     "Run one of Signal's own actions on the Signal instance on `track` (as SIGNAL_CHAIN finds it; `fx` picks one of several): `action` its id (`SIGNAL_SET`, `SIGNAL_BLOCK_ADD`, `SIGNAL_BLOCK_REMOVE`, `SIGNAL_BLOCK_MOVE`, `SIGNAL_PRESET_LOAD`, `SIGNAL_BLOCK_DEV`, … — `SIGNAL_ACTIONS` is not one: `action: \"list\"` gives the plugin's own list), `args` its arguments (an object, or its JSON as a string). Examples: `{\"track\": \"Kick/Sum/In\", \"action\": \"SIGNAL_SET\", \"args\": {\"block\": \"rescue.gate\", \"bypass\": true}}`; `{\"action\": \"SIGNAL_SET\", \"args\": {\"phase\": \"rescue\", \"makeup_db\": 0.5}}`; `{\"action\": \"SIGNAL_BLOCK_ADD\", \"args\": {\"phase\": \"tone\", \"kind\": \"eq\", \"after\": \"tone.comp\"}}`. Answers `{track, track_guid, fx_guid, action, result}`, `result` the plugin's own answer (a structural change answers the new signal.chain/1). Runs on the plugin's main thread; its track's audio waits for it.",
+    "FX",
+    "",
+);
+
+static BLOCK_SET: ActionMeta = meta(
+    "SIGNAL_BLOCK_SET",
+    "signal_block_set",
+    "Set a Signal block's parameters",
+    "Set parameters of one block of the Signal instance on `track` (as SIGNAL_CHAIN finds it; `fx` picks one of several) by their ids, whether or not an FX slot shows them (an EQ shows six bands as slots; it has 24): `block` its chain id (`tone.eq`, `rescue.gate`) or the preset's (`eq`; `lane` names the lane in a kit-mode instance, a per-track one takes its own), `params` `{\"<id>\": value}` — ids as signal.chain/1's `params[].id` (`band.7.freq`, `band.7.gain`, `band.7.shape`, `band.7.used`: a band past the preset's is heard once `used` is on; `makeup`, `threshold`, `ratio`), each value in its own units: a number (Hz, dB, ms, a choice's index; a percentage as 0..1), a boolean for a switch, or its text (`450 Hz`, `-6 dB`, `Bell`, `50%`, `On`), clamped to its range — and `bypass`? (a bypass rebuilds the chain). The values land in the plugin's state and running graph at once, playing or stopped: SIGNAL_CHAIN, MIX_STATE and a render started next (LISTEN, LISTEN_AB) all have them; a value FX_SET held on one of these parameters is let go (the block's own value is the one heard). One undo step. Example: `{\"track\": \"Kick/Sum/In\", \"block\": \"tone.eq\", \"params\": {\"band.7.used\": true, \"band.7.freq\": 450, \"band.7.gain\": -6}}`. Answers `{track, track_guid, fx_guid, block (the block as signal.chain/1 has it now), let_go (held FX_SET values let go)}`.",
     "FX",
     "",
 );
@@ -424,6 +433,122 @@ pub fn run(
     }))
 }
 
+/// Forget `fx_guid`'s kept chain: a parameter value set from outside the
+/// plugin (FX_SET) moves no revision, and the next read must have it.
+pub fn forget_chain(fx_guid: &str) {
+    with_cache(|c| {
+        if let Some(k) = c.by_fx.get_mut(fx_guid) {
+            k.chain = None;
+        }
+    });
+}
+
+/// What SIGNAL_BLOCK_SET takes, for its schema (it reads the JSON itself:
+/// `params` is an object of any ids).
+#[derive(Facet)]
+struct BlockSetDoc {
+    track: String,
+    block: String,
+    /// `{"<param id>": value}`: a number, a boolean or its text.
+    params: Option<String>,
+    bypass: Option<bool>,
+    lane: Option<String>,
+    fx: Option<String>,
+}
+
+/// The block `id` (a chain id, or the preset's id as its tail) in a
+/// `signal.chain/1`.
+fn block_in<'a>(chain: &'a Value, id: &str, lane: Option<&str>) -> Option<&'a Value> {
+    let phases: Vec<&Value> = match chain.get("lanes").and_then(Value::as_array) {
+        Some(lanes) => lanes
+            .iter()
+            .filter(|l| lane.is_none_or(|want| l["lane"] == want))
+            .flat_map(|l| l["phases"].as_array().into_iter().flatten())
+            .collect(),
+        None => chain["phases"].as_array().into_iter().flatten().collect(),
+    };
+    phases
+        .into_iter()
+        .flat_map(|p| p["blocks"].as_array().into_iter().flatten())
+        .find(|b| {
+            b["id"]
+                .as_str()
+                .is_some_and(|b| b == id || b.split_once('.').is_some_and(|(_, tail)| tail == id))
+        })
+}
+
+/// SIGNAL_BLOCK_SET: `args` (`track`, `block`, `params`, `bypass`, `lane`,
+/// `fx`) through Signal's own SIGNAL_BLOCK_SET, as one undo step; the
+/// values FX_SET held on those parameters let go.
+///
+/// # Errors
+/// No such track or Signal instance, or Signal refused the set.
+pub fn block_set(
+    daw: &Standalone,
+    project: &ProjectContext,
+    args: &Value,
+) -> Result<Value, String> {
+    let text = |k: &str| args.get(k).and_then(Value::as_str);
+    let track = text("track").ok_or("`track` is missing")?;
+    let block = text("block").ok_or("`block` is missing")?;
+    let mut inner = serde_json::Map::new();
+    inner.insert("block".into(), Value::from(block));
+    for key in ["params", "bypass", "lane"] {
+        match args.get(key) {
+            None | Some(Value::Null) => {}
+            // `params` as its JSON in a string, as SIGNAL_RUN's `args` may be.
+            Some(Value::String(s)) if key == "params" => {
+                let parsed: Value =
+                    serde_json::from_str(s).map_err(|e| format!("`params` is not JSON: {e}"))?;
+                inner.insert(key.into(), parsed);
+            }
+            Some(v) => {
+                inner.insert(key.into(), v.clone());
+            }
+        }
+    }
+    let port = port_on(daw, project, track, text("fx"))?;
+    let label = format!("Set Signal {block}");
+    daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
+    let ran = run(
+        daw,
+        project,
+        (track, text("fx")),
+        "SIGNAL_BLOCK_SET",
+        &Value::Object(inner.clone()).to_string(),
+    );
+    // The host's held values on these parameters would be sent with every
+    // block played, over the block's own: let go.
+    let let_go = ran.as_ref().map_or(0, |ran| {
+        let ids: Vec<u32> = block_in(&ran["result"], block, text("lane"))
+            .and_then(|b| b["params"].as_array())
+            .into_iter()
+            .flatten()
+            .filter(|p| {
+                inner
+                    .get("params")
+                    .and_then(Value::as_object)
+                    .is_some_and(|set| p["id"].as_str().is_some_and(|id| set.contains_key(id)))
+            })
+            .filter_map(|p| p["clap_id"].as_str()?.parse().ok())
+            .collect();
+        crate::fx_actions::project_guid(project).map_or(0, |song| {
+            crate::clap_fx::forget_params(daw, &song, &port.fx_guid, &ids)
+        })
+    });
+    daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
+    let ran = ran?;
+    forget_chain(&port.fx_guid);
+    crate::actions::list().changed("fx", &port.fx_guid);
+    Ok(json!({
+        "track": ran["track"],
+        "track_guid": ran["track_guid"],
+        "fx_guid": ran["fx_guid"],
+        "block": block_in(&ran["result"], block, text("lane")).cloned().unwrap_or(Value::Null),
+        "let_go": let_go,
+    }))
+}
+
 /// SIGNAL_SESSION: every port, by session.
 #[must_use]
 pub fn session(daw: &Standalone, project: &ProjectContext) -> Value {
@@ -654,6 +779,24 @@ pub fn register(list: &ActionList) -> Result<(), ActionError> {
             run(daw, &project, (&track, fx.as_deref()), &action, &args)
                 .map(|v| v.to_string().into_bytes())
                 .map_err(|m| failed(RUN.id, m))
+        }),
+    )?;
+    list.register_dynamic(
+        &BLOCK_SET,
+        Effect::Mutating,
+        Some(BlockSetDoc::SHAPE),
+        None,
+        Arc::new(|raw: &[u8]| {
+            let args: Value = serde_json::from_slice(if raw.is_empty() { b"{}" } else { raw })
+                .map_err(|e| ActionError::BadArgs {
+                    id: BLOCK_SET.id.to_owned(),
+                    message: e.to_string(),
+                    expected: Some(architect::schema::json_schema(BlockSetDoc::SHAPE)),
+                })?;
+            let (daw, project) = song().map_err(|m| failed(BLOCK_SET.id, m))?;
+            block_set(daw, &project, &args)
+                .map(|v| v.to_string().into_bytes())
+                .map_err(|m| failed(BLOCK_SET.id, m))
         }),
     )?;
     list.register_with(&SESSION, Effect::ReadOnly, |_: &ActionCaller, (): ()| {
