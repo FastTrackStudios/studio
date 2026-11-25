@@ -14,8 +14,6 @@
 //! (XO "Kit Similarity").
 
 pub mod proto;
-#[cfg(feature = "ui")]
-pub mod ui;
 
 // The engine half (architect::rig, signal-space's engine): native-only. The
 // browser remote drives a network engine through `proto`.
