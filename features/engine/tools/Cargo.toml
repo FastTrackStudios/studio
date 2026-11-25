@@ -4,16 +4,26 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-description = "The DAW views' headless tools: `bench` (the arrangement's and the mixer's frame costs) and `blitz_shot` (the app's own tree, rendered to a PNG or a window), over arrangement-view and mixer-view."
+description = "The DAW views' headless tools: the golden session and the theme gallery (`daw-view-tools gallery`), `bench` (the arrangement's and the mixer's frame costs) and `blitz_shot` (the app's own tree, rendered to a PNG or a window), over arrangement-view and mixer-view."
 # Tools, not a library anyone depends on: an edit to either view rebuilds
 # these, and nothing else waits on them.
 publish = false
 
 [dependencies]
-daw-view-kit = { workspace = true, features = ["native", "engine"] }
-arrangement-view = { workspace = true, features = ["native", "engine"] }
-mixer-view = { workspace = true, features = ["native", "engine"] }
-session-engine = { workspace = true }
+daw-theme = { workspace = true }
+anyrender_vello_cpu = { workspace = true }
+timeline = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
+daw-view-kit = { workspace = true, features = ["native"] }
+arrangement-view = { workspace = true, features = ["native"] }
+mixer-view = { workspace = true, features = ["native"] }
+# The Patch List view, rendered to its fixtures (`bench`).
+studio-panels = { workspace = true, features = ["native", "engine"] }
+# The expression editor and the Editor panel (`bench`), and its theme
+# tokens (`theme_export`).
+midi-editor = { workspace = true, features = ["native"] }
+session-engine = { workspace = true, features = ["native"] }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }
 blitz-dom = { workspace = true }
@@ -46,9 +56,20 @@ pprof = { workspace = true, features = ["flamegraph"], optional = true }
 [features]
 profile = ["dep:pprof", "daw-view-kit/profile"]
 
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "daw-view-tools"
+path = "src/bin/daw-view-tools.rs"
+
 [[bin]]
 name = "bench"
 path = "src/bin/bench.rs"
+
+[[bin]]
+name = "theme_export"
+path = "src/bin/theme_export.rs"
 
 [[bin]]
 name = "blitz_shot"
@@ -56,3 +77,7 @@ path = "src/bin/blitz_shot.rs"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# The window-attach test's arguments (tests/window_attach.rs).
+serde_json = { workspace = true }

@@ -56,7 +56,8 @@ pub mod comping;
 pub mod count_in;
 pub mod reference;
 pub mod review;
-pub mod section_kinds;
+/// What a section region or a marker is: the session primitive's.
+pub use fts_session::section_kinds;
 pub mod setlist;
 pub mod song;
 pub mod strip_width;
@@ -80,7 +81,8 @@ pub mod load_selection;
 // non-attribute line between this and any gated module added above.
 pub mod keyflow;
 pub mod lyrics;
-pub mod mix_phases;
+/// The phases a mix goes through: the session primitive's.
+pub use fts_session::mix_phases;
 pub mod mode_phases;
 pub mod modes;
 pub mod open_link;

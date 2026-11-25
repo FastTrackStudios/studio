@@ -482,6 +482,9 @@ mod imp {
             forward::<()>(&list, &LAUNCHER_WINDOW, M, false);
             forward::<ViewArgs>(&list, &SESSION_VIEW, M, true);
             forward::<ModeArgs>(&list, &UI_MODE, M, true);
+            // The views' theme packs, and the one chosen last shown again.
+            crate::themes::install_actions(&list);
+            crate::themes::restore();
             let scripting = architect_scripting::actions::Scripting::new(
                 list.clone(),
                 architect_scripting::Library::new(architect_scripting::MemoryStore::default()),

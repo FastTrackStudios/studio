@@ -52,6 +52,14 @@ pub use crate::audio_mode::{
     Assets, AudioMode, ModeState, RemoteTarget, begin_asset_load, set_assets_progress,
     set_cue_ready,
 };
+/// The runtime a window's link and engine calls run on, the ways sync code
+/// waits on it, and the song on screen: the views' contract's
+/// (`daw_view::open`), whose song on screen is this module's
+/// ([`song_here`], through Studio's host).
+pub use daw_view::open::{
+    block_on_engine, current_song, engine_runtime, facade_blocking, in_song, runtime,
+    traced_blocking,
+};
 pub use session_runtime::open_core::{
     AsItIs, Media, OpenHost, Opened, ProjectText, SongPlan, is_session, project_text,
     project_text_in,
@@ -72,17 +80,13 @@ pub struct Served {
     pub scope: Arc<architect::Scope>,
 }
 
-/// The engine runtime. Held because anything that spawns tasks — the
-/// audio engine does, on construction — needs to be built inside it, and
-/// a plain worker thread has no reactor of its own.
-static RUNTIME: OnceLock<&'static tokio::runtime::Runtime> = OnceLock::new();
-
 /// The process's engine: every song this window opens lives in it, side by
 /// side, one of them current — a setlist is several projects in one
 /// `Standalone`, not several engines. Made by the first open.
 static ENGINE: OnceLock<Standalone> = OnceLock::new();
 
 pub fn engine() -> &'static Standalone {
+    crate::host::install();
     ENGINE.get_or_init(|| {
         let daw = Standalone::new();
         equip(&daw);
@@ -95,6 +99,10 @@ pub fn engine() -> &'static Standalone {
 /// Today that is the instrument the Click / Count / Guide MIDI tracks
 /// play through.
 pub fn equip(daw: &Standalone) {
+    // An effect's automated parameter reads as the effect writes it: daw has
+    // no effects of its own, so it is told how Signal's (`builtin`, i.e.
+    // signal-effects) say a value.
+    crate::automation::install_param_reading(builtin::engine::reading);
     session_runtime::guide_instrument::install(
         daw,
         session_runtime::guide_instrument::Library::Folder(
@@ -116,7 +124,7 @@ pub fn switch_song(project_guid: &str) {
     let state = mode();
     if state.owns_project() {
         // The engine's own, in this process: its switch (`crate::body`).
-        crate::body::body().switch_local(project_guid);
+        crate::body::studio_body().switch_local(project_guid);
         return;
     }
     set_remote_current(Some(project_guid.to_owned()));
@@ -213,38 +221,18 @@ pub fn with_local_engine<R>(what: LocalOnly, f: impl FnOnce(&Standalone) -> R) -
     None
 }
 
-/// The song on screen: the engine's current project in Engine; in Remote
+/// The song on screen as Studio has it (what its host answers
+/// `daw_view::open::current_song` with): the engine's current project in Engine; in Remote
 /// and Cue, the facade's current project — as last selected here or seen
 /// on the remote (a tab picked in REAPER itself), kept fresh by a poll
 /// rather than asked for on every call: panels ask every frame.
 #[must_use]
-pub fn current_song() -> Option<String> {
+pub(crate) fn song_here() -> Option<String> {
     use daw::service::Projects as _;
-    // A call scoped to one song of the set ([`in_song`]) works on that
-    // song, whichever is on screen.
-    if let Some(song) = IN_SONG.with(|s| s.borrow().clone()) {
-        return Some(song);
-    }
     if crate::audio_mode::owns_project() {
         return engine().current().map(|p| p.guid);
     }
     REMOTE_CURRENT.read().ok().and_then(|slot| slot.clone())
-}
-
-thread_local! {
-    /// The song a call on this thread is scoped to ([`in_song`]).
-    static IN_SONG: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
-}
-
-/// Runs `f` with song `project` (an engine project's guid) as the current
-/// song for everything it calls on this thread: an action that works on
-/// "the open song" then works on that one, the window staying where it
-/// is. How a script edits every song of a set in one go.
-pub fn in_song<R>(project: &str, f: impl FnOnce() -> R) -> R {
-    let before = IN_SONG.with(|s| s.replace(Some(project.to_owned())));
-    let out = f();
-    IN_SONG.with(|s| *s.borrow_mut() = before);
-    out
 }
 
 /// The remote's current project, as [`current_song`] reports it.
@@ -289,86 +277,6 @@ fn watch_remote_current(rt: &'static tokio::runtime::Runtime) {
             }
         }
     });
-}
-
-/// Run one facade call to completion from a sync context (the UI thread,
-/// a worker), on the engine runtime, bounded so a remote that has gone
-/// quiet cannot hang the caller.
-pub fn facade_blocking<F, Fut, T>(what: &str, f: F) -> eyre::Result<T>
-where
-    F: FnOnce(&'static daw::rpc::Daw) -> Fut,
-    Fut: std::future::Future<Output = Result<T, daw::rpc::Error>> + Send,
-    T: Send,
-{
-    let daw =
-        daw::rpc::Daw::try_get().ok_or_else(|| eyre::eyre!("{what}: the daw facade is not up"))?;
-    let call = f(daw);
-    block_on_engine(async {
-        tokio::time::timeout(std::time::Duration::from_secs(3), call)
-            .await
-            .map_err(|_| eyre::eyre!("{what}: the remote did not answer"))?
-            .map_err(|e| eyre::eyre!("{what}: {e}"))
-    })
-    .ok_or_else(|| eyre::eyre!("{what}: the engine runtime is not up"))?
-}
-
-/// Run `future` to completion on the engine runtime from sync code — on a
-/// scoped thread of its own when the caller is already inside a runtime,
-/// where blocking on another would panic. `None` before there is one.
-pub fn block_on_engine<T: Send>(future: impl std::future::Future<Output = T> + Send) -> Option<T> {
-    let rt = runtime()?;
-    if tokio::runtime::Handle::try_current().is_err() {
-        return Some(rt.block_on(future));
-    }
-    std::thread::scope(|scope| scope.spawn(|| rt.block_on(future)).join().ok())
-}
-
-/// Build the engine runtime once, or hand back the one there is.
-///
-/// Leaked, multi-threaded, with 16 MiB worker stacks — vox's debug-build
-/// channel encode recurses deeply enough to overflow tokio's default
-/// 2 MiB, and it presents as a stack overflow somewhere entirely
-/// unrelated the first time a panel subscribes to anything.
-///
-/// Shared by both ways in, so attaching to REAPER cannot end up on a
-/// runtime with different stacks from the one the owning path proved.
-pub fn engine_runtime() -> eyre::Result<&'static tokio::runtime::Runtime> {
-    if let Some(rt) = RUNTIME.get() {
-        return Ok(rt);
-    }
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .thread_name("session-engine")
-        .thread_stack_size(16 * 1024 * 1024)
-        .enable_all()
-        .build()?;
-    let rt: &'static tokio::runtime::Runtime = Box::leak(Box::new(rt));
-    let _ = RUNTIME.set(rt);
-    Ok(rt)
-}
-
-/// `work` off the runtime's workers ([`tokio::runtime::Runtime::spawn_blocking`])
-/// under the span it was asked in: a key's or an action's edit traced from
-/// the window to the engine, though it runs on a thread of its own.
-pub fn traced_blocking<F, R>(
-    runtime: &tokio::runtime::Runtime,
-    work: F,
-) -> tokio::task::JoinHandle<R>
-where
-    F: FnOnce() -> R + Send + 'static,
-    R: Send + 'static,
-{
-    let span = tracing::Span::current();
-    runtime.spawn_blocking(move || span.in_scope(work))
-}
-
-/// The engine's runtime, for work that must not run on the event loop.
-///
-/// `None` until the project has been opened — a window that is still
-/// loading has nothing to edit.
-#[must_use]
-pub fn runtime() -> Option<&'static tokio::runtime::Runtime> {
-    RUNTIME.get().copied()
 }
 
 /// A live project this window is attached to but does not own.
@@ -440,6 +348,7 @@ static ATTACHED_TO: std::sync::RwLock<Option<Option<std::path::PathBuf>>> =
 /// mutually exclusive by construction, since there is one global facade
 /// and it can only point at one backend.
 pub fn attach_to_reaper(socket: Option<std::path::PathBuf>) -> eyre::Result<Attached> {
+    crate::host::install();
     if BUNDLE.get().is_some() {
         eyre::bail!("this window already owns a project; it cannot also attach to REAPER");
     }
@@ -602,6 +511,7 @@ pub fn request_mode(to: AudioMode) -> bool {
 /// As [`attach_to_reaper`]; a Session engine target is not wired yet
 /// (#142 follow-up) and says so rather than attaching to something else.
 pub fn attach(target: &RemoteTarget) -> eyre::Result<Attached> {
+    crate::host::install();
     let attached = match target {
         RemoteTarget::Reaper { socket } => attach_to_reaper(socket.clone()),
         RemoteTarget::Session { address } => attach_to_engine(address),
@@ -609,7 +519,7 @@ pub fn attach(target: &RemoteTarget) -> eyre::Result<Attached> {
     }?;
     // Idle unless Cue is asked for; then the click and guide play here,
     // locked to what this window drives.
-    crate::body::body().cue_start();
+    crate::body::studio_body().cue_start();
     Ok(attached)
 }
 
@@ -648,6 +558,7 @@ pub fn set_engine_dialer(dialer: EngineDialer) {
 /// When this window already owns a project, no dialer is installed, the
 /// engine cannot be reached, or its project cannot be read back.
 pub fn attach_to_engine(address: &str) -> eyre::Result<Attached> {
+    crate::host::install();
     if BUNDLE.get().is_some() {
         eyre::bail!("this window already owns a project; it cannot also drive a Session engine");
     }
@@ -684,8 +595,9 @@ pub fn attach_to_engine(address: &str) -> eyre::Result<Attached> {
 ///
 /// The engine could not be started.
 pub fn link_window_here() -> eyre::Result<()> {
+    crate::host::install();
     if BUNDLE.get().is_none() {
-        crate::body::body().start_engine()?;
+        crate::body::studio_body().start_engine()?;
     }
     let served = BUNDLE
         .get()
@@ -705,6 +617,7 @@ pub fn link_window_here() -> eyre::Result<()> {
 ///
 /// When this window already owns a project, or the socket does not answer.
 pub fn attach_to_local_engine(socket: &Path) -> eyre::Result<Attached> {
+    crate::host::install();
     if BUNDLE.get().is_some() {
         eyre::bail!("this window already owns a project; it cannot also drive a Studio engine");
     }

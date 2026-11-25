@@ -74,6 +74,10 @@ fn main() {
                 .unwrap_or_else(|_| "warn,bench=info,daw_view_kit=info".into()),
         )
         .init();
+    // Studio behind the views, as the app installs it: its host, its
+    // hooks (keys, docks, the mixer's scenes and phases).
+    session_engine::install();
+    studio_panels::hooks::install();
 
     let path = std::env::args()
         .nth(1)
@@ -455,8 +459,8 @@ fn bench_bars() -> usize {
 /// are markers on the waveforms rather than a solid bar.
 fn kit_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let size = (f64::from(width), f64::from(height));
-    let mut view = daw_view_kit::expression::Expression::audio_kit(bench_bars(), (0.0, 0.0), size);
-    view.set_look(daw_view_kit::expression::look_of(palette));
+    let mut view = midi_editor::expression::Expression::audio_kit(bench_bars(), (0.0, 0.0), size);
+    view.set_look(midi_editor::expression::look_of(palette));
     view.editor.frame_bars(4);
     view.editor.playhead = Some(view.editor.doc.time_base.units_per_second(view.editor.bpm) * 3.2);
     let mut image = VelloImageRenderer::new(width, height);
@@ -683,7 +687,7 @@ fn set_on_every_folder(
 /// `FTS_BENCH_EXPRESSION_MENU=1` with its context menu open.
 fn expression_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let size = (f64::from(width), f64::from(height));
-    let mut view = daw_view_kit::expression::Expression::demo((0.0, 0.0), size);
+    let mut view = midi_editor::expression::Expression::demo((0.0, 0.0), size);
     // `FTS_BENCH_EXPRESSION_MENU=1`: with the context menu open, as a
     // right-click in the roll leaves it.
     if std::env::var_os("FTS_BENCH_EXPRESSION_MENU").is_some() {
@@ -741,12 +745,12 @@ fn editor_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32
         tracing::error!("could not read the project back");
         return;
     };
-    let mut song = daw_view_kit::editor_view::Song::of(&project);
+    let mut song = midi_editor::editor_view::Song::of(&project);
     let named = std::env::var("FTS_BENCH_EDITOR_TRACK").unwrap_or_else(|_| "Piano".to_owned());
     for t in &mut song.tracks {
         t.selected = t.name == named;
     }
-    let mut view = daw_view_kit::editor_view::EditorView::new(song);
+    let mut view = midi_editor::editor_view::EditorView::new(song);
     let deadline = Instant::now() + std::time::Duration::from_secs(60);
     while view.editor().is_none() && Instant::now() < deadline {
         let _ = view.frame(width, height, 1.0);
@@ -755,7 +759,7 @@ fn editor_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32
     // `FTS_BENCH_EDITOR_ALIGN=1`: line the stack's takes up first, and
     // say where each lane's first notes moved.
     if std::env::var_os("FTS_BENCH_EDITOR_ALIGN").is_some() {
-        let firsts = |view: &mut daw_view_kit::editor_view::EditorView| -> Vec<Vec<f64>> {
+        let firsts = |view: &mut midi_editor::editor_view::EditorView| -> Vec<Vec<f64>> {
             view.editor().map_or_else(Vec::new, |e| {
                 (0..e.editor.tracks.len())
                     .map(|i| {
@@ -1059,14 +1063,14 @@ fn mixer_shot(
     // landing between two passes would make them differ, and the
     // verify run compares them byte for byte.
     settings.prerender_tails();
-    let frame = daw_view_kit::rails::Frame::new(f64::from(width), f64::from(height));
+    let frame = mixer_view::rails::Frame::new(f64::from(width), f64::from(height));
     let live_strips = std::env::var_os("FTS_BENCH_LIVE_STRIPS").is_some_and(|v| v != "0");
     let mixer = Mixer::build(
         palette,
         font,
         &project,
         &rows,
-        mcp_height - daw_view_kit::rails::TOP,
+        mcp_height - mixer_view::rails::TOP,
         layout,
         // The shot is of the Tone phase, which is the phase the rack
         // was built for and the one the reference images were taken in.
@@ -1165,10 +1169,8 @@ fn mixer_shot(
             // Pinned to the BOTTOM of the window.
             //
 
-            let at = Affine::translate((
-                daw_view_kit::rails::SIDE - scroll_x,
-                daw_view_kit::rails::TOP,
-            ));
+            let at =
+                Affine::translate((mixer_view::rails::SIDE - scroll_x, mixer_view::rails::TOP));
             let recorded = mixer.replay(painter, scroll_x, frame.content_width(), at);
             // The live controls, exactly as the window draws them — a
             // shot that skipped them would be a shot of a mixer with no
@@ -1203,17 +1205,17 @@ fn mixer_shot(
             );
             counts.replayed = recorded.replayed + live.replayed;
             counts.submitted = recorded.submitted + live.submitted;
-            let profile = daw_view_kit::rails::profile(
-                daw_view_kit::rails::Surface::Mixer,
-                session::modes::Mode::Mix,
+            let profile = mixer_view::rails::profile(
+                mixer_view::rails::Surface::Mixer,
+                mixer_view::app::MIX,
                 session::mix_phases::MixPhase::Tone,
                 scene.map(|s| s.slug.as_str()),
                 session_engine::settings::Settings::default(),
-                dynamic_template::scenes::Audience::Engineer,
+                mixer_view::app::Audience::Engineer,
                 // The bench draws the kit's rails.
                 "drums",
             );
-            daw_view_kit::rails::draw(
+            mixer_view::rails::draw(
                 painter,
                 palette,
                 font,
@@ -1511,11 +1513,11 @@ fn plan_dump(path: &std::path::Path, out: &std::path::Path) {
         .and_then(|slug| dynamic_template::scenes::scene(&slug))
         .or_else(|| dynamic_template::scenes::scene("drum-mixing"))
         .map(|scene| scene.slug.as_str());
-    let planner = daw_view_kit::studio::Planner {
-        raw: std::sync::Arc::new(raw),
+    let planner = session_engine::song_model::template_planner(
+        std::sync::Arc::new(raw),
         scene,
-        kinds: std::sync::Arc::new(session_engine::plan::Kinds::read(path)),
-    };
+        std::sync::Arc::new(session_engine::plan::Kinds::read(path)),
+    );
     let (_, arrange) = planner.plan(&planner.raw);
     let mixer = planner.plan_mixer(
         &planner.raw,
@@ -1586,7 +1588,7 @@ impl Session {
             }
         }
         let scene = std::env::var("FTS_BENCH_SCENE").ok();
-        let (project, rows) = daw_view_kit::studio::plan_rows(&raw, scene.as_deref(), path);
+        let (project, rows) = session_engine::song_model::plan_rows(&raw, scene.as_deref(), path);
         // Read before anything is recorded, not after: a renderer draws
         // and exits, so there is no later for them to arrive in.
         let previews = daw_view_kit::studio::previews_of(&project);
@@ -1656,7 +1658,7 @@ struct MixerRig {
     history: std::collections::HashMap<String, mixer_view::tone::Levels>,
     spectra: std::collections::HashMap<String, mixer_view::tone::Analyser>,
     pointer: daw_view_kit::pointer::Pointer,
-    frame: daw_view_kit::rails::Frame,
+    frame: mixer_view::rails::Frame,
     levels: Vec<daw_proto::TrackLevels>,
     width: f64,
     height: f64,
@@ -1692,13 +1694,13 @@ impl MixerRig {
         // render landing between two passes would make them differ,
         // and the verify run compares them byte for byte.
         settings.prerender_tails();
-        let frame = daw_view_kit::rails::Frame::new(f64::from(width), f64::from(height));
+        let frame = mixer_view::rails::Frame::new(f64::from(width), f64::from(height));
         let mixer = Mixer::build(
             palette,
             font,
             &project,
             &rows,
-            f64::from(height) - daw_view_kit::rails::TOP,
+            f64::from(height) - mixer_view::rails::TOP,
             layout,
             mixer_view::tone::panels_for(TONE),
             // The racks are driven here, so they are drawn live and
@@ -1775,7 +1777,7 @@ impl MixerRig {
             None,
             &vello::kurbo::Rect::new(0.0, 0.0, self.width, self.height),
         );
-        let at = Affine::translate((daw_view_kit::rails::SIDE, daw_view_kit::rails::TOP));
+        let at = Affine::translate((mixer_view::rails::SIDE, mixer_view::rails::TOP));
         // The recorded chrome, then the live values over it.
         let a = self
             .mixer
@@ -1901,7 +1903,7 @@ fn dock_split(width: u32, height: u32) -> (vello::kurbo::Rect, u32) {
 fn paint_dock(
     painter: &mut impl PaintScene,
     palette: &Palette,
-    editor: &mut daw_view_kit::expression::Expression,
+    editor: &mut midi_editor::expression::Expression,
     dock: vello::kurbo::Rect,
 ) {
     editor.layout((dock.x0, dock.y0), (dock.width(), dock.height()));
@@ -1929,11 +1931,11 @@ fn paint_dock(
 /// under it.
 fn dock_shot(session: &Session, palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
     let (dock_box, above) = dock_split(width, height);
-    let mut editor = daw_view_kit::expression::Expression::demo(
+    let mut editor = midi_editor::expression::Expression::demo(
         (dock_box.x0, dock_box.y0),
         (dock_box.width(), dock_box.height()),
     );
-    editor.set_look(daw_view_kit::expression::look_of(palette));
+    editor.set_look(midi_editor::expression::look_of(palette));
     editor.editor.playhead = Some(editor.editor.doc.end * 0.3);
     let (mut widget, _view) = session.widget();
     let mut image = VelloImageRenderer::new(width, height);
@@ -2078,12 +2080,12 @@ fn studio(
     // lanes, a song's worth of hits, framed four bars at a time the way
     // drums get edited — and paged through as the frames go by.
     let bars = bench_bars();
-    let mut editor = daw_view_kit::expression::Expression::audio_kit(
+    let mut editor = midi_editor::expression::Expression::audio_kit(
         bars,
         (dock_box.x0, dock_box.y0),
         (dock_box.width(), dock_box.height()),
     );
-    editor.set_look(daw_view_kit::expression::look_of(palette));
+    editor.set_look(midi_editor::expression::look_of(palette));
     editor.editor.frame_bars(4);
     let doc_end = editor.editor.doc.end;
     let (mut widget, view) = session.widget();
@@ -2336,18 +2338,18 @@ fn studio(
 
 /// Write one frame of the Patch List view to a PNG.
 ///
-/// `FTS_BENCH_PATCH_LIST=features/engine/view-kit/fixtures/patch-list.png`, the
+/// `FTS_BENCH_PATCH_LIST=features/app/panels/fixtures/patch-list.png`, the
 /// fixture album resolved against the fixture room — the picture
 /// `features/engine/view-kit/tests/patch_list_view.rs` compares byte for byte.
 fn patch_list_shot(out: &std::path::Path, width: u32, height: u32) {
-    let table = match arrangement_view::patch_list::Table::fixture() {
+    let table = match studio_panels::patch_list::Table::fixture() {
         Ok(table) => table,
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(2);
         }
     };
-    let Some(buffer) = arrangement_view::patch_list::shot(&table, (width, height)) else {
+    let Some(buffer) = studio_panels::patch_list::shot(&table, (width, height)) else {
         eprintln!("no gpu: the patch list picture needs a real device");
         std::process::exit(2);
     };
@@ -2365,19 +2367,19 @@ fn patch_list_shot(out: &std::path::Path, width: u32, height: u32) {
 /// Write one frame of the Patch List view, overridden and stale, to a
 /// PNG.
 ///
-/// `FTS_BENCH_PATCH_LIST_OVERRIDDEN_STALE=features/engine/view-kit/fixtures/patch-list-overridden-stale.png`
+/// `FTS_BENCH_PATCH_LIST_OVERRIDDEN_STALE=features/app/panels/fixtures/patch-list-overridden-stale.png`
 /// — the fixture album, a session override on Cody's DI, and a stale
 /// banner, the picture `features/engine/view-kit/tests/patch_list_view.rs`
 /// compares structurally.
 fn patch_list_shot_overridden_stale(out: &std::path::Path, width: u32, height: u32) {
-    let table = match arrangement_view::patch_list::Table::fixture_overridden_stale() {
+    let table = match studio_panels::patch_list::Table::fixture_overridden_stale() {
         Ok(table) => table,
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(2);
         }
     };
-    let Some(buffer) = arrangement_view::patch_list::shot(&table, (width, height)) else {
+    let Some(buffer) = studio_panels::patch_list::shot(&table, (width, height)) else {
         eprintln!("no gpu: the patch list picture needs a real device");
         std::process::exit(2);
     };

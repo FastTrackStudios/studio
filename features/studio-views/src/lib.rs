@@ -76,7 +76,7 @@ pub const WITH_SONG_WORKSPACE: &str = "is a panel of the song workspace (studio#
 
 /// The owner's six, in the bar's order.
 ///
-/// The Studio iPad app's bottom bar's order (`daw_view_kit::shell::BottomBar`:
+/// The Studio iPad app's bottom bar's order (`studio_panels::shell::BottomBar`:
 /// Perform, Chart, Lyrics, Arrange, Mixer, FX, Editor) for the four it has,
 /// with its words under them ("Arrange"); the song's two other panels after
 /// the Chart.

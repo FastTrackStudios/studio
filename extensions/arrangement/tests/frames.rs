@@ -38,8 +38,8 @@ use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
 use arrangement_view::panel::ArrangementPanel;
 use arrangement_view::widget::ArrangementWidget;
-use daw_view_kit::studio::StudioSession;
 use dioxus::prelude::*;
+use session_engine_client::song_model::StudioSession;
 use studio_arrangement::host::{Hosted, InScope, Stats};
 
 /// How many frames each size plays: two seconds at 60 Hz.

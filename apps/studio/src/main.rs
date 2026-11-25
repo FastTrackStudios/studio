@@ -28,6 +28,9 @@ mod playback;
 #[cfg(feature = "web")]
 mod player;
 mod storage;
+// The views' theme packs, switched while the app runs (`THEME_*`).
+#[cfg(feature = "native")]
+mod themes;
 #[cfg(feature = "drive")]
 mod trace;
 // The browser build engraves charts and reads setlist files from Drive.
@@ -216,6 +219,13 @@ fn main() {
             std::env::set_var("FTS_MCP_PORT", port.to_string());
         }
     }
+    // The Editor: what the arrangement picks opens there, and a key
+    // sequence it has half typed keeps its keys from the panes.
+    #[cfg(feature = "native")]
+    midi_editor::install();
+    // The views' keys: Studio's input profile.
+    #[cfg(feature = "native")]
+    studio_panels::hooks::install();
     storage::init();
     // Natively: stderr and, when OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set,
     // the app's spans to that collector.

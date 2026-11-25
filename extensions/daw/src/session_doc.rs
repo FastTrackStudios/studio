@@ -68,6 +68,139 @@ struct Open {
     path: PathBuf,
     id: String,
     file: Held,
+    /// The song's timing last written into it ([`timing_of`]).
+    timing: u64,
+}
+
+/// A fingerprint of what [`write_timing`] writes for `project`: its tempo
+/// changes, markers and sections. When it moves, the session is behind.
+#[must_use]
+pub fn timing_of(project: &daw_ui::studio::project::Project) -> u64 {
+    use std::hash::{Hash as _, Hasher as _};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    project.bpm.to_bits().hash(&mut h);
+    for t in &project.tempo {
+        (
+            t.at.to_bits(),
+            t.bpm.to_bits(),
+            t.beats_per_bar,
+            t.beat_unit,
+        )
+            .hash(&mut h);
+    }
+    for m in &project.markers {
+        (m.at.to_bits(), &m.name, &m.color, m.idx, m.lane).hash(&mut h);
+    }
+    for s in &project.sections {
+        (
+            s.id,
+            s.start.to_bits(),
+            s.end.to_bits(),
+            &s.name,
+            &s.color,
+            s.lane,
+        )
+            .hash(&mut h);
+    }
+    h.finish()
+}
+
+/// Song `song`'s timing as the engine has it now: its sections (regions),
+/// markers and tempo changes, the rest of the model left empty. What
+/// [`write_timing`] writes, read in this process's engine under its own
+/// locks (no window's model, which is a snapshot from when it opened).
+#[must_use]
+pub fn timing_now(song: &str) -> Option<daw_ui::studio::project::Project> {
+    use daw::service::TempoMap as _;
+    use daw_ui::studio::project::{Marker as M, Project, Section, TempoChange};
+    let song = session_engine::song::Song::named_or_current(Some(song)).ok()?;
+    let (daw, ctx) = (song.daw(), song.context());
+    let css = |c: u32| format!("#{:06x}", c & 0x00ff_ffff);
+    let sections =
+        <daw::standalone::Standalone as daw::service::region::Regions>::all(daw, ctx.clone())
+            .into_iter()
+            .map(|r| Section {
+                id: r.id.unwrap_or_default(),
+                start: r.time_range.start_seconds(),
+                end: r.time_range.end_seconds(),
+                name: r.name,
+                color: r.color.map(css),
+                lane: r.lane.unwrap_or(0),
+            })
+            .collect();
+    let markers = <daw::standalone::Standalone as daw::service::Markers>::all(daw, ctx.clone())
+        .into_iter()
+        .filter(|m| !m.name.is_empty())
+        .enumerate()
+        .map(|(i, m)| M {
+            at: m.position.seconds().unwrap_or(0.0),
+            name: m.name,
+            color: m.color.map(css),
+            idx: m
+                .id
+                .unwrap_or(u32::try_from(i).unwrap_or(0).saturating_add(1)),
+            lane: m.lane.unwrap_or(0),
+        })
+        .collect();
+    let bpm = daw.get_default_tempo(ctx.clone());
+    let mut tempo: Vec<TempoChange> = daw
+        .get_tempo_points(ctx)
+        .into_iter()
+        .filter_map(|p| {
+            Some(TempoChange {
+                at: p.position.time?.as_seconds(),
+                bpm: p.bpm,
+                beats_per_bar: p.time_signature.as_ref().map_or(4, |t| t.numerator.max(1)),
+                beat_unit: p
+                    .time_signature
+                    .as_ref()
+                    .map_or(4, |t| t.denominator.max(1)),
+            })
+        })
+        .collect();
+    tempo.sort_by(|a, b| a.at.total_cmp(&b.at));
+    Some(Project {
+        sections,
+        markers,
+        bpm,
+        tempo,
+        ..Project::default()
+    })
+}
+
+/// Whether song `song`'s session holds timing other than `timing`: the
+/// song's sections, markers or tempo changed since they were written.
+#[must_use]
+pub fn behind(song: &str, timing: u64) -> bool {
+    OPEN.lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .is_some_and(|o| o.song == song && o.timing != timing)
+}
+
+/// Song `song`'s session given `project`'s timing again (its sections,
+/// markers and tempo changed in the engine): what a chart or a lighting
+/// cue list reading the session follows. Nothing when it is not the song
+/// open.
+pub fn retime(song: &str, project: &daw_ui::studio::project::Project) {
+    let Some(rt) = session_engine::open::runtime() else {
+        return;
+    };
+    // Taken out for the write (it awaits), and put back.
+    let open = OPEN.lock().unwrap_or_else(PoisonError::into_inner).take();
+    let Some(mut open) = open else {
+        return;
+    };
+    if open.song == song {
+        match rt.block_on(write_timing(&open.file, project)) {
+            Ok(()) => open.timing = timing_of(project),
+            Err(e) => tracing::warn!(error = %e, "daw: the session's timing was not written again"),
+        }
+    }
+    let mut slot = OPEN.lock().unwrap_or_else(PoisonError::into_inner);
+    if slot.is_none() {
+        *slot = Some(open);
+    }
 }
 
 static OPEN: Mutex<Option<Open>> = Mutex::new(None);
@@ -302,6 +435,7 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
         path,
         id,
         file,
+        timing: timing_of(project),
     });
     drop(open);
     lead();

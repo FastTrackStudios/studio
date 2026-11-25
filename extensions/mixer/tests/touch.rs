@@ -25,9 +25,9 @@ use architect_workspace::paint::PaintView as _;
 use architect_workspace::{
     FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost, ViewInput,
 };
-use daw_view_kit::studio::StudioSession;
 use dioxus::prelude::*;
 use mixer_view::mixer_panel::{HostedMixer, Links};
+use session_engine_client::song_model::StudioSession;
 use studio_mixer::host::Hosted;
 use studio_view_link::{InScope, Stats};
 

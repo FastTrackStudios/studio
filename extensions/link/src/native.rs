@@ -8,9 +8,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use anyrender::recording::RenderCommand;
 use architect_scene::paint::PaintMount;
 use architect_scene::paint::{Layer, LayerKey, Scene};
-use daw_view_kit::song_model::StudioSession;
 use dioxus::prelude::*;
 use serde_json::Value as Json;
+use session_engine_client::song_model::StudioSession;
 use session_engine_client::studio_engine::link;
 
 use crate::Stats;

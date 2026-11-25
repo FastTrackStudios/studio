@@ -20,7 +20,7 @@
 //!
 //! Props only: [`Words`] (the lines, against the song's sections) and the
 //! play position. Session's window reads them off the open song
-//! (`daw_view_kit::lyrics_panel`, the Lyrics track's items, one a line) and
+//! (`studio_panels::lyrics_panel`, the Lyrics track's items, one a line) and
 //! its transport; the setlists extension's song workspace off the song's
 //! LRC and its chart's clock (`setlists::workspace`). Sections and slides
 //! are derived from the lines against the song's section spans
@@ -38,7 +38,7 @@ use futures_util::StreamExt as _;
 
 use crate::lyrics::{Layer, LyricSection, Lyrics, SLIDE_LINES, SectionSpan, Slide};
 
-/// The panel's colours: Session's window's (`daw_view_kit::shell`).
+/// The panel's colours: Session's window's (`studio_panels::shell`).
 const RULE: &str = "#2a2c31";
 const TEXT: &str = "#e5e7eb";
 const DIM: &str = "#8b9099";

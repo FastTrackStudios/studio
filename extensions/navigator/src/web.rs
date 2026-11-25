@@ -1,13 +1,13 @@
 //! The navigator's panes in a browser.
 //!
-//! The same components over the set the page's own engine has open (`daw_view_kit::web_host`), a song picked
+//! The same components over the set the page's own engine has open (`studio_panels::web_host`), a song picked
 //! there gone to as a pick in the page's own views is
 //! (`web_host::hosted_pick`: the app's playhead moves, the engine with it).
 
-use daw_view_kit::song_model::StudioSession;
-use daw_view_kit::web_host;
 use dioxus::prelude::*;
 use session_engine_client::setlist::Setlist;
+use session_engine_client::song_model::StudioSession;
+use studio_panels::web_host;
 
 /// The set the page's engine has open, once it has one.
 pub fn set() -> Option<Setlist> {
@@ -44,9 +44,11 @@ pub fn ProgressPane() -> Element {
 
 #[component]
 fn Bar(session: Song) -> Element {
+    // The song as the views read it (daw-view's), beside Studio's session.
+    use_context_provider(|| session.0.song());
     use_context_provider(|| session.0.clone());
     rsx! {
-        daw_view_kit::progress::ProgressBar { height: "44px".to_owned() }
+        studio_panels::progress::ProgressBar { height: "44px".to_owned() }
     }
 }
 
@@ -81,7 +83,7 @@ pub fn SongsPane() -> Element {
     rsx! {
         div { style: "position:relative; width:100%; height:100%; min-height:36px; background:{surface}; \
                      display:flex; align-items:stretch;",
-            daw_view_kit::shell::SongTabs {
+            studio_panels::shell::SongTabs {
                 on_pick: move |index: usize| web_host::hosted_pick(index),
                 max_shown: 0,
             }
@@ -99,7 +101,7 @@ pub fn NavigatorPane() -> Element {
     }
     rsx! {
         div { style: "position:relative; width:100%; height:100%; background:{surface};",
-            daw_view_kit::navigator::Navigator {
+            studio_panels::navigator::Navigator {
                 on_pick: move |index: usize| web_host::hosted_pick(index),
             }
         }

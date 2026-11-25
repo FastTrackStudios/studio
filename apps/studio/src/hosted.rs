@@ -417,7 +417,11 @@ pub fn use_engine_actions() {
             match run("DAW_ACTIONS", serde_json::json!({})).await {
                 Ok(serde_json::Value::Array(actions)) if !actions.is_empty() => {
                     let added = forward_engine_actions(&actions);
-                    tracing::info!(engine.actions = actions.len(), engine.forwarded = added, "studio: the engine's actions are on Studio's list");
+                    tracing::info!(
+                        engine.actions = actions.len(),
+                        engine.forwarded = added,
+                        "studio: the engine's actions are on Studio's list"
+                    );
                     DONE.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 _ => crate::state::sleep_ms(1000).await,
@@ -429,9 +433,14 @@ pub fn use_engine_actions() {
 /// Registers each of `actions` (as `DAW_ACTIONS` gives them) on Studio's
 /// list, forwarded through `DAW_RUN`: how many were added.
 fn forward_engine_actions(actions: &[serde_json::Value]) -> usize {
-    use architect::action::{ActionError, ActionInfo, ActionFuture, Effect};
+    use architect::action::{ActionError, ActionFuture, ActionInfo, Effect};
     let list = crate::actions::list();
-    let text = |a: &serde_json::Value, k: &str| a.get(k).and_then(serde_json::Value::as_str).unwrap_or("").to_owned();
+    let text = |a: &serde_json::Value, k: &str| {
+        a.get(k)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+            .to_owned()
+    };
     let mut added = 0;
     for a in actions {
         let id = text(a, "id");
@@ -450,8 +459,14 @@ fn forward_engine_actions(actions: &[serde_json::Value]) -> usize {
                 "destructive" => Effect::Destructive,
                 _ => Effect::Mutating,
             },
-            params_schema: a.get("params").and_then(serde_json::Value::as_str).map(str::to_owned),
-            result_schema: a.get("result").and_then(serde_json::Value::as_str).map(str::to_owned),
+            params_schema: a
+                .get("params")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
+            result_schema: a
+                .get("result")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
             enabled: true,
             disabled_reason: None,
             checked: None,
@@ -468,7 +483,9 @@ fn forward_engine_actions(actions: &[serde_json::Value]) -> usize {
             };
             let call = serde_json::json!({ "id": id, "args": args }).to_string();
             let future: ActionFuture = Box::pin(async move {
-                crate::actions::list().run_json_async("DAW_RUN", call.as_bytes()).await
+                crate::actions::list()
+                    .run_json_async("DAW_RUN", call.as_bytes())
+                    .await
             });
             Ok(future)
         });
@@ -515,12 +532,66 @@ pub fn use_follow_session(ui: ExtensionUi, layout: Signal<Workspace>) -> Signal<
     followed
 }
 
+/// The current song's title as the set has it, its artist left off
+/// (`Title - Artist`).
+async fn current_song_title() -> Option<String> {
+    let songs = run("DAW_SONGS", serde_json::json!({})).await.ok()?;
+    let at = usize::try_from(songs.get("at")?.as_u64()?).ok()?;
+    let title = songs
+        .get("songs")?
+        .as_array()?
+        .get(at.checked_sub(1)?)?
+        .get("title")?
+        .as_str()?;
+    Some(display_title(title))
+}
+
+/// A set's song title as a chart heads it: the artist left off
+/// (`Title - Artist`) and a file variant's suffix dropped
+/// (`Unbreakable.comped` → `Unbreakable`): a final `.` followed by one
+/// lowercase word and nothing else. A dot inside a title (`Mr. Blue Sky`)
+/// stays.
+fn display_title(raw: &str) -> String {
+    let title = raw.split(" - ").next().unwrap_or(raw).trim();
+    match title.rsplit_once('.') {
+        Some((head, variant))
+            if !head.is_empty()
+                && !variant.is_empty()
+                && variant.bytes().all(|b| b.is_ascii_lowercase()) =>
+        {
+            head.trim_end().to_owned()
+        }
+        _ => title.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod display_title_tests {
+    use super::display_title;
+
+    #[test]
+    fn the_artist_and_a_variant_suffix_are_left_off() {
+        assert_eq!(
+            display_title("Unbreakable.comped - Crescendum"),
+            "Unbreakable"
+        );
+        assert_eq!(display_title("Unbreakable - Crescendum"), "Unbreakable");
+        assert_eq!(display_title("Mr. Blue Sky - ELO"), "Mr. Blue Sky");
+        assert_eq!(display_title("Song 2.0"), "Song 2.0");
+        assert_eq!(display_title("Track.Final"), "Track.Final");
+    }
+}
+
 async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
     let mut span = crate::trace::Span::root("studio.session.follow");
     span.set("studio.session.doc", f.id.clone());
+    // The chart draws the session itself (its sections, tempo map and
+    // markers, Keyflow's typed items): it is told only which session, and
+    // the song's title to head it with.
+    let title = current_song_title().await.unwrap_or_default();
     match run(
         "KEYFLOW_SESSION_FOLLOW",
-        serde_json::json!({ "url": f.url, "id": f.id }),
+        serde_json::json!({ "url": f.url, "id": f.id, "title": title }),
     )
     .await
     {

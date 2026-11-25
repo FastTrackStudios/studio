@@ -22,6 +22,11 @@ description = "What a window needs of Session's engine: the view protocol and it
 # those calls go over the link (`view_client`) or do nothing.
 
 [dependencies]
+# The views' contract: the protocol, the link, the song model, the
+# overlays. This crate is Studio's half beside it.
+daw-view = { workspace = true }
+# Presence held for the process: the session primitive's store.
+fts-session = { workspace = true, features = ["store"] }
 dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
 daw-ui = { workspace = true, features = ["studio"] }
 daw-control = { workspace = true }
@@ -73,8 +78,8 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 [features]
 default = ["native"]
 vox = []
-native = ["session/collab", "dep:dock", "dep:rayon", "dep:dirs", "dep:tokio", "dep:architect", "dep:futures-util", "dep:builtin", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "vox"]
-web = ["dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "dep:architect", "daw/standalone-session-file", "vox"]
+native = ["daw-view/native", "daw-view/local", "session/collab", "dep:dock", "dep:rayon", "dep:dirs", "dep:tokio", "dep:architect", "dep:futures-util", "dep:builtin", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "vox"]
+web = ["daw-view/web", "daw-view/standalone", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "dep:architect", "daw/standalone-session-file", "vox"]
 
 [lints]
 workspace = true

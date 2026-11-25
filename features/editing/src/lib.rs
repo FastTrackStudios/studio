@@ -29,7 +29,9 @@ pub mod groove;
 pub mod level;
 pub mod placement;
 pub mod quantize;
-pub mod scope;
+/// What an edit acts on: the DAW's editing contract (daw-edit) holds it,
+/// for the views and the engine alike.
+pub use daw_edit::scope;
 pub mod seam;
 pub mod settings;
 pub mod written;

@@ -45,13 +45,13 @@ use architect_scene::engine::{EngineTable, EngineWriter};
 use architect_scene::ops::{Receiver, Sender};
 use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
-use daw_view_kit::studio::StudioSession;
 use dioxus::prelude::*;
 use mixer_view::mixer_panel::{HostedMixer, Links};
 use peniko::kurbo::Affine;
 use session_engine::engine::{
     METER_PARTS, METER_TRACKS, TRACK_PARTS, VALUE_TRACKS, meter_fraction, meter_value, track_value,
 };
+use session_engine_client::song_model::StudioSession;
 use studio_mixer::host::Hosted;
 use studio_view_link::{InScope, Stats};
 
