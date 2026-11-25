@@ -1,0 +1,18 @@
+[package]
+name = "drums-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The drum rig's editor: the Dioxus half of `drums`, drawn from its vox clients, so the rig itself builds headless"
+
+[lints]
+workspace = true
+
+[dependencies]
+architect = { workspace = true, features = ["atom", "platform", "vox"] }
+dioxus = { workspace = true }
+drums = { workspace = true }
+midi = { workspace = true }
+midi-ui = { workspace = true }
+signal-widgets = { workspace = true, features = ["piano"] }

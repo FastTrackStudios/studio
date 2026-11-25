@@ -5,12 +5,12 @@
 
 use std::collections::HashMap;
 
-use crate::proto::drum::{DrumEvent, DrumRigClient, DrumRigStreamClient};
-use crate::proto::{
+use dioxus::prelude::*;
+use drums::proto::drum::{DrumEvent, DrumRigClient, DrumRigStreamClient};
+use drums::proto::{
     DrumStatus, InputMap, KitInfo, KitSlot, LibraryPiece, MeterSnapshot, MixerStrip, PieceInfo,
     StripKind,
 };
-use dioxus::prelude::*;
 use midi::proto::MidiEvent;
 use midi_ui::MidiMonitorPanel;
 use signal_widgets::Piano;
