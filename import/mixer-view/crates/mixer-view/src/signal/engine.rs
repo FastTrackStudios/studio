@@ -8,7 +8,9 @@
 //! revision and meters) is polled on a thread of its own every
 //! [`FEED_EVERY`] and kept, so [`SignalSource::signal_revisions`] and
 //! [`SignalSource::signal_meters`], read every painted frame, only read
-//! what was kept.
+//! what was kept — and only while they are read: a mixer off screen reads
+//! nothing, and after [`FEED_IDLE`] without a read the thread sleeps until
+//! the next one wakes it. The engine is asked nothing while no mixer shows.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -26,6 +28,49 @@ pub const FEED_EVERY: Duration = Duration::from_millis(100);
 
 /// How long the feed rests after the engine would not answer it.
 const FEED_REST: Duration = Duration::from_secs(1);
+
+/// How long the feed is polled after its last read: a mixer that stopped
+/// painting (hidden, closed) stops the polling this long after.
+pub const FEED_IDLE: Duration = Duration::from_secs(1);
+
+/// How often a sleeping feed thread looks whether its source is gone.
+const FEED_GONE_CHECK: Duration = Duration::from_secs(5);
+
+/// When the feed was last read, and the thread that polls it woken by a
+/// read after a rest.
+#[derive(Default)]
+struct Demand {
+    read: Mutex<Option<web_time::Instant>>,
+    woken: std::sync::Condvar,
+}
+
+impl Demand {
+    /// A reader read the feed: keep polling, or start again.
+    fn read(&self) {
+        let mut read = self.read.lock().unwrap_or_else(PoisonError::into_inner);
+        let was_idle = read.is_none_or(|at| at.elapsed() >= FEED_IDLE);
+        *read = Some(web_time::Instant::now());
+        drop(read);
+        if was_idle {
+            self.woken.notify_all();
+        }
+    }
+
+    /// Wait until the feed is wanted (read within [`FEED_IDLE`]), or
+    /// [`FEED_GONE_CHECK`] passed; whether it is wanted.
+    fn wait_wanted(&self) -> bool {
+        let wanted = |at: &Option<web_time::Instant>| at.is_some_and(|at| at.elapsed() < FEED_IDLE);
+        let read = self.read.lock().unwrap_or_else(PoisonError::into_inner);
+        if wanted(&read) {
+            return true;
+        }
+        let (read, _) = self
+            .woken
+            .wait_timeout_while(read, FEED_GONE_CHECK, |at| !wanted(at))
+            .unwrap_or_else(PoisonError::into_inner);
+        wanted(&read)
+    }
+}
 
 /// Runs one engine action: its id and JSON arguments in, its JSON out.
 pub type Runner = Arc<dyn Fn(&str, &[u8]) -> Result<String, String> + Send + Sync>;
@@ -60,22 +105,32 @@ struct Fed {
 pub struct EngineSource {
     run: Runner,
     fed: Arc<Mutex<HashMap<String, Fed>>>,
+    demand: Arc<Demand>,
 }
 
 impl EngineSource {
-    /// A source over `run`, its feed polled from now on a thread of its own
-    /// for as long as the source lives.
+    /// A source over `run`, its feed polled on a thread of its own while it
+    /// is read (see [`FEED_IDLE`]), for as long as the source lives.
     #[must_use]
     pub fn new(run: Runner) -> Arc<Self> {
         let source = Arc::new(Self {
             run,
             fed: Arc::default(),
+            demand: Arc::default(),
         });
         let weak = Arc::downgrade(&source);
+        let demand = Arc::clone(&source.demand);
         let spawned = std::thread::Builder::new()
             .name("signal-feed".into())
             .spawn(move || {
-                while let Some(source) = weak.upgrade() {
+                loop {
+                    let wanted = demand.wait_wanted();
+                    let Some(source) = weak.upgrade() else {
+                        return;
+                    };
+                    if !wanted {
+                        continue;
+                    }
                     let rest = if source.poll().is_ok() {
                         FEED_EVERY
                     } else {
@@ -113,6 +168,7 @@ impl EngineSource {
     /// moved. [`SignalSource`] has no place for it yet.
     #[must_use]
     pub fn values_revisions(&self) -> Vec<(String, u64)> {
+        self.demand.read();
         self.fed
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -283,6 +339,7 @@ impl SignalSource for EngineSource {
     }
 
     fn signal_revisions(&self) -> Vec<(String, u64)> {
+        self.demand.read();
         self.fed
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -296,6 +353,7 @@ impl SignalSource for EngineSource {
     }
 
     fn signal_meters(&self, track: &TrackId) -> Vec<MeterValue> {
+        self.demand.read();
         self.fed
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -329,6 +387,43 @@ impl SignalSource for EngineSource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_feed_is_polled_only_while_it_is_read() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let asked = Arc::new(AtomicU64::new(0));
+        let counting = Arc::clone(&asked);
+        let run: Runner = Arc::new(move |id, _| {
+            if id == "SIGNAL_FEED" {
+                counting.fetch_add(1, Ordering::Relaxed);
+            }
+            Ok(json!({ "at_ms": 0, "fx": [] }).to_string())
+        });
+        let source = EngineSource::new(run);
+        std::thread::sleep(Duration::from_millis(350));
+        assert_eq!(asked.load(Ordering::Relaxed), 0, "nobody reads: no poll");
+        // A mixer on screen reads every frame.
+        let reading = web_time::Instant::now();
+        while reading.elapsed() < Duration::from_millis(500) {
+            let _ = source.signal_revisions();
+            std::thread::sleep(Duration::from_millis(16));
+        }
+        let while_read = asked.load(Ordering::Relaxed);
+        assert!(while_read >= 3, "polled while read: {while_read}");
+        // Hidden: the polling stops within FEED_IDLE.
+        std::thread::sleep(FEED_IDLE + FEED_EVERY * 3);
+        let stopped = asked.load(Ordering::Relaxed);
+        std::thread::sleep(Duration::from_millis(500));
+        assert_eq!(
+            asked.load(Ordering::Relaxed),
+            stopped,
+            "no poll once unread"
+        );
+        // Shown again: polled again at once.
+        let _ = source.signal_meters("t");
+        std::thread::sleep(FEED_EVERY);
+        assert!(asked.load(Ordering::Relaxed) > stopped, "woken by a read");
+    }
 
     #[test]
     fn the_feed_is_kept_by_track() {
