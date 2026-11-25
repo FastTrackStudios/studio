@@ -97,14 +97,19 @@ fn main() {
         }
     }
     if names.is_empty() {
-        names = ["room", "hall", "plate", "nonlinear"].map(String::from).to_vec();
+        names = ["room", "hall", "plate", "nonlinear"]
+            .map(String::from)
+            .to_vec();
     }
     let frames = (SR * seconds) as usize;
     let in_l = signal(frames, 1);
     let in_r = signal(frames, 7);
     let reference = compare.map(|p| {
         let mut bytes = Vec::new();
-        std::fs::File::open(p).unwrap().read_to_end(&mut bytes).unwrap();
+        std::fs::File::open(p)
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
         bytes
             .chunks_exact(8)
             .map(|c| f64::from_le_bytes(c.try_into().unwrap()))
