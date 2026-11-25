@@ -193,6 +193,10 @@ pub struct Ask<'a> {
     /// from a preroll of its own, measure within about 0.05 LU of it, and
     /// within a few tenths of a dB on peaks and crest.
     pub exact: bool,
+    /// Signal instances (by FX guid) whose blocks' meters to summarise over
+    /// `from`..`to` (`SIGNAL_METERS` on each chunk's copy): a gain
+    /// reduction per block, read without playback.
+    pub meters: &'a [String],
 }
 
 /// How a listen was answered.
@@ -235,6 +239,9 @@ pub struct Heard {
     pub failures: Vec<String>,
     /// The chunks it was rendered in, side by side (0 when replayed).
     pub chunks: u32,
+    /// Each of [`Ask::meters`]' instances' `SIGNAL_METERS` summary, one per
+    /// chunk, over the chunk's part of `from`..`to` (none when replayed).
+    pub meters: HashMap<String, Vec<serde_json::Value>>,
     pub plan_ms: f64,
     pub copy_ms: f64,
     pub prime_ms: f64,
@@ -992,6 +999,7 @@ pub fn render(
             reused: 0,
             failures: Vec::new(),
             chunks: 0,
+            meters: HashMap::new(),
             plan_ms,
             copy_ms: 0.0,
             prime_ms: 0.0,
@@ -1122,6 +1130,13 @@ pub fn render(
             .flat_map(|o| o.failures.iter().cloned())
             .collect(),
         chunks: count(outs.len()),
+        meters: {
+            let mut m: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+            for (guid, v) in outs.iter().flat_map(|o| o.meters.iter().cloned()) {
+                m.entry(guid).or_default().push(v);
+            }
+            m
+        },
         plan_ms,
         copy_ms: most(|o| o.copy_ms),
         prime_ms: most(|o| o.prime_ms),
@@ -1170,9 +1185,33 @@ struct ChunkOut {
     copied: u32,
     reused: u32,
     failures: Vec<String>,
+    /// [`Ask::meters`]' summaries over this chunk's part of the span.
+    meters: Vec<(String, serde_json::Value)>,
     copy_ms: f64,
     prime_ms: f64,
     blocks_ms: f64,
+}
+
+/// Run `SIGNAL_METERS` with `args` on each of `guids`' copies in
+/// `plugins`: each one's answer, by guid (a copy without `signal/1`, or
+/// whose call failed, is left out).
+fn signal_meters(
+    plugins: &Plugins,
+    guids: &[String],
+    args: &serde_json::Value,
+) -> Vec<(String, serde_json::Value)> {
+    let mut map = plugins.write();
+    guids
+        .iter()
+        .filter_map(|g| {
+            let signal = map.get_mut(g)?.signal()?;
+            let text = crate::clap_host::plugin_call(|| {
+                signal.run_action("SIGNAL_METERS", &args.to_string())
+            })
+            .ok()?;
+            Some((g.clone(), serde_json::from_str(&text).ok()?))
+        })
+        .collect()
 }
 
 /// Render chunk `k` (its frames `(first rendered, first kept, end)`) on
@@ -1187,6 +1226,18 @@ fn run_chunk(
     let tag = format!("{SESSION_TAG}-{k}");
     let ready = ready(c.daw, wanted, warm, (c.ask.cuts, &tag))?;
     let copy_ms = copying.elapsed().as_secs_f64() * 1e3;
+    // The blocks' meters, over this chunk's part of the span (not its
+    // preroll): set before priming, which resets the copies (a reset keeps
+    // the span and starts the summary afresh).
+    let (_, from_frame, _) = frames_of(c.ask.from, c.ask.to);
+    let seconds = |f: u64| f as f64 / f64::from(RATE);
+    if !c.ask.meters.is_empty() {
+        let _ = signal_meters(
+            &ready.plugins,
+            c.ask.meters,
+            &serde_json::json!({ "from": seconds(keep.max(from_frame)), "to": seconds(end) }),
+        );
+    }
     let renderer = ProjectRenderer::offline(
         c.daw,
         c.song,
@@ -1210,6 +1261,11 @@ fn run_chunk(
     let raw = render_blocks(&renderer, (first, last), c.probes.len());
     let blocks_ms = blocks.elapsed().as_secs_f64() * 1e3;
     drop(renderer);
+    let meters = if c.ask.meters.is_empty() {
+        Vec::new()
+    } else {
+        signal_meters(&ready.plugins, c.ask.meters, &serde_json::json!({}))
+    };
     // As rendered, not lined up: a recording played back later enters the
     // delay compensation exactly as this track did, so what it feeds is as
     // late (its plugins told the same song time) as in this render.
@@ -1243,6 +1299,7 @@ fn run_chunk(
         copied: ready.copied,
         reused: ready.reused,
         failures: ready.failures,
+        meters,
         copy_ms,
         prime_ms,
         blocks_ms,

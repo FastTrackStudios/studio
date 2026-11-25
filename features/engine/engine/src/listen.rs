@@ -55,7 +55,7 @@ static LISTEN: ActionMeta = meta(
     concat!(
         "Render offline only what feeds one point of `track` (GUID, path or name) — the track, everything inside it and everything sent into those; the rest of the song is left out — over `from`..`to` (bars `33`, `33:2`; times `12.5s`; sections `Chorus 1`, `Chorus 1 end`), answered from what an earlier listen heard when nothing it hears has changed since (any edit upstream of the point — a parameter, a plugin's state, a fader, an item — is seen and renders again; a kit piece's tracks render together, since their Signal instances hear each other), on copies of its plugins kept warm between calls, and measure it. ",
         at_words!(),
-        ". `solo`: tracks (paths or names) heard alone inside what is rendered, as the solo buttons would. `fresh: true` renders everything again, playing nothing back (to check a played-back answer). A span over 6 s is rendered in up to three chunks side by side, each from a 1 s preroll of its own: about twice as fast, within about 0.05 LU of a whole render and a few tenths of a dB on peaks and crest; `exact: true` renders it in one piece, as MIX_MEASURE would to the sample (A/B differences under ~0.3 dB call for it). Answers `figures`: `lufs` (integrated), `short_term` (LUFS, 3 s windows every second), `short_max`, `true_peak` (dBTP), `peak` and `rms` (dBFS; a full-scale sine reads -3), `crest` (dB), `bands` (dB per third-octave band, centres in `bands_hz`), `correlation` (L/R, -1…1), `width` (side/mid), `balance` (L/R dB); `dynamics`: for each FX that is on before the point on the track's own chain and compresses, gates or limits (or is a Signal instance, whose whole chain it then measures), its `makeup_db` (its resting in-to-out gain), `max_gr_db` and `mean_gr_db` (gain against that rest, dB, ≤ 0) and `gr` (every `hop_s` s; null where its input is below -60 dBFS); `latency` (samples the point was late, put right); `rendered`: how it was answered (`answered`: `replayed` — nothing it hears has changed since an earlier listen heard it, so nothing was rendered; `partly` — the tracks whose key is unchanged played back; `rendered`), the `tracks` rendered and those `replayed`, `of` the song's, plugins copied fresh and reused warm (reset), and any that would not copy; the time taken (`copy_ms`, `prime_ms`, `blocks_ms`, `analysis_ms`, `ms`); and two PNGs, `waveform` (L and R, peak and RMS) and `spectrogram` (20 Hz–20 kHz, -96…0 dBFS), under /tmp/listen/ (`png: false`: none). Touches neither playback nor the song."
+        ". `solo`: tracks (paths or names) heard alone inside what is rendered, as the solo buttons would. `fresh: true` renders everything again, playing nothing back (to check a played-back answer). A span over 6 s is rendered in up to three chunks side by side, each from a 1 s preroll of its own: about twice as fast, within about 0.05 LU of a whole render and a few tenths of a dB on peaks and crest; `exact: true` renders it in one piece, as MIX_MEASURE would to the sample (A/B differences under ~0.3 dB call for it). Answers `figures`: `lufs` (integrated), `short_term` (LUFS, 3 s windows every second), `short_max`, `true_peak` (dBTP), `peak` and `rms` (dBFS; a full-scale sine reads -3), `crest` (dB), `bands` (dB per third-octave band, centres in `bands_hz`), `correlation` (L/R, -1…1), `width` (side/mid), `balance` (L/R dB); `dynamics`: for each FX that is on before the point on the track's own chain and compresses, gates or limits (or is a Signal instance, whose whole chain it then measures), its `makeup_db` (its resting in-to-out gain), `max_gr_db` and `mean_gr_db` (gain against that rest, dB, ≤ 0) and `gr` (every `hop_s` s; null where its input is below -60 dBFS), and for a Signal instance `blocks`: each of its blocks' own meters over the span from the render (no playback) — `[{block, lane, meters: [{id, kind, unit, min, max, mean, seconds}], gr?: {max_gr_db, mean_gr_db}}]`, `gr` on a block with a gain-reduction meter (a compressor), a gate's opening, a dynamic EQ band's or a transient shaper's gain as `kind` `state`/`gain` — or null with `blocks_why` when the answer was replayed; `latency` (samples the point was late, put right); `rendered`: how it was answered (`answered`: `replayed` — nothing it hears has changed since an earlier listen heard it, so nothing was rendered; `partly` — the tracks whose key is unchanged played back; `rendered`), the `tracks` rendered and those `replayed`, `of` the song's, plugins copied fresh and reused warm (reset), and any that would not copy; the time taken (`copy_ms`, `prime_ms`, `blocks_ms`, `analysis_ms`, `ms`); and two PNGs, `waveform` (L and R, peak and RMS) and `spectrogram` (20 Hz–20 kHz, -96…0 dBFS), under /tmp/listen/ (`png: false`: none). Touches neither playback nor the song."
     ),
     "Mix",
     "",
@@ -385,13 +385,13 @@ fn is_dynamics(name: &str) -> bool {
 }
 
 /// The FX that are on before `at` on `track`'s chain and work on its
-/// dynamics: each one's place and name.
+/// dynamics: each one's place, name and guid.
 fn dynamics_before(
     daw: &Standalone,
     project: &ProjectContext,
     track: &str,
     at: Probe,
-) -> Vec<(usize, String)> {
+) -> Vec<(usize, String, String)> {
     let chain = Effects::list(
         daw,
         project.clone(),
@@ -408,8 +408,93 @@ fn dynamics_before(
         .enumerate()
         .take(end)
         .filter(|(_, f)| f.enabled && is_dynamics(&crate::clap_fx::display_name(f)))
-        .map(|(i, f)| (i, crate::clap_fx::display_name(f)))
+        .map(|(i, f)| (i, crate::clap_fx::display_name(f), f.guid.clone()))
         .collect()
+}
+
+/// A Signal FX's `SIGNAL_METERS` summaries, one per chunk of a render,
+/// merged over the whole span: per block and meter the lowest minimum, the
+/// highest maximum and the mean weighted by the seconds each chunk
+/// summarised; a reduction meter also as `gr_db` (LISTEN's convention,
+/// dB ≤ 0).
+fn merged_blocks(chunks: &[Value]) -> Value {
+    // (block, lane) → meter id → (meter as first seen, min, max, sum, seconds)
+    type Meter = (Value, Option<f64>, Option<f64>, f64, f64);
+    let mut blocks: Vec<((String, String), Vec<(String, Meter)>)> = Vec::new();
+    for chunk in chunks {
+        for b in chunk["blocks"].as_array().into_iter().flatten() {
+            let key = (
+                b["block"].as_str().unwrap_or_default().to_owned(),
+                b["lane"].as_str().unwrap_or_default().to_owned(),
+            );
+            let at = match blocks.iter().position(|(k, _)| *k == key) {
+                Some(i) => i,
+                None => {
+                    blocks.push((key, Vec::new()));
+                    blocks.len() - 1
+                }
+            };
+            let meters = &mut blocks[at].1;
+            for m in b["meters"].as_array().into_iter().flatten() {
+                let id = m["id"].as_str().unwrap_or_default().to_owned();
+                let secs = m["seconds"].as_f64().unwrap_or(0.0);
+                let (min, max, mean) = (m["min"].as_f64(), m["max"].as_f64(), m["mean"].as_f64());
+                let slot = match meters.iter().position(|(i, _)| *i == id) {
+                    Some(i) => &mut meters[i].1,
+                    None => {
+                        meters.push((id, (m.clone(), None, None, 0.0, 0.0)));
+                        &mut meters.last_mut().expect("just pushed").1
+                    }
+                };
+                let pick = |a: Option<f64>, b: Option<f64>, f: fn(f64, f64) -> f64| match (a, b) {
+                    (Some(a), Some(b)) => Some(f(a, b)),
+                    (a, b) => a.or(b),
+                };
+                slot.1 = pick(slot.1, min, f64::min);
+                slot.2 = pick(slot.2, max, f64::max);
+                if let Some(mean) = mean {
+                    slot.3 += mean * secs;
+                    slot.4 += secs;
+                }
+            }
+        }
+    }
+    let r = |x: Option<f64>| x.map(r2);
+    Value::Array(
+        blocks
+            .into_iter()
+            .map(|((block, lane), meters)| {
+                let mut gr = Value::Null;
+                let meters: Vec<Value> = meters
+                    .into_iter()
+                    .map(|(id, (first, min, max, sum, secs))| {
+                        let mean = (secs > 0.0).then(|| sum / secs);
+                        if first["kind"] == "reduction" {
+                            gr = json!({
+                                "max_gr_db": r(max.map(|v| -v.abs())),
+                                "mean_gr_db": r(mean.map(|v| -v.abs())),
+                            });
+                        }
+                        json!({
+                            "id": id,
+                            "name": first["name"],
+                            "kind": first["kind"],
+                            "unit": first["unit"],
+                            "min": r(min),
+                            "max": r(max),
+                            "mean": r(mean),
+                            "seconds": r2(secs),
+                        })
+                    })
+                    .collect();
+                let mut out = json!({ "block": block, "lane": lane, "meters": meters });
+                if !gr.is_null() {
+                    out["gr"] = gr;
+                }
+                out
+            })
+            .collect(),
+    )
 }
 
 /// A file name for a picture: the action, a slug of what it shows, and
@@ -524,7 +609,7 @@ pub fn listen(
         track: track.clone(),
         at,
     }];
-    for (i, _) in &dynamics {
+    for (i, _, _) in &dynamics {
         points.push(ProbeAt {
             track: track.clone(),
             at: Probe::FxIn(*i),
@@ -534,6 +619,9 @@ pub fn listen(
             at: Probe::FxOut(*i),
         });
     }
+    // Every dynamics FX asked for its blocks' meters: a Signal instance
+    // answers (`SIGNAL_METERS`), any other has no `signal/1` and is skipped.
+    let summarised: Vec<String> = dynamics.iter().map(|(_, _, g)| g.clone()).collect();
     let heard = render::render(
         daw,
         project,
@@ -548,6 +636,7 @@ pub fn listen(
             fresh: a.fresh,
             cuts: &cuts,
             exact: a.exact,
+            meters: &summarised,
         },
     )?;
     let analysed = web_time::Instant::now();
@@ -556,10 +645,21 @@ pub fn listen(
     let gains: Vec<Value> = dynamics
         .iter()
         .enumerate()
-        .map(|(k, (place, name))| {
+        .map(|(k, (place, name, guid))| {
             let (i, o) = (&heard.signals[1 + 2 * k], &heard.signals[2 + 2 * k]);
             let mut g = measure::gain_reduction(i, o, RATE, 0.1);
             g["fx"] = json!(format!("#{} {name}", place + 1));
+            // A Signal instance: each of its blocks' own meters over the
+            // span, from its render copies (none when replayed).
+            if let Some(chunks) = heard.meters.get(guid) {
+                g["blocks"] = merged_blocks(chunks);
+            } else if heard.answered == render::Answered::Replayed
+                && name.to_lowercase().contains("signal")
+            {
+                g["blocks"] = Value::Null;
+                g["blocks_why"] =
+                    json!("replayed: nothing rendered (fresh: true renders its blocks' meters)");
+            }
             g
         })
         .collect();
@@ -785,6 +885,7 @@ fn hit_windows(
             fresh: a.fresh.unwrap_or(false),
             cuts: &std::collections::HashMap::new(),
             exact: a.exact.unwrap_or(false),
+            meters: &[],
         },
     )?;
     let frames: Vec<usize> = times
@@ -988,6 +1089,7 @@ pub fn render_at(
             fresh: false,
             cuts: &cuts_of(&point),
             exact: r.exact,
+            meters: &[],
         },
     )?;
     Ok(Audio {
@@ -1675,4 +1777,37 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         listen_hits(daw, &project, &a).map(|v| RawJson::from(v.to_string()))
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod block_meter_tests {
+    use super::*;
+
+    /// Two chunks' SIGNAL_METERS of one Signal instance: merged per block,
+    /// the mean weighted by each chunk's seconds, a compressor's reduction
+    /// also as `gr` (dB ≤ 0).
+    #[test]
+    fn chunk_summaries_merge_over_the_span() {
+        let chunk = |max: f64, mean: f64, seconds: f64| {
+            json!({ "blocks": [{
+                "block": "tone.comp", "lane": "Drums/Kick",
+                "meters": [{ "id": "gain_reduction", "name": "Comp Gain Reduction", "kind": "reduction",
+                             "unit": "dB", "min": 0.0, "max": max, "mean": mean, "seconds": seconds }],
+            }]})
+        };
+        let merged = merged_blocks(&[chunk(6.0, 2.0, 1.0), chunk(3.0, 1.0, 3.0)]);
+        let comp = &merged[0];
+        assert_eq!(comp["block"], "tone.comp");
+        let m = &comp["meters"][0];
+        assert_eq!(m["max"], 6.0);
+        assert_eq!(m["mean"], 1.25);
+        assert_eq!(m["seconds"], 4.0);
+        assert_eq!(comp["gr"]["max_gr_db"], -6.0);
+        assert_eq!(comp["gr"]["mean_gr_db"], -1.25);
+        // A chunk that summarised nothing (its meter null) changes nothing.
+        let empty = json!({ "blocks": [{ "block": "tone.comp", "lane": "Drums/Kick", "meters": [
+            { "id": "gain_reduction", "kind": "reduction", "min": null, "max": null, "mean": null, "seconds": 0.0 }] }] });
+        let again = merged_blocks(&[chunk(6.0, 2.0, 1.0), empty]);
+        assert_eq!(again[0]["meters"][0]["mean"], 2.0);
+    }
 }
