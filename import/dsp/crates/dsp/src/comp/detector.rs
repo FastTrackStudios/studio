@@ -53,6 +53,19 @@ impl Detector {
     /// compressors that need transient sensitivity without full peak behavior.
     #[inline]
     pub fn detect_level_with_rms_mix(&mut self, input_abs: f64, rms_mix: f64) -> f64 {
+        self.track(input_abs);
+        let rms = self.rms_power.sqrt();
+        let mix = rms_mix.clamp(0.0, 1.0);
+        let detected = input_abs.mul_add(1.0 - mix, rms * mix);
+        linear_to_db(detected).max(DB_FLOOR)
+    }
+
+    /// Follow `input_abs` without asking for its level: the detector's
+    /// history moves exactly as [`Self::detect_level_with_rms_mix`] moves
+    /// it, without the `log10` nobody reads (a chain running its prepared
+    /// model hears the level there).
+    #[inline]
+    pub fn track(&mut self, input_abs: f64) {
         self.peak = self.peak.max(input_abs);
 
         if self.rms_coeff_rate.to_bits() != self.sample_rate.to_bits() {
@@ -62,11 +75,6 @@ impl Detector {
         }
         let coeff = self.rms_coeff;
         self.rms_power = coeff * self.rms_power + (1.0 - coeff) * input_abs * input_abs;
-
-        let rms = self.rms_power.sqrt();
-        let mix = rms_mix.clamp(0.0, 1.0);
-        let detected = input_abs.mul_add(1.0 - mix, rms * mix);
-        linear_to_db(detected).max(DB_FLOOR)
     }
 
     pub const fn reset(&mut self) {

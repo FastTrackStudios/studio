@@ -211,26 +211,27 @@ impl CompChain {
         let detect_l = key_l * (1.0 - link) + linked * link;
         let detect_r = key_r * (1.0 - link) + linked * link;
 
-        let rms_mix = self.comp.detector_rms_mix;
-        let level_l = self
-            .detector_l
-            .detect_level_with_rms_mix(detect_l.max(1e-12), rms_mix);
-        let level_r = self
-            .detector_r
-            .detect_level_with_rms_mix(detect_r.max(1e-12), rms_mix);
-
         let step = 1.0 / (self.sample_rate * 0.005).max(1.0);
         self.model_mix = if self.model_enabled {
             (self.model_mix + step).min(1.0)
         } else {
             (self.model_mix - step).max(0.0)
         };
+        // The host core's detectors always follow the key (switching back
+        // finds them where they would be), but their level is only worked
+        // out while the host core is heard.
+        let (detect_l, detect_r) = (detect_l.max(1e-12), detect_r.max(1e-12));
         let (mut out_l, mut out_r) = if self.model_mix < 1.0 {
+            let rms_mix = self.comp.detector_rms_mix;
+            let level_l = self.detector_l.detect_level_with_rms_mix(detect_l, rms_mix);
+            let level_r = self.detector_r.detect_level_with_rms_mix(detect_r, rms_mix);
             (
                 self.comp.process_with_level(audio_l, level_l, 0),
                 self.comp.process_with_level(audio_r, level_r, 1),
             )
         } else {
+            self.detector_l.track(detect_l);
+            self.detector_r.track(detect_r);
             (0.0, 0.0)
         };
         if self.model_mix > 0.0
