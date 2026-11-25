@@ -159,9 +159,11 @@ impl TriggerChain {
         }
 
         let sc_mono = (sc_l + sc_r) * 0.5;
-        let detect_threshold_gain = 10.0_f64.powf(self.threshold_db / 20.0);
 
         if let Some(peak_level) = self.detector.tick(sc_mono) {
+            // Only a hit needs the threshold as a gain: a `powf` a hit, not
+            // a `powf` a sample.
+            let detect_threshold_gain = 10.0_f64.powf(self.threshold_db / 20.0);
             let vel = self.velocity.map(peak_level, detect_threshold_gain);
             self.last_velocity = vel;
             self.triggered_this_block = true;
