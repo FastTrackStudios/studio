@@ -214,9 +214,27 @@ impl HostTimeline for TrackTimeline {
 }
 
 /// The song and track FX `fx` is on, in any song open in `daw` (the one
-/// on screen first).
+/// on screen first): from [`Places`], built again only when a song's
+/// revision moved or the songs open changed — once for every instance,
+/// not once for each.
 fn place_of(daw: &Standalone, fx: &str) -> Option<Place> {
-    use daw::service::{Effects, FxChainContext, ProjectContext, Projects, Tracks};
+    let songs = songs_of(daw);
+    let mut places = PLACES.lock().unwrap_or_else(PoisonError::into_inner);
+    let places = places.get_or_insert_with(Places::default);
+    let engine = std::ptr::from_ref(daw).addr();
+    if places.engine != engine || places.songs != songs {
+        places.by_fx = places_in(daw, &songs);
+        places.engine = engine;
+        places.songs = songs;
+        PLACE_BUILDS.fetch_add(1, Ordering::Relaxed);
+    }
+    places.by_fx.get(fx).cloned()
+}
+
+/// The songs open in `daw`, the one on screen first, each with its
+/// revision as of now.
+fn songs_of(daw: &Standalone) -> Vec<(String, Option<u64>)> {
+    use daw::service::Projects;
     let current = crate::actions::song()
         .ok()
         .filter(|(engine, _)| std::ptr::eq(*engine, daw))
@@ -226,21 +244,50 @@ fn place_of(daw: &Standalone, fx: &str) -> Option<Place> {
         songs.retain(|g| *g != current);
         songs.insert(0, current);
     }
-    songs.into_iter().find_map(|project| {
-        let ctx = ProjectContext::Project(project.clone());
-        Tracks::all(daw, ctx.clone())
-            .into_iter()
-            .find(|t| {
-                Effects::list(daw, ctx.clone(), FxChainContext::Track(t.guid.clone()))
-                    .iter()
-                    .any(|f| f.guid == fx)
-            })
-            .map(|t| Place {
-                project: project.clone(),
-                track: t.guid,
-            })
-    })
+    songs
+        .into_iter()
+        .map(|g| {
+            let revision = daw.project_revision(&g);
+            (g, revision)
+        })
+        .collect()
 }
+
+/// Every track FX of `songs`, where it is: the first song and track that
+/// has it, in order. Read in place, nothing cloned but the guids.
+fn places_in(daw: &Standalone, songs: &[(String, Option<u64>)]) -> HashMap<String, Place> {
+    use daw::standalone::sync::FxChainKey;
+    let mut by_fx = HashMap::new();
+    for (project, _) in songs {
+        daw.read_project(project, |p| {
+            for t in &p.tracks {
+                let chain = p.fx_chains.get(&FxChainKey::Track(t.guid.clone()));
+                for e in chain.into_iter().flatten() {
+                    by_fx.entry(e.fx.guid.clone()).or_insert_with(|| Place {
+                        project: project.clone(),
+                        track: t.guid.clone(),
+                    });
+                }
+            }
+        });
+    }
+    by_fx
+}
+
+/// Where every track FX of the open songs is, as of the songs' revisions.
+#[derive(Default)]
+struct Places {
+    /// The engine it was read from (a process runs one; a test may run more).
+    engine: usize,
+    /// The songs, on screen first, at the revisions it was read at.
+    songs: Vec<(String, Option<u64>)>,
+    by_fx: HashMap<String, Place>,
+}
+
+static PLACES: Mutex<Option<Places>> = Mutex::new(None);
+
+/// How many times [`Places`] was built: what the tests count.
+static PLACE_BUILDS: AtomicU64 = AtomicU64::new(0);
 
 static TIMELINES: Mutex<Option<HashMap<String, Arc<TrackTimeline>>>> = Mutex::new(None);
 
@@ -269,5 +316,125 @@ pub fn forget_gone(guids: &[String]) {
     };
     for t in gone {
         t.release();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use daw::service::{Effects, FxChainContext, ProjectContext, Tracks};
+    use daw::standalone::sync::{FxChainKey, FxEntry};
+
+    use super::*;
+
+    /// A song of `tracks` tracks, each with `per` FX.
+    fn song(guid: &str, tracks: usize, per: usize) -> Standalone {
+        let daw = Standalone::new();
+        daw.seed_project(daw_proto::ProjectInfo {
+            guid: guid.into(),
+            name: guid.into(),
+            path: String::new(),
+        });
+        daw.write_project(guid, |p| {
+            for t in 0..tracks {
+                let track = format!("{guid}-t{t}");
+                p.tracks.push(daw_proto::Track {
+                    guid: track.clone(),
+                    name: format!("Track {t}"),
+                    ..Default::default()
+                });
+                let chain = (0..per)
+                    .map(|f| FxEntry {
+                        fx: daw_proto::Fx {
+                            guid: format!("{track}-fx{f}"),
+                            name: "Signal".into(),
+                            ..Default::default()
+                        },
+                        state_chunk: String::new(),
+                        params: HashMap::new(),
+                        ranges: Vec::new(),
+                    })
+                    .collect();
+                p.fx_chains.insert(FxChainKey::Track(track), chain);
+            }
+        });
+        daw
+    }
+
+    /// Where `fx` is, found as the pump found it before [`Places`]: every
+    /// song's tracks cloned and searched for each instance.
+    fn place_of_before(daw: &Standalone, fx: &str) -> Option<Place> {
+        let songs = songs_of(daw);
+        songs.into_iter().find_map(|(project, _)| {
+            let ctx = ProjectContext::Project(project.clone());
+            Tracks::all(daw, ctx.clone())
+                .into_iter()
+                .find(|t| {
+                    Effects::list(daw, ctx.clone(), FxChainContext::Track(t.guid.clone()))
+                        .iter()
+                        .any(|f| f.guid == fx)
+                })
+                .map(|t| Place {
+                    project: project.clone(),
+                    track: t.guid,
+                })
+        })
+    }
+
+    #[test]
+    fn every_instance_is_where_it_was_found_before_and_follows_a_move() {
+        let daw = song("places-a", 6, 2);
+        let fxs: Vec<String> = (0..6)
+            .flat_map(|t| (0..2).map(move |f| format!("places-a-t{t}-fx{f}")))
+            .chain(["nowhere".to_owned()])
+            .collect();
+        for fx in &fxs {
+            assert_eq!(place_of(&daw, fx), place_of_before(&daw, fx), "{fx}");
+        }
+        // An FX moved to another track: found there once the song moved.
+        daw.write_project("places-a", |p| {
+            let fx = p
+                .fx_chains
+                .get_mut(&FxChainKey::Track("places-a-t0".into()))
+                .unwrap()
+                .remove(0);
+            p.fx_chains
+                .get_mut(&FxChainKey::Track("places-a-t5".into()))
+                .unwrap()
+                .push(fx);
+        });
+        let moved = place_of(&daw, "places-a-t0-fx0").expect("still on the song");
+        assert_eq!(moved.track, "places-a-t5");
+        assert_eq!(Some(moved), place_of_before(&daw, "places-a-t0-fx0"));
+    }
+
+    /// What finding every instance costs on a song of 120 tracks with 63
+    /// Signal instances, after an edit (what a pump does each time the
+    /// project's revision moved): before, every instance cloned every
+    /// track; now one read for all. `--ignored --nocapture` to see it.
+    #[test]
+    #[ignore = "a measurement"]
+    fn what_finding_every_instance_costs() {
+        let daw = song("places-bench", 120, 1);
+        let fxs: Vec<String> = (0..63).map(|t| format!("places-bench-t{t}-fx0")).collect();
+        let edit = || daw.write_project("places-bench", |p| p.tracks[0].volume += 0.001);
+        let n = 50u32;
+        let start = std::time::Instant::now();
+        for _ in 0..n {
+            edit();
+            for fx in &fxs {
+                std::hint::black_box(place_of_before(&daw, fx));
+            }
+        }
+        let before = start.elapsed() / n;
+        let start = std::time::Instant::now();
+        for _ in 0..n {
+            edit();
+            for fx in &fxs {
+                std::hint::black_box(place_of(&daw, fx));
+            }
+        }
+        let after = start.elapsed() / n;
+        eprintln!("every instance found after an edit: {before:?} before, {after:?} now");
+        assert!(after < before);
     }
 }
