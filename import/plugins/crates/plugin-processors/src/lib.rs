@@ -18,6 +18,7 @@
 //! | `comp`   | `comp`     | `dsp::comp`, the generic model          |
 //! | `delay`  | `delay`    | `dsp::delay::clean_delay`               |
 //! | `reverb` | `reverb`   | `dsp::reverb::ReverbChain`              |
+//! | `transient` | `transient` | `dsp::transient::TransientDesigner`: attack and sustain, keyable by hits |
 //!
 //! The plugin apps (`apps/plugins/*`) still carry their own nice-plug
 //! parameter trees; moving each onto its table here is the follow-up that
@@ -46,6 +47,8 @@ pub mod expr;
 pub mod gate;
 #[cfg(feature = "saturate")]
 pub mod saturate;
+#[cfg(feature = "transient")]
+pub mod transient;
 #[cfg(feature = "trigger")]
 pub mod trigger;
 
@@ -209,6 +212,8 @@ pub const NAMES: &[&str] = &[
     "delay",
     #[cfg(feature = "reverb")]
     "reverb",
+    #[cfg(feature = "transient")]
+    "transient",
 ];
 
 /// Family `name`'s block on its default algorithm, at the controls'
@@ -261,6 +266,8 @@ pub fn sources_of(name: &str) -> &'static [ModSourceSpec] {
         "comp" => comp::SOURCES,
         #[cfg(feature = "eq")]
         "dyn_eq" => dyn_eq::SOURCES,
+        #[cfg(feature = "transient")]
+        "transient" => transient::SOURCES,
         _ => &[],
     }
 }

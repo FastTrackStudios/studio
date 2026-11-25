@@ -10,13 +10,15 @@ description = "The plugins' effects, headless: parameter tables and dsp engines 
 workspace = true
 
 [features]
-default = ["std", "files", "gate", "saturate", "eq", "comp", "delay", "reverb", "trigger"]
+default = ["std", "files", "gate", "saturate", "eq", "comp", "delay", "reverb", "trigger", "transient"]
 # `std::error::Error`, and the algorithm registry. The engines below that
 # need the dsp crate's `std` features turn it on.
 std = []
 # Algorithm files (Styx), Signal's own and downloaded ones.
 files = ["std", "dep:facet", "dep:facet-styx"]
 gate = ["dsp/gate"]
+# The transient shaper (attack and sustain). no_std.
+transient = ["dsp/transient"]
 saturate = ["dsp/saturate"]
 eq = ["std", "dsp/eq", "dsp-core/audio"]
 comp = ["std", "dsp/comp"]

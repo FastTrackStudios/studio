@@ -12,7 +12,7 @@
 //! | `dyn_eq.bands@1` | `band.{1..4}.{used,shape,freq,q,gain,range,source,threshold,attack,hold,release}`, `velocity`, `output` |
 //! | `reverb.{room,hall,plate,spring,cloud,bloom,shimmer,chorale,magneto,nonlinear,swell,reflections,velvet,freeverb,random}@1` | the shared space controls (`decay`, `size`, `diffusion`, …) and the algorithm's own two (`extra_a`, `extra_b`) |
 //! | `delay.{tape,clean,bbd,lofi,shimmer,reverse,pitch,rhythm,drum,oilcan,multitap,spectral,filter,reverb}@1` | `time`, `feedback`, `mix`, `high_cut`, `low_cut`, `width`, `drive`, `wow`, `flutter` |
-//! | `comp.generic@1`, `saturate.preamp@1`, `gate.drum@1`, `gain@1` | the effect's own parameters |
+//! | `comp.generic@1`, `saturate.preamp@1`, `gate.drum@1`, `transient.designer@1`, `gain@1` | the effect's own parameters |
 
 use alloc::boxed::Box;
 
@@ -42,6 +42,12 @@ pub fn all() -> alloc::vec::Vec<EngineInfo> {
         id: "gate.drum@1",
         family: "gate",
         name: "Drum Gate",
+    });
+    #[cfg(feature = "transient")]
+    out.push(EngineInfo {
+        id: "transient.designer@1",
+        family: "transient",
+        name: "Transient Shaper",
     });
     #[cfg(feature = "saturate")]
     out.push(EngineInfo {
@@ -91,6 +97,8 @@ pub fn targets_of(id: &str) -> Option<&'static [ParamSpec]> {
         "gate.drum@1" => crate::gate::PARAMS,
         #[cfg(feature = "saturate")]
         "saturate.preamp@1" => crate::saturate::PARAMS,
+        #[cfg(feature = "transient")]
+        "transient.designer@1" => crate::transient::PARAMS,
         #[cfg(feature = "comp")]
         "comp.generic@1" => crate::comp::PARAMS,
         #[cfg(feature = "eq")]
@@ -125,6 +133,8 @@ pub fn build(
         ))),
         #[cfg(feature = "saturate")]
         "saturate.preamp@1" => Ok(Box::new(crate::saturate::Drive::new(sample_rate))),
+        #[cfg(feature = "transient")]
+        "transient.designer@1" => Ok(Box::new(crate::transient::Transient::new(sample_rate))),
         #[cfg(feature = "comp")]
         "comp.generic@1" => crate::comp::Comp::new(sample_rate, max_block)
             .map(|c| Box::new(c) as Box<dyn BlockProcessor>),

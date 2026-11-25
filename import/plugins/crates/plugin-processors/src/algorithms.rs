@@ -479,6 +479,7 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     ("comp", "generic"),
     ("drive", "preamp"),
     ("gate", "drum"),
+    ("transient", "designer"),
     ("gain", "gain"),
 ];
 
