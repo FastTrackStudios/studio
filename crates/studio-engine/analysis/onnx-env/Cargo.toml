@@ -1,0 +1,13 @@
+[package]
+name = "onnx-env"
+description = "The process's one ONNX Runtime environment: ort 2.0.0-rc.15 allows one per process, so every model (rhythm-hits' detectors, chatterbox TTS) makes its sessions in this one"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+ort = { workspace = true, features = ["std", "load-dynamic", "api-23"] }
+
+[lints]
+workspace = true

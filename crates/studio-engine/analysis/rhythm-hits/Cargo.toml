@@ -7,11 +7,12 @@ description = "Swappable drum hit and rhythm detection library (DSP + optional O
 
 [features]
 default = []
-onnx = ["dep:ort"]
+onnx = ["dep:ort", "dep:onnx-env"]
 
 [dependencies]
 num-traits.workspace = true
 ort = { version = "2.0.0-rc.15", optional = true, default-features = false, features = ["std", "ndarray", "load-dynamic", "api-23"] }
+onnx-env = { workspace = true, optional = true }
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -5,36 +5,14 @@
 //! search standard library paths).
 
 use std::path::Path;
-use std::sync::Mutex;
 
 use ort::environment::Environment;
 use ort::session::{Session, builder::GraphOptimizationLevel};
 
-/// Initialize an ONNX Runtime [`Environment`], honoring `ORT_DYLIB_PATH` if set.
+/// The process's ONNX Runtime [`Environment`], shared with every other model
+/// in the process (see `onnx-env`; ort rc.15 allows one per process).
 pub fn init_environment() -> Result<Environment, String> {
-    static ENVIRONMENT: Mutex<Option<Environment>> = Mutex::new(None);
-    let mut environment = ENVIRONMENT.lock().map_err(|e| e.to_string())?;
-    if let Some(existing) = &*environment {
-        return Ok(existing.clone());
-    }
-    let initialized = build_environment()?;
-    *environment = Some(initialized.clone());
-    Ok(initialized)
-}
-
-fn build_environment() -> Result<Environment, String> {
-    if let Ok(dylib) = std::env::var("ORT_DYLIB_PATH")
-        && !dylib.trim().is_empty()
-    {
-        return ort::init_from(&dylib)
-            .map_err(|e| format!("ort load dylib '{dylib}': {e}"))?
-            .with_name("fts-rhythm")
-            .build()
-            .map_err(|e| format!("ort init environment failed: {e}"));
-    }
-    ort::init()
-        .with_name("fts-rhythm")
-        .build()
+    onnx_env::environment()
         .map_err(|e| format!("ort init environment failed (set ORT_DYLIB_PATH if needed): {e}"))
 }
 

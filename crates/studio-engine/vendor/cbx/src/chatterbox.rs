@@ -90,33 +90,8 @@ pub struct SessionConfig {
 /// ort 2.0.0-rc.15 allows one environment per process and needs it to make
 /// a session (rc.10 made a global one implicitly).
 pub fn environment() -> Result<Environment> {
-    static ENVIRONMENT: std::sync::Mutex<Option<Environment>> = std::sync::Mutex::new(None);
-    let mut held = ENVIRONMENT
-        .lock()
-        .map_err(|_| anyhow!("ONNX Runtime environment lock poisoned"))?;
-    if let Some(env) = &*held {
-        return Ok(env.clone());
-    }
-    let env = build_environment()?;
-    *held = Some(env.clone());
-    Ok(env)
-}
-
-fn build_environment() -> Result<Environment> {
-    #[cfg(feature = "load-dynamic")]
-    if let Ok(dylib) = std::env::var("ORT_DYLIB_PATH")
-        && !dylib.trim().is_empty()
-    {
-        return ort::init_from(&dylib)
-            .with_context(|| format!("load ONNX Runtime from {dylib}"))?
-            .with_name("cbx")
-            .build()
-            .context("failed to initialize ONNX Runtime environment");
-    }
-    ort::init()
-        .with_name("cbx")
-        .build()
-        .context("failed to initialize ONNX Runtime environment")
+    // Studio: the process's one environment, shared with its other models.
+    onnx_env::environment().context("failed to initialize ONNX Runtime environment")
 }
 
 impl Default for SessionConfig {

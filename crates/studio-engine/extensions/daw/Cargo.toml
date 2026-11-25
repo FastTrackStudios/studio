@@ -14,8 +14,9 @@ name = "daw-extension"
 path = "src/main.rs"
 
 [features]
-# Spoken section cues (chatterbox TTS, ONNX Runtime). Off by default: the cbx
-# git dependency is written against ort rc.10 and the workspace is on rc.15.
+default = ["tts"]
+# Spoken section cues (chatterbox TTS, ONNX Runtime; vendored cbx on ort rc.15,
+# its sessions in the process's one environment from onnx-env).
 tts = ["engine-domain/tts"]
 
 [dependencies]

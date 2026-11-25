@@ -36,6 +36,7 @@ hound = { workspace = true }
 # ort 2.0.0-rc.15 takes ndarray 0.17 (upstream: 0.16 with ort rc.10).
 ndarray = "0.17"
 ort = { workspace = true, features = ["std", "ndarray", "half", "api-23"] }
+onnx-env = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokenizers = { version = "0.22.2", default-features = false, features = ["onig"] }
