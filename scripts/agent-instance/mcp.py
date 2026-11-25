@@ -5,14 +5,18 @@
     scripts/agent-instance/mcp.py run SESSION_SCREENSET '{"screenset":"6"}'
     scripts/agent-instance/mcp.py session_tree '{}'
 
-Reads the door's url and token from ~/.config/fts/studio[-<instance>]-mcp.json.
+Reads the door's url and token from studio[-<instance>]-mcp.json in ~/.config/fts
+(Linux) or ~/Library/Application Support/fts (macOS).
 Never prints the token.
 """
 import json, os, sys, urllib.request
 
 inst = os.environ.get("STUDIO_INSTANCE", "")
 name = f"studio-{inst}" if inst else "studio"
-cfg = json.load(open(os.path.expanduser(f"~/.config/fts/{name}-mcp.json")))
+# Linux: ~/.config/fts; macOS: ~/Library/Application Support/fts.
+dirs = [os.path.expanduser("~/.config/fts"), os.path.expanduser("~/Library/Application Support/fts")]
+path = next(p for p in (os.path.join(d, f"{name}-mcp.json") for d in dirs) if os.path.exists(p))
+cfg = json.load(open(path))
 
 def call(method, params=None, sid=None):
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}).encode()

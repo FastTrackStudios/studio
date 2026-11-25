@@ -7,6 +7,7 @@ import os, socket, sys
 
 inst = os.environ.get("STUDIO_INSTANCE", "")
 name = f"studio-{inst}" if inst else "studio"
+# Linux: $XDG_RUNTIME_DIR/app-shell; macOS: $TMPDIR/app-shell.
 rt = os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("TMPDIR", "/tmp")
 s = socket.socket(socket.AF_UNIX)
 s.settimeout(30)
