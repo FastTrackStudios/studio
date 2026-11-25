@@ -21,10 +21,10 @@
 
 use std::fmt::Write;
 
-use crate::proto::KeysMacro;
 use dioxus::prelude::*;
+use keys::proto::KeysMacro;
 
-use crate::ui::module_edit::KnobRow;
+use crate::module_edit::KnobRow;
 
 /// One lane's time-domain settings, as the mixer reports them.
 #[derive(Clone, PartialEq, Debug)]
@@ -179,10 +179,10 @@ pub fn DelayView(
                             text-transform: uppercase; color: {accent};",
                     "Delay"
                 }
-                crate::ui::algos::AlgoPicker {
+                crate::algos::AlgoPicker {
                     id: macros.iter().find(|m| m.id.ends_with("dly.algo")).map(|m| m.id.clone()).unwrap_or_default(),
                     value: macros.iter().find(|m| m.id.ends_with("dly.algo")).map_or(0.0, |m| m.value),
-                    options: crate::ui::algos::DELAY_ALGOS.to_vec(),
+                    options: crate::algos::DELAY_ALGOS.to_vec(),
                     accent: accent.clone(),
                     on_change: move |(id, v): (String, f32)| on_change.call((id, v)),
                 }
@@ -325,10 +325,10 @@ pub fn ReverbView(
                             text-transform: uppercase; color: {accent};",
                     "Reverb"
                 }
-                crate::ui::algos::AlgoPicker {
+                crate::algos::AlgoPicker {
                     id: macros.iter().find(|m| m.id.ends_with("amb.algo")).map(|m| m.id.clone()).unwrap_or_default(),
                     value: macros.iter().find(|m| m.id.ends_with("amb.algo")).map_or(1.0, |m| m.value),
-                    options: crate::ui::algos::VERB_ALGOS.to_vec(),
+                    options: crate::algos::VERB_ALGOS.to_vec(),
                     accent: accent.clone(),
                     on_change: move |(id, v): (String, f32)| on_change.call((id, v)),
                 }

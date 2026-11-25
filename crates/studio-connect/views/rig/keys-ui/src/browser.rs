@@ -18,15 +18,15 @@
 //! duplicated and deleted. ↑ ↓ in the search field audition (the rig
 //! remembers how it was and Esc puts it back), Enter keeps.
 
-use crate::proto::keys::KeysRigClient;
-use crate::proto::{KeysMixer, KeysPreset};
 use dioxus::prelude::*;
+use keys::proto::keys::KeysRigClient;
+use keys::proto::{KeysMixer, KeysPreset};
 use signal_widgets::kit::{MenuItem, Picked};
 use signal_widgets::{BrowseChip, BrowseEntry, BrowseScope, SoundBrowser};
 
-use crate::ui::control::engine_color;
-use crate::ui::selection::{Selection, use_selection};
-use crate::ui::state::KeysViewState;
+use crate::control::engine_color;
+use crate::selection::{Selection, use_selection};
+use crate::state::KeysViewState;
 
 /// How many rows the list draws before it asks you to narrow it. The library
 /// is ~41k presets — drawing all of them is what made the rig take half a
@@ -126,7 +126,7 @@ fn is_live(p: &KeysPreset, level: Level, sel: &Selection, mixer: &KeysMixer) -> 
     match level {
         Level::Stacks => false,
         Level::Engine => sel.engine().is_some_and(|e| {
-            let lanes: Vec<&crate::proto::KeysLayerModel> = mixer
+            let lanes: Vec<&keys::proto::KeysLayerModel> = mixer
                 .engines
                 .iter()
                 .filter(|x| x.name == e)

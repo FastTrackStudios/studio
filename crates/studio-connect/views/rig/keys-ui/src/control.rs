@@ -18,18 +18,18 @@
 //! it, so the same three knobs are a broad stroke at the top and a precise
 //! edit further in.
 
-use crate::proto::keys::KeysRigClient;
-use crate::proto::{KeysEngineModel, KeysLayerModel, KeysMacro, KeysMixer};
 use dioxus::prelude::*;
+use keys::proto::keys::KeysRigClient;
+use keys::proto::{KeysEngineModel, KeysLayerModel, KeysMacro, KeysMixer};
 
-use crate::ui::graphs::{Adsr, ModuleCurve};
+use crate::graphs::{Adsr, ModuleCurve};
 
-use crate::ui::selection::Selection;
+use crate::selection::Selection;
 use signal_widgets::Piano;
 
-use crate::ui::fader::{EdgeFader, Fader, fmt_db};
-use crate::ui::meter::{EdgeMeter, peak_of};
-use crate::ui::zoom::{OpenButton, Zoom};
+use crate::fader::{EdgeFader, Fader, fmt_db};
+use crate::meter::{EdgeMeter, peak_of};
+use crate::zoom::{OpenButton, Zoom};
 
 /// Accent per engine — the same color language the Perform strip uses.
 /// Keys is the green one (it is the engine you look at most, and green reads
@@ -59,7 +59,7 @@ pub fn ControlView(
     held: Vec<u8>,
     /// Wheel + pedal positions, for the strip beside the keys.
     #[props(default)]
-    controllers: crate::ui::controllers::Controllers,
+    controllers: crate::controllers::Controllers,
     /// Macros to show when there is no rig to fetch them from.
     ///
     /// The macro band normally pulls these over the wire, so with no
@@ -76,7 +76,7 @@ pub fn ControlView(
     #[props(default = true)]
     keyboard: bool,
 ) -> Element {
-    let mut selection = crate::ui::selection::use_selection();
+    let mut selection = crate::selection::use_selection();
     // Escape clears the selection from wherever the pointer happens to be —
     // the keyboard shortcut for "I am done editing that".
     use_future(move || async move {
@@ -236,7 +236,7 @@ fn set_scope_macro(rig: Option<KeysRigClient>, scope: MacroScope, id: String, v:
 /// loaded lane (not per module): a lane's send is a lane-level decision, and
 /// six engines of per-module tails would be unreadable. Module A speaks for
 /// the lane, which is also the module a lane preset fills first.
-fn rig_time_fx(mixer: &KeysMixer, scope: &MacroScope) -> Vec<crate::ui::time_fx::FxLane> {
+fn rig_time_fx(mixer: &KeysMixer, scope: &MacroScope) -> Vec<crate::time_fx::FxLane> {
     let mut lanes = Vec::new();
     for engine in &mixer.engines {
         let color = engine_color(&engine.name).to_string();
@@ -244,7 +244,7 @@ fn rig_time_fx(mixer: &KeysMixer, scope: &MacroScope) -> Vec<crate::ui::time_fx:
             let Some(m) = layer.modules.iter().find(|m| m.live) else {
                 continue;
             };
-            lanes.push(crate::ui::time_fx::FxLane {
+            lanes.push(crate::time_fx::FxLane {
                 label: layer.name.clone(),
                 color: color.clone(),
                 focus: scope.reaches(&engine.name, &layer.name),
@@ -320,8 +320,8 @@ fn rig_curves(mixer: &KeysMixer, scope: &MacroScope) -> Vec<ModuleCurve> {
 #[component]
 fn MacroBand(#[props(default)] seed: Vec<KeysMacro>) -> Element {
     let rig = use_hook(try_consume_context::<KeysRigClient>);
-    let state = use_hook(try_consume_context::<crate::ui::state::KeysViewState>);
-    let selection = crate::ui::selection::use_selection();
+    let state = use_hook(try_consume_context::<crate::state::KeysViewState>);
+    let selection = crate::selection::use_selection();
     // Seeded, not empty: with a rig the fetch below replaces this on the
     // first effect run, and without one it is all the band will ever have.
     let mut macros = use_signal(move || seed.clone());
@@ -408,7 +408,7 @@ fn MacroBand(#[props(default)] seed: Vec<KeysMacro>) -> Element {
             div {
                 style: "display: flex; flex-wrap: wrap; gap: 18px; padding: 4px 2px 2px; \
                         align-items: flex-start;",
-                crate::ui::time_fx::DelayView {
+                crate::time_fx::DelayView {
                     lanes: fx_lanes.clone(),
                     tempo_bpm: if tempo_bpm > 0 { tempo_bpm as f32 } else { 120.0 },
                     synced: tempo_bpm > 0,
@@ -419,7 +419,7 @@ fn MacroBand(#[props(default)] seed: Vec<KeysMacro>) -> Element {
                         move |(id, v): (String, f32)| set_scope_macro(rig.clone(), scope.clone(), id, v)
                     },
                 }
-                crate::ui::time_fx::ReverbView {
+                crate::time_fx::ReverbView {
                     lanes: fx_lanes,
                     macros: amb_macros,
                     accent: "#a78bfa".to_string(),
@@ -429,7 +429,7 @@ fn MacroBand(#[props(default)] seed: Vec<KeysMacro>) -> Element {
                     },
                 }
             }
-            crate::ui::macro_panel::MacroPanel {
+            crate::macro_panel::MacroPanel {
                 macros: items,
                 curves,
                 accent: accent.clone(),
@@ -465,7 +465,7 @@ fn MacroBand(#[props(default)] seed: Vec<KeysMacro>) -> Element {
 pub fn KeyboardStrip(
     mixer: KeysMixer,
     held: Vec<u8>,
-    #[props(default)] controllers: crate::ui::controllers::Controllers,
+    #[props(default)] controllers: crate::controllers::Controllers,
 ) -> Element {
     const LO: u8 = 21;
     const HI: u8 = 108;
@@ -506,7 +506,7 @@ pub fn KeyboardStrip(
             div { style: "display: flex; align-items: flex-end; gap: 14px; min-width: 0;",
             // Pedals and wheels, laid out as the hardware is: feet at the far
             // left, then the left hand's wheels, then the keys.
-            crate::ui::controllers::ControllerStrip { controllers, height_px: 82 }
+            crate::controllers::ControllerStrip { controllers, height_px: 82 }
             div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;",
             // Split bands, aligned to the keys beneath them.
             div { style: "position: relative; height: {14 * bands.len().max(1)}px;",
@@ -595,8 +595,8 @@ fn EngineStrip(
     #[props(default)] index: usize,
 ) -> Element {
     let rig = use_hook(try_consume_context::<KeysRigClient>);
-    let mut zoom = crate::ui::zoom::use_zoom();
-    let mut selection = crate::ui::selection::use_selection();
+    let mut zoom = crate::zoom::use_zoom();
+    let mut selection = crate::selection::use_selection();
     // What the engine is actually putting out — its card's bottom edge.
     let peak = peak_of("engine", &engine.name);
     let picked = *selection.read() == Selection::Engine(engine.name.clone());
@@ -767,7 +767,7 @@ fn EngineStrip(
 /// the card has one narrow column to spend, and a picker leaves room for the
 /// parameters a pad player actually reaches for as they land.
 #[component]
-fn DroneKeys(engine: String, drone: crate::proto::KeysDrone) -> Element {
+fn DroneKeys(engine: String, drone: keys::proto::KeysDrone) -> Element {
     const KEYS: [&str; 12] = [
         "C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B",
     ];
@@ -925,8 +925,8 @@ fn lane_letter(lane: &str, engine: &str) -> String {
 #[component]
 fn LayerStrip(layer: KeysLayerModel, accent: String) -> Element {
     let rig = use_hook(try_consume_context::<KeysRigClient>);
-    let mut zoom = crate::ui::zoom::use_zoom();
-    let mut selection = crate::ui::selection::use_selection();
+    let mut zoom = crate::zoom::use_zoom();
+    let mut selection = crate::selection::use_selection();
     // The lane's own level, metered along the bottom of its letter.
     let peak = peak_of("layer", &layer.name);
     let picked = matches!(

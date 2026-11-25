@@ -14,7 +14,7 @@ architect = { workspace = true, features = ["connect", "vox", "platform"] }
 architect-extensions = { workspace = true, features = ["linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest"] }
 guitar = { workspace = true, features = ["ui"] }
-keys = { workspace = true, features = ["ui"] }
+keys = { workspace = true }
 signal-rigs-proto = { workspace = true }
 signal-rig-perform-ui = { workspace = true }
 signal-tone3000 = { workspace = true, features = ["ui"] }

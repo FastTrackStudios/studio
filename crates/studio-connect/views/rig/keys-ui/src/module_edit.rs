@@ -19,12 +19,12 @@
 
 use std::fmt::Write;
 
-use crate::proto::{KeysLayerDetail, KeysMacro};
 use dioxus::prelude::*;
+use keys::proto::{KeysLayerDetail, KeysMacro};
 
-use crate::ui::fader::Fader;
-use crate::ui::graphs::{Adsr, EnvelopeGraph, FilterCurve};
-use crate::ui::knob::Knob;
+use crate::fader::Fader;
+use crate::graphs::{Adsr, EnvelopeGraph, FilterCurve};
+use crate::knob::Knob;
 
 /// Panel chrome — every section shares it so the page reads as one surface.
 #[component]

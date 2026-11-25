@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "The keys rig: pianos, organs, keyboards, and its editor"
+description = "The keys rig: pianos, organs and keyboards (its editor is `keys-ui`)"
 
 [lints]
 workspace = true
@@ -12,7 +12,6 @@ workspace = true
 [features]
 default = ["vox"]
 pipewire = []
-ui = ["dep:dioxus", "dep:fts-audio-ui", "dep:midi-ui", "dep:signal-browser", "signal-widgets/piano", "dep:signal-widgets", "architect/atom", "architect/platform"]
 vox = ["architect/vox", "dep:vox"]
 
 [dependencies]
@@ -20,22 +19,17 @@ architect = { workspace = true, features = ["rig", "vox"] }
 architect-telemetry = { workspace = true }
 daw = { workspace = true }
 audio = { workspace = true, features = ["io", "monitor"] }
-dioxus = { workspace = true, optional = true }
 eyre = { workspace = true }
 facet = { workspace = true }
 facet-json = { workspace = true }
 facet-styx = { workspace = true }
-fts-audio-ui = { workspace = true, optional = true }
 midi = { workspace = true, features = ["midir", "vox"] }
-midi-ui = { workspace = true, optional = true }
-signal-browser = { workspace = true, default-features = false, optional = true }
 signal-plugin-host = { workspace = true }
 signal-proto = { workspace = true }
 signal-rig-host = { workspace = true }
 signal-rigs-proto = { workspace = true }
 sampler = { workspace = true }
 synth = { workspace = true }
-signal-widgets = { workspace = true, optional = true }
 tracing = { workspace = true }
 vox = { workspace = true, optional = true }
 

@@ -11,9 +11,9 @@
 //! The right-click menus open **upward**, in the app's popup layer: the
 //! strip is the bottom of the window.
 
-use crate::proto::keys::KeysRigClient;
-use crate::proto::{KeysPerform, SwitchLearn};
 use dioxus::prelude::*;
+use keys::proto::keys::KeysRigClient;
+use keys::proto::{KeysPerform, SwitchLearn};
 use signal_widgets::PopupHost;
 use signal_widgets::switches::{
     MenuRow, MidiLearnRows, SwitchMenuFrame, SwitchTile, SwitchesMode, SwitchesToggle, close_menu,

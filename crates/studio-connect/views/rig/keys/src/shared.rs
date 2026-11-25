@@ -9,7 +9,7 @@
 
 use std::sync::{LazyLock, Mutex, PoisonError};
 
-use keys::ui::{Selection, Zoom};
+use keys_ui::{Selection, Zoom};
 use serde_json::{Value as Json, json};
 use tokio::sync::watch;
 

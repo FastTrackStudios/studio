@@ -5,8 +5,8 @@
 //! with live (sounding) leaves lit. This is the structure the renderer walks,
 //! so it's the honest picture of what the rig is doing.
 
-use crate::proto::KeysNode;
 use dioxus::prelude::*;
+use keys::proto::KeysNode;
 
 #[component]
 pub fn RoutingView(tree: KeysNode) -> Element {

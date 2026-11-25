@@ -17,7 +17,8 @@ path = "src/main.rs"
 studio-rig-link = { workspace = true }
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest"] }
-keys = { workspace = true, features = ["ui"] }
+keys = { workspace = true }
+keys-ui = { workspace = true }
 signal-widgets = { workspace = true }
 dioxus = { workspace = true }
 serde_json = { workspace = true }

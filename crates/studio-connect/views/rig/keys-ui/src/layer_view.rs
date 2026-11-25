@@ -14,13 +14,13 @@
 //! - **Edit** — the Signal Editor: the lane's articulations / zones and the
 //!   engine program it's running through.
 
-use crate::proto::keys::KeysRigClient;
-use crate::proto::{KeysLayerDetail, KeysNode};
 use dioxus::prelude::*;
+use keys::proto::keys::KeysRigClient;
+use keys::proto::{KeysLayerDetail, KeysNode};
 
-use crate::proto::KeysMixer;
-use crate::ui::control::engine_color;
-use crate::ui::zoom::Zoom;
+use crate::control::engine_color;
+use crate::zoom::Zoom;
+use keys::proto::KeysMixer;
 
 /// Which page of the layer zoom.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -93,14 +93,14 @@ pub fn LayerView(
     let level = fts_audio_ui::chrome::use_chrome_level(3);
     // The browser follows the zoom: inside a lane it lists what fits the
     // module you are editing.
-    let mut selection = crate::ui::selection::use_selection();
+    let mut selection = crate::selection::use_selection();
     {
         let (engine, lane, slot) = (d.engine.clone(), d.layer.clone(), d.module);
         use_effect(move || {
             if engine.is_empty() {
                 return;
             }
-            let next = crate::ui::selection::Selection::Module {
+            let next = crate::selection::Selection::Module {
                 engine: engine.clone(),
                 layer: lane.clone(),
                 module: slot,
@@ -232,7 +232,7 @@ fn LayerPage(
     let mut module = module;
 
     rsx! {
-        crate::ui::layer_macros::LayerMacros {
+        crate::layer_macros::LayerMacros {
             detail: detail.clone(),
             accent: accent.clone(),
             on_global: {
@@ -287,7 +287,7 @@ fn PlayPage(
 
     rsx! {
         div { style: "flex: 1; min-height: 0; display: flex;",
-            crate::ui::module_edit::ModuleEdit {
+            crate::module_edit::ModuleEdit {
                 detail: detail.clone(),
                 accent: accent.clone(),
                 module,

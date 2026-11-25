@@ -1,0 +1,19 @@
+[package]
+name = "keys-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The keys rig's editor: the Dioxus half of `keys`, drawn from its vox clients, so the rig itself builds headless"
+
+[lints]
+workspace = true
+
+[dependencies]
+architect = { workspace = true, features = ["atom", "platform", "vox"] }
+dioxus = { workspace = true }
+fts-audio-ui = { workspace = true }
+keys = { workspace = true }
+midi = { workspace = true }
+midi-ui = { workspace = true }
+signal-widgets = { workspace = true, features = ["piano"] }

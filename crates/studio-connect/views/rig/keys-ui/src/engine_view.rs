@@ -1,13 +1,13 @@
 //! **Engine zoom** — one engine fullscreen: its lanes with room to breathe,
 //! each opening into the layer zoom.
 
-use crate::proto::KeysEngineModel;
-use crate::proto::keys::KeysRigClient;
 use dioxus::prelude::*;
+use keys::proto::KeysEngineModel;
+use keys::proto::keys::KeysRigClient;
 
-use crate::ui::control::engine_color;
-use crate::ui::fader::{Fader, fmt_db};
-use crate::ui::zoom::{OpenButton, Zoom};
+use crate::control::engine_color;
+use crate::fader::{Fader, fmt_db};
+use crate::zoom::{OpenButton, Zoom};
 
 #[component]
 pub fn EngineView(engine: KeysEngineModel, zoom: Signal<Zoom>) -> Element {
@@ -73,7 +73,7 @@ pub fn EngineView(engine: KeysEngineModel, zoom: Signal<Zoom>) -> Element {
                         let rig_mute = rig.clone();
                         let muted = layer.muted;
                         let mute_lane = layer.name.clone();
-                        let peak = crate::ui::meter::peak_of("layer", &layer.name);
+                        let peak = crate::meter::peak_of("layer", &layer.name);
                         rsx! {
                             div {
                                 key: "{layer.name}",
@@ -86,7 +86,7 @@ pub fn EngineView(engine: KeysEngineModel, zoom: Signal<Zoom>) -> Element {
                                 },
                                 // The lane's level, along the bottom of its card —
                                 // the same edge the mixer meters a lane on.
-                                crate::ui::meter::EdgeMeter {
+                                crate::meter::EdgeMeter {
                                     peak,
                                     radius_px: 14,
                                     accent: accent.clone(),

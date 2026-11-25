@@ -2,7 +2,7 @@
 //!
 //! Nothing is redrawn: each pane is a vox client of the rig engine
 //! (`studio_rig_link::EnginePane`) around the keys rig's own components
-//! (`keys::ui`), with the state they share in one screen of Signal
+//! (`keys_ui`), with the state they share in one screen of Signal
 //! (`KeysRigRemote`) provided around each: the live keys state, the
 //! pointer kind, the popups, and what is open ([`shared`]: the engine or
 //! layer zoomed into, the node the browser is pointed at), kept in step
@@ -23,7 +23,7 @@ use architect_extensions::linked::{Builder, Extension};
 use architect_extensions_dioxus::BuilderExt as _;
 use dioxus::prelude::*;
 use keys::proto::keys::KeysRigClient;
-use keys::ui::{
+use keys_ui::{
     Browser, ControlView, Controllers, EngineView, KeyboardStrip, KeysViewState, LayerView,
     MacroPanel, MidiPanel, PerformStrip, RoutingView, Zoom, held_notes,
 };
@@ -90,7 +90,7 @@ fn KeysPane(children: Element) -> Element {
 /// What `KeysRigRemote` provides around its screens, around one pane.
 #[component]
 fn Providers(children: Element) -> Element {
-    let (state, rig) = keys::ui::use_keys_state();
+    let (state, rig) = keys_ui::use_keys_state();
     // Whether a finger or a mouse plays the rig, and menus over the pane.
     let touch = signal_widgets::Touch::provide();
     signal_widgets::PopupHost::provide();

@@ -9,8 +9,6 @@
 //! normalization, and the [`KeysRigBackend`] wire service.
 
 pub mod proto;
-#[cfg(feature = "ui")]
-pub mod ui;
 
 // The rig engine (architect::rig, threads, audio) is native-only; the browser
 // remote reaches a network engine through `proto`.

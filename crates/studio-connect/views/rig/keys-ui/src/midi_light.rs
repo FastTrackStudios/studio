@@ -5,12 +5,12 @@
 //! picker are a right-rail panel. Before the chrome, this was a bar widget
 //! with a popover hanging off it.
 
-use crate::proto::keys::KeysRigClient;
 use dioxus::prelude::*;
+use keys::proto::keys::KeysRigClient;
 use midi::proto::MidiEvent;
 use midi_ui::MidiMonitorPanel;
 
-use crate::ui::state::held_notes;
+use crate::state::held_notes;
 
 /// The activity light's colour, flashing on every event that lands and going
 /// solid while notes are held. A hook: the flash is a timer.
