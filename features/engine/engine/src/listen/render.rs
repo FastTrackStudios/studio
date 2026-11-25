@@ -29,7 +29,7 @@
 //!   fingerprint: a copy whose plugin is unchanged is reused, reset (CLAP's
 //!   `reset`: its buffers, voices and envelopes cleared, still activated),
 //!   or deactivated where it cannot be; one that changed is made again.
-//!   Copies are made (and live states read) side by side.
+//!   A cold render's copies (MIX_MEASURE's) are never kept.
 //!
 //! The recordings are bounded by bytes (`STUDIO_LISTEN_CACHE_MB`, 32 GiB
 //! unless set, or [`set_limit`]): past it, the one heard longest ago goes.
@@ -874,20 +874,33 @@ struct Instance {
 }
 
 /// At most this many threads make copies (or read live states) at once,
-/// per chunk.
-const COPY_THREADS: usize = 6;
+/// per chunk, unless `STUDIO_LISTEN_COPY_THREADS` says: one, since making
+/// Signal copies side by side measured no faster on Unbreakable's kit (they
+/// wait on each other).
+const COPY_THREADS: usize = 1;
 
-/// `f` over `items` on up to [`COPY_THREADS`] threads, the answers in
+fn copy_threads() -> usize {
+    static N: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *N.get_or_init(|| {
+        std::env::var("STUDIO_LISTEN_COPY_THREADS")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .filter(|n| *n > 0)
+            .unwrap_or(COPY_THREADS)
+    })
+}
+
+/// `f` over `items` on up to [`copy_threads`] threads, the answers in
 /// `items`' order.
 fn side_by_side<T: Send, R: Send>(items: Vec<T>, f: impl Fn(T) -> R + Sync) -> Vec<R> {
-    if items.len() <= 1 {
+    if items.len() <= 1 || copy_threads() == 1 {
         return items.into_iter().map(f).collect();
     }
     let n = items.len();
     let queue = Mutex::new(items.into_iter().enumerate().collect::<Vec<_>>());
     let done: Mutex<Vec<Option<R>>> = Mutex::new((0..n).map(|_| None).collect());
     std::thread::scope(|s| {
-        for _ in 0..COPY_THREADS.min(n) {
+        for _ in 0..copy_threads().min(n) {
             s.spawn(|| {
                 loop {
                     let next = queue
@@ -1969,7 +1982,18 @@ fn run_chunk(
     };
     let raw = raw.iter().map(cut).collect();
     let master = if c.master { cut(&master) } else { Vec::new() };
-    for (guid, at, state, held) in ready.kept {
+    // A cold render's copies are not kept: no cold render reuses one, and
+    // every Signal instance alive makes the next copies slower to make.
+    if c.cold {
+        drop_later(
+            ready
+                .kept
+                .iter()
+                .filter_map(|(guid, ..)| ready.plugins.write().remove(guid))
+                .collect(),
+        );
+    }
+    for (guid, at, state, held) in ready.kept.into_iter().filter(|_| !c.cold) {
         if let Some(plugin) = ready.plugins.write().remove(&guid) {
             warm.insert(
                 at,
