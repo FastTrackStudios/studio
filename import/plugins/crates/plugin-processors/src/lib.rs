@@ -14,6 +14,7 @@
 //! | `gate`   | `gate`     | `dsp::gate::DrumGate`                   |
 //! | `drive`  | `saturate` | `dsp::saturate::preamp::ClassAPreamp`   |
 //! | `eq`     | `eq`       | `dsp_core` biquads (a channel strip)    |
+//! | `dyn_eq` | `eq`       | `dsp::eq::dynamics::DynBand`: four bands keyed by their own level, a key's audio or its hits ([`dyn_eq`]) |
 //! | `comp`   | `comp`     | `dsp::comp`, the generic model          |
 //! | `delay`  | `delay`    | `dsp::delay::clean_delay`               |
 //! | `reverb` | `reverb`   | `dsp::reverb::ReverbChain`              |
@@ -37,6 +38,8 @@ pub mod param;
 pub mod algorithms;
 #[cfg(feature = "comp")]
 pub mod comp;
+#[cfg(feature = "eq")]
+pub mod dyn_eq;
 pub mod engines;
 pub mod expr;
 #[cfg(feature = "gate")]
@@ -198,6 +201,8 @@ pub const NAMES: &[&str] = &[
     "drive",
     #[cfg(feature = "eq")]
     "eq",
+    #[cfg(feature = "eq")]
+    "dyn_eq",
     #[cfg(feature = "comp")]
     "comp",
     #[cfg(feature = "delay")]
@@ -254,6 +259,8 @@ pub fn sources_of(name: &str) -> &'static [ModSourceSpec] {
         "gate" => gate::SOURCES,
         #[cfg(feature = "comp")]
         "comp" => comp::SOURCES,
+        #[cfg(feature = "eq")]
+        "dyn_eq" => dyn_eq::SOURCES,
         _ => &[],
     }
 }

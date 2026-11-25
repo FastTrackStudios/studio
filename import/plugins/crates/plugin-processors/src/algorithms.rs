@@ -473,6 +473,7 @@ const BUILT_IN: &[(&str, &str)] = &[
 /// Each family's algorithm when a preset names none.
 pub const DEFAULTS: &[(&str, &str)] = &[
     ("eq", "parametric"),
+    ("dyn_eq", "dynamic"),
     ("reverb", "plate"),
     ("delay", "tape"),
     ("comp", "generic"),
@@ -487,6 +488,7 @@ pub const DEFAULTS: &[(&str, &str)] = &[
 fn identity_id(engine_id: &str) -> &str {
     match engine_id {
         "eq.canonical@1" => "parametric",
+        "dyn_eq.bands@1" => "dynamic",
         "gain@1" => "gain",
         id => id
             .split_once('.')

@@ -9,6 +9,7 @@
 //! | engine | targets |
 //! |---|---|
 //! | `eq.canonical@1` | `band.{1..24}.{used,on,shape,freq,gain,q,slope}`, `gain_scale`, `output` |
+//! | `dyn_eq.bands@1` | `band.{1..4}.{used,shape,freq,q,gain,range,source,threshold,attack,hold,release}`, `velocity`, `output` |
 //! | `reverb.{room,hall,plate,spring,cloud,bloom,shimmer,chorale,magneto,nonlinear,swell,reflections,velvet,freeverb,random}@1` | the shared space controls (`decay`, `size`, `diffusion`, …) and the algorithm's own two (`extra_a`, `extra_b`) |
 //! | `delay.{tape,clean,bbd,lofi,shimmer,reverse,pitch,rhythm,drum,oilcan,multitap,spectral,filter,reverb}@1` | `time`, `feedback`, `mix`, `high_cut`, `low_cut`, `width`, `drive`, `wow`, `flutter` |
 //! | `comp.generic@1`, `saturate.preamp@1`, `gate.drum@1`, `gain@1` | the effect's own parameters |
@@ -60,6 +61,12 @@ pub fn all() -> alloc::vec::Vec<EngineInfo> {
         family: "eq",
         name: "FTS EQ",
     });
+    #[cfg(feature = "eq")]
+    out.push(EngineInfo {
+        id: "dyn_eq.bands@1",
+        family: "dyn_eq",
+        name: "Dynamic EQ",
+    });
     #[cfg(feature = "reverb")]
     out.extend(reverb::ALGORITHMS.iter().map(|a| EngineInfo {
         id: a.engine_id,
@@ -88,6 +95,8 @@ pub fn targets_of(id: &str) -> Option<&'static [ParamSpec]> {
         "comp.generic@1" => crate::comp::PARAMS,
         #[cfg(feature = "eq")]
         "eq.canonical@1" => eq::targets(),
+        #[cfg(feature = "eq")]
+        "dyn_eq.bands@1" => crate::dyn_eq::targets(),
         #[cfg(feature = "reverb")]
         id if reverb::find(id).is_some() => reverb::TARGETS,
         #[cfg(feature = "delay")]
@@ -121,6 +130,11 @@ pub fn build(
             .map(|c| Box::new(c) as Box<dyn BlockProcessor>),
         #[cfg(feature = "eq")]
         "eq.canonical@1" => Ok(Box::new(eq::CanonicalEqEngine::new(sample_rate, max_block))),
+        #[cfg(feature = "eq")]
+        "dyn_eq.bands@1" => Ok(Box::new(crate::dyn_eq::DynEqEngine::new(
+            sample_rate,
+            max_block,
+        ))),
         #[cfg(feature = "reverb")]
         id if reverb::find(id).is_some() => {
             let algo = reverb::find(id)?;
