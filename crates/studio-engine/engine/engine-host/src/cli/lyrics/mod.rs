@@ -312,7 +312,7 @@ fn chart_header(line: &str) -> (String, Vec<String>) {
 
 /// SONGSTART to SONGEND of a chart, in seconds.
 fn song_length(chart: &str) -> Option<f64> {
-    let layout = session::setlist::chart_import::chart_to_layout(chart).ok()?;
+    let layout = engine_domain::setlist::chart_import::chart_to_layout(chart).ok()?;
     let length = layout.song_end_seconds - layout.song_start_seconds;
     (length > 0.0).then_some(length)
 }

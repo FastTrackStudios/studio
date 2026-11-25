@@ -1,0 +1,33 @@
+[package]
+name = "engine-sync"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "The live session document bridged to a DAW engine: reading a project into the document and applying remote changes to it (daw-control, daw-standalone)"
+
+[lints]
+workspace = true
+
+[features]
+# The document's network lanes and shared clock (session-sync's `net`).
+net = ["session-sync/net"]
+
+[dependencies]
+session-sync = { workspace = true }
+daw = { workspace = true }
+daw-control = { workspace = true }
+daw-proto = { workspace = true }
+daw-standalone = { workspace = true }
+eyre = { workspace = true }
+loro = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+daw = { workspace = true, features = ["standalone"] }
+daw-standalone = { workspace = true, features = ["audio", "bootstrap", "decode", "rpp-project", "session-file"] }
+session-format = { workspace = true, features = ["store"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

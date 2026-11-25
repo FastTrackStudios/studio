@@ -1,0 +1,690 @@
+//! One peer's engine, kept in step with the shared doc.
+//!
+//! The bridge remembers the model the engine last showed. A local edit is
+//! a difference between that and a fresh read of the engine, and goes into
+//! the doc; a remote edit is a difference between that and the doc, and
+//! goes into the engine. Either way the remembered model moves to the
+//! engine's new state, so the engine never hears its own edit back and the
+//! doc never records a remote edit twice.
+//!
+//! Undo is the doc's too ([`Bridge::undo`]): this peer's own steps,
+//! undone in the doc — where another peer's edits since stay as they are —
+//! and the engine made to match.
+//!
+//! A project has one bridge in a process ([`claim`]): a second is refused.
+//! Anything else that must follow the song — a live set's doc of it — is
+//! kept in step with the bridge's doc, not with the engine
+//! ([`crate::relay`]).
+
+use daw_control::Project;
+
+use crate::align;
+use crate::diff::{Change, diff};
+use crate::doc::{ORIGIN_LOCAL, SessionDoc, Touched, Watch};
+use crate::engine::{self, Blobs, Direct, EngineIds, MediaRoot};
+use crate::model::SessionModel;
+
+pub mod check;
+pub mod claim;
+
+pub use check::{Check, Checked};
+pub use claim::AlreadyBridged;
+use claim::{Claim, engine_of};
+
+pub struct Bridge {
+    /// This bridge's hold on its project: the only bridge on it here.
+    claim: Claim,
+    doc: SessionDoc,
+    project: Project,
+    media: MediaRoot,
+    /// Where FX state is kept (the project's store).
+    blobs: std::sync::Arc<dyn Blobs>,
+    /// Which engine FX and item each doc FX and item is, here.
+    ids: EngineIds,
+    /// The engine's own services, when it runs in this process.
+    direct: Option<std::sync::Arc<dyn Direct>>,
+    /// What the engine showed after the last reconcile, chart included.
+    shown: SessionModel,
+    /// Where the engine's journals stood when `shown` was read, when it
+    /// was read whole from an engine in this process: a step reads again
+    /// only what changed since ([`engine::Since`]). `None`: read it whole.
+    cursor: Option<u64>,
+    /// This peer's steps, to undo and redo — from when the bridge began,
+    /// so opening a song is not a step.
+    undo: loro::UndoManager,
+    /// The name the next step pushed onto either stack is given.
+    naming: std::sync::Arc<std::sync::Mutex<String>>,
+    /// What changes to the doc have touched since the engine last matched
+    /// it — so a remote edit or an undo reads back only that.
+    watch: Watch,
+    /// Steps the engine finished since this peer's last recorded one that
+    /// changed nothing the doc holds, by name, last on top. Each is undone
+    /// first, as nothing: an undo never reaches past a step the person
+    /// took to the one before it.
+    quiet: Vec<String>,
+    /// Where the engine differed from the doc after the last apply, as
+    /// read back ([`Self::last_apply_drift`]).
+    applied_drift: Vec<crate::drift::Drift>,
+}
+
+/// A local step read off the engine ([`Bridge::read_step`]): what the
+/// engine showed before it and after.
+pub struct LocalRead {
+    before: SessionModel,
+    now: SessionModel,
+}
+
+/// Writes a bridge's read steps into its doc ([`Bridge::writer`]).
+pub struct StepWriter {
+    doc: SessionDoc,
+    naming: std::sync::Arc<std::sync::Mutex<String>>,
+}
+
+impl StepWriter {
+    /// Write `read` into the doc as one commit named `label` (the undo
+    /// stack's step of that name): only what changed.
+    ///
+    /// # Errors
+    /// When the doc cannot be written.
+    pub fn write(&self, read: &LocalRead, label: &str) -> eyre::Result<()> {
+        if let Ok(mut naming) = self.naming.lock() {
+            label.clone_into(&mut naming);
+        }
+        tracing::info_span!("bridge.write_step").in_scope(|| {
+            self.doc
+                .write_step(&read.before, &read.now, ORIGIN_LOCAL, label)
+        })?;
+        Ok(())
+    }
+}
+
+/// An undo manager on `doc` whose steps carry the name `naming` holds
+/// when each is pushed.
+fn undo_manager(doc: &SessionDoc) -> (loro::UndoManager, std::sync::Arc<std::sync::Mutex<String>>) {
+    let naming = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let mut undo = loro::UndoManager::new(doc.loro());
+    undo.set_max_undo_steps(UNDO_STEPS);
+    let named = std::sync::Arc::clone(&naming);
+    undo.set_on_push(Some(Box::new(move |_, _, _| {
+        let name = named.lock().map(|n| n.clone()).unwrap_or_default();
+        loro::undo::UndoItemMeta {
+            value: loro::LoroValue::from(name),
+            cursors: Vec::new(),
+        }
+    })));
+    (undo, naming)
+}
+
+/// How many steps back a song can be undone.
+const UNDO_STEPS: usize = 200;
+
+fn name_of(value: Option<loro::LoroValue>) -> String {
+    match value {
+        Some(loro::LoroValue::String(name)) => name.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// The engine's `project` as it is now, written into `doc` once.
+///
+/// There is no bridge, so nothing follows it after, and none is held: what a copy of
+/// a song saved elsewhere, or a check against its file, reads while the
+/// song keeps its own bridge. Returns what was written.
+///
+/// # Errors
+/// When the engine cannot be read or the doc cannot be written.
+pub async fn write_once(
+    project: &Project,
+    media: &MediaRoot,
+    doc: &SessionDoc,
+    chart: String,
+    blobs: &dyn Blobs,
+    direct: Option<&dyn Direct>,
+) -> eyre::Result<SessionModel> {
+    let mut now = engine::read(project, media, blobs, &EngineIds::default(), direct).await?;
+    now.chart = chart;
+    doc.write(&now, ORIGIN_LOCAL)?;
+    Ok(now)
+}
+
+impl Bridge {
+    /// Start a session from this engine: the engine is the truth, the doc
+    /// is written from it. `chart` is the song's chart text.
+    ///
+    /// # Errors
+    /// When the engine cannot be read or the doc cannot be written.
+    pub async fn host(
+        project: Project,
+        media: MediaRoot,
+        doc: SessionDoc,
+        chart: String,
+        blobs: std::sync::Arc<dyn Blobs>,
+        direct: Option<std::sync::Arc<dyn Direct>>,
+    ) -> eyre::Result<Self> {
+        let claim = Claim::take(engine_of(direct.as_deref()), project.guid())?;
+        let ids = EngineIds::default();
+        let mut shown =
+            engine::read(&project, &media, blobs.as_ref(), &ids, direct.as_deref()).await?;
+        shown.chart = chart;
+        doc.write(&shown, ORIGIN_LOCAL)?;
+        let (undo, naming) = undo_manager(&doc);
+        let watch = doc.watch();
+        let bridge = Self {
+            cursor: None,
+            claim,
+            doc,
+            project,
+            media,
+            blobs,
+            ids,
+            direct,
+            shown,
+            undo,
+            naming,
+            watch,
+            quiet: Vec::new(),
+            applied_drift: Vec::new(),
+        };
+        // What the engine showed is what the doc now holds.
+        bridge.take_touched();
+        Ok(bridge)
+    }
+
+    /// Join a session: `doc` already holds the host's state (imported
+    /// before calling this), and the engine is made to match it —
+    /// whatever it had open is replaced, never written into the doc.
+    ///
+    /// What the engine already holds as the doc does is kept, not made
+    /// again: its FX and MIDI items under the engine's own guids are
+    /// taken for the doc's ([`Self::adopt`]), so a song built from its
+    /// file and joined to a live set holding the same song is built once.
+    ///
+    /// # Errors
+    /// When the engine cannot be read or an engine call fails.
+    pub async fn join(
+        project: Project,
+        media: MediaRoot,
+        doc: SessionDoc,
+        blobs: std::sync::Arc<dyn Blobs>,
+        direct: Option<std::sync::Arc<dyn Direct>>,
+    ) -> eyre::Result<Self> {
+        use tracing::Instrument as _;
+        // Each step its own span, under the song's build: where a join's
+        // time goes.
+        let claim = Claim::take(engine_of(direct.as_deref()), project.guid())?;
+        let ids = EngineIds::default();
+        let current = engine::read(&project, &media, blobs.as_ref(), &ids, direct.as_deref())
+            .instrument(tracing::info_span!("bridge.read_engine"))
+            .await?;
+        let (undo, naming) = tracing::info_span!("bridge.undo").in_scope(|| undo_manager(&doc));
+        let watch = doc.watch();
+        let mut bridge = Self {
+            cursor: None,
+            claim,
+            doc,
+            project,
+            media,
+            blobs,
+            ids,
+            direct,
+            shown: current,
+            undo,
+            naming,
+            watch,
+            quiet: Vec::new(),
+            applied_drift: Vec::new(),
+        };
+        // The whole doc, whatever the watch has seen so far.
+        tracing::info_span!("bridge.take_touched").in_scope(|| bridge.take_touched());
+        let touched = Touched::everything();
+        let target = tracing::info_span!("bridge.read_doc")
+            .in_scope(|| bridge.doc.read_touched(&bridge.shown, &touched));
+        tracing::info_span!("bridge.adopt").in_scope(|| bridge.adopt(&target));
+        bridge
+            .make_match(target, &touched)
+            .instrument(tracing::info_span!(
+                "bridge.make_match",
+                bridge.changes = tracing::field::Empty
+            ))
+            .await?;
+        Ok(bridge)
+    }
+
+    /// This bridge's song, kept in step with `doc` from now on — a song
+    /// built from its file and then joined to a live set's doc of it. What
+    /// the bridge knows of the engine (what it showed, which engine FX and
+    /// item each entry is) holds, so the engine is not read again; it is
+    /// made to match `doc` as [`Self::join`] makes it, and what it already
+    /// holds as the doc does is kept, not made again. Undo starts here.
+    ///
+    /// # Errors
+    /// When an engine call fails.
+    pub async fn rejoin(mut self, doc: SessionDoc) -> eyre::Result<Self> {
+        self.switch_doc(doc).await?;
+        Ok(self)
+    }
+
+    /// [`Self::rejoin`] in place: the bridge kept on `doc` from now on,
+    /// the engine made to match it. Returns the steps the engine took.
+    /// Undo starts here; the steps on the doc it leaves stay with that
+    /// doc.
+    ///
+    /// # Errors
+    /// When an engine call fails. The bridge is on `doc` either way, and
+    /// the engine re-read, so the next remote pass reconciles the rest.
+    pub async fn switch_doc(&mut self, doc: SessionDoc) -> eyre::Result<Vec<Change>> {
+        let (undo, naming) = undo_manager(&doc);
+        self.watch = doc.watch();
+        self.doc = doc;
+        self.undo = undo;
+        self.naming = naming;
+        self.quiet.clear();
+        self.cursor = None;
+        self.take_touched();
+        let touched = Touched::everything();
+        let target = self.doc.read_touched(&self.shown, &touched);
+        self.adopt(&target);
+        self.make_match(target, &touched).await
+    }
+
+    /// Take what the engine shows as `target`'s where the two differ only
+    /// in what each calls an FX or an item ([`align::renames`]): the
+    /// engine's guids bound to the doc's ids, and what it showed renamed.
+    fn adopt(&mut self, target: &SessionModel) {
+        let renames = align::renames(&self.shown, target);
+        self.ids.rename(&renames);
+        renames.apply(&mut self.shown);
+    }
+
+    /// This bridge, kept on `project` from now on: the same song moved
+    /// whole into another engine (a song built on a
+    /// [`daw_standalone::sync::Stage`] and landed), under the same guids —
+    /// so what the bridge knows of it (what the engine showed, which
+    /// engine FX and item each doc entry is, its undo steps and what the
+    /// doc has touched) holds there as it did here, and nothing is
+    /// applied or read again.
+    ///
+    /// The bridge's claim moves with it: the stage's project is let go,
+    /// `project` held.
+    ///
+    /// # Errors
+    /// `project` already has a bridge here ([`AlreadyBridged`]).
+    pub fn moved_to(
+        self,
+        project: Project,
+        direct: Option<std::sync::Arc<dyn Direct>>,
+    ) -> eyre::Result<Self> {
+        let claim = Claim::take(engine_of(direct.as_deref()), project.guid())?;
+        Ok(Self {
+            claim,
+            project,
+            direct,
+            cursor: None,
+            ..self
+        })
+    }
+
+    /// Join a session while this device is locked ([`crate::Hold`]):
+    /// as [`Self::join`], except the engine is left as it is — the doc's
+    /// state waits for [`Self::merge_held`]. Until then the engine is what
+    /// this bridge last showed, so an edit made here meanwhile is recorded
+    /// as an edit (only what it changed), not as the whole engine.
+    ///
+    /// At the merge the doc wins for anything this device did not change
+    /// after joining: what the engine held before it joined is replaced,
+    /// as an unlocked join replaces it.
+    ///
+    /// # Errors
+    /// When the engine cannot be read.
+    pub async fn join_held(
+        project: Project,
+        media: MediaRoot,
+        doc: SessionDoc,
+        blobs: std::sync::Arc<dyn Blobs>,
+        direct: Option<std::sync::Arc<dyn Direct>>,
+    ) -> eyre::Result<Self> {
+        let claim = Claim::take(engine_of(direct.as_deref()), project.guid())?;
+        let ids = EngineIds::default();
+        let current =
+            engine::read(&project, &media, blobs.as_ref(), &ids, direct.as_deref()).await?;
+        let (undo, naming) = undo_manager(&doc);
+        // Starts as "everything touched": the merge reads the doc whole.
+        let watch = doc.watch();
+        let target = doc.read();
+        let mut bridge = Self {
+            cursor: None,
+            claim,
+            doc,
+            project,
+            media,
+            blobs,
+            ids,
+            direct,
+            shown: current,
+            undo,
+            naming,
+            watch,
+            quiet: Vec::new(),
+            applied_drift: Vec::new(),
+        };
+        // What it holds as the doc does is not an edit made here.
+        bridge.adopt(&target);
+        Ok(bridge)
+    }
+
+    /// The device was unlocked: merge what the lock held. This engine's
+    /// own edits since the lock go into the doc first, as one step named
+    /// `label` — only what they changed, so the others' edits already in
+    /// the doc stay — then the engine is made to match the doc, which now
+    /// holds both. Returns the steps the engine took, as
+    /// [`Self::remote_changed`] does.
+    ///
+    /// # Errors
+    /// When the engine cannot be read, the doc written, or an engine call
+    /// fails.
+    pub async fn merge_held(&mut self, label: &str) -> eyre::Result<Vec<Change>> {
+        self.local_step(label).await?;
+        self.remote_changed().await
+    }
+
+    /// The shared doc — for the sync driver to import into and export from.
+    #[must_use]
+    pub const fn doc(&self) -> &SessionDoc {
+        &self.doc
+    }
+
+    /// What the engine showed at the last reconcile.
+    #[must_use]
+    pub const fn shown(&self) -> &SessionModel {
+        &self.shown
+    }
+
+    /// The engine may have changed locally: read it, and record any
+    /// difference in the doc. Returns whether anything was recorded.
+    ///
+    /// # Errors
+    /// When the engine cannot be read or the doc cannot be written.
+    pub async fn local_changed(&mut self) -> eyre::Result<bool> {
+        let at = self.journal_now();
+        let mut now = engine::read(
+            &self.project,
+            &self.media,
+            self.blobs.as_ref(),
+            &self.ids,
+            self.direct.as_deref(),
+        )
+        .await?;
+        now.chart.clone_from(&self.shown.chart);
+        if now == self.shown {
+            return Ok(false);
+        }
+        self.name_next("Edits");
+        self.doc.write(&now, ORIGIN_LOCAL)?;
+        self.shown = now;
+        self.cursor = at;
+        self.quiet.clear();
+        Ok(true)
+    }
+
+    /// The engine finished an edit step named `label`: read it, and record
+    /// what changed as one commit of that name — only what differs
+    /// written. Returns whether anything was recorded.
+    ///
+    /// A step that changed nothing the doc holds (the doc holds the whole
+    /// project, so: nothing a collaborator or an undo could see) records
+    /// no commit — there is nothing to send anyone — but is kept as a
+    /// quiet step: the next [`Self::undo`] undoes it, as nothing, rather
+    /// than the step before it.
+    ///
+    /// # Errors
+    /// When the engine cannot be read or the doc cannot be written.
+    pub async fn local_step(&mut self, label: &str) -> eyre::Result<bool> {
+        let Some(read) = self.read_step(label).await? else {
+            return Ok(false);
+        };
+        self.writer().write(&read, label)?;
+        Ok(true)
+    }
+
+    /// [`Self::local_step`]'s first half: the engine read and compared,
+    /// and what it shows now taken as shown — the doc not yet written.
+    /// `None`: the step changed nothing (kept as a quiet step). The doc
+    /// must be written with [`StepWriter::write`] (this bridge's
+    /// [`Self::writer`]) before anything reads it against what is shown;
+    /// steps read one after another are written in the same order.
+    ///
+    /// # Errors
+    /// When the engine cannot be read.
+    pub async fn read_step(&mut self, label: &str) -> eyre::Result<Option<LocalRead>> {
+        use tracing::Instrument as _;
+        let at = self.journal_now();
+        let since = self.cursor.map(|cursor| engine::Since {
+            before: &self.shown,
+            cursor,
+        });
+        let mut now = engine::read_keeping(
+            &self.project,
+            &self.media,
+            self.blobs.as_ref(),
+            &self.ids,
+            self.direct.as_deref(),
+            None,
+            since,
+        )
+        .instrument(tracing::info_span!("bridge.read_engine"))
+        .await?;
+        self.cursor = at;
+        now.chart.clone_from(&self.shown.chart);
+        let same = tracing::info_span!("bridge.compare").in_scope(|| now == self.shown);
+        if same {
+            if self.quiet.len() >= UNDO_STEPS {
+                self.quiet.remove(0);
+            }
+            self.quiet.push(label.to_owned());
+            return Ok(None);
+        }
+        let before = std::mem::replace(&mut self.shown, now.clone());
+        self.quiet.clear();
+        Ok(Some(LocalRead { before, now }))
+    }
+
+    /// What writes this bridge's read steps into its doc: a handle on the
+    /// doc and the undo stack's naming, usable without the bridge (a long
+    /// write holds nothing of it).
+    #[must_use]
+    pub fn writer(&self) -> StepWriter {
+        StepWriter {
+            doc: self.doc.clone(),
+            naming: std::sync::Arc::clone(&self.naming),
+        }
+    }
+
+    /// Undo this peer's last step: in the doc, then in the engine. Returns
+    /// its name, or `None` with nothing to undo.
+    ///
+    /// # Errors
+    /// When the doc cannot undo or the engine cannot be made to match.
+    pub async fn undo(&mut self) -> eyre::Result<Option<String>> {
+        // A step that changed nothing is undone as nothing.
+        if let Some(name) = self.quiet.pop() {
+            return Ok(Some(name));
+        }
+        if !self.undo.can_undo() {
+            return Ok(None);
+        }
+        let name = name_of(self.undo.top_undo_value());
+        // Its redo goes by the same name.
+        self.name_next(&name);
+        self.undo.undo()?;
+        self.remote_changed().await?;
+        Ok(Some(name))
+    }
+
+    /// Redo the step last undone: in the doc, then in the engine. Returns
+    /// its name, or `None` with nothing to redo.
+    ///
+    /// # Errors
+    /// When the doc cannot redo or the engine cannot be made to match.
+    pub async fn redo(&mut self) -> eyre::Result<Option<String>> {
+        if !self.undo.can_redo() {
+            return Ok(None);
+        }
+        let name = name_of(self.undo.top_redo_value());
+        self.name_next(&name);
+        self.undo.redo()?;
+        self.remote_changed().await?;
+        Ok(Some(name))
+    }
+
+    /// The name of the step that would be undone next, if any.
+    #[must_use]
+    pub fn next_undo(&self) -> Option<String> {
+        self.quiet.last().cloned().or_else(|| {
+            self.undo
+                .can_undo()
+                .then(|| name_of(self.undo.top_undo_value()))
+        })
+    }
+
+    /// The name of the step that would be redone next, if any.
+    #[must_use]
+    pub fn next_redo(&self) -> Option<String> {
+        self.undo
+            .can_redo()
+            .then(|| name_of(self.undo.top_redo_value()))
+    }
+
+    fn name_next(&self, name: &str) {
+        if let Ok(mut naming) = self.naming.lock() {
+            name.clone_into(&mut naming);
+        }
+    }
+
+    /// Bring the song back to `past` — the doc as it was at an earlier
+    /// step, read off a fork of it at that step's frontier — as one new
+    /// local step named `label`: written over what the doc holds now, so it
+    /// is undone like any step and nothing of the history is rewritten;
+    /// then the engine made to match. What a collaborator sent first is
+    /// applied first, so the step is written over the doc as it is.
+    ///
+    /// # Errors
+    /// When the doc cannot be written or the engine made to match.
+    pub async fn restore(&mut self, past: SessionModel, label: &str) -> eyre::Result<Vec<Change>> {
+        self.remote_changed().await?;
+        self.name_next(label);
+        tracing::info_span!("bridge.write_step")
+            .in_scope(|| self.doc.write_step(&self.shown, &past, ORIGIN_LOCAL, label))?;
+        self.quiet.clear();
+        // Its own write: nothing for the engine to be told of but `past`.
+        drop(self.take_touched());
+        self.make_match(past, &Touched::everything()).await
+    }
+
+    /// The chart was edited locally.
+    ///
+    /// # Errors
+    /// When the doc cannot be written.
+    pub fn chart_changed(&mut self, chart: &str) -> eyre::Result<()> {
+        if self.shown.chart == chart {
+            return Ok(());
+        }
+        self.shown.chart = chart.to_string();
+        self.name_next("Edit chart");
+        self.doc.write(&self.shown, ORIGIN_LOCAL)?;
+        self.quiet.clear();
+        Ok(())
+    }
+
+    /// The doc changed remotely: make the engine match it. Returns the
+    /// steps taken — a caller redraws from them, and a `ChartChanged`
+    /// among them is the chart editor's to show.
+    ///
+    /// # Errors
+    /// When an engine call fails. The engine is re-read either way, so a
+    /// half-applied change is reconciled on the next call.
+    pub async fn remote_changed(&mut self) -> eyre::Result<Vec<Change>> {
+        let touched = self.take_touched();
+        if touched.is_empty() {
+            return Ok(Vec::new());
+        }
+        let target = self.doc.read_touched(&self.shown, &touched);
+        self.make_match(target, &touched).await
+    }
+
+    /// Make the engine match `target`, the doc as read for `touched`.
+    async fn make_match(
+        &mut self,
+        target: SessionModel,
+        touched: &Touched,
+    ) -> eyre::Result<Vec<Change>> {
+        use tracing::Instrument as _;
+        let changes = tracing::info_span!("bridge.diff").in_scope(|| diff(&self.shown, &target));
+        tracing::Span::current().record("bridge.changes", changes.len());
+        if changes.is_empty() {
+            return Ok(changes);
+        }
+        let apply = tracing::info_span!("bridge.apply", bridge.changes = changes.len());
+        let applied = engine::apply(
+            &self.project,
+            &self.media,
+            &changes,
+            &target,
+            self.blobs.as_ref(),
+            &mut self.ids,
+            self.direct.as_deref(),
+        )
+        .instrument(apply)
+        .await;
+        // The tracks read again only if a change could have touched them.
+        let keep =
+            (!touched.everything && !touched.parts.tracks).then(|| self.shown.tracks.clone());
+        let at = self.journal_now();
+        let mut now = engine::read_keeping(
+            &self.project,
+            &self.media,
+            self.blobs.as_ref(),
+            &self.ids,
+            self.direct.as_deref(),
+            keep,
+            None,
+        )
+        .instrument(tracing::info_span!("bridge.read_back"))
+        .await?;
+        // What the engine took of what it was given: the doc's model and
+        // what was read back, compared (the chart is not the engine's).
+        // A failed apply is its own error, not checked.
+        if applied.is_ok() {
+            let check = crate::drift::span("apply");
+            self.applied_drift = check.in_scope(|| {
+                let found = crate::drift::drift(&now, &target);
+                crate::drift::report("apply", &found);
+                found
+            });
+        }
+        now.chart = target.chart;
+        self.shown = now;
+        self.cursor = at;
+        applied?;
+        Ok(changes)
+    }
+
+    /// Where the engine's journals stand now, when the engine is in this
+    /// process — taken before a read, so a write during it is read again.
+    fn journal_now(&self) -> Option<u64> {
+        self.direct
+            .as_ref()
+            .and_then(|d| d.standalone())
+            .map(|_| daw_standalone::journal::now())
+    }
+
+    /// What the doc's changes have touched since last asked, cleared.
+    fn take_touched(&self) -> Touched {
+        self.watch
+            .touched
+            .lock()
+            .map_or_else(|_| Touched::everything(), |mut t| std::mem::take(&mut *t))
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -209,7 +209,7 @@ fn main() -> ExitCode {
                             read.has_part(session_format::read::SESSION, "main")
                         );
                         if let Ok(doc) = read.doc("main") {
-                            let p = session::sync::SessionDoc::from_loro(doc).read();
+                            let p = session_sync::SessionDoc::from_loro(doc).read();
                             let _ = writeln!(
                                 out,
                                 "  engine@main: {} tracks, {} items, {} markers, {} regions, tempo {}",

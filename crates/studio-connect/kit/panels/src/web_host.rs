@@ -85,7 +85,7 @@ fn DemoView(
 ) -> Element {
     use crate::compact::{CompactShell, PhoneView};
     use crate::shell::{SAFE_AREA, TopBar, View};
-    use session::modes::Mode;
+    use engine_domain::modes::Mode;
 
     // Audio starts on the page's first press or key: the only place a
     // browser allows it.
@@ -447,7 +447,7 @@ fn SongViews(
     // The song as the views read it (daw-view's), beside Studio's session.
     use_context_provider(|| session.song());
     use_context_provider(|| session);
-    let mode: Signal<session::modes::Mode> = use_context();
+    let mode: Signal<engine_domain::modes::Mode> = use_context();
     rsx! {
         crate::shell::PinnedProgress { view: view() }
         div {
@@ -455,7 +455,7 @@ fn SongViews(
             match view() {
                 View::Setup => rsx! { crate::setup::SetupView {} },
                 View::Performance => rsx! {
-                    if mode() == session::modes::Mode::Record {
+                    if mode() == engine_domain::modes::Mode::Record {
                         crate::record_view::RecordView {}
                     } else {
                         WebPerformance {}
@@ -735,7 +735,7 @@ fn HostedNote(text: String) -> Element {
 
 #[component]
 fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Element {
-    use session::modes::Mode;
+    use engine_domain::modes::Mode;
     use_hook(crate::web_audio::unlock_on_first_gesture);
     let mode = use_signal(|| Mode::Live);
     use_context_provider(|| mode);

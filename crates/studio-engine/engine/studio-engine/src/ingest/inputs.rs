@@ -121,8 +121,8 @@ pub fn song_at(file: &Path) -> SongSource {
 /// Focus`, `empty-focus`).
 #[must_use]
 pub fn identity(stem: &str) -> (String, String) {
-    let title = session::library::without_track_number(stem).to_owned();
-    let slug = session::library::slugify(&title);
+    let title = library_sync::without_track_number(stem).to_owned();
+    let slug = library_sync::slugify(&title);
     (title, slug)
 }
 

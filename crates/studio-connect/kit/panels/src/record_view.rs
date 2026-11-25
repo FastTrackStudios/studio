@@ -15,7 +15,7 @@
 //! - **At the bottom**, the transport, with Record where Loop is.
 
 use dioxus::prelude::*;
-use session::ui::components::{MeasureIndicator, SectionProgressBar};
+use studio_ui::components::{MeasureIndicator, SectionProgressBar};
 
 use crate::compact::{Form, use_form};
 use crate::engine::{Move, transport};
@@ -134,7 +134,7 @@ pub struct PickSong(pub Callback<usize>);
 /// of record mode.
 #[component]
 fn RecordMenu(height: String) -> Element {
-    use session::modes::Mode;
+    use engine_domain::modes::Mode;
     let setlist = try_use_context::<Signal<crate::setlist::Setlist>>();
     let pick = try_use_context::<PickSong>();
     let mode = try_use_context::<Signal<Mode>>();

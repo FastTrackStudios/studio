@@ -53,7 +53,11 @@ editor-state = { workspace = true, optional = true }
 # The chart editor's worker replies over it (what `use_coroutine` hands out).
 futures-channel = { workspace = true, optional = true }
 # The modes, the lyrics, the setlist's components the panels draw.
-session = { workspace = true, features = ["library", "ui", "web"] }
+engine-domain = { workspace = true }
+session-sync = { workspace = true }
+studio-proto = { workspace = true }
+studio-ui = { workspace = true, features = ["web"] }
+fts-session = { workspace = true }
 # The bars' icons.
 lucide-dioxus = { workspace = true }
 # The chart's numbers and names, the key.
@@ -121,8 +125,8 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 [features]
 default = ["native"]
 # daw-view-kit's features, forwarded, with what the panels' own code needs.
-native = ["mixer-view/native", "daw-view-kit/native", "midi-editor/native", "dep:patch-list", "dep:anyrender_vello", "engine-client/native", "dep:dioxus-native", "dep:zbus", "dep:dirs", "dep:winit", "dep:tokio", "dep:editor-view", "editor-view/native", "session/chart-editor", "dep:editor-state", "dep:futures-channel", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "session/library", "session/project-sync"]
-web = ["dep:studio-engine", "studio-engine/web", "mixer-view/web", "daw-view-kit/web", "midi-editor/web", "engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "session/collab", "dep:architect", "dep:futures-channel"]
+native = ["mixer-view/native", "daw-view-kit/native", "midi-editor/native", "dep:patch-list", "dep:anyrender_vello", "engine-client/native", "dep:dioxus-native", "dep:zbus", "dep:dirs", "dep:winit", "dep:tokio", "dep:editor-view", "editor-view/native", "studio-ui/chart-editor", "dep:editor-state", "dep:futures-channel", "dep:futures-util", "session-sync/net", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer"]
+web = ["dep:studio-engine", "studio-engine/web", "mixer-view/web", "daw-view-kit/web", "midi-editor/web", "engine-client/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "session-sync/net", "dep:architect", "dep:futures-channel"]
 # The engine in this process (daw-view-kit's `engine`): the chart editor,
 # the hosted page.
 engine = ["dep:studio-engine"]

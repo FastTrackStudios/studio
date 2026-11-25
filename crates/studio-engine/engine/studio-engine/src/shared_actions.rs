@@ -176,13 +176,13 @@ pub struct PhaseArg {
 pub fn pick_phase(
     mode: Option<&str>,
     phase: &str,
-) -> Result<(session::modes::Mode, &'static str), String> {
+) -> Result<(engine_domain::modes::Mode, &'static str), String> {
     let name = mode.unwrap_or("Edit");
-    let mode = session::modes::Mode::ALL
+    let mode = engine_domain::modes::Mode::ALL
         .into_iter()
         .find(|m| m.display_name().eq_ignore_ascii_case(name.trim()))
         .ok_or_else(|| format!("no mode {name}"))?;
-    let phases = session::mode_phases::of(mode);
+    let phases = engine_domain::mode_phases::of(mode);
     let found = phases
         .iter()
         .find(|p| {

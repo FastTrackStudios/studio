@@ -71,10 +71,10 @@ pub fn new_song(folder: &Path, title: &str, tempo: Option<Tempo>) -> Result<Made
     }
 
     // The engine's project: its tempo only.
-    let engine = session::sync::SessionDoc::new();
-    let mut model = session::sync::model::SessionModel::default();
+    let engine = session_sync::SessionDoc::new();
+    let mut model = session_sync::model::SessionModel::default();
     if let Some(t) = tempo {
-        model.tempo = vec![session::sync::model::TempoPoint {
+        model.tempo = vec![session_sync::model::TempoPoint {
             at: 0.0,
             bpm: t.bpm,
             beats_per_bar: t.beats_per_bar,

@@ -8,7 +8,7 @@
 
 use architect::action::{ActionList, Effect};
 use facet::Facet;
-use session::library::{Library, ListKind, Setlist, Song};
+use library_sync::{Library, ListKind, Setlist, Song};
 
 use crate::shared_actions::meta;
 

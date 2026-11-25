@@ -9,7 +9,7 @@
 //! is recognised by the ledger's record of the bytes sent and the address
 //! the server gave them.
 
-use session::library::publish::RemoteFile;
+use library_sync::publish::RemoteFile;
 
 /// Whether the WAVs travel too, or only what a set plays from elsewhere.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

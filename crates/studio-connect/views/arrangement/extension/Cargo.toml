@@ -30,7 +30,7 @@ daw-view-kit = { workspace = true, features = ["native"] }
 studio-panels = { workspace = true, features = ["native"] }
 arrangement-view = { workspace = true, features = ["native"] }
 engine-client = { workspace = true, features = ["native"] }
-session = { workspace = true }
+engine-domain = { workspace = true }
 daw-ui = { workspace = true }
 blitz-traits = { workspace = true }
 anyrender = { workspace = true }

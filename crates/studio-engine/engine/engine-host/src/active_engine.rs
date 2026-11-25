@@ -9,8 +9,8 @@
 //! those actions have no meaning against real REAPER, which owns that
 //! state itself.
 
-use session::SetlistServiceClient;
-use session::services::setlist_service::SetlistServiceStreamClient;
+use engine_domain::SetlistServiceClient;
+use engine_domain::services::setlist_service::SetlistServiceStreamClient;
 
 pub struct ActiveClients {
     pub client: SetlistServiceClient,

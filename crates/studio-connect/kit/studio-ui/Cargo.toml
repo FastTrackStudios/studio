@@ -1,0 +1,54 @@
+[package]
+name = "studio-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Studio's presentation components (props only): progress, lyrics, mixer, transport, the chart's text editor, the performance layout and its signals"
+
+[lints]
+workspace = true
+
+[features]
+# Builds for a browser page (dock's web half).
+web = ["dock/web"]
+# The desktop window: the same components with dock's web half.
+desktop = ["dock/web"]
+# The chart's text editor (`components::chart_text`): Keyflow source in the
+# editor (`editor-view`), coloured and checked as it is typed.
+chart-editor = ["dep:editor-view", "dep:editor-state", "dep:keyflow-editor-lang"]
+
+[dependencies]
+studio-proto = { workspace = true }
+architect = { workspace = true, features = ["local", "platform", "vox"] }
+architect-ui = { workspace = true }
+daw = { workspace = true }
+daw-proto = { workspace = true }
+dioxus = { workspace = true }
+dock = { workspace = true, features = ["ui"] }
+editor-state = { workspace = true, optional = true }
+editor-view = { workspace = true, optional = true }
+eyre = { workspace = true }
+futures-channel = { workspace = true }
+futures-util = { workspace = true }
+keyflow = { workspace = true, features = ["text", "engraver"] }
+keyflow-editor-lang = { workspace = true, optional = true }
+lucide-dioxus = { workspace = true }
+lyrics-ui = { workspace = true, features = ["lrc", "view"] }
+tracing = { workspace = true }
+transport-ui = { workspace = true }
+web-time = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The mixer's track grouping (monarchy sort), natively. An engine-group
+# adapter: to untangle (docs/MONOREPO-MIGRATION.md).
+dynamic-template = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = { workspace = true }
+gloo-timers = { workspace = true }
+web-sys = { workspace = true, features = ["Window", "Performance"] }
+
+[dev-dependencies]
+dioxus-ssr = { workspace = true }

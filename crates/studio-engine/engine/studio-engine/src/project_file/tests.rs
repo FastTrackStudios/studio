@@ -10,8 +10,8 @@ use std::time::Duration;
 use web_time::Instant;
 
 use daw::standalone::Standalone;
-use session::sync::relay::{Side, exchange, same_lineage, seed};
-use session::sync::{Bridge, SessionDoc};
+use engine_sync::relay::{Side, exchange, same_lineage, seed};
+use engine_sync::{Bridge, SessionDoc};
 use session_format::store::MAIN;
 
 fn runtime() -> tokio::runtime::Runtime {
@@ -65,15 +65,15 @@ fn has_its_one_bridge(daw: &Standalone, guid: &str) -> bool {
         let project = facade.daw.project(guid.to_owned()).await.expect("the song");
         let second = Bridge::host(
             project,
-            session::sync::engine::MediaRoot(std::path::PathBuf::from("/")),
+            engine_sync::engine::MediaRoot(std::path::PathBuf::from("/")),
             SessionDoc::new(),
             String::new(),
-            Arc::new(session::sync::engine::MemoryBlobs::default()),
+            Arc::new(engine_sync::engine::MemoryBlobs::default()),
             Some(Arc::new(daw.clone())),
         )
         .await;
         second.is_err_and(|e| {
-            e.downcast_ref::<session::sync::bridge::AlreadyBridged>()
+            e.downcast_ref::<engine_sync::bridge::AlreadyBridged>()
                 .is_some()
         })
     })

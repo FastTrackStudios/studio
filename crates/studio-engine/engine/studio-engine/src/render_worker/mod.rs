@@ -208,21 +208,21 @@ impl client::Song for LiveSong {
     fn snapshot(&self) -> Result<(Vec<u8>, Vec<u8>), String> {
         crate::project_file::with_song_doc(&self.guid, |doc| {
             let bytes = doc
-                .export(session::sync::loro::ExportMode::Snapshot)
+                .export(engine_sync::loro::ExportMode::Snapshot)
                 .map_err(|e| e.to_string())?;
             Ok((bytes, doc.oplog_vv().encode()))
         })?
     }
 
     fn updates_since(&self, vv: &[u8]) -> Result<Option<(Vec<u8>, Vec<u8>)>, String> {
-        let from = session::sync::loro::VersionVector::decode(vv).map_err(|e| e.to_string())?;
+        let from = engine_sync::loro::VersionVector::decode(vv).map_err(|e| e.to_string())?;
         crate::project_file::with_song_doc(&self.guid, |doc| {
             let now = doc.oplog_vv();
             if now == from {
                 return Ok(None);
             }
             let bytes = doc
-                .export(session::sync::loro::ExportMode::updates(&from))
+                .export(engine_sync::loro::ExportMode::updates(&from))
                 .map_err(|e| e.to_string())?;
             Ok(Some((bytes, now.encode())))
         })?

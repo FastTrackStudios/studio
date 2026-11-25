@@ -8,7 +8,7 @@
 //!    unloaded), then saved as the show's own project file,
 //!    `<Show>.session` — the whole show as one model;
 //! 2. each song is that model cropped to the song's range and moved to start
-//!    at zero (`session::sync::crop`), written fresh into
+//!    at zero (`engine_sync::crop`), written fresh into
 //!    `<into>/<slug>/<Song>.session`;
 //! 3. the show's media folders (`Samples/` …) are linked into each song's
 //!    folder, so a song names the very files the show does: nothing is
@@ -19,7 +19,7 @@
 
 use std::path::{Path, PathBuf};
 
-use session::sync::{ORIGIN_LOCAL, SessionDoc};
+use engine_sync::{ORIGIN_LOCAL, SessionDoc};
 use session_format::store::{MAIN, Store};
 
 /// One song made from a show.
@@ -73,7 +73,7 @@ pub fn split(set: &Path, into: &Path) -> eyre::Result<Vec<Song>> {
     let cards = ableton::setlist::sections(&live);
     let map = ableton::tempo::TempoMap::of(&live);
     for range in ranges {
-        let mut cropped = session::sync::crop::crop(&model, range.start_seconds, range.end_seconds);
+        let mut cropped = engine_sync::crop::crop(&model, range.start_seconds, range.end_seconds);
         name_song(&mut cropped, &range.name, &titles);
         let song_cards: Vec<Card> = ableton::setlist::sections_of(&cards, &range)
             .into_iter()
@@ -117,7 +117,7 @@ pub fn split(set: &Path, into: &Path) -> eyre::Result<Vec<Song>> {
 
 /// The show at `rpp` (media unloaded), saved as the project file `session`
 /// and read back as one model.
-fn show_model(rpp: &Path, session: &Path) -> eyre::Result<session::sync::SessionModel> {
+fn show_model(rpp: &Path, session: &Path) -> eyre::Result<engine_sync::SessionModel> {
     // Imported fresh every time: saving into an earlier import's file would
     // keep what that import made beside what this one does.
     for stale in [
@@ -155,8 +155,8 @@ fn show_model(rpp: &Path, session: &Path) -> eyre::Result<session::sync::Session
 /// for a song of the show (`titles`): the show's song locators became
 /// sections when it was prepared, so `Cinematic Intro` ran on over Drive
 /// To LA.
-fn name_song(song: &mut session::sync::SessionModel, name: &str, titles: &[String]) {
-    let lane = session::ruler_lanes::CoreLane::Song.lane_index();
+fn name_song(song: &mut engine_sync::SessionModel, name: &str, titles: &[String]) {
+    let lane = engine_domain::ruler_lanes::CoreLane::Song.lane_index();
     song.regions.retain(|_, region| {
         region.lane == Some(lane)
             || !titles
@@ -202,9 +202,9 @@ fn section_name(card: &str, song: &str) -> String {
 /// show's own markers made of it (one section over the whole show, its
 /// `SONGSTART` and `SONGEND`) goes: a song cut from it had no sections,
 /// and its progress bars and section strip were empty.
-fn lay_out_song(song: &mut session::sync::SessionModel, cards: &[Card], length: f64) {
-    use session::ruler_lanes::CoreLane;
-    use session::sync::model::{MarkerState, RegionState};
+fn lay_out_song(song: &mut engine_sync::SessionModel, cards: &[Card], length: f64) {
+    use engine_domain::ruler_lanes::CoreLane;
+    use engine_sync::model::{MarkerState, RegionState};
     let guid = || format!("{{{}}}", uuid::Uuid::new_v4().hyphenated()).to_uppercase();
     let (song_lane, sections, marks) = (
         CoreLane::Song.lane_index(),
@@ -220,7 +220,7 @@ fn lay_out_song(song: &mut session::sync::SessionModel, cards: &[Card], length: 
     if !cards.is_empty() {
         song.regions.retain(|_, r| r.lane == Some(song_lane));
     }
-    let mark = |song: &mut session::sync::SessionModel, name: &str, at: f64| {
+    let mark = |song: &mut engine_sync::SessionModel, name: &str, at: f64| {
         song.markers.insert(
             guid(),
             MarkerState {
@@ -273,7 +273,7 @@ pub const SHOW_TRACK: &str = "FTS:show_track";
 /// the same tracks — anything keyed by a track across songs collided (the
 /// window panicked on duplicate keys as a set's songs arrived together).
 /// Each track keeps its show track's guid under [`SHOW_TRACK`].
-fn fresh_track_guids(song: &mut session::sync::SessionModel) {
+fn fresh_track_guids(song: &mut engine_sync::SessionModel) {
     let fresh: std::collections::HashMap<String, String> = song
         .tracks
         .iter()
@@ -319,7 +319,7 @@ impl ShowPlace {
     const SECTION: &'static str = "FTS_SHOW";
 
     /// Recorded on `song`.
-    pub fn write(&self, song: &mut session::sync::SessionModel) {
+    pub fn write(&self, song: &mut engine_sync::SessionModel) {
         let section = song
             .project
             .ext
@@ -332,7 +332,7 @@ impl ShowPlace {
 
     /// Where `song` sits in its show, when it was cut from one.
     #[must_use]
-    pub fn of(song: &session::sync::SessionModel) -> Option<Self> {
+    pub fn of(song: &engine_sync::SessionModel) -> Option<Self> {
         let section = song.project.ext.get(Self::SECTION)?;
         Some(Self {
             show: section.get("show")?.clone(),
@@ -357,10 +357,7 @@ fn relative_to(path: &Path, from: &Path) -> String {
 /// not where the set says: the shortest tail of its path that is there
 /// (`Samples/Imported/Drums.wav`) — a set carried from the machine it was
 /// made on keeps its media inside its own project folder.
-fn relocate(
-    mut model: session::sync::SessionModel,
-    show_dir: &Path,
-) -> session::sync::SessionModel {
+fn relocate(mut model: engine_sync::SessionModel, show_dir: &Path) -> engine_sync::SessionModel {
     let mut moved = 0_usize;
     for item in model.items.values_mut() {
         for take in std::iter::once(&mut item.take).chain(item.other_takes.iter_mut()) {
@@ -407,11 +404,7 @@ fn rooted_under(path: &Path, dir: &Path) -> Option<String> {
 /// and costs no space, sharing the show's bytes on disk. Each file's proxy
 /// (`Proxies/<stem>.ogg` and its page index) comes too when the show has
 /// one. A link that cannot be made (another filesystem) is a copy.
-fn bring_media(
-    song: &session::sync::SessionModel,
-    show_dir: &Path,
-    dir: &Path,
-) -> eyre::Result<()> {
+fn bring_media(song: &engine_sync::SessionModel, show_dir: &Path, dir: &Path) -> eyre::Result<()> {
     let mut files: Vec<PathBuf> = song
         .items
         .values()
@@ -462,7 +455,7 @@ fn link_file(from: &Path, to: &Path) -> eyre::Result<()> {
 
 /// `model` written as a new project file at `file` (its song branch a fresh
 /// doc of exactly this): a song starts small, with no history but its own.
-fn write_fresh(file: &Path, model: &session::sync::SessionModel) -> eyre::Result<()> {
+fn write_fresh(file: &Path, model: &engine_sync::SessionModel) -> eyre::Result<()> {
     if file.exists() {
         std::fs::remove_file(file)?;
     }
@@ -517,10 +510,10 @@ mod tests {
 
     #[test]
     fn a_songs_section_cards_become_its_sections_and_marks() {
-        use session::sync::model::{MarkerState, RegionState};
+        use engine_sync::model::{MarkerState, RegionState};
         // She's American as the show left it: its SONG region, the show's
         // one section over everything, the show's SONGSTART.
-        let mut song = session::sync::SessionModel::default();
+        let mut song = engine_sync::SessionModel::default();
         song.regions.insert(
             "song".into(),
             RegionState {
@@ -597,7 +590,7 @@ mod tests {
 
     #[test]
     fn the_next_songs_count_in_inside_a_song_is_not_its_count_in() {
-        let mut song = session::sync::SessionModel::default();
+        let mut song = engine_sync::SessionModel::default();
         let card = |name: &str, start, end| Card {
             name: name.into(),
             start,
@@ -652,7 +645,7 @@ mod tests {
 
     #[test]
     fn a_song_cut_from_a_show_is_named_for_itself_with_no_other_song_as_a_section() {
-        use session::sync::{RegionState, SessionModel};
+        use engine_sync::{RegionState, SessionModel};
         let region = |name: &str, lane: u32| RegionState {
             start: 0.0,
             end: 196.5,
@@ -679,7 +672,7 @@ mod tests {
 
     #[test]
     fn songs_cut_from_one_show_have_tracks_of_their_own() {
-        use session::sync::{ItemState, SendState, SessionModel, TrackState};
+        use engine_sync::{ItemState, SendState, SessionModel, TrackState};
         let track = |guid: &str, parent: Option<&str>| TrackState {
             guid: guid.to_owned(),
             parent: parent.map(str::to_owned),
@@ -728,7 +721,7 @@ mod tests {
             end: 286.5,
         };
         assert_eq!(place.show, "../jt-senior-recital/Show.session");
-        let mut song = session::sync::SessionModel::default();
+        let mut song = engine_sync::SessionModel::default();
         assert_eq!(ShowPlace::of(&song), None);
         place.write(&mut song);
         assert_eq!(ShowPlace::of(&song), Some(place));

@@ -15,12 +15,12 @@ pub const APP: App = App::Session;
 /// An account's org libraries.
 pub trait AccountLibrary {
     /// The org `org`'s library, as this person.
-    fn library(&self, org: &str) -> session::library::Library;
+    fn library(&self, org: &str) -> library_sync::Library;
 }
 
 impl AccountLibrary for Account {
-    fn library(&self, org: &str) -> session::library::Library {
-        session::library::Library {
+    fn library(&self, org: &str) -> library_sync::Library {
+        library_sync::Library {
             server: self
                 .server
                 .replacen("https://", "wss://", 1)

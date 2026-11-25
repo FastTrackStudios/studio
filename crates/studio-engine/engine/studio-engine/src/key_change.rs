@@ -1,15 +1,15 @@
 //! `SONG_KEY`: change the song's key.
 //!
-//! The plan is `session::key_change`; this applies it through the facade
+//! The plan is `engine_domain::key_change`; this applies it through the facade
 //! (so it runs the same in a window driving an engine in another process):
 //! take pitch on every item of the pitched tracks, the KEY track's
 //! changes moved, the chart rewritten.
 
 use architect::action::{ActionError, ActionList, Effect};
 use daw::service::{ItemRef, Items, TakeRef, Tracks};
+use engine_domain::key::{format_key, key_changes, key_from_name, set_key_at};
+use engine_domain::key_change::{PlanTrack, plan, transpose_chart};
 use facet::Facet;
-use session::key::{format_key, key_changes, key_from_name, set_key_at};
-use session::key_change::{PlanTrack, plan, transpose_chart};
 
 static SONG_KEY: architect::action::ActionMeta = crate::actions::meta(
     "SONG_KEY",

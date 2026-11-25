@@ -68,8 +68,8 @@ pub fn use_song() -> Signal<Option<(String, StudioSession)>> {
 
 /// The window's mode: Live (a page has no shell to say another).
 #[must_use]
-pub const fn mode_from_env() -> session::modes::Mode {
-    session::modes::Mode::Live
+pub const fn mode_from_env() -> engine_domain::modes::Mode {
+    engine_domain::modes::Mode::Live
 }
 
 /// An action of the engine's Action List, run on the page's list. The

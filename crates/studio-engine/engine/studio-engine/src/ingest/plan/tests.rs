@@ -1,4 +1,4 @@
-use session::library::publish::RemoteFile;
+use library_sync::publish::RemoteFile;
 
 use super::{Decision, Kept, Local, Media, Same, Why, decide, needs_hash, travels, whole_id};
 

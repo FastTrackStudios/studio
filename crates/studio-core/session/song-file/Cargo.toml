@@ -16,9 +16,9 @@ path = "src/main.rs"
 [dependencies]
 session-format = { workspace = true, features = ["store", "sync", "read"] }
 fts-session = { workspace = true }
-# Studio's session crate: the engine project's doc, read for its timing
+# The live document (session-sync): the engine project's doc, read for its timing
 # when a store-only song is seeded.
-session = { workspace = true }
+session-sync = { workspace = true }
 crdt = { workspace = true }
 loro = { workspace = true }
 uuid = { workspace = true }

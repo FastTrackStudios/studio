@@ -160,7 +160,7 @@ fn cue_follow_song(project_guid: &str) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LocalOnly {
     /// Rebuilding the song's structure from an edited chart
-    /// (`session::keyflow::from_chart` runs on the sync backend traits,
+    /// (`engine_domain::keyflow::from_chart` runs on the sync backend traits,
     /// which only an in-process backend implements).
     ChartRebuild,
     /// Writing a song's `.session` — the native format is the local

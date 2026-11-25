@@ -41,7 +41,7 @@ pub struct Planned {
 }
 
 /// The phase the mixer's racks are shown in.
-const TONE: session::mix_phases::MixPhase = session::mix_phases::MixPhase::Tone;
+const TONE: fts_session::mix_phases::MixPhase = fts_session::mix_phases::MixPhase::Tone;
 
 /// Draw `shot` of `golden`.
 #[must_use]

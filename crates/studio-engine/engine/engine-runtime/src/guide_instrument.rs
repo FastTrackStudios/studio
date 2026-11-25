@@ -2,7 +2,7 @@
 //! audible on `daw-standalone`.
 //!
 //! Session writes the click, the count-in and the spoken section cues as
-//! MIDI notes (`session::guide::engine::midi`: 60–65 click, 72–79 count, 84–102
+//! MIDI notes (`engine_domain::guide::engine::midi`: 60–65 click, 72–79 count, 84–102
 //! cues). This is the instrument on those tracks: `session_guide`'s
 //! `GuideEngine` in MIDI mode — the same DSP the FTS Guide CLAP/VST3
 //! plugin wraps — running in-process as a native `PluginInstance`, so the
@@ -20,7 +20,7 @@
 //! Samples come from the FTS-GUIDE library ([`Library`]): natively the
 //! folder at `~/.config/fts/guide-samples/{Click,Counts,Guide}`, in a
 //! browser the files it needs, fetched as Ogg
-//! (`session::guide::engine::samples::library`). Anything missing is synthesized
+//! (`engine_domain::guide::engine::samples::library`). Anything missing is synthesized
 //! (clicks and count beeps), except spoken cues, which need the real
 //! samples.
 
@@ -33,7 +33,9 @@ use daw_standalone::plugin::{
     FxFactory, PluginDescriptor, PluginError, PluginEvents, PluginFormat, PluginInstance,
     PluginParamInfo,
 };
-use session::guide::engine::{BlockClock, ClickSound, GuideConfig, GuideEngine, TriggerSource};
+use engine_domain::guide::engine::{
+    BlockClock, ClickSound, GuideConfig, GuideEngine, TriggerSource,
+};
 
 /// The FX ident the guide generator puts on its tracks.
 pub const IDENT: &str = "fts.guide";
@@ -56,7 +58,7 @@ pub enum Library {
 }
 
 impl Library {
-    fn load_into(&self, bank: &mut session::guide::engine::SampleBank, rate: u32) {
+    fn load_into(&self, bank: &mut engine_domain::guide::engine::SampleBank, rate: u32) {
         match self {
             Self::Folder(dir) => {
                 bank.load_click(&dir.join("Click"), CLICK, rate);
@@ -259,12 +261,16 @@ impl PluginInstance for GuideInstrument {
             if status & 0xF0 != 0x90 || velocity == 0 {
                 continue;
             }
-            let Some(trigger) = session::guide::engine::midi::trigger_for_midi_note(key) else {
+            let Some(trigger) = engine_domain::guide::engine::midi::trigger_for_midi_note(key)
+            else {
                 continue;
             };
-            let under_cue = velocity == session::guide::engine::midi::COUNT_UNDER_CUE_VELOCITY;
-            if matches!(trigger, session::guide::engine::GuideTrigger::Count(_))
-                && under_cue
+            let under_cue =
+                velocity == engine_domain::guide::engine::midi::COUNT_UNDER_CUE_VELOCITY;
+            if matches!(
+                trigger,
+                engine_domain::guide::engine::GuideTrigger::Count(_)
+            ) && under_cue
                 && guide_playing
             {
                 continue; // the cue says it instead

@@ -594,7 +594,7 @@ fn SongTable(setlist: Signal<Setlist>, on_pick: Option<EventHandler<usize>>) -> 
                     let bpm = crate::transport_bar::tempo_text(project.bpm);
                     let long = length(song.span.1 - song.span.0);
                                         let mode = crate::song_modes::of(&song.name)
-                        .map_or("—", session::modes::Mode::display_name);
+                        .map_or("—", engine_domain::modes::Mode::display_name);
                     let (earlier, later) = (index > 0, index + 1 < count);
                     rsx! {
                         div {

@@ -132,9 +132,9 @@ impl OpenHost for ClickAndGuide {
     }
 
     fn prepare(&self, _folder: &dyn Folder, opened: &Opened) -> eyre::Result<()> {
-        session::guide::Guide::new(opened.daw.clone())
+        engine_domain::guide::Guide::new(opened.daw.clone())
             .with_instrument(guide_instrument::IDENT)
-            .generate(session::guide::GuideScope::All)
+            .generate(engine_domain::guide::GuideScope::All)
             .map_err(|e| eyre::eyre!("guide: {e}"))
     }
 }

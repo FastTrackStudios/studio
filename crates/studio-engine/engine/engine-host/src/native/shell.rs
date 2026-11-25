@@ -12,7 +12,7 @@
 
 use dioxus::prelude::*;
 
-use session::modes::Mode;
+use engine_domain::modes::Mode;
 
 /// The Session app's compiled Tailwind — what `daw-view-kit`'s panels are
 /// styled with. A plain `style { }` element, which Blitz reads; a
@@ -544,8 +544,8 @@ fn SongViews(
     // The song as the views read it (daw-view's), beside Studio's session.
     use_context_provider(|| session.song());
     use_context_provider(|| session);
-    let mode: Signal<session::modes::Mode> = use_context();
-    let record_mode = move || mode() == session::modes::Mode::Record;
+    let mode: Signal<engine_domain::modes::Mode> = use_context();
+    let record_mode = move || mode() == engine_domain::modes::Mode::Record;
     // The FX, pinned under the arrangement or the mixer: the view gives
     // up its bottom to it.
     let fx = try_use_context::<studio_panels::shell::FxToggle>();

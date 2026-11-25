@@ -17,8 +17,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use daw::standalone::Standalone;
-use session::sync::engine::{self, Blobs, Direct, EngineIds, MediaRoot};
-use session::sync::{SessionDoc, diff};
+use engine_sync::engine::{self, Blobs, Direct, EngineIds, MediaRoot};
+use engine_sync::{SessionDoc, diff};
 use session_format::store::{MAIN, Store};
 
 fn main() -> eyre::Result<()> {

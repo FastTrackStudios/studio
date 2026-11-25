@@ -21,18 +21,18 @@ pub static MODE: ActionMeta = meta(
 
 /// The mode a caller asked for, until the window takes it
 /// ([`take_mode_request`]).
-static MODE_REQUEST: Mutex<Option<session::modes::Mode>> = Mutex::new(None);
+static MODE_REQUEST: Mutex<Option<engine_domain::modes::Mode>> = Mutex::new(None);
 
 /// The mode asked for since the window last looked, if any.
-pub fn take_mode_request() -> Option<session::modes::Mode> {
+pub fn take_mode_request() -> Option<engine_domain::modes::Mode> {
     MODE_REQUEST.lock().ok()?.take()
 }
 
 /// The mode the window shows, as its shell last said (`note_shown_mode`).
-static SHOWN_MODE: Mutex<Option<session::modes::Mode>> = Mutex::new(None);
+static SHOWN_MODE: Mutex<Option<engine_domain::modes::Mode>> = Mutex::new(None);
 
 /// The window's shell shows `mode` now.
-pub fn note_shown_mode(mode: session::modes::Mode) {
+pub fn note_shown_mode(mode: engine_domain::modes::Mode) {
     if let Ok(mut slot) = SHOWN_MODE.lock() {
         *slot = Some(mode);
     }
@@ -40,13 +40,13 @@ pub fn note_shown_mode(mode: session::modes::Mode) {
 
 /// The mode the window shows, once its shell has said.
 #[must_use]
-pub fn shown_mode() -> Option<session::modes::Mode> {
+pub fn shown_mode() -> Option<engine_domain::modes::Mode> {
     SHOWN_MODE.lock().ok().and_then(|m| *m)
 }
 
 /// Ask the window for `mode`, as `SESSION_MODE` does — for an action that
 /// leaves the window in a mode of its own (New Project opens in Organize).
-pub fn request_mode(mode: session::modes::Mode) {
+pub fn request_mode(mode: engine_domain::modes::Mode) {
     if let Ok(mut slot) = MODE_REQUEST.lock() {
         *slot = Some(mode);
     }

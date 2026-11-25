@@ -12,7 +12,7 @@
 //! the engine. Hosting over iroh serves the song's own doc as it is;
 //! joining a set (by ticket, or one Task keeps) keeps the set's replica of
 //! the song in step with the song's doc as a CRDT
-//! (`session::sync::relay`) — seeded from it when the set has none yet, or,
+//! (`engine_sync::relay`) — seeded from it when the set has none yet, or,
 //! when another peer seeded the set from a copy of its own, the song moved
 //! onto the set's doc (`project_file::adopt`). Two bridges on one engine
 //! song rewrote each other and doubled its FX chains every round (#316).
@@ -57,24 +57,24 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use session::sync::clock::SharedClock;
-use session::sync::engine::MediaRoot;
-use session::sync::net::{Dial, PresenceSink, SetPeer};
+use engine_sync::clock::SharedClock;
+use engine_sync::engine::MediaRoot;
+use engine_sync::net::{Dial, PresenceSink, SetPeer};
 #[cfg(feature = "native")]
-use session::sync::net::{SetHost, dial_fixed, session_id, song_id};
-use session::sync::presence::{self, PeerState, PlayState, Pointer, Roster, Throttle};
-use session::sync::relay::{Relay, Side};
-use session::sync::transport::{
+use engine_sync::net::{SetHost, dial_fixed, session_id, song_id};
+use engine_sync::presence::{self, PeerState, PlayState, Pointer, Roster, Throttle};
+use engine_sync::relay::{Relay, Side};
+use engine_sync::transport::{
     self, Command, LocalTransport, SharedTransport, SyncPosition, TransportMode, TransportSync,
 };
-use session::sync::{Bridge, Change, Hold, ORIGIN_LOCAL, SessionDoc};
+use engine_sync::{Bridge, Change, Hold, ORIGIN_LOCAL, SessionDoc};
 use uuid::Uuid;
 
 /// Where the sessions' FX state is kept while they are shared: one
 /// store for the process, so a song shared twice reads its states once.
 #[cfg_attr(feature = "native", allow(dead_code))]
-fn blobs() -> std::sync::Arc<dyn session::sync::engine::Blobs> {
-    static BLOBS: std::sync::LazyLock<std::sync::Arc<session::sync::engine::MemoryBlobs>> =
+fn blobs() -> std::sync::Arc<dyn engine_sync::engine::Blobs> {
+    static BLOBS: std::sync::LazyLock<std::sync::Arc<engine_sync::engine::MemoryBlobs>> =
         std::sync::LazyLock::new(Default::default);
     BLOBS.clone()
 }
@@ -83,11 +83,11 @@ fn blobs() -> std::sync::Arc<dyn session::sync::engine::Blobs> {
 /// song's items through directly; `None` when the song is another
 /// process's.
 #[cfg_attr(feature = "native", allow(dead_code))]
-fn local() -> Option<std::sync::Arc<dyn session::sync::engine::Direct>> {
+fn local() -> Option<std::sync::Arc<dyn engine_sync::engine::Direct>> {
     #[cfg(feature = "native")]
     {
         crate::open::local_engine().map(|daw| {
-            std::sync::Arc::new(daw.clone()) as std::sync::Arc<dyn session::sync::engine::Direct>
+            std::sync::Arc::new(daw.clone()) as std::sync::Arc<dyn engine_sync::engine::Direct>
         })
     }
     #[cfg(not(feature = "native"))]
@@ -270,7 +270,7 @@ pub fn status() -> Option<Status> {
 
 // ---- This device's lock ------------------------------------------------
 //
-// "Lock / don't sync", per device (`session::sync::hold`): locked, the
+// "Lock / don't sync", per device (`engine_sync::hold`): locked, the
 // session's task holds what the others send in the songs' docs instead of
 // making it in this engine, and keeps this engine's edits out of the docs;
 // unlocking merges both. Presence goes on either way — the others still
@@ -372,7 +372,7 @@ pub fn key_of(project: &str) -> Option<String> {
 /// A song's full edit history, to save with it — `None` when no session
 /// doc is keeping one for `project` (yet).
 #[must_use]
-pub fn history(project: &str) -> Option<session::sync::loro::LoroDoc> {
+pub fn history(project: &str) -> Option<engine_sync::loro::LoroDoc> {
     song_where(|s| s.project == project).map(|(s, _, _)| s.doc.loro().clone())
 }
 
@@ -643,7 +643,7 @@ fn host_inner(name: String) -> eyre::Result<String> {
             let own = song_side(guid.clone(), path).await?;
             let doc = SessionDoc::new();
             doc.loro()
-                .import_batch(&session::sync::relay::seed(&own.doc)?)
+                .import_batch(&engine_sync::relay::seed(&own.doc)?)
                 .map_err(|e| eyre::eyre!("{key}: its set doc did not seed: {e}"))?;
             let served = host.add_relayed(song_id(&set, &key), &doc);
             bridges.push((
@@ -722,7 +722,7 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
         // The host's clock is the session's: pinged from here on.
         let clock = SharedClock::follow(
             vox_core::initiator_on(dial(&endpoint).await?)
-                .establish::<session::sync::clock::SessionClockClient>()
+                .establish::<engine_sync::clock::SessionClockClient>()
                 .await
                 .map_err(|e| eyre::eyre!("session clock handshake: {e:?}"))?,
         );
@@ -856,7 +856,7 @@ impl TaskSet {
             }
             #[cfg(feature = "native")]
             None => {
-                let library = session::library::Library::from_env();
+                let library = library_sync::Library::from_env();
                 Self {
                     url: library.org_url(),
                     token: library.token,
@@ -1213,7 +1213,7 @@ fn replicate(
     sync: &Dial<crdt::sync::DocSyncClient>,
     key: &str,
 ) -> Option<(SessionDoc, Side)> {
-    ids.get(&session::sync::slug::slugify(key))
+    ids.get(&engine_sync::slug::slugify(key))
         .map(|id| SetPeer::sync_song_relayed(*id, Arc::clone(sync)))
 }
 
@@ -1365,7 +1365,7 @@ async fn relay_song(
     live: Option<Side>,
     set: &str,
 ) -> eyre::Result<(Song, Link, bool)> {
-    use session::sync::relay;
+    use engine_sync::relay;
     let guid = project.guid().to_owned();
     let (doc, link, seeded) = match (meet, live) {
         (Meeting::Seed(doc), Some(live)) => {
@@ -1542,9 +1542,9 @@ fn follow_doc(
     index: usize,
     song: &Song,
     remote_tx: tokio::sync::mpsc::UnboundedSender<usize>,
-) -> session::sync::loro::Subscription {
+) -> engine_sync::loro::Subscription {
     song.doc.loro().subscribe_root(Arc::new(move |event| {
-        if event.triggered_by == session::sync::loro::EventTriggerKind::Import {
+        if event.triggered_by == engine_sync::loro::EventTriggerKind::Import {
             let _ = remote_tx.send(index);
         }
     }))
@@ -1658,11 +1658,11 @@ fn start(
         let mut next_tick = architect::platform::now();
         let mut out = Outbox::new(me.clone(), name);
         let mut roster = Roster::default();
-        let mut seen: HashMap<String, session::sync::loro::LoroValue> = HashMap::default();
+        let mut seen: HashMap<String, engine_sync::loro::LoroValue> = HashMap::default();
         // Sample-accurate following (daw-transport-sync): the leader's
         // stamped playhead, this engine locked to it.
         let mut lock = Lock::default();
-        // This device's lock (`session::sync::hold`): only a shared
+        // This device's lock (`engine_sync::hold`): only a shared
         // session holds anything. A locked device starts with every song
         // held: its joins left its engine as it was.
         let holds = me != LOCAL_ME;
@@ -1901,7 +1901,7 @@ impl Lock {
         leader: Option<&str>,
         me: &str,
         here: Option<&String>,
-        seen: &HashMap<String, session::sync::loro::LoroValue>,
+        seen: &HashMap<String, engine_sync::loro::LoroValue>,
         clock: &SharedClock,
         presence: &dyn PresenceSink,
     ) -> bool {

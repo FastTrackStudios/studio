@@ -165,7 +165,8 @@ pub fn enter(
 
 /// The mode asked for on Studio's Action List, until the session takes it.
 #[cfg(feature = "native")]
-static ASKED_MODE: std::sync::Mutex<Option<session::modes::Mode>> = std::sync::Mutex::new(None);
+static ASKED_MODE: std::sync::Mutex<Option<engine_domain::modes::Mode>> =
+    std::sync::Mutex::new(None);
 
 /// Asks this Studio's windows for mode `name` (`SESSION_MODE`): its name as
 /// the bars show it.
@@ -175,11 +176,11 @@ static ASKED_MODE: std::sync::Mutex<Option<session::modes::Mode>> = std::sync::M
 /// No mode is called that.
 #[cfg(feature = "native")]
 pub fn ask_mode(name: &str) -> Result<&'static str, String> {
-    let mode = session::modes::Mode::ALL
+    let mode = engine_domain::modes::Mode::ALL
         .into_iter()
         .find(|m| m.display_name().eq_ignore_ascii_case(name.trim()))
         .ok_or_else(|| {
-            let names: Vec<&str> = session::modes::Mode::ALL
+            let names: Vec<&str> = engine_domain::modes::Mode::ALL
                 .iter()
                 .map(|m| m.display_name())
                 .collect();
@@ -192,7 +193,7 @@ pub fn ask_mode(name: &str) -> Result<&'static str, String> {
 }
 
 #[cfg(feature = "native")]
-fn take_asked_mode() -> Option<session::modes::Mode> {
+fn take_asked_mode() -> Option<engine_domain::modes::Mode> {
     ASKED_MODE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)

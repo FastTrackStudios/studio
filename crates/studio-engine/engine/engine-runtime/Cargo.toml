@@ -26,7 +26,8 @@ daw-proto = { workspace = true }
 daw-standalone = { workspace = true, features = ["stream-ogg", "reapeaks"] }
 # The guide engine the Click / Count / Guide MIDI tracks play through
 # (`guide_instrument`).
-session = { workspace = true }
+engine-domain = { workspace = true }
+library-sync = { workspace = true }
 eyre = { workspace = true }
 # A clock that also runs in a browser (`open_core`'s load timings).
 web-time = { workspace = true }
@@ -75,7 +76,7 @@ builtin = ["dep:builtin"]
 signal = ["builtin", "dep:signal-fx"]
 # A source's chart written into the song's library folder
 # (`song_stream`'s mirror, on disk): `session::library`.
-library = ["session/library"]
+library = []
 # The browser: the page's audio loop and its AudioWorklet (`web_audio`).
 web = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers"]
 

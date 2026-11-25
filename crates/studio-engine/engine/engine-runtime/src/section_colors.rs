@@ -22,7 +22,7 @@ pub fn pending<D: Regions>(daw: &D, project: &ProjectContext) -> usize {
 }
 
 fn colour<D: Regions>(daw: &D, project: &ProjectContext, set: bool) -> daw_proto::DawResult<usize> {
-    let sections = session::ruler_lanes::CoreLane::Sections.lane_index();
+    let sections = engine_domain::ruler_lanes::CoreLane::Sections.lane_index();
     let mut coloured = 0_usize;
     for region in Regions::all(daw, project.clone()) {
         if region.lane.is_some_and(|lane| lane != sections) {
@@ -30,11 +30,11 @@ fn colour<D: Regions>(daw: &D, project: &ProjectContext, set: bool) -> daw_proto
         }
         let (Some(id), Some(kind)) = (
             region.id,
-            session::keyflow::actions::parse_region_section_type(&region.name),
+            engine_domain::keyflow::actions::parse_region_section_type(&region.name),
         ) else {
             continue;
         };
-        let colour = session::keyflow::actions::section_type_color(&kind);
+        let colour = engine_domain::keyflow::actions::section_type_color(&kind);
         if region.color != Some(rgb_of_native(colour)) {
             if set {
                 Regions::set_color(daw, project.clone(), id, colour)?;

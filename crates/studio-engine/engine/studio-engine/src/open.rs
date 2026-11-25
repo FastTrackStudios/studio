@@ -284,7 +284,7 @@ pub(crate) fn cue_engine() -> &'static Standalone {
 /// (REAPER shows it on its region too); there is no `.session` to save —
 /// the remote system saves its own project.
 pub fn set_song_color(project_guid: &str, rgb: u32, saved: Option<&Path>) {
-    let song_lane = session::ruler_lanes::CoreLane::Song.lane_index();
+    let song_lane = engine_domain::ruler_lanes::CoreLane::Song.lane_index();
     if !crate::audio_mode::owns_project() {
         let coloured = facade_blocking("song colour", |daw| {
             let guid = project_guid.to_owned();

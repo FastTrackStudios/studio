@@ -149,8 +149,8 @@ pub fn CompactShell(
     let current = setlist.read().current().cloned();
     // Record mode: Control is the record view (`crate::record_view`),
     // with its own bars and transport.
-    let mode = try_use_context::<Signal<session::modes::Mode>>();
-    let record = mode.is_some_and(|m| m() == session::modes::Mode::Record);
+    let mode = try_use_context::<Signal<engine_domain::modes::Mode>>();
+    let record = mode.is_some_and(|m| m() == engine_domain::modes::Mode::Record);
     let landscape = form == Form::Landscape;
     let direction = if landscape { "row" } else { "column" };
     let panel = rsx! {
@@ -470,7 +470,7 @@ fn ViewControls(
 #[component]
 fn More(view: Signal<PhoneView>, session: Element) -> Element {
     let mut view = view;
-    let mode = try_use_context::<Signal<session::modes::Mode>>();
+    let mode = try_use_context::<Signal<engine_domain::modes::Mode>>();
     let pins = try_use_context::<crate::shell::Pins>();
     let heading = format!(
         "padding:18px 16px 6px; font-size:11px; font-weight:700; letter-spacing:0.08em; \
@@ -507,7 +507,7 @@ fn More(view: Signal<PhoneView>, session: Element) -> Element {
             }
             if let Some(mut mode) = mode {
                 div { style: "{heading}", "MODE" }
-                for each in session::modes::Mode::ALL {
+                for each in engine_domain::modes::Mode::ALL {
                     button {
                         key: "{each.display_name()}",
                         style: {

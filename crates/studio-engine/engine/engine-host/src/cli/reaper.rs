@@ -21,7 +21,7 @@
 use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
-use session::SetlistServiceClient;
+use engine_domain::SetlistServiceClient;
 
 /// `studio reaper …`.
 #[derive(Subcommand)]

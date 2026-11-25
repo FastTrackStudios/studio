@@ -521,7 +521,7 @@ pub fn project_text(song: &Song, stems: &[Stem]) -> String {
     // guesses instead of landing beside them. The file numbers lanes from
     // one; `CoreLane` is REAPER's API numbering, from zero.
     let sections_lane =
-        i32::try_from(session::ruler_lanes::CoreLane::Sections.lane_index() + 1).unwrap_or(2);
+        i32::try_from(engine_domain::ruler_lanes::CoreLane::Sections.lane_index() + 1).unwrap_or(2);
     for (index, start) in song.sections.iter().enumerate() {
         let next = song.sections.get(index + 1).copied().unwrap_or(end);
         builder = builder.add_marker(

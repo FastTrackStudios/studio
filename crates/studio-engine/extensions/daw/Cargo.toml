@@ -16,7 +16,7 @@ path = "src/main.rs"
 [features]
 # Spoken section cues (chatterbox TTS, ONNX Runtime). Off by default: the cbx
 # git dependency is written against ort rc.10 and the workspace is on rc.15.
-tts = ["session/tts"]
+tts = ["engine-domain/tts"]
 
 [dependencies]
 architect-extensions = { workspace = true, features = ["linked-core"] }
@@ -51,7 +51,7 @@ audio = { workspace = true, features = ["io"] }
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
 # (the domain's TTS backend, `session/tts`, behind this crate's `tts`; the
 # engine is studio-engine).
-session = { workspace = true }
+engine-domain = { workspace = true }
 
 [lints]
 workspace = true

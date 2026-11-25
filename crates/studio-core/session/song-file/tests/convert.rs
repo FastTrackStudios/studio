@@ -406,7 +406,7 @@ async fn a_conversion_stopped_before_the_trash_finishes_on_the_next_run() {
 /// and is left alone.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
-    use session::sync::model::{MarkerState, RegionState, SessionModel, TempoPoint as EngineTempo};
+    use session_sync::model::{MarkerState, RegionState, SessionModel, TempoPoint as EngineTempo};
     let dir = tempfile::tempdir().unwrap();
     let song = dir.path().join("sleigh-ride");
     let older = song.join("previous-short-recording");
@@ -449,7 +449,7 @@ async fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
             },
         );
     }
-    let engine = session::sync::SessionDoc::new();
+    let engine = session_sync::SessionDoc::new();
     engine.write(&model, "local").unwrap();
     {
         let store = Store::open(&file).unwrap();
@@ -512,7 +512,7 @@ async fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
     assert_eq!(s.tempo().points().len(), 2);
     opened.with_store(|st| {
         assert_eq!(
-            session::sync::SessionDoc::from_loro(st.load(MAIN).unwrap()).read(),
+            session_sync::SessionDoc::from_loro(st.load(MAIN).unwrap()).read(),
             project
         );
     });

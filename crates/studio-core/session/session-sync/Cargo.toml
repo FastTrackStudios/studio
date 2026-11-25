@@ -7,11 +7,29 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-description = "The live session as one Loro document: the block every view and every device agrees on (Studio's features/session/src/sync, engine-free half)"
+description = "The live session as one Loro document: the block every view and every device agrees on, its diff, relay and network lanes (the engine-free half of the old sync)"
+
+[features]
+# The document over architect's sync lanes (`net`): its doc and presence
+# peers on a vox connection.
+net = ["dep:crdt", "dep:uuid", "dep:futures", "dep:vox"]
 
 [dependencies]
-loro = "1.18"
+fts-session = { workspace = true }
+# `Position` and the shared clock's estimator (plain data, no dependencies).
+daw-transport-sync = { workspace = true }
+eyre = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+vox = { workspace = true, optional = true }
+crdt = { workspace = true, optional = true, features = ["vox"] }
+architect = { workspace = true, features = ["local", "platform", "vox"] }
+uuid = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+loro = { workspace = true }
 tracing = "0.1"
 num-traits = "0.2"
 # architect::platform::Instant in the original: the browser's clock on wasm.
 web-time = "1"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

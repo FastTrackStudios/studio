@@ -135,8 +135,8 @@ impl StudioBody for EngineBody {
     fn chart_context(
         &self,
     ) -> Option<(
-        session::sync::SessionDoc,
-        std::sync::Arc<dyn session::sync::net::PresenceSink>,
+        engine_sync::SessionDoc,
+        std::sync::Arc<dyn engine_sync::net::PresenceSink>,
         String,
     )> {
         crate::collab::chart_context()

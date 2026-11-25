@@ -439,10 +439,10 @@ fn NoteGlyph() -> Element {
 /// anything else ("F dor") — spelling out "major" every time the song
 /// hasn't changed key is wasted width the pill doesn't have.
 pub(crate) fn short_key(name: &str) -> String {
-    let Some(key) = session::key::parse_key(name) else {
+    let Some(key) = engine_domain::key::parse_key(name) else {
         return name.to_owned();
     };
-    let full = session::key::format_key(&key);
+    let full = engine_domain::key::format_key(&key);
     let Some((root, mode)) = full.split_once(' ') else {
         return full;
     };

@@ -342,7 +342,7 @@ fn sections(
         .into_iter()
         .filter(|r| {
             r.lane
-                .is_none_or(|l| l == session::ruler_lanes::CoreLane::Sections.lane_index())
+                .is_none_or(|l| l == engine_domain::ruler_lanes::CoreLane::Sections.lane_index())
         })
         .map(|r| {
             (

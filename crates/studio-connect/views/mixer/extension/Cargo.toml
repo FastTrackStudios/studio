@@ -57,7 +57,7 @@ architect-workspace = { workspace = true, features = ["paint-ui"] }
 anyrender_vello_cpu = { workspace = true }
 peniko = { workspace = true }
 png = { workspace = true }
-session = { workspace = true }
+engine-domain = { workspace = true }
 daw-proto = { workspace = true }
 daw-ui = { workspace = true }
 

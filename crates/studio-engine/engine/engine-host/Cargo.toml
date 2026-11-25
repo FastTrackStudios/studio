@@ -49,7 +49,7 @@ cli = [
     "dep:libc",
     "dep:serde",
     "dep:serde_json",
-    "dep:session",
+    "dep:engine-domain", "dep:library-sync", "dep:studio-ui",
     "dep:studio-engine",
     "studio-engine?/show",
     "dep:dirs",
@@ -58,10 +58,9 @@ cli = [
     "dep:ureq",
     "dep:vox",
     "dep:vox-stream",
-    "session?/library",
-    "session?/project-sync",
-    "session?/reaper",
-    "session?/vault-sync",
+    "library-sync?/project-sync",
+    "engine-domain?/reaper",
+    "engine-domain?/vault-sync",
     "tokio?/macros",
     "tokio?/net",
     "tokio?/rt-multi-thread",
@@ -92,9 +91,8 @@ session = ["session-domain"]
 # The guide still runs; spoken section cues fall back to the synthesized
 # guide samples, exactly as they do when FTS_TTS is unset on desktop.
 session-domain = [
-    "dep:session",
+    "dep:engine-domain", "dep:library-sync", "dep:studio-ui",
     "dep:collection-proto",
-    "session?/ui",
     "dep:daw-ui",
     "dep:dawfile-reaper",
     "dep:keyflow",
@@ -102,7 +100,7 @@ session-domain = [
     "dep:daw", "dep:studio",
     "dep:daw-control",
     "dep:daw-standalone",
-    "session?/vault-sync",
+    "engine-domain?/vault-sync",
     "dep:architect",
     "architect/local",
     "architect/iroh",
@@ -128,7 +126,7 @@ charts = ["dep:keyflow"]
 # FTS_TTS=1 and a voice wav exists at ~/.config/fts/tts-voice.wav (the flake
 # provides onnxruntime + ORT_DYLIB_PATH). Cached cues keep loading regardless;
 # without it, cues fall back to the synthesized guide samples.
-tts = ["session/tts"]
+tts = ["engine-domain/tts"]
 
 # Network probe for the engine's SetlistService (the browser remote's wire
 # path, natively): `cargo run -p engine-host --example setlist_probe`.
@@ -148,7 +146,9 @@ fts-audio-ui = { workspace = true }
 # clients (session-proto) compile everywhere, including the wasm remote.
 # The in-process player crates (session facade, daw-standalone, the guide)
 # are native-only and live in the cfg(not wasm) table below.
-session = { workspace = true, optional = true }
+engine-domain = { workspace = true, optional = true }
+library-sync = { workspace = true, optional = true }
+fts-session = { workspace = true }
 keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
 # `studio setlist …` and `studio productions …` went with features/setlists
 # and features/productions (Architect's vault, Bases and Sites, which the
@@ -216,7 +216,7 @@ winit = { version = "0.31.0-beta.4", optional = true }
 dirs = { workspace = true, optional = true }
 # The start screen's icons (native::start), the same set the views use.
 lucide-dioxus = { workspace = true, optional = true }
-session = { workspace = true, features = ["desktop", "ui"], optional = true }
+studio-ui = { workspace = true, features = ["desktop"], optional = true }
 # The real DAW panels (MixerPanel / ArrangementView) — self-contained,
 # wired to the in-process daw facade. `web` = the dioxus (WebView) renderer
 # the desktop app uses.
@@ -292,7 +292,7 @@ block2 = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 dioxus = { workspace = true, default-features = true, features = ["web", "launch"] }
-session = { workspace = true, features = ["ui", "web"], optional = true }
+studio-ui = { workspace = true, features = ["web"], optional = true }
 # The collection browser's wire client (CollectionServiceClient + Collection /
 # CollectionItem / NodeRef). Wasm-only: this surface exists only in the web
 # build. Enabled via the `session` feature's `dep:collection-proto`.

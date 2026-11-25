@@ -6,8 +6,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use session::library::Library;
-use session::library::publish::{self, FilesClient, ReadAt, RemoteFile, RootId, Upload, UploadId};
+use library_sync::Library;
+use library_sync::publish::{self, FilesClient, ReadAt, RemoteFile, RootId, Upload, UploadId};
 
 use super::ledger::Ledger;
 use super::plan::{self, Decision, Kept, Local, Media};

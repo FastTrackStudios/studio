@@ -18,7 +18,7 @@
 //!   right. The first of the docked views.
 
 use dioxus::prelude::*;
-use session::modes::Mode;
+use engine_domain::modes::Mode;
 
 use crate::setlist::Setlist;
 // The chrome the views read (the views, the panes, the pins, the colours),
@@ -479,26 +479,26 @@ pub fn Modes(mode: Signal<Mode>) -> Element {
 /// The phase the mode is in, left of the mode, for a mode that has
 /// phases (Organize: Import, Tempo Map; Mix: Rescue … Overview) —
 /// another place to move through them, beside the mixer's rails. The
-/// choice is `session::mode_phases`', so a phase picked on the rails
+/// choice is `engine_domain::mode_phases`', so a phase picked on the rails
 /// shows here, and one picked here moves the rails.
 #[component]
 pub fn PhaseSwitch(mode: Signal<Mode>) -> Element {
     let mut picking = use_signal(|| false);
     // Follow a phase chosen elsewhere (the rails are a widget, which
     // cannot set a signal): the choice's version, watched.
-    let mut seen = use_signal(session::mode_phases::version);
+    let mut seen = use_signal(engine_domain::mode_phases::version);
     use_future(move || async move {
         loop {
             crate::pause(std::time::Duration::from_millis(150)).await;
-            let now = session::mode_phases::version();
+            let now = engine_domain::mode_phases::version();
             if now != *seen.peek() {
                 seen.set(now);
             }
         }
     });
     let _ = seen();
-    let phases = session::mode_phases::of(mode());
-    let Some(current) = session::mode_phases::current(mode()) else {
+    let phases = engine_domain::mode_phases::of(mode());
+    let Some(current) = engine_domain::mode_phases::current(mode()) else {
         return rsx! {};
     };
     rsx! {
@@ -536,7 +536,7 @@ pub fn PhaseSwitch(mode: Signal<Mode>) -> Element {
                                         "phase": each.slug,
                                     }),
                                 );
-                                seen.set(session::mode_phases::version());
+                                seen.set(engine_domain::mode_phases::version());
                                 picking.set(false);
                             },
                             "{n}. {each.name}"

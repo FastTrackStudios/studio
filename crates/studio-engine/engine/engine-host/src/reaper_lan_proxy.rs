@@ -20,12 +20,14 @@
 
 use std::sync::Arc;
 
-use session::proto::{
+use engine_domain::proto::{
     ActiveIndices, AudioLatencyInfo, MeasureInfo, MusicalPosition, Section, Setlist, SetlistEvent,
     Song, SongChartHydration,
 };
-use session::services::setlist_service::{SetlistServiceStreamClient, SetlistServiceStreamSource};
-use session::{SessionServiceError, SetlistServiceClient};
+use engine_domain::services::setlist_service::{
+    SetlistServiceStreamClient, SetlistServiceStreamSource,
+};
+use engine_domain::{SessionServiceError, SetlistServiceClient};
 use tokio::sync::RwLock;
 
 /// Every generated client method returns `Result<T, vox::VoxError<E>>` —
@@ -131,7 +133,7 @@ impl ReaperLanProxy {
     }
 }
 
-impl session::SetlistService for ReaperLanProxy {
+impl engine_domain::SetlistService for ReaperLanProxy {
     fn setlist(&self) -> Result<Setlist, SessionServiceError> {
         self.setlist
             .try_read()
@@ -423,7 +425,7 @@ impl session::SetlistService for ReaperLanProxy {
     async fn song_review(
         &self,
         song_index: usize,
-    ) -> Result<Vec<session::proto::review::Pass>, SessionServiceError> {
+    ) -> Result<Vec<engine_domain::proto::review::Pass>, SessionServiceError> {
         self.client
             .song_review(song_index)
             .await
@@ -434,7 +436,7 @@ impl session::SetlistService for ReaperLanProxy {
         &self,
         song_index: usize,
         pass: u32,
-        mark: session::proto::review::Mark,
+        mark: engine_domain::proto::review::Mark,
     ) -> Result<(), SessionServiceError> {
         self.client
             .mark_take(song_index, pass, mark)
@@ -532,10 +534,10 @@ pub fn proxy() -> Option<&'static ReaperLanProxy> {
 /// A fresh `LayerRouter` serving this proxy's `SetlistService` — the
 /// Recording Mode counterpart to `studio_engine::SessionEngine::router()`.
 pub fn router(proxy: &ReaperLanProxy) -> daw::LayerRouter {
-    use session::services::setlist_service::{
+    use engine_domain::services::setlist_service::{
         setlist_service_stream_service_descriptor, stream_serve as setlist_service_stream_serve,
     };
-    use session::{serve_setlist_service, setlist_service_service_descriptor};
+    use engine_domain::{serve_setlist_service, setlist_service_service_descriptor};
 
     daw::LayerRouter::new()
         .with(

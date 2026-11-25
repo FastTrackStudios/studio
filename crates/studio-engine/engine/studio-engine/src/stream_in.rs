@@ -5,7 +5,7 @@
 //! A window in Remote plays nothing; the system it drives (REAPER, a
 //! Session engine) plays the song. Streamed in, this window's own engine
 //! plays too — the tracks its **selection** names
-//! ([`session::load_selection::LoadSelection`]: Cue is the generated click,
+//! ([`engine_domain::load_selection::LoadSelection`]: Cue is the generated click,
 //! count and guide; Engine is every track, or the template groups asked for
 //! with `FTS_LOAD`):
 //!
@@ -42,7 +42,7 @@ use daw_transport_sync::{Correction, Follower, TransportBackend};
 use daw::standalone::audio_engine::materialize::{
     PendingMedia, materialize_take_via_bay, pending_media,
 };
-use session::load_selection::{LoadSelection, group_of};
+use engine_domain::load_selection::{LoadSelection, group_of};
 
 use crate::open::{Media, begin_asset_load, set_assets_progress, set_cue_ready};
 
@@ -484,7 +484,7 @@ async fn stream_from_elsewhere(remote: &str) -> Option<crate::song_stream::Strea
         return None;
     }
     let name = song_name(remote).await?;
-    let slug = session::library::slugify(&name);
+    let slug = library_sync::slugify(&name);
     let link = std::env::var(SHARE_LINKS_ENV)
         .ok()
         .and_then(|links| share_link_for(&links, &slug));

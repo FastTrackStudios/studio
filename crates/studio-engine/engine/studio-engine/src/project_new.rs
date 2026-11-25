@@ -18,7 +18,7 @@ use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::transport::service::Transport as _;
 use daw::service::{ProjectContext, TempoMap as _};
 use facet::Facet;
-use session::section_kinds::{KeyflowAction, MarkerKind};
+use fts_session::section_kinds::{KeyflowAction, MarkerKind};
 
 /// What a new song is called until it is saved.
 pub const UNTITLED: &str = "Untitled";
@@ -82,11 +82,11 @@ pub fn create(audio: Option<bool>) -> Result<String, String> {
     let _inside = runtime.enter();
     let project = ProjectContext::Project(opened.project_guid.clone());
     stamp(&opened.daw, &project)?;
-    session::guide::Guide::new(opened.daw.clone())
+    engine_domain::guide::Guide::new(opened.daw.clone())
         .with_instrument(crate::prepare::GUIDE_INSTRUMENT)
-        .generate(session::guide::GuideScope::All)
+        .generate(engine_domain::guide::GuideScope::All)
         .map_err(|e| format!("the guide: {e}"))?;
-    crate::actions::request_mode(session::modes::Mode::Organize);
+    crate::actions::request_mode(engine_domain::modes::Mode::Organize);
     crate::song_model::request_resync();
     crate::actions::list().changed("project", UNTITLED);
     tracing::info!(
@@ -112,7 +112,7 @@ fn stamp(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Result<
         daw.set_position(project.clone(), at)
             .map_err(|e| format!("the cursor would not move to {at:.3} s: {e}"))?;
         // The insert acts on the current song, which this one now is.
-        session::keyflow::actions::dispatch(daw, KeyflowAction::InsertMarker(kind));
+        engine_domain::keyflow::actions::dispatch(daw, KeyflowAction::InsertMarker(kind));
     }
     daw.set_position(project.clone(), start)
         .map_err(|e| format!("the cursor would not move to SONGSTART: {e}"))?;

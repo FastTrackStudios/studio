@@ -32,7 +32,9 @@ daw-ui = { workspace = true, features = ["studio"] }
 daw-control = { workspace = true }
 daw-proto = { workspace = true }
 rayon = { workspace = true, optional = true }
-session = { workspace = true, features = ["library", "ui", "web"] }
+engine-domain = { workspace = true }
+session-sync = { workspace = true }
+studio-proto = { workspace = true }
 keyflow = { workspace = true, features = ["text", "engraver"] }
 engine-runtime = { workspace = true }
 dynamic-template = { workspace = true }
@@ -78,7 +80,7 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 [features]
 default = ["native"]
 vox = []
-native = ["daw-view/native", "daw-view/local", "session/collab", "dep:dock", "dep:rayon", "dep:dirs", "dep:tokio", "dep:architect", "dep:futures-util", "dep:builtin", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "vox"]
+native = ["daw-view/native", "daw-view/local", "session-sync/net", "dep:dock", "dep:rayon", "dep:dirs", "dep:tokio", "dep:architect", "dep:futures-util", "dep:builtin", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "vox"]
 web = ["daw-view/web", "daw-view/standalone", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures", "dep:gloo-timers", "dep:futures-util", "dep:architect", "daw/standalone-session-file", "vox"]
 
 [lints]

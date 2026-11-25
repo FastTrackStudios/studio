@@ -53,13 +53,13 @@ use daw_standalone::bootstrap::{InProcessDaw, build_in_process_daw};
 use daw_standalone::media_bay::ProjectRelativeResolver;
 use daw_standalone::project_loader::load_rpp_text;
 use daw_standalone::sync::Standalone;
-use session::services::setlist_service::{
+use engine_domain::services::setlist_service::{
     SetlistServiceStreamClient, setlist_service_stream_service_descriptor,
     stream_serve as setlist_service_stream_serve,
 };
-use session::vault_sync::library::LibrarySong;
-use session::vault_sync::live_bus;
-use session::{
+use engine_domain::vault_sync::library::LibrarySong;
+use engine_domain::vault_sync::live_bus;
+use engine_domain::{
     SetlistServiceClient, SetlistServiceImpl, serve_setlist_service,
     setlist_service_service_descriptor,
 };
@@ -242,7 +242,7 @@ pub fn bootstrap_blocking() -> eyre::Result<()> {
 
     // Session singleton for daw-view-kit components (transport buttons,
     // sidebar seeks) — same client type the REAPER desktop installs.
-    session::ui::Session::init(engine.client.clone())
+    studio_ui::Session::init(engine.client.clone())
         .map_err(|e| eyre::eyre!("Session::init: {e:?}"))?;
 
     ENGINE

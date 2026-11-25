@@ -33,7 +33,8 @@ dioxus-native-dom = { workspace = true }
 dioxus-native = { workspace = true }
 daw-control = { workspace = true }
 daw-proto = { workspace = true }
-session = { workspace = true, features = ["library", "ui", "web"] }
+engine-domain = { workspace = true }
+fts-session = { workspace = true }
 keyflow = { workspace = true, features = ["text", "engraver"] }
 dynamic-template = { workspace = true }
 editor = { workspace = true, features = ["audio", "audio-daw", "daw", "paint"] }

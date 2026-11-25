@@ -8,9 +8,9 @@
 use std::path::PathBuf;
 
 use clap::Subcommand;
-use session::vault_sync::library::{self, LibrarySong};
-use session::vault_sync::setlist::resolve_song;
-use session::vault_sync::{live_bus, rpp, vault};
+use engine_domain::vault_sync::library::{self, LibrarySong};
+use engine_domain::vault_sync::setlist::resolve_song;
+use engine_domain::vault_sync::{live_bus, rpp, vault};
 
 /// `studio vault-sync`'s options.
 #[derive(clap::Args)]

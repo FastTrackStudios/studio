@@ -3,7 +3,7 @@
 //! (`crate::edit_state`): what Organize mode's toolbar (`crate::organize`)
 //! and `SECTION_INSERT` / `MARKER_INSERT` on the Action List both run.
 
-use session::section_kinds::KeyflowAction;
+use fts_session::section_kinds::KeyflowAction;
 
 pub use engine_client::organize_edit::*;
 
@@ -83,15 +83,15 @@ pub fn insert(
     }
     match button {
         Button::Marker(kind) => {
-            session::keyflow::actions::dispatch(daw, KeyflowAction::InsertMarker(kind));
+            engine_domain::keyflow::actions::dispatch(daw, KeyflowAction::InsertMarker(kind));
         }
         Button::Section(kind) => {
-            session::keyflow::actions::dispatch(daw, KeyflowAction::InsertSection(kind));
+            engine_domain::keyflow::actions::dispatch(daw, KeyflowAction::InsertSection(kind));
             reach_song_end(daw, &project);
         }
         Button::TimeSig(num, den) => {
             if let Err(e) =
-                session::keyflow::time_signature::insert_time_signature(daw, num, den, shift)
+                engine_domain::keyflow::time_signature::insert_time_signature(daw, num, den, shift)
             {
                 tracing::warn!(error = %e, num, den, "organize: the time signature was refused");
             }
@@ -99,9 +99,9 @@ pub fn insert(
     }
     crate::edit_state::ask(engine_edit(daw, &project));
     // The cues follow the sections; the click follows the meter.
-    if let Err(e) = session::guide::Guide::new(daw.clone())
+    if let Err(e) = engine_domain::guide::Guide::new(daw.clone())
         .with_instrument(crate::prepare::GUIDE_INSTRUMENT)
-        .generate(session::guide::GuideScope::All)
+        .generate(engine_domain::guide::GuideScope::All)
     {
         tracing::debug!(error = %e, "organize: no guide to regenerate yet");
     }
@@ -136,7 +136,7 @@ pub fn engine_edit(
 /// would otherwise have no click.
 pub fn reach_song_end(daw: &daw::standalone::Standalone, project: &daw::service::ProjectContext) {
     use daw::service::{Markers, Regions};
-    let song_lane = session::ruler_lanes::CoreLane::Song.lane_index();
+    let song_lane = engine_domain::ruler_lanes::CoreLane::Song.lane_index();
     let last = crate::actions::sections(daw, project)
         .iter()
         .map(|s| s.end)

@@ -168,7 +168,7 @@ pub struct ModeState {
     pub assets: Assets,
     /// Which of a song's tracks the local engine loads and plays (the
     /// template groups; Cue is `guide`).
-    pub selection: session::load_selection::LoadSelection,
+    pub selection: engine_domain::load_selection::LoadSelection,
 }
 
 impl Default for ModeState {
@@ -190,7 +190,7 @@ impl ModeState {
                 loaded: 0,
                 total: 0,
             },
-            selection: session::load_selection::LoadSelection::All,
+            selection: engine_domain::load_selection::LoadSelection::All,
         }
     }
 
@@ -201,7 +201,7 @@ impl ModeState {
     #[must_use]
     pub const fn streamed(
         target: RemoteTarget,
-        selection: session::load_selection::LoadSelection,
+        selection: engine_domain::load_selection::LoadSelection,
     ) -> Self {
         Self {
             requested: AudioMode::Engine,
@@ -232,9 +232,9 @@ impl ModeState {
                 total: 0,
             },
             selection: if cue {
-                session::load_selection::LoadSelection::cue()
+                engine_domain::load_selection::LoadSelection::cue()
             } else {
-                session::load_selection::LoadSelection::All
+                engine_domain::load_selection::LoadSelection::All
             },
         }
     }
@@ -366,8 +366,8 @@ pub fn from_launch(
         None if project_named => Some(AudioMode::Engine),
         None => remembered,
     };
-    let selection = env(LOAD_ENV).map_or(session::load_selection::LoadSelection::All, |v| {
-        session::load_selection::LoadSelection::parse(&v)
+    let selection = env(LOAD_ENV).map_or(engine_domain::load_selection::LoadSelection::All, |v| {
+        engine_domain::load_selection::LoadSelection::parse(&v)
     });
     // Engine with somewhere to stream from is a streamed Engine: a named
     // target (a Session engine) or REAPER asked for.

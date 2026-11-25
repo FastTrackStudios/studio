@@ -17,7 +17,7 @@ use dock::builtin::{self, kind};
 use dock::dockspace::{Chrome, InstanceId, Place, Side};
 use dock::host::{Catalog, DockHost, Kind, use_dock_provider};
 use dock::screenset::{FormClass, Screensets};
-use session::modes::Mode;
+use engine_domain::modes::Mode;
 
 /// Panels the host app adds to the window's dock, or puts in place of one
 /// of its own by kind: Studio's live rig (`rig`), which Session cannot

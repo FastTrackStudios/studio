@@ -1,0 +1,1225 @@
+//! A song built on a stage and landed ([`Bridge::moved_to`]) is the song
+//! built in place: the same engine state, field for field, and a bridge
+//! that keeps it as the one built in place does.
+//!
+//! The real-song cases read `FTS_OPEN_SONG` (a `Song.session`; copied to a
+//! temp dir first, since opening a store writes beside it) and are skipped
+//! without it:
+//!
+//! ```text
+//! FTS_OPEN_SONG=/…/fire/Fire.session cargo nextest run -p session staged
+//! ```
+
+use std::collections::BTreeMap;
+use std::fmt::Debug;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use daw_proto::ProjectInfo;
+use daw_standalone::sync::{ProjectState, Standalone};
+
+use crate::engine::{self, Blobs, Direct, EngineIds, MediaRoot, MemoryBlobs};
+use crate::model::{
+    EnvelopePointState, EnvelopeState, FxState, ItemState, MarkerState, NoteState, RegionState,
+    SendState, SessionModel, TakeState, TempoPoint, TrackState,
+};
+use crate::{Bridge, ORIGIN_LOCAL, SessionDoc};
+
+fn runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .thread_stack_size(16 * 1024 * 1024)
+        .enable_all()
+        .build()
+        .expect("a runtime")
+}
+
+fn info(guid: &str) -> ProjectInfo {
+    ProjectInfo {
+        guid: guid.into(),
+        name: guid.into(),
+        path: String::new(),
+    }
+}
+
+fn direct(daw: &Standalone) -> Option<Arc<dyn Direct>> {
+    Some(Arc::new(daw.clone()))
+}
+
+/// What a song needs to be opened: its doc, where its media is, its blobs.
+struct Song {
+    doc: SessionDoc,
+    media: MediaRoot,
+    blobs: Arc<dyn Blobs>,
+}
+
+/// `song` opened into `daw` as project `guid`, rebuilt in place.
+async fn in_place(daw: &Standalone, guid: &str, song: &Song) -> Bridge {
+    daw.seed_project(info(guid));
+    let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+        .await
+        .expect("a facade");
+    let project = facade.daw.project(guid.to_owned()).await.expect("the song");
+    Bridge::join(
+        project,
+        song.media.clone(),
+        song.doc.fork(),
+        song.blobs.clone(),
+        direct(daw),
+    )
+    .await
+    .expect("joined in place")
+}
+
+/// `song` opened into `daw` as project `guid`, built on a stage and
+/// landed. Its facade on the stage is dropped after.
+async fn staged(daw: &Standalone, guid: &str, song: &Song) -> Bridge {
+    let stage = daw.stage();
+    stage.engine().seed_project(info(guid));
+    let built = {
+        let facade = daw_standalone::bootstrap::build_in_process_daw(stage.engine().clone())
+            .await
+            .expect("a facade on the stage");
+        let project = facade.daw.project(guid.to_owned()).await.expect("the song");
+        Bridge::join(
+            project,
+            song.media.clone(),
+            song.doc.fork(),
+            song.blobs.clone(),
+            direct(stage.engine()),
+        )
+        .await
+        .expect("joined on the stage")
+    };
+    stage.land(guid).expect("landed");
+    let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+        .await
+        .expect("a facade");
+    let project = facade.daw.project(guid.to_owned()).await.expect("the song");
+    built.moved_to(project, direct(daw)).expect("moved")
+}
+
+/// Everything project `guid` holds, by part, as text — with each take's
+/// and FX's guid (made fresh each time one is made) named by where it is
+/// instead, and every map in key order.
+/// An item made under a guid of the engine's own (a MIDI item) is named
+/// by its doc id, through `ids`.
+fn engine_view(daw: &Standalone, guid: &str, ids: &EngineIds) -> BTreeMap<&'static str, String> {
+    daw.read_project(guid, |p| view_of(p, ids))
+        .expect("the project")
+}
+
+fn view_of(p: &ProjectState, ids: &EngineIds) -> BTreeMap<&'static str, String> {
+    let mut takes: Vec<(String, String)> = Vec::new();
+    for (item, list) in p.takes.iter() {
+        for (place, take) in list.takes.iter().enumerate() {
+            takes.push((take.guid.clone(), format!("<{item} take {place}>")));
+        }
+    }
+    for (chain, entries) in &p.fx_chains {
+        for (place, entry) in entries.iter().enumerate() {
+            takes.push((entry.fx.guid.clone(), format!("<{chain:?} fx {place}>")));
+        }
+    }
+    for item in p.items.keys() {
+        let doc = ids.items.doc(item);
+        if doc != *item {
+            takes.push((item.clone(), format!("<item {doc}>")));
+        }
+    }
+    let named = |text: String| {
+        takes
+            .iter()
+            .fold(text, |text, (guid, name)| text.replace(guid.as_str(), name))
+    };
+    let sorted = |entries: Vec<(String, String)>| {
+        let map: BTreeMap<String, String> = entries
+            .into_iter()
+            .map(|(k, v)| (named(k), named(v)))
+            .collect();
+        format!("{map:#?}")
+    };
+    fn each<K: Debug, V: Debug>(map: impl IntoIterator<Item = (K, V)>) -> Vec<(String, String)> {
+        map.into_iter()
+            .map(|(k, v)| (format!("{k:?}"), format!("{v:?}")))
+            .collect()
+    }
+    let fx = p
+        .fx_chains
+        .iter()
+        .map(|(chain, entries)| {
+            let entries: Vec<String> = entries
+                .iter()
+                .map(|e| {
+                    let params: BTreeMap<_, _> = e.params.iter().collect();
+                    format!("{:?} {:?} {params:?} {:?}", e.fx, e.state_chunk, e.ranges)
+                })
+                .collect();
+            (format!("{chain:?}"), format!("{entries:#?}"))
+        })
+        .collect();
+    let mut view = BTreeMap::new();
+    view.insert("info", format!("{:?}", p.info));
+    view.insert("transport", format!("{:?}", p.transport));
+    view.insert("tracks", named(format!("{:#?}", p.tracks)));
+    view.insert("track_ext", sorted(each(&p.track_ext)));
+    view.insert(
+        "items",
+        sorted(each(p.items.iter().map(|(k, v)| (k, &v.item)))),
+    );
+    view.insert("items_by_track", sorted(each(p.items_by_track.iter())));
+    view.insert("takes", sorted(each(p.takes.iter())));
+    view.insert("midi_notes", sorted(each(p.midi_notes.iter())));
+    view.insert("midi_ccs", sorted(each(p.midi_ccs.iter())));
+    view.insert("stretch_markers", sorted(each(p.stretch_markers.iter())));
+    view.insert("stretch_modes", sorted(each(p.stretch_modes.iter())));
+    view.insert("take_markers", sorted(each(p.take_markers.iter())));
+    view.insert("envelopes", sorted(each(p.envelopes.iter())));
+    view.insert("markers", format!("{:#?}", p.markers));
+    view.insert("regions", format!("{:#?}", p.regions));
+    view.insert("ruler_lanes", format!("{:#?}", p.ruler_lanes));
+    view.insert("tempo", format!("{:#?}", p.tempo_points));
+    view.insert("fx", sorted(fx));
+    view.insert("sends", sorted(each(&p.sends)));
+    view.insert("receives", sorted(each(&p.receives)));
+    view.insert("hw_outputs", sorted(each(&p.hw_outputs)));
+    view.insert("track_ext_state", sorted(each(&p.track_ext_state)));
+    view.insert("project_ext_state", sorted(each(&p.project_ext_state)));
+    view.insert(
+        "master",
+        format!("{} {} {}", p.master_volume, p.master_pan, p.master_muted),
+    );
+    view.insert(
+        "counters",
+        format!(
+            "{} {} {} {} {}",
+            p.next_region_id,
+            p.next_marker_id,
+            p.next_item_counter,
+            p.next_fx_counter,
+            p.next_take_counter
+        ),
+    );
+    view
+}
+
+/// Opened both ways, the two songs are the same, part for part, and read
+/// back the same; and the landed song's bridge records an edit made to it
+/// where it now is.
+async fn opens_alike(song: &Song) {
+    let daw = Standalone::new();
+    let mut here = in_place(&daw, "in-place", song).await;
+    let mut there = staged(&daw, "staged", song).await;
+
+    let built = engine_view(&daw, "in-place", &here.ids);
+    let landed = engine_view(&daw, "staged", &there.ids);
+    assert!(!built["tracks"].is_empty());
+    for (part, text) in &built {
+        let built = text.replace("in-place", "<song>");
+        let landed = landed[part].replace("staged", "<song>");
+        let differ = built
+            .lines()
+            .zip(landed.lines())
+            .find(|(a, b)| a != b)
+            .map(|(a, b)| format!("built   {a}\nlanded  {b}"));
+        assert_eq!(differ, None, "{part} differ");
+        assert_eq!(built.len(), landed.len(), "{part} differ in length");
+    }
+    assert_eq!(here.shown, there.shown, "both read back alike");
+
+    // The landed bridge keeps the landed song: an edit there is a step.
+    let first = song.doc.read().tracks.first().map(|t| t.guid.clone());
+    if let Some(track) = first {
+        for (bridge, guid) in [(&mut here, "in-place"), (&mut there, "staged")] {
+            daw.write_project(guid, |p| {
+                if let Some(t) = p.tracks.iter_mut().find(|t| t.guid == track) {
+                    t.volume = 0.25;
+                }
+            });
+            assert!(bridge.local_step("Turn it down").await.expect("a step"));
+            let doc = bridge.doc().read();
+            let volume = doc
+                .tracks
+                .iter()
+                .find(|t| t.guid == track)
+                .map(|t| t.volume);
+            assert_eq!(volume, Some(0.25), "{guid}'s step reached its doc");
+        }
+    }
+}
+
+/// A small song with a bit of everything the doc holds: a folder and its
+/// tracks, FX, a send, an envelope, audio and MIDI items, markers, a
+/// region and a tempo change.
+fn synthetic() -> SessionModel {
+    let track = |guid: &str, parent: Option<&str>| TrackState {
+        guid: guid.into(),
+        parent: parent.map(Into::into),
+        name: guid.to_uppercase(),
+        volume: 0.8,
+        visible_in_tcp: true,
+        visible_in_mixer: true,
+        parent_send: true,
+        channels: 2,
+        automation_mode: "trim_read".into(),
+        ..TrackState::default()
+    };
+    let mut drums = track("drums", None);
+    drums.fx.push(FxState {
+        guid: "{EQ}".into(),
+        plugin: "ReaEQ".into(),
+        name: "ReaEQ".into(),
+        enabled: true,
+        ..FxState::default()
+    });
+    let mut kick = track("kick", Some("drums"));
+    kick.sends.push(SendState {
+        dest: "verb".into(),
+        mode: "post_fader".into(),
+        volume: 0.5,
+        ..SendState::default()
+    });
+    kick.envelopes.insert(
+        "volume".into(),
+        EnvelopeState {
+            mode: "read".into(),
+            visible: true,
+            points: vec![
+                EnvelopePointState {
+                    at: 0.0,
+                    value: 1.0,
+                    ..EnvelopePointState::default()
+                },
+                EnvelopePointState {
+                    at: 2.0,
+                    value: 0.5,
+                    ..EnvelopePointState::default()
+                },
+            ],
+            ..EnvelopeState::default()
+        },
+    );
+    let tracks = vec![
+        drums,
+        kick,
+        track("snare", Some("drums")),
+        track("verb", None),
+    ];
+    let audio = |track: &str, at: f64, source: &str| ItemState {
+        track: track.into(),
+        position: at,
+        length: 1.5,
+        volume: 1.0,
+        fade_in: 0.01,
+        fade_in_shape: "linear".into(),
+        fade_out_shape: "linear".into(),
+        take: TakeState {
+            name: source.into(),
+            source: Some(format!("Audio/{source}.wav")),
+            playrate: 1.0,
+            ..TakeState::default()
+        },
+        ..ItemState::default()
+    };
+    let mut items = BTreeMap::new();
+    for (n, at) in [0.0, 2.0, 4.0].into_iter().enumerate() {
+        items.insert(format!("kick-{n}"), audio("kick", at, "Kick"));
+        items.insert(format!("snare-{n}"), audio("snare", at + 1.0, "Snare"));
+    }
+    items.insert(
+        "groove".into(),
+        ItemState {
+            track: "verb".into(),
+            position: 0.0,
+            length: 4.0,
+            volume: 1.0,
+            fade_in_shape: "linear".into(),
+            fade_out_shape: "linear".into(),
+            take: TakeState {
+                midi: true,
+                playrate: 1.0,
+                notes: vec![NoteState {
+                    start: 0.0,
+                    length: 0.5,
+                    pitch: 36,
+                    velocity: 100,
+                    channel: 0,
+                    muted: false,
+                }],
+                ..TakeState::default()
+            },
+            ..ItemState::default()
+        },
+    );
+    SessionModel {
+        tracks,
+        items,
+        markers: BTreeMap::from([(
+            "{M1}".to_owned(),
+            MarkerState {
+                at: 1.0,
+                name: "Verse".into(),
+                ..MarkerState::default()
+            },
+        )]),
+        regions: BTreeMap::from([(
+            "{R1}".to_owned(),
+            RegionState {
+                start: 0.0,
+                end: 4.0,
+                name: "Intro".into(),
+                ..RegionState::default()
+            },
+        )]),
+        tempo: vec![
+            TempoPoint {
+                at: 0.0,
+                bpm: 120.0,
+                beats_per_bar: 4,
+                beat_unit: 4,
+            },
+            TempoPoint {
+                at: 4.0,
+                bpm: 96.0,
+                beats_per_bar: 3,
+                beat_unit: 4,
+            },
+        ],
+        ..SessionModel::default()
+    }
+}
+
+#[test]
+fn a_small_song_staged_is_the_song_built_in_place() {
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(opens_alike(&song));
+}
+
+/// How many things project `guid`'s engine has made since it opened —
+/// items, FX and takes, each counted as the engine mints its guid — and
+/// every item and FX guid it holds now: a song built again shows both
+/// moving.
+fn made(daw: &Standalone, guid: &str) -> (u64, u64, u64, Vec<String>) {
+    daw.read_project(guid, |p| {
+        let mut guids: Vec<String> = p.items.keys().cloned().collect();
+        for entries in p.fx_chains.values() {
+            guids.extend(entries.iter().map(|e| e.fx.guid.clone()));
+        }
+        guids.sort();
+        (
+            p.next_item_counter,
+            p.next_fx_counter,
+            p.next_take_counter,
+            guids,
+        )
+    })
+    .expect("the project")
+}
+
+/// `doc` joined on the song already built into `daw` as `guid`, the way
+/// a song joins a live set (a fresh bridge, as collab makes one).
+async fn join_built(daw: &Standalone, guid: &str, song: &Song, doc: SessionDoc) -> Bridge {
+    let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+        .await
+        .expect("a facade");
+    let project = facade.daw.project(guid.to_owned()).await.expect("the song");
+    Bridge::join(
+        project,
+        song.media.clone(),
+        doc,
+        song.blobs.clone(),
+        direct(daw),
+    )
+    .await
+    .expect("joined the live doc")
+}
+
+/// What a peer that built `song` itself seeds a live set's doc with: its
+/// engine read afresh (so its FX and MIDI items under that engine's own
+/// guids, not the file's ids), as `collab` hosts a song.
+async fn seeded_elsewhere(song: &Song) -> SessionDoc {
+    let daw = Standalone::new();
+    // Its build's bridge let go: a project has one bridge at a time.
+    drop(in_place(&daw, "host", song).await);
+    let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+        .await
+        .expect("a facade");
+    let project = facade
+        .daw
+        .project("host".to_owned())
+        .await
+        .expect("the song");
+    let seed = SessionDoc::new();
+    let host = Bridge::host(
+        project,
+        song.media.clone(),
+        seed,
+        song.doc.read().chart,
+        song.blobs.clone(),
+        direct(&daw),
+    )
+    .await
+    .expect("seeded");
+    host.doc().fork()
+}
+
+/// The engine parts a build makes, with its counters and the order its
+/// items were made in on each track left out (neither is the doc's: a
+/// song built twice counts twice, and is the same song).
+fn built_parts(daw: &Standalone, guid: &str, ids: &EngineIds) -> BTreeMap<&'static str, String> {
+    let mut view = engine_view(daw, guid, ids);
+    view.remove("counters");
+    // Which track each item is on is in `items`; the lists only add the
+    // order they were made in.
+    view.remove("items_by_track");
+    if let Some(items) = view.get_mut("items") {
+        *items = without_item_order(items);
+    }
+    view
+}
+
+/// `text` with every item's `index: <n>, ` taken out.
+fn without_item_order(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("index: ") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + "index: ".len()..];
+        let digits = after.len() - after.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+        rest = after[digits..]
+            .strip_prefix(", ")
+            .unwrap_or(&after[digits..]);
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A song built from its file and then joined to a live set whose doc
+/// holds the same song is built once: the join makes nothing in the
+/// engine (no item, FX or take minted, the same guids held), the engine
+/// is what a build straight from the live doc makes, and the bridge
+/// shows what the doc holds — whether the doc is the file's own history
+/// or one another peer seeded from its own build (its FX and MIDI items
+/// under other guids).
+async fn joins_without_building(song: &Song) {
+    let seeded = seeded_elsewhere(song).await;
+    for (case, live) in [
+        ("the file's doc", song.doc.fork()),
+        ("a peer's seed", seeded),
+    ] {
+        let daw = Standalone::new();
+        // Its build's bridge let go: a project has one bridge at a time.
+        drop(in_place(&daw, "joined-song", song).await);
+        let before = made(&daw, "joined-song");
+        let joined = join_built(&daw, "joined-song", song, live.fork()).await;
+        assert_eq!(
+            made(&daw, "joined-song"),
+            before,
+            "{case}: the join built again"
+        );
+
+        let fresh = Song {
+            doc: live.fork(),
+            media: song.media.clone(),
+            blobs: song.blobs.clone(),
+        };
+        let straight = in_place(&daw, "straight-song", &fresh).await;
+        let have = built_parts(&daw, "joined-song", &joined.ids);
+        let want = built_parts(&daw, "straight-song", &straight.ids);
+        for (part, text) in &want {
+            let have = have[part].replace("joined-song", "<song>");
+            let want = text.replace("straight-song", "<song>");
+            let differ = have
+                .lines()
+                .zip(want.lines())
+                .find(|(a, b)| a != b)
+                .map(|(a, b)| format!("joined    {a}\nstraight  {b}"));
+            assert_eq!(differ, None, "{case}: {part} differ");
+            assert_eq!(have.len(), want.len(), "{case}: {part} differ in length");
+        }
+        let mut doc = live.read();
+        doc.chart.clone_from(&joined.shown().chart);
+        assert_eq!(joined.shown(), &doc, "{case}: the bridge shows the doc");
+    }
+}
+
+/// The bridge that built a song, re-pointed at a live doc of the same
+/// song ([`Bridge::rejoin`]), makes nothing in the engine either, and
+/// shows what the doc holds.
+async fn rejoins_without_building(song: &Song) {
+    let seeded = seeded_elsewhere(song).await;
+    for (case, live) in [
+        ("the file's doc", song.doc.fork()),
+        ("a peer's seed", seeded),
+    ] {
+        let daw = Standalone::new();
+        let built = in_place(&daw, "rejoined-song", song).await;
+        let before = made(&daw, "rejoined-song");
+        let joined = built.rejoin(live.fork()).await.expect("rejoined");
+        assert_eq!(
+            made(&daw, "rejoined-song"),
+            before,
+            "{case}: the rejoin built again"
+        );
+        let mut doc = live.read();
+        doc.chart.clone_from(&joined.shown().chart);
+        assert_eq!(joined.shown(), &doc, "{case}: the bridge shows the doc");
+    }
+}
+
+#[test]
+fn a_small_song_rejoined_to_its_live_doc_is_built_once() {
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let written = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        let song = Song {
+            doc: seeded_elsewhere(&written).await,
+            ..written
+        };
+        rejoins_without_building(&song).await;
+    });
+}
+
+#[test]
+fn a_small_song_joined_to_its_live_doc_is_built_once() {
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let written = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        // Its file as a host saves one: what its engine read back.
+        let song = Song {
+            doc: seeded_elsewhere(&written).await,
+            ..written
+        };
+        joins_without_building(&song).await;
+    });
+}
+
+#[test]
+fn a_real_song_joined_to_its_live_doc_is_built_once() {
+    let scratch = tempfile::tempdir().expect("a temp dir");
+    let Some(song) = real_song(scratch.path()) else {
+        return;
+    };
+    runtime().block_on(joins_without_building(&song));
+}
+
+/// A real song (`FTS_OPEN_SONG`), opened from a copy of its file.
+fn real_song(scratch: &Path) -> Option<Song> {
+    let original = PathBuf::from(std::env::var_os("FTS_OPEN_SONG")?);
+    let copy = scratch.join(original.file_name()?);
+    std::fs::copy(&original, &copy).expect("a copy");
+    let wal = PathBuf::from(format!("{}-wal", original.display()));
+    if wal.exists() {
+        std::fs::copy(&wal, format!("{}-wal", copy.display())).expect("its log");
+    }
+    let store = session_format::store::Store::open(&copy).expect("the store");
+    let doc = SessionDoc::from_loro(store.load(session_format::store::MAIN).expect("the song"));
+    Some(Song {
+        doc,
+        // Where the original's media is: read only.
+        media: MediaRoot(original.parent()?.to_path_buf()),
+        blobs: Arc::new(StoreBlobs(Mutex::new(store))),
+    })
+}
+
+struct StoreBlobs(Mutex<session_format::store::Store>);
+
+impl Blobs for StoreBlobs {
+    fn put(&self, bytes: &[u8]) -> String {
+        engine::blob_name(bytes)
+    }
+    fn get(&self, name: &str) -> Option<Vec<u8>> {
+        self.0.lock().ok()?.blob(name).ok()
+    }
+}
+
+#[test]
+fn a_real_song_staged_is_the_song_built_in_place() {
+    let scratch = tempfile::tempdir().expect("a temp dir");
+    let Some(song) = real_song(scratch.path()) else {
+        return;
+    };
+    runtime().block_on(opens_alike(&song));
+}
+
+/// While a real song is built on a stage and landed, a reader of another
+/// song in the engine never waits more than 20 ms for it (the budget is
+/// for an optimised build: `--profile release-fast`).
+#[test]
+fn a_real_song_staged_never_stalls_another_songs_reader() {
+    let scratch = tempfile::tempdir().expect("a temp dir");
+    let Some(song) = real_song(scratch.path()) else {
+        return;
+    };
+    let daw = Standalone::new();
+    daw.seed_project(info("playing"));
+    let done = std::sync::atomic::AtomicBool::new(false);
+    let worst = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            runtime().block_on(async {
+                let _bridge = staged(&daw, "opening", &song).await;
+            });
+            done.store(true, std::sync::atomic::Ordering::Release);
+        });
+        let mut worst = Duration::ZERO;
+        while !done.load(std::sync::atomic::Ordering::Acquire) {
+            let asked = Instant::now();
+            let found = daw.read_project("playing", |p| p.tracks.len());
+            worst = worst.max(asked.elapsed());
+            assert_eq!(found, Some(0));
+        }
+        worst
+    });
+    assert!(daw.read_project("opening", |p| p.tracks.len()) > Some(0));
+    assert!(
+        worst < Duration::from_millis(20),
+        "a read of another song waited {worst:?}"
+    );
+}
+
+/// A project has one bridge in a process: a second, whichever way it is
+/// made, is refused while the first lives — two would rewrite each other
+/// (#316) — and is allowed once the first is gone. Another engine's
+/// project of the same guid is another project.
+#[test]
+fn a_second_bridge_on_one_project_is_refused() {
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        let daw = Standalone::new();
+        let first = in_place(&daw, "one-song", &song).await;
+        let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+            .await
+            .expect("a facade");
+        let project = facade
+            .daw
+            .project("one-song".to_owned())
+            .await
+            .expect("the song");
+        let refused = |result: eyre::Result<Bridge>, how: &str| {
+            let error = result
+                .err()
+                .unwrap_or_else(|| panic!("{how}: a second bridge was made"));
+            assert_eq!(
+                error.downcast_ref::<crate::bridge::AlreadyBridged>(),
+                Some(&crate::bridge::AlreadyBridged {
+                    project: "one-song".into()
+                }),
+                "{how}: refused for another reason: {error}"
+            );
+        };
+        refused(
+            Bridge::host(
+                project.clone(),
+                song.media.clone(),
+                SessionDoc::new(),
+                String::new(),
+                song.blobs.clone(),
+                direct(&daw),
+            )
+            .await,
+            "host",
+        );
+        refused(
+            Bridge::join(
+                project.clone(),
+                song.media.clone(),
+                song.doc.fork(),
+                song.blobs.clone(),
+                direct(&daw),
+            )
+            .await,
+            "join",
+        );
+        refused(
+            Bridge::join_held(
+                project.clone(),
+                song.media.clone(),
+                song.doc.fork(),
+                song.blobs.clone(),
+                direct(&daw),
+            )
+            .await,
+            "join_held",
+        );
+
+        // Another engine's song of the same guid is its own.
+        let other = Standalone::new();
+        let _theirs = in_place(&other, "one-song", &song).await;
+
+        drop(first);
+        Bridge::host(
+            project,
+            song.media.clone(),
+            SessionDoc::new(),
+            String::new(),
+            song.blobs.clone(),
+            direct(&daw),
+        )
+        .await
+        .expect("the first gone, a bridge may be made again");
+    });
+}
+
+/// How many FX project `guid` holds, over every chain.
+fn fx_in(daw: &Standalone, guid: &str) -> usize {
+    daw.read_project(guid, |p| p.fx_chains.values().map(Vec::len).sum())
+        .expect("the project")
+}
+
+/// The #316 regression. A song hosted live: its engine keeps one bridge,
+/// on the song's own doc; the live set's doc is a copy of that doc, kept
+/// in step as a CRDT ([`crate::relay`]); a peer joins the live doc
+/// with its own engine. Edited on both engines and passed around for many
+/// rounds, every FX stays one FX on both — where two bridges on the
+/// host's engine (its doc's and the live doc's) added each chain again
+/// each round.
+#[test]
+fn a_song_hosted_live_keeps_one_of_each_fx_across_many_rounds() {
+    use crate::relay::{Side, exchange, seed};
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        // The host: the song open from its file, one bridge.
+        let host = Standalone::new();
+        let mut here = in_place(&host, "hosted", &song).await;
+        let fx = fx_in(&host, "hosted");
+        assert!(fx > 0, "the song has FX to lose count of");
+
+        // Hosted: the live doc seeded from the song's doc, then kept in step.
+        let live = SessionDoc::new();
+        live.loro()
+            .import_batch(&seed(here.doc().loro()).expect("a seed"))
+            .expect("seeded");
+        let song_side = Side::imported(here.doc().loro().clone());
+        let live_side = Side::imported(live.loro().clone());
+
+        // The peer: its replica of the live doc, one bridge on it.
+        let peer = Standalone::new();
+        let replica = SessionDoc::new();
+        replica
+            .loro()
+            .import_batch(&seed(live.loro()).expect("the live doc"))
+            .expect("replicated");
+        let replica_side = Side::imported(replica.loro().clone());
+        peer.seed_project(info("joined"));
+        let facade = daw_standalone::bootstrap::build_in_process_daw(peer.clone())
+            .await
+            .expect("a facade");
+        let project = facade
+            .daw
+            .project("joined".to_owned())
+            .await
+            .expect("the song");
+        let mut there = Bridge::join(
+            project,
+            song.media.clone(),
+            replica.clone(),
+            song.blobs.clone(),
+            direct(&peer),
+        )
+        .await
+        .expect("joined");
+        assert_eq!(fx_in(&peer, "joined"), fx, "the peer built the song once");
+
+        // Rounds of edits on both engines, each passed all the way round,
+        // and passed again for good measure.
+        let track = song.doc.read().tracks[0].guid.clone();
+        for round in 0..24_u32 {
+            let (daw, guid) = if round % 2 == 0 {
+                (&host, "hosted")
+            } else {
+                (&peer, "joined")
+            };
+            daw.write_project(guid, |p| {
+                if let Some(t) = p.tracks.iter_mut().find(|t| t.guid == track) {
+                    t.volume = f64::from(round) / 24.0;
+                }
+            });
+            if round % 2 == 0 {
+                here.local_step("Turn it").await.expect("a host step");
+            } else {
+                there.local_step("Turn it").await.expect("a peer step");
+            }
+            for _ in 0..2 {
+                exchange(&song_side, &live_side).await.expect("relayed");
+                exchange(&live_side, &replica_side).await.expect("synced");
+                here.remote_changed().await.expect("the host follows");
+                there.remote_changed().await.expect("the peer follows");
+                here.local_changed().await.expect("the host reads back");
+                there.local_changed().await.expect("the peer reads back");
+            }
+            assert_eq!(fx_in(&host, "hosted"), fx, "round {round}: the host's FX");
+            assert_eq!(fx_in(&peer, "joined"), fx, "round {round}: the peer's FX");
+        }
+        let fx_of =
+            |doc: &SessionDoc| -> usize { doc.read().tracks.iter().map(|t| t.fx.len()).sum() };
+        assert_eq!(fx_of(here.doc()), fx, "the song's doc");
+        assert_eq!(fx_of(&live), fx, "the live doc");
+        let volume = |daw: &Standalone, guid: &str| {
+            daw.read_project(guid, |p| {
+                p.tracks.iter().find(|t| t.guid == track).map(|t| t.volume)
+            })
+            .flatten()
+        };
+        assert_eq!(volume(&host, "hosted"), volume(&peer, "joined"));
+        assert_eq!(volume(&host, "hosted"), Some(23.0 / 24.0));
+    });
+}
+
+/// A step after the first reads only what the engine's journals say
+/// changed — an item moved, one removed, a recording's markers written —
+/// and comes to the very model a whole read gives.
+#[test]
+fn a_step_read_from_the_journal_is_the_engine_read_whole() {
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        let daw = Standalone::new();
+        let mut bridge = in_place(&daw, "song", &song).await;
+        // The first step reads whole and leaves the bridge its cursor.
+        daw.write_project("song", |p| {
+            if let Some(t) = p.tracks.first_mut() {
+                t.volume = 0.5;
+            }
+        });
+        assert!(bridge.local_step("Turn it down").await.expect("a step"));
+        assert!(bridge.cursor.is_some(), "read whole, the journal from here");
+
+        let (moved, gone, source) = daw
+            .read_project("song", |p| {
+                let mut kicks: Vec<&String> =
+                    p.items.keys().filter(|k| k.contains("kick")).collect();
+                kicks.sort();
+                let source = p
+                    .takes
+                    .get(kicks[0])
+                    .and_then(|l| l.takes.first())
+                    .and_then(|t| t.source_file_path.clone())
+                    .expect("a recording");
+                (kicks[0].clone(), kicks[1].clone(), source)
+            })
+            .expect("the song");
+        daw.write_project("song", |p| {
+            if let Some(entry) = p.items.get_mut(&moved) {
+                entry.item.position = daw_proto::primitives::PositionInSeconds::from_seconds(7.25);
+            }
+            p.items.remove(&gone);
+            p.take_markers
+                .entry(source)
+                .or_default()
+                .push(daw_proto::TakeMarker {
+                    id: "hit-1".into(),
+                    name: "kick".into(),
+                    source_position_seconds: 0.5,
+                    ..daw_proto::TakeMarker::default()
+                });
+        });
+        assert!(bridge.local_step("Edit the kick").await.expect("a step"));
+
+        let whole = engine::read(
+            &bridge.project,
+            &bridge.media,
+            bridge.blobs.as_ref(),
+            &bridge.ids,
+            bridge.direct.as_deref(),
+        )
+        .await
+        .expect("read whole");
+        assert_eq!(bridge.shown.items, whole.items, "items");
+        assert_eq!(
+            bridge.shown.take_markers, whole.take_markers,
+            "take markers"
+        );
+        assert!(!whole.take_markers.is_empty(), "the marker was read");
+        assert!(
+            !bridge.shown.items.contains_key(&gone),
+            "the removed item is gone"
+        );
+    });
+}
+
+/// The engine checked against the doc ([`Bridge::check`]): a song built,
+/// edited through the bridge and edited remotely matches at every turn —
+/// and is checked for free when nothing changed — while an edit made to
+/// the engine behind the bridge's back is found, by track, FX and field.
+async fn check(
+    bridge: &Bridge,
+    seen: &mut crate::bridge::Checked,
+    whole: bool,
+) -> crate::bridge::Check {
+    bridge.check(seen, whole, "test").await.expect("checked")
+}
+
+#[test]
+fn the_engine_checked_against_the_doc_finds_only_a_real_divergence() {
+    use crate::bridge::{Check, Checked};
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        // A song's doc is written from an engine (a song saved, opened
+        // again): the synthetic one, built once and read back, is that.
+        let first = Standalone::new();
+        let built = in_place(&first, "first", &song).await;
+        let saved = SessionDoc::new();
+        saved.write(built.shown(), ORIGIN_LOCAL).expect("saved");
+        drop(built);
+        let song = Song { doc: saved, ..song };
+
+        let daw = Standalone::new();
+        let mut bridge = in_place(&daw, "song", &song).await;
+        assert!(
+            bridge.last_apply_drift().is_empty(),
+            "the build took the whole doc: {:?}",
+            bridge.last_apply_drift()
+        );
+        let mut seen = Checked::default();
+        assert_eq!(
+            check(&bridge, &mut seen, true).await,
+            Check::Matched { read: true },
+            "just built"
+        );
+
+        // A normal edit: made on the engine, recorded as a step.
+        daw.write_project("song", |p| {
+            if let Some(t) = p.tracks.first_mut() {
+                t.volume = 0.25;
+            }
+        });
+        assert!(bridge.local_step("Turn it down").await.expect("a step"));
+        assert_eq!(
+            check(&bridge, &mut seen, false).await,
+            Check::Matched { read: true },
+            "an edit recorded is no drift"
+        );
+        assert_eq!(
+            check(&bridge, &mut seen, false).await,
+            Check::Matched { read: false },
+            "nothing changed since: not read again"
+        );
+
+        // A remote edit: written into the doc, applied by the bridge.
+        let mut model = bridge.doc().read();
+        model.tracks[0].volume = 0.75;
+        model.tracks[0].muted = true;
+        bridge
+            .doc()
+            .write(&model, "remote")
+            .expect("a remote write");
+        assert_eq!(
+            check(&bridge, &mut seen, false).await,
+            Check::Pending,
+            "not yet applied: apart on purpose"
+        );
+        assert!(!bridge.remote_changed().await.expect("applied").is_empty());
+        assert!(
+            bridge.last_apply_drift().is_empty(),
+            "the engine took the remote edit: {:?}",
+            bridge.last_apply_drift()
+        );
+        assert_eq!(
+            check(&bridge, &mut seen, false).await,
+            Check::Matched { read: true }
+        );
+
+        // Behind the bridge's back: a track's pan and its FX bypassed.
+        let (track, name) = daw
+            .read_project("song", |p| {
+                let t = p
+                    .tracks
+                    .iter()
+                    .find(|t| {
+                        p.fx_chains
+                            .get(&daw_standalone::sync::FxChainKey::Track(t.guid.clone()))
+                            .is_some_and(|c| !c.is_empty())
+                    })
+                    .expect("a track with FX");
+                (t.guid.clone(), t.name.clone())
+            })
+            .expect("the song");
+        daw.write_project("song", |p| {
+            if let Some(t) = p.tracks.iter_mut().find(|t| t.guid == track) {
+                t.pan = -0.5;
+            }
+            if let Some(chain) = p
+                .fx_chains
+                .get_mut(&daw_standalone::sync::FxChainKey::Track(track.clone()))
+            {
+                for entry in chain.iter_mut() {
+                    entry.fx.enabled = false;
+                }
+            }
+        });
+        let Check::Drifted(found) = check(&bridge, &mut seen, false).await else {
+            panic!("the divergence went unseen");
+        };
+        let named: Vec<String> = found.iter().map(ToString::to_string).collect();
+        assert!(
+            found
+                .iter()
+                .any(|d| d.track.as_deref() == Some(name.as_str()) && d.field == "pan"),
+            "{named:?}"
+        );
+        assert!(
+            found
+                .iter()
+                .any(|d| d.fx.is_some() && d.field == "fx.enabled"),
+            "{named:?}"
+        );
+        // Found again, read whole.
+        assert!(matches!(
+            check(&bridge, &mut seen, true).await,
+            Check::Drifted(_)
+        ));
+    });
+}
+
+/// `song` opened in place into `daw` as `guid`, reaching the engine in
+/// this process (`direct`) or through its facade alone.
+async fn opened(daw: &Standalone, guid: &str, song: &Song, in_process: bool) -> Bridge {
+    daw.seed_project(info(guid));
+    let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+        .await
+        .expect("a facade");
+    let project = facade.daw.project(guid.to_owned()).await.expect("the song");
+    Bridge::join(
+        project,
+        song.media.clone(),
+        song.doc.fork(),
+        song.blobs.clone(),
+        in_process.then(|| direct(daw)).flatten(),
+    )
+    .await
+    .expect("joined")
+}
+
+/// A song whose FX hold state, one switched off and one offline: their
+/// states are loaded together once every chain is built
+/// (`Standalone::set_state_chunks`), and the song is the one the facade
+/// builds FX by FX — each FX's state, switch and offline as the doc has
+/// them.
+#[test]
+fn fx_states_loaded_together_open_the_song_the_facade_opens() {
+    let blobs = Arc::new(MemoryBlobs::default());
+    let eq = blobs.put(b"eq: low shelf +2 dB");
+    let comp = blobs.put(b"comp: 4:1, 10 ms");
+    let mut model = synthetic();
+    let fx = |guid: &str, plugin: &str, state: &str, enabled: bool, offline: bool| FxState {
+        guid: guid.into(),
+        plugin: plugin.into(),
+        name: plugin.into(),
+        enabled,
+        offline,
+        state: Some(state.to_owned()),
+        ..FxState::default()
+    };
+    for track in &mut model.tracks {
+        track.fx = vec![
+            fx(
+                &format!("{{EQ {}}}", track.guid),
+                "ReaEQ",
+                &eq,
+                false,
+                false,
+            ),
+            fx(
+                &format!("{{COMP {}}}", track.guid),
+                "ReaComp",
+                &comp,
+                true,
+                true,
+            ),
+        ];
+    }
+    let doc = SessionDoc::new();
+    doc.write(&model, ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs,
+    };
+    runtime().block_on(async {
+        let together = Standalone::new();
+        let one_by_one = Standalone::new();
+        let a = opened(&together, "song", &song, true).await;
+        let b = opened(&one_by_one, "song", &song, false).await;
+        // What the loads set: each FX's place, plugin, state and switches
+        // (the facade alone leaves its parameters at their defaults, which
+        // the in-process engine sets from the doc: not compared).
+        let loaded = |daw: &Standalone| {
+            daw.read_project("song", |p| {
+                let mut fx: Vec<String> = p
+                    .fx_chains
+                    .iter()
+                    .flat_map(|(chain, entries)| {
+                        entries.iter().enumerate().map(move |(i, e)| {
+                            format!(
+                                "{chain:?} {i} {} {} {} {:?}",
+                                e.fx.name, e.fx.enabled, e.fx.offline, e.state_chunk
+                            )
+                        })
+                    })
+                    .collect();
+                fx.sort();
+                fx
+            })
+            .expect("the song")
+        };
+        let (fx_a, fx_b) = (loaded(&together), loaded(&one_by_one));
+        assert_eq!(fx_a, fx_b, "the FX alike, state and switches");
+        assert_eq!(fx_a.len(), model.tracks.len() * 2);
+        assert!(
+            fx_a.iter().any(|f| f.contains("low shelf")),
+            "the EQ's state"
+        );
+        assert!(
+            fx_a.iter().any(|f| f.contains("4:1")),
+            "the compressor's state"
+        );
+        let shown: Vec<_> = a.shown.tracks.iter().flat_map(|t| t.fx.iter()).collect();
+        assert_eq!(shown.len(), model.tracks.len() * 2);
+        for f in shown {
+            let is_eq = f.plugin == "ReaEQ";
+            assert_eq!(f.enabled, !is_eq, "{} enabled as the doc has it", f.guid);
+            assert_eq!(f.offline, !is_eq, "{} offline as the doc has it", f.guid);
+            assert_eq!(f.state.as_deref(), Some(if is_eq { &*eq } else { &*comp }));
+        }
+    });
+}

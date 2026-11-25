@@ -1,5 +1,5 @@
 //! Who else is in the session and what they are doing, and what this peer
-//! is doing: the session primitive's store (`session::presence::store`,
+//! is doing: the session primitive's store (`session_sync::presence::store`,
 //! re-exported here), and this peer's caret in Studio's chart editor.
 
 pub use fts_session::presence::store::*;

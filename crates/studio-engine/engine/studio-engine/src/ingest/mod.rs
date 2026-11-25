@@ -27,9 +27,9 @@ use std::path::{Path, PathBuf};
 use web_time::Instant;
 
 use facet::Facet;
-pub use session::library::publish::Form;
-use session::library::publish::{Made, Project, ProjectSpec, RemoteFile, SongRoot};
-use session::library::{Library, ListKind};
+pub use library_sync::publish::Form;
+use library_sync::publish::{Made, Project, ProjectSpec, RemoteFile, SongRoot};
+use library_sync::{Library, ListKind};
 
 pub mod actions;
 pub mod inputs;
@@ -418,8 +418,8 @@ async fn send_and_publish(
 /// checkpoint gave it.
 async fn remote_files(
     library: &Library,
-    files: &session::library::publish::FilesClient,
-    root: session::library::publish::RootId,
+    files: &library_sync::publish::FilesClient,
+    root: library_sync::publish::RootId,
     locals: &[plan::Local],
 ) -> eyre::Result<Vec<RemoteFile>> {
     let mut remote = library.catalogue(files, root).await?;

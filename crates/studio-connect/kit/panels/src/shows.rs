@@ -3,7 +3,7 @@
 
 use daw_view_kit::shows::Shows;
 use dioxus::prelude::*;
-use session::modes::Mode;
+use engine_domain::modes::Mode;
 
 /// What `mode` asks the views to show: the arm buttons in Record, every
 /// item in its track's colour in Mix, every cut (and the drum detection,

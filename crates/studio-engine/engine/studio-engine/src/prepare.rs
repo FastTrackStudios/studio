@@ -4,8 +4,8 @@
 //!
 //! Each step is the shared one, not a window-only copy:
 //! `dynamic_template::apply::organize` (the `--apply-buses` pass, run live),
-//! `session::keyflow::from_chart::build_from_chart`, and
-//! `session::guide::Guide::generate`. Each is optional; they run in that
+//! `engine_domain::keyflow::from_chart::build_from_chart`, and
+//! `engine_domain::guide::Guide::generate`. Each is optional; they run in that
 //! order because the guide reads the song the chart stamps, and files its
 //! tracks into the folder the organizer builds.
 
@@ -149,16 +149,19 @@ pub fn stamp_lyrics(
     chart: &str,
     lrc: &str,
 ) -> eyre::Result<usize> {
-    let layout = session::setlist::chart_import::chart_to_layout(chart)
+    let layout = engine_domain::setlist::chart_import::chart_to_layout(chart)
         .map_err(|e| eyre::eyre!("chart: {e:?}"))?;
     let text = lrc;
-    let mut lyrics =
-        session::lyrics::Lyrics::from_lrc(text, layout.song_start_seconds, layout.song_end_seconds);
+    let mut lyrics = engine_domain::lyrics::Lyrics::from_lrc(
+        text,
+        layout.song_start_seconds,
+        layout.song_end_seconds,
+    );
     let project = ProjectContext::Project(project_guid.to_owned());
     // Pinned to the song where the `.lrc` says (see `lyrics::Anchor`): its
     // section's downbeat, from the regions the chart just laid out, and
     // the beats from there at the song's tempo.
-    if let Some(anchor) = session::lyrics::Anchor::in_lrc(text) {
+    if let Some(anchor) = engine_domain::lyrics::Anchor::in_lrc(text) {
         use daw::service::Regions as _;
         let downbeat = daw
             .all(project.clone())
@@ -185,7 +188,8 @@ pub fn stamp_lyrics(
             );
         }
     }
-    session::lyrics::stamp_lines(daw, project, &lyrics).map_err(|e| eyre::eyre!("lyrics: {e}"))
+    engine_domain::lyrics::stamp_lines(daw, project, &lyrics)
+        .map_err(|e| eyre::eyre!("lyrics: {e}"))
 }
 
 /// The song's name, "Title - Artist": the project's name less a working
@@ -707,7 +711,7 @@ fn stems_beside(recording: &std::path::Path) -> Vec<(String, String)> {
 
 /// Lay an edited chart over the open session: rebuild the song's structure
 /// from it (tempo, markers, section regions, key and chords — see
-/// [`session::keyflow::from_chart::rebuild_from_chart`]) and, when `guide`,
+/// [`engine_domain::keyflow::from_chart::rebuild_from_chart`]) and, when `guide`,
 /// regenerate the click, count and cues to match.
 ///
 /// The guide needs nothing cleared first: it writes one item per role over
@@ -726,13 +730,13 @@ pub fn apply_chart(
     project_guid: &str,
     chart: &str,
     guide: bool,
-) -> eyre::Result<session::keyflow::from_chart::ChartRebuilt> {
+) -> eyre::Result<engine_domain::keyflow::from_chart::ChartRebuilt> {
     let project = ProjectContext::Project(project_guid.to_owned());
-    let rebuilt = session::keyflow::from_chart::rebuild_from_chart(daw, &project, chart)?;
+    let rebuilt = engine_domain::keyflow::from_chart::rebuild_from_chart(daw, &project, chart)?;
     if guide {
-        session::guide::Guide::new(daw.clone())
+        engine_domain::guide::Guide::new(daw.clone())
             .with_instrument(GUIDE_INSTRUMENT)
-            .generate(session::guide::GuideScope::All)
+            .generate(engine_domain::guide::GuideScope::All)
             .map_err(|e| eyre::eyre!("guide: {e}"))?;
     }
     Ok(rebuilt)
@@ -803,7 +807,7 @@ pub fn steps(
         // own markers — the sections made regions, the song's region and
         // bounds placed, the notes left marks — before the guide, whose
         // cues follow the sections.
-        let mut converted = session::keyflow::actions::convert_markers_in(
+        let mut converted = engine_domain::keyflow::actions::convert_markers_in(
             daw,
             &project,
             song_name(daw, &project).as_deref(),
@@ -824,7 +828,7 @@ pub fn steps(
         // Rebuild, not build: a multitrack can arrive with structure of its
         // own — the importer's guessed `Cue N` sections, its SONGSTART —
         // and the chart replaces it rather than landing beside it.
-        let built = session::keyflow::from_chart::rebuild_from_chart(daw, &project, text)
+        let built = engine_domain::keyflow::from_chart::rebuild_from_chart(daw, &project, text)
             .map_err(|e| eyre::eyre!("chart: {e}"))?
             .built;
         tracing::info!(
@@ -843,9 +847,9 @@ pub fn steps(
         }
     }
     if guide {
-        session::guide::Guide::new(daw.clone())
+        engine_domain::guide::Guide::new(daw.clone())
             .with_instrument(GUIDE_INSTRUMENT)
-            .generate(session::guide::GuideScope::All)
+            .generate(engine_domain::guide::GuideScope::All)
             .map_err(|e| eyre::eyre!("guide: {e}"))?;
         tracing::info!("prepare: click and guide generated");
         // The multitrack's own click and guide stems, renamed and
@@ -1011,10 +1015,10 @@ mod tests {
     #[test]
     fn a_reaper_projects_own_regions_are_its_sections() {
         use daw::service::{Markers, Regions};
-        use session::proto::ruler_lanes::CoreLane;
+        use engine_domain::proto::ruler_lanes::CoreLane;
         let (daw, project) = marked_up("  RULERLANE 1 4 \"\" 0 -1\n  RULERLANE 2 8 \"\" 0 -1\n");
         let converted =
-            session::keyflow::actions::convert_markers_in(&daw, &project, Some("Song"), None)
+            engine_domain::keyflow::actions::convert_markers_in(&daw, &project, Some("Song"), None)
                 .expect("converted");
         assert_eq!(converted.sections, ["Intro", "Chorus 1 (Spanish)"]);
         assert_eq!(converted.song, Some((2.0, 20.0)));
@@ -1048,10 +1052,10 @@ mod tests {
     #[test]
     fn regions_on_a_lane_named_song_are_songs() {
         use daw::service::Regions;
-        use session::proto::ruler_lanes::CoreLane;
+        use engine_domain::proto::ruler_lanes::CoreLane;
         let (daw, project) = marked_up("  RULERLANE 1 8 SONG 0 -1\n  RULERLANE 2 4 MARKS 0 -1\n");
         let converted =
-            session::keyflow::actions::convert_markers_in(&daw, &project, Some("Song"), None)
+            engine_domain::keyflow::actions::convert_markers_in(&daw, &project, Some("Song"), None)
                 .expect("converted");
         assert!(
             !converted.sections.contains(&"Intro".to_owned()),
@@ -1126,7 +1130,7 @@ mod tests {
         // a bar of 4/4, a bar of 3/4, a bar of 4/4.
         const TURN: &str =
             "Meter Song - Test\n#C 60bpm 4/4\n\nCount 1\n\nIN 3\nC\n!T3/4 F\n!T4/4 G\n";
-        let layout = session::setlist::chart_import::chart_to_layout(TURN).expect("laid out");
+        let layout = engine_domain::setlist::chart_import::chart_to_layout(TURN).expect("laid out");
         assert_eq!(
             layout.meter_changes,
             [(8.0, 3, 4), (11.0, 4, 4)],
@@ -1145,7 +1149,7 @@ mod tests {
     #[test]
     fn a_section_with_a_name_of_its_own_keeps_it() {
         use daw::service::Regions;
-        use session::proto::ruler_lanes::CoreLane;
+        use engine_domain::proto::ruler_lanes::CoreLane;
         let (daw, project) =
             applied("Named Song - Test\n#C 120bpm 4/4\n\nVS 2\nC\nG\n\n[End] 1\nC\n");
         let names: Vec<String> = Regions::all(&daw, project)
@@ -1166,7 +1170,7 @@ mod tests {
         // played 3 times (8-32 s), [End] 1 bar (32-36 s).
         const VAMP: &str =
             "Vamp Song - Test\n#C 60bpm 4/4\n\nVS 2\nC\nG\n\nOUT 2\n|: F | G :|x3\n\n[End] 1\nC\n";
-        let layout = session::setlist::chart_import::chart_to_layout(VAMP).expect("laid out");
+        let layout = engine_domain::setlist::chart_import::chart_to_layout(VAMP).expect("laid out");
         let spans: Vec<(f64, f64, u32)> = layout
             .sections
             .iter()

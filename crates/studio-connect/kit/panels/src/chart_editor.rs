@@ -22,7 +22,7 @@ use std::time::Duration;
 use dioxus::prelude::*;
 use futures_util::StreamExt as _;
 
-use session::ui::components::chart_text::{ChartText, ChartTextStatus, keyflow_decorations};
+use studio_ui::components::chart_text::{ChartText, ChartTextStatus, keyflow_decorations};
 
 use crate::shell::{RULE, TEXT};
 use crate::song_model::StudioSession;
@@ -125,7 +125,7 @@ pub fn ChartEditor() -> Element {
             "chart saved — the song is rebuilt only in Engine mode".to_owned()
         }
     };
-    // The pane is the shared one (`session::ui::components::chart_text`):
+    // The pane is the shared one (`studio_ui::components::chart_text`):
     // Keyflow's colours with the others' carets over them.
     rsx! {
         ChartText {
@@ -187,9 +187,9 @@ fn caret_revision() -> u64 {
     let mut entries: Vec<(String, Vec<u8>)> = presence
         .states()
         .into_iter()
-        .filter(|(k, _)| !k.starts_with(&me) && k.ends_with(session::sync::presence::STATE))
+        .filter(|(k, _)| !k.starts_with(&me) && k.ends_with(session_sync::presence::STATE))
         .filter_map(|(k, v)| {
-            let state = session::sync::presence::PeerState::decode(&v)?;
+            let state = session_sync::presence::PeerState::decode(&v)?;
             let (a, h) = state.chart_caret?;
             Some((k, [a, h].concat()))
         })
@@ -208,10 +208,10 @@ fn remote_carets(state: &editor_state::EditorState) -> Vec<editor_state::Decorat
     let max = rope.len_chars();
     let mut out = Vec::new();
     for (key, value) in presence.states() {
-        if key.starts_with(&me) || !key.ends_with(session::sync::presence::STATE) {
+        if key.starts_with(&me) || !key.ends_with(session_sync::presence::STATE) {
             continue;
         }
-        let Some(peer) = session::sync::presence::PeerState::decode(&value) else {
+        let Some(peer) = session_sync::presence::PeerState::decode(&value) else {
             continue;
         };
         let Some((anchor, head)) = peer.chart_caret.as_ref() else {

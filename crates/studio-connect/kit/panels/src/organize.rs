@@ -8,11 +8,11 @@
 //!
 //! - a **section** fills the arrangement's time selection, or — with none —
 //!   its default length from the edit cursor
-//!   (`session::keyflow::actions`, `infer_insert_bounds`);
+//!   (`engine_domain::keyflow::actions`, `infer_insert_bounds`);
 //! - a **marker** goes at the edit cursor;
 //! - a **time signature** starts at the measure holding the edit cursor;
 //!   with Shift held it lasts that one measure and the signature before it
-//!   comes back after (`session::keyflow::time_signature`).
+//!   comes back after (`engine_domain::keyflow::time_signature`).
 //!
 //! The actions read the ENGINE's cursor and selection, and the arrangement
 //! keeps its own, so each press hands the arrangement's over first
@@ -27,8 +27,8 @@
 //! the guide by `FTS_SESSION_GUIDE_GENERATE_GUIDE_TRACKS`.
 
 use dioxus::prelude::*;
-use session::keyflow::actions::SectionKindKeyflow as _;
-use session::section_kinds::{MarkerKind, SectionKind};
+use engine_domain::keyflow::actions::SectionKindKeyflow as _;
+use fts_session::section_kinds::{MarkerKind, SectionKind};
 
 use crate::chrome::{DIM, RULE, TEXT};
 pub use crate::organize_edit::Button;
@@ -52,7 +52,7 @@ const STRUCTURE: [(Button, &str); 12] = [
 /// The toolbar: the structure, a gap, the time signatures.
 #[component]
 pub fn OrganizeToolbar() -> Element {
-    let signatures = session::keyflow::time_signature::TIME_SIGNATURES;
+    let signatures = engine_domain::keyflow::time_signature::TIME_SIGNATURES;
     rsx! {
         div {
             // One row, always: what does not fit scrolls sideways rather
@@ -105,11 +105,11 @@ fn press(button: Button, shift: bool) {
 }
 
 /// The session's guide action as REAPER knows it
-/// (`session::proto::guide::GuideActions::generate_guide_tracks`).
+/// (`studio_proto::guide::GuideActions::generate_guide_tracks`).
 const GENERATE_GUIDE: &str = "FTS_SESSION_GUIDE_GENERATE_GUIDE_TRACKS";
 
 /// The REAPER command id of a marker or section button — the session's own
-/// action (`session::proto::keyflow_actions::KeyflowActions`), which runs
+/// action (`studio_proto::keyflow_actions::KeyflowActions`), which runs
 /// the same `dispatch` the local press does. `None` for a time signature
 /// (there is no action for one; the remote press writes it itself) and
 /// for the sections with no action.
@@ -181,7 +181,7 @@ fn press_remote(button: Button, shift: bool) -> eyre::Result<()> {
     .ok_or_else(|| eyre::eyre!("the engine runtime is not up"))?
 }
 
-/// [`session::keyflow::time_signature::insert_time_signature`], through
+/// [`engine_domain::keyflow::time_signature::insert_time_signature`], through
 /// the facade: `num/den` from the measure holding the edit cursor — for
 /// that one measure with `single_measure`, the signature before it coming
 /// back on the next downbeat unless the project already changes there.

@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 
 use dioxus::prelude::*;
-use session::modes::Mode;
+use engine_domain::modes::Mode;
 
 use crate::setlist::Setlist;
 

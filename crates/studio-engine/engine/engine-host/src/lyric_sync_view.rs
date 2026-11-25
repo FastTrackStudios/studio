@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use dioxus::prelude::*;
 
 use keyflow_lang::sync::timing::{Rating, TimingMap};
-use session::ui::components::{LyricSyncView, SyncRating, SyncWord};
+use studio_ui::components::{LyricSyncView, SyncRating, SyncWord};
 
 fn sidecar_path() -> PathBuf {
     if let Ok(p) = std::env::var("FTS_LYRIC_SYNC") {

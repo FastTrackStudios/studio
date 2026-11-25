@@ -283,7 +283,7 @@ pub enum LibraryCommand {
 }
 
 async fn library(command: LibraryCommand) -> eyre::Result<()> {
-    let lib = session::library::Library::from_env();
+    let lib = library_sync::Library::from_env();
     let setlists = lib.setlists().await?;
     match command {
         LibraryCommand::List => {
@@ -535,7 +535,7 @@ async fn share(project: &Path, org: &str) -> eyre::Result<()> {
             project.display()
         );
     }
-    let ids = session::project_sync::share(project, org)
+    let ids = library_sync::project_sync::share(project, org)
         .await
         .map_err(|e| eyre::eyre!("{e}"))?;
     for (branch, id) in ids {

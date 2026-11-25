@@ -1,7 +1,7 @@
 //! The Organize toolbar's buttons. Placing what they insert on the song is
 //! the engine's (`studio_engine::organize_edit`).
 
-use session::section_kinds::{MarkerKind, SectionKind};
+use fts_session::section_kinds::{MarkerKind, SectionKind};
 
 /// One button of the toolbar — what [`insert`] puts on the timeline.
 #[derive(Clone, Copy, PartialEq, Debug)]

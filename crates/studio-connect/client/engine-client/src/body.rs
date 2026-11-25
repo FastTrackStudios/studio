@@ -46,8 +46,8 @@ pub trait StudioBody: Send + Sync {
     fn chart_context(
         &self,
     ) -> Option<(
-        session::sync::SessionDoc,
-        std::sync::Arc<dyn session::sync::net::PresenceSink>,
+        session_sync::SessionDoc,
+        std::sync::Arc<dyn session_sync::net::PresenceSink>,
         String,
     )> {
         None

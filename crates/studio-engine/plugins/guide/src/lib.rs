@@ -25,10 +25,10 @@
 //!   `CueSchedule` built from song *sections*, and the transport alone
 //!   carries no section information.
 //! - **MIDI** — the plugin plays incoming notes and nothing else. This is
-//!   what `session::guide`'s generate-guide-tracks action produces: the
+//!   what `engine_domain::guide`'s generate-guide-tracks action produces: the
 //!   click grid, count-in and section announcements as notes on the
 //!   Click / Count / Guide tracks. One table maps notes to sounds in both
-//!   directions (`session::guide::engine::midi`), so a track FTS stamps is a track
+//!   directions (`engine_domain::guide::engine::midi`), so a track FTS stamps is a track
 //!   this plugin reads back. Count and section cues work here, because
 //!   the notes *are* the schedule — editable and movable in the piano
 //!   roll.
@@ -36,7 +36,7 @@
 //! Section-cue audio still has to be in the bank to be heard: the
 //! synthesized defaults cover clicks and count ticks, but guide
 //! announcements come from real recorded samples (`load_guide_dir`) or
-//! pre-rendered TTS (`session::guide::engine::CueBank`). A Guide note with no
+//! pre-rendered TTS (`engine_domain::guide::engine::CueBank`). A Guide note with no
 //! sample behind it is silently skipped. Loading those is a follow-up.
 //!
 //! GUI is deliberately absent (headless, host-generic params), matching the
@@ -46,8 +46,8 @@ use nice_plug::midi::NoteName;
 use nice_plug::prelude::*;
 use std::sync::Arc;
 
-use session::guide::engine::midi::{note_names, trigger_for_midi_note};
-use session::guide::engine::{BlockClock, GuideConfig, GuideEngine, TriggerSource};
+use engine_domain::guide::engine::midi::{note_names, trigger_for_midi_note};
+use engine_domain::guide::engine::{BlockClock, GuideConfig, GuideEngine, TriggerSource};
 
 const PLUGIN_NAME: &str = "FTS Guide";
 

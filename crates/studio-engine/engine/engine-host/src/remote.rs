@@ -319,7 +319,7 @@ impl std::ops::Deref for EngineDaw {
 /// from this app's own endpoint (a stable per-install identity).
 ///
 /// The same `Caller` (`engine.daw.caller()`) also reaches the engine's
-/// setlist: `session::SetlistServiceClient::new(caller.clone())`.
+/// setlist: `engine_domain::SetlistServiceClient::new(caller.clone())`.
 ///
 /// # Errors
 ///

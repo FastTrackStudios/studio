@@ -41,7 +41,7 @@ use mixer_view::mcp::Mixer;
 
 /// The phase these measurements are taken in — the one the rack was
 /// built for, and the one every reference image was shot in.
-const TONE: session::mix_phases::MixPhase = session::mix_phases::MixPhase::Tone;
+const TONE: fts_session::mix_phases::MixPhase = fts_session::mix_phases::MixPhase::Tone;
 use arrangement_view::ruler::ruler_h;
 use daw_view_kit::profile::{Counts, Stages, Summary};
 
@@ -864,7 +864,7 @@ fn fx_shot(palette: &Palette, out: &std::path::Path, width: u32, height: u32) {
         .ok()
         .and_then(|v| v.trim().parse().ok())
         .unwrap_or(1);
-    let folded: Vec<session::mix_phases::MixPhase> = std::env::var("FTS_BENCH_FX_FOLD")
+    let folded: Vec<fts_session::mix_phases::MixPhase> = std::env::var("FTS_BENCH_FX_FOLD")
         .unwrap_or_default()
         .split(',')
         .filter_map(|name| {
@@ -1208,7 +1208,7 @@ fn mixer_shot(
             let profile = mixer_view::rails::profile(
                 mixer_view::rails::Surface::Mixer,
                 mixer_view::app::MIX,
-                session::mix_phases::MixPhase::Tone,
+                fts_session::mix_phases::MixPhase::Tone,
                 scene.map(|s| s.slug.as_str()),
                 studio_engine::settings::Settings::default(),
                 mixer_view::app::Audience::Engineer,

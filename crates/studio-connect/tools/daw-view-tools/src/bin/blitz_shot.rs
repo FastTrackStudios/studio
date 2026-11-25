@@ -473,7 +473,7 @@ fn Still(props: StillProps) -> Element {
     // its mode switch sets it — Edit mode draws the hits, the cuts and
     // the comp strip over the kit.
     if let Some(mode) = std::env::var("FTS_BLITZ_MODE").ok().and_then(|m| {
-        use session::modes::Mode;
+        use engine_domain::modes::Mode;
         match m.to_ascii_lowercase().as_str() {
             "edit" => Some(Mode::Edit),
             "record" => Some(Mode::Record),

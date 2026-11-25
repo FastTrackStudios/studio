@@ -824,7 +824,7 @@ fn write_chart(keep: &Keep, project: &Path, label: &str, chart: &str) -> eyre::R
         #[cfg(feature = "library")]
         Keep::Disk(_) => {
             if let Some(folder) = project.parent() {
-                session::library::write_chart(folder, label, chart)?;
+                library_sync::write_chart(folder, label, chart)?;
             }
             Ok(())
         }

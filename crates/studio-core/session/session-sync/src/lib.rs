@@ -3,14 +3,11 @@
 //! regions), tempo map and chart, in one document that every device and
 //! every view edits and merges field by field.
 //!
-//! Copied, unchanged except for paths, from the studio repo's
-//! `features/session/src/sync` (commit 0fae0b4d7): its engine- and
-//! transport-free half (the schema, the model, the diff, presence, the
-//! shared transport, crop, hold and align). The bridge to a DAW
-//! engine, the relay (architect's transport), the network and the
-//! shared clock stay there. One change:
-//! [`Position`] stands in for `daw_transport_sync::Position`, with the
-//! same fields, so this crate needs nothing from the DAW repo, and
+//! The engine-free half of the old Session app's `sync`: the schema, the
+//! model, the diff, presence, the shared transport, crop, hold, align,
+//! drift, the relay between two documents and (feature `net`) the network
+//! lanes. The bridge to a DAW engine and the shared clock are
+//! `engine-sync`'s (the engine group). One change from the original:
 //! `web_time::Instant` for `architect::platform::Instant`.
 //!
 //! Each replica is the source of truth for its own engine: local edits
@@ -21,12 +18,19 @@
 //! (`studio:song:<id>`), wrapped with [`SessionDoc::from_loro`].
 
 pub mod align;
+#[cfg(feature = "net")]
+pub mod clock;
 pub mod crop;
 pub mod diff;
 pub mod doc;
+pub mod drift;
 pub mod hold;
 pub mod model;
-pub mod presence;
+#[cfg(feature = "net")]
+pub mod net;
+/// Who else is here: the session primitive's.
+pub use fts_session::presence;
+pub mod relay;
 pub mod slug;
 pub mod transport;
 
@@ -43,12 +47,5 @@ pub use model::{
     TakeState, TempoPoint, TrackState,
 };
 
-/// A transport's position at a moment (as `daw_transport_sync::Position`).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Position {
-    /// When, in the shared clock (µs).
-    pub host_micros: f64,
-    pub playhead_seconds: f64,
-    pub playrate: f64,
-    pub is_playing: bool,
-}
+/// A transport's position at a moment: the DAW transport's own type.
+pub use daw_transport_sync::Position;

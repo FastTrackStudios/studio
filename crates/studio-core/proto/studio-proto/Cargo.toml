@@ -1,0 +1,28 @@
+[package]
+name = "studio-proto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Studio's contracts: the setlist and song services, the mode service, and the action traits (guide, key, keyflow, playback, track manager, …) every host and client names"
+
+[lints]
+workspace = true
+
+[features]
+# `#[architect::rpc]` emits its clients and dispatchers under `vox`.
+default = ["vox"]
+vox = []
+
+[dependencies]
+architect = { workspace = true, features = ["local", "platform", "vox"] }
+daw-proto = { workspace = true }
+eyre = { workspace = true }
+facet = { workspace = true }
+keyflow = { workspace = true, features = ["text", "engraver"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+utils = { workspace = true }
+uuid = { version = "1", features = ["js", "serde", "v4", "v7"] }
+vox = { workspace = true }
+vox-types = { workspace = true }

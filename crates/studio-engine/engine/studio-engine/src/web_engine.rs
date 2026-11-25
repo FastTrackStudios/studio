@@ -1054,7 +1054,7 @@ async fn open_project_file(
         .map_err(|e| eyre::eyre!("could not read {}: {e}", path.display()))?;
     let file = ProjectFile::read(&bytes)
         .map_err(|e| eyre::eyre!("{} did not read: {e}", path.display()))?;
-    let doc = session::sync::SessionDoc::from_loro(
+    let doc = engine_sync::SessionDoc::from_loro(
         file.doc(MAIN)
             .map_err(|e| eyre::eyre!("{} did not load: {e}", path.display()))?,
     );
@@ -1082,9 +1082,9 @@ async fn open_project_file(
     // Built, the bridge has done its work here: a page keeps no project
     // file to save into. In a live set the session joins the song through
     // it (`collab::song_built`), so the song is not read back again.
-    let built = session::sync::Bridge::join(
+    let built = engine_sync::Bridge::join(
         project,
-        session::sync::engine::MediaRoot(media_dir.clone()),
+        engine_sync::engine::MediaRoot(media_dir.clone()),
         doc,
         Arc::new(FileBlobs::new(file)),
         // Through the facade: on a page the engine is not `Send` (the
@@ -1104,26 +1104,26 @@ async fn open_project_file(
 /// they are asked for; any the bridge writes kept beside them.
 struct FileBlobs {
     file: session_format::read::ProjectFile,
-    made: session::sync::engine::MemoryBlobs,
+    made: engine_sync::engine::MemoryBlobs,
 }
 
 impl FileBlobs {
     fn new(file: session_format::read::ProjectFile) -> Self {
         Self {
             file,
-            made: session::sync::engine::MemoryBlobs::default(),
+            made: engine_sync::engine::MemoryBlobs::default(),
         }
     }
 }
 
-impl session::sync::engine::Blobs for FileBlobs {
+impl engine_sync::engine::Blobs for FileBlobs {
     fn put(&self, bytes: &[u8]) -> String {
-        session::sync::engine::Blobs::put(&self.made, bytes)
+        engine_sync::engine::Blobs::put(&self.made, bytes)
     }
 
     fn get(&self, name: &str) -> Option<Vec<u8>> {
         use session_format::read::ReadError;
-        session::sync::engine::Blobs::get(&self.made, name).or_else(|| {
+        engine_sync::engine::Blobs::get(&self.made, name).or_else(|| {
             match self.file.blob(name) {
                 Ok(bytes) => Some(bytes),
                 // Not kept (an FX with no state): none, as the desktop's
@@ -1591,7 +1591,7 @@ async fn fetch_bytes(url: &str) -> Result<Arc<[u8]>, String> {
 /// from the library's share link. A file that does not arrive is left out
 /// (the instrument synthesizes its slot).
 async fn guide_library(base: &str) -> HashMap<String, Vec<u8>> {
-    let wanted = session::guide::engine::samples::library::files(
+    let wanted = engine_domain::guide::engine::samples::library::files(
         crate::guide_instrument::CLICK,
         crate::guide_instrument::VOICE,
         "ogg",

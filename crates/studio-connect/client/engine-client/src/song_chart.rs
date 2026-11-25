@@ -9,7 +9,7 @@
 //! name, tempo and metre at its head. Chords come when a chart does.
 
 use daw::service::ProjectContext;
-use session::ruler_lanes::CoreLane;
+use studio_proto::ruler_lanes::CoreLane;
 
 /// The chart text of `project`'s sections, `None` when it has none.
 #[must_use]

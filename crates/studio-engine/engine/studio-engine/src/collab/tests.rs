@@ -1,4 +1,4 @@
-use session::sync::{ORIGIN_LOCAL, SessionDoc, SessionModel, TrackState};
+use engine_sync::{ORIGIN_LOCAL, SessionDoc, SessionModel, TrackState};
 
 use super::{Meeting, TaskSet, may_seed, meeting};
 

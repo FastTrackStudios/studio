@@ -3173,9 +3173,9 @@ pub fn tally_audit(
 
 /// The ruler lane zones are kept on: the Drums lane, where the song's
 /// drum notes go.
-pub const ZONE_LANE: u32 = session::ruler_lanes::InstrumentLane::Drums.lane_index();
+pub const ZONE_LANE: u32 = engine_domain::ruler_lanes::InstrumentLane::Drums.lane_index();
 /// What that lane is called.
-pub const ZONE_LANE_NAME: &str = session::ruler_lanes::InstrumentLane::Drums.display_name();
+pub const ZONE_LANE_NAME: &str = engine_domain::ruler_lanes::InstrumentLane::Drums.display_name();
 
 /// What a zone does.
 #[derive(Facet, Clone, Copy, Debug, PartialEq, Eq)]

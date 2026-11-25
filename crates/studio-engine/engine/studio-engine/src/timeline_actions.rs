@@ -24,7 +24,7 @@ use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::transport::service::Transport as _;
 use daw::service::{ItemRef, ProjectContext, TakeRef, Takes as _, TempoMap as _};
 use facet::Facet;
-use session::section_kinds::{MarkerKind, SectionKind};
+use fts_session::section_kinds::{MarkerKind, SectionKind};
 
 use crate::edit_state::{Edit, Span};
 use crate::organize_edit::Button;
@@ -245,9 +245,9 @@ fn edit_now(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Edit
 
 /// The click, count and cues generated again over the song as it is now.
 fn regenerate_guide(daw: &daw::standalone::Standalone) {
-    if let Err(e) = session::guide::Guide::new(daw.clone())
+    if let Err(e) = engine_domain::guide::Guide::new(daw.clone())
         .with_instrument(crate::prepare::GUIDE_INSTRUMENT)
-        .generate(session::guide::GuideScope::All)
+        .generate(engine_domain::guide::GuideScope::All)
     {
         tracing::debug!(error = %e, "timeline: no guide to regenerate yet");
     }

@@ -80,7 +80,7 @@ impl PartialEq for Got {
 #[component]
 fn Root(song: Song, got: Got) -> Element {
     let session = use_context_provider(|| song.0.clone());
-    use_context_provider(|| Signal::new(session::modes::Mode::Live));
+    use_context_provider(|| Signal::new(engine_domain::modes::Mode::Live));
     use_hook(|| {
         let rows = session
             .planner

@@ -145,15 +145,15 @@ pub fn use_song() -> Signal<Option<(String, StudioSession)>> {
 /// The window's mode as Studio's shell has it: `FTS_SESSION_MODE`, else
 /// Live (`engine_host::native::shell`).
 #[must_use]
-pub fn mode_from_env() -> session::modes::Mode {
+pub fn mode_from_env() -> engine_domain::modes::Mode {
     std::env::var("FTS_SESSION_MODE")
         .ok()
         .and_then(|name| {
-            session::modes::Mode::ALL
+            engine_domain::modes::Mode::ALL
                 .into_iter()
                 .find(|m| m.display_name().eq_ignore_ascii_case(&name))
         })
-        .unwrap_or(session::modes::Mode::Live)
+        .unwrap_or(engine_domain::modes::Mode::Live)
 }
 
 /// The mode this view shows: its host's (the client's, which every one
@@ -161,10 +161,10 @@ pub fn mode_from_env() -> session::modes::Mode {
 /// [`mode_from_env`] for a view hosted alone. A view never makes its own
 /// beside its host's: two would disagree about what is drawn and which
 /// keys do what.
-pub fn use_client_mode() -> dioxus::prelude::Signal<session::modes::Mode> {
+pub fn use_client_mode() -> dioxus::prelude::Signal<engine_domain::modes::Mode> {
     use dioxus::prelude::*;
     use_hook(|| {
-        try_consume_context::<Signal<session::modes::Mode>>()
+        try_consume_context::<Signal<engine_domain::modes::Mode>>()
             .unwrap_or_else(|| provide_context(Signal::new(mode_from_env())))
     })
 }

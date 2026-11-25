@@ -329,8 +329,9 @@ pub fn sections(daw: &daw::standalone::Standalone, project: &ProjectContext) -> 
             // The sections lane's (a region on no lane is on it): not the
             // song's own region, nor an edit zone on the Drums lane.
             .filter(|r| {
-                r.lane
-                    .is_none_or(|l| l == session::ruler_lanes::CoreLane::Sections.lane_index())
+                r.lane.is_none_or(|l| {
+                    l == engine_domain::ruler_lanes::CoreLane::Sections.lane_index()
+                })
             })
             .map(|r| {
                 let (start, end) = (r.time_range.start_seconds(), r.time_range.end_seconds());
@@ -358,7 +359,7 @@ fn register_sections(list: &ActionList) -> Result<(), architect::action::ActionE
 fn register_phase(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&PHASE, Effect::Mutating, |a: PhaseArg| {
         let (mode, slug) = crate::shared_actions::pick_phase(a.mode.as_deref(), &a.phase)?;
-        session::mode_phases::choose(mode, slug);
+        engine_domain::mode_phases::choose(mode, slug);
         also_in_the_window(
             PHASE.id,
             format!(r#"{{"phase":"{}","mode":"{}"}}"#, slug, mode.display_name()),
@@ -407,11 +408,11 @@ fn register_window_target(list: &ActionList) -> Result<(), architect::action::Ac
 
 fn register_mode(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&MODE, Effect::Mutating, |a: ModeArg| {
-        let mode = session::modes::Mode::ALL
+        let mode = engine_domain::modes::Mode::ALL
             .into_iter()
             .find(|m| m.display_name().eq_ignore_ascii_case(a.mode.trim()))
             .ok_or_else(|| {
-                let names: Vec<&str> = session::modes::Mode::ALL
+                let names: Vec<&str> = engine_domain::modes::Mode::ALL
                     .iter()
                     .map(|m| m.display_name())
                     .collect();
@@ -3840,7 +3841,7 @@ pub fn spans(
         .into_iter()
         .filter(|r| {
             r.lane
-                .is_none_or(|l| l == session::ruler_lanes::CoreLane::Sections.lane_index())
+                .is_none_or(|l| l == engine_domain::ruler_lanes::CoreLane::Sections.lane_index())
         })
         .collect();
     sections

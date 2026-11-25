@@ -58,7 +58,7 @@ fn shown() -> (Option<String>, Option<String>) {
     let mode = actions::shown_mode();
     (
         mode.map(|m| m.display_name().to_owned()),
-        mode.and_then(session::mode_phases::current)
+        mode.and_then(engine_domain::mode_phases::current)
             .map(|p| p.slug.to_owned()),
     )
 }
@@ -131,7 +131,7 @@ fn modes() -> &'static [(&'static str, &'static str)] {
     static MODES: std::sync::OnceLock<Vec<(&'static str, &'static str)>> =
         std::sync::OnceLock::new();
     MODES.get_or_init(|| {
-        session::modes::Mode::ALL
+        engine_domain::modes::Mode::ALL
             .iter()
             .map(|m| (m.slug(), m.display_name()))
             .collect()
@@ -162,14 +162,14 @@ fn scene(slug: &str) -> Option<mixer_view::app::Scene> {
 /// Mix mode's phase, as Studio's shell last chose it, and its counter.
 fn phase() -> (Option<&'static str>, u64) {
     (
-        session::mode_phases::current(session::modes::Mode::Mix).map(|p| p.slug),
-        session::mode_phases::version(),
+        engine_domain::mode_phases::current(engine_domain::modes::Mode::Mix).map(|p| p.slug),
+        engine_domain::mode_phases::version(),
     )
 }
 
 /// Choose Mix mode's phase.
 fn choose_phase(slug: &str) {
-    session::mode_phases::choose(session::modes::Mode::Mix, slug);
+    engine_domain::mode_phases::choose(engine_domain::modes::Mode::Mix, slug);
 }
 
 /// The user's own keymap file, natively (a page reads no files).

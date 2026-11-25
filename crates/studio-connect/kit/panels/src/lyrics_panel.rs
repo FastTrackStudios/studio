@@ -2,18 +2,18 @@
 //! window's reading of them.
 //!
 //! The panel itself (its Audience, Performer and Confidence Monitor views,
-//! and the switch between them) is `session::ui::components::lyrics`, which
+//! and the switch between them) is `studio_ui::components::lyrics`, which
 //! the setlists extension's song workspace draws too. What is here is where
 //! the window takes its words and its play position from: the lines are the
 //! song's own, the Lyrics track's items, one a line, labelled with its text
-//! ([`session::lyrics::stamp_lines`] puts them there from a synced `.lrc`
+//! ([`engine_domain::lyrics::stamp_lines`] puts them there from a synced `.lrc`
 //! when a song is prepared), against the song's section regions; the
 //! position is the transport's.
 
 use dioxus::prelude::*;
-use session::lyrics::{Lyrics, SectionSpan};
-use session::ui::components::lyrics::{ColoredSpan, LyricsView, Words};
-pub use session::ui::components::lyrics::{LyricsChoice, View};
+use engine_domain::lyrics::{Lyrics, SectionSpan};
+use studio_ui::components::lyrics::{ColoredSpan, LyricsView, Words};
+pub use studio_ui::components::lyrics::{LyricsChoice, View};
 
 use crate::song_model::StudioSession;
 
@@ -23,7 +23,7 @@ fn words_of(session: &StudioSession) -> Words {
     let lyrics = project
         .tracks
         .iter()
-        .find(|t| session::lyrics::is_lyrics_track(&t.name))
+        .find(|t| engine_domain::lyrics::is_lyrics_track(&t.name))
         .map(|track| {
             Lyrics::from_items(project.lane(&track.guid).iter().filter_map(|item| {
                 Some((
@@ -64,7 +64,7 @@ pub fn summary(session: &StudioSession) -> (usize, usize, usize) {
     let lines = project
         .tracks
         .iter()
-        .find(|t| session::lyrics::is_lyrics_track(&t.name))
+        .find(|t| engine_domain::lyrics::is_lyrics_track(&t.name))
         .map_or(0, |track| project.lane(&track.guid).len());
     let sections = project
         .sections

@@ -466,12 +466,12 @@ pub fn session_from_project(doc: &LoroDoc) -> Result<LoroDoc> {
     use fts_session::time::{Position, TempoPoint, TimePosition, TimeSignature};
     use fts_session::{MarkId, Marker, Region, TempoMap, Time};
 
-    let model = session::sync::SessionDoc::from_loro(doc.clone()).read();
+    let model = session_sync::SessionDoc::from_loro(doc.clone()).read();
     let out = SessionDoc::new();
     let err = |e: &dyn std::fmt::Display| Error::Session(e.to_string());
     let mut changes = model.tempo.clone();
     changes.sort_by(|a, b| a.at.total_cmp(&b.at));
-    let meter = |c: &session::sync::model::TempoPoint| {
+    let meter = |c: &session_sync::model::TempoPoint| {
         TimeSignature::new(c.beats_per_bar.max(1), c.beat_unit.max(1))
     };
     let tempo = TempoMap::new(

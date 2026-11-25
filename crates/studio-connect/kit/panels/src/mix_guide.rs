@@ -10,7 +10,7 @@
 //! then, and comes back when it is next shown in another mode.
 
 use dioxus::prelude::*;
-use session::modes::Mode;
+use engine_domain::modes::Mode;
 use std::collections::HashMap;
 
 /// One song's time in Mix mode.

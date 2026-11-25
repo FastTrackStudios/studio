@@ -52,7 +52,7 @@ async fn a_new_song_is_one_file_with_an_id_and_its_tempo() {
     assert_eq!(points.len(), 1);
     assert!((points[0].bpm - 127.0).abs() < 1e-9);
     opened.with_store(|st| {
-        let project = session::sync::SessionDoc::from_loro(st.load(MAIN).unwrap()).read();
+        let project = session_sync::SessionDoc::from_loro(st.load(MAIN).unwrap()).read();
         assert!(project.tracks.is_empty());
         assert_eq!(project.tempo.len(), 1);
         assert!((project.tempo[0].bpm - 127.0).abs() < 1e-9);

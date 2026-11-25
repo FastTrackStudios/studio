@@ -131,7 +131,7 @@ fn a_song_folder_is_read_as_what_travels_and_nothing_else() {
 
 #[test]
 fn a_second_look_at_an_unchanged_folder_sends_nothing_and_hashes_nothing() {
-    use session::library::publish::RemoteFile;
+    use library_sync::publish::RemoteFile;
     let tmp = tempfile::tempdir().unwrap();
     let t = tmp.path();
     touch(&t.join("Song.session"), b"project");

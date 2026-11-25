@@ -17,10 +17,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use engine_sync::engine::{Blobs, MediaRoot};
+use engine_sync::loro::LoroDoc;
+use engine_sync::{Bridge, SessionDoc};
 use serde_json::{Value, json};
-use session::sync::engine::{Blobs, MediaRoot};
-use session::sync::loro::LoroDoc;
-use session::sync::{Bridge, SessionDoc};
 
 use super::wire::{self, Conn};
 
@@ -173,7 +173,7 @@ async fn song(
         .project(project.clone())
         .await
         .map_err(|e| e.to_string())?;
-    let direct: Arc<dyn session::sync::engine::Direct> = Arc::new(daw.clone());
+    let direct: Arc<dyn engine_sync::engine::Direct> = Arc::new(daw.clone());
     let as_blobs: Arc<dyn Blobs> = blobs.clone();
     let bridge = Bridge::join(
         handle,

@@ -47,7 +47,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use web_time::Instant;
 
-use session::library::{Library, ListKind, Setlist, slugify};
+use library_sync::{Library, ListKind, Setlist, slugify};
 
 use crate::task_account::AccountLibrary;
 
@@ -443,7 +443,7 @@ fn host(
 #[cfg(test)]
 mod tests {
     use super::{Next, Plan, Seen, next, plan};
-    use session::library::{ListKind, Setlist, Song};
+    use library_sync::{ListKind, Setlist, Song};
 
     fn keys(names: &[&str]) -> Vec<String> {
         names.iter().map(|n| (*n).to_owned()).collect()

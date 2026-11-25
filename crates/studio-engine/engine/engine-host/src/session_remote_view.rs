@@ -17,9 +17,9 @@
 //! read-only until the user acts.
 
 use dioxus::prelude::*;
-use session::proto::services::setlist_service::SetlistServiceStreamClient;
-use session::proto::{ActiveIndices, SetlistEvent, SetlistServiceClient};
-use session::ui::{PerformanceLayout, PerformanceSidebar, TransportPanel};
+use engine_domain::proto::services::setlist_service::SetlistServiceStreamClient;
+use engine_domain::proto::{ActiveIndices, SetlistEvent, SetlistServiceClient};
+use studio_ui::{PerformanceLayout, PerformanceSidebar, TransportPanel};
 
 use crate::remote::{EngineTarget, establish};
 
@@ -48,7 +48,7 @@ pub fn SessionRemoteBridge() -> Element {
 
             // Session singleton for daw-view-kit components. On wasm `init`
             // replaces the previous client (reconnect support).
-            if let Err(e) = session::ui::Session::init(client.clone()) {
+            if let Err(e) = studio_ui::Session::init(client.clone()) {
                 tracing::warn!("Session::init: {e:?}");
             }
             *CONNECTED.write() = true;
@@ -63,7 +63,7 @@ pub fn SessionRemoteBridge() -> Element {
                         .iter()
                         .map(|s| (s.id.clone(), s.name.clone()))
                         .collect();
-                    session::ui::apply_setlist_event(&SetlistEvent::SetlistChanged(setlist));
+                    studio_ui::apply_setlist_event(&SetlistEvent::SetlistChanged(setlist));
 
                     // Chart backfill: charts are stripped from structural
                     // payloads and stream as `SongChartHydrated` deltas with
@@ -75,7 +75,7 @@ pub fn SessionRemoteBridge() -> Element {
                         for (index, (song_id, name)) in songs.into_iter().enumerate() {
                             match chart_client.song_chart(index).await {
                                 Ok(Some(chart)) => {
-                                    session::ui::apply_setlist_event(
+                                    studio_ui::apply_setlist_event(
                                         &SetlistEvent::SongChartHydrated {
                                             song_id,
                                             index,
@@ -107,7 +107,7 @@ pub fn SessionRemoteBridge() -> Element {
             });
             spawn(async move {
                 while let Ok(Some(ai)) = arx.recv().await {
-                    session::ui::apply_active_indices(ai.get());
+                    studio_ui::apply_active_indices(ai.get());
                 }
             });
 
@@ -121,7 +121,7 @@ pub fn SessionRemoteBridge() -> Element {
                 }
             });
             while let Ok(Some(ev)) = rx.recv().await {
-                session::ui::apply_setlist_event(ev.get());
+                studio_ui::apply_setlist_event(ev.get());
             }
 
             tracing::warn!("session engine connection lost — reconnecting");

@@ -1,13 +1,13 @@
 //! Session workspace — the setlist player surface.
 //!
 //! Renders daw-view-kit's `PerformanceLayout` (fed by the global signals
-//! that `session::ui::apply_setlist_event` maintains) plus a minimal
+//! that `studio_ui::apply_setlist_event` maintains) plus a minimal
 //! transport strip (play/stop, current song/section, prev/next song)
 //! wired to the in-process `SetlistServiceClient` — which drives the
 //! daw-standalone transport underneath.
 
 use dioxus::prelude::*;
-use session::ui::{PerformanceLayout, TransportPanel};
+use studio_ui::{PerformanceLayout, TransportPanel};
 
 use crate::{active_engine, reaper_engine};
 
@@ -63,7 +63,7 @@ pub fn SessionEventBridge() -> Element {
             // Consume the `events` `#[subscribe]` stream through the stream
             // client so the vox lane pumps it. (Attaching a raw Tx to the
             // in-process hub is never drained — the lane is what moves data.)
-            let (tx, mut rx) = vox::channel::<session::SetlistEvent>();
+            let (tx, mut rx) = vox::channel::<engine_domain::SetlistEvent>();
             spawn(async move {
                 if let Err(e) = engine.stream_client.events(tx).await {
                     tracing::warn!("events subscription ended: {e:?}");
@@ -74,7 +74,7 @@ pub fn SessionEventBridge() -> Element {
             // (deterministic, no reliance on the stream's first republish).
             match engine.client.setlist().await {
                 Ok(setlist) => {
-                    session::ui::apply_setlist_event(&session::SetlistEvent::SetlistChanged(
+                    studio_ui::apply_setlist_event(&engine_domain::SetlistEvent::SetlistChanged(
                         setlist,
                     ));
                 }
@@ -85,13 +85,13 @@ pub fn SessionEventBridge() -> Element {
                 let ev = ev.get();
                 // Re-feed the guide when the *active* song hydrates (its sections /
                 // count-in arrive after the initial cursor set the schedule).
-                if let session::SetlistEvent::SongHydrated { index, song, .. }
-                | session::SetlistEvent::SongEntered { index, song, .. } = ev
-                    && session::ui::ACTIVE_INDICES.peek().song_index == Some(*index)
+                if let engine_domain::SetlistEvent::SongHydrated { index, song, .. }
+                | engine_domain::SetlistEvent::SongEntered { index, song, .. } = ev
+                    && studio_ui::ACTIVE_INDICES.peek().song_index == Some(*index)
                 {
                     crate::guide::set_current_song(song.clone());
                 }
-                session::ui::apply_setlist_event(ev);
+                studio_ui::apply_setlist_event(ev);
             }
             tracing::warn!("setlist event stream ended; waiting to re-subscribe");
             // Backoff before retrying. In Recording Mode the engine is gone and
@@ -111,7 +111,7 @@ pub fn SessionEventBridge() -> Element {
 
             // Consume the `active_indices` `#[subscribe]` stream through the
             // stream client (pumps the vox lane).
-            let (tx, mut rx) = vox::channel::<session::proto::ActiveIndices>();
+            let (tx, mut rx) = vox::channel::<engine_domain::proto::ActiveIndices>();
             spawn(async move {
                 if let Err(e) = engine.stream_client.active_indices(tx).await {
                     tracing::warn!("active_indices subscription ended: {e:?}");
@@ -136,11 +136,11 @@ pub fn SessionEventBridge() -> Element {
                 // Guide follows the active song, reading the current (possibly
                 // just-hydrated) song list from the shared setlist signal.
                 feed_guide(
-                    &session::ui::SETLIST_STRUCTURE.peek().songs,
+                    &studio_ui::SETLIST_STRUCTURE.peek().songs,
                     &mut guide_song,
                     ai.song_index,
                 );
-                session::ui::apply_active_indices(ai);
+                studio_ui::apply_active_indices(ai);
             }
             tracing::warn!("active-indices stream ended; waiting to re-subscribe");
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -175,7 +175,7 @@ pub fn SessionEventBridge() -> Element {
                     for t in &all {
                         armed.insert(t.guid.clone(), t.armed);
                     }
-                    session::ui::ARMED_TRACK_COUNT
+                    studio_ui::ARMED_TRACK_COUNT
                         .with_mut(|n| *n = armed.values().filter(|a| **a).count());
                 }
                 Err(e) => {
@@ -196,7 +196,7 @@ pub fn SessionEventBridge() -> Element {
                 } = event.get().event.clone()
                 {
                     armed.insert(guid, is_armed);
-                    session::ui::ARMED_TRACK_COUNT
+                    studio_ui::ARMED_TRACK_COUNT
                         .with_mut(|n| *n = armed.values().filter(|a| **a).count());
                 }
             }
@@ -209,7 +209,11 @@ pub fn SessionEventBridge() -> Element {
 
 /// Hand `songs[index]` to the guide engine when it differs from the song
 /// already scheduled. Cheap here (the rebuild runs on a worker thread).
-fn feed_guide(songs: &[session::proto::Song], scheduled: &mut Option<usize>, index: Option<usize>) {
+fn feed_guide(
+    songs: &[engine_domain::proto::Song],
+    scheduled: &mut Option<usize>,
+    index: Option<usize>,
+) {
     let Some(index) = index else { return };
     if *scheduled == Some(index) {
         return;
@@ -356,7 +360,7 @@ pub fn SessionWorkspace() -> Element {
         };
     }
 
-    if session::ui::SETLIST_STRUCTURE.read().songs.is_empty() {
+    if studio_ui::SETLIST_STRUCTURE.read().songs.is_empty() {
         return rsx! {
             div { style: "display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; width: 100%; text-align: center;",
                 span { style: "font-size: 20px; font-weight: 700;", "No setlist loaded" }

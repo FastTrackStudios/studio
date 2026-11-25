@@ -227,7 +227,7 @@ fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register_async(&SHOW_LANES, Effect::Mutating, show)?;
     list.register(&PHASE, Effect::Mutating, |a: PhaseArg| {
         let (mode, slug) = pick_phase(a.mode.as_deref(), &a.phase)?;
-        session::mode_phases::choose(mode, slug);
+        engine_domain::mode_phases::choose(mode, slug);
         Ok(())
     })?;
     crate::shared_actions::register_together(list)?;

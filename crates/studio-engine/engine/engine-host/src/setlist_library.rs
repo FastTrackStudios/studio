@@ -1,16 +1,16 @@
 //! Home page data layer: the two on-disk track libraries + the setlist
 //! notes saved under them.
 //!
-//! Reuses `session::vault_sync` (built for the `studio vault-sync` /
+//! Reuses `engine_domain::vault_sync` (built for the `studio vault-sync` /
 //! `studio player` commands) rather than re-implementing scanning or note
 //! writing here — this module is just "aggregate multiple roots" +
 //! "list/read/write setlist notes" glue on top of it.
 
 use std::path::{Path, PathBuf};
 
-use session::vault_sync::library::{self, LibrarySong};
-use session::vault_sync::setlist::{parse_setlist_links, resolve_song};
-use session::vault_sync::vault::{song_link_name, write_setlist_note};
+use engine_domain::vault_sync::library::{self, LibrarySong};
+use engine_domain::vault_sync::setlist::{parse_setlist_links, resolve_song};
+use engine_domain::vault_sync::vault::{song_link_name, write_setlist_note};
 
 /// Named track-library roots. Each root's songs live under
 /// `root/Tracks`; its setlist notes are saved under `root/Setlists`

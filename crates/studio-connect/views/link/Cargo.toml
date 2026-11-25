@@ -10,7 +10,7 @@ publish = false
 doctest = false
 
 [dependencies]
-session = { workspace = true }
+engine-domain = { workspace = true }
 daw-ui = { workspace = true }
 dioxus = { workspace = true }
 serde_json = { workspace = true }

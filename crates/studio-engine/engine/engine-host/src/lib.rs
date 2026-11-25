@@ -1236,12 +1236,12 @@ fn LibrarySongRow(
 
 // ── Arrangement workspace — daw-ui over the real session workflow modes ─────
 
-/// A single glyph per [`session::modes::Mode`] — `daw-ui` has no icon-font
+/// A single glyph per [`engine_domain::modes::Mode`] — `daw-ui` has no icon-font
 /// dependency, so these are plain emoji, matching the convention already
 /// used for `daw-ui`'s own toolbar buttons.
 #[cfg(all(feature = "session", not(target_arch = "wasm32")))]
-fn mode_glyph(mode: session::modes::Mode) -> &'static str {
-    use session::modes::Mode;
+fn mode_glyph(mode: engine_domain::modes::Mode) -> &'static str {
+    use engine_domain::modes::Mode;
     match mode {
         Mode::Organize => "\u{1f5c2}", // card index dividers
         Mode::Write => "\u{270d}",     // writing hand
@@ -1257,13 +1257,13 @@ fn mode_glyph(mode: session::modes::Mode) -> &'static str {
 }
 
 /// Hosts `daw-ui`'s `ArrangementView`, feeding it the real
-/// `session::modes::Mode` set (Organize/Write/Produce/Record/Edit/Mix/
+/// `engine_domain::modes::Mode` set (Organize/Write/Produce/Record/Edit/Mix/
 /// Master/Live/Video/Scoring) rather than an invented one — `daw-ui`
 /// can't depend on `session` (backwards dependency edge), so this app
 /// is what maps the real domain type into `daw-ui`'s generic
 /// `ModeOption` shape.
 ///
-/// State is a plain local signal, NOT `session::modes::set_mode` — that
+/// State is a plain local signal, NOT `engine_domain::modes::set_mode` — that
 /// function unconditionally calls into `studio::reaper::Reaper`
 /// (`HighReaper::get()`), which panics without a real REAPER process.
 /// This is display/selection only for now; nothing yet changes behavior
@@ -1271,7 +1271,7 @@ fn mode_glyph(mode: session::modes::Mode) -> &'static str {
 #[cfg(all(feature = "session", not(target_arch = "wasm32")))]
 #[component]
 fn ArrangementWorkspace(current: Signal<Option<Workspace>>) -> Element {
-    use session::modes::Mode;
+    use engine_domain::modes::Mode;
 
     let mut active_mode = use_signal(|| Mode::Organize);
     let modes: Vec<daw_ui::ModeOption> = Mode::ALL
@@ -1303,7 +1303,7 @@ fn ArrangementWorkspace(current: Signal<Option<Workspace>>) -> Element {
 /// "the organization mode has different toolbars" etc. Every button here
 /// is wired to something real (a workspace switch, a live
 /// `daw_control::Transport` call, or a real marker/region/tempo-map write
-/// via `session::keyflow` against the in-process `daw-standalone` engine —
+/// via `engine_domain::keyflow` against the in-process `daw-standalone` engine —
 /// the same actions `fts-extensions`/`reaper-input` bind to hotkeys in
 /// REAPER, run here without any REAPER dependency); modes with no
 /// standalone-safe action yet (Write/Produce/Live/Video/Scoring — their
@@ -1312,14 +1312,14 @@ fn ArrangementWorkspace(current: Signal<Option<Workspace>>) -> Element {
 /// buttons rather than a fake one.
 #[cfg(all(feature = "session", not(target_arch = "wasm32")))]
 fn mode_toolbar_actions(
-    mode: session::modes::Mode,
+    mode: engine_domain::modes::Mode,
     mut current: Signal<Option<Workspace>>,
 ) -> Vec<daw_ui::ToolbarAction> {
-    use session::keyflow::actions::SectionKindKeyflow as _;
-    use session::keyflow::actions::{KeyflowAction, dispatch};
-    use session::keyflow::time_signature::{TIME_SIGNATURES, insert_time_signature};
-    use session::modes::Mode;
-    use session::section_kinds::{MarkerKind, SectionKind};
+    use engine_domain::keyflow::actions::SectionKindKeyflow as _;
+    use engine_domain::keyflow::actions::{KeyflowAction, dispatch};
+    use engine_domain::keyflow::time_signature::{TIME_SIGNATURES, insert_time_signature};
+    use engine_domain::modes::Mode;
+    use fts_session::section_kinds::{MarkerKind, SectionKind};
 
     /// Fire one keyflow action against the live in-process engine — a
     /// no-op (traced, not panicking) if the engine isn't up yet, same
