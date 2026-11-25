@@ -106,15 +106,14 @@ Everything left from the old Session app has been removed or renamed
     together.
   - `engine-domain`'s `README.md` and `AGENTS.md` are the old app's, moved
     as they were; rewrite them with the AGENTS/README pass.
-- **TTS stays** (owner's decision), and stays opt-in for now:
+- **TTS stays** (owner's decision) and is **on again** (`9d829b241`):
   `bearcove/cbx` is vendored as `crates/studio-engine/vendor/cbx` (its
   licences and a NOTICE; ported to ort 2.0.0-rc.15, its CHANGELOG says how,
-  and `tts_smoke` synthesized with it once). Turning `tts` back on (in
-  engine-host's `session`, daw-extension's dependency, engine-domain's
-  dev-dependency) is fix-up item 8. ort rc.15 allows one ONNX Runtime
-  environment per process, and `rhythm-hits` and cbx each make their own:
-  hand cbx rhythm-hits' (`SessionConfig::environment`) before both run in
-  one engine.
+  and `tts_smoke` synthesized with it once). It is on in engine-host's
+  `session` feature and daw-extension's default. ort rc.15 allows one ONNX
+  Runtime environment per process, so `onnx-env`
+  (`crates/studio-engine/analysis/onnx-env`) owns it and rhythm-hits and cbx
+  both make their sessions in it.
 
 ### Next: consolidate the format crates (planned, not done)
 
@@ -181,4 +180,4 @@ cargo command** (`devenv shell -- …`): the `cargo` on the default PATH is
    AGENTS.md and README for the new layout; prune the unused architect patches.
 7. **Run the real thing**: `just studio`, open a song, play, render, MCP.
    Then the force-merge into `main` (plan, phase 4).
-8. TTS: vendor bearcove/cbx and port it to ort rc.15, then turn `tts` back on (deferred).
+8. ~~TTS~~: done (`9d829b241`); see above.
