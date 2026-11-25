@@ -1,0 +1,31 @@
+target/
+# Any scratch target dir: agents run parallel builds into their own, and one
+# that lands inside the source tree gets swept into a commit.
+target-*/
+**/target/
+.DS_Store
+.direnv/
+.claude/worktrees/
+# devenv: state, eval cache and per-user overrides.
+.devenv/
+.devenv.flake.nix
+devenv.local.nix
+devenv.local.yaml
+
+# Asset links (assets.txt, `just assets`).
+/.assets
+/features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/000/ProjectData
+/features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/001/ProjectData
+/features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/002/ProjectData
+/features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/003/ProjectData
+/features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/004/ProjectData
+/features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/005/ProjectData
+/features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/006/ProjectData
+/features/adapters/protools/tests/fixtures/protools/aaf/lord-of-the-fight.aaf
+/features/adapters/protools/tests/fixtures/protools/choir-session.ptx
+/features/adapters/protools/tests/fixtures/protools/color-testing.ptx
+/features/adapters/protools/tests/fixtures/protools/GodnessOfGod.ptx
+/features/adapters/protools/tests/fixtures/protools/live-concert-session.ptx
+/features/adapters/protools/tests/fixtures/protools/orchestral-session.ptx
+/features/adapters/protools/tests/fixtures/protools/studio-tracking-session.ptx
+/features/adapters/protools/tests/fixtures/protools/worship-session.ptx

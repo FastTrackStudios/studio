@@ -1,0 +1,31 @@
+[package]
+name = "reaper-launcher"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[package.metadata]
+
+[package.metadata."docs.rs"]
+rustdoc-args = ["--html-in-header", "arborium-header.html"]
+
+[dependencies]
+libc = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tiny-skia = { workspace = true, optional = true }
+ab_glyph = { workspace = true, optional = true }
+image = { workspace = true, features = ["png", "ico"], optional = true }
+icns = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+
+[features]
+default = ["icon-gen"]
+icon-gen = ["tiny-skia", "ab_glyph", "image", "icns", "anyhow"]
+
+[[bin]]
+name = "reaper-launcher"
+path = "src/main.rs"
+
+[lints]
+workspace = true

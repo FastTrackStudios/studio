@@ -1,0 +1,39 @@
+[package]
+name = "interchange"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Interchange formats no one host owns: AAF and DAWproject"
+
+[lints]
+workspace = true
+
+[features]
+aaf = ["dep:cfb"]
+dawproject = ["dep:roxmltree", "dep:zip"]
+# DAWproject in and out of the `.session` document:
+# `dawproject::session::{to_dawproject, from_dawproject}`. The adapter
+# depends on the document; the document does not know DAWproject.
+session = ["dawproject", "dep:session-format"]
+
+[dependencies]
+cfb = { workspace = true, optional = true }
+daw-proto = { workspace = true }
+roxmltree = { workspace = true, optional = true }
+session-format = { workspace = true, optional = true }
+thiserror = { workspace = true }
+zip = { workspace = true, features = ["deflate"], optional = true }
+
+[dev-dependencies]
+interchange = { path = ".", features = ["aaf", "dawproject", "session"] }
+# required-features): a plain `cargo test` of the workspace builds them all.
+daw-proto = { workspace = true }
+# The bridge's tests (`tests/dawproject_*.rs`, `tests/composite_envelope.rs`)
+# build a session document, some of them from a `.rpp`.
+dawfile-reaper = { workspace = true, features = ["session"] }
+session-format = { workspace = true }
+loro = { workspace = true }
+tempfile = { workspace = true }
+uuid = { workspace = true }
