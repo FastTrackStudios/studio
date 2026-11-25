@@ -15,7 +15,8 @@
 //! and again on recall: a recall changes only what both allow. Each records
 //! its **parent** (the snapshot or variant it came from, or the one last
 //! restored or kept: the song's `head`), so a mix's history branches and
-//! MIX_DIFF compares across it.
+//! MIX_DIFF compares across it. Variants of one decision, auditioned and
+//! voted on, are `crate::mix_variants`, built on this.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -52,7 +53,7 @@ static RESTORE: ActionMeta = meta(
     "MIX_RESTORE",
     "mix_restore",
     "Restore a mix snapshot",
-    "Put the mix back as snapshot `name` has it: faders, pans, mutes, solos, polarity, the master, the sends (set again, added where missing, taken off where the snapshot has none between the two tracks), every FX on or off, its parameter values and its plugin's state (loaded only where it differs). Only the snapshot's scope and categories are touched; `only` (as MIX_SNAPSHOT) narrows the categories further. Tracks and FX gone since are named, not made again. One undo step. Says what changed.",
+    "Put the mix back as snapshot `name` has it (`group:variant` names a mix variant): faders, pans, mutes, solos, polarity, the master, the sends (set again, added where missing, taken off where the snapshot has none between the two tracks), every FX on or off, its parameter values and its plugin's state (loaded only where it differs). Only the snapshot's scope and categories are touched; `only` (as MIX_SNAPSHOT) narrows the categories further. Tracks and FX gone since are named, not made again. One undo step. Says what changed.",
     "Mix",
     "",
 );
@@ -61,7 +62,7 @@ static DIFF: ActionMeta = meta(
     "MIX_DIFF",
     "mix_diff",
     "Compare mix snapshots",
-    "What differs between snapshot `a` and `b` (a snapshot's name, or `current` — the mix as it stands, `b` unless given): each fader, pan, mute, solo, polarity, send and FX setting that is not the same, as `what: a → b`; an FX whose plugin state differs, with both sizes. `only` (as MIX_SNAPSHOT) compares only those categories. `names: true` lists the song's snapshots instead, and `parents` each one's parent (`name ← parent`) and `head` the last taken, restored or kept. Read-only.",
+    "What differs between snapshot `a` and `b` (a snapshot's name, `group:variant` for a mix variant, or `current` — the mix as it stands, `b` unless given): each fader, pan, mute, solo, polarity, send and FX setting that is not the same, as `what: a → b`; an FX whose plugin state differs, with both sizes. `only` (as MIX_SNAPSHOT) compares only those categories. `names: true` lists the song's snapshots instead, and `parents` each one's parent (`name ← parent`) and `head` the last taken, restored or kept. Read-only.",
     "Mix",
     "",
 );
@@ -468,10 +469,14 @@ fn names(daw: &Standalone, project: &ProjectContext) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Snapshot `name`.
+/// Snapshot `name`, or — with no snapshot of that name — variant
+/// `group:variant` of a mix variant group.
 pub(crate) fn load(daw: &Standalone, project: &ProjectContext, name: &str) -> Result<Mix, String> {
     let Some(text) = daw_proto::ExtState::get_project(daw, project.clone(), SECTION, &key(name))
     else {
+        if let Some((group, variant)) = name.split_once(':') {
+            return crate::mix_variants::load_mix(daw, project, group.trim(), variant.trim());
+        }
         return Err(format!(
             "no snapshot {name:?} — the song has {:?}",
             names(daw, project)

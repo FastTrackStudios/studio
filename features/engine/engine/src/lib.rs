@@ -111,6 +111,8 @@ pub mod mix_snapshot;
 #[cfg(feature = "native")]
 pub mod mix_state;
 #[cfg(feature = "native")]
+pub mod mix_variants;
+#[cfg(feature = "native")]
 pub mod signal_kit;
 #[cfg(feature = "native")]
 pub mod vocal_level;

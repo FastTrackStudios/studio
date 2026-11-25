@@ -51,7 +51,14 @@ delay compensated) without touching playback, and gives each track and bus its l
 crest, bands, width and share of its folder (`bypass_signal: true` adds the raw drums beside it: \
 Signal's gain per track); MIX_RENDER writes the same to a WAV to listen to. Sends are SENDS_LIST, \
 SEND_ADD, SEND_SET and SEND_REMOVE; SIGNAL_KIT `sends: true` makes the kit's routing. \
-MIX_SNAPSHOT, MIX_RESTORE and MIX_DIFF keep and compare whole mixes, for A/B.";
+MIX_SNAPSHOT, MIX_RESTORE and MIX_DIFF keep and compare whole mixes (or a scope of tracks, \
+some categories only), for A/B. To let the user choose between takes on one decision, make \
+variants: MIX_VARIANTS_CREATE a group (its scope and categories), MIX_VARIANT_ADD each variant \
+(from the mix as it stands, or a base plus `set` changes, without touching the live mix), \
+MIX_VARIANTS_MATCH to level them; the user switches between them while the song plays \
+(MIX_VARIANT_SWITCH/NEXT/PREV, no undo steps), blind if they like (MIX_VARIANTS_BLIND), and \
+rates or picks (MIX_VARIANT_RATE/PICK); read their votes with MIX_VARIANTS_STATE and keep the \
+winner with MIX_VARIANT_KEEP (one undo step), or MIX_VARIANTS_END.";
 
 /// Serve the Action List on the engine's runtime, unless `FTS_MCP=0`, and
 /// say where it is (`~/.config/fts/session-mcp.json`); `None` when it is
