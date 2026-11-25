@@ -84,7 +84,7 @@ impl ModulatedAllpass {
         self.buffer.clear();
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn tick(&mut self, input: f64) -> f64 {
         if self.modulation_enabled {
             self.tick_with_mod(input)
@@ -103,7 +103,7 @@ impl ModulatedAllpass {
         self.allpass_step(input, buf_out)
     }
 
-    #[inline]
+    #[inline(always)]
     fn tick_with_mod(&mut self, input: f64) -> f64 {
         if self.samples_processed >= MOD_UPDATE_RATE {
             self.update_mod();
@@ -125,7 +125,7 @@ impl ModulatedAllpass {
     }
 
     /// Shared Schroeder allpass update: write `input + fb`, output `delayed - fb * written`.
-    #[inline]
+    #[inline(always)]
     fn allpass_step(&mut self, input: f64, buf_out: f64) -> f64 {
         let in_val = buf_out.mul_add(self.feedback, input);
         self.buffer.write(in_val);

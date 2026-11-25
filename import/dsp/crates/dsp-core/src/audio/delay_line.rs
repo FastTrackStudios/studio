@@ -14,7 +14,7 @@ impl DelayLine {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn write(&mut self, sample: f64) {
         self.buffer[self.write_pos] = sample;
         self.write_pos += 1;
@@ -24,7 +24,7 @@ impl DelayLine {
     }
 
     // r[impl dsp.delay.integer-read]
-    #[inline]
+    #[inline(always)]
     pub fn read(&self, delay_samples: usize) -> f64 {
         // The same index as `(write_pos + len - delay) % len`, without the
         // integer division: a reverb reads its lines dozens of times a
@@ -54,15 +54,34 @@ impl DelayLine {
 
     // r[impl dsp.delay.cubic-read]
     /// Catmull-Rom cubic interpolation for higher quality fractional reads.
-    #[inline]
+    #[inline(always)]
     pub fn read_cubic(&self, delay_samples: f64) -> f64 {
         let int_delay = delay_samples as usize;
         let frac = delay_samples - int_delay as f64;
 
-        let y0 = self.read(int_delay.saturating_sub(1).max(1));
-        let y1 = self.read(int_delay);
-        let y2 = self.read((int_delay + 1).min(self.buffer.len() - 1));
-        let y3 = self.read((int_delay + 2).min(self.buffer.len() - 1));
+        // Most reads find their four taps side by side behind the write
+        // head (no wrap, no clamp): one slice, not four wrapped reads. The
+        // same samples the general path reads, so the same result.
+        let len = self.buffer.len();
+        let contiguous = int_delay >= 2
+            && int_delay.saturating_add(3) <= len
+            && self.write_pos >= int_delay.saturating_add(2);
+        let taps = if contiguous {
+            let y1 = self.write_pos - int_delay;
+            self.buffer.get(y1 - 2..y1 + 2)
+        } else {
+            None
+        };
+        let (y0, y1, y2, y3) = if let Some(&[y3, y2, y1, y0]) = taps {
+            (y0, y1, y2, y3)
+        } else {
+            (
+                self.read(int_delay.saturating_sub(1).max(1)),
+                self.read(int_delay),
+                self.read((int_delay + 1).min(len - 1)),
+                self.read((int_delay + 2).min(len - 1)),
+            )
+        };
 
         // Catmull-Rom spline
         let a0 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
