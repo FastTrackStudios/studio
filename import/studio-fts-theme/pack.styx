@@ -1,0 +1,7 @@
+// studio-fts-theme: FastTrackStudio's console look, for daw-theme spec 1.
+name fts
+title "FastTrackStudio"
+spec 1
+themes {
+    console { title Console, layers (themes/console), mode dark }
+}
