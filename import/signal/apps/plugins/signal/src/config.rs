@@ -1,0 +1,124 @@
+//! The v0 rig configuration: a sampler pack by environment or file.
+//!
+//! The plugin loads ONE rig at startup. Which rig is chosen:
+//!
+//! 1. `$FTS_SIGNAL_RIG` — path to either a `.signalpack` (loaded directly
+//!    with defaults) or a `.styx` file describing a [`RigConfig`];
+//! 2. otherwise `~/.config/signal/plugin/rig.styx` (the plugin's default
+//!    config location, sibling to the live engine's `~/.config/signal/rig/`)
+//!    if it exists;
+//! 3. otherwise no rig: the plugin starts as a passthrough.
+//!
+//! Example rig styx:
+//!
+//! ```text
+//! # the sampler pack to load (required)
+//! pack "/path/to/Keyscape Grand.signalpack"
+//! attack_ms 5
+//! release_ms 200
+//! cache_budget_mb 8192
+//! ```
+//!
+//! It is read only by a fresh instance with no saved state: the plugin's
+//! state chunk (a `SignalState`) is what a session restores. The config
+//! becomes a preset with the pack in an instrument lane
+//! ([`crate::sampler::preset_for`]).
+
+use facet::Facet;
+use std::path::PathBuf;
+
+/// Env var pointing at a `.signalpack` or a [`RigConfig`] styx file.
+pub const RIG_ENV: &str = "FTS_SIGNAL_RIG";
+
+/// Instrument id the plugin loads and drives inside the [`SamplerBank`].
+///
+/// [`SamplerBank`]: sampler::SamplerBank
+pub const INSTRUMENT_ID: &str = "rig";
+
+#[derive(Debug, Clone, Facet)]
+pub struct RigConfig {
+    /// Path to the `.signalpack` to load (required).
+    pub pack: String,
+    #[facet(default)]
+    pub attack_ms: Option<u32>,
+    #[facet(default)]
+    pub release_ms: Option<u32>,
+    /// Decoded-sample cache budget (MiB). Default 8192.
+    #[facet(default)]
+    pub cache_budget_mb: Option<u64>,
+}
+
+impl RigConfig {
+    /// A config that loads `pack` with all defaults (the bare-`.signalpack`
+    /// path of [`RigConfig::resolve`]).
+    pub fn from_pack_path(pack: impl Into<String>) -> Self {
+        Self {
+            pack: pack.into(),
+            attack_ms: None,
+            release_ms: None,
+            cache_budget_mb: None,
+        }
+    }
+
+    /// Parse a rig config from a styx string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the styx syntax is invalid.
+    pub fn from_styx(s: &str) -> eyre::Result<Self> {
+        facet_styx::from_str(s).map_err(|e| eyre::eyre!("rig config parse: {e}"))
+    }
+
+    /// Default config location: `~/.config/signal/plugin/rig.styx`.
+    #[must_use]
+    pub fn default_path() -> Option<PathBuf> {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config/signal/plugin/rig.styx"))
+    }
+
+    /// Resolve per the priority in the module docs.
+    ///
+    /// `Ok(None)` means "no rig configured" (passthrough mode) — only real
+    /// errors (unreadable file, bad styx) are `Err`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a rig file cannot be read or has invalid syntax.
+    pub fn resolve() -> eyre::Result<Option<Self>> {
+        if let Ok(path) = std::env::var(RIG_ENV) {
+            if !path.is_empty() {
+                return Self::load(&PathBuf::from(&path))
+                    .map(Some)
+                    .map_err(|e| eyre::eyre!("{RIG_ENV}={path}: {e}"));
+            }
+        }
+        match Self::default_path() {
+            Some(p) if p.exists() => Self::load(&p)
+                .map(Some)
+                .map_err(|e| eyre::eyre!("{}: {e}", p.display())),
+            _ => Ok(None),
+        }
+    }
+
+    /// Load from a path: `.signalpack` → direct pack config; anything else is
+    /// parsed as a [`RigConfig`] styx file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or has invalid styx syntax.
+    pub fn load(path: &PathBuf) -> eyre::Result<Self> {
+        let is_pack = path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("signalpack"));
+        if is_pack {
+            return Ok(Self::from_pack_path(path.to_string_lossy().into_owned()));
+        }
+        let text =
+            std::fs::read_to_string(path).map_err(|e| eyre::eyre!("read rig config: {e}"))?;
+        Self::from_styx(&text)
+    }
+
+    #[must_use]
+    pub fn cache_budget_bytes(&self) -> Option<usize> {
+        Some((self.cache_budget_mb.unwrap_or(8192) as usize) * 1024 * 1024)
+    }
+}

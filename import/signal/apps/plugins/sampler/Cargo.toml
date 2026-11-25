@@ -1,0 +1,50 @@
+[package]
+name = "signal-sampler-clap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "CLAP instrument plugin hosting the signal-sampler engine on a REAPER track — document-mode lookahead playback driven by the host transport, StrictLive passthrough otherwise"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+# Plugin framework. `nice_plug` must be a DIRECT dep (not just via
+# `audiocore_core::prelude`) because `#[derive(Params)]` and `nice_export_clap!`
+# expand to absolute `::nice_plug::…` paths, so the crate has to be nameable here.
+nice-plug.workspace = true
+plugin-core = { workspace = true }
+
+# The sampler engine + document scheduler, and documents from a host's
+# timeline (host-timeline/1).
+sampler = { workspace = true, features = ["host-timeline"] }
+# FastTrackStudio's CLAP extensions: host-timeline/1 (the track's MIDI
+# ahead of the playhead), host-actions/1 and host-events/1 (its events).
+daw-clap-ext = { workspace = true }
+# A Standard MIDI File as a document (doc_watch), for hosts without a
+# timeline.
+midly = { workspace = true }
+
+# Lock-free Arc<Schedule> swap at block boundaries
+arc-swap = { workspace = true }
+
+# Patch config (.styx) parsing — same stack as signal-sampler's LibrarySpec
+facet.workspace = true
+facet-styx.workspace = true
+
+# Dev-only TrackDocument JSON intake (phase-3 seam)
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+# Observability
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+eyre.workspace = true
+
+[dev-dependencies]
+hound = { workspace = true }
