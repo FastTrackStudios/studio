@@ -12,6 +12,13 @@ use dawfile_reaper::builder::*;
 use dawfile_reaper::types::item::{MidiEventType, MidiSourceEvent};
 use dawfile_reaper::types::track::FolderState;
 
+/// A Live set from the ableton adapter's fixtures, the one copy in the tree.
+fn ableton_fixture(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../ableton/tests/fixtures/ableton")
+        .join(name)
+}
+
 // ─── .als → .rpp ───────────────────────────────────────────────────────────
 
 fn ableton_to_rpp(set: &AbletonLiveSet) -> dawfile_reaper::types::ReaperProject {
@@ -484,7 +491,7 @@ fn complete_note(
 
 #[test]
 fn als_to_rpp_to_als_lucid_dreaming() {
-    let original = read_live_set("tests/fixtures/LucidDreaming.als")
+    let original = read_live_set(ableton_fixture("LucidDreaming.als"))
         .expect("failed to parse LucidDreaming.als");
 
     // .als → .rpp
@@ -551,7 +558,7 @@ fn als_to_rpp_to_als_lucid_dreaming() {
 #[test]
 fn als_to_rpp_to_als_farmhouse() {
     let original =
-        read_live_set("tests/fixtures/Farmhouse.als").expect("failed to parse Farmhouse.als");
+        read_live_set(ableton_fixture("Farmhouse.als")).expect("failed to parse Farmhouse.als");
 
     let rpp_project = ableton_to_rpp(&original);
     let rpp_text = rpp_project.to_rpp_string();
@@ -592,7 +599,7 @@ fn als_to_rpp_to_als_farmhouse() {
 
 #[test]
 fn rpp_output_is_valid_reaper_project() {
-    let set = read_live_set("tests/fixtures/LucidDreaming.als").expect("failed to parse");
+    let set = read_live_set(ableton_fixture("LucidDreaming.als")).expect("failed to parse");
 
     let rpp = ableton_to_rpp(&set);
     let text = rpp.to_rpp_string();
