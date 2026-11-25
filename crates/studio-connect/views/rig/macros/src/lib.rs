@@ -1,4 +1,4 @@
-//! `studio.rig.macros`: the macro bar (`guitar::ui::panels::Macros`, the iPad layout's `TouchMacroBar`), in an Architect pane.
+//! `studio.rig.macros`: the macro bar (`guitar_ui::panels::Macros`, the iPad layout's `TouchMacroBar`), in an Architect pane.
 //!
 //! Nothing is redrawn: the pane is a vox client of the rig engine
 //! (`studio_rig_link::RigPane`) around Signal's own panel.
@@ -32,6 +32,6 @@ impl Extension for Macros {
 #[component]
 fn MacrosPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::Macros {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::Macros {} }
     }
 }

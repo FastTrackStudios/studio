@@ -1,4 +1,4 @@
-# studio.rig.status (src/lib.rs): the engine's three small readouts (`guitar::ui::panels::{Status, Tuner, DiPlayer}`), in an Architect pane: a vox client of
+# studio.rig.status (src/lib.rs): the engine's three small readouts (`guitar_ui::panels::{Status, Tuner, DiPlayer}`), in an Architect pane: a vox client of
 # the rig engine (the studio.rig extension runs it), as every Signal GUI
 # is. It names no other view (docs/design/signal-extensions.md).
 id = "studio.rig.status"

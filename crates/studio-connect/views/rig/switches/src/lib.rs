@@ -1,4 +1,4 @@
-//! `studio.rig.switches`: the footswitch scenes (`guitar::ui::panels::Switches`, the iPad layout's `TouchSwitches`), in an Architect pane.
+//! `studio.rig.switches`: the footswitch scenes (`guitar_ui::panels::Switches`, the iPad layout's `TouchSwitches`), in an Architect pane.
 //!
 //! Nothing is redrawn: the pane is a vox client of the rig engine
 //! (`studio_rig_link::RigPane`) around Signal's own panel.
@@ -32,6 +32,6 @@ impl Extension for Switches {
 #[component]
 fn SwitchesPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::Switches {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::Switches {} }
     }
 }

@@ -1,4 +1,4 @@
-//! `studio.rig.browser`: the browser (`guitar::ui::panels::Tones`, the iPad layout's `Browser` with its captures and TONE3000 panels), in an Architect pane.
+//! `studio.rig.browser`: the browser (`guitar_ui::panels::Tones`, the iPad layout's `Browser` with its captures and TONE3000 panels), in an Architect pane.
 //!
 //! Nothing is redrawn: the pane is a vox client of the rig engine
 //! (`studio_rig_link::RigPane`) around Signal's own panel.
@@ -6,7 +6,7 @@
 use architect_extensions::linked::{Builder, Extension};
 use architect_extensions_dioxus::BuilderExt as _;
 use dioxus::prelude::*;
-use guitar::ui::panels::Focus;
+use guitar_ui::panels::Focus;
 use serde_json::Value as Json;
 use studio_rig_link::{Owner, RigPane};
 
@@ -54,6 +54,6 @@ impl Extension for Browser {
 #[component]
 fn BrowserPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::Tones {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::Tones {} }
     }
 }

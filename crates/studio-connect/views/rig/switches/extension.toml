@@ -1,4 +1,4 @@
-# studio.rig.switches (src/lib.rs): the footswitch scenes (`guitar::ui::panels::Switches`, the iPad layout's `TouchSwitches`), in an Architect pane: a vox client of
+# studio.rig.switches (src/lib.rs): the footswitch scenes (`guitar_ui::panels::Switches`, the iPad layout's `TouchSwitches`), in an Architect pane: a vox client of
 # the rig engine (the studio.rig extension runs it), as every Signal GUI
 # is. It names no other view (docs/design/signal-extensions.md).
 id = "studio.rig.switches"

@@ -12,7 +12,7 @@
 
 use std::sync::{LazyLock, Mutex, PoisonError};
 
-use guitar::ui::panels::{Focus, Selected};
+use guitar_ui::panels::{Focus, Selected};
 use tokio::sync::watch;
 
 /// What the panes share.

@@ -1,0 +1,78 @@
+[package]
+name = "guitar-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The guitar and bass rigs' editors: the Dioxus, Blitz and Vello half of `guitar`, drawn from its vox clients, so the rig itself builds headless"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyrender = { workspace = true }
+architect = { workspace = true, features = ["atom", "platform", "rig", "vox"] }
+base64 = { workspace = true }
+chrono = { workspace = true }
+dioxus = { workspace = true }
+# The effects and their faces: FastTrackStudios/plugins `plugin-ui` re-exports
+# each `dsp` module with its `ui` (the paths fts-fx had), so `dsp::comp::ui::…` still names them.
+dsp = { path = "../../../plugin-ui/plugin-ui", package = "plugin-ui", features = ["comp", "comp-ui", "comp-viz", "delay", "delay-ui", "delay-viz", "eq", "eq-graph", "eq-ui", "modulation", "modulation-ui", "modulation-viz", "reverb", "reverb-ui", "reverb-viz"] }
+# The drum rig's wire contract, for its iPad surface (tablet/drums.rs).
+drums = { workspace = true }
+fts-audio-ui = { workspace = true }
+guitar = { workspace = true }
+kurbo = { workspace = true }
+lumen-blocks = { workspace = true }
+serde_json = { workspace = true }
+signal-grid = { workspace = true }
+signal-grid-ui = { workspace = true }
+signal-proto = { workspace = true }
+signal-rig-host = { workspace = true }
+# The performance screens every rig shares (Preset, Profile, Setlist).
+signal-rig-perform-ui = { workspace = true }
+# The iPad rig frame every rig shares (top bar, sidebar, dock, foot bar).
+signal-rig-shell = { workspace = true }
+signal-rigs-proto = { workspace = true }
+signal-tone3000 = { workspace = true, features = ["ui"] }
+signal-widgets = { workspace = true }
+tracing = { workspace = true }
+# `utils::paths::checkout_path`: the plugin faces found at run time, not baked in.
+utils.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+vox = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+audio = { workspace = true, features = ["io"] }
+blitz-dom = { workspace = true, features = ["custom-widget"] }
+blitz-traits = { workspace = true }
+bytemuck = { workspace = true, features = ["derive"] }
+dioxus-native-dom = { workspace = true }
+frame = { workspace = true, features = ["host-scene", "live"] }
+image = { workspace = true }
+parley = { workspace = true }
+vello = { workspace = true }
+wgpu = { workspace = true }
+wgpu_context = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+anyrender_vello_hybrid = { workspace = true, features = ["webgl"] }
+rustc-hash = { workspace = true }
+vello_gpu = { workspace = true, features = ["webgl"] }
+wasm-bindgen = { workspace = true }
+web-sys = { workspace = true, features = ["Window", "Document", "Element", "HtmlCanvasElement"] }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+anyrender = { workspace = true }
+anyrender_vello = { workspace = true }
+architect = { workspace = true, features = ["atom", "vox", "platform", "local"] }
+blitz-dom = { workspace = true }
+blitz-paint = { workspace = true, features = ["custom-widget"] }
+blitz-traits = { workspace = true }
+dioxus-native = { workspace = true }
+dioxus-native-dom = { workspace = true }
+image = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

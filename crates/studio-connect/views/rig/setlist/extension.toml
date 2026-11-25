@@ -1,4 +1,4 @@
-# studio.rig.setlist (src/lib.rs): the sidebar (`guitar::ui::panels::Sidebar`: the iPad layout's `TabletSetlist`, `ProfileView` or `PresetView`, by footswitch mode), in an Architect pane: a vox client of
+# studio.rig.setlist (src/lib.rs): the sidebar (`guitar_ui::panels::Sidebar`: the iPad layout's `TabletSetlist`, `ProfileView` or `PresetView`, by footswitch mode), in an Architect pane: a vox client of
 # the rig engine (the studio.rig extension runs it), as every Signal GUI
 # is. It names no other view (docs/design/signal-extensions.md).
 id = "studio.rig.setlist"

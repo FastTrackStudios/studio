@@ -1,4 +1,4 @@
-# studio.rig.grid (src/lib.rs): the routing grid, the FX row and Edit (`guitar::ui::panels::{Grid, Fx, Edit}`). One extension: the FX row is the grid's selection drawn as controls, and Edit is the two over a section's pending changes, in an Architect pane: a vox client of
+# studio.rig.grid (src/lib.rs): the routing grid, the FX row and Edit (`guitar_ui::panels::{Grid, Fx, Edit}`). One extension: the FX row is the grid's selection drawn as controls, and Edit is the two over a section's pending changes, in an Architect pane: a vox client of
 # the rig engine (the studio.rig extension runs it), as every Signal GUI
 # is. It names no other view (docs/design/signal-extensions.md).
 id = "studio.rig.grid"

@@ -1,4 +1,4 @@
-# studio.rig.macros (src/lib.rs): the macro bar (`guitar::ui::panels::Macros`, the iPad layout's `TouchMacroBar`), in an Architect pane: a vox client of
+# studio.rig.macros (src/lib.rs): the macro bar (`guitar_ui::panels::Macros`, the iPad layout's `TouchMacroBar`), in an Architect pane: a vox client of
 # the rig engine (the studio.rig extension runs it), as every Signal GUI
 # is. It names no other view (docs/design/signal-extensions.md).
 id = "studio.rig.macros"

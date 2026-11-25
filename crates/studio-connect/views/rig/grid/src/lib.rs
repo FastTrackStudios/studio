@@ -1,4 +1,4 @@
-//! `studio.rig.grid`: the routing grid, the FX row and Edit (`guitar::ui::panels::{Grid, Fx, Edit}`). One extension: the FX row is the grid's selection drawn as controls, and Edit is the two over a section's pending changes, in an Architect pane.
+//! `studio.rig.grid`: the routing grid, the FX row and Edit (`guitar_ui::panels::{Grid, Fx, Edit}`). One extension: the FX row is the grid's selection drawn as controls, and Edit is the two over a section's pending changes, in an Architect pane.
 //!
 //! Nothing is redrawn: the pane is a vox client of the rig engine
 //! (`studio_rig_link::RigPane`) around Signal's own panel.
@@ -6,7 +6,7 @@
 use architect_extensions::linked::{Builder, Extension};
 use architect_extensions_dioxus::BuilderExt as _;
 use dioxus::prelude::*;
-use guitar::ui::panels::Selected;
+use guitar_ui::panels::Selected;
 use serde_json::Value as Json;
 use studio_rig_link::{Owner, RigPane};
 
@@ -41,21 +41,21 @@ impl Extension for Grid {
 #[component]
 fn GridPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::Grid {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::Grid {} }
     }
 }
 
 #[component]
 fn FxPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::Fx {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::Fx {} }
     }
 }
 
 #[component]
 fn EditPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::Edit {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::Edit {} }
     }
 }
 

@@ -10,7 +10,7 @@
 //!
 //! One extension with nine views: the keys screens have one view state
 //! and no panel seam of their own yet, as the guitar's have
-//! (`guitar::ui::panels`); they split when that seam exists
+//! (`guitar_ui::panels`); they split when that seam exists
 //! (`docs/design/signal-extensions.md`).
 //!
 //! A keys pane starts the keys rig when it opens, as Signal's keys screen

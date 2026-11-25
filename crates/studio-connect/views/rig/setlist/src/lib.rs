@@ -1,4 +1,4 @@
-//! `studio.rig.setlist`: the sidebar (`guitar::ui::panels::Sidebar`: the iPad layout's `TabletSetlist`, `ProfileView` or `PresetView`, by footswitch mode), in an Architect pane.
+//! `studio.rig.setlist`: the sidebar (`guitar_ui::panels::Sidebar`: the iPad layout's `TabletSetlist`, `ProfileView` or `PresetView`, by footswitch mode), in an Architect pane.
 //!
 //! Nothing is redrawn: the pane is a vox client of the rig engine
 //! (`studio_rig_link::RigPane`) around Signal's own panel.
@@ -32,6 +32,6 @@ impl Extension for Setlist {
 #[component]
 fn SetlistPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::Sidebar {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::Sidebar {} }
     }
 }

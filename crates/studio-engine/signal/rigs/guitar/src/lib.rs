@@ -20,8 +20,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub mod phones;
 pub mod proto;
-#[cfg(feature = "ui")]
-pub mod ui;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;

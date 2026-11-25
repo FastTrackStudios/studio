@@ -12,7 +12,7 @@
 //! - `settings`: all of it on one page, drawn in Architect's Settings
 //!   (its `[[sections]]` names this view).
 //!
-//! The rig's pages are Signal's Setup tabs (`guitar::ui::panels::Setup`),
+//! The rig's pages are Signal's Setup tabs (`guitar_ui::panels::Setup`),
 //! not redrawn.
 
 pub mod engines;
@@ -20,7 +20,7 @@ pub mod engines;
 use architect_extensions::linked::{Builder, Extension};
 use architect_extensions_dioxus::BuilderExt as _;
 use dioxus::prelude::*;
-use guitar::ui::panels::SetupTab;
+use guitar_ui::panels::SetupTab;
 use serde_json::Value as Json;
 use studio_rig_link::{Owner, RigPane};
 
@@ -75,7 +75,7 @@ fn SettingsPage() -> Element {
             Engines {}
             div { style: "flex:1; min-height:520px; display:flex; border-top:1px solid {RULE};",
                 RigPane { owner: Owner(ID),
-                    guitar::ui::panels::Setup { tab: SetupTab::Audio }
+                    guitar_ui::panels::Setup { tab: SetupTab::Audio }
                 }
             }
         }
@@ -95,7 +95,7 @@ fn MidiPane() -> Element {
                 RigPane { owner: Owner(ID),
                     div { style: "flex:1; min-width:0; min-height:0; display:flex; flex-direction:column;",
                         Learn {}
-                        guitar::ui::panels::Setup { tab: SetupTab::Midi }
+                        guitar_ui::panels::Setup { tab: SetupTab::Midi }
                     }
                 }
             }
@@ -109,7 +109,7 @@ fn InstrumentPane() -> Element {
         div { style: PAGE,
             div { style: "flex:1; min-height:0; display:flex;",
                 RigPane { owner: Owner(ID),
-                    guitar::ui::panels::Setup { tab: SetupTab::Guitar }
+                    guitar_ui::panels::Setup { tab: SetupTab::Guitar }
                 }
             }
         }
@@ -410,7 +410,7 @@ fn Chip(label: String, on: bool, onclick: EventHandler<()>) -> Element {
 /// forget it.
 #[component]
 fn Learn() -> Element {
-    let state = try_use_context::<guitar::ui::RigViewState>();
+    let state = try_use_context::<guitar_ui::RigViewState>();
     let rig = use_hook(try_consume_context::<guitar::proto::rig::RigClient>);
     let (Some(state), Some(rig)) = (state, rig) else {
         return rsx! {};

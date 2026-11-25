@@ -1,4 +1,4 @@
-//! `studio.rig.status`: the engine's three small readouts (`guitar::ui::panels::{Status, Tuner, DiPlayer}`), in an Architect pane.
+//! `studio.rig.status`: the engine's three small readouts (`guitar_ui::panels::{Status, Tuner, DiPlayer}`), in an Architect pane.
 //!
 //! Nothing is redrawn: the pane is a vox client of the rig engine
 //! (`studio_rig_link::RigPane`) around Signal's own panel.
@@ -34,20 +34,20 @@ impl Extension for Status {
 #[component]
 fn StatusPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::Status {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::Status {} }
     }
 }
 
 #[component]
 fn TunerPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::Tuner {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::Tuner {} }
     }
 }
 
 #[component]
 fn PlayerPane() -> Element {
     rsx! {
-        RigPane { owner: Owner(ID), guitar::ui::panels::DiPlayer {} }
+        RigPane { owner: Owner(ID), guitar_ui::panels::DiPlayer {} }
     }
 }

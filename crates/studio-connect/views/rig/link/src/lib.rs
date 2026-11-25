@@ -4,7 +4,7 @@
 //! - [`discover`] finds the engine this app started.
 //! - [`RigPane`] is a pane's root: it waits for the connection, puts the
 //!   rig's clients in context and draws Signal's panel providers
-//!   (`guitar::ui::panels::RigProviders`) around the view, mounted afresh
+//!   (`guitar_ui::panels::RigProviders`) around the view, mounted afresh
 //!   when the engine is lost and found again.
 //! - [`bus`] is what panes share past the engine's own state: the routing
 //!   grid's selection, the browser's focus, the part being built. Each
@@ -26,7 +26,7 @@ use architect_extensions::linked::Handle;
 use dioxus::prelude::*;
 use guitar::proto::audio::AudioSettingsClient;
 use guitar::proto::rig::{RigClient, RigStreamClient};
-use guitar::ui::panels::{BrowserFocus, BuildPick, PanelHost, RoutingSel};
+use guitar_ui::panels::{BrowserFocus, BuildPick, PanelHost, RoutingSel};
 use keys::proto::keys::{KeysRigClient, KeysRigStreamClient};
 use serde_json::{Value as Json, json};
 use signal_rigs_proto::perform::service::{RigPerformClient, RigPerformStreamClient};
@@ -172,7 +172,7 @@ impl Drop for Counted {
 /// the panes share.
 #[must_use]
 pub fn state() -> Json {
-    use guitar::ui::panels::Selected;
+    use guitar_ui::panels::Selected;
     let shared = bus::get();
     let selection = shared.selection.map(|selected| match selected {
         Selected::Block(id) => json!({ "block": id }),
@@ -434,7 +434,7 @@ fn Connected(children: Element) -> Element {
         };
     }
     rsx! {
-        guitar::ui::panels::RigProviders {
+        guitar_ui::panels::RigProviders {
             Shared {}
             {children}
         }
