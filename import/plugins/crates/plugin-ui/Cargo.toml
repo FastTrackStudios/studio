@@ -18,6 +18,14 @@ default = []
 multiband = ["dsp/multiband"]
 # Vocal and drum leveling (no face of its own): `dsp::level`, passed through.
 level = ["dsp/level"]
+# dsp's modules with no face of their own, passed through, so plugin-ui
+# stands in for dsp everywhere.
+align = ["dsp/align"]
+analyzer = ["dsp/analyzer"]
+gate = ["dsp/gate"]
+pitch = ["dsp/pitch"]
+pitch-rubberband = ["dsp/pitch-rubberband"]
+std = ["dsp/std"]
 stack = ["dsp/stack"]
 stack-host = [
     "stack",

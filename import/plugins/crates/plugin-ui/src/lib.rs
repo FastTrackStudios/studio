@@ -11,6 +11,18 @@ pub use ::dsp::multiband;
 #[cfg(feature = "level")]
 pub use ::dsp::level;
 
+#[cfg(feature = "align")]
+pub use ::dsp::align;
+
+#[cfg(feature = "analyzer")]
+pub use ::dsp::analyzer;
+
+#[cfg(feature = "gate")]
+pub use ::dsp::gate;
+
+#[cfg(feature = "pitch")]
+pub use ::dsp::pitch;
+
 #[cfg(feature = "comp")]
 pub mod comp {
     pub use ::dsp::comp::*;
