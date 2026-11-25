@@ -1,0 +1,9 @@
+// studio-ableton-theme: flat greys in the style of a well-known
+// arrange-and-session DAW, as two themes, for daw-theme spec 1.
+name ableton
+title "Ableton-style"
+spec 1
+themes {
+    ableton-dark { title Dark, layers (themes/ableton), mode dark }
+    ableton-light { title Light, layers (themes/ableton), mode light }
+}

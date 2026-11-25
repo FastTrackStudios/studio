@@ -1,0 +1,53 @@
+<Document>
+  <!-- The track header beside the arrangement. Row one: the name in a box
+       of the track's colour, then the activator, solo and arm. Row two,
+       when the track is tall enough: where it goes, its FX, the volume and
+       pan fields. A thin meter runs down the right edge. -->
+  <Page name="tcp.row">
+    <Frame name="Row" w=343 h=50>
+      <Rectangle name="Ground" w=343 h=50 bind:w="w" bind:h="h" bind:fill="track.tint" />
+      <Rectangle name="Column" w=20 h=50 bind:w="row.indent" bind:h="h" bind:fill="$tcp.column" bind:visible="row.indent > 0" />
+      <Rectangle name="Divider" w=343 h=1 bind:w="w" bind:y="h - 1" bind:fill="$border" />
+      <Rectangle name="Edge" w=1 h=50 bind:x="w - 1" bind:h="h" bind:fill="$border" />
+      <Frame name="Body" w=343 h=50 bind:w="w" bind:h="h" bind:visible="h >= 12">
+        <!-- the name, on the track's colour -->
+        <Rectangle name="Name box" w=200 h=15 bind:x="row.indent + 4" bind:y="clamp((h - 15) / 2, 1, 4)" bind:w="max(w - 114 - row.indent - 4, 0)" bind:fill="track.has_color ? track.color : $local.button" />
+        <Rectangle name="Name outline" w=199 h=14 stroke-weight=1 stroke-align="center" bind:x="row.indent + 4.5" bind:y="clamp((h - 15) / 2, 1, 4) + 0.5" bind:w="max(w - 115 - row.indent - 4, 0)" bind:stroke="track.selected ? $text.bright : $hardware.edge" />
+        <Vector name="Open" w=7 h=5 geometry="M 0 0 L 7 0 L 3.5 5 Z" bind:x="row.indent + 8" bind:y="clamp((h - 15) / 2, 1, 4) + 5" bind:visible="track.folder && !track.collapsed" bind:fill="$local.title_ink" />
+        <Vector name="Shut" w=5 h=7 geometry="M 0 0 L 5 3.5 L 0 7 Z" bind:x="row.indent + 9" bind:y="clamp((h - 15) / 2, 1, 4) + 4" bind:visible="track.folder && track.collapsed" bind:fill="$local.title_ink" />
+        <Text name="Name" w=400 h=14 size=10 weight=700 bind:x="row.indent + (track.folder ? 19 : 8)" bind:y="clamp((h - 15) / 2, 1, 4) + (15 - 1.1 * min(row.name_size, 10)) / 2" bind:size="min(row.name_size, 10)" bind:text="row.name" bind:fill="track.has_color ? $local.title_ink : $local.glyph">Track</Text>
+        <Instance name="Activator" of="mute" w=40 h=15 bind:x="w - 114" bind:y="clamp((h - 15) / 2, 1, 4)" arg:on="track.mute" arg:label="fmt(track.number)" />
+        <Instance name="Solo" of="solo" w=25 h=15 bind:x="w - 72" bind:y="clamp((h - 15) / 2, 1, 4)" arg:on="track.solo" />
+        <Instance name="Arm" of="arm" w=25 h=15 bind:x="w - 45" bind:y="clamp((h - 15) / 2, 1, 4)" bind:visible="ui.recording" arg:armed="track.armed" />
+        <!-- row two -->
+        <Frame name="Row two" w=343 h=50 bind:w="w" bind:h="h" bind:visible="h >= 40">
+          <Instance name="Routing" of="routing" w=58 h=15 y=23 bind:x="row.indent + 4" arg:parent_send="track.parent_send" arg:sends="track.sends" arg:receives="track.receives" />
+          <Instance name="FX" of="fx" w=25 h=15 y=23 bind:x="row.indent + 64" arg:count="track.fx" />
+          <Instance name="Volume" of="volume" w=58 h=15 y=23 bind:x="w - 114" arg:value="track.fader" arg:label="track.volume_label" />
+          <Instance name="Pan" of="pan.field" w=25 h=15 y=23 bind:x="w - 54" arg:value="track.pan" />
+        </Frame>
+        <!-- armed and tall enough: the input and its monitoring -->
+        <Frame name="Input" w=343 h=50 bind:w="w" bind:h="h" bind:visible="h >= 60 && track.armed">
+          <Rectangle name="Field" w=150 h=15 y=42 bind:x="row.indent + 4" bind:fill="$combo" />
+          <Rectangle name="Outline" w=149 h=14 y=42.5 stroke-weight=1 stroke-align="center" bind:x="row.indent + 4.5" bind:stroke="$hardware.edge" />
+          <Text name="Source" w=140 h=12 y=44 size=9 weight=700 bind:x="row.indent + 8" bind:text="row.input" bind:fill="$local.glyph">None</Text>
+          <Instance name="Monitor" of="monitor" w=25 h=15 y=42 bind:x="w - 45" arg:mode="track.monitor" />
+        </Frame>
+        <!-- the meter down the right edge -->
+        <Rectangle name="Meter well" w=12 h=40 bind:x="w - 16" bind:y="clamp((h - 15) / 2, 1, 4)" bind:h="max(h - 2 * clamp((h - 15) / 2, 1, 4), 1)" bind:fill="$meter.well" />
+        <Rectangle name="Meter left" w=5 h=40 bind:x="w - 15" bind:y="clamp((h - 15) / 2, 1, 4)" bind:h="max(h - 2 * clamp((h - 15) / 2, 1, 4), 1)" bind:inset-top="max(h - 2 * clamp((h - 15) / 2, 1, 4), 1) * (1 - clamp(meter.left, 0, 1))" bind:visible="meter.left > 0.002" bind:fill="meter.left >= 0.8235 ? $meter.danger : (meter.left >= 0.72 ? $meter.warn : $meter.safe)" />
+        <Rectangle name="Meter right" w=5 h=40 bind:x="w - 9" bind:y="clamp((h - 15) / 2, 1, 4)" bind:h="max(h - 2 * clamp((h - 15) / 2, 1, 4), 1)" bind:inset-top="max(h - 2 * clamp((h - 15) / 2, 1, 4), 1) * (1 - clamp(meter.right, 0, 1))" bind:visible="meter.right > 0.002" bind:fill="meter.right >= 0.8235 ? $meter.danger : (meter.right >= 0.72 ? $meter.warn : $meter.safe)" />
+        <!-- where a click lands -->
+        <Frame name="@name" w=10 h=10 bind:x="row.indent + 4" bind:y="clamp((h - 15) / 2, 1, 4)" bind:w="max(w - 114 - row.indent - 4, 0)" bind:h="15" />
+        <Frame name="@folder" w=10 h=10 bind:x="row.indent + 4" bind:y="clamp((h - 15) / 2, 1, 4)" bind:w="14" bind:h="15" bind:visible="track.folder" />
+        <Frame name="@mute" w=10 h=10 bind:x="w - 114" bind:y="clamp((h - 15) / 2, 1, 4)" bind:w="40" bind:h="15" />
+        <Frame name="@solo" w=10 h=10 bind:x="w - 72" bind:y="clamp((h - 15) / 2, 1, 4)" bind:w="25" bind:h="15" />
+        <Frame name="@arm" w=10 h=10 bind:x="w - 45" bind:y="clamp((h - 15) / 2, 1, 4)" bind:w="25" bind:h="15" bind:visible="ui.recording" />
+        <Frame name="@routing" w=10 h=10 bind:x="row.indent + 4" bind:y="23" bind:w="58" bind:h="15" bind:visible="h >= 40" />
+        <Frame name="@fx" w=10 h=10 bind:x="row.indent + 64" bind:y="23" bind:w="25" bind:h="15" bind:visible="h >= 40" />
+        <Frame name="@volume" w=10 h=10 bind:x="w - 114" bind:y="23" bind:w="58" bind:h="15" bind:visible="h >= 40" />
+        <Frame name="@pan" w=10 h=10 bind:x="w - 54" bind:y="23" bind:w="25" bind:h="15" bind:visible="h >= 40" />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

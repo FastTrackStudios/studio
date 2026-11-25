@@ -1,0 +1,82 @@
+<Document>
+  <!-- The shared controls, one component each; the track header and the
+       mixer strip place the same ones. Flat faces, a one-pixel dark
+       outline, heavy black glyphs; hover lifts the face a step, a press
+       doubles the outline. -->
+  <Page name="controls">
+    <!-- The activator: an amber bar while the track plays, grey when it is
+         muted. It carries the track's number. -->
+    <Component name="mute" w=40 h=15 arg:on="false" arg:label="\"\"">
+      <Rectangle name="Face" w=40 h=15 bind:w="pw" bind:h="ph" bind:fill="(arg.on ? $mute : $local.active)" />
+      <Rectangle name="Hover" w=40 h=15 bind:w="pw" bind:h="ph" bind:fill="#ffffff22" bind:visible="ui.hover == \"mute\" && ui.pressed == \"\"" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=39 h=14 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Rectangle name="Pressed" x=1.5 y=1.5 w=37 h=12 stroke-weight=1 stroke-align="center" bind:w="pw - 3" bind:h="ph - 3" bind:stroke="#000000" bind:visible="ui.pressed == \"mute\"" />
+      <Text name="Number" w=400 h=12 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:text="arg.label" bind:fill="$local.lit_glyph">1</Text>
+    </Component>
+    <Component name="solo" w=25 h=15 arg:on="false">
+      <Rectangle name="Face" w=25 h=15 bind:w="pw" bind:h="ph" bind:fill="arg.on ? $solo : $local.button" />
+      <Rectangle name="Hover" w=25 h=15 bind:w="pw" bind:h="ph" bind:fill="#ffffff22" bind:visible="ui.hover == \"solo\" && ui.pressed == \"\"" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=24 h=14 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="S" w=400 h=14 size=11 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 12) / 2" bind:fill="arg.on ? $local.lit_glyph : $local.glyph">S</Text>
+    </Component>
+    <Component name="arm" w=25 h=15 arg:armed="false">
+      <Rectangle name="Face" w=25 h=15 bind:w="pw" bind:h="ph" bind:fill="arg.armed ? $rec : $local.button" />
+      <Rectangle name="Hover" w=25 h=15 bind:w="pw" bind:h="ph" bind:fill="#ffffff22" bind:visible="ui.hover == \"arm\" && ui.pressed == \"\"" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=24 h=14 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Ellipse name="Dot" w=8 h=8 bind:x="(pw - 8) / 2" bind:y="(ph - 8) / 2" bind:fill="arg.armed ? $local.lit_glyph : $local.glyph" />
+    </Component>
+    <!-- Input monitoring: Off, On, Auto. -->
+    <Component name="monitor" w=25 h=15 arg:mode="0">
+      <Rectangle name="Face" w=25 h=15 bind:w="pw" bind:h="ph" bind:fill="arg.mode == 0 ? $local.button : $monitor.tape" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=24 h=14 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Off" w=400 h=12 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:visible="arg.mode == 0" bind:fill="$local.glyph">Off</Text>
+      <Text name="On" w=400 h=12 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:visible="arg.mode == 1" bind:fill="$local.lit_glyph">On</Text>
+      <Text name="Auto" w=400 h=12 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:visible="arg.mode == 2" bind:fill="$local.lit_glyph">Auto</Text>
+    </Component>
+    <Component name="phase" w=25 h=15 arg:on="false">
+      <Rectangle name="Face" w=25 h=15 bind:w="pw" bind:h="ph" bind:fill="arg.on ? $accent : $local.button" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=24 h=14 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Polarity" w=400 h=14 size=10 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 11) / 2" bind:fill="arg.on ? $local.lit_glyph : $local.glyph">Ø</Text>
+    </Component>
+    <!-- The pan knob: a thick dark arc, the value in cyan from the top, a
+         dark pointer, and a cyan mark over the centre. -->
+    <Component name="pan" w=32 h=32 arg:value="0">
+      <Vector name="Track left" w=32 h=32 geometry="M 0 0" stroke-weight=3 bind:stroke="$local.knob_track" bind:geometry="arc(16, 18, 11, 0, -140)" />
+      <Vector name="Track right" w=32 h=32 geometry="M 0 0" stroke-weight=3 bind:stroke="$local.knob_track" bind:geometry="arc(16, 18, 11, 0, 140)" />
+      <Vector name="Value" w=32 h=32 geometry="M 0 0" stroke-weight=3 bind:stroke="$pan" bind:geometry="arc(16, 18, 11, 0, clamp(arg.value, -1, 1) * 140)" bind:visible="abs(clamp(arg.value, -1, 1) * 140) > 0.5" />
+      <Vector name="Mark" w=32 h=32 geometry="M 13 1 L 19 1 L 16 5 Z" bind:fill="$pan" />
+      <Vector name="Pointer" x=16 y=18 w=1 h=1 geometry="M -1.4 -9 L 1.4 -9 L 1.4 -1 L -1.4 -1 Z" bind:fill="ui.hover == \"pan\" || ui.pressed == \"pan\" ? $text.dim : $local.knob_track" bind:rotation="clamp(arg.value, -1, 1) * 140" />
+    </Component>
+    <!-- Pan as a field, for the track header: cyan from the centre. -->
+    <Component name="pan.field" w=25 h=15 arg:value="0">
+      <Rectangle name="Well" w=25 h=15 bind:w="pw" bind:h="ph" bind:fill="$field" />
+      <Rectangle name="Bar" y=1 w=1 h=13 bind:h="ph - 2" bind:x="pw / 2 + min(clamp(arg.value, -1, 1), 0) * (pw / 2 - 1)" bind:w="max(abs(clamp(arg.value, -1, 1)) * (pw / 2 - 1), 1)" bind:fill="$local.slider" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=24 h=14 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="C" w=400 h=12 size=8 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:visible="abs(arg.value) < 0.005" bind:fill="$local.glyph">C</Text>
+    </Component>
+    <!-- Volume as a field: cyan filled from the left, the gain over it. -->
+    <Component name="volume" w=58 h=15 arg:value="0" arg:label="\"\"">
+      <Rectangle name="Well" w=58 h=15 bind:w="pw" bind:h="ph" bind:fill="$field" />
+      <Rectangle name="Level" x=1 y=1 w=56 h=13 bind:h="ph - 2" bind:w="max((pw - 2) * clamp(arg.value, 0, 1), 0)" bind:fill="$local.slider" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=57 h=14 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Gain" w=400 h=12 size=8 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 10) / 2" bind:text="arg.label" bind:fill="$local.lit_glyph">0.0</Text>
+    </Component>
+    <Component name="fx" w=25 h=15 arg:count="0">
+      <Rectangle name="Face" w=25 h=15 bind:w="pw" bind:h="ph" bind:fill="$local.button" />
+      <Rectangle name="Hover" w=25 h=15 bind:w="pw" bind:h="ph" bind:fill="#ffffff22" bind:visible="ui.hover == \"fx\" && ui.pressed == \"\"" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=24 h=14 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Fx" x=4 w=40 h=14 size=10 weight=700 bind:y="(ph - 11) / 2" bind:fill="$local.glyph">Fx</Text>
+      <Text name="Count" w=400 h=12 size=8 weight=700 text-align="right" bind:x="pw - 404" bind:y="(ph - 10) / 2" bind:visible="arg.count > 0 && pw >= 34" bind:text="fmt(arg.count)" bind:fill="$local.glyph">0</Text>
+    </Component>
+    <!-- Where the track goes: a drop-down field, its caret, a mark for
+         sends and receives. -->
+    <Component name="routing" w=58 h=15 arg:parent_send="true" arg:sends="0" arg:receives="0">
+      <Rectangle name="Face" w=58 h=15 bind:w="pw" bind:h="ph" bind:fill="$combo" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=57 h=14 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Out" x=4 w=60 h=12 size=9 weight=700 bind:y="(ph - 10) / 2" bind:visible="pw >= 40" bind:fill="arg.parent_send ? $local.glyph : $text.faint">Out</Text>
+      <Rectangle name="Send" w=3 h=3 bind:x="pw - 18" bind:y="ph / 2 - 1.5" bind:visible="arg.sends > 0" bind:fill="$route.send" />
+      <Rectangle name="Receive" w=3 h=3 bind:x="pw - 22" bind:y="ph / 2 - 1.5" bind:visible="arg.receives > 0" bind:fill="$route.recv" />
+      <Vector name="Caret" w=7 h=5 geometry="M 0 0 L 7 0 L 3.5 5 Z" bind:x="pw - 11" bind:y="(ph - 5) / 2" bind:fill="$local.glyph" />
+    </Component>
+  </Page>
+</Document>
