@@ -4,7 +4,10 @@
 //! ([`bridge`]), its subscriptions are fed from the song ([`topics`]),
 //! and a Signal instance is read and driven through its
 //! `com.fasttrackstudio.signal/1` by track ([`signal`]: `SIGNAL_CHAIN`,
-//! `SIGNAL_RUN`, `SIGNAL_SESSION`, `SIGNAL_FEED`).
+//! `SIGNAL_RUN`, `SIGNAL_SESSION`, `SIGNAL_FEED`), and every CLAP may write
+//! the lanes of its own parameters through
+//! `com.fasttrackstudio.host-automation/1` ([`automation`]: Signal's
+//! offline blocks' results, written at once, no playback).
 //!
 //! ## The main thread
 //!
@@ -24,6 +27,7 @@
 //! the call waits for it a little ([`bridge::SYNC_WAIT`]). Past that, the
 //! answer is `{"job": <id>}`, and the result comes as a `job` event.
 
+pub mod automation;
 pub mod bridge;
 pub mod signal;
 pub mod topics;
@@ -94,6 +98,7 @@ pub fn install(daw: &'static Standalone) {
             Arc::new(bridge::StudioActions::default());
         daw.set_plugin_load_options(daw::standalone::plugin::LoadOptions {
             actions: Some(actions),
+            automation: Some(Arc::new(automation::StudioAutomation::new(daw))),
         });
         let spawned = std::thread::Builder::new()
             .name("clap-main".into())
@@ -114,11 +119,18 @@ pub fn install(daw: &'static Standalone) {
 /// its parameters refreshed), the events it subscribed to delivered.
 pub fn pump(daw: &Standalone) {
     let guids: Vec<String> = daw.with_plugin_map(|m| m.guids().map(str::to_owned).collect());
-    let outbox = topics::Outbox::gather(daw, take_step());
+    let step = take_step();
+    let outbox = topics::Outbox::gather(daw, step);
     let mut live = Vec::new();
     for guid in &guids {
+        let known = automation::caller_of(guid).is_some();
         let turn = daw.with_plugin_instance(guid, |p| {
             plugin_call(|| {
+                if !known {
+                    // Before its main thread runs: a write it makes there
+                    // names a plugin Studio knows.
+                    register_plugin(daw, guid, None, p);
+                }
                 if p.wants_main_thread() {
                     p.pump_main_thread();
                 }
@@ -135,11 +147,58 @@ pub fn pump(daw: &Standalone) {
         live.extend(sink);
         if rescanned(guid, revision) {
             refresh_params(daw, guid);
+            // Its parameters again, for host-automation/1.
+            let _ = daw.with_plugin_instance(guid, |p| {
+                plugin_call(|| register_plugin(daw, guid, None, p))
+            });
         }
     }
     topics::retain_live(&live);
     forget_gone(&guids);
+    automation::retain(&guids);
+    // An edit step: offline blocks made from audio that moved go stale.
+    if step
+        && let Ok((engine, project)) = crate::actions::song()
+        && std::ptr::eq(engine, daw)
+    {
+        crate::signal_offline::after_step(daw, &project);
+    }
+    for (caller, edit) in automation::user_edits(daw) {
+        if let Ok(event) = serde_json::to_string(&edit) {
+            topics::automation_edited(caller, &event);
+        }
+    }
     signal::publish_feed(daw);
+}
+
+/// Know `p` (FX `fx_guid`'s live plugin, its lock held by the caller) for
+/// host-automation/1: its FX, its track and song (`at`, or found on the
+/// song open now), and its parameter ids.
+pub fn register_plugin(
+    daw: &Standalone,
+    fx_guid: &str,
+    at: Option<(daw_proto::ProjectContext, String)>,
+    p: &mut dyn daw::standalone::plugin::PluginInstance,
+) {
+    let Some(sink) = p.event_sink() else {
+        return;
+    };
+    let Some((project, track_guid)) = at.or_else(|| {
+        signal::chain_of(daw, fx_guid)
+            .map(|(project, track)| (daw_proto::ProjectContext::Project(project), track.guid))
+    }) else {
+        return;
+    };
+    let ids: Vec<u32> = p.params().iter().map(|i| i.id).collect();
+    automation::register(
+        sink.plugin_key(),
+        automation::Registered {
+            fx_guid: fx_guid.to_owned(),
+            track_guid,
+            project,
+            ids,
+        },
+    );
 }
 
 /// Each plugin's parameter-info revision, as last seen.
