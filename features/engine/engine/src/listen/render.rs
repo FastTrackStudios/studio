@@ -29,6 +29,19 @@
 //!   fingerprint: a copy whose plugin is unchanged is reused, reset (CLAP's
 //!   `reset`: its buffers, voices and envelopes cleared, still activated),
 //!   or deactivated where it cannot be; one that changed is made again.
+//!   Copies are made (and live states read) side by side.
+//!
+//! The recordings are bounded by bytes (`STUDIO_LISTEN_CACHE_MB`, 32 GiB
+//! unless set, or [`set_limit`]): past it, the one heard longest ago goes.
+//! A track's key also carries the render's solos (a solo anywhere silences
+//! the rest) and, for the master, its fader and the keys of what sums into
+//! it.
+//!
+//! One render can hear the song several ways at once ([`Ask::more`]): a
+//! block's input and output (two cuts of one Signal instance), the mix
+//! with and without Signal. Each hearing is planned against the
+//! recordings on its own and rendered side by side with the others, on
+//! copies (and in Signal sessions) of its own.
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -52,8 +65,6 @@ const BLOCK: usize = 1_024;
 pub const PREROLL: f64 = 1.0;
 /// The longest span listened to at once, seconds.
 const MOST: f64 = 600.0;
-/// The most recordings kept (about 5 MB each for 13 s).
-const KEPT_RECORDINGS: usize = 240;
 /// The Signal session a chunk's copies share (`listen-<chunk>`): one of
 /// their own, never the live kit's, and the same for every listen so a
 /// reused copy and a fresh one meet in it.
@@ -186,7 +197,8 @@ pub struct Ask<'a> {
     /// still kept for the next listen).
     pub fresh: bool,
     /// Signal instances (by FX guid) cut at a block for this render (a
-    /// point at `block:<id>:pre|post`): fresh copies, cut, never kept.
+    /// point at `block:<id>:pre|post`): copies of their own, cut, kept warm
+    /// apart from the uncut ones.
     pub cuts: &'a HashMap<String, Cut>,
     /// Render in one piece, not in chunks side by side: slower, and what a
     /// whole render (MIX_MEASURE) would say to the sample. Chunks, each
@@ -197,6 +209,57 @@ pub struct Ask<'a> {
     /// `from`..`to` (`SIGNAL_METERS` on each chunk's copy): a gain
     /// reduction per block, read without playback.
     pub meters: &'a [String],
+    /// Also hear the master (what every top-level track sums to, through
+    /// its fader): [`Heard::master`].
+    pub master: bool,
+    /// Every plugin rendered on a copy made for this render, never a warm
+    /// one reset (a reset is not trusted to clear every tail), and only
+    /// recordings made that way played back: what a whole render would
+    /// say, to the sample (with `exact`).
+    pub cold: bool,
+    /// More hearings of the same span in the same render, each its own
+    /// points, cuts and bypasses, side by side with this one on copies of
+    /// their own ([`Heard::more`], in order).
+    pub more: &'a [Pass<'a>],
+}
+
+impl Ask<'_> {
+    /// An ask of `points` over `from`..`to`, everything else as a plain
+    /// listen has it (no solo, bypass, cut, meters or master; warm, in
+    /// chunks).
+    #[must_use]
+    pub fn plain<'a>(
+        (from, to): (f64, f64),
+        points: &'a [ProbeAt],
+        keyed: &'a [Keyed],
+        cuts: &'a HashMap<String, Cut>,
+    ) -> Ask<'a> {
+        Ask {
+            from,
+            to,
+            points,
+            solo: None,
+            bypass_fx: HashSet::new(),
+            keyed,
+            fresh: false,
+            cuts,
+            exact: false,
+            meters: &[],
+            master: false,
+            cold: false,
+            more: &[],
+        }
+    }
+}
+
+/// Another hearing in one render ([`Ask::more`]): its points, read with
+/// its own cuts and bypasses (on top of the ask's solo).
+pub struct Pass<'a> {
+    pub points: &'a [ProbeAt],
+    pub cuts: &'a HashMap<String, Cut>,
+    pub bypass_fx: HashSet<String>,
+    pub meters: &'a [String],
+    pub master: bool,
 }
 
 /// How a listen was answered.
@@ -219,6 +282,31 @@ impl Answered {
             Self::Rendered => "rendered",
         }
     }
+
+    /// Two hearings' answers as one: replayed only if both were, rendered
+    /// if either was everything.
+    #[must_use]
+    pub const fn and(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Replayed, Self::Replayed) => Self::Replayed,
+            (Self::Rendered, _) | (_, Self::Rendered) => Self::Rendered,
+            _ => Self::Partly,
+        }
+    }
+}
+
+/// One hearing of a render, as heard.
+pub struct PassHeard {
+    /// Each point's signal, exactly `from`..`to`, interleaved stereo.
+    pub signals: Vec<Vec<f32>>,
+    /// How late each point was before it was lined up, samples.
+    pub latencies: Vec<u32>,
+    /// The master over `from`..`to`, when asked for.
+    pub master: Option<Vec<f32>>,
+    /// The song's latency at the master, samples.
+    pub master_latency: u32,
+    pub meters: HashMap<String, Vec<serde_json::Value>>,
+    pub answered: Answered,
 }
 
 /// What a render heard.
@@ -227,8 +315,10 @@ pub struct Heard {
     pub signals: Vec<Vec<f32>>,
     /// How late each point was before it was lined up, samples.
     pub latencies: Vec<u32>,
+    /// Every hearing's answer, as one.
     pub answered: Answered,
-    /// The tracks rendered and played back, by guid, and the song's count.
+    /// The tracks rendered and played back, by guid (over every hearing),
+    /// and the song's count.
     pub rendered: Vec<String>,
     pub replayed: Vec<String>,
     pub song_tracks: u32,
@@ -237,16 +327,104 @@ pub struct Heard {
     pub reused: u32,
     /// Plugins that would not be copied (rendered dry), and why.
     pub failures: Vec<String>,
-    /// The chunks it was rendered in, side by side (0 when replayed).
+    /// The chunks it was rendered in, side by side (0 when replayed), and
+    /// the hearings ([`Ask::more`] and the first) that rendered anything.
     pub chunks: u32,
+    pub passes: u32,
     /// Each of [`Ask::meters`]' instances' `SIGNAL_METERS` summary, one per
     /// chunk, over the chunk's part of `from`..`to` (none when replayed).
     pub meters: HashMap<String, Vec<serde_json::Value>>,
+    /// The master ([`Ask::master`]) over `from`..`to`, and its latency.
+    pub master: Option<Vec<f32>>,
+    pub master_latency: u32,
+    /// [`Ask::more`]'s hearings, in order.
+    pub more: Vec<PassHeard>,
+    /// What the recordings kept between listens hold after this one.
+    pub cache: CacheStats,
     pub plan_ms: f64,
     pub copy_ms: f64,
     pub prime_ms: f64,
     pub blocks_ms: f64,
     pub ms: f64,
+}
+
+impl Heard {
+    /// Span seconds rendered per second of the render (how many times
+    /// faster than real time); `None` when nothing took any time.
+    #[must_use]
+    pub fn realtime_factor(&self, seconds: f64) -> Option<f64> {
+        (self.ms > 0.0).then(|| seconds / (self.ms / 1e3))
+    }
+
+    /// Record what the render cost on `span`, which declares the
+    /// [`render_span!`](crate::render_span) fields ([`render`] records
+    /// itself on the current span).
+    pub fn record(&self, span: &tracing::Span, points: usize, seconds: f64) {
+        span.record("render.points", points);
+        span.record("render.seconds", seconds);
+        span.record("render.answered", self.answered.word());
+        span.record("render.tracks_rendered", self.rendered.len());
+        span.record("render.tracks_replayed", self.replayed.len());
+        span.record("render.passes", self.passes);
+        span.record("render.chunks", self.chunks);
+        span.record("render.plugins_copied", self.copied);
+        span.record("render.plugins_reused", self.reused);
+        span.record("render.copy_ms", self.copy_ms);
+        span.record("render.blocks_ms", self.blocks_ms);
+        span.record("render.ms", self.ms);
+        if let Some(rtf) = self.realtime_factor(seconds) {
+            span.record("render.realtime_factor", rtf);
+        }
+        span.record("render.cache_bytes", self.cache.bytes);
+        span.record("render.cache_recordings", self.cache.recordings);
+    }
+}
+
+/// A span declaring the fields [`Heard::record`] fills, with the action's
+/// own after them.
+#[macro_export]
+macro_rules! render_span {
+    ($name:expr) => {
+        tracing::info_span!(
+            $name,
+            render.points = tracing::field::Empty,
+            render.seconds = tracing::field::Empty,
+            render.answered = tracing::field::Empty,
+            render.tracks_rendered = tracing::field::Empty,
+            render.tracks_replayed = tracing::field::Empty,
+            render.passes = tracing::field::Empty,
+            render.chunks = tracing::field::Empty,
+            render.plugins_copied = tracing::field::Empty,
+            render.plugins_reused = tracing::field::Empty,
+            render.copy_ms = tracing::field::Empty,
+            render.blocks_ms = tracing::field::Empty,
+            render.ms = tracing::field::Empty,
+            render.realtime_factor = tracing::field::Empty,
+            render.cache_bytes = tracing::field::Empty,
+            render.cache_recordings = tracing::field::Empty
+        )
+    };
+    ($name:expr, $($rest:tt)+) => {
+        tracing::info_span!(
+            $name,
+            render.points = tracing::field::Empty,
+            render.seconds = tracing::field::Empty,
+            render.answered = tracing::field::Empty,
+            render.tracks_rendered = tracing::field::Empty,
+            render.tracks_replayed = tracing::field::Empty,
+            render.passes = tracing::field::Empty,
+            render.chunks = tracing::field::Empty,
+            render.plugins_copied = tracing::field::Empty,
+            render.plugins_reused = tracing::field::Empty,
+            render.copy_ms = tracing::field::Empty,
+            render.blocks_ms = tracing::field::Empty,
+            render.ms = tracing::field::Empty,
+            render.realtime_factor = tracing::field::Empty,
+            render.cache_bytes = tracing::field::Empty,
+            render.cache_recordings = tracing::field::Empty,
+            $($rest)+
+        )
+    };
 }
 
 /// A copy of a live plugin, and the fingerprint of the state it was made
@@ -264,18 +442,44 @@ struct Warm {
     plugin: Box<dyn PluginInstance>,
 }
 
+/// Where a copy is kept warm: its FX, and for a copy cut at a block, the
+/// cut (a cut copy is never an uncut one).
+fn warm_key(guid: &str, cut: Option<&Cut>) -> String {
+    match cut {
+        None => guid.to_owned(),
+        Some(c) => format!(
+            "{guid}#{}:{}",
+            c.block,
+            match c.side {
+                Side::Pre => "pre",
+                Side::Post => "post",
+            }
+        ),
+    }
+}
+
+/// The recordings' clock: a recording heard is stamped again, so the one
+/// heard longest ago goes first.
+static CLOCK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn tick() -> u64 {
+    CLOCK.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+}
+
 /// One point of a track as a render heard it.
 struct Recorded {
     key: u64,
     /// Rendered in one piece ([`Ask::exact`]).
     exact: bool,
+    /// Rendered on copies made for it ([`Ask::cold`]).
+    cold: bool,
     /// Render frames `start..end`.
     start: u64,
     end: u64,
     samples: Arc<[f32]>,
     latency: u32,
-    /// When it was kept: the oldest goes first.
-    stamp: u64,
+    /// When it was last kept or heard: the oldest goes first.
+    stamp: std::sync::atomic::AtomicU64,
 }
 
 impl Recorded {
@@ -284,53 +488,150 @@ impl Recorded {
     fn holds(&self, key: u64, (start, to): (u64, u64)) -> bool {
         self.key == key && self.start <= start && self.end >= to + u64::from(self.latency)
     }
+
+    /// Whether it is good enough for a render asking `exact` and `cold`.
+    fn serves(&self, (exact, cold): (bool, bool)) -> bool {
+        (self.exact || !exact) && (self.cold || !cold)
+    }
+
+    fn bytes(&self) -> u64 {
+        (self.samples.len() * std::mem::size_of::<f32>()) as u64
+    }
 }
 
-/// A recording's address: a track, and where in it.
+/// A recording's address: a track (or [`MASTER`]), and where in it.
 type Point = (String, Probe);
 
+/// The master's recordings' track.
+const MASTER: &str = "\u{0}master";
+
+/// How much the recordings may hold at most unless set
+/// (`STUDIO_LISTEN_CACHE_MB`, or `LISTEN_CACHE {limit_mb}`): 32 GiB.
+const DEFAULT_LIMIT_MB: u64 = 32 * 1024;
+
+/// What the recordings kept between listens hold.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CacheStats {
+    pub recordings: u64,
+    pub bytes: u64,
+    pub limit_bytes: u64,
+    /// Plugin copies kept warm.
+    pub warm: u64,
+    /// Recordings let go to stay under the limit, since the engine began.
+    pub evicted: u64,
+}
+
 /// What listens keep between calls. Held for a whole render: two listens
-/// never run at once (their copies share one Signal session).
+/// never run at once (their copies share Signal sessions).
 #[derive(Default)]
 struct Kept {
-    /// Per chunk, by FX guid.
-    warm: Vec<HashMap<String, Warm>>,
+    /// Per hearing of a render (the first, then [`Ask::more`]'s), per
+    /// chunk, by [`warm_key`].
+    warm: Vec<Vec<HashMap<String, Warm>>>,
     /// By point and key: a point keeps what it sounded like before and
     /// after a change, so putting a change back replays the first.
     recordings: HashMap<(Point, u64), Recorded>,
-    stamp: u64,
+    bytes: u64,
+    /// Set by [`set_limit`]; else the default.
+    limit: Option<u64>,
+    evicted: u64,
+}
+
+/// The limit `STUDIO_LISTEN_CACHE_MB` sets, else the default, bytes.
+fn default_limit() -> u64 {
+    static LIMIT: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *LIMIT.get_or_init(|| {
+        std::env::var("STUDIO_LISTEN_CACHE_MB")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .unwrap_or(DEFAULT_LIMIT_MB)
+            * 1024
+            * 1024
+    })
 }
 
 impl Kept {
-    /// Keep a recording, the oldest let go past [`KEPT_RECORDINGS`].
-    fn keep(&mut self, at: Point, mut r: Recorded) {
-        self.stamp += 1;
-        r.stamp = self.stamp;
-        self.recordings.insert((at, r.key), r);
-        while self.recordings.len() > KEPT_RECORDINGS {
-            let Some(oldest) = self
-                .recordings
-                .iter()
-                .min_by_key(|(_, r)| r.stamp)
-                .map(|(p, _)| p.clone())
-            else {
+    fn limit(&self) -> u64 {
+        self.limit.unwrap_or_else(default_limit)
+    }
+
+    /// Keep a recording — unless one under the same key already covers
+    /// what it covers, as well made, which is then only stamped — and let
+    /// the ones heard longest ago go while they hold more than the limit.
+    fn keep(&mut self, at: Point, r: Recorded) {
+        let slot = (at, r.key);
+        if let Some(old) = self.recordings.get(&slot)
+            && old.start <= r.start
+            && old.end >= r.end
+            && old.serves((r.exact, r.cold))
+        {
+            old.stamp
+                .store(tick(), std::sync::atomic::Ordering::Relaxed);
+            return;
+        }
+        r.stamp.store(tick(), std::sync::atomic::Ordering::Relaxed);
+        self.bytes += r.bytes();
+        if let Some(old) = self.recordings.insert(slot, r) {
+            self.bytes -= old.bytes();
+        }
+        self.shrink();
+    }
+
+    /// Let the recordings heard longest ago go until they hold at most the
+    /// limit.
+    fn shrink(&mut self) {
+        let limit = self.limit();
+        if self.bytes <= limit {
+            return;
+        }
+        let mut by_age: Vec<(u64, (Point, u64))> = self
+            .recordings
+            .iter()
+            .map(|(k, r)| {
+                (
+                    r.stamp.load(std::sync::atomic::Ordering::Relaxed),
+                    k.clone(),
+                )
+            })
+            .collect();
+        by_age.sort_unstable_by_key(|(stamp, _)| *stamp);
+        for (_, k) in by_age {
+            if self.bytes <= limit {
                 break;
-            };
-            self.recordings.remove(&oldest);
+            }
+            if let Some(r) = self.recordings.remove(&k) {
+                self.bytes -= r.bytes();
+                self.evicted += 1;
+            }
         }
     }
 
-    /// The recording of `at` under `key` over `frames`, if one is kept.
+    /// The recording of `at` under `key` over `frames`, good enough for a
+    /// render asking `need` (`exact`, `cold`), if one is kept: stamped as
+    /// heard.
     fn holding(
         &self,
         at: &Point,
-        (key, exact): (Option<u64>, bool),
+        (key, need): (Option<u64>, (bool, bool)),
         frames: (u64, u64),
     ) -> Option<&Recorded> {
         let key = key?;
-        self.recordings
+        let r = self
+            .recordings
             .get(&(at.clone(), key))
-            .filter(|r| r.holds(key, frames) && (r.exact || !exact))
+            .filter(|r| r.holds(key, frames) && r.serves(need))?;
+        r.stamp.store(tick(), std::sync::atomic::Ordering::Relaxed);
+        Some(r)
+    }
+
+    fn stats(&self) -> CacheStats {
+        CacheStats {
+            recordings: self.recordings.len() as u64,
+            bytes: self.bytes,
+            limit_bytes: self.limit(),
+            warm: self.warm.iter().flatten().map(|w| w.len() as u64).sum(),
+            evicted: self.evicted,
+        }
     }
 }
 
@@ -572,7 +873,44 @@ struct Instance {
     held: u64,
 }
 
-/// The live plugins on `tracks`' chains, by track, their states read.
+/// At most this many threads make copies (or read live states) at once,
+/// per chunk.
+const COPY_THREADS: usize = 6;
+
+/// `f` over `items` on up to [`COPY_THREADS`] threads, the answers in
+/// `items`' order.
+fn side_by_side<T: Send, R: Send>(items: Vec<T>, f: impl Fn(T) -> R + Sync) -> Vec<R> {
+    if items.len() <= 1 {
+        return items.into_iter().map(f).collect();
+    }
+    let n = items.len();
+    let queue = Mutex::new(items.into_iter().enumerate().collect::<Vec<_>>());
+    let done: Mutex<Vec<Option<R>>> = Mutex::new((0..n).map(|_| None).collect());
+    std::thread::scope(|s| {
+        for _ in 0..COPY_THREADS.min(n) {
+            s.spawn(|| {
+                loop {
+                    let next = queue
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .pop();
+                    let Some((i, item)) = next else { break };
+                    let r = f(item);
+                    done.lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)[i] = Some(r);
+                }
+            });
+        }
+    });
+    done.into_inner()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+/// The live plugins on `tracks`' chains, by track, their states read (side
+/// by side: each read holds only its own plugin's lock).
 fn instances(
     daw: &Standalone,
     song: &str,
@@ -603,57 +941,83 @@ fn instances(
                 .collect()
         })
         .unwrap_or_default();
-    chains
+    let wanted: Vec<(String, String, String, u64)> = chains
         .into_iter()
-        .map(|(track, fx)| {
-            let live = fx
-                .into_iter()
-                .filter_map(|(g, held)| {
-                    let name = names.get(&g)?.clone();
-                    let state = daw.save_plugin_state(&g).unwrap_or_default();
-                    Some(Instance {
-                        guid: g,
-                        name,
-                        state,
-                        held,
-                    })
-                })
-                .collect();
-            (track, live)
+        .flat_map(|(track, fx)| {
+            let names = &names;
+            fx.into_iter().filter_map(move |(g, held)| {
+                Some((track.clone(), g.clone(), names.get(&g)?.clone(), held))
+            })
         })
-        .collect()
+        .collect();
+    let read = side_by_side(wanted, |(track, guid, name, held)| {
+        let state = daw.save_plugin_state(&guid).unwrap_or_default();
+        (
+            track,
+            Instance {
+                guid,
+                name,
+                state,
+                held,
+            },
+        )
+    });
+    let mut out: HashMap<String, Vec<Instance>> = HashMap::new();
+    for (track, i) in read {
+        out.entry(track).or_default().push(i);
+    }
+    out
 }
 
 /// What [`ready`] made ready.
 struct Ready {
     plugins: Arc<Plugins>,
-    /// Each copy's guid and the state and held values it carries.
-    kept: Vec<(String, u64, u64)>,
+    /// Each copy's guid, where it is kept warm, and the state and held
+    /// values it carries.
+    kept: Vec<(String, String, u64, u64)>,
     copied: u32,
     reused: u32,
     failures: Vec<String>,
 }
 
-/// A copy of each of `wanted` carrying its live instance's state: the warm
-/// one when its state is unchanged (reset, so it starts as from silence),
-/// else made again.
-fn ready(
+/// A Signal instance's state given the session `tag` of its own; any
+/// other's as it is.
+fn restated(name: &str, state: Vec<u8>, tag: &str) -> Vec<u8> {
+    if crate::signal_kit::is_signal_bundle(name) {
+        crate::signal_kit::private_session(state, tag)
+    } else {
+        state
+    }
+}
+
+/// A copy of `i` made afresh, in Signal session `tag`, cut at `cut`.
+fn copy_of(
     daw: &Standalone,
-    wanted: Vec<Instance>,
-    warm: &mut HashMap<String, Warm>,
-    (cuts, tag): (&HashMap<String, Cut>, &str),
-) -> Result<Ready, String> {
-    let restate = |name: &str, state: Vec<u8>| {
-        if crate::signal_kit::is_signal_bundle(name) {
-            crate::signal_kit::private_session(state, tag)
-        } else {
-            state
-        }
-    };
+    i: &Instance,
+    (tag, cut): (&str, Option<&Cut>),
+) -> Result<Box<dyn PluginInstance>, String> {
+    let restate = |name: &str, state: Vec<u8>| restated(name, state, tag);
     let how = Copying {
         make: Some(&crate::mix_measure::make_fresh),
         restate: Some(&restate),
     };
+    let (mut copy, _) = copy_plugin(daw, &i.name, i.state.clone(), how)?;
+    if let Some(cut) = cut {
+        cut_copy(&mut *copy, cut)?;
+    }
+    Ok(copy)
+}
+
+/// A copy of each of `wanted` carrying its live instance's state: the warm
+/// one when its state is unchanged (reset, so it starts as from silence;
+/// never with `cold`), else made again — those side by side. A Signal
+/// instance in `cuts` is cut at its block (its copies kept apart).
+fn ready(
+    daw: &Standalone,
+    wanted: Vec<Instance>,
+    warm: &mut HashMap<String, Warm>,
+    (cuts, tag, cold): (&HashMap<String, Cut>, &str, bool),
+) -> Result<Ready, String> {
     let plugins = Arc::new(Plugins::default());
     let mut out = Ready {
         plugins: plugins.clone(),
@@ -662,47 +1026,60 @@ fn ready(
         reused: 0,
         failures: Vec::new(),
     };
+    let restate = |name: &str, state: Vec<u8>| restated(name, state, tag);
+    let mut to_make: Vec<(Instance, String, Option<Cut>)> = Vec::new();
     for i in wanted {
+        let cut = cuts.get(&i.guid).cloned();
+        let at = warm_key(&i.guid, cut.as_ref());
         let print = fingerprint(&i.state);
-        if let Some(cut) = cuts.get(&i.guid) {
-            let (mut copy, _) = copy_plugin(daw, &i.name, i.state, how)?;
-            cut_copy(&mut *copy, cut)?;
-            crate::clap_host::hand_copy(daw, &i.guid, &*copy);
-            out.copied += 1;
-            plugins.write().insert(i.guid, copy);
-            continue;
-        }
-        let usable = warm.remove(&i.guid).and_then(|mut w| {
-            let fits =
-                w.state == print && (w.held == i.held || reload(&mut *w.plugin, &i, &restate));
-            if fits {
-                Some(w)
-            } else {
+        let usable = warm.remove(&at).and_then(|mut w| {
+            if cold || w.state != print {
                 drop_later(vec![w.plugin]);
-                None
+                return None;
             }
+            if w.held != i.held {
+                // Its state loaded again undoes a cut: cut it again.
+                let again = reload(&mut *w.plugin, &i, &restate)
+                    && cut
+                        .as_ref()
+                        .is_none_or(|c| cut_copy(&mut *w.plugin, c).is_ok());
+                if !again {
+                    drop_later(vec![w.plugin]);
+                    return None;
+                }
+            }
+            Some(w)
         });
-        let copy = match usable {
+        match usable {
             Some(mut w) => {
                 if !w.plugin.reset() {
                     w.plugin.deactivate();
                 }
                 out.reused += 1;
-                Ok(w.plugin)
-            }
-            None => copy_plugin(daw, &i.name, i.state, how).map(|(copy, _)| {
-                out.copied += 1;
-                copy
-            }),
-        };
-        match copy {
-            Ok(copy) => {
                 // The song's placed hits as the live instance has them now
                 // (a warm copy's may be an edit step old).
+                crate::clap_host::hand_copy(daw, &i.guid, &*w.plugin);
+                plugins.write().insert(i.guid.clone(), w.plugin);
+                out.kept.push((i.guid, at, print, i.held));
+            }
+            None => to_make.push((i, at, cut)),
+        }
+    }
+    let made = side_by_side(to_make, |(i, at, cut)| {
+        let copy = copy_of(daw, &i, (tag, cut.as_ref()));
+        (i, at, cut.is_some(), copy)
+    });
+    for (i, at, was_cut, copy) in made {
+        match copy {
+            Ok(copy) => {
                 crate::clap_host::hand_copy(daw, &i.guid, &*copy);
                 plugins.write().insert(i.guid.clone(), copy);
-                out.kept.push((i.guid, print, i.held));
+                out.copied += 1;
+                let print = fingerprint(&i.state);
+                out.kept.push((i.guid, at, print, i.held));
             }
+            // A point inside a cut instance cannot be heard without it.
+            Err(why) if was_cut => return Err(why),
             Err(why) => out.failures.push(format!("{}: {why}", i.guid)),
         }
     }
@@ -750,12 +1127,14 @@ fn frames_of(from: f64, to: f64) -> (u64, u64, u64) {
     (from.saturating_sub(frame(PREROLL)), from, to)
 }
 
-/// Each track's own fingerprint: as a render reads it (`prints`), and its
-/// plugins' states.
+/// Each track's own fingerprint: as a render reads it (`prints`), its
+/// plugins' states and cuts, and which tracks the render solos (`solo`: a
+/// solo anywhere silences what is not soloed, though its own print does
+/// not move).
 fn own_prints(
     prints: Vec<(String, u64)>,
     plugins: &HashMap<String, Vec<Instance>>,
-    cuts: &HashMap<String, Cut>,
+    (cuts, solo): (&HashMap<String, Cut>, u64),
 ) -> HashMap<String, u64> {
     prints
         .into_iter()
@@ -767,9 +1146,30 @@ fn own_prints(
                 i.held.hash(&mut h);
                 cuts.get(&i.guid).hash(&mut h);
             }
+            solo.hash(&mut h);
             (g, h.finish())
         })
         .collect()
+}
+
+/// A fingerprint of which tracks a render solos: `solo` when it says,
+/// else the song's own solos; 0 when none is.
+fn solo_print(solo: Option<&HashSet<String>>, all: &[daw_proto::Track]) -> u64 {
+    let mut soloed: Vec<&str> = match solo {
+        Some(s) => s.iter().map(String::as_str).collect(),
+        None => all
+            .iter()
+            .filter(|t| t.soloed)
+            .map(|t| t.guid.as_str())
+            .collect(),
+    };
+    if soloed.is_empty() {
+        return 0;
+    }
+    soloed.sort_unstable();
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    soloed.hash(&mut h);
+    h.finish()
 }
 
 /// What a render will do: render `rendered` (the reached tracks not
@@ -855,11 +1255,65 @@ fn plan(
     }
 }
 
+/// One hearing of a render: the first ([`Ask`]'s own) or one of
+/// [`Ask::more`].
+struct Spec<'a> {
+    points: &'a [ProbeAt],
+    cuts: &'a HashMap<String, Cut>,
+    bypass: &'a HashSet<String>,
+    meters: &'a [String],
+    master: bool,
+}
+
+/// What one hearing will render, and what it has to.
+struct Job {
+    /// The hearing, by index in the specs.
+    spec: usize,
+    fed: HashMap<String, Fed>,
+    wanted: Vec<Instance>,
+    /// The points, then the master's feeders when the master is not
+    /// recorded, then every rendered track's output to keep.
+    probes: Vec<ProbeAt>,
+    only: HashSet<String>,
+    rendered: HashSet<String>,
+}
+
+/// One hearing's plan.
+struct Planned {
+    plan: Plan,
+    keys: HashMap<String, u64>,
+    master_key: u64,
+}
+
+/// The tracks that sum into the master: top-level (or whose folder is not
+/// the song's), sending to their parent.
+fn master_feeders(all: &[daw_proto::Track]) -> Vec<String> {
+    let guids: HashSet<&str> = all.iter().map(|t| t.guid.as_str()).collect();
+    all.iter()
+        .filter(|t| t.parent_send)
+        .filter(|t| t.parent_guid.as_deref().is_none_or(|p| !guids.contains(p)))
+        .map(|t| t.guid.clone())
+        .collect()
+}
+
+/// The master's key: its fader, pan and mute, the solos, and the keys of
+/// what sums into it.
+fn master_key(own: u64, feeders: &[String], keys: &HashMap<String, u64>) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    MASTER.hash(&mut h);
+    own.hash(&mut h);
+    for f in feeders {
+        keys.get(f).copied().unwrap_or(0).hash(&mut h);
+    }
+    h.finish()
+}
+
 /// Render `ask` of song `song` (`project` its context): what feeds its
-/// points, played back where nothing it hears has changed.
+/// points, played back where nothing it hears has changed; its other
+/// hearings ([`Ask::more`]) side by side with it.
 ///
 /// # Errors
-/// The span is empty or too long.
+/// The span is empty or too long, or a cut instance would not be copied.
 pub fn render(
     daw: &Standalone,
     project: &ProjectContext,
@@ -879,13 +1333,35 @@ pub fn render(
             ask.to - ask.from
         ));
     }
+    let specs: Vec<Spec<'_>> = std::iter::once(Spec {
+        points: ask.points,
+        cuts: ask.cuts,
+        bypass: &ask.bypass_fx,
+        meters: ask.meters,
+        master: ask.master,
+    })
+    .chain(ask.more.iter().map(|p| Spec {
+        points: p.points,
+        cuts: p.cuts,
+        bypass: &p.bypass_fx,
+        meters: p.meters,
+        master: p.master,
+    }))
+    .collect();
     let all = daw::service::Tracks::all(daw, project.clone());
     let routes = Routes::new(
         all.iter()
             .map(|t| (t.guid.as_str(), t.parent_guid.as_deref(), t.parent_send)),
         sends_into(daw, project, &all),
     );
-    let roots: Vec<String> = ask.points.iter().map(|p| p.track.clone()).collect();
+    let feeders = master_feeders(&all);
+    let mut roots: Vec<String> = specs
+        .iter()
+        .flat_map(|s| s.points.iter().map(|p| p.track.clone()))
+        .collect();
+    if specs.iter().any(|s| s.master) {
+        roots.extend(feeders.iter().cloned());
+    }
     let mut everything = reach_keyed(&routes, &roots, ask.keyed);
     let mut live = instances(daw, song, &everything);
     // What the reached Signal tracks key from runs too (it publishes the
@@ -908,241 +1384,424 @@ pub fn render(
         everything.extend(new);
         sources = key_sources(daw, &live, &all);
     }
-    // The song as this render reads it: its solos and bypasses.
-    let prints = ProjectRenderer::offline(
-        daw,
-        song,
-        RATE,
-        Offline {
-            solo: ask.solo.clone(),
-            bypass_fx: ask.bypass_fx.clone(),
-            ..Offline::default()
-        },
-    )
-    .track_prints();
-    let keys = keys(
-        &routes,
-        &everything,
-        (&own_prints(prints, &live, ask.cuts), &sources),
-    );
+    let solo = solo_print(ask.solo.as_ref(), &all);
+    let master_own = daw
+        .read_project(song, |p| {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            (
+                p.master_volume.to_bits(),
+                p.master_pan.to_bits(),
+                p.master_muted,
+                solo,
+            )
+                .hash(&mut h);
+            h.finish()
+        })
+        .unwrap_or(0);
+    // The song as each hearing reads it: its solos and bypasses.
+    let mut prints_by_bypass: HashMap<Vec<String>, Vec<(String, u64)>> = HashMap::new();
+    let keyed: Vec<(HashMap<String, u64>, u64)> = specs
+        .iter()
+        .map(|s| {
+            let mut by: Vec<String> = s.bypass.iter().cloned().collect();
+            by.sort_unstable();
+            let prints = prints_by_bypass
+                .entry(by)
+                .or_insert_with(|| {
+                    ProjectRenderer::offline(
+                        daw,
+                        song,
+                        RATE,
+                        Offline {
+                            solo: ask.solo.clone(),
+                            bypass_fx: s.bypass.clone(),
+                            ..Offline::default()
+                        },
+                    )
+                    .track_prints()
+                })
+                .clone();
+            let keys = keys(
+                &routes,
+                &everything,
+                (&own_prints(prints, &live, (s.cuts, solo)), &sources),
+            );
+            let m = master_key(master_own, &feeders, &keys);
+            (keys, m)
+        })
+        .collect();
     let (start, from, to) = frames_of(ask.from, ask.to);
+    let need = (ask.exact, ask.cold);
     let mut kept = kept()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let key = |g: &str| keys.get(g).copied();
     let sources_of = |g: &str| match sources.get(g) {
         Some(known) => known.clone(),
         None => Some(Vec::new()),
     };
-    let planned = if ask.fresh {
-        Plan {
-            answered: Answered::Rendered,
-            rendered: everything.clone(),
-            fed: HashSet::new(),
-        }
-    } else {
-        plan(
-            &routes,
-            (ask.points, &everything),
-            |p| {
-                kept.holding(
-                    &(p.track.clone(), p.at),
-                    (key(&p.track), ask.exact),
-                    (start, to),
-                )
-                .is_some()
-            },
-            |g| {
-                !routes.taps_before_its_fader(g)
-                    && kept
-                        .holding(
-                            &(g.to_owned(), Probe::PostFader),
-                            (key(g), ask.exact),
-                            (start, to),
-                        )
-                        .is_some()
-            },
-            sources_of,
-        )
-    };
-    let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
-    if planned.answered == Answered::Replayed {
-        let (signals, latencies): (Vec<Vec<f32>>, Vec<u32>) = ask
-            .points
-            .iter()
-            .filter_map(|p| {
-                kept.holding(
-                    &(p.track.clone(), p.at),
-                    (key(&p.track), ask.exact),
-                    (start, to),
-                )
-            })
-            .map(|r| {
-                (
-                    line_up(&r.samples, r.start, (from, to), r.latency),
-                    r.latency,
-                )
-            })
-            .unzip();
-        let mut replayed: Vec<String> = roots.clone();
-        replayed.sort();
-        replayed.dedup();
-        let plan_ms = began.elapsed().as_secs_f64() * 1e3;
-        return Ok(Heard {
-            signals,
-            latencies,
-            answered: Answered::Replayed,
-            rendered: Vec::new(),
-            replayed,
-            song_tracks: count(all.len()),
-            copied: 0,
-            reused: 0,
-            failures: Vec::new(),
-            chunks: 0,
-            meters: HashMap::new(),
-            plan_ms,
-            copy_ms: 0.0,
-            prime_ms: 0.0,
-            blocks_ms: 0.0,
-            ms: plan_ms,
-        });
-    }
-    let fed_map: HashMap<String, Fed> = planned
-        .fed
-        .iter()
-        .filter_map(|g| {
-            let r = kept.holding(
-                &(g.clone(), Probe::PostFader),
-                (key(g), ask.exact),
-                (start, to),
-            )?;
-            Some((
-                g.clone(),
-                Fed {
-                    start: r.start,
-                    samples: r.samples.clone(),
-                    latency: r.latency,
+    let master_at: Point = (MASTER.to_owned(), Probe::PostFader);
+    // Each hearing planned against what is kept; its points, then the
+    // master's feeders when the master has to be rendered.
+    let mut planned: Vec<Planned> = Vec::new();
+    let mut points_of: Vec<Vec<ProbeAt>> = Vec::new();
+    for (s, spec) in specs.iter().enumerate() {
+        let (keys, mkey) = keyed[s].clone();
+        let key = |g: &str| keys.get(g).copied();
+        let mut points = spec.points.to_vec();
+        let master_held = spec.master
+            && kept
+                .holding(&master_at, (Some(mkey), need), (start, to))
+                .is_some();
+        let synthetic: HashSet<ProbeAt> = if spec.master && !master_held {
+            feeders
+                .iter()
+                .map(|g| ProbeAt {
+                    track: g.clone(),
+                    at: Probe::PostFader,
+                })
+                .collect()
+        } else {
+            HashSet::new()
+        };
+        points.extend(synthetic.iter().cloned());
+        let plan = if ask.fresh {
+            Plan {
+                answered: Answered::Rendered,
+                rendered: everything.clone(),
+                fed: HashSet::new(),
+            }
+        } else {
+            plan(
+                &routes,
+                (&points, &everything),
+                |p| {
+                    !synthetic.contains(p)
+                        && kept
+                            .holding(&(p.track.clone(), p.at), (key(&p.track), need), (start, to))
+                            .is_some()
                 },
-            ))
+                |g| {
+                    !routes.taps_before_its_fader(g)
+                        && kept
+                            .holding(
+                                &(g.to_owned(), Probe::PostFader),
+                                (key(g), need),
+                                (start, to),
+                            )
+                            .is_some()
+                },
+                sources_of,
+            )
+        };
+        planned.push(Planned {
+            plan,
+            keys,
+            master_key: mkey,
+        });
+        points_of.push(points);
+    }
+    // What each hearing that has anything to render renders.
+    let jobs: Vec<Job> = planned
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.plan.answered != Answered::Replayed)
+        .map(|(s, p)| {
+            let key = |g: &str| p.keys.get(g).copied();
+            let fed: HashMap<String, Fed> = p
+                .plan
+                .fed
+                .iter()
+                .filter_map(|g| {
+                    let r =
+                        kept.holding(&(g.clone(), Probe::PostFader), (key(g), need), (start, to))?;
+                    Some((
+                        g.clone(),
+                        Fed {
+                            start: r.start,
+                            samples: r.samples.clone(),
+                            latency: r.latency,
+                        },
+                    ))
+                })
+                .collect();
+            let wanted: Vec<Instance> = p
+                .plan
+                .rendered
+                .iter()
+                .filter_map(|g| live.get(g))
+                .flatten()
+                .cloned()
+                .collect();
+            let mut probes = points_of[s].clone();
+            probes.extend(p.plan.rendered.iter().map(|g| ProbeAt {
+                track: g.clone(),
+                at: Probe::PostFader,
+            }));
+            let mut only = p.plan.rendered.clone();
+            only.extend(p.plan.fed.iter().cloned());
+            Job {
+                spec: s,
+                fed,
+                wanted,
+                probes,
+                only,
+                rendered: p.plan.rendered.clone(),
+            }
         })
         .collect();
-    let wanted: Vec<Instance> = planned
-        .rendered
-        .iter()
-        .filter_map(|g| live.remove(g))
-        .flatten()
-        .collect();
     let plan_ms = began.elapsed().as_secs_f64() * 1e3;
-    // The points asked for, then every rendered track's output to keep.
-    let mut probes = ask.points.to_vec();
-    probes.extend(planned.rendered.iter().map(|g| ProbeAt {
-        track: g.clone(),
-        at: Probe::PostFader,
-    }));
-    let mut only = planned.rendered.clone();
-    only.extend(planned.fed.iter().cloned());
     let spans = if ask.exact {
         vec![(start, start, to)]
     } else {
         chunks(start, from, to)
     };
-    if kept.warm.len() < spans.len() {
-        kept.warm.resize_with(spans.len(), HashMap::new);
+    if kept.warm.len() < specs.len() {
+        kept.warm.resize_with(specs.len(), Vec::new);
     }
-    let shared = Shared {
-        daw,
-        song,
-        ask,
-        probes: &probes,
-        only: &only,
-        fed: &fed_map,
-    };
+    for pool in &mut kept.warm {
+        if pool.len() < spans.len() {
+            pool.resize_with(spans.len(), HashMap::new);
+        }
+    }
     let chunk_count = spans.len();
-    let outs: Vec<Result<ChunkOut, String>> = std::thread::scope(|s| {
-        let running: Vec<_> = spans
+    // Every chunk of every hearing that renders, side by side.
+    let outs: Vec<(usize, Vec<Result<ChunkOut, String>>)> = std::thread::scope(|sc| {
+        let mut pools: Vec<Option<&mut Vec<HashMap<String, Warm>>>> =
+            kept.warm.iter_mut().map(Some).collect();
+        let running: Vec<(usize, Vec<_>)> = jobs
             .iter()
-            .zip(kept.warm.iter_mut())
-            .enumerate()
-            .map(|(k, (span, warm))| {
-                let (wanted, shared) = (wanted.clone(), &shared);
-                let last = k + 1 == chunk_count;
-                s.spawn(move || run_chunk(shared, ((k, last), *span), wanted, warm))
+            .map(|job| {
+                let spec = &specs[job.spec];
+                let pool = pools[job.spec].take().expect("one job a hearing");
+                let shared = Shared {
+                    daw,
+                    song,
+                    from: ask.from,
+                    to: ask.to,
+                    solo: ask.solo.clone(),
+                    bypass: spec.bypass.clone(),
+                    cuts: spec.cuts,
+                    meters: spec.meters,
+                    cold: ask.cold,
+                    master: spec.master,
+                    slot: job.spec,
+                    probes: &job.probes,
+                    only: &job.only,
+                    fed: &job.fed,
+                };
+                let threads = spans
+                    .iter()
+                    .zip(pool.iter_mut())
+                    .enumerate()
+                    .map(|(k, (span, warm))| {
+                        let wanted = job.wanted.clone();
+                        let last = k + 1 == chunk_count;
+                        let shared = shared.clone();
+                        sc.spawn(move || run_chunk(&shared, ((k, last), *span), wanted, warm))
+                    })
+                    .collect::<Vec<_>>();
+                (job.spec, threads)
             })
             .collect();
         running
             .into_iter()
-            .map(|r| {
-                r.join()
-                    .unwrap_or_else(|_| Err("a chunk's render panicked".to_owned()))
+            .map(|(s, threads)| {
+                (
+                    s,
+                    threads
+                        .into_iter()
+                        .map(|t| {
+                            t.join()
+                                .unwrap_or_else(|_| Err("a chunk's render panicked".to_owned()))
+                        })
+                        .collect(),
+                )
             })
             .collect()
     });
-    let outs: Vec<ChunkOut> = outs.into_iter().collect::<Result<_, _>>()?;
-    // Each probe as rendered, from the preroll's start until it reached
-    // `to`, late by its latency.
-    let raw: Vec<Vec<f32>> = (0..probes.len())
-        .map(|i| outs.iter().flat_map(|o| o.raw[i].iter().copied()).collect())
-        .collect();
-    let latencies: Vec<u32> = outs
-        .first()
-        .map(|o| o.latencies.clone())
-        .unwrap_or_default();
-    let n = ask.points.len();
-    let signals: Vec<Vec<f32>> = raw[..n]
-        .iter()
-        .zip(&latencies)
-        .map(|(r, late)| line_up(r, start, (from, to), *late))
-        .collect();
-    let covered = |r: &[f32]| start + (r.len() / 2) as u64;
-    for ((p, samples), late) in probes.iter().zip(raw).zip(&latencies) {
-        if !planned.rendered.contains(&p.track) {
-            continue;
-        }
-        let Some(key) = key(&p.track) else { continue };
-        kept.keep(
-            (p.track.clone(), p.at),
-            Recorded {
-                key,
-                exact: ask.exact || spans.len() == 1,
-                start,
-                end: covered(&samples),
-                samples: samples.into(),
-                latency: *late,
-                stamp: 0,
-            },
-        );
+    let mut rendered_outs: HashMap<usize, Vec<ChunkOut>> = HashMap::new();
+    for (s, chunk_outs) in outs {
+        rendered_outs.insert(s, chunk_outs.into_iter().collect::<Result<_, _>>()?);
     }
-    let most = |f: fn(&ChunkOut) -> f64| outs.iter().map(f).fold(0.0, f64::max);
-    Ok(Heard {
-        signals,
-        latencies: outs
+    let covered = |r: &[f32]| start + (r.len() / 2) as u64;
+    let made_exact = ask.exact || spans.len() == 1;
+    let mut heard_passes: Vec<PassHeard> = Vec::new();
+    let (mut rendered_all, mut fed_all): (HashSet<String>, HashSet<String>) = Default::default();
+    let (mut copied, mut reused, mut failures) = (0u32, 0u32, Vec::new());
+    let (mut copy_ms, mut prime_ms, mut blocks_ms) = (0.0f64, 0.0f64, 0.0f64);
+    for (s, spec) in specs.iter().enumerate() {
+        let p = &planned[s];
+        let n = spec.points.len();
+        let Some(outs) = rendered_outs.remove(&s) else {
+            // Replayed: every point (and the master) from what is kept.
+            let key = |g: &str| p.keys.get(g).copied();
+            let (signals, latencies): (Vec<Vec<f32>>, Vec<u32>) = spec
+                .points
+                .iter()
+                .filter_map(|pt| {
+                    kept.holding(
+                        &(pt.track.clone(), pt.at),
+                        (key(&pt.track), need),
+                        (start, to),
+                    )
+                })
+                .map(|r| {
+                    (
+                        line_up(&r.samples, r.start, (from, to), r.latency),
+                        r.latency,
+                    )
+                })
+                .unzip();
+            let master = spec
+                .master
+                .then(|| {
+                    kept.holding(&master_at, (Some(p.master_key), need), (start, to))
+                        .map(|r| {
+                            (
+                                line_up(&r.samples, r.start, (from, to), r.latency),
+                                r.latency,
+                            )
+                        })
+                })
+                .flatten();
+            fed_all.extend(spec.points.iter().map(|pt| pt.track.clone()));
+            heard_passes.push(PassHeard {
+                signals,
+                latencies,
+                master_latency: master.as_ref().map_or(0, |m| m.1),
+                master: master.map(|m| m.0),
+                meters: HashMap::new(),
+                answered: Answered::Replayed,
+            });
+            continue;
+        };
+        let job = jobs.iter().find(|j| j.spec == s).expect("its job");
+        // Each probe as rendered, from the preroll's start until it reached
+        // `to`, late by its latency.
+        let raw: Vec<Vec<f32>> = (0..job.probes.len())
+            .map(|i| outs.iter().flat_map(|o| o.raw[i].iter().copied()).collect())
+            .collect();
+        let latencies: Vec<u32> = outs
             .first()
-            .map(|o| o.latencies[..n].to_vec())
-            .unwrap_or_default(),
-        answered: planned.answered,
-        rendered: planned.rendered.into_iter().collect(),
-        replayed: planned.fed.into_iter().collect(),
-        song_tracks: count(all.len()),
-        copied: outs.iter().map(|o| o.copied).sum(),
-        reused: outs.iter().map(|o| o.reused).sum(),
-        failures: outs
+            .map(|o| o.latencies.clone())
+            .unwrap_or_default();
+        let master_latency = outs.first().map_or(0, |o| o.master_latency);
+        let signals: Vec<Vec<f32>> = raw[..n]
             .iter()
-            .flat_map(|o| o.failures.iter().cloned())
-            .collect(),
-        chunks: count(outs.len()),
-        meters: {
-            let mut m: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
-            for (guid, v) in outs.iter().flat_map(|o| o.meters.iter().cloned()) {
-                m.entry(guid).or_default().push(v);
+            .zip(&latencies)
+            .map(|(r, late)| line_up(r, start, (from, to), *late))
+            .collect();
+        let master = spec.master.then(|| {
+            let m: Vec<f32> = outs.iter().flat_map(|o| o.master.iter().copied()).collect();
+            let lined = line_up(&m, start, (from, to), master_latency);
+            kept.keep(
+                master_at.clone(),
+                Recorded {
+                    key: p.master_key,
+                    exact: made_exact,
+                    cold: ask.cold,
+                    start,
+                    end: covered(&m),
+                    samples: m.into(),
+                    latency: master_latency,
+                    stamp: 0.into(),
+                },
+            );
+            lined
+        });
+        for ((pt, samples), late) in job.probes.iter().zip(raw).zip(&latencies) {
+            if !job.rendered.contains(&pt.track) {
+                continue;
             }
-            m
+            let Some(key) = p.keys.get(&pt.track).copied() else {
+                continue;
+            };
+            kept.keep(
+                (pt.track.clone(), pt.at),
+                Recorded {
+                    key,
+                    exact: made_exact,
+                    cold: ask.cold,
+                    start,
+                    end: covered(&samples),
+                    samples: samples.into(),
+                    latency: *late,
+                    stamp: 0.into(),
+                },
+            );
+        }
+        let mut meters: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+        for (guid, v) in outs.iter().flat_map(|o| o.meters.iter().cloned()) {
+            meters.entry(guid).or_default().push(v);
+        }
+        copied += outs.iter().map(|o| o.copied).sum::<u32>();
+        reused += outs.iter().map(|o| o.reused).sum::<u32>();
+        failures.extend(outs.iter().flat_map(|o| o.failures.iter().cloned()));
+        let most = |f: fn(&ChunkOut) -> f64| outs.iter().map(f).fold(0.0, f64::max);
+        copy_ms = copy_ms.max(most(|o| o.copy_ms));
+        prime_ms = prime_ms.max(most(|o| o.prime_ms));
+        blocks_ms = blocks_ms.max(most(|o| o.blocks_ms));
+        rendered_all.extend(p.plan.rendered.iter().cloned());
+        fed_all.extend(p.plan.fed.iter().cloned());
+        heard_passes.push(PassHeard {
+            signals,
+            latencies: latencies[..n].to_vec(),
+            master,
+            master_latency,
+            meters,
+            answered: p.plan.answered,
+        });
+    }
+    failures.sort();
+    failures.dedup();
+    let cache = kept.stats();
+    drop(kept);
+    let answered = heard_passes
+        .iter()
+        .map(|h| h.answered)
+        .reduce(Answered::and)
+        .unwrap_or(Answered::Replayed);
+    let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    let mut rendered: Vec<String> = rendered_all.iter().cloned().collect();
+    rendered.sort();
+    let mut replayed: Vec<String> = fed_all.difference(&rendered_all).cloned().collect();
+    replayed.sort();
+    let mut passes = heard_passes.into_iter();
+    let first = passes.next().expect("the first hearing");
+    let heard = Heard {
+        signals: first.signals,
+        latencies: first.latencies,
+        answered,
+        rendered,
+        replayed,
+        song_tracks: count(all.len()),
+        copied,
+        reused,
+        failures,
+        chunks: if jobs.is_empty() {
+            0
+        } else {
+            count(chunk_count)
         },
+        passes: count(jobs.len()),
+        meters: first.meters,
+        master: first.master,
+        master_latency: first.master_latency,
+        more: passes.collect(),
+        cache,
         plan_ms,
-        copy_ms: most(|o| o.copy_ms),
-        prime_ms: most(|o| o.prime_ms),
-        blocks_ms: most(|o| o.blocks_ms),
+        copy_ms,
+        prime_ms,
+        blocks_ms,
         ms: began.elapsed().as_secs_f64() * 1e3,
-    })
+    };
+    // On the caller's span, when it declares `render_span!`'s fields.
+    heard.record(
+        &tracing::Span::current(),
+        specs.iter().map(|s| s.points.len()).sum(),
+        ask.to - ask.from,
+    );
+    Ok(heard)
 }
 
 /// The chunks a listen of render frames `start..to` (`from` the span's
@@ -1165,11 +1824,23 @@ fn chunks(start: u64, from: u64, to: u64) -> Vec<(u64, u64, u64)> {
         .collect()
 }
 
-/// What every chunk of one render reads.
+/// What every chunk of one hearing reads.
+#[derive(Clone)]
 struct Shared<'a> {
     daw: &'a Standalone,
     song: &'a str,
-    ask: &'a Ask<'a>,
+    /// The span, seconds.
+    from: f64,
+    to: f64,
+    solo: Option<HashSet<String>>,
+    bypass: HashSet<String>,
+    cuts: &'a HashMap<String, Cut>,
+    meters: &'a [String],
+    cold: bool,
+    /// Also keep what reaches the master.
+    master: bool,
+    /// The hearing's index: its warm copies and its Signal sessions.
+    slot: usize,
     probes: &'a [ProbeAt],
     only: &'a HashSet<String>,
     fed: &'a HashMap<String, Fed>,
@@ -1182,10 +1853,14 @@ struct ChunkOut {
     /// last's on until every probe has reached the span's end).
     raw: Vec<Vec<f32>>,
     latencies: Vec<u32>,
+    /// What reached the master over the same frames (empty unless asked),
+    /// and how late.
+    master: Vec<f32>,
+    master_latency: u32,
     copied: u32,
     reused: u32,
     failures: Vec<String>,
-    /// [`Ask::meters`]' summaries over this chunk's part of the span.
+    /// The hearing's meters' summaries over this chunk's part of the span.
     meters: Vec<(String, serde_json::Value)>,
     copy_ms: f64,
     prime_ms: f64,
@@ -1223,18 +1898,23 @@ fn run_chunk(
     warm: &mut HashMap<String, Warm>,
 ) -> Result<ChunkOut, String> {
     let copying = web_time::Instant::now();
-    let tag = format!("{SESSION_TAG}-{k}");
-    let ready = ready(c.daw, wanted, warm, (c.ask.cuts, &tag))?;
+    // The first hearing's sessions keep the names they always had.
+    let tag = if c.slot == 0 {
+        format!("{SESSION_TAG}-{k}")
+    } else {
+        format!("{SESSION_TAG}-{}-{k}", c.slot)
+    };
+    let ready = ready(c.daw, wanted, warm, (c.cuts, &tag, c.cold))?;
     let copy_ms = copying.elapsed().as_secs_f64() * 1e3;
     // The blocks' meters, over this chunk's part of the span (not its
     // preroll): set before priming, which resets the copies (a reset keeps
     // the span and starts the summary afresh).
-    let (_, from_frame, _) = frames_of(c.ask.from, c.ask.to);
+    let (_, from_frame, _) = frames_of(c.from, c.to);
     let seconds = |f: u64| f as f64 / f64::from(RATE);
-    if !c.ask.meters.is_empty() {
+    if !c.meters.is_empty() {
         let _ = signal_meters(
             &ready.plugins,
-            c.ask.meters,
+            c.meters,
             &serde_json::json!({ "from": seconds(keep.max(from_frame)), "to": seconds(end) }),
         );
     }
@@ -1244,8 +1924,8 @@ fn run_chunk(
         RATE,
         Offline {
             plugins: ready.plugins.clone(),
-            bypass_fx: c.ask.bypass_fx.clone(),
-            solo: c.ask.solo.clone(),
+            bypass_fx: c.bypass.clone(),
+            solo: c.solo.clone(),
             tap: None,
             only: Some(c.only.clone()),
             probes: c.probes.to_vec(),
@@ -1253,18 +1933,27 @@ fn run_chunk(
         },
     );
     let primed = web_time::Instant::now();
-    renderer.prime(u32::try_from(BLOCK).unwrap_or(1_024));
+    let song_latency = renderer.prime(u32::try_from(BLOCK).unwrap_or(1_024));
     let latencies = renderer.probe_latencies();
     let prime_ms = primed.elapsed().as_secs_f64() * 1e3;
     let blocks = web_time::Instant::now();
-    let last = end + u64::from(latencies.iter().copied().max().unwrap_or(0));
-    let raw = render_blocks(&renderer, (first, last), c.probes.len());
+    let master_latency = if c.master { song_latency } else { 0 };
+    let last = end
+        + u64::from(
+            latencies
+                .iter()
+                .copied()
+                .max()
+                .unwrap_or(0)
+                .max(master_latency),
+        );
+    let (raw, master) = render_blocks(&renderer, (first, last), (c.probes.len(), c.master));
     let blocks_ms = blocks.elapsed().as_secs_f64() * 1e3;
     drop(renderer);
-    let meters = if c.ask.meters.is_empty() {
+    let meters = if c.meters.is_empty() {
         Vec::new()
     } else {
-        signal_meters(&ready.plugins, c.ask.meters, &serde_json::json!({}))
+        signal_meters(&ready.plugins, c.meters, &serde_json::json!({}))
     };
     // As rendered, not lined up: a recording played back later enters the
     // delay compensation exactly as this track did, so what it feeds is as
@@ -1273,18 +1962,17 @@ fn run_chunk(
         if k == 0 { first } else { keep },
         if last_chunk { last } else { end },
     );
-    let raw = raw
-        .iter()
-        .map(|r| {
-            r.get(((from - first) * 2) as usize..((to - first) * 2) as usize)
-                .map(<[f32]>::to_vec)
-                .unwrap_or_default()
-        })
-        .collect();
-    for (guid, state, held) in ready.kept {
+    let cut = |r: &Vec<f32>| {
+        r.get(((from - first) * 2) as usize..((to - first) * 2) as usize)
+            .map(<[f32]>::to_vec)
+            .unwrap_or_default()
+    };
+    let raw = raw.iter().map(cut).collect();
+    let master = if c.master { cut(&master) } else { Vec::new() };
+    for (guid, at, state, held) in ready.kept {
         if let Some(plugin) = ready.plugins.write().remove(&guid) {
             warm.insert(
-                guid,
+                at,
                 Warm {
                     state,
                     held,
@@ -1296,6 +1984,8 @@ fn run_chunk(
     Ok(ChunkOut {
         raw,
         latencies,
+        master,
+        master_latency,
         copied: ready.copied,
         reused: ready.reused,
         failures: ready.failures,
@@ -1307,20 +1997,27 @@ fn run_chunk(
 }
 
 /// The renderer's blocks over render frames `start..end`: every probe's
-/// signal as it came, interleaved stereo.
+/// signal as it came, interleaved stereo, and (when `master`) what
+/// reached the master.
 fn render_blocks(
     renderer: &ProjectRenderer,
     (start, end): (u64, u64),
-    probes: usize,
-) -> Vec<Vec<f32>> {
+    (probes, master): (usize, bool),
+) -> (Vec<Vec<f32>>, Vec<f32>) {
     let frames = (end - start) as usize;
     let mut out: Vec<Vec<f32>> = (0..probes)
         .map(|_| Vec::with_capacity(frames * 2))
         .collect();
+    let mut sum: Vec<f32> = Vec::with_capacity(if master { frames * 2 } else { 0 });
     let mut at = start;
     while at < end {
         let n = BLOCK.min((end - at) as usize);
-        renderer.render_block(at, n);
+        let block = renderer.render_block(at, n);
+        if master {
+            let got = &block.samples[..(n * 2).min(block.samples.len())];
+            sum.extend_from_slice(got);
+            sum.resize(sum.len() + (n * 2 - got.len()), 0.0);
+        }
         renderer.with_probes(|got| {
             for (dst, src) in out.iter_mut().zip(got) {
                 dst.extend_from_slice(&src[..(n * 2).min(src.len())]);
@@ -1328,7 +2025,7 @@ fn render_blocks(
         });
         at += n as u64;
     }
-    out
+    (out, sum)
 }
 
 /// A probe's signal (from render frame `start`, `late` samples late) as
@@ -1348,17 +2045,40 @@ pub fn forget() -> (u32, u32) {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let counts = (
-        u32::try_from(kept.warm.iter().map(HashMap::len).sum::<usize>()).unwrap_or(u32::MAX),
+        u32::try_from(kept.warm.iter().flatten().map(HashMap::len).sum::<usize>())
+            .unwrap_or(u32::MAX),
         u32::try_from(kept.recordings.len()).unwrap_or(u32::MAX),
     );
     drop_later(
         kept.warm
             .iter_mut()
+            .flatten()
             .flat_map(|w| w.drain().map(|(_, w)| w.plugin))
             .collect(),
     );
     kept.recordings.clear();
+    kept.bytes = 0;
     counts
+}
+
+/// What the recordings hold now (waits for a render running).
+#[must_use]
+pub fn cache_stats() -> CacheStats {
+    kept()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .stats()
+}
+
+/// Bound the recordings to `bytes` (`None`: the default again), letting the
+/// ones heard longest ago go now if they hold more.
+pub fn set_limit(bytes: Option<u64>) -> CacheStats {
+    let mut kept = kept()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    kept.limit = bytes;
+    kept.shrink();
+    kept.stats()
 }
 
 #[cfg(test)]
@@ -1554,6 +2274,76 @@ mod tests {
         );
         // Under two chunks' worth: one.
         assert_eq!(chunks(0, s, 6 * s).len(), 1);
+    }
+
+    fn recorded(key: u64, (start, end): (u64, u64), frames: usize) -> Recorded {
+        Recorded {
+            key,
+            exact: true,
+            cold: false,
+            start,
+            end,
+            samples: vec![0.0f32; frames * 2].into(),
+            latency: 0,
+            stamp: 0.into(),
+        }
+    }
+
+    #[test]
+    fn the_recordings_heard_longest_ago_go_first_past_the_byte_limit() {
+        // Room for two recordings of 100 frames (800 bytes each).
+        let mut kept = Kept {
+            limit: Some(1_600),
+            ..Kept::default()
+        };
+        let at = |t: &str| (t.to_owned(), Probe::PostFader);
+        kept.keep(at("a"), recorded(1, (0, 100), 100));
+        kept.keep(at("b"), recorded(2, (0, 100), 100));
+        assert_eq!(kept.bytes, 1_600);
+        // `a` heard again: `b` is now the one heard longest ago.
+        assert!(
+            kept.holding(&at("a"), (Some(1), (false, false)), (0, 50))
+                .is_some()
+        );
+        kept.keep(at("c"), recorded(3, (0, 100), 100));
+        assert_eq!(kept.recordings.len(), 2);
+        assert!(
+            kept.holding(&at("b"), (Some(2), (false, false)), (0, 50))
+                .is_none()
+        );
+        assert!(
+            kept.holding(&at("a"), (Some(1), (false, false)), (0, 50))
+                .is_some()
+        );
+        assert_eq!(kept.bytes, 1_600);
+        assert_eq!(kept.stats().evicted, 1);
+        // A shorter recording under a key that covers it already keeps the
+        // longer one.
+        kept.keep(at("a"), recorded(1, (10, 40), 30));
+        assert!(
+            kept.holding(&at("a"), (Some(1), (false, false)), (0, 100))
+                .is_some()
+        );
+        // A warm-made one never serves a cold render.
+        assert!(
+            kept.holding(&at("a"), (Some(1), (true, true)), (0, 100))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn a_solo_anywhere_moves_every_key() {
+        let t = |g: &str, soloed: bool| daw_proto::Track {
+            guid: g.into(),
+            soloed,
+            ..daw_proto::Track::default()
+        };
+        let none = [t("a", false), t("b", false)];
+        let one = [t("a", true), t("b", false)];
+        assert_eq!(solo_print(None, &none), 0);
+        assert_ne!(solo_print(None, &one), 0);
+        let asked: HashSet<String> = ["a".to_owned()].into();
+        assert_eq!(solo_print(Some(&asked), &none), solo_print(None, &one));
     }
 
     #[test]

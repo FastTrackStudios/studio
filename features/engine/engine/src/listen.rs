@@ -24,7 +24,7 @@ pub mod measure;
 pub mod plot;
 pub mod render;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use architect::action::{ActionCaller, ActionList, ActionMeta, Effect, RawJson};
@@ -53,7 +53,7 @@ static LISTEN: ActionMeta = meta(
     "listen",
     "Listen to a point of the mix",
     concat!(
-        "Render offline only what feeds one point of `track` (GUID, path or name) — the track, everything inside it and everything sent into those; the rest of the song is left out — over `from`..`to` (bars `33`, `33:2`; times `12.5s`; sections `Chorus 1`, `Chorus 1 end`), answered from what an earlier listen heard when nothing it hears has changed since (any edit upstream of the point — a parameter, a plugin's state, a fader, an item — is seen and renders again; a kit piece's tracks render together, since their Signal instances hear each other), on copies of its plugins kept warm between calls, and measure it. ",
+        "Render offline only what feeds one point of `track` (GUID, path or name) — or every one of `points` (`[{\"track\": \"Kick/Sum/In\", \"at\": \"block:tone.comp:pre\"}, …]`, `at` as below, post-fader unless given; with `track` too, that point first) in one render, points cut at different blocks of one Signal instance heard side by side on copies of their own, answered `{from, to, points: [each as one point's answer: track, at, figures, dynamics, latency, png], bands_hz, rendered, analysis_ms, ms}` (`png` false unless asked) — — the track, everything inside it and everything sent into those; the rest of the song is left out — over `from`..`to` (bars `33`, `33:2`; times `12.5s`; sections `Chorus 1`, `Chorus 1 end`), answered from what an earlier listen heard when nothing it hears has changed since (any edit upstream of the point — a parameter, a plugin's state, a fader, an item — is seen and renders again; a kit piece's tracks render together, since their Signal instances hear each other), on copies of its plugins kept warm between calls, and measure it. ",
         at_words!(),
         ". `solo`: tracks (paths or names) heard alone inside what is rendered, as the solo buttons would. `fresh: true` renders everything again, playing nothing back (to check a played-back answer). A span over 6 s is rendered in up to three chunks side by side, each from a 1 s preroll of its own: about twice as fast, within about 0.05 LU of a whole render and a few tenths of a dB on peaks and crest; `exact: true` renders it in one piece, as MIX_MEASURE would to the sample (A/B differences under ~0.3 dB call for it). Answers `figures`: `lufs` (integrated), `short_term` (LUFS, 3 s windows every second), `short_max`, `true_peak` (dBTP), `peak` and `rms` (dBFS; a full-scale sine reads -3), `crest` (dB), `bands` (dB per third-octave band, centres in `bands_hz`), `correlation` (L/R, -1…1), `width` (side/mid), `balance` (L/R dB); `dynamics`: for each FX that is on before the point on the track's own chain and compresses, gates or limits (or is a Signal instance, whose whole chain it then measures), its `makeup_db` (its resting in-to-out gain), `max_gr_db` and `mean_gr_db` (gain against that rest, dB, ≤ 0) and `gr` (every `hop_s` s; null where its input is below -60 dBFS), and for a Signal instance `blocks`: each of its blocks' own meters over the span from the render (no playback) — `[{block, lane, meters: [{id, kind, unit, min, max, mean, seconds}], gr?: {max_gr_db, mean_gr_db}}]`, `gr` on a block with a gain-reduction meter (a compressor), a gate's opening, a dynamic EQ band's or a transient shaper's gain as `kind` `state`/`gain` — or null with `blocks_why` when the answer was replayed; `latency` (samples the point was late, put right); `rendered`: how it was answered (`answered`: `replayed` — nothing it hears has changed since an earlier listen heard it, so nothing was rendered; `partly` — the tracks whose key is unchanged played back; `rendered`), the `tracks` rendered and those `replayed`, `of` the song's, plugins copied fresh and reused warm (reset), and any that would not copy; the time taken (`copy_ms`, `prime_ms`, `blocks_ms`, `analysis_ms`, `ms`); and two PNGs, `waveform` (L and R, peak and RMS) and `spectrogram` (20 Hz–20 kHz, -96…0 dBFS), under /tmp/listen/ (`png: false`: none). Touches neither playback nor the song."
     ),
@@ -79,7 +79,7 @@ static RENDER: ActionMeta = meta(
     "listen_render",
     "Render a point of the mix to a file",
     concat!(
-        "The audio at one point of `track` (GUID, path or name) over `from`..`to` (bars, times or sections as LISTEN), rendered as LISTEN renders it (only what feeds the point; answered from an earlier listen when nothing it hears has changed), written to the WAV `to_file` (48 kHz, 32-bit float, stereo; under /tmp/listen/ when not given). ",
+        "The audio at one point of `track` (GUID, path or name) — or at each of `points` (`[{track, at}]`, as LISTEN's: rendered together, each written to a WAV of its own under /tmp/listen/ — `to_file` then names a folder for them — answered `{files: [{track, at, file, lufs, true_peak, latency}], seconds, rate, rendered, ms}`) — over `from`..`to` (bars, times or sections as LISTEN), rendered as LISTEN renders it (only what feeds the point; answered from an earlier listen when nothing it hears has changed), written to the WAV `to_file` (48 kHz, 32-bit float, stereo; under /tmp/listen/ when not given). ",
         at_words!(),
         ". What a tool that needs the audio itself reads — an offline Signal block's analysis renders `block:<id>:pre` through it. Answers `file`, `seconds`, `rate`, `lufs`, `true_peak`, `latency` (samples the point was late, put right), `answered` (replayed, partly, rendered) and the time taken. Touches neither playback nor the song."
     ),
@@ -92,10 +92,28 @@ static AB: ActionMeta = meta(
     "listen_ab",
     "Listen before and after a change",
     concat!(
-        "Listen to one point of `track` over `from`..`to` (as LISTEN: ",
+        "Listen to one point of `track` — or every one of `points` (`[{track, at}]`, in one render each time; answered per point in `points: [{track, at, a, b, difference}]`) — over `from`..`to` (as LISTEN: ",
         at_words!(),
         "), make `change` — a list of action calls, each `{\"action\": \"FX_SET\", \"args\": {…}}` (args an object, or its JSON as a string), run in order as one undo step, stopping at the first that fails — listen again, and put the mix back as it was unless `keep: true` — every fader, pan, mute, solo, polarity, send, FX switch, held parameter value and plugin state that differs, as MIX_RESTORE does (so Signal's own edits through SIGNAL_RUN go back too; an edit to items or automation is not part of the mix and is not put back). Answers `a` and `b` (LISTEN's `figures` before and after), `difference` (b − a: every figure, and the bands band by band, dB, centres in `bands_hz`), `changed` (each call's answer), `kept`, `put_back` (what was `changed` back, and how many `plugin_states` were loaded), `a_ms`, `change_ms`, `b_ms`, `back_ms`, `ms`, and a PNG of both spectra and their difference under /tmp/listen/ (`png: false`: none). A change that failed is put back the same way, and its error said."
     ),
+    "Mix",
+    "",
+);
+
+static BLOCK: ActionMeta = meta(
+    "LISTEN_BLOCK",
+    "listen_block",
+    "Listen to a Signal block's input and output",
+    "One Signal block of `track` (its id as SIGNAL_CHAIN gives it, `block`: `tone.comp`) heard arriving at it and leaving it (`block:<id>:pre` and `block:<id>:post`, as LISTEN) over `from`..`to`, in one render: the two cuts of the instance side by side, each on copies of its own, everything feeding the track played back from what an earlier listen heard where unchanged. Answers `pre` and `post` (each as LISTEN answers one point: `track`, `at`, `figures`, `dynamics`, `latency`, `png`), `difference` (post − pre: every figure, bands band by band), `bands_hz`, `rendered` (as LISTEN's, `passes` the hearings rendered) and the time taken. `solo`, `fresh`, `exact` as LISTEN; `png` false unless asked. Touches neither playback nor the song.",
+    "Mix",
+    "",
+);
+
+static CACHE: ActionMeta = meta(
+    "LISTEN_CACHE",
+    "listen_cache",
+    "What listens keep between calls",
+    "What LISTEN, LISTEN_BLOCK, LISTEN_AB, LISTEN_RENDER, MIX_MEASURE and MIX_RENDER keep between calls: each track's output (and each point heard) over the spans rendered, under a key of everything that makes it (its media, fader, FX switches, held values, plugin states, cuts, the solos, and recursively what feeds it), played back in place of rendering it while that key holds. Answers `recordings`, `mb` (what they hold), `limit_mb` (bounded by bytes: past it the one heard longest ago goes; 32768 unless `STUDIO_LISTEN_CACHE_MB` or `limit_mb` set it), `evicted` (let go to stay under it, since the engine began) and `warm_copies` (plugin copies kept warm). `limit_mb` sets the bound (0 or less: the default again); `forget: true` lets everything go (the next listen renders and copies afresh). Touches neither playback nor the song.",
     "Mix",
     "",
 );
@@ -163,8 +181,9 @@ struct AlignArg {
 /// LISTEN_RENDER's arguments.
 #[derive(Facet)]
 struct RenderArg {
-    track: String,
+    track: Option<String>,
     at: Option<String>,
+    points: Option<Vec<PointArg>>,
     from: String,
     to: String,
     to_file: Option<String>,
@@ -175,8 +194,9 @@ struct RenderArg {
 /// call's `args` may be an object).
 #[derive(Facet)]
 struct AbDoc {
-    track: String,
+    track: Option<String>,
     at: Option<String>,
+    points: Option<Vec<PointArg>>,
     from: String,
     to: String,
     /// Each `{action, args}`.
@@ -187,10 +207,73 @@ struct AbDoc {
     exact: Option<bool>,
 }
 
+/// One point of `points`: a track and where in it (`at_words!`; post-fader
+/// unless given).
+#[derive(Facet, Clone)]
+pub struct PointArg {
+    pub track: String,
+    pub at: Option<String>,
+}
+
+/// The points `track` + `at` and `points` name, in order (each `at`
+/// post-fader unless given).
+///
+/// # Errors
+/// Neither names a point.
+fn asked_points(
+    track: Option<&str>,
+    at: Option<&str>,
+    points: Option<&[PointArg]>,
+) -> Result<Vec<(String, String)>, String> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    if let Some(t) = track {
+        out.push((t.to_owned(), at.unwrap_or("post-fader").to_owned()));
+    }
+    for p in points.into_iter().flatten() {
+        out.push((
+            p.track.clone(),
+            p.at.clone().unwrap_or_else(|| "post-fader".to_owned()),
+        ));
+    }
+    if out.is_empty() {
+        return Err("give `track` (one point) or `points` ([{track, at}])".to_owned());
+    }
+    Ok(out)
+}
+
+/// The pairs as [`PointsArgs::points`] borrows them.
+fn borrowed(points: &[(String, String)]) -> Vec<(&str, &str)> {
+    points
+        .iter()
+        .map(|(t, a)| (t.as_str(), a.as_str()))
+        .collect()
+}
+
+/// LISTEN_BLOCK's arguments.
+#[derive(Facet)]
+struct BlockArg {
+    track: String,
+    block: String,
+    from: String,
+    to: String,
+    solo: Option<Vec<String>>,
+    png: Option<bool>,
+    fresh: Option<bool>,
+    exact: Option<bool>,
+}
+
+/// LISTEN_CACHE's arguments.
+#[derive(Facet)]
+struct CacheArg {
+    limit_mb: Option<f64>,
+    forget: Option<bool>,
+}
+
 /// LISTEN's arguments.
 #[derive(Facet)]
 struct ListenArg {
-    track: String,
+    track: Option<String>,
+    points: Option<Vec<PointArg>>,
     at: Option<String>,
     from: String,
     to: String,
@@ -556,6 +639,12 @@ fn rendered_json(h: &render::Heard, path: &dyn Fn(&str) -> String) -> Value {
         "copy_ms": r2(h.copy_ms),
         "prime_ms": r2(h.prime_ms),
         "blocks_ms": r2(h.blocks_ms),
+        "passes": h.passes,
+        "cache": {
+            "recordings": h.cache.recordings,
+            "mb": r2(h.cache.bytes as f64 / 1_048_576.0),
+            "limit_mb": r2(h.cache.limit_bytes as f64 / 1_048_576.0),
+        },
     })
 }
 
@@ -589,109 +678,30 @@ pub fn listen(
     a: &ListenArgs<'_>,
 ) -> Result<Listened, String> {
     let began = web_time::Instant::now();
-    let song = crate::fx_actions::project_guid(project)?;
-    let track = resolve(daw, project, a.track)?;
-    let point = point_of(daw, project, &track, a.at.unwrap_or("post-fader"))?;
-    let at = point.probe;
-    let cuts = cuts_of(&point);
-    let (from, to) = span_of(daw, project, a.from, a.to)?;
-    let solo: Option<HashSet<String>> = match a.solo {
-        Some(names) if !names.is_empty() => Some(
-            names
-                .iter()
-                .map(|n| resolve(daw, project, n))
-                .collect::<Result<_, _>>()?,
-        ),
-        _ => None,
-    };
-    let dynamics = dynamics_before(daw, project, &track, at);
-    let mut points = vec![ProbeAt {
-        track: track.clone(),
-        at,
-    }];
-    for (i, _, _) in &dynamics {
-        points.push(ProbeAt {
-            track: track.clone(),
-            at: Probe::FxIn(*i),
-        });
-        points.push(ProbeAt {
-            track: track.clone(),
-            at: Probe::FxOut(*i),
-        });
-    }
-    // Every dynamics FX asked for its blocks' meters: a Signal instance
-    // answers (`SIGNAL_METERS`), any other has no `signal/1` and is skipped.
-    let summarised: Vec<String> = dynamics.iter().map(|(_, _, g)| g.clone()).collect();
-    let heard = render::render(
+    let at = a.at.unwrap_or("post-fader");
+    let mut heard = listen_points(
         daw,
         project,
-        &song,
-        &render::Ask {
-            from,
-            to,
-            points: &points,
-            solo,
-            bypass_fx: HashSet::new(),
-            keyed: &keyed(daw, project),
+        &PointsArgs {
+            points: &[(a.track, at)],
+            from: a.from,
+            to: a.to,
+            solo: a.solo,
+            png: a.png,
             fresh: a.fresh,
-            cuts: &cuts,
             exact: a.exact,
-            meters: &summarised,
         },
     )?;
-    let analysed = web_time::Instant::now();
-    let signal = heard.signals.first().cloned().unwrap_or_default();
-    let figures = measure::figures(&signal, RATE);
-    let gains: Vec<Value> = dynamics
-        .iter()
-        .enumerate()
-        .map(|(k, (place, name, guid))| {
-            let (i, o) = (&heard.signals[1 + 2 * k], &heard.signals[2 + 2 * k]);
-            let mut g = measure::gain_reduction(i, o, RATE, 0.1);
-            g["fx"] = json!(format!("#{} {name}", place + 1));
-            // A Signal instance: each of its blocks' own meters over the
-            // span, from its render copies (none when replayed).
-            if let Some(chunks) = heard.meters.get(guid) {
-                g["blocks"] = merged_blocks(chunks);
-            } else if heard.answered == render::Answered::Replayed
-                && name.to_lowercase().contains("signal")
-            {
-                g["blocks"] = Value::Null;
-                g["blocks_why"] =
-                    json!("replayed: nothing rendered (fresh: true renders its blocks' meters)");
-            }
-            g
-        })
-        .collect();
-    let analysis_ms = analysed.elapsed().as_secs_f64() * 1e3;
-    let all = Tracks::all(daw, project.clone());
-    let paths = crate::mix_sends::paths(&all);
-    let path = paths.get(&track).cloned().unwrap_or(track.clone());
-    let what = format!("{path} {}", at_word(&point));
-    let pictures = if a.png {
-        let title = format!("{what} · {from:.2}–{to:.2} s");
-        json!({
-            "waveform": drawn(Ok(plot::waveform(&signal, RATE, from, &title)), picture("waveform", &what)),
-            "spectrogram": drawn(plot::spectrogram(&signal, RATE, from, &title), picture("spectrogram", &what)),
-        })
-    } else {
-        Value::Null
-    };
-    let answer = json!({
-        "track": path,
-        "at": at_word(&point),
-        "from": from,
-        "to": to,
-        "figures": figures,
-        "bands_hz": bands_hz(),
-        "dynamics": gains,
-        "latency": heard.latencies.first(),
-        "rendered": rendered_json(&heard, &|g: &str| paths.get(g).cloned().unwrap_or_else(|| g.to_owned())),
-        "png": pictures,
-        "analysis_ms": r2(analysis_ms),
-        "ms": r2(began.elapsed().as_secs_f64() * 1e3),
-    });
-    Ok(Listened { answer, signal })
+    let mut one = heard.points.remove(0);
+    if let Some(o) = one.answer.as_object_mut() {
+        o.insert("from".into(), json!(heard.from));
+        o.insert("to".into(), json!(heard.to));
+        o.insert("bands_hz".into(), json!(bands_hz()));
+        o.insert("rendered".into(), heard.rendered.clone());
+        o.insert("analysis_ms".into(), json!(r2(heard.analysis_ms)));
+        o.insert("ms".into(), json!(r2(began.elapsed().as_secs_f64() * 1e3)));
+    }
+    Ok(one)
 }
 
 /// What [`listen`] is asked.
@@ -704,6 +714,239 @@ pub struct ListenArgs<'a> {
     pub png: bool,
     pub fresh: bool,
     pub exact: bool,
+}
+
+/// What [`listen_points`] is asked: points, each a track (GUID, path or
+/// name) and where in it (`at_words!`), over one span.
+pub struct PointsArgs<'a> {
+    pub points: &'a [(&'a str, &'a str)],
+    pub from: &'a str,
+    pub to: &'a str,
+    pub solo: Option<&'a [String]>,
+    pub png: bool,
+    pub fresh: bool,
+    pub exact: bool,
+}
+
+/// What [`listen_points`] heard.
+pub struct PointsHeard {
+    /// Each point as LISTEN answers it (`track`, `at`, `figures`,
+    /// `dynamics`, `latency`, `png`), in the order asked.
+    pub points: Vec<Listened>,
+    pub from: f64,
+    pub to: f64,
+    /// The render's reach and cost, as LISTEN's `rendered`.
+    pub rendered: Value,
+    pub heard: render::Heard,
+    pub analysis_ms: f64,
+}
+
+/// One point asked of [`listen_points`], resolved.
+struct Asked {
+    path: String,
+    point: At,
+    dynamics: Vec<(usize, String, String)>,
+    /// Its hearing (the points cut the same way share one), and where its
+    /// probes start in that hearing's.
+    pass: usize,
+    first_probe: usize,
+}
+
+/// Render what feeds every one of `a.points` in one render — the points
+/// cut differently (`block:<id>:pre` and `:post` of one instance) heard
+/// side by side, each on copies of its own — and measure each.
+///
+/// # Errors
+/// A track, point or the span is not the song's, or the render failed.
+pub fn listen_points(
+    daw: &Standalone,
+    project: &ProjectContext,
+    a: &PointsArgs<'_>,
+) -> Result<PointsHeard, String> {
+    if a.points.is_empty() {
+        return Err("no points to listen to: give `track` or `points`".to_owned());
+    }
+    let song = crate::fx_actions::project_guid(project)?;
+    let (from, to) = span_of(daw, project, a.from, a.to)?;
+    let solo: Option<HashSet<String>> = match a.solo {
+        Some(names) if !names.is_empty() => Some(
+            names
+                .iter()
+                .map(|n| resolve(daw, project, n))
+                .collect::<Result<_, _>>()?,
+        ),
+        _ => None,
+    };
+    let all = Tracks::all(daw, project.clone());
+    let paths = crate::mix_sends::paths(&all);
+    // Each point, its hearing: one per way of cutting the song.
+    let mut cuts: Vec<Option<(String, render::Cut)>> = Vec::new();
+    let mut probes: Vec<Vec<ProbeAt>> = Vec::new();
+    let mut meters: Vec<Vec<String>> = Vec::new();
+    let mut asked: Vec<Asked> = Vec::new();
+    for (track, word) in a.points {
+        let track = resolve(daw, project, track)?;
+        let point = point_of(daw, project, &track, word)?;
+        let dynamics = dynamics_before(daw, project, &track, point.probe);
+        let pass = match cuts.iter().position(|c| *c == point.cut) {
+            Some(p) => p,
+            None => {
+                cuts.push(point.cut.clone());
+                probes.push(Vec::new());
+                meters.push(Vec::new());
+                cuts.len() - 1
+            }
+        };
+        let first_probe = probes[pass].len();
+        probes[pass].push(ProbeAt {
+            track: track.clone(),
+            at: point.probe,
+        });
+        for (i, _, guid) in &dynamics {
+            probes[pass].push(ProbeAt {
+                track: track.clone(),
+                at: Probe::FxIn(*i),
+            });
+            probes[pass].push(ProbeAt {
+                track: track.clone(),
+                at: Probe::FxOut(*i),
+            });
+            // Every dynamics FX asked for its blocks' meters: a Signal
+            // instance answers (`SIGNAL_METERS`), any other has no
+            // `signal/1` and is skipped.
+            if !meters[pass].contains(guid) {
+                meters[pass].push(guid.clone());
+            }
+        }
+        asked.push(Asked {
+            path: paths.get(&track).cloned().unwrap_or_else(|| track.clone()),
+            point,
+            dynamics,
+            pass,
+            first_probe,
+        });
+    }
+    let cut_maps: Vec<HashMap<String, render::Cut>> =
+        cuts.iter().map(|c| c.iter().cloned().collect()).collect();
+    let more: Vec<render::Pass<'_>> = (1..cuts.len())
+        .map(|p| render::Pass {
+            points: &probes[p],
+            cuts: &cut_maps[p],
+            bypass_fx: HashSet::new(),
+            meters: &meters[p],
+            master: false,
+        })
+        .collect();
+    let keyed = keyed(daw, project);
+    let heard = render::render(
+        daw,
+        project,
+        &song,
+        &render::Ask {
+            solo,
+            fresh: a.fresh,
+            exact: a.exact,
+            meters: &meters[0],
+            more: &more,
+            ..render::Ask::plain((from, to), &probes[0], &keyed, &cut_maps[0])
+        },
+    )?;
+    tracing::Span::current().record("render.points", a.points.len());
+    let analysed = web_time::Instant::now();
+    let pass_of = |p: usize| -> (
+        &[Vec<f32>],
+        &[u32],
+        &HashMap<String, Vec<Value>>,
+        render::Answered,
+    ) {
+        if p == 0 {
+            (
+                &heard.signals,
+                &heard.latencies,
+                &heard.meters,
+                heard.answered,
+            )
+        } else {
+            let h = &heard.more[p - 1];
+            (&h.signals, &h.latencies, &h.meters, h.answered)
+        }
+    };
+    let points: Vec<Listened> = asked
+        .iter()
+        .map(|q| {
+            let (signals, latencies, meters, answered) = pass_of(q.pass);
+            let signal = signals.get(q.first_probe).cloned().unwrap_or_default();
+            let figures = measure::figures(&signal, RATE);
+            let gains: Vec<Value> = q
+                .dynamics
+                .iter()
+                .enumerate()
+                .map(|(k, (place, name, guid))| {
+                    let at = q.first_probe + 1 + 2 * k;
+                    let mut g = measure::gain_reduction(&signals[at], &signals[at + 1], RATE, 0.1);
+                    g["fx"] = json!(format!("#{} {name}", place + 1));
+                    // A Signal instance: each of its blocks' own meters over
+                    // the span, from its render copies (none when replayed).
+                    if let Some(chunks) = meters.get(guid) {
+                        g["blocks"] = merged_blocks(chunks);
+                    } else if answered == render::Answered::Replayed
+                        && name.to_lowercase().contains("signal")
+                    {
+                        g["blocks"] = Value::Null;
+                        g["blocks_why"] = json!(
+                            "replayed: nothing rendered (fresh: true renders its blocks' meters)"
+                        );
+                    }
+                    g
+                })
+                .collect();
+            let what = format!("{} {}", q.path, at_word(&q.point));
+            let pictures = if a.png {
+                let title = format!("{what} · {from:.2}–{to:.2} s");
+                json!({
+                    "waveform": drawn(Ok(plot::waveform(&signal, RATE, from, &title)), picture("waveform", &what)),
+                    "spectrogram": drawn(plot::spectrogram(&signal, RATE, from, &title), picture("spectrogram", &what)),
+                })
+            } else {
+                Value::Null
+            };
+            let answer = json!({
+                "track": q.path,
+                "at": at_word(&q.point),
+                "figures": figures,
+                "dynamics": gains,
+                "latency": latencies.get(q.first_probe),
+                "png": pictures,
+            });
+            Listened { answer, signal }
+        })
+        .collect();
+    let analysis_ms = analysed.elapsed().as_secs_f64() * 1e3;
+    let rendered = rendered_json(&heard, &|g: &str| {
+        paths.get(g).cloned().unwrap_or_else(|| g.to_owned())
+    });
+    Ok(PointsHeard {
+        points,
+        from,
+        to,
+        rendered,
+        heard,
+        analysis_ms,
+    })
+}
+
+/// LISTEN's answer for several points: each as LISTEN answers one, the
+/// render they shared once.
+fn points_answer(h: &PointsHeard, ms: f64) -> Value {
+    json!({
+        "from": h.from,
+        "to": h.to,
+        "points": h.points.iter().map(|p| &p.answer).collect::<Vec<_>>(),
+        "bands_hz": bands_hz(),
+        "rendered": h.rendered,
+        "analysis_ms": r2(h.analysis_ms),
+        "ms": r2(ms),
+    })
 }
 
 /// The tracks other tracks' plugins key from, which a listen runs
@@ -876,16 +1119,9 @@ fn hit_windows(
         project,
         &song,
         &render::Ask {
-            from,
-            to,
-            points: &points,
-            solo: None,
-            bypass_fx: HashSet::new(),
-            keyed: &keyed(daw, project),
             fresh: a.fresh.unwrap_or(false),
-            cuts: &std::collections::HashMap::new(),
             exact: a.exact.unwrap_or(false),
-            meters: &[],
+            ..render::Ask::plain((from, to), &points, &keyed(daw, project), &HashMap::new())
         },
     )?;
     let frames: Vec<usize> = times
@@ -917,7 +1153,7 @@ fn hit_windows(
 /// # Errors
 /// No such piece, no hits in the span, or the render failed.
 fn listen_hits(daw: &Standalone, project: &ProjectContext, a: &HitsArg) -> Result<Value, String> {
-    let span = tracing::info_span!(
+    let span = crate::render_span!(
         "LISTEN_HITS",
         listen.piece = %a.piece,
         listen.hits = tracing::field::Empty,
@@ -1080,16 +1316,13 @@ pub fn render_at(
         project,
         &song,
         &render::Ask {
-            from: r.from,
-            to: r.to,
-            points: &points,
-            solo: None,
-            bypass_fx: HashSet::new(),
-            keyed: &keyed(daw, project),
-            fresh: false,
-            cuts: &cuts_of(&point),
             exact: r.exact,
-            meters: &[],
+            ..render::Ask::plain(
+                (r.from, r.to),
+                &points,
+                &keyed(daw, project),
+                &cuts_of(&point),
+            )
         },
     )?;
     Ok(Audio {
@@ -1098,6 +1331,19 @@ pub fn render_at(
         rate: RATE,
         answered: heard.answered,
     })
+}
+
+/// Write interleaved stereo `samples` to the WAV `file` (its folder made):
+/// what it measures.
+fn write_wav(file: &std::path::Path, samples: &[f32]) -> Result<crate::mix_measure::Stats, String> {
+    if let Some(dir) = file.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    let (l, r) = measure::channels(samples);
+    let stats = crate::mix_measure::analysis::measure(&l, &r, RATE, Bands::Octave);
+    fts_sample::write_wav_f32(file, RATE, &[l, r])
+        .map_err(|e| format!("{}: {e}", file.display()))?;
+    Ok(stats)
 }
 
 /// `LISTEN_RENDER`.
@@ -1110,13 +1356,20 @@ fn listen_render(
     a: &RenderArg,
 ) -> Result<Value, String> {
     let began = web_time::Instant::now();
+    if a.points.as_ref().is_some_and(|p| !p.is_empty()) {
+        return listen_render_points(daw, project, a);
+    }
+    let track = a
+        .track
+        .as_deref()
+        .ok_or("give `track` (one point) or `points` ([{track, at}])")?;
     let (from, to) = span_of(daw, project, &a.from, &a.to)?;
     let at = a.at.as_deref().unwrap_or("post-fader");
     let audio = render_at(
         daw,
         project,
         &RenderAt {
-            track: &a.track,
+            track,
             at,
             from,
             to,
@@ -1125,18 +1378,12 @@ fn listen_render(
     )?;
     let file = a.to_file.as_ref().map_or_else(
         || {
-            let p = picture("render", &format!("{} {at}", a.track));
+            let p = picture("render", &format!("{track} {at}"));
             p.with_extension("wav")
         },
         PathBuf::from,
     );
-    if let Some(dir) = file.parent().filter(|d| !d.as_os_str().is_empty()) {
-        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    }
-    let (l, r) = measure::channels(&audio.samples);
-    let stats = crate::mix_measure::analysis::measure(&l, &r, RATE, Bands::Octave);
-    fts_sample::write_wav_f32(&file, RATE, &[l, r])
-        .map_err(|e| format!("{}: {e}", file.display()))?;
+    let stats = write_wav(&file, &audio.samples)?;
     Ok(json!({
         "file": file.display().to_string(),
         "seconds": to - from,
@@ -1149,10 +1396,67 @@ fn listen_render(
     }))
 }
 
+/// `LISTEN_RENDER` of several points: one render, a WAV each.
+///
+/// # Errors
+/// As [`listen_points`], or a file would not be written.
+fn listen_render_points(
+    daw: &Standalone,
+    project: &ProjectContext,
+    a: &RenderArg,
+) -> Result<Value, String> {
+    let began = web_time::Instant::now();
+    let asked = asked_points(a.track.as_deref(), a.at.as_deref(), a.points.as_deref())?;
+    let heard = listen_points(
+        daw,
+        project,
+        &PointsArgs {
+            points: &borrowed(&asked),
+            from: &a.from,
+            to: &a.to,
+            solo: None,
+            png: false,
+            fresh: false,
+            exact: a.exact.unwrap_or(false),
+        },
+    )?;
+    let dir = a
+        .to_file
+        .as_ref()
+        .map_or_else(|| PathBuf::from(PICTURES), PathBuf::from);
+    let files = heard
+        .points
+        .iter()
+        .zip(&asked)
+        .map(|(p, (track, at))| {
+            let name = picture("render", &format!("{track} {at}")).with_extension("wav");
+            let file = dir.join(name.file_name().unwrap_or_default());
+            let stats = write_wav(&file, &p.signal)?;
+            Ok(json!({
+                "track": p.answer["track"],
+                "at": p.answer["at"],
+                "file": file.display().to_string(),
+                "lufs": stats.lufs,
+                "true_peak": stats.true_peak,
+                "latency": p.answer["latency"],
+            }))
+        })
+        .collect::<Result<Vec<Value>, String>>()?;
+    Ok(json!({
+        "files": files,
+        "seconds": heard.to - heard.from,
+        "rate": RATE,
+        "rendered": heard.rendered,
+        "ms": r2(began.elapsed().as_secs_f64() * 1e3),
+    }))
+}
+
 /// LISTEN_AB's arguments, read from its JSON.
 struct AbArgs {
-    track: String,
-    at: Option<String>,
+    /// Each point, track and `at`; `single` when it was `track` + `at`
+    /// alone (answered as one point always was).
+    points: Vec<(String, String)>,
+    single: bool,
     from: String,
     to: String,
     change: Vec<(String, String)>,
@@ -1186,9 +1490,30 @@ fn ab_args(raw: &[u8]) -> Result<AbArgs, String> {
             Ok((action.to_owned(), args))
         })
         .collect::<Result<Vec<_>, String>>()?;
+    let listed: Vec<PointArg> = v
+        .get("points")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|p| {
+            Ok(PointArg {
+                track: p
+                    .get("track")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| format!("a point has no `track`: {p}"))?
+                    .to_owned(),
+                at: p.get("at").and_then(Value::as_str).map(str::to_owned),
+            })
+        })
+        .collect::<Result<_, String>>()?;
+    let points = asked_points(
+        text("track").as_deref(),
+        text("at").as_deref(),
+        Some(&listed),
+    )?;
     Ok(AbArgs {
-        track: need("track")?,
-        at: text("at"),
+        single: listed.is_empty(),
+        points,
         from: need("from")?,
         to: need("to")?,
         change,
@@ -1215,27 +1540,31 @@ fn listen_ab(
     list: &ActionList,
     a: &AbArgs,
 ) -> Result<Value, String> {
-    let span = tracing::info_span!(
+    let span = crate::render_span!(
         "LISTEN_AB",
         listen.calls = a.change.len(),
         listen.kept = a.keep,
         listen.outcome = tracing::field::Empty,
+        listen.a_answered = tracing::field::Empty,
+        listen.a_ms = tracing::field::Empty,
         listen.ms = tracing::field::Empty,
     );
     let _in = span.enter();
     let began = web_time::Instant::now();
-    let ask = |png: bool| ListenArgs {
-        track: &a.track,
-        at: a.at.as_deref(),
+    let points = borrowed(&a.points);
+    let ask = PointsArgs {
+        points: &points,
         from: &a.from,
         to: &a.to,
         solo: a.solo.as_deref(),
-        png,
+        png: false,
         fresh: false,
         exact: a.exact,
     };
-    let before = listen(daw, project, &ask(false))?;
+    let before = listen_points(daw, project, &ask)?;
     let a_ms = began.elapsed().as_secs_f64() * 1e3;
+    span.record("listen.a_answered", before.heard.answered.word());
+    span.record("listen.a_ms", a_ms);
     let mix = crate::mix_snapshot::current(daw, project)?;
     let changing = web_time::Instant::now();
     let changed = ab::change(daw, project, list, &a.change);
@@ -1268,7 +1597,7 @@ fn listen_ab(
         }
     };
     let b_began = web_time::Instant::now();
-    let after = listen(daw, project, &ask(false));
+    let after = listen_points(daw, project, &ask);
     let b_ms = b_began.elapsed().as_secs_f64() * 1e3;
     let backing = web_time::Instant::now();
     let back = (!a.keep || after.is_err())
@@ -1276,9 +1605,7 @@ fn listen_ab(
         .transpose()?;
     let back_ms = backing.elapsed().as_secs_f64() * 1e3;
     let after = after?;
-    let fa = &before.answer["figures"];
-    let fb = &after.answer["figures"];
-    let png = if a.png {
+    let first_png = |fa: &Value, fb: &Value, (track, at): (&Value, &Value)| {
         let centres = Bands::Third.centres();
         let bands = |f: &Value| -> Vec<f64> {
             f["bands"]
@@ -1290,8 +1617,8 @@ fn listen_ab(
         };
         let title = format!(
             "{} {} · A (before) and B (after) · {}–{}",
-            before.answer["track"].as_str().unwrap_or(""),
-            before.answer["at"].as_str().unwrap_or(""),
+            track.as_str().unwrap_or(""),
+            at.as_str().unwrap_or(""),
             a.from,
             a.to
         );
@@ -1306,35 +1633,63 @@ fn listen_ab(
             )),
             picture(
                 "ab",
-                &format!("{} {}", a.track, a.at.as_deref().unwrap_or("post-fader")),
+                &format!(
+                    "{} {}",
+                    track.as_str().unwrap_or(""),
+                    at.as_str().unwrap_or("")
+                ),
             ),
         )
-    } else {
-        Value::Null
+    };
+    let rows: Vec<Value> = before
+        .points
+        .iter()
+        .zip(&after.points)
+        .map(|(x, y)| {
+            let (fa, fb) = (&x.answer["figures"], &y.answer["figures"]);
+            json!({
+                "track": x.answer["track"],
+                "at": x.answer["at"],
+                "a": fa,
+                "b": fb,
+                "difference": ab::difference(fa, fb),
+            })
+        })
+        .collect();
+    let png = match rows.first() {
+        Some(r) if a.png && a.single => first_png(&r["a"], &r["b"], (&r["track"], &r["at"])),
+        _ => Value::Null,
     };
     let ms = began.elapsed().as_secs_f64() * 1e3;
     span.record("listen.ms", ms);
-    Ok(json!({
-        "track": before.answer["track"],
-        "at": before.answer["at"],
-        "from": before.answer["from"],
-        "to": before.answer["to"],
-        "a": fa,
-        "b": fb,
-        "difference": ab::difference(fa, fb),
+    let mut out = json!({
+        "from": before.from,
+        "to": before.to,
         "bands_hz": bands_hz(),
         "changed": said,
         "kept": a.keep,
         "put_back": back.map(|b| json!({ "changed": b.changed, "plugin_states": b.states })),
-        "a_answered": before.answer["rendered"]["answered"],
-        "b_answered": after.answer["rendered"]["answered"],
+        "a_answered": before.heard.answered.word(),
+        "b_answered": after.heard.answered.word(),
+        "a_rendered": before.rendered,
+        "b_rendered": after.rendered,
         "png": png,
         "a_ms": r2(a_ms),
         "change_ms": r2(change_ms),
         "b_ms": r2(b_ms),
         "back_ms": r2(back_ms),
         "ms": r2(ms),
-    }))
+    });
+    if a.single
+        && let (Some(o), Some(row)) = (out.as_object_mut(), rows.first())
+    {
+        for k in ["track", "at", "a", "b", "difference"] {
+            o.insert(k.into(), row[k].clone());
+        }
+    } else {
+        out["points"] = Value::Array(rows);
+    }
+    Ok(out)
 }
 
 /// A fix, as answered.
@@ -1689,6 +2044,98 @@ fn listen_live(daw: &Standalone, project: &ProjectContext, a: &LiveArg) -> Resul
     }
 }
 
+/// `LISTEN`: one point (`track`, answered as it always was) or many
+/// (`points`, in one render).
+///
+/// # Errors
+/// As [`listen`] / [`listen_points`].
+fn listen_action(
+    daw: &Standalone,
+    project: &ProjectContext,
+    a: &ListenArg,
+) -> Result<Value, String> {
+    let many = a.points.as_ref().is_some_and(|p| !p.is_empty());
+    if !many {
+        let track = a
+            .track
+            .as_deref()
+            .ok_or("give `track` (one point) or `points` ([{track, at}])")?;
+        return listen(
+            daw,
+            project,
+            &ListenArgs {
+                track,
+                at: a.at.as_deref(),
+                from: &a.from,
+                to: &a.to,
+                solo: a.solo.as_deref(),
+                png: a.png.unwrap_or(true),
+                fresh: a.fresh.unwrap_or(false),
+                exact: a.exact.unwrap_or(false),
+            },
+        )
+        .map(|l| l.answer);
+    }
+    let began = web_time::Instant::now();
+    let asked = asked_points(a.track.as_deref(), a.at.as_deref(), a.points.as_deref())?;
+    let heard = listen_points(
+        daw,
+        project,
+        &PointsArgs {
+            points: &borrowed(&asked),
+            from: &a.from,
+            to: &a.to,
+            solo: a.solo.as_deref(),
+            png: a.png.unwrap_or(false),
+            fresh: a.fresh.unwrap_or(false),
+            exact: a.exact.unwrap_or(false),
+        },
+    )?;
+    Ok(points_answer(&heard, began.elapsed().as_secs_f64() * 1e3))
+}
+
+/// `LISTEN_BLOCK`: a block's input and output in one render.
+///
+/// # Errors
+/// As [`listen_points`].
+fn listen_block(daw: &Standalone, project: &ProjectContext, a: &BlockArg) -> Result<Value, String> {
+    let began = web_time::Instant::now();
+    let (pre, post) = (
+        format!("block:{}:pre", a.block),
+        format!("block:{}:post", a.block),
+    );
+    let heard = listen_points(
+        daw,
+        project,
+        &PointsArgs {
+            points: &[
+                (a.track.as_str(), pre.as_str()),
+                (a.track.as_str(), post.as_str()),
+            ],
+            from: &a.from,
+            to: &a.to,
+            solo: a.solo.as_deref(),
+            png: a.png.unwrap_or(false),
+            fresh: a.fresh.unwrap_or(false),
+            exact: a.exact.unwrap_or(false),
+        },
+    )?;
+    let (p, q) = (&heard.points[0].answer, &heard.points[1].answer);
+    Ok(json!({
+        "track": p["track"],
+        "block": a.block,
+        "from": heard.from,
+        "to": heard.to,
+        "pre": p,
+        "post": q,
+        "difference": ab::difference(&p["figures"], &q["figures"]),
+        "bands_hz": bands_hz(),
+        "rendered": heard.rendered,
+        "analysis_ms": r2(heard.analysis_ms),
+        "ms": r2(began.elapsed().as_secs_f64() * 1e3),
+    }))
+}
+
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register_with(&LIVE, Effect::ReadOnly, |_: &ActionCaller, a: LiveArg| {
         let (daw, project) = song()?;
@@ -1719,6 +2166,8 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         Effect::ReadOnly,
         |_: &ActionCaller, a: RenderArg| {
             let (daw, project) = song()?;
+            let span = crate::render_span!("LISTEN_RENDER");
+            let _in = span.enter();
             listen_render(daw, &project, &a).map(|v| RawJson::from(v.to_string()))
         },
     )?;
@@ -1748,30 +2197,45 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         Effect::ReadOnly,
         |_: &ActionCaller, a: ListenArg| {
             let (daw, project) = song()?;
-            let span = tracing::info_span!(
+            let span = crate::render_span!(
                 "LISTEN",
                 listen.at = a.at.as_deref().unwrap_or("post-fader"),
                 listen.ms = tracing::field::Empty,
             );
             let _in = span.enter();
-            let heard = listen(
-                daw,
-                &project,
-                &ListenArgs {
-                    track: &a.track,
-                    at: a.at.as_deref(),
-                    from: &a.from,
-                    to: &a.to,
-                    solo: a.solo.as_deref(),
-                    png: a.png.unwrap_or(true),
-                    fresh: a.fresh.unwrap_or(false),
-                    exact: a.exact.unwrap_or(false),
-                },
-            )?;
-            span.record("listen.ms", heard.answer["ms"].as_f64().unwrap_or(0.0));
-            Ok::<_, String>(RawJson::from(heard.answer.to_string()))
+            let answer = listen_action(daw, &project, &a)?;
+            span.record("listen.ms", answer["ms"].as_f64().unwrap_or(0.0));
+            Ok::<_, String>(RawJson::from(answer.to_string()))
         },
     )?;
+    list.register_with(&BLOCK, Effect::ReadOnly, |_: &ActionCaller, a: BlockArg| {
+        let (daw, project) = song()?;
+        let span = crate::render_span!("LISTEN_BLOCK", listen.ms = tracing::field::Empty,);
+        let _in = span.enter();
+        let answer = listen_block(daw, &project, &a)?;
+        span.record("listen.ms", answer["ms"].as_f64().unwrap_or(0.0));
+        Ok::<_, String>(RawJson::from(answer.to_string()))
+    })?;
+    list.register_with(&CACHE, Effect::ReadOnly, |_: &ActionCaller, a: CacheArg| {
+        if a.forget.unwrap_or(false) {
+            render::forget();
+        }
+        let stats = match a.limit_mb {
+            Some(mb) if mb > 0.0 => render::set_limit(Some((mb * 1_048_576.0) as u64)),
+            Some(_) => render::set_limit(None),
+            None => render::cache_stats(),
+        };
+        Ok::<_, String>(RawJson::from(
+            json!({
+                "recordings": stats.recordings,
+                "mb": r2(stats.bytes as f64 / 1_048_576.0),
+                "limit_mb": r2(stats.limit_bytes as f64 / 1_048_576.0),
+                "evicted": stats.evicted,
+                "warm_copies": stats.warm,
+            })
+            .to_string(),
+        ))
+    })?;
     list.register_with(&HITS, Effect::ReadOnly, |_: &ActionCaller, a: HitsArg| {
         let (daw, project) = song()?;
         listen_hits(daw, &project, &a).map(|v| RawJson::from(v.to_string()))

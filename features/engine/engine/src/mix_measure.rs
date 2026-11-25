@@ -43,7 +43,7 @@ static MEASURE: ActionMeta = meta(
     "MIX_MEASURE",
     "mix_measure",
     "Measure the mix",
-    "Render `from`..`to` (bars `33`, `33:2`; times `12.5s`; sections `Chorus 1`, `Chorus 1 end`) offline through the whole mix — every FX including the hosted CLAPs (Signal), sends, folders, faders, plugin delay compensated — without touching playback or the song, and measure each of `tracks` (paths, names or GUIDs; default: the Drums folder, every track and folder in it) and the master: `lufs` (integrated), `short_max` (loudest 3 s), `true_peak` (dBTP), `peak`, `rms` (dBFS; a full-scale sine reads -3), `crest` (dB), `bands` (dB per band, the band centres in `bands_hz`: octaves 31.5 Hz–16 kHz, or thirds with `bands: third`), `correlation` and `width` (side/mid) and `balance` (L/R dB), and for a track in a folder its `share_db` of its parent's sum (K-weighted). Taken after the fader (`post_fader: false`: after the FX, before the fader). `bypass_signal: true` also measures the same span with every Signal instance bypassed, giving each track its `raw` numbers and `signal_gain_db` (processed minus raw loudness: the gain-neutral check). Says each track's latency (samples), the song's, and the time taken.",
+    "Render `from`..`to` (bars `33`, `33:2`; times `12.5s`; sections `Chorus 1`, `Chorus 1 end`) offline through the whole mix — every FX including the hosted CLAPs (Signal), sends, folders, faders, plugin delay compensated — without touching playback or the song, and measure each of `tracks` (paths, names or GUIDs; default: the Drums folder, every track and folder in it) and the master: `lufs` (integrated), `short_max` (loudest 3 s), `true_peak` (dBTP), `peak`, `rms` (dBFS; a full-scale sine reads -3), `crest` (dB), `bands` (dB per band, the band centres in `bands_hz`: octaves 31.5 Hz–16 kHz, or thirds with `bands: third`), `correlation` and `width` (side/mid) and `balance` (L/R dB), and for a track in a folder its `share_db` of its parent's sum (K-weighted). Taken after the fader (`post_fader: false`: after the FX, before the fader). `bypass_signal: true` also measures the same span with every Signal instance bypassed, giving each track its `raw` numbers and `signal_gain_db` (processed minus raw loudness: the gain-neutral check). Says each track's latency (samples), the song's, and the time taken. Rendered as LISTEN renders: only what feeds the tracks asked for and (unless `master: false`, which leaves the MASTER row out and renders far less) the master; every track whose key is unchanged since an earlier measure or render heard it played back, not rendered (`answered`, `tracks_rendered`, `tracks_replayed`, `cache_mb`, `realtime_factor` say how it went); the raw pass side by side with the processed one in the same render. In one piece on fresh copies (`exact`, the default: to the sample what a whole render says); `exact: false` renders in chunks side by side on warm copies (LISTEN's speed, within about 0.05 LU). `full: true` renders the whole song afresh, nothing played back.",
     "Mix",
     "",
 );
@@ -52,7 +52,7 @@ static RENDER: ActionMeta = meta(
     "MIX_RENDER",
     "mix_render",
     "Render the mix to a file",
-    "Render `from`..`to` (as MIX_MEASURE) offline through the whole mix — what MIX_MEASURE measures — to the WAV `to_file` (48 kHz, 32-bit float, stereo): the master, or with `tracks` (paths, names or GUIDs) a solo of those (as the solo buttons would: a folder brings its children, each heard through its folders). `bypass_signal: true` renders it with every Signal instance bypassed (the raw drums). Touches neither playback nor the song. Says the file, its length, its loudness and peak, and the time taken.",
+    "Render `from`..`to` (as MIX_MEASURE) offline through the whole mix — what MIX_MEASURE measures — to the WAV `to_file` (48 kHz, 32-bit float, stereo): the master, or with `tracks` (paths, names or GUIDs) a solo of those (as the solo buttons would: a folder brings its children, each heard through its folders). `bypass_signal: true` renders it with every Signal instance bypassed (the raw drums). Touches neither playback nor the song. Says the file, its length, its loudness and peak, and the time taken. Rendered as MIX_MEASURE renders (unchanged tracks played back from earlier renders; `exact: false` in chunks side by side; `full: true` the whole song afresh).",
     "Mix",
     "",
 );
@@ -66,6 +66,9 @@ struct MeasureArg {
     post_fader: Option<bool>,
     bypass_signal: Option<bool>,
     bands: Option<String>,
+    master: Option<bool>,
+    exact: Option<bool>,
+    full: Option<bool>,
 }
 
 /// What to render.
@@ -77,6 +80,8 @@ struct RenderArg {
     solo: Option<Vec<String>>,
     to_file: String,
     bypass_signal: Option<bool>,
+    exact: Option<bool>,
+    full: Option<bool>,
 }
 
 /// One signal's numbers, as MIX_MEASURE says them.
@@ -154,6 +159,16 @@ pub struct MeasureRow {
     pub render_ms: f64,
     pub analysis_ms: f64,
     pub ms: f64,
+    /// How it was rendered: `replayed`, `partly`, `rendered` (`full` when
+    /// the whole song was rendered afresh).
+    pub answered: String,
+    pub tracks_rendered: u32,
+    pub tracks_replayed: u32,
+    pub plugins_reused: u32,
+    /// What the recordings kept between renders hold, MB.
+    pub cache_mb: f64,
+    /// Span seconds per second of rendering.
+    pub realtime_factor: f64,
 }
 
 /// The mix, rendered to a file.
@@ -166,6 +181,10 @@ pub struct RenderRow {
     pub latency: u32,
     pub plugin_failures: Vec<String>,
     pub ms: f64,
+    pub answered: String,
+    pub tracks_rendered: u32,
+    pub tracks_replayed: u32,
+    pub realtime_factor: f64,
 }
 
 /// A span rendered: master and the tracks asked for, each exactly
@@ -388,6 +407,122 @@ pub fn render_span(daw: &Standalone, project: &str, span: &Span<'_>) -> Result<R
     })
 }
 
+/// How a render went, as MIX_MEASURE and MIX_RENDER answer it.
+pub struct Cost {
+    /// `replayed`, `partly`, `rendered`, or `full` (the whole song afresh).
+    pub answered: &'static str,
+    pub rendered: u32,
+    pub replayed: u32,
+    pub reused: u32,
+    pub cache_bytes: u64,
+}
+
+impl Cost {
+    /// A whole render's: every one of the song's `tracks` rendered.
+    fn full(tracks: usize) -> Self {
+        Self {
+            answered: "full",
+            rendered: u32::try_from(tracks).unwrap_or(u32::MAX),
+            replayed: 0,
+            reused: 0,
+            cache_bytes: crate::listen::render::cache_stats().bytes,
+        }
+    }
+}
+
+/// Render `span` of song `guid` as LISTEN renders (only what feeds its
+/// taps and, with `master`, the master; unchanged tracks played back from
+/// earlier renders), and with `raw` (Signal's instances) the same with
+/// those bypassed, side by side in the same render. `exact`: in one piece
+/// on fresh copies, only such recordings played back.
+///
+/// # Errors
+/// The span is empty or too long.
+pub fn render_cached(
+    daw: &Standalone,
+    project: &ProjectContext,
+    guid: &str,
+    span: &Span<'_>,
+    (raw, master, exact): (Option<HashSet<String>>, bool, bool),
+) -> Result<(Rendered, Option<Rendered>, Cost), String> {
+    use crate::listen::render as lr;
+    use daw_standalone::audio_engine::render::offline::{Probe, ProbeAt};
+    let at = if span.post_fader {
+        Probe::PostFader
+    } else {
+        Probe::PreFader
+    };
+    let order: Vec<String> = span.tap.iter().cloned().collect();
+    let points: Vec<ProbeAt> = order
+        .iter()
+        .map(|g| ProbeAt {
+            track: g.clone(),
+            at,
+        })
+        .collect();
+    let none = HashMap::new();
+    let keyed = crate::listen::keyed(daw, project);
+    let more: Vec<lr::Pass<'_>> = raw
+        .map(|bypass_fx| lr::Pass {
+            points: &points,
+            cuts: &none,
+            bypass_fx,
+            meters: &[],
+            master,
+        })
+        .into_iter()
+        .collect();
+    let heard = lr::render(
+        daw,
+        project,
+        guid,
+        &lr::Ask {
+            solo: span.solo.clone(),
+            bypass_fx: span.bypass_fx.clone(),
+            exact,
+            cold: exact,
+            master,
+            more: &more,
+            ..lr::Ask::plain((span.from, span.to), &points, &keyed, &none)
+        },
+    )?;
+    let cost = Cost {
+        answered: heard.answered.word(),
+        rendered: u32::try_from(heard.rendered.len()).unwrap_or(u32::MAX),
+        replayed: u32::try_from(heard.replayed.len()).unwrap_or(u32::MAX),
+        reused: heard.reused,
+        cache_bytes: heard.cache.bytes,
+    };
+    let made =
+        |signals: Vec<Vec<f32>>, latencies: &[u32], m: Option<Vec<f32>>, latency: u32| Rendered {
+            master: m.unwrap_or_default(),
+            latencies: order
+                .iter()
+                .cloned()
+                .zip(latencies.iter().copied())
+                .collect(),
+            tracks: order.iter().cloned().zip(signals).collect(),
+            latency,
+            copied: heard.copied,
+            failures: heard.failures.clone(),
+            copy_ms: heard.copy_ms,
+            prime_ms: heard.prime_ms,
+            blocks_ms: heard.blocks_ms,
+            ms: heard.ms,
+        };
+    let mut more = heard.more.into_iter();
+    let raw = more
+        .next()
+        .map(|r| made(r.signals, &r.latencies, r.master, r.master_latency));
+    let processed = made(
+        heard.signals,
+        &heard.latencies,
+        heard.master,
+        heard.master_latency,
+    );
+    Ok((processed, raw, cost))
+}
+
 /// Split interleaved stereo.
 fn channels(s: &[f32]) -> (Vec<f32>, Vec<f32>) {
     s.chunks_exact(2).map(|f| (f[0], f[1])).unzip()
@@ -459,7 +594,7 @@ fn measure(
     project: &ProjectContext,
     a: &MeasureArg,
 ) -> Result<MeasureRow, String> {
-    let span = tracing::info_span!(
+    let span = crate::render_span!(
         "MIX_MEASURE",
         mix.tracks = tracing::field::Empty,
         mix.seconds = tracing::field::Empty,
@@ -493,39 +628,66 @@ fn measure(
     } else {
         Vec::new()
     };
-    let pass = |bypass_fx: HashSet<String>| {
-        render_span(
+    let full = a.full.unwrap_or(false);
+    let with_master = a.master.unwrap_or(true);
+    let rendering = web_time::Instant::now();
+    let (processed, raw, cost) = if full {
+        let pass = |bypass_fx: HashSet<String>| {
+            render_span(
+                daw,
+                &guid,
+                &Span {
+                    from,
+                    to,
+                    tap: &tap,
+                    post_fader,
+                    bypass_fx,
+                    solo: None,
+                },
+            )
+        };
+        // The raw pass beside the processed one: copies of their own (each
+        // in a Signal session of its own), so the two share nothing.
+        let (processed, raw) = if a.bypass_signal.unwrap_or(false) {
+            let bypass: HashSet<String> = signal.iter().cloned().collect();
+            std::thread::scope(|s| {
+                let raw = s.spawn(|| pass(bypass));
+                let processed = pass(HashSet::new());
+                let raw = raw.join().map_err(|_| "the raw pass panicked".to_owned());
+                (processed, raw)
+            })
+        } else {
+            (pass(HashSet::new()), Ok(Err(String::new())))
+        };
+        let processed = processed?;
+        let raw = match raw? {
+            Ok(r) => Some(r),
+            Err(why) if why.is_empty() => None,
+            Err(why) => return Err(why),
+        };
+        let cost = Cost::full(all.len());
+        (processed, raw, cost)
+    } else {
+        render_cached(
             daw,
+            project,
             &guid,
             &Span {
                 from,
                 to,
                 tap: &tap,
                 post_fader,
-                bypass_fx,
+                bypass_fx: HashSet::new(),
                 solo: None,
             },
-        )
-    };
-    // The raw pass beside the processed one: copies of their own (each in a
-    // Signal session of its own), so the two share nothing.
-    let rendering = web_time::Instant::now();
-    let (processed, raw) = if a.bypass_signal.unwrap_or(false) {
-        let bypass: HashSet<String> = signal.iter().cloned().collect();
-        std::thread::scope(|s| {
-            let raw = s.spawn(|| pass(bypass));
-            let processed = pass(HashSet::new());
-            let raw = raw.join().map_err(|_| "the raw pass panicked".to_owned());
-            (processed, raw)
-        })
-    } else {
-        (pass(HashSet::new()), Ok(Err(String::new())))
-    };
-    let processed = processed?;
-    let raw = match raw? {
-        Ok(r) => Some(r),
-        Err(why) if why.is_empty() => None,
-        Err(why) => return Err(why),
+            (
+                a.bypass_signal
+                    .unwrap_or(false)
+                    .then(|| signal.iter().cloned().collect()),
+                with_master,
+                a.exact.unwrap_or(true),
+            ),
+        )?
     };
     let render_ms = rendering.elapsed().as_secs_f64() * 1e3;
     let analysed = web_time::Instant::now();
@@ -577,22 +739,25 @@ fn measure(
             }
         })
         .collect();
+    let master_measured = full || with_master;
     let (master, master_raw) = rayon::join(
         || stats(&processed.master),
         || raw.as_ref().map(|r| stats(&r.master)),
     );
-    rows.push(TrackNumbers {
-        path: "MASTER".into(),
-        kind: "master".into(),
-        latency: processed.latency,
-        numbers: Numbers::from(&master),
-        share_db: None,
-        parent: None,
-        signal_gain_db: master_raw
-            .as_ref()
-            .map(|r| ((master.lufs - r.lufs) * 100.0).round() / 100.0),
-        raw: master_raw.as_ref().map(Numbers::from),
-    });
+    if master_measured {
+        rows.push(TrackNumbers {
+            path: "MASTER".into(),
+            kind: "master".into(),
+            latency: processed.latency,
+            numbers: Numbers::from(&master),
+            share_db: None,
+            parent: None,
+            signal_gain_db: master_raw
+                .as_ref()
+                .map(|r| ((master.lufs - r.lufs) * 100.0).round() / 100.0),
+            raw: master_raw.as_ref().map(Numbers::from),
+        });
+    }
     let analysis_ms = analysed.elapsed().as_secs_f64() * 1e3;
     let out = MeasureRow {
         from,
@@ -614,6 +779,12 @@ fn measure(
         render_ms,
         analysis_ms,
         ms: began.elapsed().as_secs_f64() * 1e3,
+        answered: cost.answered.to_owned(),
+        tracks_rendered: cost.rendered,
+        tracks_replayed: cost.replayed,
+        plugins_reused: cost.reused,
+        cache_mb: ((cost.cache_bytes as f64 / 1_048_576.0) * 100.0).round() / 100.0,
+        realtime_factor: (((to - from) / (render_ms / 1e3).max(1e-9)) * 100.0).round() / 100.0,
     };
     span.record("mix.tracks", out.tracks.len());
     span.record("mix.seconds", to - from);
@@ -638,7 +809,7 @@ fn measure(
 /// # Errors
 /// A bad span, track or file, or the render failed.
 fn render(daw: &Standalone, project: &ProjectContext, a: &RenderArg) -> Result<RenderRow, String> {
-    let span = tracing::info_span!(
+    let span = crate::render_span!(
         "MIX_RENDER",
         mix.seconds = tracing::field::Empty,
         mix.solo = tracing::field::Empty,
@@ -669,18 +840,29 @@ fn render(daw: &Standalone, project: &ProjectContext, a: &RenderArg) -> Result<R
     } else {
         HashSet::new()
     };
-    let rendered = render_span(
-        daw,
-        &guid,
-        &Span {
-            from,
-            to,
-            tap: &HashSet::new(),
-            post_fader: true,
-            bypass_fx,
-            solo,
-        },
-    )?;
+    let span_of_render = Span {
+        from,
+        to,
+        tap: &HashSet::new(),
+        post_fader: true,
+        bypass_fx,
+        solo,
+    };
+    let (rendered, cost) = if a.full.unwrap_or(false) {
+        let r = render_span(daw, &guid, &span_of_render)?;
+        let tracks = Tracks::all(daw, project.clone()).len();
+        let cost = Cost::full(tracks);
+        (r, cost)
+    } else {
+        let (r, _, cost) = render_cached(
+            daw,
+            project,
+            &guid,
+            &span_of_render,
+            (None, true, a.exact.unwrap_or(true)),
+        )?;
+        (r, cost)
+    };
     let file = PathBuf::from(&a.to_file);
     if let Some(dir) = file.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -697,6 +879,10 @@ fn render(daw: &Standalone, project: &ProjectContext, a: &RenderArg) -> Result<R
         latency: rendered.latency,
         plugin_failures: rendered.failures,
         ms: began.elapsed().as_secs_f64() * 1e3,
+        answered: cost.answered.to_owned(),
+        tracks_rendered: cost.rendered,
+        tracks_replayed: cost.replayed,
+        realtime_factor: (((to - from) / (rendered.ms / 1e3).max(1e-9)) * 100.0).round() / 100.0,
     };
     span.record("mix.seconds", out.seconds);
     span.record("mix.latency", out.latency);

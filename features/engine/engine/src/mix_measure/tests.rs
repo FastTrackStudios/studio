@@ -163,6 +163,9 @@ fn args(tracks: &[&str], post_fader: bool) -> MeasureArg {
         post_fader: Some(post_fader),
         bypass_signal: None,
         bands: None,
+        master: None,
+        exact: None,
+        full: None,
     }
 }
 
@@ -426,6 +429,8 @@ fn mix_render_writes_what_was_measured() {
             solo: None,
             to_file: file.to_string_lossy().into_owned(),
             bypass_signal: None,
+            exact: None,
+            full: None,
         },
     )
     .expect("rendered");
@@ -547,6 +552,9 @@ fn signal_kit_speed() {
             post_fader: None,
             bypass_signal: Some(std::env::var_os("KIT_SPEED_RAW").is_some()),
             bands: None,
+            master: None,
+            exact: None,
+            full: Some(std::env::var_os("KIT_SPEED_FULL").is_some()),
         },
     )
     .expect("measured");
@@ -561,6 +569,9 @@ fn signal_kit_speed() {
             post_fader: None,
             bypass_signal: Some(std::env::var_os("KIT_SPEED_RAW").is_some()),
             bands: None,
+            master: None,
+            exact: None,
+            full: Some(std::env::var_os("KIT_SPEED_FULL").is_some()),
         },
     )
     .expect("measured again");
@@ -613,4 +624,114 @@ fn signal_kit_speed() {
     }
     assert!(m.plugin_failures.is_empty(), "{:?}", m.plugin_failures);
     assert!(quiet < tracks, "everything silent");
+}
+
+/// What a measure answers for every row, to compare two measures.
+fn readings(m: &super::MeasureRow) -> Vec<(String, f64, f64, f64)> {
+    let mut v: Vec<(String, f64, f64, f64)> = m
+        .tracks
+        .iter()
+        .map(|t| {
+            (
+                t.path.clone(),
+                t.numbers.rms,
+                t.numbers.lufs,
+                t.numbers.peak,
+            )
+        })
+        .collect();
+    v.sort_by(|a, b| a.0.cmp(&b.0));
+    v
+}
+
+#[test]
+fn a_measure_after_a_change_renders_only_what_changed_and_reads_as_a_whole_render() {
+    let (daw, ctx) = song("measure-cached", Some(sine(200.0, -20.0, 6.0)));
+    let snare = guid_of(&daw, &ctx, "Drums/Snare");
+    daw_proto::fx::Effects::add(
+        &daw,
+        ctx.clone(),
+        daw_proto::fx::FxChainContext::Track(snare),
+        "Late 848",
+    )
+    .expect("a late plugin");
+    let tracks = ["Drums/Kick", "Drums/Snare", "Drums"];
+    let first = measure(&daw, &ctx, &args(&tracks, true)).expect("first");
+    assert_ne!(first.answered, "replayed");
+    // Nothing changed: nothing rendered.
+    let again = measure(&daw, &ctx, &args(&tracks, true)).expect("again");
+    assert_eq!(
+        again.answered, "replayed",
+        "{} rendered",
+        again.tracks_rendered
+    );
+    assert_eq!(readings(&again), readings(&first));
+    // The kick's fader moves: the kick and what it feeds render, the
+    // snare plays back.
+    daw.set_volume(
+        ctx.clone(),
+        TrackRef::Guid(guid_of(&daw, &ctx, "Drums/Kick")),
+        10f64.powf(-6.0 / 20.0),
+    )
+    .expect("the fader");
+    let changed = measure(&daw, &ctx, &args(&tracks, true)).expect("changed");
+    assert_eq!(changed.answered, "partly");
+    assert!(changed.tracks_replayed >= 1, "{}", changed.tracks_replayed);
+    assert!((row(&changed, "Drums/Kick").numbers.rms - -24.0).abs() < 0.1);
+    // A whole render, afresh, reads the same to the sample.
+    let mut whole = args(&tracks, true);
+    whole.full = Some(true);
+    let whole = measure(&daw, &ctx, &whole).expect("whole");
+    assert_eq!(whole.answered, "full");
+    for (c, w) in readings(&changed).iter().zip(readings(&whole)) {
+        assert_eq!(c.0, w.0);
+        for (x, y) in [(c.1, w.1), (c.2, w.2), (c.3, w.3)] {
+            assert!((x - y).abs() < 1e-6, "{} {x} vs {y}", c.0);
+        }
+    }
+    // Without the master, the MASTER row is left out.
+    let mut no_master = args(&["Drums/Kick"], true);
+    no_master.master = Some(false);
+    let m = measure(&daw, &ctx, &no_master).expect("no master");
+    assert!(m.tracks.iter().all(|t| t.kind != "master"));
+}
+
+#[test]
+fn the_raw_pass_renders_beside_the_processed_one_in_the_same_render() {
+    let (daw, ctx) = song("measure-raw-pass", None);
+    let kick = guid_of(&daw, &ctx, "Drums/Kick");
+    let fx = daw_proto::fx::Effects::add(
+        &daw,
+        ctx.clone(),
+        daw_proto::fx::FxChainContext::Track(kick.clone()),
+        "Gain 6",
+    )
+    .expect("a gain");
+    let tap: HashSet<String> = [kick.clone()].into();
+    let span = Span {
+        from: 1.0,
+        to: 3.0,
+        tap: &tap,
+        post_fader: true,
+        bypass_fx: HashSet::new(),
+        solo: None,
+    };
+    let (on, off, cost) = super::render_cached(
+        &daw,
+        &ctx,
+        "measure-raw-pass",
+        &span,
+        (Some([fx].into()), true, true),
+    )
+    .expect("rendered");
+    let off = off.expect("the raw pass");
+    let rms = |s: &[f32]| {
+        let (l, r) = super::channels(s);
+        super::analysis::measure(&l, &r, RATE, super::Bands::Octave).rms
+    };
+    let gain = rms(&on.tracks[&kick]) - rms(&off.tracks[&kick]);
+    assert!((gain - 6.0).abs() < 0.05, "{gain}");
+    let master = rms(&on.master) - rms(&off.master);
+    assert!((master - 6.0).abs() < 0.05, "{master}");
+    assert_ne!(cost.answered, "replayed");
 }
