@@ -50,6 +50,9 @@ pub struct Gate {
     /// the drum.
     since_hit: usize,
     fail_open_after: usize,
+    /// The host placed every hit: a gap is the song's, and the gate never
+    /// fails open (it would on the instance's own clock, not the song's).
+    hits_known: bool,
 }
 
 const MAX_HITS: usize = 16;
@@ -81,6 +84,7 @@ impl Gate {
             pulse: (sr * 0.002) as usize,
             since_hit: 0,
             fail_open_after: (sr * 10.0) as usize,
+            hits_known: false,
         }
     }
 
@@ -151,7 +155,8 @@ impl BlockProcessor for Gate {
         } else {
             self.since_hit = self.since_hit.saturating_add(n);
         }
-        if self.keyed == 0 && self.hit_keyed && self.since_hit < self.fail_open_after {
+        let waiting = self.hits_known || self.since_hit < self.fail_open_after;
+        if self.keyed == 0 && self.hit_keyed && waiting {
             self.key_from_hits(n);
         }
         let keyed = core::mem::take(&mut self.keyed);
@@ -173,6 +178,10 @@ impl BlockProcessor for Gate {
         self.wired = true;
         self.hit_keyed = true;
         self.since_hit = 0;
+    }
+
+    fn hits_known(&mut self, known: bool) {
+        self.hits_known = known;
     }
 
     fn hit(&mut self, offset: u32, _velocity: f32) {
@@ -298,6 +307,28 @@ mod fail_open_tests {
         assert!(
             level_at[11] > 0.25,
             "open on its own input after 10 s: {level_at:?}"
+        );
+    }
+
+    /// Keyed by hits the host placed, it never fails open: a long gap is
+    /// the song's, and a render from part way in plays it as the whole song
+    /// does.
+    #[test]
+    fn a_gate_with_every_hit_known_waits_through_a_gap() {
+        let mut g = Gate::with_max_block(48_000.0, 512);
+        g.keyed();
+        g.hits_known(true);
+        let mut level_at = alloc::vec::Vec::new();
+        for piece in 0..(48_000 * 12 / 512) {
+            let (mut l, mut r) = (alloc::vec![0.5_f32; 512], alloc::vec![0.5_f32; 512]);
+            g.process(&mut l, &mut r);
+            if piece % (48_000 / 512) == 0 {
+                level_at.push(l.iter().map(|s| s.abs()).fold(0.0, f32::max));
+            }
+        }
+        assert!(
+            level_at[11] < 0.05,
+            "shut after 10 s, waiting for its next hit: {level_at:?}"
         );
     }
 

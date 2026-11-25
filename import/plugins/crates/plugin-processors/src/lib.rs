@@ -147,6 +147,16 @@ pub trait BlockProcessor: Send {
     /// trigger on another track stays shut until that trigger's first hit.
     fn keyed(&mut self) {}
 
+    /// Whether the host has placed every hit of the piece that keys it
+    /// (`true`), or they're found as they come (`false`, as built). With
+    /// every hit known, a gap between them is the song's, not a dead
+    /// trigger's: a gate keyed by them waits for the next one however long
+    /// it takes, so what it plays at a song frame never depends on how long
+    /// it has been running. Said between pieces, on the audio thread.
+    fn hits_known(&mut self, known: bool) {
+        let _ = known;
+    }
+
     /// A drum hit in the next piece, `offset` frames in, at `velocity`
     /// (0–1): what a sample block plays. Effects ignore it.
     fn hit(&mut self, offset: u32, velocity: f32) {
