@@ -1,0 +1,85 @@
+# daw: the one PR/push gate. GitHub's hosted runner, rustup and apt (the
+# native headers Studio's hosted jobs install), no nix.
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # A draft runs nothing; marking it ready starts the run.
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Build + test
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      # The workspace pin (rust-toolchain.toml); keep the two in step.
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: rustfmt
+          targets: wasm32-unknown-unknown
+      - name: Native headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libssl-dev libfontconfig1-dev libfreetype-dev \
+            libclang-dev clang llvm mold libasound2-dev libudev-dev \
+            libjack-jackd2-dev libpipewire-0.3-dev libspa-0.2-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev \
+            libdbus-1-dev libwayland-dev libxdo-dev
+      - uses: Swatinem/rust-cache@v2
+      - name: Manifests + lockfile
+        run: cargo metadata --locked --format-version 1 > /dev/null
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+      - name: cargo check --workspace --all-targets
+        run: cargo check --workspace --all-targets --locked
+      - name: cargo test --workspace
+        run: cargo test --workspace --locked
+      # midi with its midir backend alone, as a crate that wants only that
+      # asks for it (signal's `kontrol`): the workspace's own builds unify
+      # more of midi's features and would hide a gap.
+      - name: cargo check -p midi (midir alone)
+        run: cargo check --locked -p midi --no-default-features --features midir
+      # What Studio's browser builds take from here, with the features they
+      # ask for (session-daw-web, session-web, signal-web, the Signal remote).
+      - name: wasm32 check (the base)
+        run: >
+          cargo check --locked --target wasm32-unknown-unknown
+          -p daw-control -p daw-proto -p daw-module -p daw-transport-sync
+          -p utils -p midi -p audio -p fts-sample
+          --no-default-features
+          --features daw-proto/vox,midi/vox,midi/native,midi/ui,audio/io,audio/monitor,fts-sample/load,fts-sample/write,fts-sample/engine-core,fts-sample/decode-compressed
+      # The engine in Studio's browser builds: session-daw-web (the DAW in a
+      # browser: load, decode, save, the .rpp reader) and signal-web / the
+      # Signal remote (decode, the built-in effects), with the features each
+      # turns on (`cargo tree -e features --target wasm32-unknown-unknown` in
+      # Studio).
+      - name: wasm32 check (the engine, as session-daw-web takes it)
+        run: >
+          cargo check --locked --target wasm32-unknown-unknown
+          -p daw -p daw-standalone -p session-format -p dawfile-reaper
+          --features daw/standalone-audio,daw/standalone-bootstrap,daw/standalone-decode,daw/standalone-save,daw/standalone-session-file,daw-standalone/reapeaks,daw-standalone/rpp-project-wasm,daw-standalone/stream-ogg,dawfile-reaper/session,session-format/read,daw-proto/vox,midi/vox,fts-sample/write
+      - name: wasm32 check (the engine, as signal-web takes it)
+        run: >
+          cargo check --locked --target wasm32-unknown-unknown
+          -p daw -p builtin -p dawfile-reaper -p audio -p midi
+          --features daw/standalone-decode,audio/io,audio/monitor,midi/native,midi/ui,midi/vox,midi/webmidi,daw-proto/vox
+      # The AudioWorklet renderer (the browser setlist player; README).
+      - name: wasm32 check (the engine's worklet renderer)
+        run: >
+          cargo check --locked --target wasm32-unknown-unknown
+          -p daw-standalone --lib --no-default-features --features decode,web
