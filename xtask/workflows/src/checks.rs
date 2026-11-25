@@ -5,13 +5,13 @@
 //! warm target dir, and CI pays for builds once per merge:
 //!
 //! ```text
-//!   PR into main   NOT this workflow: pr.yml (`PR checks`, a free backstop
-//!                  that compiles nothing) plus the `Local CI` commit status
-//!                  the pre-push hook posts (prek.toml -> scripts/
-//!                  ci-local-hook.sh -> scripts/ci-local.sh: the static
-//!                  guards, then the rail-planned tests, `cargo check` and
-//!                  wasm check). Main requires only `PR checks`; `Local
-//!                  CI` is an indicator, not a gate.
+//!   PR into main   NOT this workflow: pr.yml (`PR checks`, the gates that
+//!                  compile nothing, and `Affected crates`, the crates the
+//!                  change reaches checked and tested, `cargo rail plan`)
+//!                  plus the `Local CI` commit status the pre-push hook
+//!                  posts (prek.toml -> scripts/ci-local-hook.sh ->
+//!                  scripts/ci-local.sh: the same, on the author's warm
+//!                  target dir). `Local CI` is an indicator, not a gate.
 //!   push to main   once per merge, what the merge reaches: `cargo rail
 //!                  plan` from the newest green ancestor with rail evidence
 //!                  (see [`rail_plan`]), the full set when there is none.
@@ -21,7 +21,7 @@
 //!                  a commit whose `CI passed` is green, and the tag's builds
 //!                  never run this again.
 //!   push to        a hotfix line: the FULL set.
-//!   release/v*
+//!   release/**
 //!   PR into        a hotfix onto a release line: the FULL set (nothing left
 //!   release/**     to a hook, on a branch that ships straight out).
 //!   by hand        `gh workflow run checks.yml --ref <branch>` runs
@@ -52,9 +52,9 @@
 //! the check in `Check` (one target dir, 4-6 minutes on every run's critical
 //! path); in its own `Lint` job it holds up nothing.
 //!
-//! No tailwind step: every sheet a crate `include_str!`s is committed. No
-//! Boundaries step: `just ci-boundaries` is a
-//! manual check.
+//! No tailwind step: every sheet a crate `include_str!`s is committed. The
+//! layout rules (boundaries.toml, scripts/boundaries.py: the group rules,
+//! the promise, the deny rows) are a step of `Gates`: they compile nothing.
 //!
 //! The jobs run WITHOUT nix (see [`crate::steps`]): the pinned rustc from
 //! dtolnay/rust-toolchain, the native headers from apt (cached), the pinned
@@ -76,8 +76,8 @@ pull_request:
   # skipped, see NOT_DRAFT); marking it ready starts the run.
   types: [opened, synchronize, reopened, ready_for_review]
 push:
-  # release/v*: the hotfix lines, released from their own green commits.
-  branches: [main, "release/v*"]
+  # release/**: the hotfix lines, released from their own green commits.
+  branches: [main, "release/**"]
 workflow_dispatch:
 "#,
         )?,
@@ -183,6 +183,7 @@ fn rail_plan() -> Result<Job> {
         .output("cargo", "${{ steps.rail.outputs.cargo }}")
         .output("tests", "${{ steps.rail.outputs.tests }}")
         .output("test_filter", "${{ steps.rail.outputs.test_filter }}")
+        .output("test_packages", "${{ steps.rail.outputs.test_packages }}")
         .output("wasm", "${{ steps.rail.outputs.wasm }}")
         .step(
             checkout()
@@ -219,7 +220,7 @@ gates_out() {
 }
 full() {
   echo "plan: $1 -> the full set"
-  gates_out $'full=true\ncargo=true\ncheck=true\ntests=true\ntest_filter=\nwasm=true'
+  gates_out $'full=true\ncargo=true\ncheck=true\ntests=true\ntest_filter=\ntest_packages=\nwasm=true'
   exit 0
 }
 if [ "$EVENT" != push ] || [ "$REF" != refs/heads/main ]; then
@@ -267,7 +268,7 @@ fn deps_cache() -> Job {
 
 /// The env every hosted cargo job sets. Incremental is off: a CI build is
 /// never rebuilt in place, and incremental dirs would only fatten the cache.
-fn hosted_cargo_job(job: Job) -> Job {
+pub fn hosted_cargo_job(job: Job) -> Job {
     job.env("CARGO_INCREMENTAL", "0")
 }
 
@@ -310,6 +311,24 @@ fn gates() -> Job {
             .cond(NOT_CANCELLED),
         )
         .step(Step::run("cargo fmt --check", "cargo fmt --all --check").cond(NOT_CANCELLED))
+        // The group rules, the promise and the deny rows (boundaries.toml):
+        // cargo metadata and a `cargo tree` per core and engine member, no
+        // compile.
+        .step(
+            Step::run(
+                "Boundaries (boundaries.toml)",
+                "python3 scripts/boundaries.py check",
+            )
+            .cond(NOT_CANCELLED),
+        )
+        // Ignition's spec coverage: a tag naming a requirement no spec defines.
+        .step(
+            Step::run(
+                "Spec coverage (Ignition)",
+                "python3 -I scripts/spec-coverage.py --scope lighting",
+            )
+            .cond(NOT_CANCELLED),
+        )
         .steps(workflow_gates())
         .step(change_check())
         .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_CANCELLED))
@@ -349,7 +368,7 @@ fn release_macos() -> Job {
 /// no-/nix/store guard. v26.11.0 and v26.11.1 shipped no .dmg for a
 /// macOS-only compile error no Linux check could see; v26.11.2 shipped none
 /// for a macOS link of nixpkgs' zlib (studio#444). (The iOS build went with
-/// the old rig app; apps/desktop has no iOS target yet.)
+/// the old rig app; apps/studio has no iOS release job yet.)
 fn apple() -> Job {
     Job::new(RunsOn::Labels(&[
         "self-hosted",
@@ -367,7 +386,7 @@ fn apple() -> Job {
     )
     .step(Step::uses("devenv CLI", "./.github/actions/devenv"))
     .step(Step::run(
-        "macOS: cargo build -p studio-desktop -p daw-extension (the .dmg's app and its engine, linked), nothing from /nix/store",
+        "macOS: cargo build -p daw-extension; -p studio-app --features native (the .dmg's engine and app, linked), nothing from /nix/store",
         &in_shell(MACOS),
     ))
 }
@@ -376,8 +395,10 @@ fn apple() -> Job {
 /// macOS SDK: `macos-libs.sh config`), then its guard on a copy: a binary
 /// that links anything from /nix/store fails here, not at the tag (v26.11.2
 /// shipped no .dmg for nixpkgs' libz.dylib; studio#444).
-const MACOS: &str = r#"cargo build -p studio-desktop -p daw-extension --config "$(bash scripts/desktop/macos-libs.sh config)"
-for built in studio daw-extension; do
+const MACOS: &str = r#"libs="$(bash scripts/desktop/macos-libs.sh config)"
+cargo build -p daw-extension --config "$libs"
+cargo build -p studio-app --no-default-features --features native --config "$libs"
+for built in Studio daw-extension; do
   cp "${CARGO_TARGET_DIR:-target}/debug/$built" "$RUNNER_TEMP/$built"
   bash scripts/desktop/macos-libs.sh guard "$RUNNER_TEMP/$built"
 done
@@ -388,25 +409,9 @@ done
 /// serialise differently from one run to the next and `--locked` fails at
 /// random (observed locally: four consecutive `cargo metadata` runs, three
 /// orderings). Instead: resolve, then diff the committed lockfile against
-/// the written one with the trailer compared as a sorted set.
-pub const LOCKFILE: &str = r#"set -euo pipefail
-committed="$RUNNER_TEMP/Cargo.lock.committed"
-cp Cargo.lock "$committed"
-cargo metadata --format-version 1 > /dev/null
-packages() { sed '/^\[\[patch\.unused\]\]/,$d' "$1"; }
-unused() {
-  awk '/^\[\[patch\.unused\]\]/ { f = 1; next }
-       f && /^name = /    { n = $3 }
-       f && /^version = / { print n "@" $3 }' "$1" | sort
-}
-ok=1
-diff -u <(packages "$committed") <(packages Cargo.lock) || ok=0
-diff -u <(unused "$committed") <(unused Cargo.lock) || ok=0
-if [ "$ok" = 0 ]; then
-  echo "::error::Cargo.lock is out of date — run cargo metadata and commit the result"
-  exit 1
-fi
-"#;
+/// the written one with the trailer compared as a sorted set. One copy, in
+/// scripts/check-lockfile.sh, which `just ci` runs too.
+pub const LOCKFILE: &str = "bash scripts/check-lockfile.sh\n";
 
 /// The workflows are generated (this crate): regenerating must change
 /// nothing, so a hand edit to .github/workflows or a source change without
@@ -433,7 +438,7 @@ fn workflow_gates() -> [Step; 2] {
 /// PR never reaches this job. `--since <the PR's base
 /// commit>` rather than `--merge-base`: the checkout is shallow (no
 /// default-branch ref to find a merge-base with), and for a PR into a
-/// release/v* line the merge-base with main would count the line's
+/// release/* line the merge-base with main would count the line's
 /// earlier, already-consumed hotfixes.
 fn change_check() -> Step {
     Step::run(
@@ -451,7 +456,7 @@ cargo rail change check --since \"${BASE_SHA}\"
 /// Release artifacts use the reserved `thebattleship-release` label.
 /// Main PRs retain their hosted fast checks, and fork hotfixes are refused
 /// by the existing plan gate before a build reaches the shared pool.
-const POOL: RunsOn = RunsOn::Label(
+pub const POOL: RunsOn = RunsOn::Label(
     "${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('[\"self-hosted\",\"thebattleship\"]') }}",
 );
 
@@ -502,7 +507,7 @@ mod runner_tests {
 /// Each slot owns its Studio targets, separated by build kind. Kache
 /// restores reusable artifacts across slots and repositories without
 /// sharing mutable Cargo target directories. The cap applies to this slot.
-fn target_dir(kind: &str) -> Step {
+pub fn target_dir(kind: &str) -> Step {
     Step::run(
         &format!("Target dir ({kind}, pool capped at 200 GB)"),
         &format!(
@@ -556,7 +561,7 @@ fn pool_job(name: &str, kind: &str, timeout: u32) -> Job {
 /// bound to different Cargo configuration"). One path for every instance,
 /// and the registry downloads are shared too. The config is replaced with
 /// a rename, so a job on another instance never reads half of it.
-fn ci_cargo_config() -> Step {
+pub fn ci_cargo_config() -> Step {
     Step::run(
         "CI cargo config (the pool's cargo home)",
         r#"# Public hotfix PRs run on hosted VMs; the protected-ref jobs use the gate's cache.
@@ -594,7 +599,7 @@ const MAIN_PUSH: &str =
 
 /// `script`, run in the devenv shell (devenv.nix, the same shell a developer
 /// gets from `devenv shell`).
-fn in_shell(script: &str) -> String {
+pub fn in_shell(script: &str) -> String {
     format!("devenv shell -- bash -euo pipefail -s <<'EOF'\n{script}EOF\n")
 }
 
@@ -652,22 +657,24 @@ fi
 "#;
 
 /// REQUIRED on full runs: the browser build, which the workspace check
-/// (native) never compiles — studio-web (apps/web) for wasm32 (STA-366: a
+/// (native) never compiles: the web app (apps/studio --features web) and
+/// Keyflow's chart editor for wasm32, `just check-web` (STA-366: a
 /// native-only dep leaking into a browser graph stayed hidden until a
 /// deploy failed).
 fn wasm() -> Job {
     pool_job("Wasm", "wasm", 75)
         .cond("${{ needs.rail.outputs.wasm == 'true' }}")
         .step(Step::run(
-            "wasm check (studio-web)",
-            &in_shell("just web-wasm-check\n"),
+            "wasm check (just check-web)",
+            &in_shell("just check-web\n"),
         ))
         .step(mark_green("wasm"))
 }
 
-/// REQUIRED on full runs: the core test set (`just test_packages`, the one
-/// list `just test` and local CI use; ~650 tests since the cut of
-/// 2026-10-24), warm on the pool.
+/// REQUIRED on full runs: the tests of what the merge reaches, warm on the
+/// pool. The tested set is every group's members minus boundaries.toml's
+/// `[test] skip` (`scripts/boundaries.py packages all --tested`, what `just
+/// test all` and local CI run); rail's plan narrows it to its selection.
 fn tests() -> Job {
     pool_job("Tests", "tests", 120)
         .cond("${{ needs.rail.outputs.tests == 'true' }}")
@@ -677,7 +684,8 @@ fn tests() -> Job {
             Step::run("cargo nextest", &in_shell(NEXTEST))
                 .id("nextest")
                 .env("TEST_LOG", "${{ runner.temp }}/nextest-ci.log")
-                .env("TEST_FILTER", "${{ needs.rail.outputs.test_filter }}"),
+                .env("TEST_FILTER", "${{ needs.rail.outputs.test_filter }}")
+                .env("TEST_PACKAGES", "${{ needs.rail.outputs.test_packages }}"),
         )
         .step(test_log("nextest-ci"))
         .step(mark_green("tests"))
@@ -717,7 +725,7 @@ fn test_log(artifact: &str) -> Step {
 /// actions/checkout's clean wipes the ignored .assets/ every run, so
 /// .assets is a symlink into the runner instance's cache dir: the clean
 /// removes the link, not the clones.
-fn assets() -> Step {
+pub fn assets() -> Step {
     Step::run(
         "Assets (studio-assets, rig-models, mic-models)",
         &format!(
@@ -769,7 +777,12 @@ fn assets_token() -> Step {
 /// runner's stdout pipe failed. A regular file cannot do that. The full log
 /// is the job's test-log artifact.
 const NEXTEST: &str = r####"pkgs=()
-for p in $(just --evaluate test_packages); do pkgs+=(-p "$p"); done
+# The tested set, narrowed to rail's selection when it made one.
+sel=" ${TEST_PACKAGES:-} "
+while read -r p; do
+  if [ "$sel" = "  " ] || [[ "$sel" == *" $p "* ]]; then pkgs+=(-p "$p"); fi
+done < <(python3 scripts/boundaries.py packages all --tested)
+if [ "${#pkgs[@]}" = 0 ]; then echo "no tested package in the plan"; exit 0; fi
 echo "packages: ${pkgs[*]}"
 t0=$(date +%s)
 cargo nextest run "${pkgs[@]}" --no-run >"${TEST_LOG}" 2>&1

@@ -1,7 +1,7 @@
 //! `release-dry-run` — the release MECHANICS against a throwaway draft
 //! (scripts/release-dry-run.sh): draft, uploads, scripts/release-sums.sh,
 //! signing with an ephemeral key, publishing, on a release named
-//! `dry-run-<run id>` that is never a `v*` tag, never Latest, and is deleted
+//! `dry-run-<run id>` that is never a release tag, never Latest, and is deleted
 //! with its tag at the end. The cases: an injected asset never signed, a
 //! replaced asset refused, a second workflow building on the first one's
 //! verified sums, publishing only the draft, a re-run leaving it alone.

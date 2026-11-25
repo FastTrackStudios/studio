@@ -5,14 +5,14 @@ name: release
 on:
   push:
     tags:
-    - v*
+    - studio-v*
   workflow_dispatch: null
 permissions:
   contents: read
 jobs:
   publish:
     name: GitHub Release
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ startsWith(github.ref, 'refs/tags/studio-v') }}
     runs-on:
     - self-hosted
     - thebattleship-release
@@ -40,7 +40,7 @@ jobs:
         else
           echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
         fi
-    - name: The tag is a green commit on main or release/v*
+    - name: The tag is a green commit on main or release/*
       env:
         GH_TOKEN: ${{ github.token }}
       run: bash scripts/release.sh tag-guard

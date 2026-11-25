@@ -1,12 +1,12 @@
 //! `desktop` — the Studio desktop installers on the release tag: a signed,
 //! notarized macOS `.dmg` and a Linux AppImage, attached to the ONE GitHub
-//! Release of `vX.Y.Z`. scripts/install.sh installs them (README, "Install").
+//! Release of `studio-vX.Y.Z`. scripts/install.sh installs them (README, "Install").
 //!
 //! ```text
-//!   `just release` pushes vX.Y.Z --> this, `studio` (the node and web
-//!   tarballs) and the release publish all start on the tag, in parallel --> resolve (hosted:
+//!   `just release` pushes studio-vX.Y.Z --> this and the release publish
+//!   start on the tag, in parallel --> resolve (hosted:
 //!   the tag's version stamped in, tag shape, the stamped version == the
-//!   tag's, commit on main or release/v*, `CI passed` green, Release exists) --> macos (airlock) and linux
+//!   tag's, commit on main or release/*, `CI passed` green, Release exists) --> macos (airlock) and linux
 //!   (THEBATTLESHIP, `thebattleship-release`) build in parallel and upload
 //!   workflow artifacts --> publish (hosted) checks them and attaches them
 //!   to the Release.
@@ -44,11 +44,11 @@ pub fn workflow() -> Result<Workflow> {
         yaml(
             r#"
 push:
-  tags: ["v*"]
+  tags: ["studio-v*"]
 workflow_dispatch:
   inputs:
     tag:
-      description: "Release tag (e.g. v26.10.1) for publish/validate; any branch or sha for build-only"
+      description: "Release tag (e.g. studio-v26.12.0) for publish/validate; any branch or sha for build-only"
       required: true
       type: string
     mode:
@@ -89,8 +89,8 @@ pub const STAMPED: &str = "${{ env.MODE != 'build-only' }}";
 
 /// The release checks (release.sh ios-resolve, named for the TestFlight
 /// build it first served): the tag is
-/// vX.Y.Z, the stamped release version is the tag's, the commit is
-/// on main or release/v*, `CI passed` is green. A
+/// studio-vX.Y.Z, the stamped release version is the tag's, the commit is
+/// on main or release/*, `CI passed` is green. A
 /// build-only run checks none of that and builds the ref as it is.
 pub fn resolve() -> Result<Job> {
     Ok(Job::new(UBUNTU)
@@ -104,9 +104,9 @@ pub fn resolve() -> Result<Job> {
         .output("sha", "${{ steps.resolve.outputs.sha || steps.ref.outputs.sha }}")
         .step(
             Step::run(
-                "The tag is vX.Y.Z",
-                r#"if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "::error::'$TAG' is not a release tag (^v[0-9]+\.[0-9]+\.[0-9]+$): installers are attached only to the studio release tag"
+                "The tag is studio-vX.Y.Z",
+                r#"if [[ ! "$TAG" =~ ^studio-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "::error::'$TAG' is not a release tag (^studio-v[0-9]+\.[0-9]+\.[0-9]+$): installers are attached only to the studio release tag"
   exit 1
 fi
 "#,
@@ -124,7 +124,7 @@ fi
         .step(stamp("${{ env.TAG }}").cond(STAMPED))
         .step(
             Step::run(
-                "Version = tag version, on main or release/v*, CI passed",
+                "Version = tag version, on main or release/*, CI passed",
                 "bash scripts/release.sh ios-resolve studio \"$TAG\"\n",
             )
             .id("resolve")
@@ -132,16 +132,16 @@ fi
             .env("GH_TOKEN", "${{ github.token }}"),
         )
         // A build-only run builds on the self-hosted release runners: only a
-        // commit already on main or a release/v* line may get there (the
+        // commit already on main or a release/* line may get there (the
         // self-hosted runner gate), never any SHA a dispatcher names.
         .step(
             Step::run(
                 "Build-only ref",
                 r#"set -euo pipefail
 sha="$(git rev-parse HEAD)"
-git fetch -q origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/release/v*:refs/remotes/origin/release/v*'
-if [ -z "$(git branch -r --contains "$sha" --format='%(refname:short)' | grep -E '^origin/(main|release/v.*)$' || true)" ]; then
-  echo "::error::build-only: $sha is on neither main nor a release/v* line: refused (the release runners build only reviewed commits)"
+git fetch -q origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/release/*:refs/remotes/origin/release/*'
+if [ -z "$(git branch -r --contains "$sha" --format='%(refname:short)' | grep -E '^origin/(main|release/.*)$' || true)" ]; then
+  echo "::error::build-only: $sha is on neither main nor a release/* line: refused (the release runners build only reviewed commits)"
   exit 1
 fi
 echo "version=$(bash scripts/release.sh version)" >> "$GITHUB_OUTPUT"
@@ -205,7 +205,7 @@ fi
         )
         .step(stamp("${{ env.TAG }}").cond(STAMPED))
         // The guitar rig's release build refuses to compile without its
-        // captures (signal:features/rigs/guitar/build.rs): airlock's rig-models
+        // captures (crates/studio-engine/signal/rigs/guitar/build.rs): airlock's rig-models
         // clone, fast-forwarded first.
         .step(Step::run(
             "Rig captures (rig-models) linked into the tree",

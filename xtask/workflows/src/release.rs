@@ -4,7 +4,7 @@
 //!
 //! ```text
 //!   push tag v*            "GitHub Release": stamp the tag's version, the
-//!                          tag guard (vX.Y.Z on a commit of main or
+//!                          tag guard (studio-vX.Y.Z on a commit of main or
 //!                          release/v*, `CI passed` already green: the suite
 //!                          is not run again), then the ONE GitHub Release
 //!                          with the notes from the change files added since
@@ -28,7 +28,7 @@ pub fn workflow() -> Result<Workflow> {
         yaml(
             r#"
 push:
-  tags: ["v*"]
+  tags: ["studio-v*"]
 workflow_dispatch:
 "#,
         )?,
@@ -41,7 +41,7 @@ fn publish() -> Result<Job> {
     Ok(
         Job::new(RunsOn::Labels(&["self-hosted", "thebattleship-release"]))
             .name("GitHub Release")
-            .cond("${{ startsWith(github.ref, 'refs/tags/v') }}")
+            .cond("${{ startsWith(github.ref, 'refs/tags/studio-v') }}")
             .timeout(5)
             .permissions(yaml("contents: write\nchecks: read\n")?)
             .concurrency("release-publish", false)
@@ -53,7 +53,7 @@ fn publish() -> Result<Job> {
             .step(stamp("${{ github.ref_name }}"))
             .step(
                 Step::run(
-                    "The tag is a green commit on main or release/v*",
+                    "The tag is a green commit on main or release/*",
                     "bash scripts/release.sh tag-guard",
                 )
                 .env("GH_TOKEN", "${{ github.token }}"),

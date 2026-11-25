@@ -21,7 +21,7 @@
 //! migration is never mechanical, so it never carries the trailer.
 //!
 //! Token (scripts/check-token-mints.py): studio only, `contents: write`,
-//! for the one `git push` of the tag (the App is a bypass actor of the `v*`
+//! for the one `git push` of the tag (the App is a bypass actor of the `studio-v*`
 //! tag ruleset; a tag pushed with GITHUB_TOKEN would start no release
 //! workflow). It reaches git through GIT_CONFIG_* in that step's
 //! environment, never a file; every read (CI status, tags) uses the

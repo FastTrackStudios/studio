@@ -23,7 +23,7 @@
 //! other asset is left out of the sums, unsigned. Then the draft is
 //! published.
 //!
-//! - `sums` signs: it runs in the `release-signing` environment (tags `v*`
+//! - `sums` signs: it runs in the `release-signing` environment (tags `studio-v*`
 //!   only: the org key is in no other job), so only on a tag.
 //! - `sums-unsigned` is the same on a run by hand from a branch, which the
 //!   environment refuses: SHA256SUMS alone, a stale `.minisig` deleted, and
@@ -40,7 +40,7 @@ use anyhow::Result;
 /// is signed with any other key.
 pub const ORG_RELEASE_KEY: &str = "RWRh9Gk9qaStQMhku4THMidEYrQsmAEsm2dDprUkZxShEtqfIcroM8Od";
 
-const ON_TAG: &str = "startsWith(github.ref, 'refs/tags/v')";
+const ON_TAG: &str = "startsWith(github.ref, 'refs/tags/studio-v')";
 
 /// minisign 0.12, the upstream Linux binary, by sha256: onto PATH.
 pub const INSTALL_MINISIGN: &str = r#"set -euo pipefail
@@ -64,7 +64,7 @@ assets() { gh api "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --
 assets > "$dir/assets.json"
 # Never over a signed release from a branch run: it would replace the signed
 # sums with this workflow's alone and drop the signature. Re-run a tag with
-# `gh workflow run <workflow> --ref vX.Y.Z` (a tag ref: the signed path).
+# `gh workflow run <workflow> --ref studio-vX.Y.Z` (a tag ref: the signed path).
 if [ "$SIGNED" != true ] && jq -e 'map(.name) | index("SHA256SUMS.minisig")' "$dir/assets.json" >/dev/null; then
   echo "::error::$TAG already has a signed SHA256SUMS: an unsigned (branch) run must not touch it; dispatch with --ref $TAG"
   exit 1
@@ -117,7 +117,7 @@ assets > "$dir/assets.json"
 bash scripts/release-sums.sh plan "$dir/own" "$dir/assets.json" "$prev" > /dev/null
 if [ "$SIGNED" = true ] && [ "${#upload[@]}" = 2 ]; then
   draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/$id" --jq .draft)"
-  highest="$(git tag --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+  highest="$(git tag --list 'studio-v[0-9]*' | grep -E '^studio-v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
   case "$(bash scripts/release-publish.sh decide "$draft" "$TAG" "$highest")" in
     publish-latest) gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest ;;
     publish) gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false ;;

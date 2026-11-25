@@ -56,26 +56,16 @@ jobs:
     - name: Manifests + lockfile
       if: ${{ !cancelled() }}
       run: |
-        set -euo pipefail
-        committed="$RUNNER_TEMP/Cargo.lock.committed"
-        cp Cargo.lock "$committed"
-        cargo metadata --format-version 1 > /dev/null
-        packages() { sed '/^\[\[patch\.unused\]\]/,$d' "$1"; }
-        unused() {
-          awk '/^\[\[patch\.unused\]\]/ { f = 1; next }
-               f && /^name = /    { n = $3 }
-               f && /^version = / { print n "@" $3 }' "$1" | sort
-        }
-        ok=1
-        diff -u <(packages "$committed") <(packages Cargo.lock) || ok=0
-        diff -u <(unused "$committed") <(unused Cargo.lock) || ok=0
-        if [ "$ok" = 0 ]; then
-          echo "::error::Cargo.lock is out of date — run cargo metadata and commit the result"
-          exit 1
-        fi
+        bash scripts/check-lockfile.sh
     - name: rail config
       if: ${{ !cancelled() }}
       run: cargo rail config validate --strict
+    - name: Group rules (boundaries.toml)
+      if: ${{ !cancelled() }}
+      run: python3 scripts/boundaries.py check --edges
+    - name: Spec coverage (Ignition)
+      if: ${{ !cancelled() }}
+      run: python3 -I scripts/spec-coverage.py --scope lighting
     - name: 'Release bots: token mints, sums, facts, queue, bump dependents, www patch'
       if: ${{ !cancelled() }}
       run: |
@@ -89,6 +79,116 @@ jobs:
         python3 scripts/check-www-patch.py --self-test
         python3 scripts/check-www-patch.py
         bash scripts/lock-sources-test.sh
+  affected:
+    name: Affected crates
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        fetch-depth: 2
+        persist-credentials: false
+    - name: Hosted setup
+      if: ${{ runner.environment == 'github-hosted' }}
+      uses: ./.github/actions/hosted-nix
+    - name: Shared runner tools
+      if: ${{ runner.environment == 'self-hosted' }}
+      uses: ./.github/actions/shared-tools
+    - name: CI cargo config (the pool's cargo home)
+      run: |
+        # Public hotfix PRs run on hosted VMs; the protected-ref jobs use the gate's cache.
+        if [ -z "${CI_CACHE_DIR:-}" ]; then
+          export CI_CACHE_DIR="$RUNNER_TEMP/studio-ci"
+          echo "CI_CACHE_DIR=$CI_CACHE_DIR" >> "$GITHUB_ENV"
+        fi
+        home="$CI_CACHE_DIR/cargo-home"
+        mkdir -p "$home"
+        echo "CARGO_HOME=$home" >> "$GITHUB_ENV"
+        # The old per-checkout copy, which cargo would still find from the checkout.
+        rm -f ../.cargo/config.toml
+        tmp="$(mktemp "$home/config.toml.XXXXXX")"
+        cp .cargo/ci-config.toml "$tmp"
+        mv -f "$tmp" "$home/config.toml"
+    - name: Target dir (affected, pool capped at 200 GB)
+      run: |
+        pool="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}"
+        dir="$pool/affected/$RUNNER_NAME/target"
+        mkdir -p "$dir"
+        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+        used="$(du -s --block-size=1G "$pool" | cut -f1)"
+        if [ "$used" -gt 200 ]; then
+          echo "::warning::the pool cache is ${used} GB, over 200 GB: emptying $dir (a cold affected build)"
+          rm -rf "$dir" && mkdir -p "$dir"
+        fi
+        echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$pool" | awk 'NR==2 {print $4}') free on the disk"
+    - name: cargo rail plan (against the PR's base)
+      id: plan
+      run: |
+        devenv shell -- bash -euo pipefail -s <<'EOF'
+        base="$(git rev-parse HEAD^1)"
+        plan="$RUNNER_TEMP/rail-plan.json"
+        gates=""
+        if cargo rail plan --from "$base" --to HEAD --json > "$plan"; then
+          gates="$(python3 scripts/ci-rail-plan.py "$plan")" || gates=""
+        fi
+        [ -n "$gates" ] || { echo "plan: no plan; the full set"; gates=$'full=true\ncargo=true\ncheck=true\ncheck_packages=\ntests=true\ntest_filter=\ntest_packages=\nwasm=true'; }
+        cargo rail plan --from "$base" --to HEAD --explain 2>&1 | head -n 40 || true
+        printf '%s\n' "$gates" | tee -a "$GITHUB_OUTPUT"
+        EOF
+    - name: cargo check (the affected crates)
+      if: ${{ !cancelled() && steps.plan.outcome == 'success' && (steps.plan.outputs.check == 'true' || steps.plan.outputs.cargo == 'true') }}
+      env:
+        CHECK_PACKAGES: ${{ steps.plan.outputs.check_packages }}
+      run: |
+        devenv shell -- bash -euo pipefail -s <<'EOF'
+        pkgs=()
+        for p in ${CHECK_PACKAGES:-}; do pkgs+=(-p "$p"); done
+        if [ "${#pkgs[@]}" = 0 ]; then cargo check --workspace; else cargo check "${pkgs[@]}"; fi
+        EOF
+    - name: Assets (studio-assets, rig-models, mic-models)
+      if: ${{ !cancelled() && steps.plan.outcome == 'success' && steps.plan.outputs.tests == 'true' }}
+      env:
+        ASSETS_TOKEN: ''
+      run: |
+        store="${CI_CACHE_DIR:-${CACHE_DIRECTORY:-$HOME/.cache}}/assets"
+        mkdir -p "$store"
+        [ -L .assets ] || [ -e .assets ] || ln -s "$store" .assets
+        if [ -n "${ASSETS_TOKEN}" ]; then
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${ASSETS_TOKEN}@github.com/.insteadOf"
+          export GIT_CONFIG_VALUE_0="https://github.com/"
+          devenv shell -- just assets
+        elif [ -d "$store/studio-assets/.git" ] && [ -d "$store/rig-models/.git" ] && [ -d "$store/mic-models/.git" ]; then
+          echo "no asset credential on this run (only main's full runs fetch): linking the clones this runner holds"
+          ASSETS_OFFLINE=1 devenv shell -- just assets
+        else
+          echo "::warning::no asset clones on this runner yet and no credential to fetch them (a main run fetches them): tests that need assets will fail"
+        fi
+    - name: cargo nextest (the affected crates' tests)
+      if: ${{ !cancelled() && steps.plan.outcome == 'success' && steps.plan.outputs.tests == 'true' }}
+      env:
+        TEST_PACKAGES: ${{ steps.plan.outputs.test_packages }}
+      run: |
+        devenv shell -- bash -euo pipefail -s <<'EOF'
+        pkgs=()
+        sel=" ${TEST_PACKAGES:-} "
+        while read -r p; do
+          if [ "$sel" = "  " ] || [[ "$sel" == *" $p "* ]]; then pkgs+=(-p "$p"); fi
+        done < <(python3 scripts/boundaries.py packages all --tested)
+        if [ "${#pkgs[@]}" = 0 ]; then echo "no tested package affected"; exit 0; fi
+        cargo nextest run "${pkgs[@]}" --no-fail-fast --no-tests=pass
+        EOF
+    - name: wasm check (just check-web)
+      if: ${{ !cancelled() && steps.plan.outcome == 'success' && steps.plan.outputs.wasm == 'true' }}
+      run: |
+        devenv shell -- bash -euo pipefail -s <<'EOF'
+        just check-web
+        EOF
   architect-pin:
     name: 'Architect pin: main''s full set'
     if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event.pull_request.head.repo.full_name == github.repository }}

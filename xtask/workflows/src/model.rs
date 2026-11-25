@@ -191,12 +191,20 @@ impl Job {
     }
 
     /// A called workflow's input.
+    #[allow(
+        dead_code,
+        reason = "for a job that calls a reusable workflow; none does since setlists-extension went"
+    )]
     pub fn with(mut self, key: &str, value: impl Into<Value>) -> Self {
         self.with.insert(key.to_owned(), value.into());
         self
     }
 
     /// A called workflow's secret, passed by name.
+    #[allow(
+        dead_code,
+        reason = "for a job that calls a reusable workflow; none does since setlists-extension went"
+    )]
     pub fn secret(mut self, key: &str, value: &str) -> Self {
         self.secrets.insert(key.to_owned(), value.to_owned());
         self
