@@ -1065,6 +1065,97 @@ mod tests {
         );
     }
 
+    /// A chart laid over an empty song: its meters on the tempo map from
+    /// 0 (the opening meter there too, so a song saved and opened again
+    /// starts in it), and a section with a name of its own named so.
+    #[cfg(feature = "native")]
+    fn applied(chart: &str) -> (daw::standalone::Standalone, daw::service::ProjectContext) {
+        let daw = daw::standalone::Standalone::new();
+        let loaded = daw::standalone::project_loader::load_rpp_text(
+            &daw,
+            "Song",
+            "",
+            "<REAPER_PROJECT 0.1 \"7.0/test\" 0\n>\n",
+        )
+        .expect("the project loads");
+        // The insert actions it stamps through spawn: a runtime to spawn on.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        let _in = runtime.enter();
+        super::apply_chart(&daw, &loaded.project_guid, chart, false).expect("applied");
+        let project = daw::service::ProjectContext::Project(loaded.project_guid);
+        (daw, project)
+    }
+
+    #[cfg(feature = "native")]
+    fn meters(
+        daw: &daw::standalone::Standalone,
+        project: &daw::service::ProjectContext,
+    ) -> Vec<(f64, u32, u32)> {
+        use daw::service::TempoMap;
+        TempoMap::get_tempo_points(daw, project.clone())
+            .into_iter()
+            .filter_map(|p| {
+                let ts = p.time_signature?;
+                Some((
+                    (p.position.seconds().unwrap_or(0.0) * 1000.0).round() / 1000.0,
+                    ts.numerator,
+                    ts.denominator,
+                ))
+            })
+            .collect()
+    }
+
+    /// A song in 3/4 throughout is in 3/4 from 0: a point says so.
+    #[cfg(feature = "native")]
+    #[test]
+    fn a_chart_in_three_four_is_three_four_from_the_start() {
+        let (daw, project) =
+            applied("Waltz Song - Test\n#A 90bpm 3/4\n\nCount 2\n\nVS 4\nA\nD\nE\nA\n");
+        assert_eq!(meters(&daw, &project), [(0.0, 3, 4)]);
+    }
+
+    /// Bars of 3/4 in a song of 4/4: the song opens in 4/4 at 0, and each
+    /// change lands at its own bar.
+    #[cfg(feature = "native")]
+    #[test]
+    fn a_meter_change_lands_on_its_bar_after_the_opening_meter() {
+        // 60 BPM: a 4/4 bar is 4 s, a 3/4 bar 3 s. Count 1 (4 s), then IN:
+        // a bar of 4/4, a bar of 3/4, a bar of 4/4.
+        const TURN: &str =
+            "Meter Song - Test\n#C 60bpm 4/4\n\nCount 1\n\nIN 3\nC\n!T3/4 F\n!T4/4 G\n";
+        let layout = session::setlist::chart_import::chart_to_layout(TURN).expect("laid out");
+        assert_eq!(
+            layout.meter_changes,
+            [(8.0, 3, 4), (11.0, 4, 4)],
+            "the layout"
+        );
+        let (daw, project) = applied(TURN);
+        assert_eq!(
+            meters(&daw, &project),
+            [(0.0, 4, 4), (8.0, 3, 4), (11.0, 4, 4)]
+        );
+    }
+
+    /// A section with a name of its own (`[End]`) is a region of that
+    /// name, not a generic instrumental one.
+    #[cfg(feature = "native")]
+    #[test]
+    fn a_section_with_a_name_of_its_own_keeps_it() {
+        use daw::service::Regions;
+        use session::proto::ruler_lanes::CoreLane;
+        let (daw, project) =
+            applied("Named Song - Test\n#C 120bpm 4/4\n\nVS 2\nC\nG\n\n[End] 1\nC\n");
+        let names: Vec<String> = Regions::all(&daw, project)
+            .into_iter()
+            .filter(|r| r.lane == Some(CoreLane::Sections.lane_index()))
+            .map(|r| r.name)
+            .collect();
+        assert!(names.iter().any(|n| n == "End"), "{names:?}");
+    }
+
     #[test]
     fn filing_folders_do_not_name_an_artist() {
         assert!(names_an_artist("crescendum-2026-10-08"));

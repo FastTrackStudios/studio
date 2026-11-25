@@ -38,6 +38,9 @@ pub struct LaidSection {
     pub kind: SectionKind,
     /// Custom label from a quoted chart comment (`Interlude "Breakdown"`).
     pub label: Option<String>,
+    /// A section's own name when it is not one of the kinds (`[End]`,
+    /// `[Hook]`): its region is named so, not by its kind.
+    pub name: Option<String>,
     /// Auto-assigned occurrence number ("Verse 1"), if any.
     pub number: Option<u32>,
     /// Start position in seconds (from region start; count-in is at 0).
@@ -115,8 +118,11 @@ pub fn chart_to_layout(chart_text: &str) -> Result<ChartLayout, ChartImportError
         .map(|t| t.bpm)
         .filter(|b| *b > 0.0)
         .unwrap_or(DEFAULT_TEMPO_BPM);
+    // The meter the chart opens in: `time_signature` is the one in force
+    // where parsing ended, after any lasting change.
     let (num, den) = chart
-        .time_signature
+        .initial_time_signature
+        .or(chart.time_signature)
         .map_or((4, 4), |ts| (ts.numerator, ts.denominator));
     // A quarter note is 60/bpm. Each measure lasts its OWN meter — a chart
     // that writes one bar of 2/4 (`!T2/4`) in a song of 4/4 has a bar half
@@ -163,6 +169,12 @@ pub fn chart_to_layout(chart_text: &str) -> Result<ChartLayout, ChartImportError
         sections.push(LaidSection {
             kind,
             label: s.comment.clone(),
+            name: match &s.section_type {
+                keyflow::SectionType::Custom(name) if !name.trim().is_empty() => {
+                    Some(name.trim().to_owned())
+                }
+                _ => None,
+            },
             number: s.number,
             start_seconds,
             end_seconds: at,

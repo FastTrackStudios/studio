@@ -1199,6 +1199,7 @@ fn run_chunk(
             only: Some(c.only.clone()),
             probes: c.probes.to_vec(),
             fed: c.fed.clone(),
+            record: None,
         },
     );
     let primed = web_time::Instant::now();
