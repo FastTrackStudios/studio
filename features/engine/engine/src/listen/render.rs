@@ -439,7 +439,23 @@ struct Warm {
     /// rendered: a value held then and let go since is still set in the
     /// copy, so when they differ the state is loaded into it again.
     held: u64,
+    /// Made afresh and never had a state loaded into it again: reset, it
+    /// renders as a copy made now would, to the sample (measured on
+    /// Unbreakable: a whole song on copies reset after a section that
+    /// ended mid-tail nulls against fresh copies), so a cold render may
+    /// use it.
+    pristine: bool,
     plugin: Box<dyn PluginInstance>,
+}
+
+/// Whether a cold render makes every copy afresh, never resetting a warm
+/// one (`STUDIO_LISTEN_COLD_FRESH=1`: the old way, for a plugin whose
+/// reset leaves something behind).
+fn cold_fresh() -> bool {
+    static FRESH: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FRESH.get_or_init(|| {
+        std::env::var("STUDIO_LISTEN_COLD_FRESH").is_ok_and(|v| !v.is_empty() && v != "0")
+    })
 }
 
 /// Where a copy is kept warm: its FX, and for a copy cut at a block, the
@@ -985,9 +1001,9 @@ fn instances(
 /// What [`ready`] made ready.
 struct Ready {
     plugins: Arc<Plugins>,
-    /// Each copy's guid, where it is kept warm, and the state and held
-    /// values it carries.
-    kept: Vec<(String, String, u64, u64)>,
+    /// Each copy's guid, where it is kept warm, the state and held values
+    /// it carries, and whether it is pristine ([`Warm::pristine`]).
+    kept: Vec<(String, String, u64, u64, bool)>,
     copied: u32,
     reused: u32,
     failures: Vec<String>,
@@ -1023,7 +1039,8 @@ fn copy_of(
 
 /// A copy of each of `wanted` carrying its live instance's state: the warm
 /// one when its state is unchanged (reset, so it starts as from silence;
-/// never with `cold`), else made again — those side by side. A Signal
+/// with `cold` only a pristine one whose held values are unchanged too, and
+/// that took its reset), else made again — those side by side. A Signal
 /// instance in `cuts` is cut at its block (its copies kept apart).
 fn ready(
     daw: &Standalone,
@@ -1046,11 +1063,22 @@ fn ready(
         let at = warm_key(&i.guid, cut.as_ref());
         let print = fingerprint(&i.state);
         let usable = warm.remove(&at).and_then(|mut w| {
-            if cold || w.state != print {
+            let as_fresh = w.pristine && w.held == i.held && !cold_fresh();
+            if (cold && !as_fresh) || w.state != print {
                 drop_later(vec![w.plugin]);
                 return None;
             }
+            if cold {
+                // Reset or made again: a copy that cannot be reset may
+                // carry the last render's tail.
+                if !w.plugin.reset() {
+                    drop_later(vec![w.plugin]);
+                    return None;
+                }
+                return Some(w);
+            }
             if w.held != i.held {
+                w.pristine = false;
                 // Its state loaded again undoes a cut: cut it again.
                 let again = reload(&mut *w.plugin, &i, &restate)
                     && cut
@@ -1065,7 +1093,7 @@ fn ready(
         });
         match usable {
             Some(mut w) => {
-                if !w.plugin.reset() {
+                if !cold && !w.plugin.reset() {
                     w.plugin.deactivate();
                 }
                 out.reused += 1;
@@ -1073,7 +1101,7 @@ fn ready(
                 // (a warm copy's may be an edit step old).
                 crate::clap_host::hand_copy(daw, &i.guid, &*w.plugin);
                 plugins.write().insert(i.guid.clone(), w.plugin);
-                out.kept.push((i.guid, at, print, i.held));
+                out.kept.push((i.guid, at, print, i.held, w.pristine));
             }
             None => to_make.push((i, at, cut)),
         }
@@ -1089,7 +1117,7 @@ fn ready(
                 plugins.write().insert(i.guid.clone(), copy);
                 out.copied += 1;
                 let print = fingerprint(&i.state);
-                out.kept.push((i.guid, at, print, i.held));
+                out.kept.push((i.guid, at, print, i.held, true));
             }
             // A point inside a cut instance cannot be heard without it.
             Err(why) if was_cut => return Err(why),
@@ -1996,24 +2024,17 @@ fn run_chunk(
     } else {
         Vec::new()
     };
-    // A cold render's copies are not kept: no cold render reuses one, and
-    // every Signal instance alive makes the next copies slower to make.
-    if c.cold {
-        drop_later(
-            ready
-                .kept
-                .iter()
-                .filter_map(|(guid, ..)| ready.plugins.write().remove(guid))
-                .collect(),
-        );
-    }
-    for (guid, at, state, held) in ready.kept.into_iter().filter(|_| !c.cold) {
+    // Kept warm, a cold render's copies too: the next cold render resets
+    // them in place of making them again (copying and priming a song's
+    // plugins costs more than its render's blocks on a short span).
+    for (guid, at, state, held, pristine) in ready.kept {
         if let Some(plugin) = ready.plugins.write().remove(&guid) {
             warm.insert(
                 at,
                 Warm {
                     state,
                     held,
+                    pristine,
                     plugin,
                 },
             );
