@@ -501,7 +501,6 @@ dependencies = [
 [[package]]
 name = "app-shell"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=46a0d04a9bde95deac00745fa996313c874e9be8#46a0d04a9bde95deac00745fa996313c874e9be8"
 dependencies = [
  "dioxus",
  "futures-channel",
@@ -518,7 +517,6 @@ name = "app-shell"
 version = "26.10.3"
 dependencies = [
  "architect",
- "architect-telemetry",
  "axum",
  "dioxus",
  "dioxus-native",
@@ -546,7 +544,6 @@ dependencies = [
 [[package]]
 name = "app-shell-extensions"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=46a0d04a9bde95deac00745fa996313c874e9be8#46a0d04a9bde95deac00745fa996313c874e9be8"
 dependencies = [
  "anyrender",
  "app-shell 0.1.0",
@@ -576,7 +573,6 @@ dependencies = [
 [[package]]
 name = "app-shell-native"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=46a0d04a9bde95deac00745fa996313c874e9be8#46a0d04a9bde95deac00745fa996313c874e9be8"
 dependencies = [
  "anyrender",
  "anyrender_vello_cpu",
@@ -875,7 +871,6 @@ checksum = "33ca55ee147b1926dbea904f50fe4902494e97bc742205abbbf10c709e43815f"
 [[package]]
 name = "architect"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-action-derive",
  "architect-derive",
@@ -923,7 +918,6 @@ dependencies = [
 [[package]]
 name = "architect-action-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -933,7 +927,6 @@ dependencies = [
 [[package]]
 name = "architect-commands"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-input",
@@ -953,7 +946,6 @@ dependencies = [
 [[package]]
 name = "architect-control"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "dirs 6.0.0",
@@ -966,7 +958,6 @@ dependencies = [
 [[package]]
 name = "architect-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -977,7 +968,6 @@ dependencies = [
 [[package]]
 name = "architect-devices"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-orgs",
@@ -994,7 +984,6 @@ dependencies = [
 [[package]]
 name = "architect-documents"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "facet",
@@ -1005,7 +994,6 @@ dependencies = [
 [[package]]
 name = "architect-extension-archive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "base64 0.22.1",
  "flate2",
@@ -1022,7 +1010,6 @@ dependencies = [
 [[package]]
 name = "architect-extensions"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "anyrender",
  "architect",
@@ -1069,7 +1056,6 @@ dependencies = [
 [[package]]
 name = "architect-extensions-dioxus"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-extensions",
@@ -1087,7 +1073,6 @@ dependencies = [
 [[package]]
 name = "architect-favourites"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "serde",
 ]
@@ -1095,7 +1080,6 @@ dependencies = [
 [[package]]
 name = "architect-input"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "dioxus",
  "facet",
@@ -1109,7 +1093,6 @@ dependencies = [
 [[package]]
 name = "architect-mcp"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-control",
@@ -1123,7 +1106,6 @@ dependencies = [
 [[package]]
 name = "architect-orgs"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "facet",
  "facet-json",
@@ -1134,7 +1116,6 @@ dependencies = [
 [[package]]
 name = "architect-palette"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "facet",
 ]
@@ -1142,7 +1123,6 @@ dependencies = [
 [[package]]
 name = "architect-permissions"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "serde",
  "serde_json",
@@ -1152,7 +1132,6 @@ dependencies = [
 [[package]]
 name = "architect-process-view"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "anyrender",
  "architect-extensions",
@@ -1179,7 +1158,6 @@ dependencies = [
 [[package]]
 name = "architect-rpc-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1189,7 +1167,6 @@ dependencies = [
 [[package]]
 name = "architect-scene"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "anyrender",
  "architect",
@@ -1213,7 +1190,6 @@ dependencies = [
 [[package]]
 name = "architect-scripting"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-theme",
@@ -1228,7 +1204,6 @@ dependencies = [
 [[package]]
 name = "architect-settings"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-palette",
  "architect-settings-derive",
@@ -1240,7 +1215,6 @@ dependencies = [
 [[package]]
 name = "architect-settings-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1250,7 +1224,6 @@ dependencies = [
 [[package]]
 name = "architect-shell"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-favourites",
  "architect-theme",
@@ -1272,7 +1245,6 @@ dependencies = [
 [[package]]
 name = "architect-story-core"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "linkme",
 ]
@@ -1280,7 +1252,6 @@ dependencies = [
 [[package]]
 name = "architect-story-macros"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -1291,7 +1262,6 @@ dependencies = [
 [[package]]
 name = "architect-story-runtime"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-story-core",
  "architect-story-macros",
@@ -1300,26 +1270,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "architect-telemetry"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-dependencies = [
- "libc",
- "opentelemetry",
- "opentelemetry-appender-tracing",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "sentry",
- "sentry-tracing",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "architect-theme"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "dioxus",
  "facet",
@@ -1332,7 +1284,6 @@ dependencies = [
 [[package]]
 name = "architect-ui"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-story-runtime",
  "architect-theme",
@@ -1352,7 +1303,6 @@ dependencies = [
 [[package]]
 name = "architect-views"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "facet",
  "thiserror 2.0.20",
@@ -1361,7 +1311,6 @@ dependencies = [
 [[package]]
 name = "architect-workspace"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "anyrender",
  "architect",
@@ -1414,6 +1363,50 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "arrangement-view"
+version = "26.10.3"
+dependencies = [
+ "anyrender",
+ "anyrender_vello",
+ "architect-input",
+ "blitz-dom",
+ "blitz-traits",
+ "daw",
+ "daw-control",
+ "daw-proto",
+ "daw-ui",
+ "daw-view-kit",
+ "dioxus",
+ "dioxus-native",
+ "dioxus-native-dom",
+ "dsp",
+ "dynamic-template",
+ "editing",
+ "editor",
+ "eyre",
+ "facet-json",
+ "frame",
+ "keybinds",
+ "keyflow",
+ "num-traits",
+ "patch-list",
+ "rustc-hash 2.1.3",
+ "serde_json",
+ "session 0.1.0",
+ "session-engine",
+ "session-engine-client",
+ "studio",
+ "timeline",
+ "tracing",
+ "tracing-subscriber",
+ "vello",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
+ "winit 0.31.0-beta.4",
 ]
 
 [[package]]
@@ -1813,7 +1806,6 @@ dependencies = [
 [[package]]
 name = "audio"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "anyhow",
  "atomic_float",
@@ -1842,7 +1834,6 @@ dependencies = [
 [[package]]
 name = "auth-client"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "base64 0.22.1",
  "libc",
@@ -3943,7 +3934,6 @@ checksum = "56ed6191a7e78c36abdb16ab65341eefd73d64d303fffccdbb00d51e4205967b"
 [[package]]
 name = "builtin"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "comp-plugin",
  "crossbeam-channel",
@@ -5163,7 +5153,6 @@ dependencies = [
 [[package]]
 name = "crdt"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-devices",
@@ -5189,7 +5178,6 @@ dependencies = [
 [[package]]
 name = "crdt-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5576,7 +5564,6 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 [[package]]
 name = "daw"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "architect",
  "daw-control",
@@ -5619,9 +5606,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "daw-clap-ext"
+version = "0.1.0"
+dependencies = [
+ "clap-sys",
+]
+
+[[package]]
 name = "daw-control"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "architect",
  "daw-proto",
@@ -5638,6 +5631,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "daw-edit"
+version = "0.3.2"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "daw-extension"
 version = "26.10.3"
 dependencies = [
@@ -5650,8 +5650,8 @@ dependencies = [
  "daw-ui",
  "libc",
  "serde_json",
+ "session 0.1.0",
  "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=e8a705ed1c9ae8b16934018e3b4b897769635961)",
- "session-desktop",
  "session-engine",
  "session-format",
  "song-file",
@@ -5684,7 +5684,6 @@ dependencies = [
 [[package]]
 name = "daw-module"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "tokio",
  "tracing",
@@ -5693,7 +5692,6 @@ dependencies = [
 [[package]]
 name = "daw-proto"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "architect",
  "daw-transport-sync",
@@ -5775,7 +5773,6 @@ dependencies = [
 [[package]]
 name = "daw-standalone"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "arc-swap",
  "architect",
@@ -5783,7 +5780,9 @@ dependencies = [
  "base64 0.22.1",
  "clack-extensions",
  "clack-host",
+ "clap-sys",
  "cpal",
+ "daw-clap-ext",
  "daw-control",
  "daw-proto",
  "daw-transport-sync",
@@ -5810,7 +5809,6 @@ dependencies = [
 [[package]]
 name = "daw-sync"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "daw",
  "facet",
@@ -5822,7 +5820,6 @@ dependencies = [
 [[package]]
 name = "daw-test-macro"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5832,7 +5829,6 @@ dependencies = [
 [[package]]
 name = "daw-transport-sync"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "web-time",
 ]
@@ -5870,9 +5866,121 @@ dependencies = [
 ]
 
 [[package]]
+name = "daw-view-kit"
+version = "26.10.3"
+dependencies = [
+ "anyrender",
+ "anyrender_vello",
+ "anyrender_vello_cpu",
+ "anyrender_vello_hybrid",
+ "app-shell 26.10.3",
+ "architect",
+ "architect-input",
+ "blitz-dom",
+ "blitz-paint",
+ "blitz-traits",
+ "builtin",
+ "cursor-icon",
+ "daw",
+ "daw-control",
+ "daw-proto",
+ "daw-ui",
+ "dioxus",
+ "dioxus-native",
+ "dioxus-native-dom",
+ "dirs 6.0.0",
+ "dsp",
+ "dynamic-template",
+ "editing",
+ "editor",
+ "editor-crdt",
+ "editor-keyflow",
+ "editor-state",
+ "editor-view",
+ "eyre",
+ "facet",
+ "facet-json",
+ "frame",
+ "fts-audio-ui",
+ "futures-channel",
+ "futures-timer",
+ "futures-util",
+ "gloo-timers 0.3.0",
+ "image",
+ "js-sys",
+ "keybinds",
+ "keyflow",
+ "lucide-dioxus",
+ "num-traits",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "patch-list",
+ "pollster",
+ "pprof",
+ "rustc-hash 2.1.3",
+ "serde_json",
+ "session 0.1.0",
+ "session-engine",
+ "session-engine-client",
+ "skrifa 0.44.0",
+ "studio",
+ "timeline",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "utils",
+ "vello",
+ "vello_common",
+ "vello_gpu",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
+ "wgpu 30.0.1",
+ "wgpu_context",
+ "winit 0.31.0-beta.4",
+ "zbus",
+]
+
+[[package]]
+name = "daw-view-tools"
+version = "26.10.3"
+dependencies = [
+ "anyrender",
+ "anyrender_vello",
+ "arrangement-view",
+ "blitz-dom",
+ "blitz-paint",
+ "blitz-traits",
+ "daw",
+ "daw-control",
+ "daw-proto",
+ "daw-ui",
+ "daw-view-kit",
+ "dioxus",
+ "dioxus-native",
+ "dioxus-native-dom",
+ "dynamic-template",
+ "editor",
+ "eyre",
+ "frame",
+ "image",
+ "keyflow",
+ "mixer-view",
+ "pprof",
+ "session 0.1.0",
+ "session-engine",
+ "studio",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "vello",
+ "winit 0.31.0-beta.4",
+]
+
+[[package]]
 name = "dawfile-reaper"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "base64 0.22.1",
  "daw-proto",
@@ -5913,7 +6021,6 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
- "serde",
  "uuid",
 ]
 
@@ -7272,6 +7379,7 @@ dependencies = [
 name = "editing"
 version = "26.10.3"
 dependencies = [
+ "daw-edit",
  "dsp",
  "facet",
  "facet-json",
@@ -7357,7 +7465,6 @@ dependencies = [
 [[package]]
 name = "editor-keyflow"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "editor-state",
  "keyflow-lang",
@@ -7498,7 +7605,6 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 [[package]]
 name = "engraver"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "anyrender",
  "bitflags 2.13.2",
@@ -8523,7 +8629,6 @@ dependencies = [
 [[package]]
 name = "fts-sample"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "arc-swap",
  "claxon",
@@ -9776,17 +9881,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hostname"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "617aaa3557aef3810a6369d0a99fac8a080891b68bd9f9812a1eeda0c0730cbd"
-dependencies = [
- "cfg-if",
- "libc",
- "windows-link",
-]
-
-[[package]]
 name = "hound"
 version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9911,6 +10005,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "rustls",
+ "rustls-native-certs",
  "tokio",
  "tokio-rustls",
  "tower-service",
@@ -10336,7 +10431,6 @@ dependencies = [
 [[package]]
 name = "ignition-beams"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "bevy",
 ]
@@ -10344,7 +10438,6 @@ dependencies = [
 [[package]]
 name = "ignition-colour"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "ignition-proto",
  "serde",
@@ -10354,7 +10447,6 @@ dependencies = [
 [[package]]
 name = "ignition-core"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "ignition-colour",
  "ignition-daw-proto",
@@ -10370,7 +10462,6 @@ dependencies = [
 [[package]]
 name = "ignition-daw"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "ableton",
  "anyhow",
@@ -10394,7 +10485,6 @@ dependencies = [
 [[package]]
 name = "ignition-daw-proto"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "serde",
 ]
@@ -10402,7 +10492,6 @@ dependencies = [
 [[package]]
 name = "ignition-dmx"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "serde",
  "serde_json",
@@ -10411,7 +10500,6 @@ dependencies = [
 [[package]]
 name = "ignition-effects"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "ignition-colour",
  "ignition-daw-proto",
@@ -10425,7 +10513,6 @@ dependencies = [
 [[package]]
 name = "ignition-fixture"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "anyhow",
  "ignition-proto",
@@ -10437,7 +10524,6 @@ dependencies = [
 [[package]]
 name = "ignition-pane"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "architect",
  "architect-extensions",
@@ -10464,7 +10550,6 @@ dependencies = [
 [[package]]
 name = "ignition-playback"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "ignition-colour",
  "ignition-daw-proto",
@@ -10479,7 +10564,6 @@ dependencies = [
 [[package]]
 name = "ignition-proto"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "serde",
 ]
@@ -10487,7 +10571,6 @@ dependencies = [
 [[package]]
 name = "ignition-rig"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "ignition-proto",
  "serde",
@@ -10497,7 +10580,6 @@ dependencies = [
 [[package]]
 name = "ignition-session"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "ignition-daw-proto",
  "ignition-show",
@@ -10510,7 +10592,6 @@ dependencies = [
 [[package]]
 name = "ignition-show"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "ignition-colour",
  "ignition-daw-proto",
@@ -10523,7 +10604,6 @@ dependencies = [
 [[package]]
 name = "ignition-viz"
 version = "0.2.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
 dependencies = [
  "anyhow",
  "artnet_protocol",
@@ -11275,7 +11355,6 @@ dependencies = [
 [[package]]
 name = "keyflow"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "color-eyre",
  "colored",
@@ -11299,7 +11378,6 @@ source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.4#22b8df90e99
 [[package]]
 name = "keyflow-daw-analysis"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "architect",
  "daw",
@@ -11313,7 +11391,6 @@ dependencies = [
 [[package]]
 name = "keyflow-extension"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "architect",
  "architect-extensions",
@@ -11335,7 +11412,6 @@ dependencies = [
 [[package]]
 name = "keyflow-lang"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "facet",
  "facet-json",
@@ -11350,7 +11426,6 @@ dependencies = [
 [[package]]
 name = "keyflow-proto"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "architect",
  "color-palette 0.1.0 (git+https://github.com/FastTrackStudios/music-convention?tag=v0.1.0)",
@@ -11366,7 +11441,6 @@ dependencies = [
 [[package]]
 name = "keyflow-session"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "crdt",
  "facet-json",
@@ -11378,7 +11452,6 @@ dependencies = [
 [[package]]
 name = "keyflow-ui"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "anyrender",
  "architect-ui",
@@ -12452,7 +12525,6 @@ dependencies = [
 [[package]]
 name = "midi"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "architect",
  "core-foundation 0.10.1",
@@ -12589,6 +12661,44 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "mixer-view"
+version = "26.10.3"
+dependencies = [
+ "anyrender",
+ "architect",
+ "blitz-dom",
+ "blitz-traits",
+ "builtin",
+ "daw-proto",
+ "daw-ui",
+ "daw-view-kit",
+ "dioxus",
+ "dioxus-native",
+ "dioxus-native-dom",
+ "dsp",
+ "dynamic-template",
+ "facet",
+ "facet-json",
+ "frame",
+ "fts-audio-ui",
+ "lucide-dioxus",
+ "num-traits",
+ "serde_json",
+ "session 0.1.0",
+ "session-engine",
+ "session-engine-client",
+ "studio",
+ "tokio",
+ "tracing",
+ "utils",
+ "vello",
+ "web-sys",
+ "web-time",
+ "wgpu_context",
+ "winit 0.31.0-beta.4",
 ]
 
 [[package]]
@@ -14309,19 +14419,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "opentelemetry-appender-tracing"
-version = "0.30.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e68f63eca5fad47e570e00e893094fc17be959c80c79a7d6ec1abdd5ae6ffc16"
-dependencies = [
- "opentelemetry",
- "tracing",
- "tracing-core",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "opentelemetry-http"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14480,22 +14577,6 @@ dependencies = [
  "sha2 0.10.9",
  "tar",
  "ureq 3.4.0",
-]
-
-[[package]]
-name = "os_info"
-version = "3.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf20a545b305cf1da722b236b5155c9bb35f1d5ceb28c048bd96ca842f41b5b"
-dependencies = [
- "android_system_properties",
- "log",
- "nix 0.31.3",
- "objc2 0.6.5",
- "objc2-foundation 0.3.2",
- "objc2-ui-kit 0.3.2",
- "serde",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -14759,7 +14840,6 @@ checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 name = "patch-list"
 version = "26.10.3"
 dependencies = [
- "architect-telemetry",
  "chrono",
  "daw-proto",
  "daw-standalone",
@@ -16303,6 +16383,7 @@ dependencies = [
  "pin-project-lite",
  "quinn",
  "rustls",
+ "rustls-native-certs",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -17019,102 +17100,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sentry"
-version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20ea0b15e48c3959c2f86f626cacd86d1fe2bd037e7ee98c756bdd8eb0afa0dc"
-dependencies = [
- "httpdate",
- "reqwest 0.12.28",
- "rustls",
- "sentry-backtrace",
- "sentry-contexts",
- "sentry-core",
- "sentry-panic",
- "sentry-tracing",
- "tokio",
- "ureq 3.4.0",
-]
-
-[[package]]
-name = "sentry-backtrace"
-version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34342a99429c6c95c923bc0ba8e41f28dd65e616c3babc1455609714b7a1f03f"
-dependencies = [
- "backtrace",
- "regex",
- "sentry-core",
-]
-
-[[package]]
-name = "sentry-contexts"
-version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4655094e6bf8c9c0ffd421fa315dccddf4e7e5731721e510003f27e9f5d496e7"
-dependencies = [
- "hostname",
- "libc",
- "os_info",
- "rustc_version",
- "sentry-core",
- "uname",
-]
-
-[[package]]
-name = "sentry-core"
-version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28e2d5d2249386660cbe86945b9d18677a6b4aa45adedced871d39734746eaaa"
-dependencies = [
- "rand 0.9.5",
- "sentry-types",
- "serde",
- "serde_json",
- "url",
-]
-
-[[package]]
-name = "sentry-panic"
-version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e68514b697f38ba2050e142b695ae0ec146cd263dada12ac2827bca8f0269ef9"
-dependencies = [
- "sentry-backtrace",
- "sentry-core",
-]
-
-[[package]]
-name = "sentry-tracing"
-version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f8a714ea29806d180b58e8c30fbde43a4c77f72a5c938b03f939237354d5e63"
-dependencies = [
- "bitflags 2.13.2",
- "sentry-backtrace",
- "sentry-core",
- "tracing-core",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "sentry-types"
-version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2f1b8fcfc8f35b8791a0998a42d95d5c6cfe02186e4709fd2adb3b0c261990d"
-dependencies = [
- "debugid",
- "hex",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "time",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "seq-macro"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17432,7 +17417,7 @@ version = "26.10.3"
 dependencies = [
  "app-shell 26.10.3",
  "architect",
- "architect-telemetry",
+ "arrangement-view",
  "axum",
  "base64 0.22.1",
  "block2 0.6.2",
@@ -17444,6 +17429,7 @@ dependencies = [
  "daw-proto",
  "daw-standalone",
  "daw-ui",
+ "daw-view-kit",
  "dawfile-reaper",
  "dioxus",
  "dioxus-native",
@@ -17460,6 +17446,7 @@ dependencies = [
  "keyflow-lang",
  "libc",
  "lucide-dioxus",
+ "mixer-view",
  "objc2 0.6.5",
  "objc2-avf-audio",
  "objc2-foundation 0.3.2",
@@ -17470,7 +17457,6 @@ dependencies = [
  "serde_json",
  "session 0.1.0",
  "session-engine",
- "session-ui",
  "studio",
  "thiserror 2.0.20",
  "tokio",
@@ -17496,15 +17482,19 @@ dependencies = [
  "ableton",
  "app-shell 26.10.3",
  "architect",
+ "architect-extensions",
  "architect-mcp",
- "architect-telemetry",
+ "architect-settings",
  "auth-client",
+ "base64 0.22.1",
  "blake3",
  "builtin",
  "chrono",
+ "clap-sys",
  "crdt",
  "daw",
  "daw-control",
+ "daw-edit",
  "daw-proto",
  "daw-standalone",
  "daw-transport-sync",
@@ -17530,13 +17520,16 @@ dependencies = [
  "live-proto",
  "num-traits",
  "opentelemetry",
+ "opentelemetry-otlp",
  "opentelemetry_sdk",
  "rayon",
  "realfft",
  "reqwest 0.12.28",
+ "semver",
  "serde",
  "serde_json",
  "session 0.1.0",
+ "session-engine-client",
  "session-format",
  "session-runtime",
  "signal-fx",
@@ -17546,13 +17539,58 @@ dependencies = [
  "timeline",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "utils",
  "uuid",
  "vello",
  "vox",
  "vox-core",
+ "vox-stream",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
+]
+
+[[package]]
+name = "session-engine-client"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "builtin",
+ "daw",
+ "daw-control",
+ "daw-proto",
+ "daw-standalone",
+ "daw-ui",
+ "dioxus",
+ "dirs 6.0.0",
+ "dock",
+ "dsp",
+ "dsp-core",
+ "dynamic-template",
+ "editing",
+ "editor",
+ "eyre",
+ "facet",
+ "facet-json",
+ "futures-util",
+ "gloo-timers 0.3.0",
+ "keyflow",
+ "num-traits",
+ "rayon",
+ "serde",
+ "serde_json",
+ "session 0.1.0",
+ "session-runtime",
+ "studio",
+ "timeline",
+ "tokio",
+ "tracing",
+ "utils",
+ "vello",
+ "vox",
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
@@ -17590,7 +17628,6 @@ dependencies = [
 [[package]]
 name = "session-format"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "async-trait",
  "crdt",
@@ -17652,82 +17689,6 @@ dependencies = [
  "num-traits",
  "tracing",
  "web-time",
-]
-
-[[package]]
-name = "session-ui"
-version = "26.10.3"
-dependencies = [
- "anyrender",
- "anyrender_vello",
- "anyrender_vello_cpu",
- "anyrender_vello_hybrid",
- "app-shell 26.10.3",
- "architect",
- "architect-input",
- "blitz-dom",
- "blitz-paint",
- "blitz-traits",
- "builtin",
- "cursor-icon",
- "daw",
- "daw-control",
- "daw-proto",
- "daw-ui",
- "dioxus",
- "dioxus-native",
- "dioxus-native-dom",
- "dirs 6.0.0",
- "dsp",
- "dynamic-template",
- "editing",
- "editor",
- "editor-crdt",
- "editor-keyflow",
- "editor-state",
- "editor-view",
- "eyre",
- "facet",
- "facet-json",
- "frame",
- "fts-audio-ui",
- "futures-channel",
- "futures-timer",
- "futures-util",
- "gloo-timers 0.3.0",
- "image",
- "js-sys",
- "keybinds",
- "keyflow",
- "lucide-dioxus",
- "num-traits",
- "opentelemetry",
- "opentelemetry_sdk",
- "patch-list",
- "pollster",
- "pprof",
- "rustc-hash 2.1.3",
- "serde_json",
- "session 0.1.0",
- "session-engine",
- "skrifa 0.44.0",
- "studio",
- "timeline",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "utils",
- "vello",
- "vello_common",
- "vello_gpu",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "web-time",
- "wgpu 30.0.1",
- "wgpu_context",
- "winit 0.31.0-beta.4",
- "zbus",
 ]
 
 [[package]]
@@ -17913,7 +17874,6 @@ dependencies = [
 [[package]]
 name = "signal-plugin-host"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "daw",
 ]
@@ -18674,6 +18634,7 @@ dependencies = [
  "architect-scripting",
  "architect-settings",
  "architect-views",
+ "daw-view-kit",
  "dioxus",
  "drive-client",
  "drive-dioxus",
@@ -18692,12 +18653,13 @@ dependencies = [
  "keyflow",
  "keyflow-extension",
  "loro",
+ "mixer-view",
  "opentelemetry",
  "serde_json",
- "session-engine",
+ "session 0.1.0",
+ "session-engine-client",
  "session-format",
  "session-sync",
- "session-ui",
  "studio-arrangement",
  "studio-lyrics",
  "studio-mixer",
@@ -18724,8 +18686,10 @@ dependencies = [
  "architect-extensions-dioxus",
  "architect-scene",
  "architect-workspace",
+ "arrangement-view",
  "blitz-traits",
  "daw-ui",
+ "daw-view-kit",
  "dioxus",
  "futures-timer",
  "peniko 0.6.1",
@@ -18733,7 +18697,7 @@ dependencies = [
  "serde_json",
  "session 0.1.0",
  "session-engine",
- "session-ui",
+ "session-engine-client",
  "studio-view-link",
  "web-time",
 ]
@@ -18744,9 +18708,9 @@ version = "26.10.3"
 dependencies = [
  "architect-extensions",
  "architect-extensions-dioxus",
+ "daw-view-kit",
  "dioxus",
  "serde_json",
- "session-ui",
  "studio-view-link",
 ]
 
@@ -18761,16 +18725,19 @@ dependencies = [
  "architect-extensions-dioxus",
  "architect-scene",
  "architect-workspace",
+ "arrangement-view",
  "blitz-traits",
  "daw-proto",
  "daw-ui",
+ "daw-view-kit",
  "dioxus",
+ "mixer-view",
  "peniko 0.6.1",
  "png 0.17.16",
  "serde_json",
  "session 0.1.0",
  "session-engine",
- "session-ui",
+ "session-engine-client",
  "studio-view-link",
  "tracing",
  "web-time",
@@ -18782,12 +18749,13 @@ version = "26.10.3"
 dependencies = [
  "architect-extensions",
  "architect-extensions-dioxus",
+ "daw-view-kit",
  "dioxus",
  "futures-timer",
  "gloo-timers 0.3.0",
  "serde_json",
  "session-engine",
- "session-ui",
+ "session-engine-client",
  "studio-view-link",
 ]
 
@@ -18814,13 +18782,14 @@ dependencies = [
  "architect-scene",
  "blitz-traits",
  "daw-ui",
+ "daw-view-kit",
  "dioxus",
  "futures-timer",
  "gloo-timers 0.3.0",
  "serde_json",
  "session 0.1.0",
  "session-engine",
- "session-ui",
+ "session-engine-client",
  "web-time",
 ]
 
@@ -20769,15 +20738,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "uname"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b72f89f0ca32e4db1c04e2a72f5345d59796d4866a1ee0609084569f73683dc8"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "uncased"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20956,13 +20916,11 @@ dependencies = [
  "log",
  "native-tls",
  "percent-encoding",
- "rustls",
  "rustls-pki-types",
  "socks",
  "ureq-proto",
  "utf8-zero",
  "webpki-root-certs",
- "webpki-roots 1.0.9",
 ]
 
 [[package]]
@@ -21078,7 +21036,6 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "utils"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "facet",
  "facet-styx",
@@ -24008,7 +23965,30 @@ dependencies = [
 ]
 
 [[patch.unused]]
+name = "keyflow-annotate"
+version = "0.5.5"
+
+[[patch.unused]]
+name = "editor-lsp"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/editor?rev=6817dc2c709fbb5a7858229592bbbc85eed49528#6817dc2c709fbb5a7858229592bbbc85eed49528"
+
+[[patch.unused]]
+name = "architect-telemetry"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "vault-proto"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
 name = "architect-accounts"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
+name = "vault-obsidian"
 version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
@@ -24018,12 +23998,52 @@ version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
+name = "vault-live"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
+name = "vault-doc"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
+name = "vault-collab"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
+name = "vault"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
 name = "architect-editor"
 version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
+name = "architect-spaces"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
 name = "architect-extension-wasi"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
+name = "architect-presence"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
+name = "auth-proto"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+
+[[patch.unused]]
+name = "architect-navigator-api"
 version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
@@ -24038,61 +24058,14 @@ version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
-name = "architect-navigator-api"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "architect-presence"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "architect-spaces"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "auth-proto"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "vault"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "vault-collab"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "vault-doc"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "vault-live"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "vault-obsidian"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "vault-proto"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
-
-[[patch.unused]]
-name = "editor-lsp"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/editor?rev=6817dc2c709fbb5a7858229592bbbc85eed49528#6817dc2c709fbb5a7858229592bbbc85eed49528"
-
-[[patch.unused]]
 name = "tone3000"
 version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
+
+[[patch.unused]]
+name = "architect-telemetry"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "keyflow-annotate"
+version = "0.5.5"
