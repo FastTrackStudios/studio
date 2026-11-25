@@ -2,6 +2,9 @@
 //! alternative are `session` docs on the org's driver, kept in the
 //! project's own file — and another device gets them, edits them, and the
 //! first device's file holds the edit (docs/design/sync.md, "Projects").
+// The crate is package `studio-session` (lib `studio_session`); its tests
+// still say `session`, which the old package was called.
+use studio_session as session;
 
 use std::path::Path;
 use std::time::Duration;

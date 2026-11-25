@@ -631,6 +631,7 @@ mod tests {
                     name: name.into(),
                     ..ignition_core::CueList::default()
                 },
+                path: PathBuf::new(),
             }
         };
         let songs = vec![song("Drive To LA"), song("Fire")];
@@ -640,6 +641,7 @@ mod tests {
             set,
             sets: Vec::new(),
             songs,
+            library: PathBuf::new(),
         };
         let mut p = StudioPlayhead::default();
         p.name(&slugs(&night), "g-fire", "Fire", "/s/fire/Fire.session");

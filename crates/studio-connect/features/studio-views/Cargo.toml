@@ -33,6 +33,8 @@ architect-extensions = { workspace = true, optional = true, features = ["guest"]
 architect-extensions-dioxus = { workspace = true, optional = true, features = ["guest"] }
 
 [dev-dependencies]
+# tests/it links the extension (`ext`), so its tests build with it on.
+studio-views = { path = ".", features = ["extension"] }
 keyflow = { workspace = true, features = ["text", "engraver"] }
 futures = { workspace = true }
 # The app side of tests/it: the host, the app's action list.
