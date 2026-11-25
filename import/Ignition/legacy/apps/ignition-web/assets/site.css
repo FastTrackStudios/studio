@@ -1,0 +1,812 @@
+/* The Ignition site.
+ *
+ * Small and hand-written: three screens do not pay for a utility
+ * framework's build machinery.
+ *
+ * DARK, unconditionally — not "dark by default". The page is a frame
+ * around video of a dark room and a screenful of stage light, and a white
+ * page around that reads as a screenshot pasted into a document rather
+ * than as a window onto the thing. The product itself is a console that
+ * lives in a dark room. There was a `prefers-color-scheme: light` block
+ * here; it is gone, and `color-scheme: dark` below is what stops the
+ * browser painting form controls and scrollbars for the other one.
+ *
+ * The imported Tailwind sheet (architect-ui's tokens, which the guide's
+ * graph resolves against) follows the SYSTEM preference, so forcing this
+ * half alone would leave a light legend and light graph chrome on a dark
+ * page for anyone whose machine is set to light. Its dark values are
+ * restated below for that reason. */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #08080b;
+  --bg-far: #101018;
+  --surface: #101016;
+  --ink: #f4f3f7;
+  --ink-soft: #9a97a8;
+  --line: #23222c;
+  /* Ignition: the colour of a lamp striking, not a brand blue. The
+   * gradient sweep runs from here to --ig-accent-far, which is one hop
+   * round the wheel — far enough to read as travel, near enough that it
+   * is one colour moving rather than two arguing.
+   *
+   * `--ig-` prefixed, and that is not decoration: architect-ui's sheet
+   * defines a token called `--accent` too (a neutral grey), and this file
+   * loads after it — so an unprefixed name here silently repainted a
+   * design-system token inside the guide's graph. */
+  --ig-accent: #ff8a3d;
+  --ig-accent-far: #ffd166;
+  --ig-accent-ink: #1a0d02;
+  --code-bg: #16161d;
+  --shell-max: 96rem;
+  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+/* architect-ui's tokens, pinned dark.
+ *
+ * `fts-theme.css` (imported by the Tailwind sheet) defines these light at
+ * `:root` and dark only inside `@media (prefers-color-scheme: dark)`. On
+ * a machine set to light that media query never matches, so the guide's
+ * graph — its legend, its labels, its zoom controls — came out light on
+ * this page's dark ground. These are that file's dark values, restated
+ * unconditionally. site.css loads after the Tailwind sheet, so they win.
+ *
+ * Only the tokens the graph actually resolves against are here. If it
+ * starts using another one, the symptom is a light-mode colour appearing
+ * in the graph on a light-mode machine, and the fix is another line. */
+:root {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ig-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── Header ───────────────────────────────────────────────────────
+ *
+ * The BAR is full-bleed — it is sticky and translucent, so its border has
+ * to run the whole viewport or the page looks like it is scrolling past a
+ * floating card. Only its CONTENTS are centred, by growing the side
+ * padding once the viewport passes --shell-max. */
+.ig-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.9rem max(clamp(1rem, 4vw, 3rem), calc((100% - var(--shell-max)) / 2));
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.ig-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* The lamp. A dot with its own glow, because the wordmark is the only
+ * place on the page that names the product and it should look lit. */
+.ig-spark {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--ig-accent);
+  box-shadow: 0 0 0.4rem var(--ig-accent), 0 0 1.2rem color-mix(in srgb, var(--ig-accent) 60%, transparent);
+}
+
+.ig-nav { display: flex; gap: 1.75rem; }
+
+.ig-nav a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  transition: color 120ms ease;
+}
+
+.ig-nav a:hover { color: var(--ink); }
+.ig-nav a:focus-visible { outline: 2px solid var(--ig-accent); outline-offset: 3px; }
+
+.ig-main { flex: 1; padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1rem, 4vw, 3rem); }
+
+/* ── The hero ─────────────────────────────────────────────────────
+ *
+ * Copy left, room right. One screen: a page whose whole job is to say
+ * what this is should not make anyone scroll to find out. */
+.ig-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(1.5rem, 4vw, 4rem);
+  align-items: center;
+  max-width: var(--shell-max);
+  margin: 0 auto;
+  min-height: calc(100vh - 14rem);
+}
+
+.ig-hero-copy { max-width: 38rem; }
+
+.ig-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 1.1rem;
+}
+
+/* Three lines, one claim. They are set as blocks rather than as a list
+ * because they are a headline: a reader should take them in at a glance,
+ * in one breath, and bullets would invite reading them as features.
+ *
+ * `line-height` is tight and the tracking negative, so the three stack
+ * into a single block of text rather than three sentences that happen to
+ * be near each other. */
+.ig-display {
+  font-weight: 620;
+  font-size: clamp(2.1rem, 4.2vw, 3.4rem);
+  letter-spacing: -0.035em;
+  line-height: 1.06;
+  margin: 0;
+}
+
+.ig-pillar { display: block; }
+
+/* The middle line is the longest by some way; without this it can wrap on
+ * a narrow column and break the three-line read. */
+.ig-pillar { text-wrap: nowrap; }
+
+@media (max-width: 30rem) {
+  /* Below this the line simply does not fit, and a clipped headline is
+   * worse than a wrapped one. */
+  .ig-pillar { text-wrap: balance; }
+}
+
+/* The unifying line. Deliberately a step down from the pillars and a step
+ * up from the lede: it is the sentence that turns a list into a product,
+ * so it has to read as neither a fourth item nor body copy. */
+.ig-kicker {
+  margin: 0.9rem 0 0;
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  font-weight: 560;
+  letter-spacing: -0.015em;
+}
+
+/* The one thing on the page that moves. A three-stop gradient whose first
+ * and last stops are the same colour, laid out at 200% and scrolled a
+ * whole tile per cycle — because the tile's edges match, the loop is
+ * seamless and needs no alternate direction. */
+.ig-accel {
+  background: linear-gradient(100deg, var(--ig-accent), var(--ig-accent-far), var(--ig-accent));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ig-sweep 6s linear infinite;
+}
+
+@keyframes ig-sweep {
+  from { background-position: 200% 0; }
+  to { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ig-accel { animation: none; }
+}
+
+.ig-lede {
+  font-size: 1.05rem;
+  color: var(--ink-soft);
+  margin: 1.4rem 0 0;
+  text-wrap: pretty;
+}
+
+.ig-points {
+  list-style: none;
+  padding: 0;
+  margin: 1.6rem 0 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ig-points li {
+  position: relative;
+  padding-left: 1.4rem;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+
+.ig-points li::before {
+  content: "";
+  position: absolute;
+  left: 0.15rem;
+  top: 0.68em;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: var(--ig-accent);
+}
+
+.ig-cta { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 2.25rem 0 0; }
+
+.ig-button {
+  display: inline-block;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 550;
+  text-decoration: none;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.ig-button:hover { border-color: var(--ink-soft); }
+
+.ig-button-primary {
+  background: var(--ig-accent);
+  border-color: var(--ig-accent);
+  color: var(--ig-accent-ink);
+}
+
+.ig-button-primary:hover { filter: brightness(1.08); }
+.ig-button:focus-visible { outline: 2px solid var(--ig-accent); outline-offset: 2px; }
+
+.ig-note { font-size: 0.85rem; color: var(--ink-soft); margin: 1.4rem 0 0; }
+
+/* ── The window ───────────────────────────────────────────────────
+ *
+ * A frame and nothing else. It carried a title bar naming the venue, the
+ * show file and the cue, and a caption saying where the render came from;
+ * both were captions on a picture that speaks for itself, and both made
+ * the page longer to read for no gain. */
+.ig-window {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  overflow: hidden;
+  /* The room is dark; without this the pane's own edge disappears into
+   * the page and the video appears to float. */
+  box-shadow: 0 1.5rem 4rem color-mix(in srgb, #000 45%, transparent);
+}
+
+/* `block` so the video does not sit on a text baseline and leave a strip
+ * of surface below itself. The aspect ratio is the render's. */
+.ig-window-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+
+@media (max-width: 68rem) {
+  .ig-hero {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+  /* The video first on a phone: it is the argument, and the copy under it
+   * is the explanation. */
+  .ig-window { order: -1; }
+}
+
+/* ── The guide, as a vault ────────────────────────────────────────
+ *
+ * Three columns: contents, note, local graph. The rails are fixed and the
+ * note takes what is left — a note column that grows with the viewport
+ * runs to a measure nobody can read, and the two rails hold their width
+ * regardless because a table of contents that reflows as you navigate is
+ * a table of contents you cannot use as a landmark. */
+.ig-guide {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr) 19rem;
+  gap: clamp(1.5rem, 3vw, 3rem);
+  max-width: var(--shell-max);
+  margin: 0 auto;
+  align-items: start;
+}
+
+/* Both rails stick: the contents is how you move around the guide, and
+ * the local graph is how you move around the *concept*. Either scrolling
+ * away is the moment you need it. */
+.ig-guide-toc,
+.ig-local-graph {
+  position: sticky;
+  top: 5rem;
+}
+
+.ig-guide-toc { display: flex; flex-direction: column; gap: 0.15rem; }
+
+.ig-guide-toc a {
+  padding: 0.3rem 0.55rem;
+  margin-left: -0.55rem;
+  border-radius: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.ig-guide-toc a:hover { color: var(--ink); background: var(--code-bg); }
+
+.ig-toc-current { color: var(--ink) !important; background: var(--code-bg); }
+
+/* The stage heading. Not a link, and set in the same mono-caps register
+ * as the header's nav so it reads as structure rather than as a chapter
+ * someone forgot to link. */
+.ig-toc-stage {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  opacity: 0.7;
+  margin: 1.4rem 0 0.35rem;
+}
+
+.ig-guide-toc > :first-child { margin-top: 0; }
+
+.ig-toc-graph { margin-top: 1.6rem; border-top: 1px solid var(--line); padding-top: 0.9rem !important; }
+
+.ig-guide-page { max-width: 44rem; padding-bottom: 4rem; }
+
+/* Previous / next, above and below the note. */
+.ig-chapter-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.ig-chapter-link {
+  display: grid;
+  gap: 0.1rem;
+  flex: 1;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.ig-chapter-link:hover { border-color: var(--ink-soft); }
+/* The second of the pair is "next" whether or not there is a first. */
+.ig-chapter-next { text-align: right; margin-left: auto; }
+
+.ig-chapter-dir {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.ig-chapter-title { font-weight: 550; font-size: 0.95rem; }
+
+/* The top copy is the same two links stripped of their boxes: a full pair
+ * of cards above the title competes with the title. */
+.ig-chapter-nav-top {
+  margin: 0 0 2rem;
+  padding: 0;
+  border: 0;
+}
+
+.ig-chapter-nav-top .ig-chapter-link {
+  border: 0;
+  padding: 0;
+  flex: 0 1 auto;
+  font-size: 0.85rem;
+}
+
+.ig-chapter-nav-top .ig-chapter-dir { display: none; }
+.ig-chapter-nav-top .ig-chapter-title { color: var(--ink-soft); font-weight: 450; }
+.ig-chapter-nav-top .ig-chapter-link:hover .ig-chapter-title { color: var(--ink); }
+
+.ig-backlinks { margin-top: 3rem; }
+.ig-backlinks h2 { font-size: 0.8rem; font-family: var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 0.6rem; }
+.ig-backlinks ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.3rem; }
+.ig-backlinks a { color: var(--ig-accent); text-decoration: none; font-size: 0.9rem; }
+.ig-backlinks a:hover { text-decoration: underline; }
+
+.ig-local-graph h2 {
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 0.6rem;
+}
+
+/* The canvas needs a definite height: the graph view lays out into the
+ * box it is given, and a box sized by its contents has none. */
+.ig-local-graph-canvas {
+  height: 16rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* The view fits its viewBox to the node POSITIONS, so a node's own radius
+ * and its label both hang outside that box — in a rail this narrow the
+ * outermost label ran off the edge, and `spacing` does not help because
+ * the fit is recomputed from whatever positions come out. Scaling the
+ * whole drawing down inside its frame is the padding the component does
+ * not expose. */
+.ig-local-graph-canvas svg { transform: scale(0.82); transform-origin: center; }
+
+.ig-local-graph .ig-note { margin-top: 0.6rem; display: inline-block; color: var(--ig-accent); text-decoration: none; }
+
+/* Below three columns the rails fold away rather than stack: a table of
+ * contents above every page turns each one into a menu you scroll past,
+ * and the graph is a rail, not a figure. Both stay reachable — the header
+ * carries Guide and Graph, and the chapter buttons walk the whole thing. */
+@media (max-width: 96rem) {
+  .ig-guide { grid-template-columns: 13rem minmax(0, 1fr); }
+  .ig-local-graph { display: none; }
+}
+
+@media (max-width: 56rem) {
+  .ig-guide { grid-template-columns: minmax(0, 1fr); }
+  .ig-guide-toc { display: none; }
+}
+
+/* ── The whole graph ──────────────────────────────────────────────
+ *
+ * A screen, not a document: it fills the viewport, because a force layout
+ * in a letterbox is a hairball. */
+.ig-graph-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15rem;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1rem clamp(1rem, 2vw, 2rem);
+  height: calc(100vh - 10rem);
+  max-width: var(--shell-max);
+  margin: 0 auto;
+}
+
+.ig-graph-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.ig-graph-bar h1 { font-weight: 600; font-size: 1.4rem; letter-spacing: -0.02em; margin: 0; flex: 1; }
+
+.ig-graph-search {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.ig-graph-search:focus-visible { outline: 2px solid var(--ig-accent); outline-offset: 1px; }
+
+.ig-graph-canvas {
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.ig-graph-legend { min-height: 0; overflow-y: auto; font-size: 0.85rem; }
+
+/* Two things the component sizes for a wiki of hundreds of pages, and
+ * this guide is not one.
+ *
+ * The label size is `max(node radius x 0.8, edge_unit x 6)`, and with
+ * seven nodes in a wide frame the second term wins — labels came out the
+ * size of headlines and overlapped each other. Neither `node_scale` nor
+ * `spacing` can reach that floor, so the size is set here instead; the
+ * unit is the SVG's own, so it still tracks the component's zoom.
+ *
+ * And the viewBox fits the node POSITIONS, which leaves a node's radius
+ * and the label under it hanging outside the frame — the bottom row was
+ * cut in half. Scaling the drawing inside its box is the padding the
+ * component does not expose. */
+.ig-graph-canvas svg { transform: scale(0.85); transform-origin: center; }
+.ig-graph-canvas svg text { font-size: 15px; }
+.ig-local-graph-canvas svg text { font-size: 11px; }
+
+@media (max-width: 56rem) {
+  .ig-graph-screen { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .ig-graph-canvas { height: 60vh; }
+}
+
+/* ── Prose: the guide ─────────────────────────────────────────────── */
+
+.ig-prose {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding-bottom: 4rem;
+}
+
+.ig-prose h1 {
+  font-weight: 620;
+  font-size: clamp(1.9rem, 3.4vw, 2.6rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 0 0 0.6rem;
+}
+
+/* The rendered markdown. Everything under here came out of pulldown-cmark
+ * at build time, so the selectors are plain tags. */
+.ig-md { margin-top: 2rem; }
+/* Tailwind's preflight unsets heading weight and size (it expects every
+ * heading to be given utilities), and the guide's headings come out of a
+ * markdown renderer with no classes at all — so the sheet has to say. */
+.ig-md h1 {
+  font-weight: 620;
+  font-size: clamp(1.9rem, 3.4vw, 2.6rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 0 0 1.2rem;
+}
+.ig-md h2 { font-weight: 600; font-size: 1.4rem; letter-spacing: -0.02em; margin: 2.6rem 0 0.6rem; }
+.ig-md h3 { font-weight: 600; font-size: 1.1rem; letter-spacing: -0.01em; margin: 2rem 0 0.4rem; }
+.ig-md p { margin: 0 0 1rem; text-wrap: pretty; }
+.ig-md ul, .ig-md ol { margin: 0 0 1.2rem; padding-left: 1.3rem; }
+.ig-md li { margin: 0.3rem 0; }
+.ig-md strong { font-weight: 600; }
+.ig-md a { color: var(--ig-accent); text-underline-offset: 0.2em; }
+
+.ig-md code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.3rem;
+}
+
+.ig-md pre {
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+/* Inside a block the border and background belong to the `pre`; a second
+ * set on every span of code inside it draws a box round each line. */
+.ig-md pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+
+.ig-md blockquote {
+  margin: 0 0 1.2rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--ig-accent);
+  color: var(--ink-soft);
+}
+
+/* A table can be wider than the measure — the domain's grids often are —
+ * so it scrolls inside its own frame rather than pushing the page. */
+.ig-md table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 1.4rem;
+  font-size: 0.9rem;
+}
+
+.ig-md th, .ig-md td {
+  border: 1px solid var(--line);
+  padding: 0.45rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.ig-md th { background: var(--code-bg); font-weight: 560; }
+
+.ig-md hr { border: 0; border-top: 1px solid var(--line); margin: 2.4rem 0; }
+
+/* ── Guide: the vault components ──────────────────────────────────────
+ *
+ * `ssg-ui` ships its own sheet (linked ahead of this one) with layout
+ * and spacing built on custom properties. This binds those to the
+ * site's palette, and adds the two things that are Ignition's own: the
+ * aside that stacks search above the graph, and a search panel that has
+ * to sit ON the page rather than push it down. */
+
+.ig-guide {
+  --ssg-rule: var(--line);
+  --ssg-accent: var(--accent);
+  --ssg-broken: var(--ink-faint);
+  --ssg-code-bg: rgba(255, 255, 255, 0.05);
+  /* The results panel floats; without an opaque ground the prose shows
+   * through it. */
+  --ssg-surface: var(--bg-raised, #14141a);
+}
+
+.ig-guide-aside {
+  display: grid;
+  gap: 1.25rem;
+  align-content: start;
+  position: sticky;
+  top: 1.5rem;
+}
+
+/* The in-page contents sits above the note, not beside it — the left
+ * rail is already the vault's contents and two rails of links either
+ * side of the prose is one too many. */
+.ig-guide-page .ssg-page-toc {
+  margin-block-end: 2rem;
+  padding-inline-start: 0.75rem;
+  border-inline-start: 2px solid var(--line);
+}
+
+.ig-guide-page .ssg-page-toc a { color: var(--ink-soft); }
+.ig-guide-page .ssg-page-toc a:hover { color: var(--accent); }
+
+.ig-page-meta {
+  margin-block-start: 2rem;
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+
+/* ── The demo ─────────────────────────────────────────────────────
+ *
+ * A canvas Bevy owns, and a bar above it. Deliberately spare: the point
+ * of the screen is the room, and every pixel of chrome is a pixel not
+ * showing it. */
+.ig-demo {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1rem;
+  /* Not `--shell-max`: this screen is an application, not a document,
+     and a desk squeezed to a reading measure is a desk nobody can use.
+     It takes the viewport. */
+  margin: 0 auto;
+  /* Nearly the whole viewport: this screen is the application, and the
+     site's header is the only chrome it keeps. */
+  height: calc(100vh - 5rem);
+  width: 100%;
+}
+
+/* The room and the desk. Before the demo is launched there is no desk,
+   so the room has the whole frame; after, the desk takes a fixed rail
+   and the room takes what is left — the room is the thing being looked
+   at, and it should not shrink as panes appear inside the desk. */
+.ig-demo-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  min-height: 0;
+}
+
+/* The desk's Live view is a multi-column layout built for a monitor —
+   looks and macros, the fader strip, then the palettes. Squeezed into a
+   narrow rail its own inner columns clip, so it gets a real share of the
+   screen rather than a sidebar's. */
+.ig-demo-body.has-desk {
+  grid-template-columns: minmax(0, 1fr) minmax(38rem, 44rem);
+}
+
+/* The desk's own sheets style everything inside this; all that is
+   wanted here is a box for them with its own scroll, so a long cue list
+   never grows the page and pushes the room off the bottom. */
+.ig-demo-desk {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--surface);
+}
+
+@media (max-width: 96rem) {
+  /* Below this the two do not both fit, and a 20rem-wide desk is not a
+     desk. Stack them and let the page scroll. */
+  .ig-demo { height: auto; }
+  .ig-demo-body.has-desk { grid-template-columns: minmax(0, 1fr); }
+  .ig-demo-stage { height: 60vh; }
+  .ig-demo-desk { height: 40rem; }
+}
+
+.ig-demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.ig-demo-bar h1 { font-weight: 600; font-size: 1.4rem; letter-spacing: -0.02em; margin: 0; flex: 1; }
+
+.ig-demo-status {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ig-accent);
+}
+
+/* A failure here is usually a sentence naming a browser flag, not a
+ * word — it needs to wrap and to sit under the heading rather than
+ * beside it. */
+.ig-demo-failed {
+  color: #ff9b6b;
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  flex-basis: 100%;
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+/* `position: relative` so the hint can sit over the canvas rather than
+ * beside it — before launch the canvas is an empty black rectangle, and
+ * a caption under it reads as a caption for nothing. */
+.ig-demo-stage {
+  position: relative;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  overflow: hidden;
+  background: #000;
+}
+
+/* Bevy sizes the drawing buffer; CSS sizes the element. `display: block`
+ * for the same reason the hero video wants it — no text baseline under
+ * a replaced element. */
+.ig-demo-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+.ig-demo-hint {
+  position: absolute;
+  inset: auto 0 0 0;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}

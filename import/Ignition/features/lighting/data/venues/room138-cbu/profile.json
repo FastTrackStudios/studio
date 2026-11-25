@@ -1,0 +1,49 @@
+{
+  "canvases": {},
+  "colors": [],
+  "focus": {
+    "Audience": "Audience Front",
+    "Back Wall": "Band Wall",
+    "Band": "Upstage Centre",
+    "Drums": "Drums",
+    "House": "Audience Back",
+    "Stage": "Stage Wide",
+    "Vocal": "Vocal Centre"
+  },
+  "groups": {
+    "Audience": {
+      "Group": "Tower Lamps"
+    },
+    "Back": {
+      "Group": "Wall Bars"
+    },
+    "Bars": {
+      "Group": "Bars"
+    },
+    "Beams": {
+      "Group": "Movers"
+    },
+    "Drums": {
+      "Group": "Drum Towers"
+    },
+    "Fill": {
+      "Group": "Tree Colour"
+    },
+    "Floor": {
+      "Group": "RockStrips"
+    },
+    "Key": {
+      "Group": "Tree Faces"
+    },
+    "Movers": {
+      "Group": "Movers"
+    },
+    "Spot": {
+      "Group": "Key Guitar"
+    },
+    "Wash": {
+      "Group": "Towers"
+    }
+  },
+  "profile": "Ignition"
+}

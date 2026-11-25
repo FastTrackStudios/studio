@@ -1,0 +1,78 @@
+# Ignition CI — the workspace gate.
+#
+# This exists because it did not. The only workflow in this repo built the
+# iOS app; nothing ever ran `cargo check` on the tree, and the cost showed
+# up twice: `crates/ignition-song` reached into sibling checkouts that a
+# runner does not have (so `cargo metadata` failed before anything
+# compiled — fixed in #5), and `apps/ignition-mobile` merged in never
+# having been through rustfmt. Both are things a gate catches in a minute.
+#
+# Enters `nix develop .#ci`, which is the shell built for exactly this:
+# toolchain, native headers and tailwindcss, no interactive installers.
+# See nix/modules/shells/ci.nix.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # A draft runs nothing; marking it ready starts the run.
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+# A newer push to the same ref supersedes an older queued run. Unlike the
+# iOS workflow this one is cheap to cancel — nothing is uploaded anywhere.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Incremental artifacts are worthless across runner sessions and cost
+  # gigabytes of the cache we do carry between them.
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gate:
+    # Skipped on a draft PR: marking it ready starts the run.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # The repo's own self-hosted runner on THEBATTLESHIP (NixOS, nix
+    # preinstalled, its store persistent between runs).
+    runs-on: [self-hosted, ignition]
+    # Bevy, wgpu and the Blitz stack are a long cold build. The persistent
+    # target dir below makes the warm case a few minutes; this ceiling is
+    # for the cold one.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      # One target dir for the whole workspace, on the runner's durable
+      # cache disk; the vendored Bevy fork is the bulk of it and never
+      # changes between runs.
+      - name: Persistent target dir
+        run: |
+          dir="${CI_CACHE_DIR:-$HOME/cargo-target}/checks"
+          mkdir -p "$dir"
+          echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+          echo "target dir: $dir ($(du -sh "$dir" 2>/dev/null | cut -f1))"
+
+      # `asset!()` demands the stylesheet at compile time and it is
+      # gitignored build output, so it has to exist before cargo runs.
+      # `just tailwind` is the one definition of how it is built.
+      - name: Build the stylesheet
+        run: nix develop .#ci -c just tailwind
+
+      # fmt, and clippy reporting without failing for now (#13). Kept as `just lint` so a
+      # contributor runs locally exactly what CI runs.
+      - name: Lint
+        run: nix develop .#ci -c just lint
+
+      - name: Test
+        run: nix develop .#ci -c cargo test --workspace
+
+      # The spec is normative and the coverage script is the cheap version
+      # of tracey: it also fails on an `r[impl ...]` naming a requirement
+      # no spec defines, which is how a renamed rule gets caught.
+      - name: Spec coverage
+        run: nix develop .#ci -c python3 features/lighting/tools/spec_coverage.py

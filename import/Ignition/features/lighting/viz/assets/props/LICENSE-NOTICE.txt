@@ -1,0 +1,42 @@
+drum-kit.glb is "Full Drum Kit" by Batoski, obtained from Poly Pizza
+(https://poly.pizza/m/1HvDgRF7fX) and released under Creative Commons
+Attribution 3.0:
+
+    https://creativecommons.org/licenses/by/3.0/
+
+CC-BY *does* impose a condition — attribution — unlike the CC0
+characters in ../people. This file is that attribution, and it has to
+travel with any build that ships the model. CC-BY 3.0 is compatible with
+this repo's GPL-3.0-or-later: the licence stays on the asset, the
+attribution stays with it, and neither is ours to change.
+
+The file is the unmodified glTF binary as published.
+
+Note on scale and orientation: the kit is authored in arbitrary units,
+facing its own -Z, with its footprint off-origin. `props.rs` scales it
+so its kick drum is a real 22" (0.559 m) rather than trusting the
+bounding box, recentres it, and turns it to face the audience.
+
+---
+
+keyboard.glb, pa-speaker.glb and floor-monitor.glb are also from Poly
+Pizza, and also Creative Commons Attribution 3.0 — same condition as the
+kit above, so this notice has to travel with any build that ships them:
+
+    keyboard.glb       "Keyboard" by S. Paul Michael
+                       https://poly.pizza/m/fP_S-_T1BOZ
+    pa-speaker.glb     "Speaker" by Jose Rosero
+                       https://poly.pizza/m/7EmeFe3O7GQ
+    floor-monitor.glb  "Floor Monitor" by Peter Simcoe
+                       https://poly.pizza/m/2827m06VfIA
+
+    https://creativecommons.org/licenses/by/3.0/
+
+All three are unmodified glTF binaries as published.
+
+Like the kit, each is authored in arbitrary units and none is centred on
+its own origin, so `props.rs` seats them by a real-world dimension
+(`GlbProp::model_height`) and recentres them (`GlbProp::centre`) rather
+than trusting a bounding box. Those constants were measured from the
+files' own baked scene bounds and then corrected by eye — see the
+`GLB_PROPS` table.

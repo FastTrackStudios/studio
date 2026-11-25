@@ -1,0 +1,34 @@
+ignition — a night of lighting, following a Live set's playhead
+
+  ignition --set <set.als> [--show <night.ig-show>] [--clock internal|studio[:<socket>]|midi:<port>|session:<url>#<doc>@<song>]
+           [--output] [--camera <preset>] [--start <n>]
+  ignition --set <set.als> --check          load the night, print the running order
+  ignition --set <set.als> --at <beat>      the song, bar, section and cue at a beat of the set
+  ignition --midi-ports                     list MIDI inputs
+  ignition --set <set.als> --process-view   draw into an Architect pane (ARCHITECT_VIEW_FD; frames shared on the GPU)
+  ignition --set <set.als> --bench <frames> [--size 2560x1440]
+                                            the pane's renderer with no pane: p50/p99 of each phase of a frame
+
+  --clock internal   the operator's clock (default): type a song number, Enter to GO/stop,
+                     `b <bar>` to cue a bar, `l` to list
+  --clock studio     follow the Studio app's playback: the running Studio engine's transport
+                     (the newest $XDG_RUNTIME_DIR/fts/engine-<pid>.sock, or studio:<socket>) —
+                     the song playing and where in it
+  --clock midi:<p>   follow Ableton's MIDI beat clock + Song Position Pointer on the input
+                     whose name contains <p> (Live: the port's Sync output on)
+  --clock session:<url>#<doc>@<song>
+                     follow a session's transport: its host's playhead (presence, in the
+                     host's clock) at <url>, as song <song> (slug or number) of the night
+  --start <n>        the operator's clock cued to song n; --bar <b> to bar b of it; --go running
+  --output           send DMX to the rig (sACN + Art-Net, as the venue's venue.ig-venue says)
+
+  IGNITION_LIVE_SET  the set, when --set is not given
+  IGNITION_QUALITY   potato | low | medium | high | ultra
+  IGNITION_FRAME_STATS  a pane's frames summarised every <n> (300; 0 for never): each phase's p50/p99
+  IGNITION_FRAME_DRAIN  1: wait for the rendering before copying a frame out (splits the GPU wait; a measurement's setting)
+
+  ignition --set <set.als> render --song <title|locator|n> --out <file.mp4> [--audio <file>]
+           [--camera Wide] [--fps 30] [--size 1920x1080] [--from <s>] [--to <s>] [--crf 20]
+                     a song's show rendered offline to H.264, frame i = i/fps s after its locator,
+                     muxed with its audio from sample 0; <out>.cues.tsv and chapters per cue
+                     (IGNITION_FFMPEG: the ffmpeg binary)

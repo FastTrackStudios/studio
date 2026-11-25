@@ -1,0 +1,478 @@
+/* Sized for fingers *and* driven by a mouse. Every control is at least
+   44px on its short edge — the smallest thing a thumb hits reliably —
+   and every control also has a hover state, because a touchscreen
+   simply never triggers one. Hover is additive here: it never carries
+   information that is not already visible, so nothing is lost on
+   a panel that cannot hover.
+
+   This file is NOT on its way out, which it used to claim it was, and
+   it is injected as a `<style>` block by `windows.rs` rather than
+   compiled by Tailwind — `document::Stylesheet` is inert under Blitz,
+   and routing these rules through it cost the desk its whole layout
+   once already. Three measurements decided that. The first two are why
+   the rules are not utility classes, after a probe converted one pool
+   of buttons:
+
+   - a `@utility` lands in `@layer utilities`, which loses to every
+     unlayered rule, so converting these would have flipped the cascade
+     on the twenty-four selectors this file shares with `live.css` and
+     `dock.css`;
+   - and a utility is only emitted when Tailwind can *see* its name,
+     which it cannot for the classes this app builds at runtime
+     (`format!("pane pane-{}", ...)`).
+
+   The probe also drifted from the `.pad` rule it was mirroring in three
+   ways inside eight lines, which is the argument in miniature: a rule
+   used twice is one rule, and cannot disagree with itself.
+
+   The third measurement is the delivery one: importing these sheets
+   into `tailwind.css` and loading the result through
+   `document::Stylesheet` compiled, passed every test, and silently
+   unstyled the application — the `.viz` element collapsed to zero size
+   and the visualizer never initialised. Nothing in the suite could see
+   it. `<style>` blocks are how CSS reaches Blitz.
+
+   Utilities are still the right tool for one-off layout, and every
+   colour token has one (`bg-panel`, `text-ink-dim`) — see
+   `theme.css`.
+
+   It stays flexbox and explicit values not because Blitz is limited
+   (its style engine is stylo, the same one Firefox uses, so the cascade
+   is real) but because layout is Taffy, and flexbox is the part of
+   Taffy with no surprises. */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: sans-serif; font-size: 13px; }
+
+/* A desk is not a document: nothing here is meant to be drag-selected,
+   and letting it be is not merely untidy. A selection whose anchor node
+   is removed by a re-render leaves blitz comparing two nodes that no
+   longer share a root, and `compare_document_order` underflows
+   `common_depth - 1` into a `usize::MAX` index — a hard panic on the
+   main thread, which takes the studio with it. The cue list alone
+   attaches and detaches nodes constantly (the fade bar appears the
+   moment a cue is taken and goes when it lands), so the window for
+   that is not narrow.
+
+   Text inputs keep their selection: typing in one is the one place a
+   caret is the point. */
+.window, .window * { -webkit-user-select: none; user-select: none; }
+.window input, .window textarea { -webkit-user-select: text; user-select: text; }
+
+.studio { display: flex; width: 100%; height: 100vh; }
+
+/* ── Cue list, left ────────────────────────────────────────────────── */
+.cues { width: 260px; min-width: 260px; height: 100%; background: var(--panel);
+        border-right: 1px solid var(--line); overflow-y: auto; }
+.cues header { display: flex; justify-content: space-between; align-items: center;
+               padding: 12px 14px; font-weight: bold; letter-spacing: 0.08em;
+               text-transform: uppercase; font-size: 10px; color: var(--ink-label);
+               border-bottom: 1px solid var(--line); }
+.cues ol { list-style: none; margin: 0; padding: 0; }
+/* A row is a block, not a flex line: the main line, then whatever the
+   Program preset opens under it — note, commands, parts. */
+.cue { display: block; padding: 0; cursor: pointer;
+       border-bottom: 1px solid var(--pad); }
+.cues .cue-main { display: flex; gap: 10px; align-items: center; padding: 14px; }
+.cue:hover { background: var(--pad); }
+.cue.on { background: #23233a; color: var(--ink-bright); }
+/* Hits: the song fires these, GO never does. Quiet until one lands. */
+.cue.hit .cue-main { padding: 6px 14px; color: #6f6f80; font-size: 0.85em; }
+.cue.hit .num { color: #4a4a5c; }
+.cue.hit.on { background: var(--hit); color: var(--hit-ink); }
+.num { width: 22px; color: var(--ink-faint); text-align: right; }
+.cues .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+              white-space: nowrap; }
+
+.go { background: var(--go); color: var(--go-ink); border: 1px solid var(--go-line);
+      border-radius: 5px; padding: 8px 18px; font-size: 11px; font-weight: bold;
+      letter-spacing: 0.08em; cursor: pointer; }
+.go:hover { background: #386038; }
+/* Transport, under the cue-list header. PLAY hands the list to the
+   song; GO steps it by hand. Both drive the same cues. */
+.transport { display: flex; gap: 8px; padding: 10px 12px;
+             border-bottom: 1px solid var(--line); }
+.transport button { flex: 1; height: 44px; border-radius: 6px; cursor: pointer;
+                    font-size: 12px; }
+.play { background: var(--play); color: var(--meter-ink); border: 1px solid var(--play-line); }
+.play:hover { background: #365070; }
+
+/* ── The cue list's Program preset ──────────────────────────────────
+   The same rows and the same order; more columns, and wider, which is
+   the only thing a Program list needs that a Live one does not.
+   r[impl studio.cuelist.one-panel]
+
+   Every selector below is anchored on `.cues` on purpose. A cue-list
+   rule spelled `.col` or `.name` is not a cue-list rule: `col` is what
+   the dock calls a column split and what the busking surface calls its
+   columns, and an unanchored rule here silently restyles both. */
+.cues.program { width: 460px; min-width: 460px; }
+.dock .cues.program { width: 100%; min-width: 0; }
+.cues.program .cue-main { padding: 9px 14px; font-size: 12px; }
+.cues .preset { background: var(--pad-hover); color: #9a9ab0; border: 1px solid var(--line-strong);
+                border-radius: 5px; padding: 6px 10px; font-size: 9px;
+                font-weight: bold; letter-spacing: 0.08em; cursor: pointer; }
+.cues .preset.on { background: #2f3a52; color: var(--meter-ink); border-color: #45587c; }
+/* Columns switched off on top of the preset. */
+.cues .colbar { display: flex; gap: 4px; flex-wrap: wrap; padding: 6px 12px;
+                border-bottom: 1px solid var(--line); }
+.cues .colbar .col { background: var(--pad); color: var(--ink-ghost);
+                     border: 1px solid #2a2a32; border-radius: 4px;
+                     padding: 3px 7px; font-size: 9px; letter-spacing: 0.04em;
+                     cursor: pointer; }
+.cues .colbar .col.on { background: #26263a; color: #a6a6c0; border-color: #3a3a52; }
+
+/* The appearance stripe — what makes a hundred rows scannable.
+   r[impl cues.appearance] */
+.cues .tint { width: 4px; align-self: stretch; min-height: 16px;
+              border-radius: 2px; background: transparent; font-size: 8px;
+              color: var(--bg); text-align: center; flex: none; }
+.cues .cue.hit .tint { background: transparent; }
+
+/* How the cue is taken, one glyph. r[impl cues.trig] */
+.cues .trig { width: 12px; color: #6f6f8a; text-align: center; flex: none; }
+.cues .at { color: #7d8fa8; font-size: 0.85em; white-space: nowrap; }
+.cues .fade { color: var(--ink-faint); font-size: 0.85em; white-space: nowrap;
+              min-width: 30px; text-align: right; }
+
+/* Per-class timing, condensed. r[impl studio.cuelist.condensed-timing] */
+.cues .times { display: flex; gap: 5px; }
+.cues .tcell { background: var(--tile); border: 1px solid var(--line-pad);
+               border-radius: 3px; padding: 1px 4px; font-size: 10px;
+               color: #9a9ab0; white-space: nowrap; }
+.cues .tclass { color: #5a5a6a; margin-right: 3px; }
+.cues .ease { color: #7a6f95; margin-left: 3px; }
+
+/* The flags, as chips. Each is one letter with the whole rule on hover. */
+.cues .flags { display: flex; gap: 3px; }
+.cues .chip { width: 15px; height: 15px; line-height: 15px; text-align: center;
+              border-radius: 3px; background: var(--line-pad); color: #a0a0b8;
+              font-size: 9px; font-weight: bold; }
+.cues .mib { color: #8a7fb0; font-size: 10px; white-space: nowrap; }
+.cues .cue-cmds { display: flex; gap: 5px; padding: 0 14px 8px 44px; }
+.cues .cmd { background: #22202c; border: 1px solid #34304a; border-radius: 3px;
+             padding: 1px 5px; font-size: 10px; color: #a89ac0; }
+
+/* Coverage, and the direct values that will not follow a rig change.
+   r[impl cues.recipes-not-values] */
+.cues .cover { color: #6f7d6f; font-size: 10px; white-space: nowrap; }
+.cues .direct { color: #c0913a; margin-left: 3px; }
+
+/* The cook status, as MA3's pot colours. r[impl studio.cuelist.status] */
+.cues .dot { width: 7px; height: 7px; border-radius: 50%; flex: none;
+             background: #3a3a44; }
+.cues .dot.ok { background: #4f9e4f; }
+.cues .dot.bad { background: var(--bad); }
+.cues .dot.warn { background: #c08a3a; }
+.cues .dot.direct { background: #6a7a9a; }
+.cues .dot.dead { background: var(--bad); box-shadow: 0 0 0 3px rgba(192,74,58,0.2); }
+.cues .dot.unknown { background: var(--line-pad); }
+
+/* The standing cue's fade, as a bar across the top of its row, and the
+   countdown on a cue that takes itself.
+   r[impl studio.cuelist.live-state] */
+.cues .fading { height: 2px; background: var(--tile); }
+.cues .fadefill { height: 100%; background: #4a7fbf; }
+.cues .countdown { background: var(--hit); color: var(--hit-ink); border-radius: 3px;
+                   padding: 1px 5px; font-size: 10px; white-space: nowrap; }
+
+.cues .expand { background: none; border: none; color: #6f6f8a;
+                cursor: pointer; font-size: 10px; padding: 0 2px; }
+
+/* The note gets its own line — it is the thing that never fits in a
+   column. r[impl cues.note] */
+.cues .cue-note { padding: 0 14px 9px 44px; color: #8a8a9c; font-size: 11px;
+                  font-style: italic; line-height: 1.4; }
+
+/* Parts: a cue's recipes, indented under it.
+   r[impl studio.cuelist.expand] r[impl cues.parts-are-recipes] */
+.cues .parts { background: #101015; border-top: 1px solid var(--pad); }
+.cues .part { display: flex; gap: 8px; align-items: center;
+              padding: 5px 14px 5px 34px; font-size: 11px; color: #9a9ab0;
+              border-bottom: 1px solid var(--panel-2); }
+.cues .part:last-child { border-bottom: none; }
+.cues .part.over { color: #7d8fa8; }
+.cues .part.off { opacity: 0.45; text-decoration: line-through; }
+.cues .pnum { width: 14px; color: #4a4a5c; text-align: right; flex: none; }
+.cues .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+               white-space: nowrap; }
+.cues .ptarget { color: #6f7d8a; font-size: 10px; white-space: nowrap; }
+.cues .pcover { color: #6f7d6f; font-size: 10px; }
+.cues .pcover.none { color: var(--bad); }
+.cues .pnote { color: #6a6a7c; font-style: italic; font-size: 10px; }
+
+/* ── Stage: visualizer over the busking surface ───────────────────── */
+.stage { flex: 1; height: 100%; display: flex; flex-direction: column; }
+/* An <object> is a replaced element with no intrinsic size, so it lays
+   out 0x0 inside a plain block and never paints. Grid stretches it. */
+.viewport { flex: 1; min-height: 0; display: grid; }
+.viz { display: grid; width: 100%; height: 100%; }
+.viz > object { width: 100%; height: 100%; }
+
+/* ── Busking surface ──────────────────────────────────────────────── */
+.surface { height: 320px; min-height: 320px; display: flex;
+           background: var(--panel); border-top: 1px solid var(--line); }
+/* `min-width: 0` is what lets a flex item shrink below its content —
+   without it the pools refuse to give ground and push the faders off
+   the right edge. */
+.col { padding: 12px; border-right: 1px solid var(--line-soft);
+       overflow-y: auto; flex: 1 1 0; min-width: 0; }
+.col.groups { flex: 0 0 260px; }
+.col.intensity { flex: 0 0 210px; }
+.col.faders { flex: 0 0 470px; border-right: none; }
+.surface header { font-weight: bold; letter-spacing: 0.08em; text-transform: uppercase;
+                  font-size: 10px; color: var(--ink-label); margin-bottom: 10px; }
+
+/* Pools — Groups and Focus share one uniform grid. Fixed-size cells
+   rather than pills that size to their label: a pool you find things in
+   by position has to keep the same shape every time you look at it,
+   which is how every console lays a pool out. */
+.pool { display: flex; flex-wrap: wrap; gap: 8px; }
+.pad { background: var(--pad); color: var(--ink-soft); border: 1px solid var(--line-pad);
+       border-radius: 6px; width: 84px; height: 64px; font-size: 11px;
+       padding: 4px; cursor: pointer; }
+.pad:hover { background: var(--pad-hover); border-color: var(--line-bright); }
+.pad.on { background: var(--sel); border-color: var(--sel-line); color: var(--ink-bright); }
+
+/* Loose buttons that are not pool entries — Release, Clear. */
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.tile { background: var(--tile); color: var(--ink-2); border: 1px solid var(--line-pad);
+        border-radius: 6px; padding: 0 12px; height: 44px; min-width: 74px;
+        font-size: 12px; cursor: pointer; }
+.tile:hover { background: #272733; }
+.tile.warn { background: #2a1a1a; border-color: #4a2a2a; color: #e0b0b0; }
+.tile.warn:hover { background: #3a2222; }
+
+/* Colour — the pool shows its colours. A ring rather than a filled
+   square so a white gel still reads as a swatch against a dark panel. */
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch { background: transparent; border: none; padding: 0; cursor: pointer;
+          width: 62px; display: flex; flex-direction: column;
+          align-items: center; gap: 4px; }
+.disc { width: 46px; height: 46px; border-radius: 23px;
+        border: 2px solid rgba(255, 255, 255, 0.18); }
+/* Brighten the ring rather than the disc: the disc is the gel and must
+   not lie about what it will do. */
+.swatch:hover .disc { border-color: rgba(255, 255, 255, 0.65); }
+.swatch:hover .swatch-label { color: var(--ink); }
+.swatch-label { font-size: 10px; color: var(--ink-dim); text-align: center; }
+
+/* Intensity — presets beside the fader, the way a console puts its
+   dimmer pool next to the wheel. */
+.intensity-row { display: flex; gap: 12px; }
+.presets { display: flex; flex-direction: column; gap: 6px; }
+.preset { background: var(--tile); color: var(--ink-2); border: 1px solid var(--line-pad);
+          border-radius: 6px; width: 52px; height: 40px; font-size: 12px;
+          cursor: pointer; }
+
+/* ── Faders ───────────────────────────────────────────────────────── */
+.fader-row { display: flex; gap: 8px; align-items: flex-start; }
+.fader { display: flex; flex-direction: column; align-items: center; gap: 5px;
+         width: 44px; }
+/* Keep `.track`'s height in step with `TRACK` in main.rs — the value
+   comes from the pointer's position within this element, so the two have
+   to agree. */
+.track { position: relative; width: 44px; height: 190px; border-radius: 8px;
+         background: var(--panel-2); border: 1px solid var(--line-pad); overflow: hidden;
+         cursor: pointer; }
+.fill { position: absolute; left: 0; bottom: 0; width: 100%; opacity: 0.55; }
+/* A wide flat handle reads as a fader cap and gives the thumb something
+   to aim at. */
+.handle { position: absolute; left: 0; width: 100%; height: 8px;
+          margin-bottom: -4px; background: #e8e8ee;
+          border-top: 2px solid; border-bottom: 2px solid; }
+.fader-label { font-size: 10px; color: var(--ink-dim); }
+.fader-value { font-size: 11px; color: var(--ink-2); }
+/* The master sits apart so it does not read as a ninth fader. */
+.master { margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--line-pad); }
+
+/* Solo. Deliberately loud when engaged: a solo left on by accident is
+   the kind of mistake that survives a whole song, and a control that
+   looks the same either way is how that happens. */
+.groups header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.groups .solo {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.66);
+  background: var(--pad-hover);
+  border: 1px solid var(--line-strong);
+}
+.groups .solo:hover { background: var(--sel-deep-2); }
+
+/* Flash keys. Wide and short — a flash is hit with the side of a hand
+   under pressure, not clicked precisely, so the target is generous even
+   though the control is momentary. */
+.flashes { display: flex; flex-direction: column; gap: 6px; padding: 0 8px; justify-content: center; }
+.flashes .flash {
+  width: 74px;
+  padding: 9px 0;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  border-radius: 5px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  background: #2a2733;
+  border: 1px solid #3a3546;
+}
+.flashes .flash:hover { background: #363042; border-color: #4a4358; }
+.flashes .flash:active { background: #d8d0e8; color: var(--ink-inverse); }
+
+/* Role masters, beside the effect controls. Same fader shape as the
+   rest — a master and an effect fader feel identical under a hand, and
+   what they do differently is the label's job, not the geometry's. */
+.masters { display: flex; gap: 6px; padding: 0 6px; }
+
+/* Transport, across the top of the visualizer.
+   Above the picture rather than beside the cue list, because that is
+   where the eye already is: an operator watching the rig should not have
+   to look away to see where the song is. */
+.transport-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--pad-hover);
+  flex: 0 0 auto;
+}
+.transport-bar .t-btn {
+  width: 30px;
+  height: 26px;
+  font-size: 11px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.78);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+}
+.transport-bar .t-btn:hover { background: var(--sel-deep-2); }
+
+/* Held keys. Distinct from the fired ones because they behave
+   differently under a hand — down is on, up is off — and a key that
+   looks like a flash but stays on would be learned wrong. PUNT is the
+   one with glow tape on it: the key an operator finds without looking
+   when the show has gone wrong, so it is the one that looks different
+   from everything else on the surface. */
+.flashes .flash.hold { border-style: dashed; }
+.flashes .flash.punt {
+  color: var(--ink-inverse);
+  background: #e8c860;
+  border: 1px solid var(--hit-pale);
+  font-weight: 600;
+}
+.flashes .flash.punt:hover { background: #f0d878; }
+.flashes .flash.punt:active { background: #fff4c0; }
+
+/* ── Pages, keys and the programmer's modes ───────────────────────── */
+/* The page strip sits in the fader column's header, beside the key
+   mode for the row. Both are decisions made before a song, so they are
+   small; the faders and keys below are what the hand lives on. */
+.faders header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pages { display: flex; align-items: center; gap: 4px; }
+.page-btn {
+  width: 24px; height: 20px; font-size: 10px; border-radius: 4px; cursor: pointer;
+  color: rgba(255, 255, 255, 0.78); background: var(--raised); border: 1px solid var(--line-strong);
+}
+.page-btn:hover { background: var(--sel-deep-2); }
+.page-num { font-size: 10px; letter-spacing: 0.06em; color: #b8b8c8; text-transform: none; }
+.key-modes { display: flex; gap: 3px; }
+.key-mode {
+  font-size: 9px; letter-spacing: 0.06em; padding: 3px 6px; border-radius: 4px; cursor: pointer;
+  color: rgba(255, 255, 255, 0.6); background: var(--tile); border: 1px solid var(--line-pad);
+}
+.key-mode.on { background: var(--sel); border-color: var(--sel-line); color: var(--ink-bright); }
+.blind-flag { font-size: 9px; letter-spacing: 0.06em; color: var(--ink-inverse); background: var(--bad-bright);
+              padding: 2px 6px; border-radius: 3px; text-transform: none; }
+
+/* A fader and its playback key, stacked. */
+.fader-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pkey {
+  width: 44px; height: 22px; font-size: 10px; border-radius: 5px; cursor: pointer;
+  color: rgba(255, 255, 255, 0.55); background: #2a2733; border: 1px solid #3a3546;
+}
+.pkey:hover { background: #363042; }
+.pkey:active { background: #d8d0e8; color: var(--ink-inverse); }
+.pkey.on { background: #d8c060; border-color: var(--hit-pale); color: var(--ink-inverse); }
+
+/* Latched: the page turned under a fader that was up. The old
+   assignment is still playing and the fill is hollow until the hand
+   brings the fader back to match — MA3's fixed-executor pickup. */
+.fader.latched .track { border-style: dashed; border-color: #8a7a3a; }
+.fader.latched .fill { opacity: 0.2; }
+.fader.latched .fader-label { color: #d8c060; }
+
+/* The programmer's modes. Blind is loud when on: every punch on a
+   blind desk goes nowhere, and it has to look wrong. */
+.modes { margin-top: 6px; }
+.tile.mode { font-size: 9px; letter-spacing: 0.06em; padding: 5px 7px; }
+.tile.mode.on { background: var(--sel); border-color: var(--sel-line); color: var(--ink-bright); }
+.tile.mode.blind.on { background: #7a2a2a; border-color: var(--bad-bright); color: var(--ink-bright); }
+
+/* GO on the look list, beside the song's GO. */
+.go.look { background: var(--play); color: var(--meter-ink); border-color: var(--play-line); margin-left: 4px; }
+
+/* ── Masters, parks, speed keys and the sound-in ─────────────────── */
+/* Transport keys for the song *playback*, beside the song's own
+   transport: pause holds the cue list, GO− steps it back, LOAD arms the
+   next cue. PAUSED is loud the way BLIND is — a paused list is one
+   whose every GO goes nowhere. */
+.transport-bar .t-keys { display: flex; gap: 4px; margin-left: 8px; }
+.transport-bar .t-key {
+  height: 26px; padding: 0 8px; font-size: 10px; letter-spacing: 0.06em;
+  border-radius: 4px; cursor: pointer; color: rgba(255, 255, 255, 0.78);
+  background: var(--raised); border: 1px solid var(--line-strong);
+}
+.transport-bar .t-key:hover { background: var(--sel-deep-2); }
+.transport-bar .t-key.on { background: var(--hit-bright); border-color: #f0c070; color: var(--ink-inverse); }
+
+/* The transmitter. Green when bytes are leaving the socket, red when
+   they cannot — an errored socket outranks the switch, because a lit
+   key over a dead socket is a desk silently not sending. */
+.transport-bar .t-output { display: flex; align-items: center; gap: 6px; margin-left: 8px; }
+.transport-bar .t-key.output.on { background: #3fae5a; border-color: #6fd08a; color: #0d140f; }
+.transport-bar .t-key.output.err { background: #c8383a; border-color: #ef6b6d; color: var(--ink-bright); }
+.transport-bar .out-status { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The sound fade and the three band meters. A trim and a meter, so
+   they are small; the operator glances at them, and rides nothing. */
+.transport-bar .t-sound { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.transport-bar .t-label { font-size: 9px; letter-spacing: 0.08em; color: #8a8a9a; }
+.hslider {
+  position: relative; width: 90px; height: 14px; border-radius: 7px;
+  background: var(--raised); border: 1px solid var(--line-strong); overflow: hidden; cursor: pointer;
+}
+.hfill { position: absolute; left: 0; top: 0; height: 100%; background: var(--meter); opacity: 0.7; }
+.meters { display: flex; gap: 4px; }
+.meter { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.meter-track {
+  position: relative; width: 10px; height: 22px; border-radius: 2px;
+  background: var(--raised); border: 1px solid var(--line-strong); overflow: hidden;
+}
+.meter-fill { position: absolute; left: 0; bottom: 0; width: 100%; background: #8fd0a0; }
+.meter-label { font-size: 7px; color: #8a8a9a; letter-spacing: 0.04em; }
+
+/* Park. Not a warning colour: a park is a fix, not a mistake. The
+   PARKED flag beside it is what says something on the rig is nailed. */
+.tile.park { background: #1a2a2a; border-color: #2a4a4a; color: #b0e0e0; }
+.tile.park:hover { background: #223a3a; }
+.parked-flag {
+  font-size: 9px; letter-spacing: 0.06em; color: var(--ink-inverse); background: #60d0d0;
+  padding: 2px 6px; border-radius: 3px; align-self: center;
+}
+
+/* The speed keys under RATE. TAP is the big one — a foot or a fist
+   finds it; the others are a decision. */
+.rate-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.speed-keys { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+.speed-key {
+  width: 44px; height: 18px; font-size: 9px; letter-spacing: 0.04em; border-radius: 4px;
+  cursor: pointer; color: rgba(255, 255, 255, 0.7); background: var(--tile); border: 1px solid var(--line-pad);
+}
+.speed-key:hover { background: #272733; }
+.speed-key.on { background: var(--sel); border-color: var(--sel-line); color: var(--ink-bright); }
+.speed-key.tap { height: 24px; background: #3a2e1a; border-color: #6a5030; color: #f0d0a0; font-weight: 600; }
+.speed-key.tap:active { background: #f0d0a0; color: var(--ink-inverse); }
+.tap-readout { font-size: 9px; color: var(--ink-dim); }

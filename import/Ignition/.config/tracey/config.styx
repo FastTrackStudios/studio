@@ -1,0 +1,40 @@
+// Tracey — requirement traceability for Ignition.
+//
+// Specs live in docs/lighting/spec/**; requirements are `r[<topic>.<id>]` paragraphs.
+// Code references them with `r[impl <id>]` / `r[verify <id>]`. Run
+// `tracey_status` / `tracey_uncovered` to see what still needs building or
+// testing.
+//
+// The `r` prefix matches FastTrackStudio's. The two repos are separate
+// checkouts with separate specs, so the ids never meet.
+
+specs (
+    {
+        name ignition
+        include (
+            docs/lighting/spec/**/*.md
+        )
+        impls (
+            {
+                name rust
+                include (
+                    crates/**/*.rs
+                    apps/**/*.rs
+                    features/**/*.rs
+                )
+                exclude (
+                    target/**
+                    **/target/**
+                    // The vendored upstream forks. They carry no `r[...]`
+                    // markers and never will — a one-hunk patch against
+                    // someone else's crate is not where this project's
+                    // requirements live — so sweeping ~60k lines of them
+                    // is pure scan cost.
+                    vendor/**
+                    // Not ported (legacy/README.md): outside the workspace.
+                    legacy/**
+                )
+            }
+        )
+    }
+)

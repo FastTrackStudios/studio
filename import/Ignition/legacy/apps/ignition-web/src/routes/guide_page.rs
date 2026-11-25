@@ -1,0 +1,311 @@
+//! The guide — one vault note, with its table of contents and its local
+//! graph.
+//!
+//! Three columns: the contents on the left, the note in the middle, and
+//! on the right the **local graph** — this concept and everything one hop
+//! from it, drawn and clickable. That is the view that makes a vault feel
+//! like a vault rather than a chapter list: you can see what a page
+//! touches, and go there, without reading it first.
+
+use dioxus::prelude::*;
+use view_knowledge_graph::model::{ColorMode, WikiGraph};
+
+use crate::Route;
+use crate::guide::{self, VAULT};
+use crate::routes::Shell;
+
+/// `/guide` — opens at the front door.
+#[component]
+pub fn GuideIndex() -> Element {
+    let slug = VAULT
+        .first()
+        .map_or_else(String::new, |p| p.slug.to_string());
+    rsx! {
+        GuidePage { slug }
+    }
+}
+
+/// `/guide/:slug` — one note.
+#[component]
+pub fn GuidePage(slug: String) -> Element {
+    let nav = navigator();
+
+    let Some(page) = VAULT.page(&slug) else {
+        return rsx! {
+            Shell {
+                section { class: "ig-prose",
+                    h1 { "No such guide page" }
+                    Link { to: Route::GuideIndex {}, class: "ig-button", "Back to the guide" }
+                }
+            }
+        };
+    };
+
+    let graph = use_memo(guide::graph);
+    let here = page.slug;
+    let backlinks = use_memo(move || VAULT.backlinks(here));
+    let local = use_memo(move || guide::local_graph(&graph.read(), here));
+
+    rsx! {
+        Shell {
+            div { class: "ig-guide",
+                GuideToc { current: page.slug }
+
+                article { class: "ig-guide-page",
+                    // Where you are: the guide, the stage, this note.
+                    // From the stage rather than a path — the vault is
+                    // flat, and the reading order is the only structure
+                    // the notes actually declare.
+                    ssg::Breadcrumbs { page, base: guide::BASE }
+
+                    ChapterNav { slug: page.slug, compact: true }
+
+                    // The headings of THIS note, as links into it. Renders
+                    // nothing on a short one — a contents list exists to
+                    // save a scroll, and two entries do not.
+                    ssg::PageToc { page }
+
+                    // The note. This HTML is what this crate's own build
+                    // script produced from markdown in this repo — there
+                    // is no untrusted author anywhere in the path, which
+                    // is the only reason this is not the hole it looks
+                    // like.
+                    //
+                    // The click handler is what keeps a wikilink inside
+                    // the app: `build.rs` rewrote `[[slug]]` to an
+                    // ordinary `/guide/slug` anchor, and left to itself
+                    // the browser would reload the whole site to follow
+                    // one. Delegated from the container rather than bound
+                    // per link, because the links are inside opaque HTML
+                    // and there is no element here to attach to.
+                    // Hovering a cross-reference shows where it goes —
+                    // title, summary, reading time — so a reader can
+                    // decide NOT to follow it and lose their place. The
+                    // target is already `&'static` here, so the card
+                    // costs no fetch.
+                    ssg::LinkPreviews { vault: VAULT,
+                    div {
+                        class: "ig-md",
+                        dangerous_inner_html: "{page.html}",
+                        onclick: move |evt| {
+                            if let Some(route) = clicked_route(&evt) {
+                                evt.prevent_default();
+                                nav.push(route);
+                            }
+                        },
+                    }
+                    }
+
+                    ChapterNav { slug: page.slug, compact: false }
+
+                    // Reading time always; the date only when the build
+                    // established one — a nix build has no git history,
+                    // and an invented date is worse than none.
+                    p { class: "ig-page-meta",
+                        "{page.reading_minutes()} min read"
+                        if !page.updated.is_empty() {
+                            " · updated "
+                            time { datetime: page.updated, {day(page.updated)} }
+                        }
+                    }
+
+                    Backlinks { pages: backlinks() }
+                }
+
+                aside { class: "ig-guide-aside",
+                    // Search is a scan over the vault, which is already
+                    // `&'static` in this binary — no index to fetch, and
+                    // the first search is as fast as the tenth.
+                    ssg::VaultSearch { vault: VAULT, base: guide::BASE }
+                    LocalGraph { graph: local(), current: page.slug }
+                }
+            }
+        }
+    }
+}
+
+/// The date part of an RFC 3339 timestamp — `2026-09-04`.
+///
+/// A guide page is not a news post: the hour it was committed is noise,
+/// and the `datetime` attribute carries the precise value for anything
+/// that wants it.
+fn day(timestamp: &str) -> &str {
+    timestamp.split('T').next().unwrap_or(timestamp)
+}
+
+/// The in-app route a click inside the rendered note asked for, if any.
+///
+/// Walks up from whatever was clicked to the nearest anchor and reads its
+/// `href`. Only `/guide/…` is claimed: an external link, and a link to a
+/// page that does not exist, are left to the browser.
+#[cfg(target_arch = "wasm32")]
+fn clicked_route(evt: &Event<MouseData>) -> Option<Route> {
+    use wasm_bindgen::JsCast as _;
+
+    let mouse = evt.data().downcast::<web_sys::MouseEvent>()?.clone();
+    let target = mouse.target()?.dyn_into::<web_sys::Element>().ok()?;
+    let href = target.closest("a").ok()??.get_attribute("href")?;
+    let rest = href.strip_prefix("/guide")?;
+    match rest.trim_start_matches('/') {
+        "graph" => Some(Route::GuideGraph {}),
+        "" => Some(Route::GuideIndex {}),
+        slug if VAULT.page(slug).is_some() => Some(Route::GuidePage {
+            slug: slug.to_owned(),
+        }),
+        _ => None,
+    }
+}
+
+/// Off the web there is no DOM to read the click out of, and this crate
+/// still builds for the host so `cargo check --workspace` and the tests
+/// mean something.
+#[cfg(not(target_arch = "wasm32"))]
+const fn clicked_route(_evt: &Event<MouseData>) -> Option<Route> {
+    None
+}
+
+/// This note and everything one hop from it.
+///
+/// Nodes are coloured by community, matching the full graph view, so the
+/// two reads agree about which cluster a concept belongs to. Clicking a
+/// node navigates.
+#[component]
+fn LocalGraph(graph: WikiGraph, current: &'static str) -> Element {
+    let nav = navigator();
+
+    // A page with no links has nothing to draw, and an empty box beside
+    // the text reads as broken rather than as "no connections".
+    if graph.nodes.len() < 2 {
+        return rsx! {};
+    }
+
+    rsx! {
+        aside { class: "ig-local-graph",
+            h2 { "Connections" }
+            div { class: "ig-local-graph-canvas",
+                view_knowledge_graph::KnowledgeGraphView {
+                    graph,
+                    color_mode: ColorMode::Community,
+                    // Marks the page you are on without dimming the rest —
+                    // `highlighted` would, and here everything IS relevant.
+                    active: Some(current.to_string()),
+                    // Tighter than the full view: this is a handful of
+                    // nodes in a narrow rail, not a whole map.
+                    spacing: 0.45,
+                    node_scale: 0.75,
+                    on_node_click: move |id: String| {
+                        if VAULT.page(&id).is_some() {
+                            nav.push(Route::GuidePage { slug: id });
+                        }
+                    },
+                }
+            }
+            Link { to: Route::GuideGraph {}, class: "ig-note", "See the whole graph" }
+        }
+    }
+}
+
+/// The table of contents, in reading order, under its stages.
+///
+/// The notes are one path from "what is this" to "how do I run it", and a
+/// flat list of seven links hides that — it reads as reference material
+/// you dip into. The stage headings say where the path is going and,
+/// more usefully, where someone can stop.
+///
+/// The stage comes from each note's frontmatter and a heading is emitted
+/// whenever it changes, so the order of the headings is the reading order
+/// by construction and a chapter cannot appear under a stage it does not
+/// belong to.
+#[component]
+fn GuideToc(current: &'static str) -> Element {
+    rsx! {
+        nav { class: "ig-guide-toc",
+            // `stages()` groups consecutive pages by their `stage:`, so
+            // the order of the headings IS the reading order and a
+            // chapter cannot appear under a stage it does not belong to.
+            for (stage , pages) in VAULT.stages() {
+                if !stage.is_empty() {
+                    span { class: "ig-toc-stage", "{stage}" }
+                }
+                for entry in pages {
+                    Link {
+                        key: "{entry.slug}",
+                        to: Route::GuidePage { slug: entry.slug.to_string() },
+                        class: if entry.slug == current { "ig-toc-current" } else { "" },
+                        // The note's `blurb:`. A title is a name; the
+                        // blurb is what the chapter is about, and a
+                        // sidebar with both in it stops being a sidebar.
+                        title: entry.summary,
+                        "{entry.title}"
+                    }
+                }
+            }
+            Link { to: Route::GuideGraph {}, class: "ig-toc-graph", "Graph" }
+        }
+    }
+}
+
+/// Previous and next, above and below the note.
+///
+/// Both copies read the vault's reading order, which is what
+/// `GUIDE_PAGES`, which is what the table of contents renders — so the
+/// buttons, the sidebar and the reading order are one fact with one
+/// source. The prose footer these replace still lives in each note's
+/// `source`, where it is most of the graph's edges; `build.rs` strips it
+/// from the rendered body.
+///
+/// `compact` is the top copy: the same two links with the labels and the
+/// boxes dropped, because a full pair of cards above the title competes
+/// with the title.
+#[component]
+fn ChapterNav(slug: &'static str, compact: bool) -> Element {
+    let (previous, next) = (VAULT.previous(slug), VAULT.next(slug));
+    if previous.is_none() && next.is_none() {
+        return rsx! {};
+    }
+    rsx! {
+        nav {
+            class: if compact { "ig-chapter-nav ig-chapter-nav-top" } else { "ig-chapter-nav" },
+            "aria-label": "Chapters",
+            if let Some(p) = previous {
+                Link {
+                    to: Route::GuidePage { slug: p.slug.to_string() },
+                    class: "ig-chapter-link ig-chapter-prev",
+                    span { class: "ig-chapter-dir", "Previous" }
+                    span { class: "ig-chapter-title", "{p.title}" }
+                }
+            }
+            if let Some(n) = next {
+                Link {
+                    to: Route::GuidePage { slug: n.slug.to_string() },
+                    class: "ig-chapter-link ig-chapter-next",
+                    span { class: "ig-chapter-dir", "Next" }
+                    span { class: "ig-chapter-title", "{n.title}" }
+                }
+            }
+        }
+    }
+}
+
+/// What leads here.
+///
+/// Rendered only when there is something to show — an empty "Referenced
+/// by" heading is worse than none.
+#[component]
+fn Backlinks(pages: Vec<&'static ssg::StaticPage>) -> Element {
+    if pages.is_empty() {
+        return rsx! {};
+    }
+    rsx! {
+        footer { class: "ig-backlinks",
+            h2 { "Referenced by" }
+            ul {
+                for p in pages {
+                    li { key: "{p.slug}",
+                        Link { to: Route::GuidePage { slug: p.slug.to_string() }, "{p.title}" }
+                    }
+                }
+            }
+        }
+    }
+}

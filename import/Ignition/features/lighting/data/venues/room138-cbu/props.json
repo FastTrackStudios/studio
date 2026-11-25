@@ -1,0 +1,156 @@
+[
+  {
+    "eulers": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "name": "Drum Kit",
+    "position": {
+      "x": -0.65,
+      "y": 0.7788,
+      "z": 0
+    },
+    "size": {
+      "x": 1.926,
+      "y": 1.632,
+      "z": 1.206
+    }
+  },
+  {
+    "eulers": {
+      "x": 0,
+      "y": 0,
+      "z": 180
+    },
+    "name": "Keyboard",
+    "position": {
+      "x": 0,
+      "y": -1.15,
+      "z": 0
+    },
+    "size": {
+      "x": 1.35,
+      "y": 0.42,
+      "z": 0.95
+    }
+  },
+  {
+    "eulers": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "name": "Mic 1",
+    "position": {
+      "x": 0,
+      "y": -1.5,
+      "z": 0
+    },
+    "size": {
+      "x": 0.59,
+      "y": 0.52,
+      "z": 1.6
+    }
+  },
+  {
+    "eulers": {
+      "x": 0,
+      "y": 0,
+      "z": 0.0
+    },
+    "label": "lead vocal, keyboard, standing",
+    "name": "Person - Singer",
+    "person": "Singer",
+    "position": {
+      "x": 0,
+      "y": -0.75,
+      "z": 0
+    },
+    "size": {
+      "x": 0.6,
+      "y": 0.3,
+      "z": 1.78
+    }
+  },
+  {
+    "eulers": {
+      "x": 0,
+      "y": 0,
+      "z": 0.0
+    },
+    "label": "guitar",
+    "name": "Person - Guitar 1",
+    "person": "Guitar 1",
+    "position": {
+      "x": 1.35,
+      "y": -0.05,
+      "z": 0
+    },
+    "size": {
+      "x": 0.6,
+      "y": 0.3,
+      "z": 1.75
+    }
+  },
+  {
+    "eulers": {
+      "x": 0,
+      "y": 0,
+      "z": 0.0
+    },
+    "label": "guitar",
+    "name": "Person - Guitar 2",
+    "person": "Guitar 2",
+    "position": {
+      "x": 2.4,
+      "y": -0.25,
+      "z": 0
+    },
+    "size": {
+      "x": 0.6,
+      "y": 0.3,
+      "z": 1.75
+    }
+  },
+  {
+    "eulers": {
+      "x": 0,
+      "y": 0,
+      "z": 0.0
+    },
+    "label": "bass",
+    "name": "Person - Bass",
+    "person": "Bass",
+    "position": {
+      "x": -2.35,
+      "y": 0.05,
+      "z": 0
+    },
+    "size": {
+      "x": 0.6,
+      "y": 0.3,
+      "z": 1.75
+    }
+  },
+  {
+    "eulers": {
+      "x": 0,
+      "y": 0,
+      "z": 0.0
+    },
+    "label": "drums",
+    "name": "Person - Drummer",
+    "person": "Drummer",
+    "position": {
+      "x": -0.48,
+      "y": 1.23,
+      "z": 0
+    },
+    "size": {
+      "x": 0.6,
+      "y": 0.3,
+      "z": 1.35
+    }
+  }
+]
