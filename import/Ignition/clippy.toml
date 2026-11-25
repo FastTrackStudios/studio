@@ -19,6 +19,7 @@ doc-valid-idents = [
     "DaVinci",
     "OpenGL", "WebGPU", "WebSocket",
     "SlimPAR", "RockStrip",
+    "EasyView", "myDMX",
     "MAgic",
     "DejaVu",
 ]

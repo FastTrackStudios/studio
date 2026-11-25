@@ -1,0 +1,14 @@
+{
+  "song": "Out Of The Black",
+  "note": "The recital set's reference track (the Royal Blood recording edited to the recital arrangement) on the desk's computer, and the Sr. Recital Showcase Ableton set's warp markers for its clip: [audio seconds, clip beat]. The clip's beat 0 is the song's beat 4 (the song starts at arrangement beat 7962; the clip sits at 7969.625 with loop start 3.625).",
+  "audio": "/Users/codywright/Downloads/Out Of The Black - Recital Reference.wav",
+  "seconds": 324.123313,
+  "beat_offset": 4.0,
+  "warp": [
+    [0.0, 3.625],
+    [265.42454166666664, 707.0],
+    [278.0478333333117, 739.0],
+    [290.2771458333101, 771.0],
+    [324.1233124999107, 859.0]
+  ]
+}

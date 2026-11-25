@@ -250,6 +250,14 @@
         "to": 0
       },
       "tricks": []
+    },
+    "quarter turns": {
+      "about": "each light a little further round the loop than the one before, a whole turn across the row: heads on a circle or a ballyhoo stop moving as one",
+      "phase": {
+        "from": 0,
+        "to": 270
+      },
+      "tricks": []
     }
   },
   "version": 1

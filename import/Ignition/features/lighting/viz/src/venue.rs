@@ -625,43 +625,56 @@ fn address_gaps(venue: &Venue) -> Vec<Option<u16>> {
 
 /// Narrows a several-lamp fixture's map to one lamp: of every attribute
 /// the chart repeats (six warm whites), only the `cell`-th stays; the
-/// channels the chart has once (level, strobe, the shared colour) stay
-/// as they are, so a lamp is drawn in the fixture's colour at its
-/// level. Returns the repeated attributes: the ones that are a lamp's own.
+/// channels the chart has once (level, strobe) stay as they are, so a
+/// lamp is drawn at the fixture's level. Returns the repeated attributes:
+/// the ones that are a lamp's own.
+///
+/// A chart can also have a fixture-wide copy of a per-lamp channel: the
+/// ZQ01334's 33ch mode is one R, G, B for the whole bar, then an R, G, B
+/// per cell. An attribute that appears exactly once more than another
+/// repeated attribute (red 7 times beside warm white's 6) has its first
+/// copy as the fixture's own, kept by cell 0 (the fixture itself) and by
+/// no lamp.
 fn keep_cell(map: &mut ignition_proto::ChannelMap, cell: u8) -> Vec<ignition_proto::Attribute> {
-    let mut seen: Vec<(ignition_proto::Attribute, u8)> = Vec::new();
-    let repeated: Vec<ignition_proto::Attribute> = {
-        let mut counts: Vec<(ignition_proto::Attribute, u8)> = Vec::new();
-        for (_, attr) in &map.channels {
-            match counts.iter_mut().find(|(a, _)| a == attr) {
-                Some((_, n)) => *n = n.saturating_add(1),
-                None => counts.push((attr.clone(), 1)),
-            }
+    let mut counts: Vec<(ignition_proto::Attribute, u8)> = Vec::new();
+    for (_, attr) in &map.channels {
+        match counts.iter_mut().find(|(a, _)| a == attr) {
+            Some((_, n)) => *n = n.saturating_add(1),
+            None => counts.push((attr.clone(), 1)),
         }
-        counts
-            .into_iter()
-            .filter(|(_, n)| *n > 1)
-            .map(|(a, _)| a)
-            .collect()
-    };
+    }
+    counts.retain(|(_, n)| *n > 1);
+    let shared = |count: u8| counts.iter().any(|(_, n)| n.saturating_add(1) == count);
+    let mut seen: Vec<(ignition_proto::Attribute, u8)> = Vec::new();
     map.channels.sort_by_key(|(offset, _)| *offset);
     map.channels.retain(|(_, attr)| {
-        if !repeated.contains(attr) {
+        let Some(&(_, count)) = counts.iter().find(|(a, _)| a == attr) else {
             return true;
-        }
-        let nth = match seen.iter_mut().find(|(a, _)| a == attr) {
-            Some((_, n)) => {
-                *n = n.saturating_add(1);
-                *n
-            }
-            None => {
-                seen.push((attr.clone(), 1));
-                1
-            }
         };
-        nth == cell
+        let nth = if let Some((_, n)) = seen.iter_mut().find(|(a, _)| a == attr) {
+            *n = n.saturating_add(1);
+            *n
+        } else {
+            seen.push((attr.clone(), 1));
+            1
+        };
+        if shared(count) {
+            // nth 1 is the fixture's own copy; lamp k is copy k + 1.
+            nth == cell.saturating_add(1)
+        } else {
+            nth == cell
+        }
     });
-    repeated
+    // The renderer writes, for cell 0, only what is *not* in this list
+    // (show.rs, `scaled`): the shared copy is the fixture's own, so it
+    // stays off cell 0's list, or the tower never sends its bar colour.
+    let own: Vec<bool> = counts.iter().map(|(_, n)| cell == 0 && shared(*n)).collect();
+    counts
+        .into_iter()
+        .zip(own)
+        .filter(|(_, own)| !own)
+        .map(|((a, _), _)| a)
+        .collect()
 }
 
 impl PatchTable {
@@ -1371,6 +1384,48 @@ mod tests {
         // Where `bounds()` stops at the centres.
         let (bmin, bmax) = venue.bounds();
         assert_eq!((bmin.x, bmax.y), (0.0, -5.0));
+    }
+
+    /// The ZQ01334's 33ch mode: dimmer, strobe, warm white x6, a bar-wide
+    /// R G B, then R G B per cell. Lamp 2 keeps warm white 2 and cell 2's
+    /// colour; the fixture itself (cell 0) keeps the bar-wide colour.
+    #[test]
+    fn a_cell_skips_the_fixture_wide_copy_of_its_colour() {
+        use ignition_proto::{Attribute, ColorChannel};
+        let rgb = |c| Attribute::ColorAdd { channel: c };
+        let mut channels = vec![(0, Attribute::Dimmer), (1, Attribute::Strobe)];
+        for i in 0..6_u16 {
+            channels.push((2 + i, rgb(ColorChannel::White)));
+        }
+        let mut offset = 8_u16;
+        for _ in 0..7 {
+            for c in [ColorChannel::Red, ColorChannel::Green, ColorChannel::Blue] {
+                channels.push((offset, rgb(c)));
+                offset += 1;
+            }
+        }
+        let map = ignition_proto::ChannelMap { footprint: 29, channels, curves: std::collections::HashMap::new() };
+        let mut lamp = map.clone();
+        keep_cell(&mut lamp, 2);
+        let red: Vec<u16> = lamp.channels.iter().filter(|(_, a)| *a == rgb(ColorChannel::Red)).map(|(o, _)| *o).collect();
+        // Bar-wide red is 8; cell 1's 11; cell 2's 14.
+        assert_eq!(red, vec![14]);
+        let ww: Vec<u16> = lamp
+            .channels
+            .iter()
+            .filter(|(_, a)| *a == rgb(ColorChannel::White))
+            .map(|(o, _)| *o)
+            .collect();
+        assert_eq!(ww, vec![3]);
+        let mut whole = map;
+        let lamps_own = keep_cell(&mut whole, 0);
+        // The bar-wide colour is the fixture's own: not on the list of
+        // what cell 0 leaves to its lamps.
+        assert!(!lamps_own.contains(&rgb(ColorChannel::Red)));
+        assert!(lamps_own.contains(&rgb(ColorChannel::White)));
+        let red: Vec<u16> = whole.channels.iter().filter(|(_, a)| *a == rgb(ColorChannel::Red)).map(|(o, _)| *o).collect();
+        assert_eq!(red, vec![8]);
+        assert!(whole.channels.iter().all(|(_, a)| *a != rgb(ColorChannel::White)));
     }
 
     #[test]

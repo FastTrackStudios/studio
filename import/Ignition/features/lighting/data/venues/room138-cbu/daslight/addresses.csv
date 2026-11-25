@@ -1,0 +1,23 @@
+fixture,type,mode,address,last_channel,reserved_to
+Tower 1,U'King ZQ01334 tower,33CH,1,33,33
+Tower 2,U'King ZQ01334 tower,33CH,34,66,66
+Tower 3,U'King ZQ01334 tower,33CH,67,99,99
+Tower 4,U'King ZQ01334 tower,33CH,100,132,132
+Tree 1 Par 1 - Bass,U'King 36 LED par,7CH (DMX mode; its only one),141,147,147
+Tree 1 Par 2 - Drummer,U'King 36 LED par,7CH (DMX mode; its only one),148,154,154
+Tree 1 Par 3 - Singer,U'King 36 LED par,7CH (DMX mode; its only one),155,161,161
+Tree 1 Par 4 - Guitar 1,U'King 36 LED par,7CH (DMX mode; its only one),162,168,168
+Tree 2 Par 1 - Bass,U'King 36 LED par,7CH (DMX mode; its only one),169,175,175
+Tree 2 Par 2 - Singer,U'King 36 LED par,7CH (DMX mode; its only one),176,182,182
+Tree 2 Par 3 - Guitar 1,U'King 36 LED par,7CH (DMX mode; its only one),183,189,189
+Tree 2 Par 4 - Guitar 2,U'King 36 LED par,7CH (DMX mode; its only one),190,196,196
+Mover 1,Mini Gobo moving head,11CH,201,211,211
+Mover 2,Mini Gobo moving head,11CH,212,222,222
+Mover 3,Mini Gobo moving head,11CH,223,233,233
+Mover 4,Mini Gobo moving head,11CH,234,244,244
+Wall Bar 1,Solena Max Bar 28 RGB,24CH,301,324,324
+Wall Bar 2,Solena Max Bar 28 RGB,24CH,325,348,348
+RockStrip 1,Rockville RockStrip 252,28CH,401,428,428
+RockStrip 2,Rockville RockStrip 252,28CH,429,456,456
+RockStrip 3,Rockville RockStrip 252,28CH,457,484,484
+RockStrip 4,Rockville RockStrip 252,28CH,485,512,512

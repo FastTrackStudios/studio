@@ -38,7 +38,7 @@ upstage(+), z = up, playing area centred on the origin):
 The band wall is a velvet curtain hung 12 cm off it, floor to 3.12 m.
 The lounge is the stage-right end, the mixing console the stage-left end.
 
-## The rig — 40 fixtures, 224 channels, universe 1
+## The rig — 42 fixtures, universe 1
 
 **4 towers, 24 lights.** Symmetric at x = ±6 ft and ±18 ft, just in front of
 the band wall. Six lights stacked on each ~5 ft stand, touching, as
@@ -47,18 +47,16 @@ a honeycomb lens with LED behind the rest of the face — `CBU Tower Blinder
 Ring`, generated from `data/fixtures/cbu-tower-blinder-ring.json`, four
 channels: WW (the blinder), then R/G/B (the surround).
 
-**2 trees, 8 parcans.** T-bar stands about 8 ft tall at x = ±2.9 m, 14 ft
-into the house, four pars side by side along each crossbar. (They were at
-±16 ft, which in the real room is inside the mixing console on one side
-and on the lounge's coffee table on the other.) `36 LED Par
-Can`, 7 ch.
+**2 trees, 8 parcans.** T-bar stands about 8 ft tall, 7.9 m into the
+house, centred at x = ±1.3 m: four pars in one row along each crossbar
+(1 × 4), 38 cm apart, Par 1 on the left as the audience sees it. `36 LED
+Par Can`, 7 ch.
 
 Each par is aimed at one player rather than washing the band flat. Left
-to right on the audience-left tree: **keys, bass, drums, vocal**. The far
-tree takes them in the opposite order, so every player gets light from
-both sides — one key, one fill — instead of two pars from the same
-direction. The fixture names carry the target (`Tree 1 Par 3 — Drums`),
-so a repatch that moves one is obvious.
+to right: Tree 1 (audience left) **bass, drummer, singer, guitar 1**;
+Tree 2 (audience right) **bass, singer, guitar 1, guitar 2**. The fixture
+names carry the target (`Tree 1 Par 3 — Singer`), so a repatch that moves
+one is obvious.
 
 **4 movers.** In front of the band wall's curtain at 8 ft, above
 the 5 ft towers so they clear the band's heads and can sweep the room.
@@ -135,19 +133,28 @@ open), so the guesses are listed rather than buried:
   the house and the aim angles are chosen to look like a room that works,
   not measured.
 - **The tower fixture** — identified from the owner's own desk file as
-  the U'King ZQ01334 in its 15-channel mode: one level, one strobe and
-  one colour for the whole tower, and a warm white for each of its six
-  lamps. Each lamp is still its own record, drawn as a lamp
-  (`CBU Tower Blinder Ring`), with `wired_as` naming the real fixture and
-  `cell` its lamp. Lamp 0 (`Tower 1` to `Tower 4`, channels 41 to 44) is
-  the tower itself: its level, strobe and colour, drawn by its lamps. So
-  `Towers` is those four and `Tower Lamps` is the twenty-four warm
-  whites, each with a level of its own; the output works out the one
-  level byte the fixture really has. The drawn lamp's size, 40 degree spread and 18 W are still
-  read off the photograph.
-- **DMX addressing** — packed from 1 with no gaps, in the order towers,
-  trees, movers, wall bars, key bars. Whatever the real patch is, it goes in
-  `patch.json` and `fixtures.json` together.
+  the U'King ZQ01334, now patched in its 33-channel mode: one level and
+  one strobe for the whole tower, a bar-wide colour, and for each of its
+  six lamps a warm white and an RGB cell of its own. Each lamp is still
+  its own record, drawn as a lamp (`CBU Tower Blinder Ring`), with
+  `wired_as` naming the real fixture and `cell` its lamp. Lamp 0
+  (`Tower 1` to `Tower 4`, channels 41 to 44) is the tower itself: its
+  level, strobe and the bar-wide colour. So `Towers` is those four and
+  `Tower Lamps` is the twenty-four lamps, each with a level and a colour
+  of its own; the output works out the one level byte the fixture really
+  has. The drawn lamp's size, 40 degree spread and 18 W are still read
+  off the photograph.
+- **DMX addressing** — the mobile rig's real patch (2026-11-22), the
+  same as the myDMX showfile and address list in `daslight/`: towers at
+  1, 34, 67, 100 (33ch); tree pars from 141, 7 apart; movers (Mini Gobo,
+  11ch) from 201, 11 apart; two Solena bars on the back wall at 301 and
+  325 (24ch); four RockStrips across the front, left to right, at 401,
+  429, 457 and 485 (28ch: eight R, G, B cells, master dimmer, strobe,
+  chase, function). Ignition's own type for the RockStrip's 28ch mode
+  reads 1-24 as single-colour section levels, so the cooked myDMX scenes
+  keep its level and take the strips' colour from the wall bars
+  (`daslight/COOKED.md`). The RockStrips' position on the floor
+  downstage is a placeholder: nobody has said where they stand.
 - **Drum kit** — where the scan has it, borrowing Riverside's kit
   dimensions.
 

@@ -23,6 +23,8 @@ members = [
     "features/lighting/daw",
     "features/lighting/fixture",
     "features/lighting/profile",
+    # Daslight 5 / myDMX 5 showfiles (features/lighting/daslight).
+    "features/lighting/daslight",
     # Beams in the air, drawn analytically (features/lighting/beams/README.md).
     "features/lighting/beams",
     "features/lighting/viz",
@@ -64,7 +66,7 @@ ignition-session = { path = "features/lighting/session" }
 # and items (features/lighting/session). By rev until it is tagged: a
 # commit of its `main`, the one Studio and Keyflow pin (on Architect v0.15.0), so a build with all
 # three has one `session`.
-session = { git = "https://github.com/FastTrackStudios/session", rev = "e8a705ed1c9ae8b16934018e3b4b897769635961", default-features = false }
+session = { git = "https://github.com/FastTrackStudios/session", rev = "568e9a30a2d858b68a617a94f40f2390f7ea022e", default-features = false }
 ignition-effects = { path = "features/lighting/effects" }
 ignition-playback = { path = "features/lighting/playback" }
 ignition-core = { path = "features/lighting/core" }
@@ -72,6 +74,7 @@ ignition-dmx = { path = "features/lighting/dmx" }
 ignition-daw = { path = "features/lighting/daw" }
 ignition-fixture = { path = "features/lighting/fixture" }
 ignition-profile = { path = "features/lighting/profile" }
+ignition-daslight = { path = "features/lighting/daslight" }
 ignition-viz = { path = "features/lighting/viz" }
 ignition-beams = { path = "features/lighting/beams" }
 ignition-pane = { path = "features/lighting/pane" }
@@ -90,6 +93,9 @@ utils = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e
 # songs of a night and their tempo maps. ignition-daw's `ableton` feature
 # (on by default), and apps/ignition's tests.
 ableton = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
+# `dsp::hits::detect` (feature `hits`): drum hits found in a stem, for
+# ignition-daw's `hits` (cues on the hits).
+dsp = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
 # The REAPER project parser (`parse_rpp_file`, `ReaperProject`, MIDI
 # items): ignition-daw's `reaper` and `chart`.
 dawfile-reaper = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
@@ -113,25 +119,24 @@ fts-sample = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731d
 
 # Not Studio's, but Studio's pin: the LRC lyrics parser
 # (`keyflow_proto::lrc`), for ignition-daw's `lyrics`.
-keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa" }
 
 # ── Architect — the same source Studio's root pins at that commit ─────
 # One tag shared by every entry so the framework moves together.
 # The extension API: ignition-pane links into an Architect build
 # (`linked`) and runs as a process extension (`guest`).
-architect-extensions = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-architect-extensions-dioxus = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extensions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.0" }
 # View input and theme tokens (`ViewInput`, `Button`, `ThemeTokens`) the
 # process view receives.
-architect-workspace = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.0" }
 # Process views (architect#641): a pane drawn by another program over a
 # socket pair, its frames in a dma-buf (Linux), an IOSurface (macOS) or
 # shared memory — the visualizer's pane (apps/ignition --process-view),
 # by the tag the rest of architect is. apps/ignition takes its `guest`
 # feature for `gpu::export_texture`, on the workspace's one wgpu.
-architect-process-view = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-process-view = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.0" }
 
-architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", features = ["otel"] }
+architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.0", features = ["otel"] }
 ignition-live-ui = { path = "crates/ignition-live-ui" }
 ignition-mobile = { path = "apps/ignition-mobile" }
 
@@ -271,15 +276,16 @@ fts-sample = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263
 # host, which cargo counts as another source, is how a git dependency's
 # own pin is overridden. Move it with that pin.
 [patch."https://github.com/FastTrackStudios/architect"]
-architect = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-architect-devices = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-architect-orgs = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-crdt = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-crdt-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+architect-devices = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+architect-orgs = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+architect-workspace-hack = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+crdt = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
+crdt-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
 
 # One editor source: architect v0.12.6's workspace-hack names the editor
 # on the `www.` host while its other crates name the plain one.
