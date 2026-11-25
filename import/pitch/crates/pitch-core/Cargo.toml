@@ -1,0 +1,11 @@
+[package]
+name = "pitch-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Swappable pitch detection, note segmentation, scale correction, and pitch-blob resynthesis"
+
+[dependencies]
+realfft = { workspace = true }
+serde = { workspace = true }

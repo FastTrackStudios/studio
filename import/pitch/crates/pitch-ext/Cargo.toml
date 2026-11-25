@@ -1,0 +1,18 @@
+[package]
+name = "pitch-ext"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Out-of-process DAW extension and CLI for swappable pitch detection and ARA-style pitch editing (fts.pitch)"
+
+[[bin]]
+name = "fts-pitch"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+hound = { workspace = true }
+pitch-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
