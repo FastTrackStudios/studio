@@ -111,10 +111,16 @@ impl EqChain {
         if !self.has_active_bands() {
             return;
         }
-        for (li, ri) in left.iter_mut().zip(right.iter_mut()) {
-            for band in &mut self.bands {
+        // Band by band over the block, not sample by sample through every
+        // band: a band's output at a sample depends only on its own state
+        // and the band before it at that sample, so the order is free, and
+        // one band's loop keeps its coefficients in registers and runs its
+        // channels side by side. Bit for bit what the sample-outer loop
+        // gave. A band idle once stays idle (disabled, its ramp at zero).
+        for band in &mut self.bands {
+            for (li, ri) in left.iter_mut().zip(right.iter_mut()) {
                 if band.is_idle() {
-                    continue;
+                    break;
                 }
                 band.advance_frame();
                 match band.placement {
@@ -147,5 +153,117 @@ impl EqChain {
 impl Default for EqChain {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EqChain;
+    use crate::eq::design::FilterType;
+    use crate::eq::runtime::band::Placement;
+
+    /// The chain as it ran: sample by sample, through every band.
+    fn sample_outer(chain: &mut EqChain, left: &mut [f64], right: &mut [f64]) {
+        for (li, ri) in left.iter_mut().zip(right.iter_mut()) {
+            for band in &mut chain.bands {
+                if band.is_idle() {
+                    continue;
+                }
+                band.advance_frame();
+                match band.placement {
+                    Placement::Stereo => {
+                        *li = band.process_channel(*li, 0);
+                        *ri = band.process_channel(*ri, 1);
+                    }
+                    Placement::Left => *li = band.process_channel(*li, 0),
+                    Placement::Right => *ri = band.process_channel(*ri, 1),
+                    Placement::Mid => {
+                        let m = 0.5 * (*li + *ri);
+                        let s = 0.5 * (*li - *ri);
+                        let m = band.process_channel(m, 0);
+                        *li = m + s;
+                        *ri = m - s;
+                    }
+                    Placement::Side => {
+                        let m = 0.5 * (*li + *ri);
+                        let s = 0.5 * (*li - *ri);
+                        let s = band.process_channel(s, 0);
+                        *li = m + s;
+                        *ri = m - s;
+                    }
+                }
+            }
+        }
+    }
+
+    fn chain() -> EqChain {
+        let mut c = EqChain::new();
+        let bands = [
+            (FilterType::Highpass, 80.0, 0.0, 4, Placement::Stereo),
+            (FilterType::Peak, 400.0, -4.0, 2, Placement::Mid),
+            (FilterType::HighShelf, 6000.0, 3.0, 2, Placement::Side),
+            (FilterType::Peak, 2500.0, 5.0, 2, Placement::Left),
+            (FilterType::Bandpass, 120.0, 0.0, 2, Placement::Right),
+        ];
+        for (ty, hz, db, order, placement) in bands {
+            let i = c.add_band().unwrap_or(0);
+            if let Some(b) = c.band_mut(i) {
+                b.filter_type = ty;
+                b.freq_hz = hz;
+                b.gain_db = db;
+                b.order = order;
+                b.placement = placement;
+            }
+            c.update_band(i);
+        }
+        c
+    }
+
+    /// Band by band over the block is sample by sample, bit for bit —
+    /// through a band switching off (its ramp to idle) and back on, and a
+    /// redesign's crossfade.
+    #[test]
+    fn band_outer_is_the_sample_outer_chain() {
+        let (mut ours, mut theirs) = (chain(), chain());
+        let mut seed = 0x9e37_79b9_u32;
+        for block in 0..40 {
+            match block {
+                10 => {
+                    for c in [&mut ours, &mut theirs] {
+                        if let Some(b) = c.band_mut(1) {
+                            b.enabled = false;
+                        }
+                    }
+                }
+                25 => {
+                    for c in [&mut ours, &mut theirs] {
+                        if let Some(b) = c.band_mut(1) {
+                            b.enabled = true;
+                        }
+                        if let Some(b) = c.band_mut(3) {
+                            b.gain_db = -6.0;
+                        }
+                        c.update_band(3);
+                    }
+                }
+                _ => {}
+            }
+            let len = if block % 3 == 0 { 97 } else { 256 };
+            let mut l: Vec<f64> = (0..len)
+                .map(|_| {
+                    seed ^= seed << 13;
+                    seed ^= seed >> 17;
+                    seed ^= seed << 5;
+                    f64::from(seed) / f64::from(u32::MAX) - 0.5
+                })
+                .collect();
+            let mut r: Vec<f64> = l.iter().rev().map(|x| 0.7 * x).collect();
+            let (mut l2, mut r2) = (l.clone(), r.clone());
+            ours.process(&mut l, &mut r);
+            sample_outer(&mut theirs, &mut l2, &mut r2);
+            for (i, (a, b)) in l.iter().chain(&r).zip(l2.iter().chain(&r2)).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "block {block}, sample {i}");
+            }
+        }
     }
 }
