@@ -13,7 +13,7 @@ use dawfile_reaper::session::RppProject;
 use session_format::{DawProject, DocumentEdit, DocumentQuery};
 
 const FIXTURE: &str = include_str!(
-    "../../../../features/adapters/reaper/dawfile-reaper/resources/Template-with-takes-lanes.RPP"
+    "../../../../studio-engine/adapters/reaper/dawfile-reaper/resources/Template-with-takes-lanes.RPP"
 );
 
 fn area(comp_lane: u32, source_lane: u32, start: f64, end: f64) -> CompArea {
@@ -73,7 +73,7 @@ fn a_lane_track_without_lanesolo_plays_lane_zero_in_both_loaders() {
     // `key-signatures.RPP`: `FIXEDLANES 1 0 1 0 0` + `LANENAME 1`, no
     // LANESOLO — one lane, and it plays.
     let text = include_str!(
-        "../../../../features/adapters/reaper/dawfile-reaper/tests/fixtures/key-signatures.RPP"
+        "../../../../studio-engine/adapters/reaper/dawfile-reaper/tests/fixtures/key-signatures.RPP"
     );
     let (project, _) = DawProject::import_rpp(text, "keys").expect("import");
     let reaper = dawfile_reaper::parse_project_text(text).expect("parse");

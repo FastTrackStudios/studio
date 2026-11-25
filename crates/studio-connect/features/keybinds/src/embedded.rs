@@ -15,11 +15,11 @@ use crate::proto::ProfileConfig;
 pub const ABLETON: &[(&str, &str)] = &[
     (
         "profile.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/ableton/profile.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/ableton/profile.styx"),
     ),
     (
         "transport.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/ableton/transport.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/ableton/transport.styx"),
     ),
 ];
 
@@ -28,120 +28,120 @@ pub const FASTTRACKSTUDIO: &[(&str, &str)] = &[
     (
         "profile.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/profile.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/profile.styx"
         ),
     ),
     (
         "automation.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/automation.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/automation.styx"
         ),
     ),
     (
         "editing.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/editing.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/editing.styx"
         ),
     ),
     (
         "expression-editor.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/expression-editor.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/expression-editor.styx"
         ),
     ),
     (
         "fx.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/fasttrackstudio/fx.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/fx.styx"),
     ),
     (
         "grid.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/fasttrackstudio/grid.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/grid.styx"),
     ),
     (
         "lanes-takes.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/lanes-takes.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/lanes-takes.styx"
         ),
     ),
     (
         "markers.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/markers.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/markers.styx"
         ),
     ),
     (
         "midi-modes.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/midi-modes.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/midi-modes.styx"
         ),
     ),
     (
         "midi.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/fasttrackstudio/midi.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/midi.styx"),
     ),
     (
         "modes.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/fasttrackstudio/modes.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/modes.styx"),
     ),
     (
         "mouse-profile.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/mouse-profile.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/mouse-profile.styx"
         ),
     ),
     (
         "mouse.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/fasttrackstudio/mouse.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/mouse.styx"),
     ),
     (
         "navigation.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/navigation.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/navigation.styx"
         ),
     ),
     (
         "options.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/options.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/options.styx"
         ),
     ),
     (
         "scrolling.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/scrolling.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/scrolling.styx"
         ),
     ),
     (
         "tracks.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/tracks.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/tracks.styx"
         ),
     ),
     (
         "transport.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/transport.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/transport.styx"
         ),
     ),
     (
         "utility.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/utility.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/utility.styx"
         ),
     ),
     (
         "views.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/fasttrackstudio/views.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/views.styx"),
     ),
     (
         "visibility.styx",
         include_str!(
-            "../../adapters/reaper/reaper-input/config/config/fasttrackstudio/visibility.styx"
+            "../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/visibility.styx"
         ),
     ),
     (
         "zoom.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/fasttrackstudio/zoom.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/fasttrackstudio/zoom.styx"),
     ),
 ];
 
@@ -149,39 +149,39 @@ pub const FASTTRACKSTUDIO: &[(&str, &str)] = &[
 pub const LOGIC: &[(&str, &str)] = &[
     (
         "profile.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/logic/profile.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/logic/profile.styx"),
     ),
     (
         "editing.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/logic/editing.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/logic/editing.styx"),
     ),
     (
         "midi.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/logic/midi.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/logic/midi.styx"),
     ),
     (
         "mouse-profile.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/logic/mouse-profile.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/logic/mouse-profile.styx"),
     ),
     (
         "mouse.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/logic/mouse.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/logic/mouse.styx"),
     ),
     (
         "navigation.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/logic/navigation.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/logic/navigation.styx"),
     ),
     (
         "scrolling.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/logic/scrolling.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/logic/scrolling.styx"),
     ),
     (
         "transport.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/logic/transport.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/logic/transport.styx"),
     ),
     (
         "views.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/logic/views.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/logic/views.styx"),
     ),
 ];
 
@@ -189,11 +189,11 @@ pub const LOGIC: &[(&str, &str)] = &[
 pub const PRO_TOOLS: &[(&str, &str)] = &[
     (
         "profile.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/pro-tools/profile.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/pro-tools/profile.styx"),
     ),
     (
         "transport.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/pro-tools/transport.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/pro-tools/transport.styx"),
     ),
 ];
 
@@ -201,39 +201,39 @@ pub const PRO_TOOLS: &[(&str, &str)] = &[
 pub const REAPER: &[(&str, &str)] = &[
     (
         "profile.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/reaper/profile.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/reaper/profile.styx"),
     ),
     (
         "editing.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/reaper/editing.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/reaper/editing.styx"),
     ),
     (
         "midi.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/reaper/midi.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/reaper/midi.styx"),
     ),
     (
         "mouse-profile.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/reaper/mouse-profile.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/reaper/mouse-profile.styx"),
     ),
     (
         "mouse.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/reaper/mouse.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/reaper/mouse.styx"),
     ),
     (
         "navigation.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/reaper/navigation.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/reaper/navigation.styx"),
     ),
     (
         "scrolling.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/reaper/scrolling.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/reaper/scrolling.styx"),
     ),
     (
         "transport.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/reaper/transport.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/reaper/transport.styx"),
     ),
     (
         "views.styx",
-        include_str!("../../adapters/reaper/reaper-input/config/config/reaper/views.styx"),
+        include_str!("../../../../studio-engine/adapters/reaper/adapters/reaper-input/config/config/reaper/views.styx"),
     ),
 ];
 

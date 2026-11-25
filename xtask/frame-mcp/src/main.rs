@@ -33,7 +33,7 @@ use frame::surface::proto::Catalog;
 use frame_architect::SurfaceEngineClient;
 use serde_json::{Value, json};
 
-const REFERENCE: &str = include_str!("../../../src/document/text/REFERENCE.md");
+const REFERENCE: &str = include_str!("../../../crates/studio-core/frame/frame/src/document/text/REFERENCE.md");
 
 const INSTRUCTIONS: &str = "frame designs live-performance control surfaces (knobs, faders, footswitches, meters) \
 that are bound to an audio engine's parameters. Workflow: `catalog` to see what can be controlled → `describe` \

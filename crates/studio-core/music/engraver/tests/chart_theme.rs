@@ -25,7 +25,7 @@ use kurbo::Rect;
 use peniko::Color;
 
 const SONG: &str =
-    include_str!("../../../examples/chordsheet-compat/kf/ED SHEERAN - THINKING OUT LOUD.kf");
+    include_str!("../../keyflow-examples/chordsheet-compat/kf/ED SHEERAN - THINKING OUT LOUD.kf");
 const KEY: u64 = 7;
 /// Device scale for the goldens: small enough to keep the PNGs light,
 /// large enough that a glyph-level change shows.

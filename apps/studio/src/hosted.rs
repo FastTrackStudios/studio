@@ -370,7 +370,7 @@ fn tell(events: &[architect_extensions::host::Event]) {
 /// The daw extension's package: its manifest and its program
 /// (`daw-extension`, as the engine is found), in Studio's folder.
 fn daw_package() -> Result<std::path::PathBuf, String> {
-    const MANIFEST: &str = include_str!("../../../extensions/daw/extension.toml");
+    const MANIFEST: &str = include_str!("../../../crates/studio-engine/extensions/daw/extension.toml");
     let bin = crate::engine::daw_extension_bin().ok_or("no daw-extension program")?;
     let dir = crate::storage::config_dir()
         .ok_or("no config folder")?

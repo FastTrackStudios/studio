@@ -939,20 +939,12 @@ mod token_sheet {
 
     const TOKENS: &str = include_str!("tokens.css");
     const LIVE: &str = include_str!("live.css");
-    const STUDIO: &str = include_str!("../../../legacy/apps/ignition-studio/src/studio.css");
-    const DOCK: &str = include_str!("../../../legacy/apps/ignition-studio/src/dock.css");
-    const BASE: &str = include_str!("../../../apps/ignition-live-web/src/base.css");
-    const PANEL: &str = include_str!("../../../legacy/apps/ignition-studio/src/panel.css");
     const THEME: &str = include_str!("theme.css");
 
-    fn sheets() -> [(&'static str, &'static str); 5] {
-        [
-            ("live.css", LIVE),
-            ("studio.css", STUDIO),
-            ("dock.css", DOCK),
-            ("base.css", BASE),
-            ("panel.css", PANEL),
-        ]
+    // The legacy ignition-studio and ignition-live-web sheets went with
+    // their apps in the monorepo move; live.css is the one left.
+    fn sheets() -> [(&'static str, &'static str); 1] {
+        [("live.css", LIVE)]
     }
 
     /// Every `#rrggbb` (and `#rgb`) literal in a sheet, normalised to six

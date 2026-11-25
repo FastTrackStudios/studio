@@ -22,7 +22,7 @@ use engraver::renderer::ChartView;
 /// A real chart from the repo's own examples: repeats, sections, text
 /// cues, rhythm slashes — about a page and a half.
 pub const SONG: &str =
-    include_str!("../../../examples/chordsheet-compat/kf/ED SHEERAN - THINKING OUT LOUD.kf");
+    include_str!("../../keyflow-examples/chordsheet-compat/kf/ED SHEERAN - THINKING OUT LOUD.kf");
 
 pub fn chart() -> keyflow_proto::Chart {
     keyflow_lang::text::chart::parse_chart(SONG).expect("the example chart parses")
