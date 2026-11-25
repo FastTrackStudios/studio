@@ -99,6 +99,10 @@ pub fn engine() -> &'static Standalone {
 /// Today that is the instrument the Click / Count / Guide MIDI tracks
 /// play through.
 pub fn equip(daw: &Standalone) {
+    // An effect's automated parameter reads as the effect writes it: daw has
+    // no effects of its own, so it is told how Signal's (`builtin`, i.e.
+    // signal-effects) say a value.
+    crate::automation::install_param_reading(builtin::engine::reading);
     session_runtime::guide_instrument::install(
         daw,
         session_runtime::guide_instrument::Library::Folder(
