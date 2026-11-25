@@ -44,4 +44,8 @@ ureq = { workspace = true }
 urlencoding = "2.1.3"
 
 [dev-dependencies]
+# Its own tests and bins link ONNX Runtime the way Studio does, found at run
+# time (ORT_DYLIB_PATH, set by the dev shell): without a consumer turning on
+# `load-dynamic`, ort links it statically and there is no library to link.
+chatterbox-rs = { path = ".", features = ["load-dynamic"] }
 tempfile = { workspace = true }
