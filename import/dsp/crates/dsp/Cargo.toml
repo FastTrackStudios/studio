@@ -1,0 +1,95 @@
+[package]
+name = "dsp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Pure Rust audio DSP engines (EQ, dynamics, saturation, reverb, delay, modulation, metering) with zero UI dependencies"
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["std"]
+std = []
+align = ["std", "dep:realfft", "dep:dsp-core", "dsp-core/audio"]
+analyzer = ["std", "dep:dsp-core", "dsp-core/audio", "dep:realfft", "dep:serde"]
+comp = ["std", "dep:dsp-core", "dsp-core/audio"]
+comp-profiles = ["comp", "eq", "eq-profiles"]
+delay = ["std", "dep:dsp-core", "dsp-core/audio", "pitch"]
+delay-profiles = ["delay"]
+eq = ["std", "dep:dsp-core", "dsp-core/audio", "dep:realfft", "dep:smallvec"]
+eq-analyzer = ["eq", "dep:once_cell", "dep:parking_lot", "dep:rtrb"]
+eq-profiles = ["eq"]
+gate = ["dep:dsp-core", "dep:libm"]
+level = ["std", "dep:dsp-core", "dsp-core/audio"]
+mic = ["std", "dep:dsp-core", "dep:realfft"]
+modulation = ["std", "dep:dsp-core", "dsp-core/audio", "dsp-core/modulation"]
+modulation-profiles = ["modulation"]
+multiband = ["std"]
+pitch = ["std", "dep:dsp-core", "dsp-core/audio", "dep:realfft", "dep:serde"]
+pitch-rubberband = ["pitch"]
+reverb = [
+    "std",
+    "dep:dsp-core",
+    "dsp-core/audio",
+    "dsp-core/modulation",
+    "dep:crossbeam-channel",
+    "pitch",
+    "dep:realfft",
+    "dep:symphonium",
+    "symphonium/wav",
+    "symphonium/pcm",
+    "symphonium/fft-resampler",
+    "dep:thiserror",
+]
+reverb-profiles = ["reverb"]
+saturate = ["dep:dsp-core", "dep:libm"]
+saturate-analysis = ["saturate", "std"]
+saturate-profiles = ["saturate", "std"]
+stack = ["dep:libm"]
+transient = ["dep:dsp-core", "dep:libm"]
+trigger = ["std", "dep:dsp-core", "dsp-core/audio", "eq", "dep:rustfft"]
+
+[dependencies]
+crossbeam-channel = { workspace = true, optional = true }
+dsp-core = { workspace = true, optional = true }
+libm = { workspace = true, optional = true }
+once_cell = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
+realfft = { workspace = true, optional = true }
+rtrb = { workspace = true, optional = true }
+rustfft = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+smallvec = { workspace = true, optional = true }
+symphonium = { version = "0.6", default-features = false, optional = true }
+thiserror = { workspace = true, optional = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+dsp-core = { workspace = true, features = ["audio", "golden", "modulation"] }
+hound = { workspace = true }
+rustfft = { workspace = true }
+serde_json = { workspace = true }
+symphonia = { workspace = true, features = ["default", "wav", "pcm"] }
+test-that = { workspace = true, features = ["regex", "num-traits"] }
+dsp = { path = ".", features = [
+    "align", "analyzer", "comp", "comp-profiles", "delay", "delay-profiles",
+    "eq", "eq-analyzer", "eq-profiles", "gate", "level", "mic",
+    "modulation", "modulation-profiles", "multiband", "pitch",
+    "reverb", "reverb-profiles", "saturate", "saturate-analysis",
+    "saturate-profiles", "stack", "trigger",
+] }
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+required-features = ["mic", "reverb"]
+
+[[example]]
+name = "reverb_costs"
+required-features = ["reverb"]
