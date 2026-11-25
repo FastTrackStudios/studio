@@ -139,7 +139,12 @@ impl Builder {
     fn main_alone(&mut self, area: Area) -> Node {
         let arrangement = self.group(ARRANGEMENT);
         let progress = self.group(PROGRESS);
-        self.split(Axis::Column, progress, arrangement, PROGRESS_HEIGHT / area.h)
+        self.split(
+            Axis::Column,
+            progress,
+            arrangement,
+            PROGRESS_HEIGHT / area.h,
+        )
     }
 }
 
@@ -206,6 +211,48 @@ pub fn stage(area: Area, names: &Names, page: Option<Pane>) -> Workspace {
     ws.active = Some(PaneId::new(ARRANGEMENT));
     ws.next_id = b.next;
     ws
+}
+
+/// The Stage with `centre` (a pane of the Stage's: `CHART`, `LYRICS`,
+/// `SHOW`) filling its main window, the window it had otherwise left out;
+/// with `others` false, the main window alone (`STUDIO_SINGLE_WINDOW`).
+/// Every pane is kept, so what follows the song (the chart's session)
+/// still finds it. `centre` `None` is the Stage as [`stage`] makes it.
+#[must_use]
+pub fn with_centre(
+    area: Area,
+    names: &Names,
+    centre: Option<&str>,
+    page: Option<Pane>,
+    others: bool,
+) -> Workspace {
+    let mut ws = stage(area, names, page);
+    if let Some(pane) = centre {
+        let mut b = Builder { next: ws.next_id };
+        let node = b.group(pane);
+        ws.next_id = b.next;
+        ws.windows[0] = Window::new(WindowId::main(), node);
+        // A pane is in one place: the window it was in goes.
+        let id = PaneId::new(pane);
+        let mut first = true;
+        ws.windows.retain(|w| {
+            let main = std::mem::take(&mut first);
+            main || !w.center.as_ref().is_some_and(|n| holds(n, &id))
+        });
+        ws.active = Some(id);
+    }
+    if !others {
+        ws.windows.truncate(1);
+    }
+    ws
+}
+
+/// Whether `node` has `pane` in it.
+fn holds(node: &Node, pane: &PaneId) -> bool {
+    match node {
+        Node::Group(g) => g.tabs.contains(pane),
+        Node::Split(s) => s.children.iter().any(|c| holds(&c.node, pane)),
+    }
 }
 
 #[cfg(test)]
@@ -276,6 +323,31 @@ mod tests {
         let work = split(&top.children[1].node);
         assert_eq!(work.axis, Axis::Column);
         assert!((work.children[0].share - 0.62).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_chart_fills_the_main_window() {
+        let names = Names {
+            set: "Set".into(),
+            chart_state: "session:x".into(),
+            kind: crate::setfile::Kind::default(),
+        };
+        // The Charts screenset: the chart alone in the main window, its own
+        // window gone, the lighting's kept.
+        let ws = with_centre(Area::default(), &names, Some(CHART), None, true);
+        assert_eq!(views(ws.windows[0].center.as_ref().unwrap()), [CHART]);
+        assert_eq!(ws.windows.len(), 2);
+        assert_eq!(ws.windows[1].id, WindowId::new(LIGHTING_WINDOW));
+        // Every pane is still the Stage's: the chart keeps its session.
+        let chart = ws.panes.iter().find(|p| p.id.0 == CHART).unwrap();
+        assert_eq!(chart.state, "session:x");
+        // One window: no other.
+        let ws = with_centre(Area::default(), &names, Some(CHART), None, false);
+        assert_eq!(ws.windows.len(), 1);
+        // No centre, one window: the Stage's own main window.
+        let ws = with_centre(Area::default(), &names, None, None, false);
+        assert_eq!(ws.windows.len(), 1);
+        assert!(views(ws.windows[0].center.as_ref().unwrap()).contains(&ARRANGEMENT.to_owned()));
     }
 
     #[test]

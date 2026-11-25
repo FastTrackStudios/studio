@@ -249,7 +249,11 @@ static STARTED: std::sync::Mutex<Option<(PathBuf, u32)>> = std::sync::Mutex::new
 pub fn engine_dir() -> Option<PathBuf> {
     std::env::var_os("XDG_RUNTIME_DIR")
         .filter(|d| !d.is_empty())
-        .map(|run| PathBuf::from(run).join("fts").join("studio-app-engine"))
+        .map(|run| {
+            PathBuf::from(run)
+                .join("fts")
+                .join(crate::instance::engine_folder())
+        })
 }
 
 /// Keep the engine running when Studio closes (`1`), or stop it (`0`).
@@ -278,7 +282,10 @@ pub fn stop_started_engine() {
         .take();
     let Some((bin, pid)) = started else { return };
     if keeps_engine() {
-        tracing::info!(engine.pid = pid, "studio: closing, the engine keeps running ({KEEP_ENGINE})");
+        tracing::info!(
+            engine.pid = pid,
+            "studio: closing, the engine keeps running ({KEEP_ENGINE})"
+        );
         return;
     }
     let stopped = std::process::Command::new(&bin)
@@ -289,9 +296,14 @@ pub fn stop_started_engine() {
         .status();
     match stopped {
         Ok(status) if status.success() => {
-            tracing::info!(engine.pid = pid, "studio: closing, the engine it started is stopped");
+            tracing::info!(
+                engine.pid = pid,
+                "studio: closing, the engine it started is stopped"
+            );
         }
-        other => tracing::warn!(engine.pid = pid, outcome = ?other, "studio: closing, the engine did not stop"),
+        other => {
+            tracing::warn!(engine.pid = pid, outcome = ?other, "studio: closing, the engine did not stop")
+        }
     }
 }
 
@@ -340,8 +352,9 @@ fn spawn(bin: &Path, args: &[String], wait: Duration) -> Result<Found, String> {
         .map_err(|e| format!("{} could not start: {e}", bin.display()))?;
     let pid = child.id();
     // Ours: stopped when Studio closes, unless it keeps its engine.
-    *STARTED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
-        Some((bin.to_path_buf(), pid));
+    *STARTED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((bin.to_path_buf(), pid));
     // Reaped when it goes, so it never lingers as a zombie.
     let _ = std::thread::Builder::new()
         .name("engine-child".into())

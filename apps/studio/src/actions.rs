@@ -49,8 +49,11 @@ mod imp {
     use crate::state::use_app;
     use crate::{orgs, setlist, songs};
 
-    /// The name the app's doors go by (`studio-mcp.json`, `studio.sock`).
-    pub const NAME: &str = "studio";
+    /// The name the app's doors go by (`studio-mcp.json`, `studio.sock`):
+    /// [`crate::instance::name`], so a second instance has its own.
+    fn door_name() -> &'static str {
+        crate::instance::name()
+    }
 
     /// One call, on its way to the UI thread.
     struct Call {
@@ -280,6 +283,13 @@ mod imp {
         "Put this Studio's windows in a mode: Organize, Write, Produce, Record, Edit, Mix, Master, Live, Video or Scoring. The mode is the client's, not the engine's: it decides what the views draw (Edit shows every cut and the hit markers on a folder's row; Live and Mix a folder's row whole) and which keys do what. Another client on the same engine keeps its own."
     );
     meta!(
+        SCREENSET,
+        "SESSION_SCREENSET",
+        "Screenset",
+        "View",
+        "Recall a screenset of this Studio's window by its number or name: 1 Performance (the lighting), 2 Overview, 3 Session (the arrangement and mixer), 4 Mix, 5 Edit (the editor), 6 Charts (the chart, filling the main window), 7 Signal (FX)."
+    );
+    meta!(
         SESSION_VIEW,
         "STUDIO_SESSION_VIEW",
         "Show a session view",
@@ -312,6 +322,11 @@ mod imp {
     #[derive(Facet)]
     struct ViewArgs {
         view: String,
+    }
+
+    #[derive(Facet)]
+    struct ScreensetArgs {
+        screenset: String,
     }
 
     #[derive(Facet)]
@@ -481,6 +496,7 @@ mod imp {
             forward::<()>(&list, &HOME, M, false);
             forward::<()>(&list, &LAUNCHER_WINDOW, M, false);
             forward::<ViewArgs>(&list, &SESSION_VIEW, M, true);
+            forward::<ScreensetArgs>(&list, &SCREENSET, M, true);
             forward::<ModeArgs>(&list, &UI_MODE, M, true);
             // The views' theme packs, and the one chosen last shown again.
             crate::themes::install_actions(&list);
@@ -523,8 +539,8 @@ mod imp {
     fn open_doors(list: ActionList) {
         let version = env!("CARGO_PKG_VERSION");
         let control = architect_control::server::Control::new(
-            NAME,
-            architect_control::Surface::new(NAME, version, list.clone()),
+            door_name(),
+            architect_control::Surface::new(door_name(), version, list.clone()),
         )
         .and_then(architect_control::server::Control::serve);
         let control = match control {
@@ -547,7 +563,7 @@ mod imp {
                 return;
             }
         };
-        let server = architect_mcp::Server::new(NAME, version, list).with_instructions(
+        let server = architect_mcp::Server::new(door_name(), version, list).with_instructions(
             "This is Studio, the app the person has open: their orgs, setlists, the songs of \
              each set, and what plays. Every STUDIO_* action is what the app's own pages do. \
              `actions` lists them, `describe` says what one takes; SCRIPT_RUN runs a Luau \
@@ -566,7 +582,7 @@ mod imp {
                 Ok(a) => format!("http://{a}/mcp"),
                 Err(_) => return,
             };
-            match architect_mcp::publish(NAME, &url, Some(&token)) {
+            match architect_mcp::publish(door_name(), &url, Some(&token)) {
                 Ok(path) => tracing::info!(mcp.url = %url, mcp.discovery = %path.display(), "MCP"),
                 Err(e) => tracing::warn!(error = %e, "MCP's discovery file could not be written"),
             }
@@ -952,6 +968,13 @@ mod imp {
                 let a: ModeArgs = args(raw)?;
                 let mode = crate::session::ask_mode(&a.mode)?;
                 Ok(json!({ "mode": mode }))
+            }
+            "SESSION_SCREENSET" => {
+                let a: ScreensetArgs = args(raw)?;
+                let (name, v) = crate::session::screenset(&a.screenset)?;
+                let to = crate::session::route(v);
+                navigator().push(to.clone());
+                Ok(json!({ "screenset": name, "route": to.to_string() }))
             }
             "STUDIO_SESSION_VIEW" => {
                 let a: ViewArgs = args(raw)?;

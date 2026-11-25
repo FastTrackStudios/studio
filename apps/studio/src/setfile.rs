@@ -74,7 +74,9 @@ static KINDS: std::sync::Mutex<Vec<(String, Kind)>> = std::sync::Mutex::new(Vec:
 /// Notes the kind of the set named `name`, as its file says, for the
 /// session that opens it.
 pub fn note_kind(name: &str, kind: Kind) {
-    let mut kinds = KINDS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut kinds = KINDS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     kinds.retain(|(n, _)| n != name);
     kinds.push((name.to_owned(), kind));
 }

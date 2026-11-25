@@ -18,6 +18,7 @@ mod files_live;
 #[cfg(feature = "native")]
 mod hosted;
 mod icons;
+mod instance;
 mod keys;
 mod live_sync;
 mod orgs;
@@ -246,14 +247,15 @@ fn main() {
         App,
         popout,
         app_shell_native::Config {
-            title: "Studio".to_owned(),
-            // What the window manager's rules match (Loft's: `^Studio$`).
-            app_id: Some("Studio".to_owned()),
+            title: instance::title(),
+            // What the window manager's rules match (Loft's: `^Studio$`);
+            // a second instance's is its own, so no rule places it.
+            app_id: Some(instance::app_id()),
             size: (1440.0, 900.0),
             system_decorations: false,
             // `shot <path.png>` on $XDG_RUNTIME_DIR/app-shell/studio.sock:
             // the app paints its window to a file (development, agents).
-            control: Some("studio".to_owned()),
+            control: Some(instance::name().to_owned()),
         },
     );
     // The window closed: the engine Studio started goes with it, unless
