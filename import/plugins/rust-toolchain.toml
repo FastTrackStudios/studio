@@ -1,0 +1,6 @@
+# The workspace compiler, for rustup (CI's dtolnay/rust-toolchain, the
+# release Mac, anyone outside the devenv shell). The devenv shell takes the
+# same 1.99.1 from devenv-fleet (pins.json), the store path every fleet repo
+# shares: move them together, with the fleet.
+[toolchain]
+channel = "1.99.1"

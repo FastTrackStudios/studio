@@ -1,0 +1,35 @@
+[package]
+name = "plugin-processors"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The plugins' effects, headless: parameter tables and dsp engines behind one Processor interface, for the CLAP/VST3 targets, Signal's blocks and Studio's engine (native, iOS, wasm)"
+
+[lints]
+workspace = true
+
+[features]
+default = ["std", "files", "gate", "saturate", "eq", "comp", "delay", "reverb", "trigger", "transient"]
+# `std::error::Error`, and the algorithm registry. The engines below that
+# need the dsp crate's `std` features turn it on.
+std = []
+# Algorithm files (Styx), Signal's own and downloaded ones.
+files = ["std", "dep:facet", "dep:facet-styx"]
+gate = ["dsp/gate"]
+# The transient shaper (attack and sustain). no_std.
+transient = ["dsp/transient"]
+saturate = ["dsp/saturate"]
+eq = ["std", "dsp/eq", "dsp-core/audio"]
+comp = ["std", "dsp/comp"]
+delay = ["std", "dsp/delay", "dsp-core/audio"]
+reverb = ["std", "dsp/reverb", "dsp-core/audio"]
+# Drum hit detection (a kit's trigger lanes).
+trigger = ["std", "dsp/trigger", "dsp-core/audio"]
+
+[dependencies]
+dsp = { workspace = true }
+dsp-core = { workspace = true }
+libm = { workspace = true }
+facet = { workspace = true, optional = true }
+facet-styx = { workspace = true, optional = true }

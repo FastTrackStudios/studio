@@ -1,0 +1,387 @@
+[package]
+name = "plugin-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Effect plugin UIs, Dioxus editors, Vello/WGPU visualizers, nice-plug parameter trees, and stack host adapters"
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+
+[lints]
+workspace = true
+
+[features]
+default = []
+multiband = ["dsp/multiband"]
+# Vocal and drum leveling (no face of its own): `dsp::level`, passed through.
+level = ["dsp/level"]
+# dsp's modules with no face of their own, passed through, so plugin-ui
+# stands in for dsp everywhere.
+align = ["dsp/align"]
+analyzer = ["dsp/analyzer"]
+gate = ["dsp/gate"]
+pitch = ["dsp/pitch"]
+pitch-rubberband = ["dsp/pitch-rubberband"]
+std = ["dsp/std"]
+stack = ["dsp/stack"]
+stack-host = [
+    "stack",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:parking_lot",
+]
+
+comp = ["dsp/comp"]
+comp-profiles = ["comp", "dsp/comp-profiles", "eq", "eq-profiles", "eq-ui"]
+comp-ui = [
+    "comp",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:web-time",
+    "comp-profiles",
+]
+comp-viz = [
+    "comp",
+    "dep:anyrender",
+    "dep:blitz-dom",
+    "blitz-dom/custom-widget",
+    "dep:bytemuck",
+    "bytemuck/derive",
+    "dep:dioxus-native-dom",
+    "dep:vello",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+]
+comp-native = [
+    "comp",
+    "dep:architect-ui",
+    "dep:fts-audio-ui",
+    "dep:atomic_float",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "eq",
+    "eq-profiles",
+    "eq-ui",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+    "dep:preset-browser",
+    "preset-browser/ui",
+    "eq-native",
+]
+
+delay = ["dsp/delay"]
+delay-profiles = ["delay", "dsp/delay-profiles"]
+delay-ui = [
+    "delay",
+    "dep:crossbeam-channel",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:web-time",
+    "delay-profiles",
+]
+delay-viz = [
+    "delay",
+    "dep:anyrender",
+    "dep:blitz-dom",
+    "blitz-dom/custom-widget",
+    "dep:bytemuck",
+    "bytemuck/derive",
+    "dep:dioxus-native-dom",
+    "dep:vello",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+]
+delay-native = [
+    "stack-host",
+    "delay",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+]
+
+eq = ["dsp/eq"]
+eq-profiles = ["eq", "dsp/eq-profiles"]
+eq-analyzer = ["eq", "dsp/eq-analyzer"]
+eq-analyzer-ui = [
+    "eq-analyzer",
+    "dep:anyrender",
+    "dep:dioxus",
+    "dep:kurbo",
+    "dep:peniko",
+]
+eq-graph-paint = [
+    "eq",
+    "eq-analyzer",
+    "eq-analyzer-ui",
+    "dep:anyrender",
+    "dep:kurbo",
+    "dep:peniko",
+]
+eq-graph = [
+    "eq",
+    "eq-analyzer",
+    "eq-analyzer-ui",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "dep:blitz-traits",
+    "dep:bytemuck",
+    "bytemuck/derive",
+    "dep:dioxus-native",
+    "dep:futures-timer",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+    "eq-graph-paint",
+]
+eq-panel = [
+    "eq",
+    "dep:architect-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:fts-audio-ui",
+    "dep:nice-plug-dioxus",
+]
+eq-ui = [
+    "eq",
+    "dep:blitz-dom",
+    "blitz-dom/autofocus",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:parking_lot",
+    "dep:web-time",
+    "eq-profiles",
+    "eq-analyzer",
+]
+eq-native = [
+    "stack-host",
+    "eq",
+    "eq-analyzer",
+    "eq-analyzer-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:preset-browser",
+    "preset-browser/ui",
+    "eq-graph",
+    "eq-panel",
+    "eq-profiles",
+]
+
+mic = ["dsp/mic"]
+mic-ui = [
+    "mic",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+]
+
+modulation = ["dsp/modulation"]
+modulation-profiles = ["modulation", "dsp/modulation-profiles"]
+modulation-ui = [
+    "modulation",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:web-time",
+    "modulation-profiles",
+]
+modulation-viz = [
+    "modulation",
+    "dep:anyrender",
+    "dep:blitz-dom",
+    "blitz-dom/custom-widget",
+    "dep:dioxus-native-dom",
+    "dep:vello",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+]
+modulation-native = [
+    "modulation",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+]
+
+reverb = ["dsp/reverb"]
+reverb-profiles = ["reverb", "dsp/reverb-profiles"]
+reverb-ui = [
+    "reverb",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "dep:web-time",
+    "reverb-profiles",
+]
+reverb-viz = [
+    "reverb",
+    "dep:anyrender",
+    "dep:blitz-dom",
+    "blitz-dom/custom-widget",
+    "dep:bytemuck",
+    "bytemuck/derive",
+    "dep:dioxus-native-dom",
+    "dep:vello",
+    "fts-audio-ui/shader",
+    "dep:fts-audio-ui",
+]
+reverb-native = [
+    "stack-host",
+    "reverb",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "eq",
+    "eq-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+    "dep:preset-browser",
+    "preset-browser/ui",
+    "eq-native",
+]
+
+saturate = ["dsp/saturate"]
+saturate-analysis = ["saturate", "dsp/saturate-analysis"]
+saturate-profiles = ["saturate", "dsp/saturate-profiles"]
+saturate-ui = [
+    "saturate",
+    "dep:crossbeam-channel",
+    "dep:dioxus",
+    "dep:fts-audio-ui",
+    "saturate-profiles",
+]
+saturate-viz = [
+    "saturate",
+    "saturate-analysis",
+    "dep:anyrender",
+    "dep:kurbo",
+    "multiband",
+    "dep:peniko",
+]
+saturate-native = [
+    "stack-host",
+    "saturate",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "eq",
+    "eq-ui",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:parking_lot",
+    "eq-native",
+]
+
+trigger = ["dsp/trigger"]
+trigger-ui = ["trigger"]
+trigger-native = [
+    "trigger",
+    "dep:architect-ui",
+    "dep:atomic_float",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:fts-audio-ui",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+]
+
+[dependencies]
+anyrender = { workspace = true, optional = true }
+architect-ui = { workspace = true, optional = true }
+atomic_float = { workspace = true, optional = true }
+blitz-dom = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
+crossbeam-channel = { workspace = true, optional = true }
+dioxus = { workspace = true, optional = true }
+dioxus-native-dom = { workspace = true, optional = true }
+dsp = { workspace = true }
+dsp-core = { workspace = true, features = ["audio"] }
+fts-audio-ui = { workspace = true, optional = true }
+futures-timer = { workspace = true, optional = true }
+kurbo = { workspace = true, optional = true }
+nice-plug = { workspace = true, optional = true }
+nice-plug-dioxus = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
+peniko = { workspace = true, optional = true }
+plugin-core = { workspace = true, optional = true }
+preset-browser = { workspace = true, optional = true }
+vello = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+blitz-traits = { workspace = true, optional = true }
+dioxus-native = { workspace = true, optional = true }
+nice-plug-dioxus = { workspace = true, optional = true }
+
+[dev-dependencies]
+anyrender_vello_cpu = { workspace = true }
+blitz-traits = { workspace = true }
+bytemuck = { workspace = true, features = ["derive"] }
+dioxus = { workspace = true }
+dioxus-ssr = { workspace = true }
+fts-audio-ui = { workspace = true, features = ["probe"] }
+naga = { workspace = true, features = ["wgsl-in"] }
+png = "0.18"
+pollster = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+wgpu = "30"
+plugin-ui = { path = ".", features = [
+    "comp", "comp-native", "comp-profiles", "comp-ui", "comp-viz",
+    "delay", "delay-native", "delay-profiles", "delay-ui", "delay-viz",
+    "eq", "eq-analyzer", "eq-analyzer-ui", "eq-graph", "eq-graph-paint", "eq-native", "eq-panel", "eq-profiles", "eq-ui",
+    "mic", "mic-ui",
+    "modulation", "modulation-native", "modulation-profiles", "modulation-ui", "modulation-viz",
+    "multiband",
+    "reverb", "reverb-native", "reverb-profiles", "reverb-ui", "reverb-viz",
+    "saturate", "saturate-analysis", "saturate-native", "saturate-profiles", "saturate-ui", "saturate-viz",
+    "stack", "stack-host",
+    "trigger", "trigger-native", "trigger-ui",
+] }
+
+[[test]]
+name = "comp_param_round_trip"
+path = "comp/tests/param_round_trip.rs"
+required-features = ["comp", "comp-native", "comp-ui"]
+
+[[test]]
+name = "delay_param_round_trip"
+path = "delay/tests/param_round_trip.rs"
+required-features = ["delay", "delay-native", "delay-ui"]
+
+[[test]]
+name = "eq_param_round_trip"
+path = "eq/tests/param_round_trip.rs"
+required-features = ["eq", "eq-native", "eq-ui"]
+
+[[test]]
+name = "mic_param_round_trip"
+path = "mic/tests/param_round_trip.rs"
+required-features = ["mic", "mic-ui"]
+
+[[test]]
+name = "reverb_param_round_trip"
+path = "reverb/tests/param_round_trip.rs"
+required-features = ["reverb", "reverb-native", "reverb-ui"]
+
+[[test]]
+name = "saturate_param_round_trip"
+path = "saturate/tests/param_round_trip.rs"
+required-features = ["saturate", "saturate-native", "saturate-ui"]

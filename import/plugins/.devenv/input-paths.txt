@@ -1,0 +1,9 @@
+/run/media/Development/t3-worktrees/plugins/headless-processors/.devenv/bootstrap/bootstrapLib.nix
+/run/media/Development/t3-worktrees/plugins/headless-processors/.devenv/bootstrap/default.nix
+/run/media/Development/t3-worktrees/plugins/headless-processors/.devenv/bootstrap/resolve-lock.nix
+/run/media/Development/t3-worktrees/plugins/headless-processors/.env
+/run/media/Development/t3-worktrees/plugins/headless-processors/devenv.local.nix
+/run/media/Development/t3-worktrees/plugins/headless-processors/devenv.lock
+/run/media/Development/t3-worktrees/plugins/headless-processors/devenv.nix
+/run/media/Development/t3-worktrees/plugins/headless-processors/devenv.yaml
+/run/user/1000/devenv-4f2ca2a/processes/native-manager.pid

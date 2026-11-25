@@ -1,0 +1,25 @@
+[package]
+name = "reverb-plugin"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "FTS Reverb: Signal's reverb block family as its own CLAP/VST3 (signal#26)"
+
+[lib]
+# cdylib → the loadable CLAP/VST3 binary; lib → tests + a future standalone host.
+crate-type = ["cdylib", "lib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+# `nice_export_clap!` expands to `::nice_plug::…` paths.
+nice-plug = { workspace = true, features = ["vst3"] }
+family-clap = { workspace = true }
+
+[features]
+default = []
+# The CLAP / VST3 entry points, only for the bundle build: two plugins'
+# entry points in one binary (a workspace test build) collide.
+export = []

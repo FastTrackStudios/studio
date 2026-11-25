@@ -1,0 +1,24 @@
+[package]
+name = "eq-plugin"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "FTS EQ: Signal's eq block family as its own CLAP/VST3 (signal#26)"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+# `nice_export_clap!` expands to `::nice_plug::…` paths.
+nice-plug = { workspace = true, features = ["vst3"] }
+family-clap = { workspace = true }
+
+[features]
+default = []
+# The CLAP / VST3 entry points, only for the bundle build: two plugins'
+# entry points in one binary (a workspace test build) collide.
+export = []
