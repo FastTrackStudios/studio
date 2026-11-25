@@ -1,353 +1,202 @@
-# FastTrackStudio — root workspace recipes
-# Run commands: just <recipe-name>
-
-# The session the DAW window opens.
+# Studio's recipes. `just` lists them in this order.
 #
-# The drum template, not the orchestral stress fixture: it has the
-# hierarchy a real desk has (Drums > Drum Kit > Kick > Sum > In/Out/Trig),
-# the template's own colours, and it opens with the kick selected — so
-# the focus-width rack is on screen before anything is clicked. The
-# orchestral fixture is 2000 flat tracks; it exists to be slow, not to
-# be looked at.
+# Every recipe runs in the dev shell (scripts/dev-shell.sh enters it unless
+# this checkout's shell is already loaded), so cargo is the pinned 1.99.1
+# with the fleet's kache environment. The cargo on the default PATH is
+# 1.98.1: its builds share no cache keys with anyone else's.
 #
-# It is the golden session — built by the Rust builder in
-# `dynamic_template::golden_session` and committed under
-# features/dynamic-template/fixtures/golden/. `just daw-template`
-# regenerates it. Override for a one-off with an argument
-# (`just studio-song some.rpp`) or for a session with FTS_DAW_TEMPLATE.
-GOLDEN_DIR := "features/dynamic-template/fixtures/golden"
-DAW_PROJECT := env("FTS_DAW_TEMPLATE", GOLDEN_DIR / "template.rpp")
-DAW_VOCAL := env("FTS_DAW_VOCAL", GOLDEN_DIR / "vocal-fx.rpp")
+# Use these recipes rather than ad-hoc `cargo -p` sets: cargo unifies
+# features per invocation, so every different package set compiles the
+# shared crates a different way, under a different kache key.
 
-# List recipes by default: the three that run it first (file order).
+set shell := ["bash", "scripts/dev-shell.sh", "-c"]
+set script-interpreter := ["bash", "scripts/dev-shell.sh"]
+
+# The expression editor's harness: `just editor <recipe>` (just/editor.just).
+mod editor "just/editor.just"
+
+# One build for working on the app: dx's `desktop-dev` profile for the host
+# triple, as `dx serve` builds the window. The engine, the tests and the
+# window then share one set of compiled crates.
+host := if os() == "macos" { arch() + "-apple-darwin" } else { arch() + "-unknown-linux-gnu" }
+dev_build := "--profile desktop-dev --target " + host
+target_dir := env("CARGO_TARGET_DIR", justfile_directory() / "target")
+dev_out := target_dir / host / "desktop-dev"
+
+# The engine's package and program. Today it is the `daw` extension
+# (`daw-extension --engine`); when the engine binary moves into apps/studio
+# these two lines change, and nothing else.
+engine_package := "daw-extension"
+engine_bin := "daw-extension"
+
+# List the recipes.
 default:
     @just --list --unsorted
 
-# ── Run it: the local stack (docs/local-stack.md) ─────────────────
-# The same three recipes, with the same meaning, in Studio, Architect and
-# Keyflow. `devenv up` (processes in devenv.nix, scripts/local-stack.sh)
-# is the engine underneath; `just dev-status` says what runs and where.
+# ── Run ──────────────────────────────────────────────────────────────────
 
-# Everything locally, hot-patched on save: the sign-in, the Architect server (plain Architect) on the demo vault with its share links, studio-web and Studio desktop (desktop=off: no window)
-dev *ARGS:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    scripts/local-stack.sh choose mode=dev {{ARGS}}
-    # shellcheck disable=SC2046 # the process names, split on purpose
-    exec devenv up $(scripts/local-stack.sh procs)
+# The desktop app (apps/studio, Blitz) under `dx serve`, with the engine it starts built first
+studio *ARGS: _engine-build
+    cd apps/studio && dx serve --platform desktop --renderer native --no-default-features --features native {{dev_build}} {{ARGS}}
 
-# See it working, quickly: the sign-in, the Architect server and studio-web, no desktop window
-demo *ARGS:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    scripts/local-stack.sh choose mode=demo watch=off {{ARGS}}
-    # shellcheck disable=SC2046
-    exec devenv up $(scripts/local-stack.sh procs)
+# The engine, headless: `run` (the default) starts it in the foreground; `status` and `stop` ask the running one
+engine ACTION="run": _engine-build
+    {{dev_out}}/{{engine_bin}} {{ if ACTION == "run" { "--engine" } else { "--" + ACTION } }}
 
-# studio-web (with the server's paths) on this tailnet over HTTPS for a phone or another machine (tailscale serve, never funnel); `just phone off`
-phone *ARGS:
-    scripts/local-stack.sh tailnet {{ARGS}}
+# The web app under `dx serve` (its /studio/api goes to the Drive node on :8096, apps/studio/Dioxus.toml)
+web *ARGS:
+    cd apps/studio && dx serve --platform web --features web {{ARGS}}
 
-# Stop Studio's engine (the `daw` extension's process, which outlives the window); the app starts a new one when it next opens
-engine-stop:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    bin=extensions/daw/daw-extension
-    [ -x "$bin" ] || bin="$(find target -path '*desktop-dev/daw-extension' -type f | head -1)"
-    [ -n "$bin" ] || { echo "no daw-extension built" >&2; exit 1; }
-    "$bin" --stop && echo "engine: stopped (or none was running)"
+_engine-build:
+    cargo build {{dev_build}} -p {{engine_package}} --bin {{engine_bin}}
 
-# What the local stack runs, from where (studio/architect/keyflow versions), its URLs
-dev-status:
-    scripts/local-stack.sh status
+# ── Check and test ───────────────────────────────────────────────────────
 
-# The local stack, checked end to end: share page, songs, Firefox plays and the playhead moves
-dev-smoke:
-    scripts/local-stack.sh smoke
+# The whole workspace compiles, and the layout rules hold (boundaries.toml)
+check:
+    cargo check --workspace
+    python3 scripts/boundaries.py check
 
-# Remove the local stack's state (its vault copy, issuer database, the server's and the window's data); stop it first
-dev-reset:
-    scripts/local-stack.sh reset
+# The browser builds, for wasm32: the web app, and Keyflow's chart editor as its web build takes it
+check-web:
+    cargo check -p studio-app --features web --target wasm32-unknown-unknown
+    cargo check --target wasm32-unknown-unknown -p editor-keyflow -p keyflow -p keyflow-ui --no-default-features --features editor-keyflow/render,keyflow/text,keyflow/svg,keyflow/highlighting,keyflow-ui/wasm-graphics
 
-# ── Tailwind (app UI sheet) ──────────────────────────────────────────────
-# The single compiled sheet (assets/tailwind-signal.css) is inlined by
-# BOTH features/engine/host/src/rig_view.rs (signal UI) and
-# src/main.rs SessionChrome (session UI) via include_str!; rebuild it
-# whenever UI-crate class usage changes. input.css @source globs scan the
-# signal/session UI crates + libs/ui + libs/dock.
+# The layout rules (boundaries.toml): `check` (both), `check --edges` (seconds), `tighten`, `groups`
+boundaries *ARGS="check":
+    python3 scripts/boundaries.py {{ARGS}}
 
-# Point features/engine/host/.lumen-blocks at the lumen-blocks
-# checkout cargo actually resolved.
-#
-# input.css used to reach into $CARGO_HOME with a hardcoded /home/cody path
-# and a `lumen-blocks-*/*/` wildcard. That wildcard matched EVERY checkout
-# in the cache, not the pinned one — four of them here — so the compiled
-# sheet depended on which revisions happened to be lying around, and
-# changed on its own as the cache moved. That's what kept this file
-# permanently dirty. `cargo metadata` knows the real answer; ask it.
-_lumen-link:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # As locked, or (a local stack's overrides) as those resolve.
-    cargo() { if [ -n "${STUDIO_ARCHITECT_CARGO_CONFIG:-}" ]; then command cargo "${@/--locked/--offline}" --config "$STUDIO_ARCHITECT_CARGO_CONFIG"; else command cargo "$@"; fi; }
-    dir=$(cargo metadata --locked --format-version 1 2>/dev/null \
-        | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="lumen-blocks"))')
-    ln -sfn "$dir" features/engine/host/.lumen-blocks
-    # architect-ui, for the FX editors' sheets (a git dep has no stable path).
-    ui=$(cargo metadata --locked --format-version 1 2>/dev/null \
-        | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-ui"))')
-    ln -sfn "$ui" features/ui/.architect-ui
-    # The rigs' UI crates are FastTrackStudios/signal's: the checkout cargo
-    # resolved (the repo root, three up from the guitar crate).
-    guitar=$(cargo metadata --locked --format-version 1 2>/dev/null \
-        | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="guitar"))')
-    ln -sfn "$(cd "$guitar/../../.." && pwd)" features/ui/.signal
+# A group's tests: core, connect, engine, app, tools or all. Extra arguments go to nextest (`just test engine -E 'test(mixer)'`)
+[positional-arguments]
+[script]
+test GROUP="core" *ARGS:
+    group="$1"; shift
+    pkgs=()
+    while read -r p; do pkgs+=(-p "$p"); done < <(python3 scripts/boundaries.py packages "$group" --tested)
+    [ "${#pkgs[@]}" -gt 0 ] || { echo "no packages in group $group" >&2; exit 1; }
+    cargo nextest run "${pkgs[@]}" --no-fail-fast "$@"
 
-# Build Tailwind CSS (v4)
-tailwind: _lumen-link
-    cd features/engine/host && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
+# The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
+ci-local BASE="":
+    bash scripts/ci-local.sh {{BASE}}
 
-# Watch Tailwind CSS for changes
-tailwind-watch: _lumen-link
-    cd features/engine/host && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --watch --minify
-
-# Fail if the committed sheet isn't what the sources produce.
-#
-# tailwind-signal.css is `include_str!`d by rig_view.rs and main.rs, so it
-# has to be committed — which means it can go stale silently when someone
-# adds a class and doesn't rebuild. It was stale by ~50 classes when this
-# check was written.
-tailwind-check: tailwind
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if ! git diff --quiet -- features/engine/host/assets/tailwind-signal.css; then
-        echo "tailwind-signal.css is out of date — run 'just tailwind' and commit the result" >&2
-        exit 1
+# What CI runs after a merge to main, in its order, on this machine (`just ci tests` starts from that step)
+[script]
+ci FROM="gates":
+    export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"
+    steps=(gates boundaries check web tests)
+    start=0
+    for i in "${!steps[@]}"; do [ "${steps[$i]}" = "{{FROM}}" ] && start=$i; done
+    from() { local at=0 i; for i in "${!steps[@]}"; do [ "${steps[$i]}" = "$1" ] && at=$i; done; [ "$at" -ge "$start" ]; }
+    # A full disk fails in the linker, as a bus error that reads like a
+    # compiler fault: say so in the first second instead.
+    free_gb=$(df -PBG "$CARGO_TARGET_DIR" 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$4); print $4}')
+    if [ -n "${free_gb:-}" ] && [ "$free_gb" -lt 25 ]; then
+      echo "only ${free_gb}G free under $CARGO_TARGET_DIR; reclaim first (just sweep, just disk)" >&2
+      exit 1
     fi
-    echo "tailwind-signal.css is up to date"
+    if from gates; then
+      echo "── gates: lockfile, duplicate versions, fmt, workflows, rail config, spec coverage ──"
+      bash scripts/check-lockfile.sh
+      python3 scripts/check-duplicate-deps.py
+      cargo fmt --all --check
+      just workflows-check
+      cargo rail config validate --strict
+      python3 -I scripts/spec-coverage.py --scope lighting >/dev/null
+    fi
+    if from boundaries; then echo "── boundaries ──"; python3 scripts/boundaries.py check; fi
+    if from check; then echo "── cargo check --workspace ──"; cargo check --workspace; fi
+    if from web; then echo "── wasm ──"; just check-web; fi
+    if from tests; then echo "── tests (all groups) ──"; just assets; just test all; fi
+    echo "every CI step passed locally"
 
-# Launch the desktop app (Session and/or Charts, per default features) via
-# dx serve, so UI edits hot-reload instead of a plain `cargo run`.
-desktop:
-    cd features/engine/host && dx serve --release
+# Record rail's observed-input evidence for HEAD, so `ci-local` against it narrows a docs or CI-file change
+[script]
+rail-evidence:
+    dir="$(git rev-parse --git-common-dir)/rail-evidence/$(git rev-parse HEAD)"
+    mkdir -p "$dir"
+    cargo rail plan evidence --work cargo.build -o "$dir/cargo.build.json" -- check --workspace
+    cargo rail plan evidence --work cargo.test -o "$dir/cargo.test.json" -- check --workspace --all-targets
+    echo "rail evidence: $dir"
 
-# Stage the fts web bundle (the browser remote) for embedding: tailwind →
-# dx web build (signal rigs + the session setlist remote) →
-# features/engine/host/web-dist/, which `cargo build -p engine-host
-# --features embed-web` compiles into the binary (include_dir). On wasm the
-# session feature is only the wire surface (session-proto clients +
-# daw-view-kit); the player itself runs in the engine. web-dist/ is gitignored.
-web-stage: tailwind
-    cd features/engine/host && dx build --platform web --release --no-default-features --features signal,session
-    rm -rf features/engine/host/web-dist
-    cp -r target/dx/engine-host/release/web/public features/engine/host/web-dist
+# Spec coverage: reqs / impl / verify per spec (`--scope lighting` is Ignition's gate; `--uncovered`, `--untested`)
+spec-coverage *ARGS:
+    python3 -I scripts/spec-coverage.py {{ARGS}}
 
-# ONE build for the app, shared by every recipe that runs it and by the dev
-# loop (`just dev-test`): dx's `desktop-dev` profile
-# (the dev profile, Cargo.toml) for the host triple, as `dx serve` builds the
-# window, so the window, the engine, the tests and these recipes reuse one set
-# of compiled crates. Another profile, target or feature set makes cargo
-# recompile every shared crate for that combination. Release builds are for
-# shipping (scripts/desktop/*) and measuring, not for working.
-dev_host := `rustc -vV | sed -n 's/^host: //p'`
-dev_build := "--profile desktop-dev --target " + dev_host
-dev_out := "./target/" + dev_host + "/desktop-dev"
-# Stage the browser keys rig's AudioWorklet bundle (W4 of
-# signal:features/signal/docs/browser-keys-rig.md) into the web bundle:
-# a RELEASE wasm build of web-audio-worklet --features keys (KeysWorklet =
-# WebRenderer + headless KeysRig), wasm-bindgen'd `--target web`, plus
-# the keys-specific processor + worklet polyfill (AudioWorkletGlobalScope
-# has no dynamic import(), TextDecoder, crypto, or performance — see
-# features/adapters/web/worklet/js/). The page (src/web_keys_rig.rs) expects:
-#   /worklet/keys_processor.js
-#   /worklet/signal_keys_worklet.js
-#   /worklet/signal_keys_worklet_bg.wasm
-# wasm-bindgen-cli comes from the dev shell, pinned to the workspace
-# wasm-bindgen version.
-keys-worklet-wasm out='target/worklet':
-    # --max-memory: default wasm linear memory caps at 2 GB — resident pack
-    # bytes + decoded-PCM budget + app need the full 4 GB address space.
-    #
-    # +simd128: wasm SIMD (stable, and in every browser we target). The rig
-    # renders nine lanes of sampler + FX inside ONE audio thread, so DSP
-    # throughput is the headroom that decides whether it plays clean; the
-    # per-sample loops (gain, mix, filters, interpolation) are exactly what
-    # 128-bit lanes accelerate. Measure `renderLoad()` across this change —
-    # it is the number that says whether the render fits the quantum.
-    RUSTFLAGS="-C link-arg=--max-memory=4294967296 -C target-feature=+simd128" \
-    cargo build -p web-audio-worklet --features keys --lib \
-        --target wasm32-unknown-unknown --release
-    mkdir -p {{out}}
-    wasm-bindgen --target web --out-dir {{out}} \
-        --out-name signal_keys_worklet \
-        target/wasm32-unknown-unknown/release/web_audio_worklet.wasm
-    cp features/adapters/web/worklet/js/keys_processor.js {{out}}/keys_processor.js
-    cp features/adapters/web/worklet/js/worklet_polyfill.js {{out}}/worklet_polyfill.js
-    cp features/adapters/web/worklet/js/keys_decoder_worker.js {{out}}/keys_decoder_worker.js
-    cp features/adapters/web/worklet/js/keys_streamer_worker.js {{out}}/keys_streamer_worker.js
+# Crates Cargo.lock holds in more than one version: fails on a new one (`--write` after an intended change)
+deps-dupes *ARGS:
+    python3 scripts/check-duplicate-deps.py {{ARGS}}
 
-# W13: the SHARED-MEMORY worklet build — wasm threads.
-#
-# The rig's audio thread must never decode, and copying PCM to it costs a
-# memcpy per sample. With shared memory the decoder threads write chunks
-# straight into the heap the audio thread reads, which is how the NATIVE
-# engine already works (fts-sample's streamer pool). Requirements:
-#
-#   +atomics,+bulk-memory,+mutable-globals   the thread ABI
-#   --shared-memory --import-memory          one memory across instances
-#   -Z build-std                             std must be rebuilt with atomics
-#                                            (hence nightly — the rest of the
-#                                            tree stays on stable 1.99.1)
-#
-# The page creates the WebAssembly.Memory and hands it to the worklet and to
-# each decoder worker, so all three instantiate over the SAME heap. Serving
-# it needs cross-origin isolation (EngineHost::cross_origin_isolated).
-#
-# Kept as its OWN recipe until it is proven: `keys-worklet-wasm` (single
-# threaded) stays the default so a toolchain problem here can never take the
-# working rig down with it.
-keys-worklet-wasm-threads out='target/worklet':
-    # The four TLS symbols are exported EXPLICITLY: wasm-bindgen's threading
-    # pass looks up `__wasm_init_tls` (each thread initialises its own TLS
-    # block through it), and LLD garbage-collects all of them when no Rust
-    # code happens to use `#[thread_local]` — which shows up much later as
-    # `failed to prepare module for threading: failed to find
-    # __wasm_init_tls`, long after the Rust build succeeded.
-    RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128 \
-        -C link-arg=--shared-memory \
-        -C link-arg=--import-memory \
-        -C link-arg=--max-memory=4294967296 \
-        -C link-arg=--export=__wasm_init_tls \
-        -C link-arg=--export=__tls_size \
-        -C link-arg=--export=__tls_align \
-        -C link-arg=--export=__tls_base" \
-    cargo-nightly build -p web-audio-worklet --features keys --lib \
-        -Z build-std=std,panic_abort \
-        --target wasm32-unknown-unknown --release
-    mkdir -p {{out}}
-    wasm-bindgen --target web --out-dir {{out}} \
-        --out-name signal_keys_worklet \
-        target/wasm32-unknown-unknown/release/web_audio_worklet.wasm
-    cp features/adapters/web/worklet/js/keys_processor.js {{out}}/keys_processor.js
-    cp features/adapters/web/worklet/js/worklet_polyfill.js {{out}}/worklet_polyfill.js
-    cp features/adapters/web/worklet/js/keys_decoder_worker.js {{out}}/keys_decoder_worker.js
-    cp features/adapters/web/worklet/js/keys_streamer_worker.js {{out}}/keys_streamer_worker.js
+# ── CI workflows ─────────────────────────────────────────────────────────
+# .github/workflows is GENERATED from xtask/workflows (one Rust module per
+# workflow, the reasons as comments there): edit the Rust, run `just
+# workflows`, commit both.
 
-# Stage the browser guitar rig (signal:features/signal/docs/browser-guitar-rig.md):
-# one wasm module with two entry points — GuitarWorklet on the AudioWorklet
-# thread, NamWorker on each NAM Web Worker — plus the processor, the worker,
-# the page-side orchestrator and the worklet polyfill (shared with keys).
-# The page expects, under {{out}}:
-#   guitar_processor.js  nam_worker.js  guitar_rig.js  worklet_polyfill.js
-#   signal_guitar_worklet.js  signal_guitar_worklet_bg.wasm
-# +simd128: the NAM kernels are what decides how many models fit a quantum.
-guitar-worklet-wasm out='target/worklet/guitar':
-    RUSTFLAGS="-C target-feature=+simd128" \
-    cargo build -p web-audio-worklet --features guitar --lib \
-        --target wasm32-unknown-unknown --release
-    mkdir -p {{out}}
-    wasm-bindgen --target web --out-dir {{out}} \
-        --out-name signal_guitar_worklet \
-        target/wasm32-unknown-unknown/release/web_audio_worklet.wasm
-    cp features/adapters/web/worklet/js/guitar_processor.js {{out}}/
-    cp features/adapters/web/worklet/js/nam_worker.js {{out}}/
-    cp features/adapters/web/worklet/js/guitar_rig.js {{out}}/
-    cp features/adapters/web/worklet/js/worklet_polyfill.js {{out}}/
+# Write .github/workflows from xtask/workflows
+workflows:
+    cargo run -q -p xtask-workflows -- generate
 
+# Fail if a workflow on disk is not what `just workflows` writes; then actionlint
+workflows-check:
+    cargo run -q -p xtask-workflows -- check
+    actionlint
 
-# Session.app + its macOS .pkg installer (signed with the Developer ID
-# identities in the login keychain), built with the host toolchain — see the
-# script's header for the knobs (NOTARIZE=1, ADHOC_SIGN=1, MAC_TARGETS=...).
-macos-pkg:
-    bash features/engine/host/ios/package-session-macos.sh
+# ── Assets, faces, plugins ───────────────────────────────────────────────
 
-# Build the installer and install it for this user (~/Applications, no
-# password), replacing any earlier install.
-macos-install: macos-pkg
-    installer -pkg "target/Session-$(cargo pkgid -p engine-host | sed 's/.*[#@]//')-macos.pkg" -target CurrentUserHomeDirectory
+# Fetch the large binaries kept out of git (assets.txt) into .assets/ and link them into place (ASSETS_OFFLINE=1: no network)
+assets:
+    bash scripts/assets.sh
 
-# The FX editors' Tailwind sheets (`tailwind-eq`, `-comp`, `-limiter`,
-# `-trigger`, `-eq-standalone`) are recipes of FastTrackStudios/fts-fx, where
-# the effects live.
+# Make a worktree complete as the main checkout is (assets, faces); the post-checkout hook runs it
+worktree-setup:
+    bash scripts/worktree-setup.sh --force
 
-# The plugins still built here — the one list every plugin recipe iterates. A
-# name here is `<name>-plugin` as a cargo package and "FTS <Name>" as a bundle
-# (see bundler.toml); adding a plugin means touching this line and that file.
-# The effects (eq, comp, reverb, delay, …) are bundled by
-# FastTrackStudios/fts-fx's `just plugins-bundle`, and the nam, signal and
-# sampler plugins by FastTrackStudios/signal's, the same recipe.
-fts_plugins := "guide"
+# Generate the plugin faces (every `.frame`, the catalogs, rig-faces/faces.json) into plugin-faces/generated; not kept in git
+faces *ONLY:
+    cargo run -q --release -p plugin-faces -- crates/studio-connect/plugin-ui/plugin-faces/generated {{ if ONLY != "" { "--only " + ONLY } else { "" } }}
 
-# Bundle every FTS plugin as .clap + .vst3 (target/bundled/, names from
-# bundler.toml). Pass a subset to bundle only those:
-#   just plugins-bundle guide
-# Debug of a single plugin: cargo run -p fts-plugin-xtask -- bundle -p guide-plugin
-#
-# On macOS this uses nice-plug-xtask's `bundle-universal` instead of
-# `bundle`: it builds both aarch64-apple-darwin and x86_64-apple-darwin and
-# lipo's them into one universal .clap/.vst3 per plugin — no custom lipo
-# scripting needed. Requires the x86_64-apple-darwin rustc target (added to
-# fts.rustToolchain for darwin — nix/modules/toolchain.nix).
-plugins-bundle plugins=fts_plugins:
-    #!/usr/bin/env bash
-    set -euo pipefail
+# The plugin bundles every plugin recipe iterates: cargo packages, named for
+# their bundles in bundler.toml (adding a plugin means this line and that file).
+plugins := "eq-plugin comp-plugin reverb-plugin delay-plugin modulation-plugin level-plugin saturate-plugin gate-plugin limiter-plugin trigger-plugin meter-plugin pitch-plugin unison-plugin mic-plugin guide-plugin nam-plugin signal-plugin signal-sampler-clap"
+
+# Bundle plugins as .clap + .vst3 into target/bundled (all of them, or the packages named; universal binaries on macOS)
+[script]
+plugins-bundle *ONLY:
     cmd=bundle
-    [ "$(uname)" = "Darwin" ] && cmd=bundle-universal
-    for p in {{plugins}}; do
-        # `export` (the CLAP/VST3 entry points) is a feature of the FX
-        # plugins; guide has no such feature.
-        feat=(); grep -q '^export *=' "plugins/$p/Cargo.toml" && feat=(--features export)
-        cargo run -q -p fts-plugin-xtask -- "$cmd" -p "$p-plugin" --release "${feat[@]}"
+    [ "$(uname)" = Darwin ] && cmd=bundle-universal
+    for p in {{ if ONLY != "" { ONLY } else { plugins } }}; do
+        # `export` (the CLAP/VST3 entry points) is a feature of the FX plugins.
+        manifest="$(grep -rl --include=Cargo.toml "^name = \"$p\"" crates/studio-engine/plugins | head -1)"
+        feat=(); grep -q '^export *=' "$manifest" && feat=(--features export)
+        cargo run -q -p fts-plugin-xtask -- "$cmd" -p "$p" --release "${feat[@]}"
     done
-    ls target/bundled/
+    ls "{{target_dir}}/bundled/"
 
-# Symlink the built bundles into this machine's user plugin dirs, so a rebuild
-# is live in REAPER (and anything else that scans them) without reinstalling.
-#
-# Points at `target/bundled` rather than copying it. The bundler rewrites each bundle in place at a stable path, so the link stays
-# valid across rebuilds — `just plugins-bundle nam` and the next plugin scan
-# sees the new binary.
-#
-#   just plugins-link              # every bundle currently in target/bundled
-#   just plugins-bundle nam && ... # rebuild one; the link already points at it
-#
-# Idempotent, and deliberately conservative: it replaces its own symlinks but
-# refuses to delete a REAL directory of the same name, which would be a copy
-# installed by hand or by a release. Remove those yourself first —
-# a plugin folder is not somewhere to be clever with rm -rf.
+# Symlink the bundles in target/bundled into this machine's CLAP and VST3 folders (never replaces a real install)
+[script]
 plugins-link:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    src="$(pwd)/target/bundled"
-    [ -d "$src" ] || { echo "no target/bundled — run 'just plugins-bundle' first" >&2; exit 1; }
+    src="{{target_dir}}/bundled"
+    [ -d "$src" ] || { echo "no $src: run 'just plugins-bundle' first" >&2; exit 1; }
     case "$(uname)" in
         Darwin) clap_dir="$HOME/Library/Audio/Plug-Ins/CLAP"; vst3_dir="$HOME/Library/Audio/Plug-Ins/VST3";;
         *)      clap_dir="$HOME/.clap"; vst3_dir="$HOME/.vst3";;
     esac
     mkdir -p "$clap_dir" "$vst3_dir"
-    linked=0; skipped=0
     for bundle in "$src"/*.clap "$src"/*.vst3; do
         [ -e "$bundle" ] || continue
         name="$(basename "$bundle")"
-        case "$name" in *.clap) dest_dir="$clap_dir";; *) dest_dir="$vst3_dir";; esac
-        dest="$dest_dir/$name"
+        case "$name" in *.clap) dest="$clap_dir/$name";; *) dest="$vst3_dir/$name";; esac
         if [ -e "$dest" ] && [ ! -L "$dest" ]; then
-            printf "  SKIP  %-22s (a real copy is installed at %s)\n" "$name" "$dest_dir"
-            skipped=$((skipped+1))
-            continue
+            printf "  SKIP  %-22s (a real copy is installed there)\n" "$name"; continue
         fi
-        rm -f "$dest"
-        ln -s "$bundle" "$dest"
-        printf "  link  %-22s -> %s\n" "$name" "$dest_dir"
-        linked=$((linked+1))
+        rm -f "$dest"; ln -s "$bundle" "$dest"
+        printf "  link  %-22s -> %s\n" "$name" "$(dirname "$dest")"
     done
-    echo "linked $linked bundle(s), skipped $skipped"
 
-# Remove the symlinks `plugins-link` made, leaving any real installs alone.
+# Remove the symlinks `plugins-link` made, leaving real installs alone
+[script]
 plugins-unlink:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    src="$(pwd)/target/bundled"
+    src="{{target_dir}}/bundled"
     case "$(uname)" in
         Darwin) dirs=("$HOME/Library/Audio/Plug-Ins/CLAP" "$HOME/Library/Audio/Plug-Ins/VST3");;
         *)      dirs=("$HOME/.clap" "$HOME/.vst3");;
@@ -356,39 +205,25 @@ plugins-unlink:
         [ -d "$dir" ] || continue
         for link in "$dir"/*.clap "$dir"/*.vst3; do
             [ -L "$link" ] || continue
-            target="$(readlink "$link")"
-            case "$target" in "$src"/*) rm -f "$link"; echo "  unlink $(basename "$link")";; esac
+            case "$(readlink "$link")" in "$src"/*) rm -f "$link"; echo "  unlink $(basename "$link")";; esac
         done
     done
 
-# Prove every bundle in target/bundled actually LOADS — dlopen it, run its
-# entry point, and walk its factory (plugins/verify/). A plugin that
-# compiles, links, and exports the right symbol can still fail in a host: a
-# missing dependency or a panicking init only shows up at load time, and
-# `nm` cannot see either.
-#
-# Works on both platforms, including their different bundle shapes (Linux
-# .clap is a bare shared object, macOS .clap is a directory) and different
-# VST3 entry-point names (ModuleEntry vs bundleEntry). On macOS, pass an
-# arch to run the universal binaries in one personality:
-#   just plugins-verify              # native
-#   just plugins-verify x86_64       # the Intel half, under Rosetta
-plugins-verify arch="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    [ -d target/bundled ] || { echo "no target/bundled — run 'just plugins-bundle' first" >&2; exit 1; }
-    out="target/plugin-verify"; mkdir -p "$out"
-    archflag=""
-    [ -n "{{arch}}" ] && archflag="-arch {{arch}}"
-    cc $archflag -o "$out/clap_load" plugins/verify/clap_load.c -ldl
-    cc $archflag -o "$out/vst3_load" plugins/verify/vst3_load.c -ldl
-    # The loadable binary inside a bundle, whatever shape the bundle is.
+# Load every bundle in target/bundled (dlopen, entry point, factory): a bundle that links can still fail in a host. ARCH: x86_64 for the Intel half on macOS
+[script]
+plugins-verify ARCH="":
+    src="{{target_dir}}/bundled"
+    [ -d "$src" ] || { echo "no $src: run 'just plugins-bundle' first" >&2; exit 1; }
+    out="{{target_dir}}/plugin-verify"; mkdir -p "$out"
+    archflag=(); [ -n "{{ARCH}}" ] && archflag=(-arch "{{ARCH}}")
+    cc "${archflag[@]}" -o "$out/clap_load" crates/studio-engine/plugins/verify/clap_load.c -ldl
+    cc "${archflag[@]}" -o "$out/vst3_load" crates/studio-engine/plugins/verify/vst3_load.c -ldl
     binary_in() {
-        if [ -d "$1" ]; then find "$1/Contents" -type f -perm -u+x ! -name "*.txt" ! -name "PkgInfo" | head -1
+        if [ -d "$1" ]; then find "$1/Contents" -type f -perm -u+x ! -name "*.txt" ! -name PkgInfo | head -1
         else echo "$1"; fi
     }
     fail=0
-    for b in target/bundled/*.clap target/bundled/*.vst3; do
+    for b in "$src"/*.clap "$src"/*.vst3; do
         [ -e "$b" ] || continue
         case "$b" in *.clap) loader="$out/clap_load";; *) loader="$out/vst3_load";; esac
         bin="$(binary_in "$b")"
@@ -397,1221 +232,85 @@ plugins-verify arch="":
         printf "%-24s %s\n" "$(basename "$b")" "$result"
         case "$result" in OK*) ;; *) fail=1;; esac
     done
-    [ "$fail" = 0 ] || { echo "FAILURES — some bundles do not load" >&2; exit 1; }
-    echo "all bundles load"
+    [ "$fail" = 0 ] || { echo "some bundles do not load" >&2; exit 1; }
 
-# The models are the private FastTrackStudios/mic-models repository, read from
-# $FTS_MIC_MODELS, else ~/.local/share/fts/mic-models. The default mic (LD-47K)
-# is built into the plugin, so this is only needed for the other thirty-nine.
-# Install or update the FTS Mic models for the plugin
+# Install or update the FTS Mic models (the private mic-models repo) into $FTS_MIC_MODELS or ~/.local/share/fts/mic-models
+[script]
 mic-models-install:
-    #!/usr/bin/env bash
-    set -euo pipefail
     dest="${FTS_MIC_MODELS:-${XDG_DATA_HOME:-$HOME/.local/share}/fts/mic-models}"
-    if [ -d "$dest/.git" ]; then
-        git -C "$dest" pull --ff-only
-    elif [ -e "$dest" ]; then
-        echo "$dest exists and is not a mic-models checkout; leaving it alone" >&2
-        exit 1
-    else
-        mkdir -p "$(dirname "$dest")"
-        git clone git@github.com:FastTrackStudios/mic-models.git "$dest"
-    fi
+    if [ -d "$dest/.git" ]; then git -C "$dest" pull --ff-only
+    elif [ -e "$dest" ]; then echo "$dest exists and is not a mic-models checkout; leaving it alone" >&2; exit 1
+    else mkdir -p "$(dirname "$dest")"; git clone git@github.com:FastTrackStudios/mic-models.git "$dest"; fi
 
-# Package the plugin bundles as a single release tarball in dist/
-# (fts-plugins-v<version>-<platform>.tar.gz + SHA256SUMS entry). The macOS
-# release artifact is NOT this — it's the signed+notarized .zip built by
-# features/engine/host/ios/deploy-macos-plugins.sh, since Apple only accepts
-# zip/pkg/dmg for notarization.
-plugins-package: plugins-bundle
-    #!/usr/bin/env bash
-    set -euo pipefail
-    version="$(cargo pkgid -p guide-plugin | sed 's/.*[#@]//')"
-    case "$(uname)-$(uname -m)" in
-        Darwin-*)        plat=macos ;;
-        Linux-x86_64)    plat=x86_64-linux ;;
-        Linux-aarch64)   plat=aarch64-linux ;;
-        *) echo "unsupported platform: $(uname)-$(uname -m)" >&2; exit 1 ;;
-    esac
-    mkdir -p dist
-    tarball="fts-plugins-v$version-$plat.tar.gz"
-    tar -czf "dist/$tarball" -C target/bundled .
-    (cd dist && sha256sum "$tarball" >> SHA256SUMS 2>/dev/null || sha256sum "$tarball" > SHA256SUMS)
-    echo "packaged: dist/$tarball"
-
-# ── REAPER ───────────────────────────────────────────────────────────────
-# The daw-bridge cdylib and the daw-reaper integration suites (`just reaper
-# install`, `just reaper daw-test [FILTER]`) are FastTrackStudios/
-# studio-adapters' (its Justfile's `reaper` module), with the crates.
-# Session's own REAPER suites are `just reaper-test` below.
-
-# ── Build ────────────────────────────────────────────────────────────────
-
-# Check the whole workspace compiles
-check:
-    cargo check --workspace
-
-# Run tests. nextest: parallel per-test binaries, much faster than
-# `cargo test` on this many crates. It does NOT run doctests — use
-# `just test-doc` for those.
-# The crates that have tests: the core set the suite was cut to on
-# 2026-10-24 (11 317 tests in 815 binaries -> ~650 in ~40): the DSP math,
-# the session format, the engine, the timeline, the wire types, every
-# effect's parameter round-trip. `just test`, local CI and CI's Tests job
-# build and run exactly these; building the workspace's ~200 crates with no
-# tests left would only link empty harnesses. Add a crate here when it gains
-# tests worth running on every change. The wire types' tests (daw-proto,
-# daw-control, daw-transport-sync, utils) and the engine's and the session
-# format's (daw-standalone, session-format) run in FastTrackStudios/daw,
-# where those crates live (studio#510).
-test_packages := "timeline dock tempo-map studio-tempo-map"
-
-# Run the core test set (test_packages above).
-test:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    pkgs=(); for p in {{test_packages}}; do pkgs+=(-p "$p"); done
-    cargo nextest run "${pkgs[@]}"
-
-# Tests built the way the dev loop builds the app: dx's
-# `desktop-dev` profile for the host triple, with studio-desktop (the app,
-# apps/desktop) in the build, so cargo unifies
-# the named crates' features with the app's and the tests reuse the window's
-# and engine's artifacts instead of recompiling them another way.
-#   just dev-test studio-engine daw-view-kit -- comp
-[positional-arguments]
-dev-test *ARGS:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # As dx builds the window: `desktop-dev` for the host triple.
-    host="$(rustc -vV | sed -n 's/^host: //p')"
-    pkgs=(--cargo-profile desktop-dev --target "$host" -p studio-desktop)
-    rest=()
-    only=""
-    seen=0
-    for a in "$@"; do
-        if [ "$a" = "--" ]; then seen=1; continue; fi
-        if [ "$seen" = 0 ]; then
-            pkgs+=(-p "$a")
-            only="${only:+$only | }package($a)"
-        else
-            rest+=("$a")
-        fi
-    done
-    # studio-desktop is named only for its features: run just the crates
-    # asked for. nextest ORs several -E, so a filter given is ANDed in.
-    args=()
-    i=0
-    while [ "$i" -lt "${#rest[@]}" ]; do
-        a="${rest[$i]}"
-        if [ "$a" = "-E" ] && [ -n "$only" ] && [ $((i + 1)) -lt "${#rest[@]}" ]; then
-            i=$((i + 1))
-            args+=(-E "($only) & (${rest[$i]})")
-            only=""
-        else
-            args+=("$a")
-        fi
-        i=$((i + 1))
-    done
-    cargo nextest run "${pkgs[@]}" ${only:+-E "$only"} "${args[@]}"
-
-# Doctests only — nextest can't run them (libtest owns doctests).
-test-doc:
-    cargo test --workspace --doc
-
-# ── Disk / build-time hygiene ────────────────────────────────────────────
-# Cargo never garbage-collects target/: every rebuild with a changed
-# fingerprint leaves the old artifact behind forever. Measured in this tree:
-# 56 stale copies of a single crate, 77 G of `debug/incremental`, ~1 TB of
-# target/ across the worktrees. These recipes are the GC cargo doesn't have.
-
-# Reclaim stale artifacts in THIS worktree (keeps anything touched recently).
-sweep days="7":
-    cargo sweep --time {{days}}
-    @du -sh target
-
-# Sweep every worktree — the thing to run when the dev disk fills up.
-# Uses `git worktree list` so new worktrees are picked up automatically.
-sweep-all days="7":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    before=$(du -sc $(git worktree list --porcelain | awk '/^worktree /{print $2"/target"}') 2>/dev/null | tail -1 | cut -f1)
-    for w in $(git worktree list --porcelain | awk '/^worktree /{print $2}'); do
-      [ -d "$w/target" ] || continue
-      echo "── sweeping $w"
-      cargo sweep --time {{days}} "$w" || true
-    done
-    after=$(du -sc $(git worktree list --porcelain | awk '/^worktree /{print $2"/target"}') 2>/dev/null | tail -1 | cut -f1)
-    echo "reclaimed $(( (before - after) / 1024 / 1024 )) GiB"
-
-# Drop incremental-compilation caches everywhere. They are pure cache —
-# safe to delete, costs one non-incremental rebuild. Was 77 G in main alone.
-sweep-incremental:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    for w in $(git worktree list --porcelain | awk '/^worktree /{print $2}'); do
-      rm -rf "$w"/target/*/incremental "$w"/target/incremental 2>/dev/null || true
-    done
-    echo "incremental caches cleared"
-
-# Where is the disk actually going? Per-worktree target/ sizes, largest first.
-disk:
-    #!/usr/bin/env bash
-    du -sh $(git worktree list --porcelain | awk '/^worktree /{print $2"/target"}') 2>/dev/null | sort -rh
-
-# Why is the build slow? Writes target/cargo-timings/cargo-timing.html —
-# a per-crate Gantt chart showing the critical path and link-time tail.
-timings *ARGS:
-    cargo build --timings {{ARGS}}
-    @echo "→ target/cargo-timings/cargo-timing.html"
-
-# ── Knowledge graph (graphify) ───────────────────────────────────────────
-# Whole-repo knowledge graph for AI assistants — parses the tree with
-# tree-sitter (100% local, no API calls) into graphify-out/ (graph.json +
-# GRAPH_REPORT.md + interactive graph.html). graphify is bootstrapped in the
-# nix dev shell (see flake.nix shellHook). Output is gitignored + regenerable;
-# rebuild after large structural changes. `graph-serve` exposes it over MCP
-# (wired into .mcp.json so Claude Code queries it instead of grepping cold).
-
-# Build/refresh the repo knowledge graph (local AST + clustering, no LLM).
-# --force so the graph shrinks when .graphifyignore excludes more (vendored
-# trees); without it graphify refuses a rebuild that has fewer nodes.
-graph:
-    graphify update . --force
-
-# Serve the knowledge graph over MCP (stdio) — used by .mcp.json
-graph-serve:
-    graphify-mcp --transport stdio --graph graphify-out/graph.json
-
-# The browser setlist player's AudioWorklet bundle (daw-standalone's `web`
-# renderer, committed in the task repo) is built in FastTrackStudios/daw,
-# where the engine lives: its README has the command (studio#510).
-
-# ── Expression editor ────────────────────────────────────────────────────
-
-# The expression editor in a window you keep open, with rsx! hot reload.
-# Blitz -> Vello -> winit via dioxus-native: the same renderer the VST3
-# editor and the REAPER panel use, without the plugin windowing. Pick the
-# file to edit inside the window; set EXPRESSION_EDITOR_LIBRARY to point
-# the chooser at a folder of material.
-#
-# ⚠ RESTART IT AFTER A STRUCTURAL rsx! EDIT. Hot reload replaces the
-# template in the running app, and dioxus's template diffing cannot
-# handle a template whose *node count* changed — adding or removing an
-# element, an `if` block, or a component. The next render walks a
-# mutation path into a node that is no longer there and you get
-#
-#     blitz-dom/src/mutator.rs: invalid key        (node_at_path)
-#
-# which reads like a bug in whatever key you just pressed and is not:
-# the same markup mounts fine from a cold start, and the headless
-# suite — which has no hot reload — never sees it. Upstream knows the
-# class (DioxusLabs/dioxus#3459, #3567); this is its Blitz spelling,
-# because blitz-dom holds nodes in a slab and a stale index there says
-# "invalid key" rather than "index out of bounds".
-#
-# Editing *values* — a colour, a size, a string — hot reloads fine. It
-# is only shape. To rule it out entirely: `just ee-serve --hot-reload
-# false`, or `just ee` for a one-shot window.
-ee-serve *ARGS:
-    dx serve -p editor --features standalone,ui --example serve \
-        --platform desktop --renderer native {{ARGS}}
-
-# One-shot window on a file (no hot reload, no chooser).
-ee SOURCE="phrase" *ARGS:
-    cargo run -p editor --features standalone,ui --example editor -- {{SOURCE}} {{ARGS}}
-
-# The workstation: arrangement + TCP over the drum-mode editor, mixer
-# down the right, audio out the default output. Defaults to the drum-
-# mode reference session; pass any .rpp to open something else.
-workstation SOURCE="/run/media/AudioHaven/Project/02 LORD OF THE FIGHT/02 LORD OF THE FIGHT.RPP" *ARGS:
-    cargo run --release -p editor --features standalone --example workstation -- \
-        "{{SOURCE}}" --drums --size 1920x1080 {{ARGS}}
-
-# ── Aliases ──────────────────────────────────────────────────────────────
-
-alias c := check
-alias t := test
-
-# The workstation on a real song, served: `rsx!` edits hot-reload into the
-# running window. SONG: set-in-stone or unbreakable.
-# Override the source with EXPRESSION_EDITOR_PRACTICE_ALBUM; TMPDIR controls copies.
-ee-practice $SONG="set-in-stone" $FRESH="false":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ "$SONG" == "both" ]]; then
-        echo 'Open one song per window: just ee-practice set-in-stone / just ee-practice unbreakable' >&2
-        exit 2
-    fi
-    # Reuse the staging by default. It is still a copy — originals stay
-    # out of every write path — but it is ONE copy: this used to stage a
-    # fresh 5.6 GB per invocation, so an afternoon of opening the window
-    # buried the disk and threw away the `.reapeaks` sidecars each time,
-    # making every start slow as well. `just ee-practice set-in-stone
-    # true` stages a throwaway copy when you want to start from the
-    # record as recorded.
-    staging=(--cached)
-    if [[ "$FRESH" == "true" ]]; then staging=(); fi
-    project=$(cargo run -p editor --features standalone --example practice -- "${staging[@]}" "$SONG")
-    # Served, so `rsx!` edits hot-reload into the running window. `dx`
-    # owns argv — it has --cargo-args and --rustc-args but nothing that
-    # reaches the app — so the project goes through the environment
-    # instead; see `Args::from_env`.
-    # Everything the window says also lands in a file, so a warning that
-    # scrolls past — or an agent that cannot see your terminal — still has
-    # it. `tee` keeps it on screen too.
-    mkdir -p target
-    EXPRESSION_EDITOR_ARGS="'$project' --drums --size 1600x900" \
-        dx serve -p editor --features standalone --example workstation \
-        --platform desktop --renderer native 2>&1 | tee target/ee-practice.log
-
-# The same workstation in a WRY WebView (dioxus-desktop) instead of Blitz.
-#
-# The renderer the Session desktop app ships on, so this is where the
-# panels get designed: real CSS, devtools, and a DOM that does not mind a
-# pane adding and removing nodes. Same project staging as `ee-practice` —
-# reused, not re-copied — and everything below the UI is unchanged and
-# native: the project loads, the daw facade runs in-process, audio plays.
-#
-# The drum stack draws as SVG markup here rather than a painted scene —
-# a browser engine is fast at exactly those elements and Blitz is not.
-# See `expression_editor_ui::stack::markup`.
-#
-# The window reports its own frame rate to the log a couple of times a
-# second (`ui.fps`, `ui.worst_frame_ms`), so a scroll can be measured
-# from a terminal instead of a screenshot: `just ee-fps`.
-#
-# `PROBE=1` turns the dioxus-mcp probe on for `runtime_events`. It is off
-# by default because it is not free: it records every `dioxus_core` trace
-# event, fields and all, and those fields are whole `VNode` trees —
-# 18,000 events a second with the window merely playing back. Turn it on
-# to inspect renders, not to measure them.
-ee-webview $SONG="set-in-stone" $FRESH="false" $PROBE="0":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ "$SONG" == "both" ]]; then
-        echo 'Open one song per window: just ee-webview set-in-stone / just ee-webview unbreakable' >&2
-        exit 2
-    fi
-    staging=(--cached)
-    if [[ "$FRESH" == "true" ]]; then staging=(); fi
-    project=$(cargo run -p editor --features standalone --example practice -- "${staging[@]}" "$SONG")
-    # Served too, and this is the one where it pays most: a WebView has
-    # devtools, so a hot-reloaded `rsx!` edit can be inspected as it
-    # lands.
-    mkdir -p target
-    FTS_DIOXUS_PROBE="$PROBE" \
-    RUST_LOG="${RUST_LOG:-warn,expression_editor_ui::frame_meter=info}" \
-    ${WEBKIT_DISABLE_COMPOSITING_MODE:+WEBKIT_DISABLE_COMPOSITING_MODE="$WEBKIT_DISABLE_COMPOSITING_MODE"} \
-    EXPRESSION_EDITOR_ARGS="'$project' --drums --size 1600x900" \
-        dx serve -p editor --example webview \
-        --platform desktop --features standalone,webview 2>&1 | tee target/ee-webview.log
-
-# Drive the WebView window on a private display and measure a scroll.
-#
-# The developer's own window is a native Wayland surface: `grim` is
-# refused by the compositor and `xdotool` cannot see it, so there is no
-# way to drive or capture it. This gives the window a display of its own
-# — Xvfb, a window manager, xdotool input, `import` capture — the same
-# shape as `daw::test::VirtualDisplay`, which is how the REAPER panels
-# are already tested.
-#
-# Xvfb is NOT a GPU. Numbers here are for an A/B under a fixed
-# environment, not for quoting as what the window does on a screen.
-# See scripts/ui-stress/GUIDE.md.
-ee-vdisplay $CMD="run" $NAME="run":
-    scripts/ui-stress/webview-display.sh "$CMD" "$NAME"
-
-# Stop the private display and anything left running on it.
-ee-vdisplay-stop:
-    #!/usr/bin/env bash
-    pkill -9 -x webview 2>/dev/null || true
-    scripts/ui-stress/webview-display.sh stop
-
-# The frame rate the WebView actually presented at, worst frame first.
-#
-# Reads the `ui.fps` lines the window logs. Scroll for a few seconds,
-# then run this: the interesting number is the low end of the range and
-# the worst frame, not the mean of a window that spent most of its time
-# idle.
-ee-fps $LINES="20":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    log=target/ee-webview.log
-    if [[ ! -f "$log" ]]; then echo "no $log — run just ee-webview first" >&2; exit 1; fi
-    sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$log" \
-      | grep -o 'ui\.fps=[0-9.]*  *ui\.worst_frame_ms=[0-9.]*' \
-      | sed -E 's/ui\.fps=([0-9.]*)  *ui\.worst_frame_ms=([0-9.]*)/\1 \2/' \
-      | awk '{ printf "%6.1f fps   worst %6.1f ms\n", $1, $2 }' \
-      | tail -n "$LINES"
-
-# Prepare self-contained projects without opening a window; prints their paths.
-# Reuses the shared staging; pass FRESH=true for a throwaway copy.
-ee-practice-prepare $SONG="both" $FRESH="false":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    staging=(--cached)
-    if [[ "$FRESH" == "true" ]]; then staging=(); fi
-    cargo run -p editor --features standalone --example practice -- "${staging[@]}" "$SONG"
-
-# Fast iteration loop: the SAME cached song/audio staging every run, fewer
-# frames, optionally one phase. Prints the report directory for compare.py.
-#
-# `ee-stress` is the recipe of record — a fresh copy, all eight phases,
-# 120 frames. This one trades that isolation for a minute-long loop: it
-# reuses one staging (nothing here writes to it) so the `.reapeaks`
-# sidecars stay warm, and it defaults to 40 frames, which is a signal,
-# not a result. Confirm anything you intend to report with `ee-stress`.
-ee-bench $SONG="set-in-stone" $FRAMES="120" $PHASE="all_panels" $PROFILE="release":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ "$SONG" == "both" ]]; then echo 'Run one song per benchmark: set-in-stone or unbreakable' >&2; exit 2; fi
-    cargo build -p editor --features standalone --example stress --example practice --profile "$PROFILE"
-    artifact_root="${CARGO_TARGET_DIR:-target}"
-    artifact_profile="$PROFILE"
-    if [[ "$PROFILE" == "dev" ]]; then artifact_profile=debug; fi
-    project=$("$artifact_root/$artifact_profile/examples/practice" --cached "$SONG")
-    report_root=$(mktemp -d -t fts-ui-bench-XXXXXX)
-    printf 'Practice project: %s\nReport directory: %s\n' "$project" "$report_root"
-    RUST_BACKTRACE=1 FTS_STRESS_FRAMES="$FRAMES" FTS_STRESS_PROFILE="$PROFILE" FTS_STRESS_PHASE="$PHASE" \
-      "$artifact_root/$artifact_profile/examples/stress" "$project" --drums --size 1600x900 --out "$report_root" 2>&1 | tee "$report_root/run.log"
-    python3 scripts/ui-stress/run.py "$report_root"
-
-# What the last `ee-practice` / `ee-webview` run said, worst first.
-#
-# The window's own log, summarised: repeated warnings collapsed to one
-# line and a count, so a thousand copies of the same message read as one
-# fact rather than a wall. Point an agent at this rather than pasting a
-# scrollback.
-ee-log $WHICH="webview" $LINES="40":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    log="target/ee-$WHICH.log"
-    if [[ ! -f "$log" ]]; then echo "no $log — run just ee-$WHICH first" >&2; exit 1; fi
-    echo "── $log ($(wc -l < "$log") lines) ──"
-    echo
-    echo "REPEATED (count, message):"
-    # Strip timestamps and ANSI so identical messages actually collapse.
-    sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g; s/^[0-9]{2}:[0-9]{2}:[0-9]{2}//; s/^\s*\[[a-z]+\]\s*//' "$log" \
-        | grep -aE "WARN|ERROR|panic" | sort | uniq -c | sort -rn | head -15 || echo "  (none)"
-    echo
-    echo "LAST $LINES LINES:"
-    tail -n "$LINES" "$log"
-
-# Two benchmark runs side by side, with their load averages.
-ee-bench-compare BASELINE CANDIDATE:
-    python3 scripts/ui-stress/compare.py {{BASELINE}} {{CANDIDATE}}
-
-# Headless full-workstation DOM stress on fresh song/audio copies.
-ee-stress $SONG="set-in-stone" $FRAMES="120" $PROFILE="dev" $ENFORCE="false":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ "$SONG" == "both" ]]; then echo 'Run one song per benchmark: set-in-stone or unbreakable' >&2; exit 2; fi
-    cargo build -p editor --features standalone --example stress --example practice --profile "$PROFILE"
-    artifact_root="${CARGO_TARGET_DIR:-target}"
-    artifact_profile="$PROFILE"
-    if [[ "$PROFILE" == "dev" ]]; then artifact_profile=debug; fi
-    project=$("$artifact_root/$artifact_profile/examples/practice" "$SONG")
-    report_root=$(mktemp -d -t fts-ui-stress-XXXXXX)
-    options=()
-    if [[ "$ENFORCE" == "true" ]]; then options+=(--enforce); fi
-    printf 'Practice project: %s\nReport directory: %s\n' "$project" "$report_root"
-    RUST_BACKTRACE=1 FTS_STRESS_FRAMES="$FRAMES" FTS_STRESS_PROFILE="$PROFILE" "$artifact_root/$artifact_profile/examples/stress" "$project" --drums --size 1600x900 --out "$report_root" 2>&1 | tee "$report_root/run.log"
-    python3 scripts/ui-stress/run.py "$report_root" "${options[@]}"
-
-# The orchestral test fixture: 2,000 tracks, 20,000 items, no media.
-#
-# The standard load for anything performance-related. Empty MIDI takes,
-# so it opens instantly and needs no 5.6GB staging — what it reproduces
-# is the SHAPE of a big template, which is what the renderer pays for.
-# Confirm anything surprising against a real session before believing it.
-daw-fixture TRACKS="2000" ITEMS="20000":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    out="${FTS_DAW_FIXTURE:-/tmp/fts-orchestral.rpp}"
-    scripts/ui-stress/make-synthetic-rpp.py {{TRACKS}} {{ITEMS}} > "$out"
-    printf 'wrote %s — %s tracks, %s items, %s\n' "$out" \
-        "$(grep -c '^  <TRACK' "$out")" "$(grep -c '^    <ITEM' "$out")" \
-        "$(du -h "$out" | cut -f1)"
-
-# A session shaped like the dynamic template builds one.
-#
-# Small and DEEP, where the orchestral fixture is large and flat:
-# `Drums > Drum Kit > Kick > SUM > {In, Out, Trig}` is five levels before
-# a single audio track. The flat fixture never nests past one, so it
-# cannot show whether the panel draws a folder structure at all.
-#
-# The hierarchy and the names come from features/dynamic-template's own
-# group definitions rather than being invented here: the builder walks
-# the config-derived template tree with a fixture song shape
-# (`dynamic_template::golden_session`), and the result is the golden
-# session. This regenerates the committed project files
-# (template.rpp, vocal-fx.rpp), the uncommitted synthetic media beside
-# them, and the checklist in docs/spec/session/maximal-template.md —
-# which is regenerated from the golden-rule checks, never hand-ticked.
-# A test fails when any of the committed text is stale.
+# Regenerate the golden session (crates/studio-engine/adapters/dynamic-template/fixtures/golden); a test fails while it is stale
 daw-template:
-    cargo run -p dynamic-template --bin golden-session -- "{{GOLDEN_DIR}}"
+    cargo run -p dynamic-template --bin golden-session -- crates/studio-engine/adapters/dynamic-template/fixtures/golden
 
-# One sheet of folder items over a project, by hand — the same render the
-# fixtures come from, so it is the way to LOOK at a fold.
-#
-# `just daw-folder-item-sheet /tmp/fi.png "" 0,16` for eight bars.
-daw-folder-item-sheet OUT="/tmp/fts-folder-items.png" PROJECT="" WINDOW="" SIZE="1280x480":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    project="{{PROJECT}}"
-    if [[ -z "$project" ]]; then
-        project="{{GOLDEN_DIR}}/template.rpp"
-        [[ -f "$project" ]] || just daw-template
-    fi
-    cargo build -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    window="{{WINDOW}}"
-    # No window given means the whole project.
-    export FTS_BENCH_WINDOW="$window"
-    [[ -n "$window" ]] || unset FTS_BENCH_WINDOW
-    FTS_BENCH_FOLDER_ITEMS="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
-        ./target/debug/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
-
-# Benchmark the arrangement HEADLESSLY: no window, no surface, no vsync.
-#
-# Sweeps both axes hard and reports percentiles. This is the number that
-# says how much ROOM is left — the windowed build is pinned to whatever
-# display it opens on (240fps on the 240Hz panel, 180 on the 180Hz one),
-# which answers "does it keep up" and nothing else.
-#
-# No compositor and no present here, so treat it as the upper bound on
-# drawing alone. Runs over ssh, on a headless box, or in CI.
-daw-bench PROJECT="" SIZE="5120x1440":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    project="{{PROJECT}}"
-    if [[ -z "$project" ]]; then
-        project="${FTS_DAW_FIXTURE:-/tmp/fts-orchestral.rpp}"
-        [[ -f "$project" ]] || just daw-fixture
-    fi
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    echo "load before: $(cut -d' ' -f1-3 /proc/loadavg)"
-    FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN'
-
-# The master workflow checklist (docs/spec/session/workflows.md): which
-# flows have an implementation and a test, and which are still open. A
-# report you run by hand — no longer a CI or local-CI gate (2026-10-24):
-# it exits 1 when a `flow.*` rule has an r[impl] and no r[verify]; open
-# rules (neither) are counted. `-v` lists every rule by state. tracey
-# comes from the dev shell (nix/modules/tracey.nix); exemptions, with a
-# reason, are in .config/tracey/flow-verify-grandfathered.txt.
-daw-flows *ARGS:
-    python3 scripts/tracey-flow-gate.py {{ARGS}}
-
-# The studio benchmark: a 5120x1440 arrangement with the expression
-# editor docked under it, and a 2560x1440 mixer on a second display,
-# both drawn every frame. The verdict is against 240 Hz for the pair.
-daw-studio PROJECT="" SIZE="5120x1440" MIXER="2560x1440":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    project="{{PROJECT}}"
-    if [[ -z "$project" ]]; then
-        project="${FTS_DAW_FIXTURE:-/tmp/fts-orchestral.rpp}"
-        [[ -f "$project" ]] || just daw-fixture
-    fi
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    echo "load before: $(cut -d' ' -f1-3 /proc/loadavg)"
-    FTS_BENCH_STUDIO=1 FTS_BENCH_SIZE="{{SIZE}}" FTS_BENCH_MIXER_SIZE="{{MIXER}}" \
-        ./target/release/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
-
-# The arrangement with the editor docked under it, as a PNG.
-daw-dock OUT="/tmp/fts-dock.png" PROJECT="" SIZE="2560x1440":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    project="{{PROJECT}}"
-    if [[ -z "$project" ]]; then
-        project="{{DAW_PROJECT}}"
-        [[ -f "$project" ]] || just daw-template
-    fi
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    FTS_BENCH_DOCK="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
-        ./target/release/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
-
-# The audio drum workflow: a tracked kit stacked as role lanes with a
-# song's worth of hits, as a PNG. BARS sets how much groove.
-daw-kit OUT="/tmp/fts-kit.png" SIZE="2560x900" BARS="200":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    FTS_BENCH_KIT="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" FTS_BENCH_BARS="{{BARS}}" \
-        ./target/release/bench /dev/null 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
-
-# The expression editor over the demo drum groove, as a PNG — the view
-# `e` opens in the window with nothing selected, painted headless.
-daw-expression OUT="/tmp/fts-expression.png" SIZE="1600x900":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    FTS_BENCH_EXPRESSION="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
-        ./target/release/bench /dev/null 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
-
-# The Patch List view's render fixture: the fixture album resolved
-# against the fixture room, written where its test reads it. Run it when
-# a deliberate change to the view has moved a pixel, and commit the PNG.
-daw-patch-list OUT="features/engine/view-kit/fixtures/patch-list.png" SIZE="1280x1280":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    FTS_BENCH_PATCH_LIST="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
-        ./target/release/bench /dev/null 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
-
-# The Patch List view's second render fixture: the same fixture album
-# with a session override on Cody's DI and a stale banner (#57). Run it
-# when a deliberate change has moved a pixel, and commit the PNG.
-daw-patch-list-overridden-stale OUT="features/engine/view-kit/fixtures/patch-list-overridden-stale.png" SIZE="1280x1280":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    FTS_BENCH_PATCH_LIST_OVERRIDDEN_STALE="{{OUT}}" FTS_BENCH_SIZE="{{SIZE}}" \
-        ./target/release/bench /dev/null 2>&1 | grep -viE 'vulkan|objects:|WARN|Fontconfig'
-
-# One scene of the visual track manager, as a PNG.
-#
-# `just daw-scene lead-vocal-fx` renders the vocal template with the
-# Short delay and the Long verb in focus; the drum scenes render the
-# drum template. Scenes are the data table in
-# `dynamic_template::scenes::table`: drum-tracking, drum-mixing,
-# drum-overview, drum-advanced, drum-fx, buses, guitar-fx, lead-vocal,
-# lead-vocal-fx. In the window the number keys recall the scenes of the
-# current DAW mode, and a digit past the end clears the scene.
-daw-scene SCENE="lead-vocal-fx" OUT="" SIZE="2560x1440":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    case "{{SCENE}}" in
-        drum-*|guitar-*|buses) project="{{DAW_PROJECT}}" ;;
-        *)                     project="{{DAW_VOCAL}}" ;;
-    esac
-    [[ -f "$project" ]] || just daw-template
-    out="{{OUT}}"; [[ -n "$out" ]] || out="/tmp/fts-scene-{{SCENE}}.png"
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    FTS_BENCH_MIXER="$out" FTS_BENCH_SCENE="{{SCENE}}" FTS_BENCH_SIZE="{{SIZE}}" \
-        ./target/release/bench "$project" 2>&1 | grep -viE 'vulkan|objects:|WARN'
-
-# Open the studio — the ruler, the panel and the arrangement painted as
-# ONE node, in a real window on dioxus-native.
-#
-#   just studio                    the golden session, drivable by hand
-#   just studio animate            running the benchmark's own gestures
-#   just studio "" 2560x1440       at another size
-#   FPS=1 just studio              with the frame-time graph over it
-#
-# The app's own panels (DawPanels), with the app's hands: wheel scrolls,
-# shift makes it sideways; hold `z` and scroll to zoom time, shift-`z` for
-# the rows; `z` and drag is the zoom tool; middle-drag is the hand; `x`
-# docks the mixer. `FPS=1` draws what a frame cost — the shell's own
-# resolve-encode-present, not the gap between redraws.
-#
-# `FPS=1` puts a hundred-frame bar graph in the bottom right, with the
-# 4.17 ms budget drawn across it, so a hitch is visible as a hitch rather
-# than averaged into a number that looks fine.
-
-#
-# Presented WITHOUT vsync, and `VSYNC=1` puts it back. Not a default
-# chosen for speed: measured on the golden session at 5120x1440, the
-# animated gestures went p50 10.1ms with vsync and 6.8ms without, which
-# is not the frame getting cheaper — it is the frame having missed a
-# deadline and waiting for the next one. A window that waits is a window
-# whose readout reports the wait, and the number this is being tuned
-# against has to be what a frame COST.
-#
-# Logs to /tmp/fts-studio.log rather than to the terminal, because a
-# window has no terminal and what a run did has to be readable afterwards.
-studio MODE="1" SIZE="5120x1440" SCENE="drum-mixing":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build {{dev_build}} -p daw-view-kit --bin blitz_shot
-    # Through `env`, not as a bare `VAR=x` prefix: bash decides what is
-    # an assignment BEFORE it expands anything, so `${FPS:+FTS_BLITZ_FPS=1}`
-    # in that position becomes a command name and the recipe dies with
-    # "command not found".
-    env ${FPS:+FTS_BLITZ_FPS=1} \
-    FTS_PRESENT="${VSYNC:+vsync}${VSYNC:-immediate}" \
-    FTS_BLITZ_WINDOW="{{MODE}}" \
-    FTS_BLITZ_SIZE="{{SIZE}}" \
-    FTS_BLITZ_SCENE="{{SCENE}}" \
-    FTS_BLITZ_LOG=/tmp/fts-studio.log \
-    {{dev_out}}/blitz_shot "{{GOLDEN_DIR}}/template.rpp" /tmp/fts-studio.png
-
-# The studio, on the golden session.
-#
-#   just studio-demo               your hands on it
-#   just studio-demo --animate     driving itself
-#
-# Hands-on by default, because that is what opening it is usually for.
-# `--animate` runs the benchmark's own gestures on screen: the same tree,
-# the same session and the same numbers as `just studio-bench`, so what
-# the table says and what the window feels like are one thing measured
-# twice. The corner reads out what each frame cost either way.
-studio-demo ANIMATE="" SIZE="5120x1440":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    case "{{ANIMATE}}" in
-      ""|hands|manual) mode=1 ;;
-      --animate|animate) mode=animate ;;
-      *) echo "usage: just studio-demo [--animate] [SIZE]" >&2; exit 2 ;;
-    esac
-    just studio "$mode" "{{SIZE}}"
-
-# Drive one gesture headlessly and say what a frame of it costs.
-#
-#   just studio-bench pan          across the session
-#   just studio-bench down         down it — the axis the panel shares
-#   just studio-bench zoom-x       in and out, horizontally
-#   just studio-bench zoom-y       and vertically
-#
-# `DUMP=/tmp/frames` writes every frame as a picture, which is the only
-# way to see a fault that exists only while something is moving: a still
-# rendered at the same place is correct, because what is wrong is the
-# state left over from the frame before.
-studio-bench GESTURE="pan" SIZE="5120x1440" FRAMES="120" DUMP="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build --release -p daw-view-kit --bin blitz_shot
-    env ${DUMP:+FTS_BLITZ_DUMP="{{DUMP}}"} ${FPS:+FTS_BLITZ_FPS=1} \
-    FTS_BLITZ_SCENE=drum-mixing \
-    FTS_BLITZ_SIZE="{{SIZE}}" \
-    FTS_BLITZ_GESTURE="{{GESTURE}}" \
-    FTS_BLITZ_FRAMES="{{FRAMES}}" \
-    ./target/release/blitz_shot "{{GOLDEN_DIR}}/template.rpp" /tmp/fts-studio.png 2>/dev/null
-
-# ── Driving the studio from a script ──────────────────────────────────
-#
-#   just drive                     open it on :99
-#   just drive-shot /tmp/now.png   photograph that display
-#   just drive-stop                close it
-#
-# Why this exists: on Wayland a session cannot move the pointer or type
-# into a window, so the only way to find out whether a click does what
-# you think is to ask a person. Three bugs in the panel's input went
-# unnoticed exactly that way — a rename field that opened and could not
-# be typed into, a name that reverted on Enter, a control that lit on
-# the wrong row. All three showed up in the first minute of driving it.
-#
-# Xvfb has no GPU, so this renders through llvmpipe at some tens of
-# milliseconds a frame. It is for finding out what the window DOES, and
-# says nothing whatever about what it costs — measure with
-# `just studio-bench`.
-#
-# Notes that cost an hour each, so they are written down:
-#
-#   * `setsid`, or the window dies with the shell that started it.
-#   * Wait for the WINDOW, not for a number of seconds. `xdotool search`
-#     returning an id is the only honest ready signal; the process
-#     exists long before it has mapped anything.
-#   * There is no window manager on :99, so nothing gives a window the
-#     keyboard. `xdotool windowfocus` it first and send keys with
-#     `key --window $W`, or every keystroke goes nowhere — which looks
-#     exactly like a bug in whatever you are testing.
-#
-#   W=$(DISPLAY=:99 xdotool search --name FastTrackStudio | head -1)
-#   DISPLAY=:99 xdotool windowfocus $W
-#   DISPLAY=:99 xdotool mousemove 375 230 click 1
-#   DISPLAY=:99 xdotool key --window $W Return
-
-# Open the studio on a nested display a script can drive.
-drive SIZE="2560x1440" SCENE="drum-mixing" DISPLAY_NUM="99":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build {{dev_build}} -p daw-view-kit --bin blitz_shot
-    just drive-stop "{{DISPLAY_NUM}}"
-    # A killed Xvfb leaves its lock behind and the next one refuses to
-    # start — silently, as far as anything asking the display is
-    # concerned: every xdotool call just says "failed creating new xdo
-    # instance". So wait for the old one to actually go, then clear
-    # what it left.
-    until ! pgrep -f "Xvfb :{{DISPLAY_NUM}} " >/dev/null 2>&1; do sleep 1; done
-    rm -f /tmp/.X{{DISPLAY_NUM}}-lock /tmp/.X11-unix/X{{DISPLAY_NUM}}
-    setsid Xvfb :{{DISPLAY_NUM}} -screen 0 {{SIZE}}x24 > /tmp/fts-xvfb.log 2>&1 < /dev/null &
-    disown || true
-    for _ in $(seq 30); do
-        DISPLAY=:{{DISPLAY_NUM}} xdotool getdisplaygeometry >/dev/null 2>&1 && break
-        sleep 1
-    done
-    if ! DISPLAY=:{{DISPLAY_NUM}} xdotool getdisplaygeometry >/dev/null 2>&1; then
-        echo "Xvfb :{{DISPLAY_NUM}} did not come up — see /tmp/fts-xvfb.log" >&2
-        tail -5 /tmp/fts-xvfb.log >&2 || true
-        exit 1
-    fi
-    echo "display :{{DISPLAY_NUM}} up at {{SIZE}}"
-    setsid env -u WAYLAND_DISPLAY DISPLAY=:{{DISPLAY_NUM}} \
-        FTS_BLITZ_WINDOW=1 \
-        FTS_BLITZ_SIZE="{{SIZE}}" \
-        FTS_BLITZ_SCENE="{{SCENE}}" \
-        FTS_BLITZ_FPS=0 \
-        FTS_PRESENT=immediate \
-        FTS_BLITZ_LOG=/tmp/fts-drive.log \
-        {{dev_out}}/blitz_shot "{{GOLDEN_DIR}}/template.rpp" /tmp/fts-drive.png \
-        > /tmp/fts-drive.out 2>&1 < /dev/null &
-    disown || true
-    # Software rendering opens slowly; a minute is generous and a hang
-    # is better reported than waited on forever.
-    for _ in $(seq 60); do
-        W=$(DISPLAY=:{{DISPLAY_NUM}} xdotool search --name FastTrackStudio 2>/dev/null | head -1 || true)
-        [ -n "${W:-}" ] && break
-        sleep 1
-    done
-    if [ -z "${W:-}" ]; then
-        echo "no window after 60s — see /tmp/fts-drive.out" >&2
-        tail -5 /tmp/fts-drive.out >&2 || true
-        exit 1
-    fi
-    DISPLAY=:{{DISPLAY_NUM}} xdotool windowfocus "$W" || true
-    echo "window $W on :{{DISPLAY_NUM}} — logs /tmp/fts-drive.log, stdout /tmp/fts-drive.out"
-
-# Photograph the nested display.
-drive-shot OUT="/tmp/fts-drive-shot.png" DISPLAY_NUM="99":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    DISPLAY=:{{DISPLAY_NUM}} import -window root "{{OUT}}"
-    echo "{{OUT}}"
-
-# Close the nested display and whatever was on it.
-drive-stop DISPLAY_NUM="99":
-    #!/usr/bin/env bash
-    set -uo pipefail
-    pkill -f "release/blitz_shot .*template.rpp /tmp/fts-drive.png" || true
-    pkill -f "Xvfb :{{DISPLAY_NUM}} " || true
-    exit 0
-
-# Prove the culling draws the same frame as drawing everything.
-#
-# The bench's headline number comes from NOT drawing what is off screen,
-# which is only a speed-up if the skipped part was never visible. This
-# renders 720 viewports twice — culled, then complete — and compares the
-# buffers byte for byte. Run it after touching the scene index, the
-# viewport maths, or anything that records commands. Exits non-zero on a
-# mismatch, so it belongs in CI beside the bench.
-# Defaults to the GOLDEN SESSION rather than the orchestral fixture:
-# byte-identical culling on the reference session is one of the things
-# the golden is for (#49). The orchestral fixture is one argument away
-# (`just daw-verify /tmp/fts-orchestral.rpp`, or FTS_DAW_FIXTURE).
-daw-verify PROJECT="" SIZE="5120x1440":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    project="{{PROJECT}}"
-    if [[ -z "$project" ]]; then
-        project="${FTS_DAW_FIXTURE:-{{DAW_PROJECT}}}"
-        [[ -f "$project" ]] || just daw-template
-    fi
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    FTS_BENCH_VERIFY=1 FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "$project" 2>&1 \
-        | grep -viE 'vulkan|objects:|WARN'
-
-# The same sweep, in a real window, so you can watch it.
-#
-# Every parameter on every track, moving, measured.
-#
-# The mixer's controls are drawn live so a mute can change without the
-# mixer being re-recorded. This is the frame that says whether that is
-# actually cheap: mutes and solos toggling, arms flipping, faders
-# sweeping and pans crossing on every visible strip, every frame.
-#
-# Nothing scrolls — the question is what a STILL mixer costs when
-# everything in it is changing, and a scroll would hide that under the
-# cost of culling.
-daw-animate PROJECT="" SIZE="2560x1440":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    project="{{PROJECT}}"
-    if [[ -z "$project" ]]; then
-        project="${FTS_DAW_FIXTURE:-/tmp/fts-orchestral.rpp}"
-        [[ -f "$project" ]] || just daw-fixture
-    fi
-    cargo build --release -p daw-view-kit --bin bench 2>&1 | grep -E '^error' -A6 || true
-    FTS_BENCH_ANIMATE=1 FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "$project" 2>&1 \
-        | grep -viE 'vulkan|objects:|WARN'
-
-# The app's Mixer, on the golden session, the way the scene pictures show
-# it — opened straight from the fixtures (not organized a second time, so
-# nothing is written beside it), in Mix mode, drawn by the fts-dark theme,
-# with a simulated signal in the meters and the racks (FTS_SIMULATE) since
-# the template has no media. Compare with
-# features/dynamic-template/fixtures/golden/scenes/drum-mixing.png.
-#
-#   just mixer-golden                    at the pictures' 2560x1440
-#   SIMULATE=0 just mixer-golden         silent, as the engine has it
-#   THEME=console just mixer-golden      features/engine/view-kit/themes/console/ (a folder of layers)
-#   THEME=console:~/my-layers just …     a theme over it: each path over the ones before
-mixer-golden SIZE="2560x1440":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build {{dev_build}} -p engine-host
-    # A theme by name is themes/<name>/ or themes/fts-<name>.frame; anything
-    # else is a path. `:` layers them.
-    theme=""
-    IFS=: read -ra layers <<< "${THEME:-dark}"
-    for layer in "${layers[@]}"; do
-        if [ -d "features/engine/view-kit/themes/$layer" ]; then path="$PWD/features/engine/view-kit/themes/$layer"
-        elif [ -f "features/engine/view-kit/themes/fts-$layer.frame" ]; then path="$PWD/features/engine/view-kit/themes/fts-$layer.frame"
-        else path="${layer/#\~/$HOME}"; fi
-        theme="${theme:+$theme:}$path"
-    done
-    FTS_SESSION_PREPARE=0 \
-    FTS_SESSION_MODE=Mix \
-    FTS_SESSION_VIEW=mixer \
-    FTS_SIMULATE="${SIMULATE:-1}" \
-    FTS_THEME="$theme" \
-    FTS_WINDOW_SIZE="{{SIZE}}" \
-    FTS_SESSION_PROJECT="$PWD/{{GOLDEN_DIR}}/template.rpp" \
-    {{dev_out}}/engine-host
-
-# How far the themed mixer is from the painters' one: regenerates the
-# fts-dark theme from the painters' own drawings (skin::export), shoots the
-# mixer both ways and diffs them (percentage of pixels that differ, and a
-# picture of where). THEME_DIFF_CROP=x0,y0,x1,y1 also writes a blown-up
-# side-by-side of one region. OUT is where the pictures go.
-theme-parity PROJECT="features/dynamic-template/fixtures/golden/template.rpp" SIZE="1600x900" OUT="/tmp/fts-theme-parity":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p "{{OUT}}"
-    cargo build -q --release -p daw-view-kit --bin bench --bin theme_diff --bin theme_export
-    ./target/release/theme_export features/engine/view-kit/themes/fts-dark.frame
-    FTS_BENCH_MIXER="{{OUT}}/native.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote' || true
-    FTS_THEME=features/engine/view-kit/themes/fts-dark.frame FTS_BENCH_MIXER="{{OUT}}/themed.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote|theme' || true
-    ./target/release/theme_diff "{{OUT}}/native.png" "{{OUT}}/themed.png" "{{OUT}}/diff.png"
-
-# The studio window (Blitz + the painted arrangement) on a real session,
-# prepared first: organize it, build the song from its keyflow chart
-# (tempo, markers, section regions, Keyflow folder), and generate the
-# click and guide — the multitrack's own click/guide stems are kept,
-# muted, beside them. Leave CHART empty to open the session as it is.
-# The desktop app, as you run it while working on it: the shared dev build
-# (`dev_build` above). `PROJECT` is a `.RPP` (its prepared
-# `.session` beside it opens instead, once there is one), a `.session`, or
-# a setlist (a folder of songs, or a `.setlist`); `MODE` opens in a mode:
-#   just app "../sessions/Worship Set.setlist" "" organize
-app PROJECT="" CHART="" MODE="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build {{dev_build}} -p engine-host
-    # A bare binary started from a shell is not a foreground app on macOS
-    # (it opens behind whatever is in front); wrapped in a bundle and
-    # started with `open`, it comes forward like any app.
-    bundle="{{dev_out}}/Session Dev.app"
-    mkdir -p "$bundle/Contents/MacOS"
-    printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
-        '<plist version="1.0"><dict>' \
-        '<key>CFBundleName</key><string>Session Dev</string>' \
-        '<key>CFBundleIdentifier</key><string>app.fasttrackstudio.session.dev</string>' \
-        '<key>CFBundleExecutable</key><string>engine-host</string>' \
-        '<key>CFBundlePackageType</key><string>APPL</string>' \
-        '<key>NSHighResolutionCapable</key><true/>' \
-        '</dict></plist>' > "$bundle/Contents/Info.plist"
-    # Everything the app prints, panics with their backtraces included, goes
-    # here — `open` would otherwise throw it away.
-    # ~/Library/Logs, not target/: `open` cannot write a launched app's
-    # output onto an external volume (-10810).
-    mkdir -p "$HOME/Library/Logs/Session Dev"
-    log="$HOME/Library/Logs/Session Dev/session-dev.log"
-    envs=(--env "RUST_LOG=${RUST_LOG:-warn,studio_engine=info,daw_view_kit=info}" --env RUST_BACKTRACE=1)
-    # quote(): a song title can carry an apostrophe (God, I'm Just Grateful).
-    project={{quote(PROJECT)}}
-    chart={{quote(CHART)}}
-    mode={{quote(MODE)}}
-    if [[ -n "$project" ]]; then
-        # A folder or a .setlist is a set; anything else is one song.
-        if [[ -d "$project" && "$project" != *.session ]] || [[ "$project" == *.setlist ]]; then
-            envs+=(--env "FTS_SESSION_SETLIST=$(cd "$(dirname "$project")" && pwd)/$(basename "$project")")
-        else
-            envs+=(--env "FTS_SESSION_PROJECT=$(cd "$(dirname "$project")" && pwd)/$(basename "$project")")
-        fi
-    fi
-    if [[ -n "$chart" ]]; then envs+=(--env "FTS_SESSION_CHART=$chart"); fi
-    if [[ -n "$mode" ]]; then envs+=(--env "FTS_SESSION_MODE=$mode"); fi
-    # The view to open on (overview, performance, setup), from the caller's env.
-    if [[ -n "${FTS_SESSION_VIEW:-}" ]]; then envs+=(--env "FTS_SESSION_VIEW=$FTS_SESSION_VIEW"); fi
-    # The lyrics panel's view (audience, performer, confidence), likewise.
-    if [[ -n "${FTS_LYRICS_VIEW:-}" ]]; then envs+=(--env "FTS_LYRICS_VIEW=$FTS_LYRICS_VIEW"); fi
-    # Collaboration (collab_bar.rs): share on open, or join a ticket / the
-    # file a host writes one to. A joining copy is a SECOND window beside
-    # the host, so it neither kills the running one nor shares its log.
-    for var in FTS_COLLAB_HOST FTS_COLLAB_JOIN FTS_COLLAB_TASK FTS_COLLAB_NAME FTS_COLLAB_TICKET FTS_COLLAB_PUPPET FTS_COLLAB_PUPPET_TRANSPORT FTS_COLLAB_PUPPET_MOUSE FTS_WINDOW_POS FTS_WINDOW_SIZE FTS_SESSION_SONG FTS_AUDIO_MODE FTS_AUDIO_TARGET SESSION_DAW_REAPER FTS_SOCKET FTS_STREAM_SOURCE FTS_SHARE_LINKS FTS_LOAD FTS_TASK_SERVER FTS_TASK_ORG FTS_TASK_TOKEN XDG_DATA_HOME; do
-        if [[ -n "${!var:-}" ]]; then envs+=(--env "$var=${!var}"); fi
-    done
-    # FTS_SECOND_WINDOW: the same, for any second window (`duo-task`).
-    if [[ -n "${FTS_COLLAB_JOIN:-}" || -n "${FTS_SECOND_WINDOW:-}" ]]; then
-        log="$HOME/Library/Logs/Session Dev/session-dev-joined.log"
-        open -n --stdout "$log" --stderr "$log" "${envs[@]}" "$bundle"
-        echo "log: $log"
-        exit 0
-    fi
-    pkill -f 'Session Dev.app/Contents/MacOS/engine-host' || true
-    # Let a killed copy go before its bundle is opened again.
-    sleep 1
-    # A new file, never an overwrite: macOS caches a binary's code signature
-    # by file, and launching one rewritten in place fails (-10810).
-    rm -f "$bundle/Contents/MacOS/engine-host"
-    cp {{dev_out}}/engine-host "$bundle/Contents/MacOS/engine-host"
-    # One signature across rebuilds. The linker's ad-hoc one names the
-    # binary by a build hash, so every build is a new app to macOS and it
-    # asks again for the removable drive; a real identity and a fixed
-    # identifier keep the grant. SESSION_SIGN_IDENTITY overrides the pick.
-    identity="${SESSION_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null \
-        | awk -F'"' '/Apple Development/ {print $2; exit}')}"
-    if [[ -n "$identity" ]]; then
-        codesign --force --sign "$identity" --identifier app.fasttrackstudio.session.dev "$bundle" \
-            || echo "codesign with '$identity' failed; the build keeps its ad-hoc signature"
-    fi
-    open -n --stdout "$log" --stderr "$log" "${envs[@]}" "$bundle"
-    echo "log: $log"
-
-# Two windows side by side on one song or setlist, collaborating: the left
-# one shares it, the right one joins — to see both ends of a session at
-# once with your own mouse. `NAME_A`/`NAME_B` name the two people.
-#
-#   just duo "../sessions/Worship Set.setlist"
-#   just duo "../sessions/imported/Washed/Washed.RPP"
-duo PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build {{dev_build}} -p engine-host
-    # The main screen's usable area, in points: below the menu bar, above
-    # the Dock — NOT Finder's desktop bounds, which span every monitor.
-    read -r X Y W H < <(swift -e 'import AppKit; let s = NSScreen.main!; let f = s.visibleFrame; print(Int(f.origin.x), Int(s.frame.height - f.maxY), Int(f.width), Int(f.height))' 2>/dev/null)
-    # Not an even split: the sharer's window is a little narrower, so
-    # every panel is a different size on each side — what anchored
-    # pointers have to survive. DUO_SPLIT is the left one's share, in %.
-    left=$((W * ${DUO_SPLIT:-44} / 100))
-    right=$((W - left))
-    ticket="${TMPDIR:-/tmp}/fts-session-ticket"
-    rm -f "$ticket"
-    FTS_COLLAB_HOST=1 FTS_COLLAB_NAME={{quote(NAME_A)}} FTS_SESSION_VIEW="${FTS_SESSION_VIEW:-overview}" \
-        FTS_WINDOW_POS="${X},${Y}" FTS_WINDOW_SIZE="${left}x${H}" \
-        just app {{quote(PROJECT)}} "" {{quote(MODE)}}
-    for _ in $(seq 1 90); do [[ -s "$ticket" ]] && break; sleep 1; done
-    [[ -s "$ticket" ]] || { echo "the host did not share (see the log)"; exit 1; }
-    # JOIN_SONG=<n> starts the joiner on the set's n-th song.
-    FTS_SESSION_SONG="${JOIN_SONG:-}" FTS_COLLAB_JOIN="$ticket" FTS_COLLAB_NAME={{quote(NAME_B)}} FTS_SESSION_VIEW="${FTS_SESSION_VIEW:-overview}" \
-        FTS_WINDOW_POS="$((X + left)),${Y}" FTS_WINDOW_SIZE="${right}x${H}" \
-        just app {{quote(PROJECT)}} "" {{quote(MODE)}}
-    echo "sharing: $(cat "$ticket")"
-
-# Two windows meeting in a set Task keeps (`FTS_COLLAB_TASK`): no host —
-# Task keeps the session, the first window on a song seeds its doc, and the
-# second takes it from Task. SETLIST is the set's id in the library's org
-# (`FTS_TASK_*`), or `share:<live share link>` to join as a guest.
-duo-task SETLIST PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build {{dev_build}} -p engine-host
-    read -r X Y W H < <(swift -e 'import AppKit; let s = NSScreen.main!; let f = s.visibleFrame; print(Int(f.origin.x), Int(s.frame.height - f.maxY), Int(f.width), Int(f.height))' 2>/dev/null)
-    left=$((W * ${DUO_SPLIT:-44} / 100))
-    right=$((W - left))
-    FTS_COLLAB_TASK={{quote(SETLIST)}} FTS_COLLAB_NAME={{quote(NAME_A)}} FTS_SESSION_VIEW="${FTS_SESSION_VIEW:-overview}" \
-        FTS_WINDOW_POS="${X},${Y}" FTS_WINDOW_SIZE="${left}x${H}" \
-        just app {{quote(PROJECT)}} "" {{quote(MODE)}}
-    # The first seeds; give it the moment it takes before the second looks.
-    sleep "${DUO_TASK_GAP:-8}"
-    FTS_SECOND_WINDOW=1 FTS_SESSION_SONG="${JOIN_SONG:-}" FTS_COLLAB_TASK={{quote(SETLIST)}} FTS_COLLAB_NAME={{quote(NAME_B)}} FTS_SESSION_VIEW="${FTS_SESSION_VIEW:-overview}" \
-        FTS_WINDOW_POS="$((X + left)),${Y}" FTS_WINDOW_SIZE="${right}x${H}" \
-        just app {{quote(PROJECT)}} "" {{quote(MODE)}}
-
-# Prepare songs once — organize, build from the chart, generate the click
-# and guide — and save each as `Song.session` beside its `.RPP`, which the
-# app then opens instead. One process per song (the engine is
-# process-wide). `just prepare ../sessions/imported/*/*.RPP`
+# Prepare songs once (organize, build from the chart, click and guide) into `Song.session` beside each `.RPP`
 [positional-arguments]
+[script]
 prepare +PROJECTS:
-    #!/usr/bin/env bash
-    set -euo pipefail
     cargo build {{dev_build}} -p studio-engine --bin prepare
-    for p in "$@"; do {{dev_out}}/prepare "$p"; done
+    for p in "$@"; do "{{dev_out}}/prepare" "$p"; done
 
-studio-song PROJECT CHART="" SIZE="2560x1440":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build {{dev_build}} -p daw-view-kit --bin blitz_shot
-    prep=()
-    if [[ -n "{{CHART}}" ]]; then
-        prep=(FTS_BLITZ_ORGANIZE=1 "FTS_BLITZ_CHART={{CHART}}" FTS_BLITZ_GUIDE=1)
-    fi
-    env FTS_BLITZ_WINDOW=1 FTS_BLITZ_SIZE="{{SIZE}}" ${prep[@]+"${prep[@]}"} \
-        RUST_LOG="${RUST_LOG:-warn,studio_engine=info,daw_view_kit=info}" \
-        {{dev_out}}/blitz_shot "{{PROJECT}}" /tmp/fts-studio.png
+# ── Releases (the fleet's release flow; scripts/release.sh) ─────────────
+# One release for the repo: a `studio-vYY.M.MICRO` tag on a green commit
+# of main (or a release/studio-v* hotfix line). The tag alone ships; nothing
+# is committed for a release.
 
-# Everything CI runs, in CI's order, with one command.
-#
-# The workflow (.github/workflows/checks.yml) is the source of truth;
-# this mirrors its steps so a green run here means a green run there.
-# It stops at the first failure, because CI does too and a later step
-# built on a broken one tells you nothing.
-#
-# `just ci` runs the lot. `just ci nextest` starts from that step, for
-# when you have already passed the cheap ones and are iterating on a
-# test. Steps in order: lockfile, fmt, flows, tailwind, check, nextest.
-# Filter matches TEST NAMES, not file names, and a filter matching
-# nothing exits zero having run nothing — check the count.
-#
-# Stands up an isolated REAPER under target/fts-reaper-test with only
-# daw-bridge in its UserPlugins (built from the sibling ../daw), then
-# runs the suites that attach the window to it. Not part of `just ci`
-# and not run by CI at all: it needs a licensed REAPER, so it is checked
-# locally (this, and `just reaper daw-test` in studio-adapters for daw-reaper's suites).
+# The version this tree carries (NOT the released one, which is the latest studio-v* tag)
+version:
+    @bash scripts/release.sh version
 
-# Run the REAPER integration suites against a real REAPER
-reaper-test FILTER="":
-    cargo run -p session-reaper-xtask -- {{FILTER}}
+# What is live, what main holds since, the next version and the draft notes from .changes/
+release-plan:
+    bash scripts/release.sh plan
 
-# The same with REAPER's window shown, held open afterwards
-reaper-test-gui FILTER="":
-    cargo run -p session-reaper-xtask -- --gui --keep-open {{FILTER}}
+# Tag the next version on main's newest green commit (or on SHA) and push it: THIS SHIPS (`--dry-run` tags nothing)
+release *ARGS:
+    bash scripts/release.sh release {{ARGS}}
 
-# studio-web (apps/web), checked for wasm32 (STA-366): `cargo check
-# --workspace` is native and never compiles it, so a native-only dep
-# leaking into its graph (tokio `net` -> mio, an engine, X11/HID) only shows
-# here. Required in checks.yml.
-web-wasm-check:
-    cargo check -p studio-web --target wasm32-unknown-unknown
+# A hotfix while main can't ship: the given main commits cherry-picked onto release/<latest tag>, with a PR into it
+release-hotfix +COMMITS:
+    bash scripts/release.sh hotfix {{COMMITS}}
 
-# The workflows in .github/workflows are GENERATED from xtask/workflows (one
-# Rust module per workflow, the reasons as comments there). Edit the Rust,
-# then run this and commit both.
-workflows:
-    cargo run -q -p xtask-workflows -- generate
+# A tag's release notes (default: the draft for origin/main)
+release-notes *ARGS:
+    @bash scripts/release.sh notes {{ARGS}}
 
-# Fails if a workflow on disk is not what `just workflows` would write (a
-# hand edit, or a source change without a regenerate); then actionlint, when
-# it is on PATH. checks.yml's lint job runs both.
-workflows-check:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo run -q -p xtask-workflows -- check
-    if command -v actionlint >/dev/null; then actionlint; fi
+# The release tooling's own end-to-end test (a synthetic repo and a local origin)
+release-sandbox:
+    bash scripts/release-sandbox.sh
 
-# The same order as CI: the gates, then the whole workspace check, the wasm
-# checks and every test. A PR is checked by `just ci-local` instead (the
-# pre-push hook): the gates plus what the change affects. NOT the other
-# workflows: `desktop` and `studio` (the release tag) need a Mac, signing
-# keys and upload credentials, so a green run here says nothing about them.
-# Everything checks.yml runs after a merge to main, locally.
-ci FROM="lockfile":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"
-    steps=(lockfile fmt workflows rail check wasm nextest)
-    start=0
-    for i in "${!steps[@]}"; do
-      [ "${steps[$i]}" = "{{FROM}}" ] && start=$i && break
-    done
-    run_from() { local want="$1"; local at=0
-      for i in "${!steps[@]}"; do [ "${steps[$i]}" = "$want" ] && at=$i; done
-      [ "$at" -ge "$start" ]; }
+# The release bots' own tests: token mints, sums, facts, the bump's checks, the www [patch] guard
+release-bots-test:
+    python3 scripts/check-token-mints.py --self-test
+    python3 scripts/check-token-mints.py
+    bash scripts/release-sums-test.sh
+    bash scripts/release-facts-test.sh
+    bash scripts/bump-verify-test.sh
+    python3 scripts/bump-architect-deps-test.py
+    python3 scripts/check-www-patch.py --self-test
+    python3 scripts/check-www-patch.py
 
-    # Before anything: is there room to build?
-    #
-    # A full disk does not fail as a full disk. mold dies with a bus
-    # error and cargo reports `linking with cc failed`, which reads as a
-    # broken toolchain and sends you looking in the wrong place — it
-    # cost an hour once. Checked here because this is the command
-    # everyone runs before pushing, and a run that cannot finish should
-    # say why in the first second rather than the twentieth minute.
-    free_gb=$(df -PBG "$CARGO_TARGET_DIR" 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$4); print $4}')
-    if [ -n "${free_gb:-}" ] && [ "$free_gb" -lt 25 ]; then
-      echo "only ${free_gb}G free on the volume holding $CARGO_TARGET_DIR."
-      echo "A build that runs out of room dies in the LINKER, with a bus"
-      echo "error that looks like a compiler fault. Reclaim first:"
-      echo "  just sweep-incremental   # the big, always-safe win"
-      echo "  just sweep               # artifacts older than 7 days"
-      echo "  just disk                # where it all went"
-      exit 1
-    fi
+# Move the architect pin to TAG (e.g. v0.15.1): the manifests, Cargo.lock, the change file (what the bump bot runs)
+bump-architect TAG *ARGS:
+    python3 scripts/bump-architect.py "{{TAG}}" {{ARGS}}
 
-    if run_from lockfile; then
-      echo "── lockfile ─────────────────────────────────────────"
-      committed="$(mktemp)"; cp Cargo.lock "$committed"
-      cargo metadata --format-version 1 > /dev/null
-      packages() { sed '/^\[\[patch\.unused\]\]/,$d' "$1"; }
-      unused() { awk '/^\[\[patch\.unused\]\]/ { f = 1; next }
-                      f && /^name = /    { n = $3 }
-                      f && /^version = / { print n "@" $3 }' "$1" | sort; }
-      ok=1
-      diff -u <(packages "$committed") <(packages Cargo.lock) || ok=0
-      diff -u <(unused "$committed") <(unused Cargo.lock) || ok=0
-      rm -f "$committed"
-      [ "$ok" = 1 ] || { echo "Cargo.lock is out of date — commit the result of cargo metadata"; exit 1; }
-      echo "── duplicate crate versions ─────────────────────────"
-      python3 scripts/check-duplicate-deps.py
-    fi
+# ── Hooks and housekeeping ───────────────────────────────────────────────
 
-    if run_from fmt; then
-      echo "── cargo fmt --check ────────────────────────────────"
-      cargo fmt --all --check
-      echo "ok"
-    fi
-
-    if run_from workflows; then
-      echo "── generated workflows ──────────────────────────────"
-      just workflows-check
-      echo "ok"
-    fi
-
-    if run_from rail; then
-      echo "── rail config ──────────────────────────────────────"
-      cargo rail config validate --strict
-    fi
-
-    if run_from check; then
-      echo "── cargo check --workspace ──────────────────────────"
-      cargo check --workspace
-      echo "ok"
-    fi
-
-    if run_from wasm; then
-      echo "── wasm check (studio-web) ───────────────────────────"
-      just web-wasm-check
-      echo "ok"
-    fi
-
-    if run_from nextest; then
-      # What CI's Tests job has before nextest: the private assets linked.
-      echo "── assets ───────────────────────────────────────────"
-      just assets
-      echo "── cargo nextest (the core test set) ────────────────"
-      pkgs=(); for p in {{test_packages}}; do pkgs+=(-p "$p"); done
-      cargo nextest run "${pkgs[@]}" --no-fail-fast
-    fi
-
-    echo
-    echo "every CI step passed locally"
-
-# Crates Cargo.lock holds in more than one version (each is another
-# compile): fails on a new one. `--write` after an intended change.
-deps-dupes *ARGS:
-    python3 scripts/check-duplicate-deps.py {{ARGS}}
-
-# Two CI-boot passes (prep + test build); the second must compile nothing.
-ci-churn:
-    scripts/ci-churn-check.sh
-
-# Run once per clone (prek.toml): rustfmt / shellcheck / actionlint on the
-# staged files at commit, `ci-local` at push, which posts the `Local CI`
-# status main requires. Clears a leftover core.hooksPath (the old .githooks).
-# Install the git hooks (prek): format on commit, local CI on push.
+# Install the git hooks (prek.toml): rustfmt on commit, `ci-local` on push, `worktree-setup` after `git worktree add`
 install-hooks:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    git config --unset core.hooksPath 2>/dev/null || true
+    git config --unset core.hooksPath || true
     prek install --force
 
-# Rewrites the version and every per-platform sha256 in nix/modules/prek.nix
-# from the release's own `.sha256` files; then `just install-hooks` again.
-# Move prek to its newest release (or VERSION).
+# Move prek (nix/modules/prek.nix) to its newest release, or VERSION
+[script]
 prek-bump VERSION="":
-    #!/usr/bin/env bash
-    set -euo pipefail
     v="{{VERSION}}"
-    if [ -z "$v" ]; then
-        v="$(curl -fsSL https://api.github.com/repos/j178/prek/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')"
-    fi
+    [ -n "$v" ] || v="$(curl -fsSL https://api.github.com/repos/j178/prek/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')"
     [ -n "$v" ] || { echo "could not read prek's latest release" >&2; exit 1; }
     f=nix/modules/prek.nix
-    # -i.bak + rm: one spelling for GNU and BSD (macOS) sed.
     sed -i.bak "s/version = \"[^\"]*\";/version = \"$v\";/" "$f"
     for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin; do
         sum="$(curl -fsSL "https://github.com/j178/prek/releases/download/v$v/prek-$t.tar.gz.sha256" | cut -d' ' -f1)"
@@ -1619,269 +318,20 @@ prek-bump VERSION="":
         sed -i.bak "s|target = \"$t\"; sha256 = \"[0-9a-f]*\"|target = \"$t\"; sha256 = \"$sum\"|" "$f"
     done
     rm -f "$f.bak"
-    git diff --stat -- "$f"
-    echo "prek -> $v"
+    echo "prek -> $v; run just install-hooks"
 
-# BASE defaults to the merge-base with origin/main; the pre-push hook runs
-# this and marks the pushed commits `Local CI`. Run it BEFORE pushing a long
-# change: the pass it records makes the push instant.
-# The PR gate, locally: tests + check + wasm for what `cargo rail plan` affects.
-ci-local BASE="":
-    bash scripts/ci-local.sh {{BASE}}
+# Reclaim artifacts in this worktree's target dir untouched for DAYS days
+sweep DAYS="7":
+    cargo sweep --time {{DAYS}}
 
-# Run on a clean HEAD (normally main after a pull), so `ci-local` against it
-# narrows a docs or CI-file change instead of running everything. Kept in the
-# git dir, one file per work item; one warm test build and one warm check.
-# Record rail's observed-input evidence for HEAD.
-rail-evidence:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    dir="$(git rev-parse --git-common-dir)/rail-evidence/$(git rev-parse HEAD)"
-    mkdir -p "$dir"
-    cargo rail plan evidence --work cargo.test -o "$dir/cargo.test.json" -- \
-      test --workspace --no-run --features engine-host/cli,web-audio-worklet/guitar,web-audio-worklet/keys
-    cargo rail plan evidence --work cargo.build -o "$dir/cargo.build.json" -- check --workspace
-    echo "rail evidence: $dir"
+# Each worktree's target dir, largest first
+disk:
+    git worktree list --porcelain | awk '/^worktree /{print $2"/target"}' | xargs -r du -sh 2>/dev/null | sort -rh
 
+# Build or refresh the repo knowledge graph (graphify, local, no LLM)
+graph:
+    graphify update . --force
 
-# ── Studio Architect (apps/desktop, docs/architect-distribution.md) ────
-# Studio's distribution of Architect: the Architect app with Studio's
-# extensions compiled in. Its node is what a hosted Architect runs.
-
-# The headless node for this machine (release profile; PROFILE=dev for a quick one).
-studio-node:
-    bash scripts/studio.sh node
-
-# The web bundle (Architect's web app + this distribution.json) into OUT.
-studio-web OUT:
-    bash scripts/studio.sh web {{OUT}}
-
-# `cargo check` of the node, as the PR job runs it.
-studio-check:
-    bash scripts/studio.sh check
-
-# The release's tarballs (node + web, with .sha256) into DIR.
-studio-release TAG DIR:
-    bash scripts/studio.sh release {{TAG}} {{DIR}}
-
-# ── Releases ─────────────────────────────────────────────────────────────
-#
-# Tag-from-main (docs/agents/release-workflow.md). `main` is the only
-# long-lived branch: every PR merges into it (a lone PR squashes, a stack
-# merges with merge commits) with a cargo-rail change file (`cargo rail change add <crates> --bump
-# <none|patch|minor|major> -m "<note>"`), and a merge runs CI and ships
-# nothing. A release is a TAG: `just release` tags the next CalVer
-# `vYY.M.MICRO` on main's newest commit whose `CI passed` is green, and the
-# tag alone starts the release builds (Studio's node and web tarballs,
-# the desktop installers, the one GitHub Release with
-# the notes from the change files added since the previous tag). Nothing
-# is committed for a release: each build stamps the tag's version into its
-# checkout, so the version committed on main is not the released one.
-# (The REAPER suites are not in CI: run `just reaper-test` here and `just
-# reaper daw-test` in studio-adapters, locally.) Production = the latest `v*` tag.
-
-# The version the tree carries (a release build's stamped version, else
-# [workspace.package] in Cargo.toml): NOT the released version, which is
-# the latest v* tag (`just release-plan`).
-version:
-    @bash scripts/release.sh version
-
-# What is live (latest v* tag), what main holds since, the next CalVer
-# version, the draft notes from .changes/ and the git deps that moved.
-release-plan:
-    bash scripts/release.sh plan
-
-# Tag the next CalVer version on main's newest commit with a green
-# `CI passed` (or on SHA: on main or a release/v* line, and green), after
-# showing the notes; asks before pushing on a terminal. THE TAG SHIPS.
-# Run as a person or the fts-forge App, never with a workflow token (that
-# starts no workflow).
-#   just release --dry-run     which commit, which version, the notes; no tag
-#   just release               tag + push (asks on a terminal; --yes skips it)
-#   just release <sha>         a given green commit (a hotfix line's head)
-release *ARGS:
-    bash scripts/release.sh release {{ARGS}}
-
-# Hotfix while main can't ship: release/v<latest tag> from the tag (if
-# missing), the given main commits cherry-picked with -x on a branch, and
-# its PR into that line. Once it merged and that commit's `CI passed` is
-# green: just release <sha>.
-release-hotfix +COMMITS:
-    bash scripts/release.sh hotfix {{COMMITS}}
-
-# Every architect pin (and keyflow's, to the newest keyflow release on that
-# architect) moves to TAG: the manifests and the comments naming the tags,
-# Cargo.lock (cargo resolves; nothing compiles), add-only lines in
-# .config/duplicate-deps.toml, the change file. Exit 3: needs a person;
-# exit 4: no keyflow release on TAG yet, or daw / fts-fx (pinned by rev)
-# still on Studio's current architect tag. The bot runs exactly this.
-# Move the architect and keyflow pins to architect TAG (e.g. v0.12.5)
-bump-architect TAG *ARGS:
-    python3 scripts/bump-architect.py "{{TAG}}" {{ARGS}}
-
-# studio#457's replay must equal the merged commit (Cargo.lock included);
-# a keyflow behind the tag must exit 4, an editor move exit 3.
-# Test the bump script against real bumps
-bump-architect-test:
-    bash scripts/bump-architect-replay.sh
-
-# Every workflow's App token: one repository, its hop's permissions, its
-# environment's own key (scripts/check-token-mints.py; PR checks run it).
-# Check the App token mints of every workflow
-check-token-mints:
-    python3 scripts/check-token-mints.py --self-test
-    python3 scripts/check-token-mints.py
-
-# What `sums` signs, the queue's API check, the bump's wait on daw/fts-fx,
-# the www [patch] guard (PR checks run them)
-release-bots-test:
-    bash scripts/release-sums-test.sh
-    bash scripts/bump-verify-test.sh
-    python3 scripts/bump-architect-deps-test.py
-    bash scripts/release-facts-test.sh
-    python3 scripts/check-www-patch.py --self-test
-    python3 scripts/check-www-patch.py
-
-# The release notes of a tag (default: the draft for origin/main).
-release-notes *ARGS:
-    @bash scripts/release.sh notes {{ARGS}}
-
-# The release tooling's own end-to-end test (synthetic repo, local origin).
-release-sandbox:
-    bash scripts/release-sandbox.sh
-
-
-# Studio's island (#445): Session's progress bar and transport as a WASI
-# component for a share link's now-playing view. Built in the `wasi` profile
-# (wasm32-wasip2, node) into <target>/studio-island/: Architect's `build-web`
-# folder (the component transpiled by jco, its lock) and its stylesheet
-# (features/island/island.css, compiled by tailwind). Architect's web
-# tools come from the architect checkout cargo resolved, copied into
-# <target>/architect-web. NETWORK: `npm ci` there fetches their npm packages
-# (jco and its transpiler, pinned by that folder's package-lock.json) at
-# build time. The component is built as `wasm-release`, its name section
-# stripped. <target> is cargo's target directory (`cargo metadata`), so a
-# CARGO_TARGET_DIR outside the checkout is honoured. The sheet is locked
-# with the component (a second build-web run), and BUILT_FROM records
-# `git describe --always --dirty` of the tree it was built from, which the
-# release checks.
-island: island-check island-build
-
-# The island without its clippy: what `just island` builds, and what the
-# local stack rebuilds on a save (scripts/local-stack.sh).
-island-build:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # What it is built from, taken before the build: the commit, and
-    # `-dirty` when the tree has changes git tracks (the release refuses that).
-    built=$(git describe --always --dirty --abbrev=40)
-    # A local stack's overrides (scripts/local-stack.sh), when it gives them.
-    cfg=(${STUDIO_ARCHITECT_CARGO_CONFIG:+--config "$STUDIO_ARCHITECT_CARGO_CONFIG"})
-    meta=$(cargo metadata --format-version 1 "${cfg[@]}")
-    target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
-    devenv --profile wasi shell -- env CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
-        cargo build --profile wasm-release -p studio-island --target wasm32-wasip2 "${cfg[@]}"
-    ext=$(python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-extensions"))' <<<"$meta")
-    tools="$target/architect-web"
-    # jco and its transpiler, pinned by the folder's package-lock.json: `npm
-    # ci` again only when that lock (or the architect it came from) changed,
-    # so the local stack's rebuild of the island does not fetch or reinstall.
-    if [ -d "$tools/node_modules" ] && cmp -s "$ext/web/package-lock.json" "$tools/package-lock.json" \
-        && [ "$(cat "$tools/.from" 2>/dev/null)" = "$ext" ]; then
-        cp -r "$ext/web/." "$tools/"
-    else
-        rm -rf "$tools" && mkdir -p "$tools" && cp -r "$ext/web/." "$tools/"
-        devenv --profile wasi shell -- bash -c "cd '$tools' && npm ci --no-audit --no-fund >/dev/null"
-        printf '%s' "$ext" > "$tools/.from"
-    fi
-    out="$target/studio-island"
-    rm -rf "$out"
-    web() {
-        devenv --profile wasi shell -- node "$tools/cli/cli.mjs" build-web \
-            "$target/wasm32-wasip2/wasm-release/studio_island.wasm" "$out" --manifest features/island/extension.toml
-    }
-    web
-    # The same views as a web bundle (`web-*` files of the folder): what a
-    # share page in a browser without JS Promise Integration (Safari before
-    # 27, every browser on iOS before it) draws them with, in Architect's
-    # web view frame (`SiteIsland::web`).
-    just island-web "$out"
-    just _lumen-link
-    tailwindcss -i features/island/island.css -o "$out/island.css" --minify
-    # The sheet as the page will hold it: refused by Architect's cleanSheet,
-    # the island would draw unstyled, so the build fails instead.
-    bash scripts/island-sheet.sh "$out/island.css"
-    # Locked with the rest: build-web locks every file in its folder, so a
-    # second run puts the sheet's digest in architect.lock.json, which the
-    # node checks it against (apps/desktop/src/island.rs).
-    web
-    python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$out/architect.lock.json"
-    # What it was built from: the release ships it only from that same
-    # clean commit (scripts/studio.sh release). Not locked, not served.
-    printf '%s\n' "$built" > "$out/BUILT_FROM"
-    ls -la "$out"
-
-# The island's views as a web bundle into <out> (Architect's web view,
-# `SiteIsland::web`): built for wasm32-unknown-unknown, wasm-bindgen's
-# `--target web` glue (the CLI pinned with the crate, =0.2.127), its
-# snippets flattened to `web-snippet-<n>.js` (one folder, as the frame
-# loads it: scripts/island-web-flatten.py), and its wasm optimized by
-# wasm-opt allowing only the features Safari 15 has (bulk memory, mutable
-# globals, non-trapping float-to-int, reference types, sign extension,
-# multi-value): a module that needs another fails the build here, not on a
-# phone.
-island-web out:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # The dev shell's cargo (its own output kept out of the JSON).
-    cfg=(${STUDIO_ARCHITECT_CARGO_CONFIG:+--config "$STUDIO_ARCHITECT_CARGO_CONFIG"})
-    metafile=$(mktemp); devenv shell -- sh -c 'out="$1"; shift; cargo metadata --format-version 1 "$@" > "$out"' sh "$metafile" "${cfg[@]}" >/dev/null; meta=$(cat "$metafile"); rm -f "$metafile"
-    target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
-    # The dev shell's own cargo, wasm-bindgen (pinned with the crate) and
-    # wasm-opt (binaryen), never whatever else is on the PATH.
-    devenv shell -- env CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
-        cargo build --profile wasm-release -p studio-island --target wasm32-unknown-unknown "${cfg[@]}"
-    raw=$(mktemp -d)
-    trap 'rm -rf "$raw"' EXIT
-    devenv shell -- wasm-bindgen --target web --no-typescript --out-name web-studio-island --out-dir "$raw" \
-        "$target/wasm32-unknown-unknown/wasm-release/studio_island.wasm"
-    # Flattened, only what the glue reaches, and refused if it names
-    # WebRTC, a WebSocket, storage or cookies.
-    python3 scripts/island-web-flatten.py "$raw" "{{out}}"
-    devenv shell -- wasm-opt -Oz --mvp-features --enable-bulk-memory --enable-mutable-globals \
-        --enable-nontrapping-float-to-int --enable-reference-types --enable-sign-ext --enable-multivalue \
-        "{{out}}/web-studio-island_bg.wasm" -o "{{out}}/web-studio-island_bg.wasm"
-
-# The island's clippy, for the targets it is built for (wasm32-wasip2, and
-# wasm32-unknown-unknown for its web bundle: on the host the crate is
-# empty, so a host clippy checks nothing). Warnings fail.
-island-check:
-    devenv --profile wasi shell -- cargo clippy -p studio-island --target wasm32-wasip2 -- -D warnings
-    devenv shell -- cargo clippy -p studio-island --target wasm32-unknown-unknown -- -D warnings
-
-# Fetch the large binaries kept out of this repository (assets.txt: the
-# private studio-assets, rig-models and mic-models repos) into
-# .assets/<repo>, and link each listed file or directory into place.
-# Re-run to update. A worktree starts from the main checkout's clones (a
-# copy-on-write clone, nothing fetched); ASSETS_OFFLINE=1 never touches the
-# network. See scripts/assets.sh.
-assets:
-    bash scripts/assets.sh
-
-# Make this worktree complete, as the main checkout is: the assets (from the
-# main checkout's .assets/ clones) and the plugin faces. Runs by itself after
-# `git worktree add` (prek's post-checkout hook, `just install-hooks`); run
-# it by hand in a worktree made before the hook. scripts/worktree-setup.sh.
-worktree-setup:
-    bash scripts/worktree-setup.sh --force
-
-# Generate frame's plugin faces (features/ui/plugin-faces/generated: every `.frame`, the
-# catalogs and rig-faces/faces.json) from features/ui/plugin-faces. They are
-# not kept in git; daw-view-kit and signal read them from here at runtime.
-# Deterministic: unchanged sources rewrite every file byte for byte.
-faces *ONLY:
-    cargo run -q --release -p plugin-faces -- features/ui/plugin-faces/generated {{ if ONLY != "" { "--only " + ONLY } else { "" } }}
-
-# The face gallery and Frame's Figma parity suite are the frame repo's
-# (FastTrackStudios/frame: `just faces-gallery`, `just parity`); Frame is a git
-# dependency here (docs/frame.md).
+# Serve the knowledge graph over MCP on stdio (.mcp.json)
+graph-serve:
+    graphify-mcp --transport stdio --graph graphify-out/graph.json
