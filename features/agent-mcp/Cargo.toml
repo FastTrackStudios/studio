@@ -6,9 +6,10 @@ license.workspace = true
 authors.workspace = true
 description = "Studio's MCP for an agent: a stdio MCP server on the running app's control socket — curated, typed mixing tools, compact answers that page instead of being cut, and long calls as jobs — found by itself and surviving the app's restarts"
 
-# Deliberately small (serde_json and std only): it is what a client's
-# `.mcp.json` starts, so it must build in seconds on a cold checkout and
-# never wait on the app's own build. It speaks the control socket's
+# Deliberately small (serde_json, std and QuickJS for `script`): it is
+# what a client's `.mcp.json` starts, so it must build in seconds on a
+# cold checkout (QuickJS is one C library, ~20 s) and never wait on the
+# app's own build. It speaks the control socket's
 # newline JSON itself (architect-control's protocol, `architect-control/1`)
 # rather than linking architect.
 
@@ -18,6 +19,7 @@ path = "src/main.rs"
 
 [dependencies]
 serde_json.workspace = true
+rquickjs.workspace = true
 
 [lints]
 workspace = true

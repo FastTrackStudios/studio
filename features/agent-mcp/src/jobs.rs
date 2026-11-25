@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, PoisonError, Weak};
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
@@ -40,9 +40,41 @@ pub struct Job {
     pub cancel: Cancel,
     /// It outlived its wait and was answered as a job: `jobs` lists it.
     pub background: AtomicBool,
+    /// The calls it runs side by side ([`Job::child`]): cancelled with it.
+    children: Mutex<Vec<Weak<Self>>>,
 }
 
 impl Job {
+    fn new(id: String, tool: &str) -> Self {
+        Self {
+            id,
+            tool: tool.to_owned(),
+            started: Instant::now(),
+            state: Mutex::new((State::Running, None)),
+            changed: Condvar::new(),
+            step: Mutex::new(String::new()),
+            cancel: Cancel::default(),
+            background: AtomicBool::new(false),
+            children: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// A call this job makes beside its others (a script's, a parallel
+    /// batch's step): its own connection to Studio, so each can be
+    /// stopped, and cancelled when this job is. Not listed in `jobs`.
+    #[must_use]
+    pub fn child(&self, tool: &str) -> Arc<Self> {
+        let child = Arc::new(Self::new(format!("{}.{tool}", self.id), tool));
+        if self.cancel.is_cancelled() {
+            child.cancel.cancel();
+        }
+        let mut children = self.children.lock().unwrap_or_else(PoisonError::into_inner);
+        children.retain(|c| c.strong_count() > 0);
+        children.push(Arc::downgrade(&child));
+        drop(children);
+        child
+    }
+
     /// Say what it is doing now.
     pub fn step(&self, what: impl Into<String>) {
         *self.step.lock().unwrap_or_else(PoisonError::into_inner) = what.into();
@@ -58,9 +90,19 @@ impl Job {
         self.changed.notify_all();
     }
 
-    /// Stop it: its waiting ends now.
+    /// Stop it: its waiting ends now, and its children's.
     pub fn cancel(&self) {
         self.cancel.cancel();
+        let children: Vec<Arc<Self>> = self
+            .children
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .filter_map(Weak::upgrade)
+            .collect();
+        for c in children {
+            c.cancel();
+        }
         {
             let mut s = self.state.lock().unwrap_or_else(PoisonError::into_inner);
             if matches!(s.0, State::Running) {
@@ -148,16 +190,7 @@ impl Jobs {
             let mut all = self.all.lock().unwrap_or_else(PoisonError::into_inner);
             all.0 = all.0.saturating_add(1);
             let n = all.0;
-            let job = Arc::new(Job {
-                id: format!("j{n}"),
-                tool: tool.to_owned(),
-                started: Instant::now(),
-                state: Mutex::new((State::Running, None)),
-                changed: Condvar::new(),
-                step: Mutex::new(String::new()),
-                cancel: Cancel::default(),
-                background: AtomicBool::new(false),
-            });
+            let job = Arc::new(Job::new(format!("j{n}"), tool));
             all.1.insert(n, job.clone());
             // Forget the oldest finished ones past what is kept.
             let done: Vec<u64> = all
@@ -272,6 +305,23 @@ mod tests {
         go.send(()).unwrap();
         std::thread::sleep(Duration::from_millis(50));
         assert!(matches!(job.wait(Duration::ZERO), State::Cancelled));
+    }
+
+    #[test]
+    fn cancelling_a_job_cancels_its_children() {
+        let jobs = Jobs::default();
+        let (go, gate) = std::sync::mpsc::channel::<()>();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let job = jobs.spawn("script", move |j| {
+            tx.send(j.child("listen")).ok();
+            gate.recv().ok();
+            Ok(Value::Null)
+        });
+        let child = rx.recv().unwrap();
+        assert!(!child.cancel.is_cancelled());
+        job.cancel();
+        assert!(child.cancel.is_cancelled());
+        go.send(()).unwrap();
     }
 
     #[test]

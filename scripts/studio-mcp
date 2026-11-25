@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Studio's MCP for an agent (features/agent-mcp, apps/studio/docs/mcp.md):
 # what `.mcp.json` starts. Builds `studio-mcp` when it is missing or older
-# than its sources (a few seconds: serde_json and std only), then runs it
+# than its sources (seconds: serde_json, std and QuickJS's C), then runs it
 # on stdio. It finds the running Studio by its control socket, needs no
 # port or token, and carries on across Studio's restarts.
 #

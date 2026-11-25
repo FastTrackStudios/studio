@@ -17,9 +17,12 @@
 //!   levels, and pages instead of a cut ([`page`]).
 //! - **Jobs** ([`jobs`]): a call that outlives its wait answers a job id
 //!   at once, and `job` waits for its result.
+//! - **Scripts** ([`script`]): JavaScript that chains many calls — loops,
+//!   conditions, renders side by side — in one tool call.
 
 pub mod jobs;
 pub mod page;
+pub mod script;
 pub mod server;
 pub mod shape;
 pub mod tools;

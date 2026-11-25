@@ -241,9 +241,15 @@ pub fn generic() -> Vec<Tool> {
         },
         Tool {
             name: "batch",
-            description: "Run several actions in order (`steps`: each `{id, args}`), stopping at the first failure unless `stop_on_error: false`. At most 64; not atomic.",
+            description: "Run several actions (`steps`: each `{id, args}`), in order, stopping at the first failure unless `stop_on_error: false`; each step is its own undo step, nothing is rolled back. At most 64. `parallel: true` runs read-only steps side by side (refused if one is not read-only). A step's args may take an earlier step's answer: `{\"$ref\": \"steps.0.figures.lufs\"}` (steps count from 0; dots into objects and lists). Anything more (loops, conditions, arithmetic): `script`.",
             exec: Exec::Composite(batch),
             schema: Some(batch_schema),
+        },
+        Tool {
+            name: "script",
+            description: crate::script::DESCRIPTION,
+            exec: Exec::Composite(crate::script::run),
+            schema: Some(crate::script::schema),
         },
         Tool {
             name: "watch",
@@ -635,13 +641,246 @@ fn run(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
 
 fn batch_schema() -> Value {
     json!({"type": "object", "properties": {
-        "steps": {"type": "array", "maxItems": 64, "items": {"type": "object", "properties": {"id": {"type": "string"}, "args": {"type": "object"}}, "required": ["id"]}},
-        "stop_on_error": {"type": "boolean"},
+        "steps": {"type": "array", "maxItems": MAX_STEPS, "items": {"type": "object", "properties": {"id": {"type": "string"}, "args": {"type": "object"}, "ticket": {"type": "string"}}, "required": ["id"]}},
+        "stop_on_error": {"type": "boolean", "description": "false: run every step, whatever fails (default true)."},
+        "parallel": {"type": "boolean", "description": "Run the steps side by side; every one must be read-only (LISTEN, MIX_STATE, …)."},
     }, "required": ["steps"]})
 }
 
+/// The most steps one batch runs (Studio's own limit).
+const MAX_STEPS: usize = 64;
+
+/// Whether `v` holds a `{"$ref": …}` anywhere.
+fn has_ref(v: &Value) -> bool {
+    match v {
+        Value::Object(o) => o.contains_key("$ref") || o.values().any(has_ref),
+        Value::Array(a) => a.iter().any(has_ref),
+        _ => false,
+    }
+}
+
+/// What `path` (`steps.2.figures.lufs`) points at in the answers so far.
+fn lookup(path: &str, done: &[Option<Value>]) -> Result<Value, String> {
+    let mut parts = path.split('.');
+    if parts.next() != Some("steps") {
+        return Err(format!("`$ref: {path}`: a reference starts `steps.<n>.`"));
+    }
+    let n: usize = parts
+        .next()
+        .and_then(|n| n.parse().ok())
+        .ok_or_else(|| format!("`$ref: {path}`: `steps.<n>` takes a step's number, from 0"))?;
+    let mut at = done
+        .get(n)
+        .and_then(Option::as_ref)
+        .ok_or_else(|| format!("`$ref: {path}`: step {n} has not answered before this one"))?;
+    for part in parts {
+        let next = match at {
+            Value::Array(a) => part.parse::<usize>().ok().and_then(|i| a.get(i)),
+            Value::Object(o) => o.get(part),
+            _ => None,
+        };
+        at = next.ok_or_else(|| {
+            let keys = at.as_object().map_or_else(
+                || format!("it is {}", kind(at)),
+                |o| {
+                    format!(
+                        "its keys: {}",
+                        o.keys().cloned().collect::<Vec<_>>().join(", ")
+                    )
+                },
+            );
+            format!("`$ref: {path}`: no `{part}` there ({keys})")
+        })?;
+    }
+    Ok(at.clone())
+}
+
+const fn kind(v: &Value) -> &'static str {
+    match v {
+        Value::Null => "null",
+        Value::Bool(_) => "a boolean",
+        Value::Number(_) => "a number",
+        Value::String(_) => "a string",
+        Value::Array(_) => "a list",
+        Value::Object(_) => "an object",
+    }
+}
+
+/// `v` with every `{"$ref": path}` replaced by what it points at.
+fn resolve(v: &Value, done: &[Option<Value>]) -> Result<Value, String> {
+    Ok(match v {
+        Value::Object(o) => {
+            if let Some(path) = o.get("$ref") {
+                let path = path.as_str().ok_or_else(|| {
+                    "`$ref` takes a path as text (`steps.0.figures.lufs`)".to_owned()
+                })?;
+                return lookup(path, done);
+            }
+            let mut out = Map::new();
+            for (k, x) in o {
+                out.insert(k.clone(), resolve(x, done)?);
+            }
+            Value::Object(out)
+        }
+        Value::Array(a) => Value::Array(
+            a.iter()
+                .map(|x| resolve(x, done))
+                .collect::<Result<_, _>>()?,
+        ),
+        other => other.clone(),
+    })
+}
+
+/// One step's line in a batch's answer, as Studio's batch gives it.
+fn step_result(i: usize, id: &str, outcome: &Result<Value, Failure>) -> Value {
+    match outcome {
+        Ok(v) => json!({"step": i, "id": id, "ok": true, "result": v}),
+        Err(e) => json!({"step": i, "id": id, "ok": false, "error": e}),
+    }
+}
+
 fn batch(ctx: &Ctx<'_>, args: &Value) -> Result<Value, Failure> {
-    ctx.method("batch", args)
+    let parallel = args
+        .get("parallel")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let steps = args
+        .get("steps")
+        .and_then(Value::as_array)
+        .ok_or_else(|| bad("`steps` is missing (a list of `{id, args}`)"))?;
+    let refs = steps.iter().any(|s| s.get("args").is_some_and(has_ref));
+    if !parallel && !refs {
+        let mut plain = args.clone();
+        if let Some(o) = plain.as_object_mut() {
+            o.remove("parallel");
+        }
+        return ctx.method("batch", &plain);
+    }
+    if steps.len() > MAX_STEPS {
+        return Err(bad(format!(
+            "{} steps; a batch runs at most {MAX_STEPS} — split it, or use `script`",
+            steps.len()
+        )));
+    }
+    let ids: Vec<&str> = steps
+        .iter()
+        .map(|s| s.get("id").and_then(Value::as_str).unwrap_or_default())
+        .collect();
+    if let Some(i) = ids.iter().position(|id| id.is_empty()) {
+        return Err(bad(format!("step {i} has no `id`")));
+    }
+    if parallel {
+        if refs {
+            return Err(bad(
+                "`$ref` needs the steps in order: a parallel batch cannot use one (drop `parallel`, or use `script`)",
+            ));
+        }
+        return batch_parallel(ctx, steps, &ids);
+    }
+    let stop = args
+        .get("stop_on_error")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let mut done: Vec<Option<Value>> = Vec::new();
+    let mut results = Vec::new();
+    for (i, (step, id)) in steps.iter().zip(&ids).enumerate() {
+        ctx.job
+            .step(format!("{}/{} {id}", i.saturating_add(1), steps.len()));
+        let outcome = resolve(
+            &step.get("args").cloned().unwrap_or_else(|| json!({})),
+            &done,
+        )
+        .map_err(bad)
+        .and_then(|a| {
+            let mut params = json!({"id": id, "args": a});
+            if let (Some(t), Some(o)) = (step.get("ticket"), params.as_object_mut()) {
+                o.insert("ticket".into(), t.clone());
+            }
+            ctx.up.call("run", &params, &ctx.job.cancel)
+        });
+        let failed = outcome.is_err();
+        results.push(step_result(i, id, &outcome));
+        done.push(outcome.ok());
+        if failed && stop {
+            break;
+        }
+    }
+    Ok(batch_answer(&results, steps.len()))
+}
+
+fn batch_answer(results: &[Value], of: usize) -> Value {
+    let failed = results
+        .iter()
+        .find(|r| r.get("ok") == Some(&json!(false)))
+        .map(|f| {
+            (
+                f.get("step").cloned().unwrap_or_default(),
+                f.get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+            )
+        });
+    let mut out = json!({"ran": results.len(), "of": of, "results": results});
+    if let (Some((step, id)), Some(o)) = (failed, out.as_object_mut()) {
+        o.insert("failed".into(), json!(format!("step {step} ({id}) failed")));
+    }
+    out
+}
+
+/// Read-only steps side by side, each on a connection of its own.
+fn batch_parallel(ctx: &Ctx<'_>, steps: &[Value], ids: &[&str]) -> Result<Value, Failure> {
+    let mut unique: Vec<&str> = ids.to_vec();
+    unique.sort_unstable();
+    unique.dedup();
+    for id in unique {
+        let d = ctx.method("describe", &json!({"id": id}))?;
+        let effect = d
+            .get("effect")
+            .and_then(Value::as_str)
+            .unwrap_or("mutating");
+        if effect != "read-only" {
+            return Err(bad(format!(
+                "`parallel` runs read-only steps only; {id} is {effect} (run it in order: drop `parallel`)"
+            )));
+        }
+    }
+    // At most IN_FLIGHT at once: one group of steps, then the next.
+    let mut outcomes: Vec<Result<Value, Failure>> = Vec::with_capacity(steps.len());
+    for (c, chunk) in steps.chunks(crate::script::IN_FLIGHT).enumerate() {
+        let base = c.saturating_mul(crate::script::IN_FLIGHT);
+        ctx.job.step(format!(
+            "parallel: steps {}–{} of {}",
+            base.saturating_add(1),
+            base.saturating_add(chunk.len()),
+            steps.len()
+        ));
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = chunk
+                .iter()
+                .enumerate()
+                .map(|(k, step)| {
+                    let id = ids.get(base.saturating_add(k)).copied().unwrap_or_default();
+                    let child = ctx.job.child(id);
+                    let args = step.get("args").cloned().unwrap_or_else(|| json!({}));
+                    let up = ctx.up;
+                    scope.spawn(move || upstream::run(up, id, &args, &child.cancel))
+                })
+                .collect();
+            for h in handles {
+                outcomes.push(
+                    h.join()
+                        .unwrap_or_else(|_| Err(failure("failed", "the step's thread panicked"))),
+                );
+            }
+        });
+    }
+    let results: Vec<Value> = outcomes
+        .iter()
+        .enumerate()
+        .map(|(i, o)| step_result(i, ids.get(i).copied().unwrap_or_default(), o))
+        .collect();
+    Ok(batch_answer(&results, steps.len()))
 }
 
 fn watch_schema() -> Value {
@@ -672,7 +911,10 @@ given) answers `{job, state: \"running\"}`: call `job {job}` to wait for its res
 whole song take minutes). Mix by measurement: listen/block_measure for one point, \
 mix_measure/balance across the mix, listen_ab to try a change level-matched and put it back, \
 mix_snapshot before a series of changes. Changes are undo steps in the person's session: say what \
-you change.";
+you change. \
+\n\nMany calls at once: `script` runs JavaScript over every tool (`studio.listen`, `studio.trackSet`, \
+…) — loops, conditions, renders side by side — in one call; `batch` with `parallel: true` runs \
+read-only steps side by side.";
 
 #[cfg(test)]
 mod tests {

@@ -62,8 +62,8 @@ listed the tools, the bridge sends `tools/list_changed` once it answers.
 
 The generic tools are `actions` (one line per action, `filter`),
 `describe`, `run` (any action; known big answers are compacted the same
-way), `batch` and `watch`. The bridge's own tools are `job`, `jobs`,
-`job_cancel` and `more`.
+way), `batch`, `script` and `watch`. The bridge's own tools are `job`,
+`jobs`, `job_cancel` and `more`.
 
 `signal_block_set` needs a Studio built with SIGNAL_BLOCK_SET
 (feat/signal-block-set). Until then it answers `no action
@@ -112,3 +112,166 @@ SIGNAL_BLOCK_SET`. Meanwhile, use `signal_run` with `SIGNAL_SET`
 
 Everything else (MIX_VARIANT*, SENDS_*, QUANTIZE, ZONES_*, …):
 `actions {filter}`, then `describe`, then `run`.
+
+## Many calls in one: `batch` and `script`
+
+MCP has no request batching of its own. JSON-RPC batches came into the
+spec in revision 2025-03-26 and were taken out again in 2025-06-18, the
+revision this server answers in by default (it also accepts the
+2025-03-26 and 2024-11-05 handshakes, but takes one message a line,
+never a batch array). So chaining calls is a tool's job:
+
+- **`batch`** runs a list of `{id, args}` steps in order, each its own
+  undo step, nothing rolled back. Two additions on top of Studio's own
+  batch:
+  - `parallel: true` runs the steps side by side (8 at once), when every
+    one is read-only (LISTEN, MIX_STATE, …). A mutating step makes the
+    whole batch refused before anything runs.
+  - A step's args can take an earlier step's answer:
+    `{"$ref": "steps.0.figures.lufs"}` (steps count from 0; the path
+    dots into objects and lists). A `$ref` cannot be combined with
+    `parallel`.
+
+  That is as far as `batch` goes. Anything that needs a loop, a
+  condition or arithmetic is a script.
+- **`script`** runs JavaScript, described below.
+
+## Scripting
+
+`script {source, args?, timeout?}` runs `source` as the body of an async
+function in an embedded JavaScript engine, QuickJS (`rquickjs`):
+
+- JSON is JavaScript's own data, so Studio's answers are plain objects.
+- Its promises let independent renders run side by side.
+- It builds from C in seconds, so the bridge still starts fast.
+
+Luau (`mlua`, which `architect-scripting` uses for `SCRIPT_RUN` inside
+Studio) was the other choice. Two things decided against it here:
+`SCRIPT_RUN` runs on the app's own thread, a whole script as one undo
+step, so it cannot wait on offline renders the way the bridge can; and
+models write JavaScript more reliably than Luau.
+
+The script sees:
+
+| | |
+|---|---|
+| `studio.<tool>(args)` | any tool in the table above, by its name or in camelCase: `studio.listen`, `studio.blockMeasure`, `studio.mixMeasure`, `studio.balance`, `studio.trackSet`, `studio.signalBlockSet`, `studio.signalRun`, `studio.mixSnapshot`, `studio.mixRestore`, `studio.sessionTree`, `studio.actions`, `studio.describe`, … Its answer is the tool's own: compacted the same way (`detail` works), but whole. Paging only applies to what the script returns, and long calls are waited for inside (no `job`). |
+| `studio.run(id, args)` | any action, with Studio's own answer (not compacted). |
+| `studio.snapshot(name)` | MIX_SNAPSHOT `{name}`: a checkpoint to `studio.mixRestore({name})` to. |
+| `studio.all([…])` | `Promise.all` over promises, or over functions that return them. Up to 8 calls run at once; more wait for a free slot. |
+| `args` | the tool's `args`, any JSON. |
+| `log(...)`, `console.log(...)` | lines returned with the answer (500 kept). |
+
+A failed call throws an `Error` with `code`, `message`, `call` and
+`failure` (Studio's whole failure, `did_you_mean` included). Catch it, or
+the script fails with it.
+
+The answer is `{result, log, calls, ms}`. `result` is what the script
+returned, with numbers rounded to 4 places. An answer too big pages
+like any other, through `result`'s longest list. An uncaught error
+answers `isError` with the failure's `code` and `error`, plus:
+
+- the script's `line` and `column`, and `source`, the text of that line;
+- `thrown_by` when it was a studio call nothing caught;
+- the `log` so far and the `calls` made.
+
+The rules:
+
+- **Each mutating call is an undo step** in the person's session, the
+  same as when the tools are called one by one. A script that changes
+  several things should `await studio.snapshot("before …")` first and
+  say what it changed. If it fails halfway, what ran stays done:
+  `mix_restore` puts the mix back.
+- **The sandbox.** QuickJS has its own built-ins only. There is no module
+  loader, no `std` or `os`, no `fetch` and no timers, so a script reaches
+  nothing but `studio`, `log` and `args`. It may use 64 MB of memory.
+  `timeout` (300 s by default, 3600 s at most) covers the whole run,
+  JavaScript and calls alike. A script past its timeout is stopped, even
+  inside a `while (true) {}`, and its calls still running are dropped.
+- **It is a job like any call.** A script still running after its `wait`
+  answers `{job, state: "running", step: "script: 12 calls, 8 running, 41 s"}`,
+  and `job` waits for it. `job_cancel` stops the script and every call
+  it has running.
+
+### Examples: drums
+
+**(a) Every Signal block's gain reduction on the kit's mics over a
+section.** This is one listen a mic, all side by side. `fresh: true`
+renders the blocks' meters even when a listen could be replayed. On the
+Unbreakable session it read the 12 mics in 13 calls and 2.0 s; one
+round trip a listen would be 13 tool calls.
+
+```js
+const tracks = (await studio.sessionTree({under: "Drums", view: "list", fields: ["path", "fx", "items"]}))
+  .filter((t) => t.items > 0 && t.fx.includes("Signal Dev") && !/Trig|Sample/.test(t.path))
+  .map((t) => t.path);
+log(`${tracks.length} mics`);
+const heard = await studio.all(tracks.map((track) =>
+  studio.listen({track, from: args.from, to: args.to, at: "post-fx", fresh: true})));
+const rows = [];
+heard.forEach((h, i) => {
+  for (const d of h.dynamics ?? [])
+    for (const b of d.blocks ?? [])
+      rows.push({track: tracks[i], block: b.block, max_gr_db: b.gr?.max_gr_db, mean_gr_db: b.gr?.mean_gr_db});
+});
+return rows.sort((a, b) => (a.max_gr_db ?? 0) - (b.max_gr_db ?? 0));
+```
+
+With `args: {from: "CH 1", to: "CH 1 end"}`, the answer starts:
+
+```json
+{"calls": 13, "log": ["12 mics"], "ms": 2050, "result": [
+  {"block": "tone.comp", "max_gr_db": -22.66, "mean_gr_db": -5.56, "track": "Drums/Cymbals/OHs"},
+  {"block": "tone.comp", "max_gr_db": -9.89, "mean_gr_db": -2.73, "track": "Drums/Rooms"},
+  {"block": "tone.comp", "max_gr_db": 0, "mean_gr_db": 0, "track": "Drums/Kick/Sum/In"}, …]}
+```
+
+**(b) Level-match a phase's make-up until it is within 0.1 dB.** This
+makes the `tone` phase of `Kick/Sum/In` gain neutral. The phase's input
+is `block:<its first block>:pre`. With `tone` as the instance's last
+phase, its output is the Signal FX's output. The loop measures, moves
+the make-up by the difference, and measures again, up to 6 times. Each
+make-up change is an undo step, so it snapshots first.
+
+```js
+const {track, phase} = args;            // {"track": "Kick/Sum/In", "phase": "tone"}
+const span = {from: "CH 1", to: "CH 1 end", exact: true};
+await studio.snapshot(`before ${phase} make-up`);
+const chain = (await studio.signalBlock({track})).chain;
+const p = chain.phases.find((x) => x.phase === phase);
+const input = (await studio.listen({track, ...span, at: `block:${p.blocks[0].id}:pre`})).figures.lufs;
+let makeup = p.makeup_db;
+for (let i = 0; i < 6; i++) {
+  const out = (await studio.listen({track, ...span, at: "fx:Signal:out"})).figures.lufs;
+  const off = input - out;
+  log(`pass ${i}: make-up ${makeup.toFixed(2)} dB, out ${out.toFixed(2)} vs in ${input.toFixed(2)}`);
+  if (Math.abs(off) <= 0.1) return {track, phase, makeup_db: makeup, off_db: off, passes: i};
+  makeup += off;
+  await studio.signalRun({track, action: "SIGNAL_SET", args: {phase, makeup_db: makeup}});
+}
+throw new Error(`still more than 0.1 dB off after 6 passes (make-up ${makeup} dB)`);
+```
+
+**(c) An EQ change, heard A/B.** This tries a cut on the snare top at
+three frequencies. `listenAb` makes each change, listens, and puts it
+back. The script keeps the cut that takes out the most energy in the
+box band, at matched level.
+
+```js
+const track = "Snare/Sum/Top", span = {from: "CH 1", to: "CH 1 end"};
+const tries = [];
+for (const freq of [350, 450, 550]) {
+  const ab = await studio.listenAb({track, ...span, change: [{action: "SIGNAL_BLOCK_SET", args: {
+    track, block: "tone.eq", params: {"band.7.used": true, "band.7.shape": "Bell",
+      "band.7.freq": freq, "band.7.gain": -4, "band.7.q": 2}}}]});
+  // matched.bands: b − a per third octave with the loudness change taken out (centres in bands_hz).
+  const box = ab.matched.bands.slice(13, 16).reduce((s, x) => s + x, 0) / 3; // 400–630 Hz
+  tries.push({freq, gain_db: ab.matched.gain_db, box_db: box, crest: ab.matched.crest});
+  log(`${freq} Hz: box ${box.toFixed(2)} dB, level ${ab.matched.gain_db} dB`);
+}
+tries.sort((a, b) => a.box_db - b.box_db);
+return {best: tries[0], tries};
+```
+
+Here the EQ goes back each time. Add `keep: true` to the best one's
+`listenAb`, or call `studio.signalBlockSet`, to leave it in.

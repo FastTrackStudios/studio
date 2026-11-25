@@ -202,7 +202,7 @@ impl Bridge {
                     "block_measure" | "balance" | "actions" | "describe" | "watch" => {
                         Some("read-only".to_owned())
                     }
-                    "run" | "batch" => Some("mutating".to_owned()),
+                    "run" | "batch" | "script" => Some("mutating".to_owned()),
                     _ => None,
                 });
                 let mut tool = json!({ "name": t.name, "description": t.description, "inputSchema": schema });

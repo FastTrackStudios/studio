@@ -5,7 +5,7 @@
 use std::collections::VecDeque;
 use std::sync::{Mutex, PoisonError};
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 /// How many big answers are kept for `more`.
 const KEPT: usize = 16;
@@ -21,8 +21,9 @@ pub struct Pages {
 enum Pageable {
     /// The answer is a list.
     Whole,
-    /// The answer's field `name` is (its longest list).
-    Field(String),
+    /// The answer's field at this path is (its longest list): a field of
+    /// the answer, or of one of its objects (a script's `result.tracks`).
+    Field(Vec<String>),
     /// No list to page: the text, by characters.
     Text,
 }
@@ -30,13 +31,43 @@ enum Pageable {
 fn pageable(v: &Value) -> Pageable {
     match v {
         Value::Array(_) => Pageable::Whole,
-        Value::Object(o) => o
-            .iter()
-            .filter(|(_, x)| x.as_array().is_some_and(|a| !a.is_empty()))
-            .max_by_key(|(_, x)| x.to_string().len())
-            .map_or(Pageable::Text, |(k, _)| Pageable::Field(k.clone())),
+        Value::Object(o) => {
+            let mut lists: Vec<(Vec<String>, usize)> = Vec::new();
+            for (k, x) in o {
+                match x {
+                    Value::Array(a) if !a.is_empty() => {
+                        lists.push((vec![k.clone()], x.to_string().len()));
+                    }
+                    Value::Object(inner) => {
+                        for (k2, y) in inner {
+                            if y.as_array().is_some_and(|a| !a.is_empty()) {
+                                lists.push((vec![k.clone(), k2.clone()], y.to_string().len()));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            lists
+                .into_iter()
+                .max_by_key(|(_, n)| *n)
+                .map_or(Pageable::Text, |(path, _)| Pageable::Field(path))
+        }
         _ => Pageable::Text,
     }
+}
+
+/// The object holding the field at `path`'s end, and that field's name.
+fn parent_mut<'a>(
+    v: &'a mut Value,
+    path: &'a [String],
+) -> Option<(&'a mut Map<String, Value>, &'a str)> {
+    let (last, up) = path.split_last()?;
+    let mut at = v;
+    for k in up {
+        at = at.get_mut(k)?;
+    }
+    Some((at.as_object_mut()?, last.as_str()))
 }
 
 impl Pages {
@@ -140,25 +171,24 @@ fn cut(v: &Value, offset: usize, limit: Option<usize>, budget: usize) -> Value {
             let (items, next) = take(list, offset, limit, budget);
             json!({ "items": items, "page": page_note(offset, items.len(), list.len(), next, "items") })
         }
-        Pageable::Field(field) => {
-            let list = v
-                .get(&field)
-                .and_then(Value::as_array)
-                .map_or(&[][..], Vec::as_slice);
+        Pageable::Field(path) => {
             let mut rest = v.clone();
-            if let Some(o) = rest.as_object_mut() {
-                o.remove(&field);
-            }
+            let list: Vec<Value> = parent_mut(&mut rest, &path)
+                .and_then(|(o, k)| o.remove(k))
+                .and_then(|l| l.as_array().cloned())
+                .unwrap_or_default();
             let rest_len = rest.to_string().len();
             let (items, next) = take(
-                list,
+                &list,
                 offset,
                 limit,
                 budget.saturating_sub(rest_len).max(1000),
             );
-            let note = page_note(offset, items.len(), list.len(), next, &field);
+            let note = page_note(offset, items.len(), list.len(), next, &path.join("."));
+            if let Some((o, k)) = parent_mut(&mut rest, &path) {
+                o.insert(k.to_owned(), Value::Array(items));
+            }
             if let Some(o) = rest.as_object_mut() {
-                o.insert(field, Value::Array(items));
                 o.insert("page".into(), note);
             }
             rest
@@ -248,6 +278,18 @@ mod tests {
         let first = p.fit(json!({"blob": "z".repeat(10_000)}), 3000);
         assert!(first["text"].as_str().unwrap().len() <= 3000);
         assert!(first["page"]["next"].as_u64().is_some());
+    }
+
+    #[test]
+    fn a_list_one_object_down_pages_too() {
+        let p = Pages::default();
+        let first = p.fit(json!({"result": big(), "log": ["a"], "calls": 2}), 5000);
+        assert_eq!(first["page"]["of"], json!("result.tracks"));
+        assert_eq!(first["result"]["track"], json!("Drums"));
+        assert_eq!(first["log"], json!(["a"]));
+        let id = first["page"]["result"].as_str().unwrap();
+        let page = p.more(id, 7, Some(1), 5000).unwrap();
+        assert_eq!(page["result"]["tracks"][0]["path"], json!("Drums/T7"));
     }
 
     #[test]
