@@ -1,5 +1,0 @@
-[application]
-name = "ignition-live-web"
-
-[web.app]
-title = "Ignition Live"

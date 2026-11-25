@@ -1,2 +1,0 @@
-devenv-fleet/rust
-devenv-fleet/darwin

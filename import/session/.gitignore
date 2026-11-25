@@ -1,7 +1,0 @@
-/target
-# devenv: state, eval cache and per-user overrides.
-.devenv/
-.devenv.flake.nix
-devenv.local.nix
-devenv.local.yaml
-.direnv/

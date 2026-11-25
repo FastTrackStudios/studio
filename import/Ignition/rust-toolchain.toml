@@ -1,7 +1,0 @@
-# The workspace's compiler, for rustup (anyone outside the devenv shell and
-# the flake, which have no rustup). Must match the 1.99.1 both take from
-# devenv-fleet (pins.json; devenv.yaml, nix/modules/toolchain.nix): move it
-# with the fleet, never here alone. Channel only: each CI job installs the
-# components and targets it needs.
-[toolchain]
-channel = "1.99.1"
