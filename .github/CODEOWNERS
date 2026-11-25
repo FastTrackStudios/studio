@@ -7,3 +7,6 @@
 /scripts/bump-architect.py @Codys-Wright
 /scripts/check-token-mints.py @Codys-Wright
 /scripts/check-duplicate-deps.py @Codys-Wright
+# The layout rules and their allow-list, which only shrinks.
+/boundaries.toml @Codys-Wright
+/scripts/boundaries.py @Codys-Wright

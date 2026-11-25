@@ -1,6 +1,8 @@
 # This repo's git hooks, run by prek (https://github.com/j178/prek; the
 # dev shell carries the pinned release, nix/modules/prek.nix). Install
-# once per clone: `just install-hooks`.
+# once per clone: `just install-hooks`. Commit and push from the dev shell
+# (direnv, or `devenv shell`): the hooks' shellcheck and actionlint come
+# from it.
 #
 #   commit   rustfmt, shellcheck and actionlint on the STAGED files only;
 #            with a Cargo.toml staged, the committed Cargo.lock made from
@@ -10,11 +12,12 @@
 #            prek stashes unstaged edits while hooks run, so a hook sees
 #            exactly what is being committed. A hook that rewrites a file
 #            fails the commit: `git add` the result and commit again.
-#   push     local CI (scripts/ci-local-hook.sh): the static guards, then
-#            the tests, `cargo check` and wasm check `cargo rail plan` says
-#            the change affects, on this machine's warm target dir, then
-#            the `Local CI` status on the pushed commit, which main
-#            requires (checks.yml header).
+#   push     local CI (scripts/ci-local-hook.sh): the static guards and
+#            the group rules (boundaries.toml), then the tests, `cargo
+#            check` and wasm check `cargo rail plan` says the change
+#            affects, on this machine's warm target dir, then the `Local
+#            CI` status on the pushed commit (an indicator: the PR's own
+#            `Affected crates` job runs the same).
 #   checkout after `git worktree add` (and only then: the previous HEAD is
 #            all zeros), scripts/worktree-setup.sh: the assets from the
 #            main checkout's clones, `.env`, and the plugin faces in the
@@ -22,9 +25,9 @@
 #            builds (kache hits) and runs complete. `just worktree-setup`
 #            runs it by hand.
 #
-# Skip one hook by its id: `SKIP=local-ci git push` (the PR then waits on
-# the `Local CI` status until a checked push or
-# `gh workflow run checks.yml --ref <branch>`).
+# Skip one hook by its id: `SKIP=local-ci git push` (the PR's `Affected
+# crates` job still checks it; `gh workflow run checks.yml --ref <branch>`
+# runs the full set and posts `Local CI`).
 default_install_hook_types = ["pre-commit", "pre-push", "post-checkout"]
 
 [[repos]]
