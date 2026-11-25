@@ -1,0 +1,9 @@
+// studio-protools-theme: grey console chrome in the style of a well-known
+// post-production DAW, as two themes, for daw-theme spec 1.
+name protools
+title "Pro Tools-style"
+spec 1
+themes {
+    protools-dark { title Dark, layers (themes/protools), mode dark }
+    protools-classic { title Classic, layers (themes/protools), mode classic }
+}

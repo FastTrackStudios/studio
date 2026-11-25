@@ -1,0 +1,133 @@
+<Document>
+  <!-- One Mix window channel, top to foot: the track's colour bar; the
+       inserts A–E and sends A–E (a lettered slot for each one the track
+       has); the I/O selectors; then on the lighter lower section the pan
+       knob and its readout, input and record, solo and mute, the fader
+       beside its meter, the volume readout, and the name plate (white
+       when selected). Short strips drop the sends, then the inserts. -->
+  <Page name="mcp.strip">
+    <Frame name="Strip" w=80 h=700>
+      <Rectangle name="Upper" w=80 h=700 bind:w="w" bind:h="h" bind:fill="$local.strip_upper" />
+      <Rectangle name="Lower" w=80 h=400 bind:w="w" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0))" bind:h="max(h - (64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)), 0)" bind:fill="$local.strip_lower" />
+      <Rectangle name="Edge" w=1 h=700 bind:x="w - 1" bind:h="h" bind:fill="$local.strip_edge" />
+      <Rectangle name="Colour" x=2 y=2 w=76 h=10 bind:w="w - 5" bind:fill="track.has_color ? track.color : $local.no_color" />
+      <Frame name="Inserts" w=80 h=101 bind:w="w" bind:y="14" bind:visible="h >= 520">
+        <Rectangle name="Band" w=80 h=12 bind:w="pw - 1" bind:fill="$local.strip_section" />
+        <Text name="Label" w=400 h=12 y=1 size=8 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:fill="$local.section_ink">INSERTS A–E</Text>
+        <Rectangle name="Slot A" x=4 y=14 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.fx > 0 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot A" x=7 y=20 w=3 h=3 bind:fill="track.fx > 0 ? $local.slot_ink : $text.faint" />
+        <Text name="Name A" w=400 h=12 y=16 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.fx > 0" bind:fill="$local.slot_ink">A</Text>
+        <Rectangle name="Slot B" x=4 y=31 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.fx > 1 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot B" x=7 y=37 w=3 h=3 bind:fill="track.fx > 1 ? $local.slot_ink : $text.faint" />
+        <Text name="Name B" w=400 h=12 y=33 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.fx > 1" bind:fill="$local.slot_ink">B</Text>
+        <Rectangle name="Slot C" x=4 y=48 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.fx > 2 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot C" x=7 y=54 w=3 h=3 bind:fill="track.fx > 2 ? $local.slot_ink : $text.faint" />
+        <Text name="Name C" w=400 h=12 y=50 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.fx > 2" bind:fill="$local.slot_ink">C</Text>
+        <Rectangle name="Slot D" x=4 y=65 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.fx > 3 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot D" x=7 y=71 w=3 h=3 bind:fill="track.fx > 3 ? $local.slot_ink : $text.faint" />
+        <Text name="Name D" w=400 h=12 y=67 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.fx > 3" bind:fill="$local.slot_ink">D</Text>
+        <Rectangle name="Slot E" x=4 y=82 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.fx > 4 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot E" x=7 y=88 w=3 h=3 bind:fill="track.fx > 4 ? $local.slot_ink : $text.faint" />
+        <Text name="Name E" w=400 h=12 y=84 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.fx > 4" bind:fill="$local.slot_ink">E</Text>
+      </Frame>
+      <Frame name="Sends" w=80 h=101 bind:w="w" bind:y="(14 + (h >= 520 ? 101 : 0))" bind:visible="h >= 640">
+        <Rectangle name="Band" w=80 h=12 bind:w="pw - 1" bind:fill="$local.strip_section" />
+        <Text name="Label" w=400 h=12 y=1 size=8 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:fill="$local.section_ink">SENDS A–E</Text>
+        <Rectangle name="Slot A" x=4 y=14 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.sends > 0 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot A" x=7 y=20 w=3 h=3 bind:fill="track.sends > 0 ? $local.slot_ink : $text.faint" />
+        <Text name="Name A" w=400 h=12 y=16 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.sends > 0" bind:fill="$local.slot_ink">A</Text>
+        <Rectangle name="Slot B" x=4 y=31 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.sends > 1 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot B" x=7 y=37 w=3 h=3 bind:fill="track.sends > 1 ? $local.slot_ink : $text.faint" />
+        <Text name="Name B" w=400 h=12 y=33 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.sends > 1" bind:fill="$local.slot_ink">B</Text>
+        <Rectangle name="Slot C" x=4 y=48 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.sends > 2 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot C" x=7 y=54 w=3 h=3 bind:fill="track.sends > 2 ? $local.slot_ink : $text.faint" />
+        <Text name="Name C" w=400 h=12 y=50 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.sends > 2" bind:fill="$local.slot_ink">C</Text>
+        <Rectangle name="Slot D" x=4 y=65 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.sends > 3 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot D" x=7 y=71 w=3 h=3 bind:fill="track.sends > 3 ? $local.slot_ink : $text.faint" />
+        <Text name="Name D" w=400 h=12 y=67 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.sends > 3" bind:fill="$local.slot_ink">D</Text>
+        <Rectangle name="Slot E" x=4 y=82 w=72 h=15 radius=1 bind:w="pw - 9" bind:fill="track.sends > 4 ? $local.slot_full : $local.slot" />
+        <Ellipse name="Dot E" x=7 y=88 w=3 h=3 bind:fill="track.sends > 4 ? $local.slot_ink : $text.faint" />
+        <Text name="Name E" w=400 h=12 y=84 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:visible="track.sends > 4" bind:fill="$local.slot_ink">E</Text>
+      </Frame>
+      <Frame name="IO" w=80 h=50 bind:w="w" bind:y="(14 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0))">
+        <Rectangle name="Band" w=80 h=12 bind:w="pw - 1" bind:fill="$local.strip_section" />
+        <Text name="Label" w=400 h=12 y=1 size=8 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:fill="$local.section_ink">I / O</Text>
+        <Rectangle name="Input" x=4 y=14 w=72 h=15 radius=2 bind:w="pw - 9" bind:fill="$local.dropdown" />
+        <Rectangle name="Input outline" x=4.5 y=14.5 w=71 h=14 radius=2 stroke-weight=1 stroke-align="center" bind:w="pw - 10" bind:stroke="$hardware.edge" />
+        <Text name="Source" w=400 h=12 y=16 size=9 weight=700 text-align="center" bind:x="(pw - 14 - 400) / 2" bind:text="track.input" bind:fill="$local.dropdown_ink">no input</Text>
+        <Vector name="Input caret" y=20 w=7 h=4 geometry="M 0 0 L 7 0 L 3.5 4 Z" bind:x="pw - 16" bind:fill="$local.dropdown_ink" />
+        <Instance name="Routing" of="routing" x=4 y=31 w=72 h=15 bind:w="pw - 9" arg:parent_send="track.parent_send" arg:sends="track.sends" arg:receives="track.receives" />
+      </Frame>
+      <Instance name="Pan" of="pan" w=32 h=32 bind:x="(w - 32) / 2" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 4" arg:value="track.pan" />
+      <Rectangle name="Pan readout" x=6 w=68 h=14 radius=1 bind:w="w - 12" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 38" bind:fill="$local.readout" />
+      <Text name="Pan word" x=10 w=40 h=12 size=9 weight=700 bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 39" bind:fill="$local.readout_ink">pan</Text>
+      <Text name="Pan value" w=400 h=12 size=9 weight=700 text-align="right" bind:x="w - 410" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 39" bind:text="abs(track.pan) < 0.005 ? \"0\" : (track.pan < 0 ? \"‹\" + fmt(round(abs(track.pan) * 100)) : fmt(round(track.pan * 100)) + \"›\")" bind:fill="$local.readout_ink">0</Text>
+      <Instance name="Input" of="monitor" w=24 h=16 bind:x="w / 2 - 26" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 58" bind:visible="!ui.mixing" arg:mode="track.monitor" />
+      <Instance name="Arm" of="arm" w=24 h=16 bind:x="w / 2 + 2" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 58" bind:visible="!ui.mixing" arg:armed="track.armed" />
+      <Instance name="Solo" of="solo" w=24 h=16 bind:x="w / 2 - 26" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 78" arg:on="track.solo" />
+      <Instance name="Mute" of="mute" w=24 h=16 bind:x="w / 2 + 2" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 78" arg:on="track.mute" arg:label="fmt(track.number)" />
+      <Frame name="Fader" w=80 h=200 bind:w="w" bind:y="((64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 104)" bind:h="max(h - 50 - ((64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 104), 0)" bind:visible="max(h - 50 - ((64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 104), 0) > 30">
+        <Text name="Mark 12" w=400 h=10 size=7 weight=600 text-align="right" bind:x="pw / 2 - 418" bind:y="ph * 0.0000 - 4" bind:fill="$local.scale_ink">12</Text>
+        <Rectangle name="Tick 12" w=3 h=1 bind:x="pw / 2 - 16" bind:y="ph * 0.0000" bind:fill="$local.scale_ink" />
+        <Text name="Mark 6" w=400 h=10 size=7 weight=600 text-align="right" bind:x="pw / 2 - 418" bind:y="ph * 0.0882 - 4" bind:visible="ph >= 140" bind:fill="$local.scale_ink">6</Text>
+        <Rectangle name="Tick 6" w=3 h=1 bind:x="pw / 2 - 16" bind:y="ph * 0.0882" bind:visible="ph >= 140" bind:fill="$local.scale_ink" />
+        <Text name="Mark 0" w=400 h=10 size=7 weight=600 text-align="right" bind:x="pw / 2 - 418" bind:y="ph * 0.1765 - 4" bind:fill="$local.scale_ink">0</Text>
+        <Rectangle name="Tick 0" w=3 h=1 bind:x="pw / 2 - 16" bind:y="ph * 0.1765" bind:fill="$local.scale_ink" />
+        <Text name="Mark 5" w=400 h=10 size=7 weight=600 text-align="right" bind:x="pw / 2 - 418" bind:y="ph * 0.2500 - 4" bind:visible="ph >= 140" bind:fill="$local.scale_ink">5</Text>
+        <Rectangle name="Tick 5" w=3 h=1 bind:x="pw / 2 - 16" bind:y="ph * 0.2500" bind:visible="ph >= 140" bind:fill="$local.scale_ink" />
+        <Text name="Mark 10" w=400 h=10 size=7 weight=600 text-align="right" bind:x="pw / 2 - 418" bind:y="ph * 0.3235 - 4" bind:fill="$local.scale_ink">10</Text>
+        <Rectangle name="Tick 10" w=3 h=1 bind:x="pw / 2 - 16" bind:y="ph * 0.3235" bind:fill="$local.scale_ink" />
+        <Text name="Mark 15" w=400 h=10 size=7 weight=600 text-align="right" bind:x="pw / 2 - 418" bind:y="ph * 0.3971 - 4" bind:visible="ph >= 140" bind:fill="$local.scale_ink">15</Text>
+        <Rectangle name="Tick 15" w=3 h=1 bind:x="pw / 2 - 16" bind:y="ph * 0.3971" bind:visible="ph >= 140" bind:fill="$local.scale_ink" />
+        <Text name="Mark 20" w=400 h=10 size=7 weight=600 text-align="right" bind:x="pw / 2 - 418" bind:y="ph * 0.4706 - 4" bind:fill="$local.scale_ink">20</Text>
+        <Rectangle name="Tick 20" w=3 h=1 bind:x="pw / 2 - 16" bind:y="ph * 0.4706" bind:fill="$local.scale_ink" />
+        <Text name="Mark 30" w=400 h=10 size=7 weight=600 text-align="right" bind:x="pw / 2 - 418" bind:y="ph * 0.6176 - 4" bind:visible="ph >= 140" bind:fill="$local.scale_ink">30</Text>
+        <Rectangle name="Tick 30" w=3 h=1 bind:x="pw / 2 - 16" bind:y="ph * 0.6176" bind:visible="ph >= 140" bind:fill="$local.scale_ink" />
+        <Text name="Mark 40" w=400 h=10 size=7 weight=600 text-align="right" bind:x="pw / 2 - 418" bind:y="ph * 0.7647 - 4" bind:fill="$local.scale_ink">40</Text>
+        <Rectangle name="Tick 40" w=3 h=1 bind:x="pw / 2 - 16" bind:y="ph * 0.7647" bind:fill="$local.scale_ink" />
+        <Rectangle name="Slot" w=3 h=200 bind:x="pw / 2 - 11" bind:h="ph" bind:fill="$local.fader_slot" />
+        <Rectangle name="Well" w=12 h=200 bind:x="pw / 2 + 6" bind:h="ph" bind:fill="$meter.well" />
+        <Rectangle name="Lit left" w=5 h=200 bind:x="pw / 2 + 6" bind:h="ph" bind:inset-top="ph * (1 - clamp(meter.left, 0, 1))" bind:visible="meter.left > 0.002" bind:fill="meter.left >= 0.8235 ? $meter.danger : (meter.left >= 0.72 ? $meter.warn : $meter.safe)" />
+        <Rectangle name="Lit right" w=5 h=200 bind:x="pw / 2 + 13" bind:h="ph" bind:inset-top="ph * (1 - clamp(meter.right, 0, 1))" bind:visible="meter.right > 0.002" bind:fill="meter.right >= 0.8235 ? $meter.danger : (meter.right >= 0.72 ? $meter.warn : $meter.safe)" />
+        <Rectangle name="Hold left" w=5 h=1 bind:x="pw / 2 + 6" bind:y="ph * (1 - clamp(meter.hold_left, 0, 1))" bind:visible="meter.hold_left > 0.002" bind:fill="$meter.warn" />
+        <Rectangle name="Hold right" w=5 h=1 bind:x="pw / 2 + 13" bind:y="ph * (1 - clamp(meter.hold_right, 0, 1))" bind:visible="meter.hold_right > 0.002" bind:fill="$meter.warn" />
+        <Rectangle name="Clip" w=12 h=3 y=-4 bind:x="pw / 2 + 6" bind:fill="meter.clip ? $meter.danger : #2d0000" />
+        <!-- the cap: light, a dark line across its middle -->
+        <Frame name="Cap" w=16 h=30 bind:x="pw / 2 - 17.5" bind:y="clamp(ph * (1 - clamp(track.fader, 0, 1)), 0, ph) - 15">
+          <Rectangle name="Shade" w=16 h=30 radius=2 bind:fill="$local.fader_cap_shade" />
+          <Rectangle name="Top" x=1 y=1 w=14 h=13 radius=1 bind:fill="ui.pressed == \"fader\" ? lighten($local.fader_cap, 0.06) : $local.fader_cap" />
+          <Rectangle name="Bottom" x=1 y=16 w=14 h=13 radius=1 bind:fill="ui.pressed == \"fader\" ? lighten($local.fader_cap, 0.06) : $local.fader_cap" />
+          <Rectangle name="Line" x=1 y=14 w=14 h=2 fill="#2a2a2a" />
+        </Frame>
+      </Frame>
+      <Instance name="Volume" of="volume" x=6 w=68 h=15 bind:w="w - 12" bind:y="h - 44" arg:value="track.fader" arg:label="track.volume_label" />
+      <Rectangle name="Plate" x=2 w=76 h=18 bind:y="h - 24" bind:w="w - 5" bind:fill="track.selected ? $local.plate_selected : $local.plate" />
+      <Vector name="Fold open" x=5 w=7 h=5 geometry="M 0 0 L 7 0 L 3.5 5 Z" bind:y="h - 17" bind:visible="track.folder && !track.collapsed" bind:fill="$local.plate_ink" />
+      <Vector name="Fold shut" x=6 w=5 h=7 geometry="M 0 0 L 5 3.5 L 0 7 Z" bind:y="h - 18" bind:visible="track.folder && track.collapsed" bind:fill="$local.plate_ink" />
+      <Text name="Name" w=400 h=14 size=11 weight=700 text-align="center" bind:x="(w - 400) / 2 + (track.folder ? 4 : 0)" bind:y="h - 24 + (18 - 1.1 * min(track.label_size, 11)) / 2" bind:size="min(track.label_size, 11)" bind:text="track.label" bind:fill="track.selected ? $local.plate_selected_ink : $local.plate_ink">Track</Text>
+      <Frame name="@fx" w=10 h=10 bind:x="0" bind:y="14" bind:w="w" bind:h="101" bind:visible="h >= 520" />
+      <Frame name="@routing" w=10 h=10 bind:x="4" bind:y="(14 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 31" bind:w="w - 9" bind:h="15" />
+      <Frame name="@pan" w=10 h=10 bind:x="(w - 32) / 2" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 4" bind:w="32" bind:h="32" />
+      <Frame name="@monitor" w=10 h=10 bind:x="w / 2 - 26" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 58" bind:w="24" bind:h="16" bind:visible="!ui.mixing" />
+      <Frame name="@arm" w=10 h=10 bind:x="w / 2 + 2" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 58" bind:w="24" bind:h="16" bind:visible="!ui.mixing" />
+      <Frame name="@solo" w=10 h=10 bind:x="w / 2 - 26" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 78" bind:w="24" bind:h="16" />
+      <Frame name="@mute" w=10 h=10 bind:x="w / 2 + 2" bind:y="(64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 78" bind:w="24" bind:h="16" />
+      <Frame name="@fader" w=10 h=10 bind:x="0" bind:y="((64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 104)" bind:w="w / 2 + 4" bind:h="max(h - 50 - ((64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 104), 0)" />
+      <Frame name="@clip" w=10 h=10 bind:x="w / 2 + 6" bind:y="((64 + (h >= 520 ? 101 : 0) + (h >= 640 ? 101 : 0)) + 104) - 4" bind:w="12" bind:h="5" />
+      <Frame name="@name" w=10 h=10 bind:x="0" bind:y="h - 24" bind:w="w" bind:h="18" />
+      <Frame name="@folder" w=10 h=10 bind:x="0" bind:y="h - 24" bind:w="14" bind:h="18" bind:visible="track.folder" />
+    </Frame>
+  </Page>
+  <Page name="mcp.rackback">
+    <Frame name="Back" w=80 h=300>
+      <Rectangle name="Ground" w=80 h=300 bind:w="w" bind:h="h" bind:fill="$local.strip_upper" />
+      <Rectangle name="Edge" w=1 h=300 bind:x="w - 1" bind:h="h" bind:fill="$local.strip_edge" />
+    </Frame>
+  </Page>
+  <Page name="mcp.step">
+    <Frame name="Step" w=80 h=12>
+      <Rectangle name="Band" w=80 h=12 bind:w="w" bind:h="h" bind:fill="folder.tint" />
+      <Rectangle name="Rule" w=80 h=1 bind:w="w" bind:y="h - 1" bind:fill="$border" />
+    </Frame>
+  </Page>
+</Document>

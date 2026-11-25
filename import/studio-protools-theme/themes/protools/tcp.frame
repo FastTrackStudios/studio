@@ -1,0 +1,48 @@
+<Document>
+  <!-- The Edit window's track header. A bar of the track's colour down
+       the left; the name on a dark plate (light when selected); record,
+       input, solo and mute under it; on a taller track the volume and pan
+       readouts, then the output and the inserts. A two-bar meter runs down
+       the right. A short track puts the buttons beside the name. -->
+  <Page name="tcp.row">
+    <Frame name="Row" w=343 h=60>
+      <Rectangle name="Ground" w=343 h=60 bind:w="w" bind:h="h" bind:fill="$tcp.tint" />
+      <Rectangle name="Column" w=20 h=60 bind:w="row.indent" bind:h="h" bind:fill="$tcp.column" bind:visible="row.indent > 0" />
+      <Rectangle name="Colour" w=6 h=60 bind:x="row.indent" bind:h="h - 1" bind:fill="track.has_color ? track.color : $local.no_color" />
+      <Rectangle name="Divider" w=343 h=1 bind:w="w" bind:y="h - 1" bind:fill="$border" />
+      <Rectangle name="Edge" w=1 h=60 bind:x="w - 1" bind:h="h" bind:fill="$border" />
+      <Frame name="Body" w=343 h=60 bind:w="w" bind:h="h" bind:visible="h >= 12">
+        <Rectangle name="Plate" w=200 h=16 radius=1 bind:x="(row.indent + 10)" bind:y="(h >= 40 ? 4 : clamp((h - 16) / 2, 0, 4))" bind:w="max(w - (row.indent + 10) - 30 - (h >= 40 ? 0 : 106), 0)" bind:fill="track.selected ? $local.name_selected : $local.name" />
+        <Vector name="Open" w=7 h=5 geometry="M 0 0 L 7 0 L 3.5 5 Z" bind:x="(row.indent + 10) + 4" bind:y="(h >= 40 ? 4 : clamp((h - 16) / 2, 0, 4)) + 6" bind:visible="track.folder && !track.collapsed" bind:fill="track.selected ? $local.plate_selected_ink : $local.name_ink" />
+        <Vector name="Shut" w=5 h=7 geometry="M 0 0 L 5 3.5 L 0 7 Z" bind:x="(row.indent + 10) + 5" bind:y="(h >= 40 ? 4 : clamp((h - 16) / 2, 0, 4)) + 5" bind:visible="track.folder && track.collapsed" bind:fill="track.selected ? $local.plate_selected_ink : $local.name_ink" />
+        <Text name="Name" w=400 h=14 size=11 weight=700 text-align="center" bind:x="(row.indent + 10) + (max(w - (row.indent + 10) - 30 - (h >= 40 ? 0 : 106), 0) - 400) / 2 + (track.folder ? 6 : 0)" bind:y="(h >= 40 ? 4 : clamp((h - 16) / 2, 0, 4)) + (16 - 1.1 * min(row.name_size, 11)) / 2" bind:size="min(row.name_size, 11)" bind:text="row.name" bind:fill="track.selected ? $local.plate_selected_ink : $local.name_ink">Track</Text>
+        <Instance name="Arm" of="arm" w=24 h=16 bind:x="(h >= 40 ? (row.indent + 10) : w - 30 - 102)" bind:y="(h >= 40 ? 24 : clamp((h - 16) / 2, 0, 4))" bind:visible="ui.recording" arg:armed="track.armed" />
+        <Instance name="Input" of="monitor" w=24 h=16 bind:x="(h >= 40 ? (row.indent + 10) : w - 30 - 102) + 26" bind:y="(h >= 40 ? 24 : clamp((h - 16) / 2, 0, 4))" bind:visible="ui.recording" arg:mode="track.monitor" />
+        <Instance name="Solo" of="solo" w=24 h=16 bind:x="((h >= 40 ? (row.indent + 10) : w - 30 - 102) + (ui.recording ? 52 : 0))" bind:y="(h >= 40 ? 24 : clamp((h - 16) / 2, 0, 4))" arg:on="track.solo" />
+        <Instance name="Mute" of="mute" w=24 h=16 bind:x="((h >= 40 ? (row.indent + 10) : w - 30 - 102) + (ui.recording ? 52 : 0)) + 26" bind:y="(h >= 40 ? 24 : clamp((h - 16) / 2, 0, 4))" arg:on="track.mute" arg:label="fmt(track.number)" />
+        <Frame name="Row three" w=343 h=60 bind:w="w" bind:h="h" bind:visible="h >= 62">
+          <Instance name="Volume" of="volume" w=58 h=15 y=44 bind:x="(row.indent + 10)" arg:value="track.fader" arg:label="track.volume_label" />
+          <Rectangle name="Pan readout" w=44 h=15 y=44 radius=1 bind:x="(row.indent + 10) + 62" bind:fill="$local.readout" />
+          <Text name="Pan value" w=400 h=12 y=46 size=9 weight=700 text-align="center" bind:x="(row.indent + 10) + 62 + (44 - 400) / 2" bind:text="abs(track.pan) < 0.005 ? \"pan 0\" : (track.pan < 0 ? \"‹\" + fmt(round(abs(track.pan) * 100)) : fmt(round(track.pan * 100)) + \"›\")" bind:fill="$local.readout_ink">pan 0</Text>
+        </Frame>
+        <Frame name="Row four" w=343 h=60 bind:w="w" bind:h="h" bind:visible="h >= 84">
+          <Instance name="Routing" of="routing" w=100 h=15 y=64 bind:x="(row.indent + 10)" arg:parent_send="track.parent_send" arg:sends="track.sends" arg:receives="track.receives" />
+          <Instance name="FX" of="fx" w=72 h=15 y=64 bind:x="(row.indent + 10) + 104" arg:count="track.fx" />
+        </Frame>
+        <Rectangle name="Meter well" w=12 h=40 bind:x="w - 22" bind:y="clamp((h - 16) / 2, 1, 4)" bind:h="max(h - 2 * clamp((h - 16) / 2, 1, 4), 1)" bind:fill="$meter.well" />
+        <Rectangle name="Meter left" w=5 h=40 bind:x="w - 22" bind:y="clamp((h - 16) / 2, 1, 4)" bind:h="max(h - 2 * clamp((h - 16) / 2, 1, 4), 1)" bind:inset-top="max(h - 2 * clamp((h - 16) / 2, 1, 4), 1) * (1 - clamp(meter.left, 0, 1))" bind:visible="meter.left > 0.002" bind:fill="meter.left >= 0.8235 ? $meter.danger : (meter.left >= 0.72 ? $meter.warn : $meter.safe)" />
+        <Rectangle name="Meter right" w=5 h=40 bind:x="w - 15" bind:y="clamp((h - 16) / 2, 1, 4)" bind:h="max(h - 2 * clamp((h - 16) / 2, 1, 4), 1)" bind:inset-top="max(h - 2 * clamp((h - 16) / 2, 1, 4), 1) * (1 - clamp(meter.right, 0, 1))" bind:visible="meter.right > 0.002" bind:fill="meter.right >= 0.8235 ? $meter.danger : (meter.right >= 0.72 ? $meter.warn : $meter.safe)" />
+        <Frame name="@name" w=10 h=10 bind:x="(row.indent + 10)" bind:y="(h >= 40 ? 4 : clamp((h - 16) / 2, 0, 4))" bind:w="max(w - (row.indent + 10) - 30 - (h >= 40 ? 0 : 106), 0)" bind:h="16" />
+        <Frame name="@folder" w=10 h=10 bind:x="(row.indent + 10)" bind:y="(h >= 40 ? 4 : clamp((h - 16) / 2, 0, 4))" bind:w="14" bind:h="16" bind:visible="track.folder" />
+        <Frame name="@arm" w=10 h=10 bind:x="(h >= 40 ? (row.indent + 10) : w - 30 - 102)" bind:y="(h >= 40 ? 24 : clamp((h - 16) / 2, 0, 4))" bind:w="24" bind:h="16" bind:visible="ui.recording" />
+        <Frame name="@monitor" w=10 h=10 bind:x="(h >= 40 ? (row.indent + 10) : w - 30 - 102) + 26" bind:y="(h >= 40 ? 24 : clamp((h - 16) / 2, 0, 4))" bind:w="24" bind:h="16" bind:visible="ui.recording" />
+        <Frame name="@solo" w=10 h=10 bind:x="((h >= 40 ? (row.indent + 10) : w - 30 - 102) + (ui.recording ? 52 : 0))" bind:y="(h >= 40 ? 24 : clamp((h - 16) / 2, 0, 4))" bind:w="24" bind:h="16" />
+        <Frame name="@mute" w=10 h=10 bind:x="((h >= 40 ? (row.indent + 10) : w - 30 - 102) + (ui.recording ? 52 : 0)) + 26" bind:y="(h >= 40 ? 24 : clamp((h - 16) / 2, 0, 4))" bind:w="24" bind:h="16" />
+        <Frame name="@volume" w=10 h=10 bind:x="(row.indent + 10)" bind:y="44" bind:w="58" bind:h="15" bind:visible="h >= 62" />
+        <Frame name="@pan" w=10 h=10 bind:x="(row.indent + 10) + 62" bind:y="44" bind:w="44" bind:h="15" bind:visible="h >= 62" />
+        <Frame name="@routing" w=10 h=10 bind:x="(row.indent + 10)" bind:y="64" bind:w="100" bind:h="15" bind:visible="h >= 84" />
+        <Frame name="@fx" w=10 h=10 bind:x="(row.indent + 10) + 104" bind:y="64" bind:w="72" bind:h="15" bind:visible="h >= 84" />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

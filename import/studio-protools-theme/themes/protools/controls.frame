@@ -1,0 +1,80 @@
+<Document>
+  <!-- The shared controls, one component each; the track header and the
+       mixer strip place the same ones. Grey faces with a one-pixel dark
+       outline and a highlight along the top, white glyphs; a lit face
+       takes the state's colour and a dark glyph. Hover lifts the face, a
+       press darkens it. -->
+  <Page name="controls">
+    <!-- Mute: an M, orange when lit. -->
+    <Component name="mute" w=24 h=16 arg:on="false" arg:label="\"\"">
+      <Rectangle name="Face" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="arg.on ? $mute : $hardware" />
+      <Rectangle name="Sheen" x=1 y=1 w=22 h=1 bind:w="pw - 2" bind:fill="$sheen" />
+      <Rectangle name="Hover" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="#ffffff1c" bind:visible="ui.hover == \"mute\" && ui.pressed == \"\"" />
+      <Rectangle name="Pressed" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="#00000033" bind:visible="ui.pressed == \"mute\"" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=23 h=15 radius=2 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="M" w=400 h=14 size=11 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 13) / 2" bind:fill="arg.on ? $local.lit_ink : $local.button_ink">M</Text>
+    </Component>
+    <!-- Solo: an S, yellow when lit. -->
+    <Component name="solo" w=24 h=16 arg:on="false">
+      <Rectangle name="Face" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="arg.on ? $solo : $hardware" />
+      <Rectangle name="Sheen" x=1 y=1 w=22 h=1 bind:w="pw - 2" bind:fill="$sheen" />
+      <Rectangle name="Hover" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="#ffffff1c" bind:visible="ui.hover == \"solo\" && ui.pressed == \"\"" />
+      <Rectangle name="Pressed" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="#00000033" bind:visible="ui.pressed == \"solo\"" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=23 h=15 radius=2 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="S" w=400 h=14 size=11 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 13) / 2" bind:fill="arg.on ? $local.lit_ink : $local.button_ink">S</Text>
+    </Component>
+    <!-- Record arm: a dot on a dark red face, the face red when armed. -->
+    <Component name="arm" w=24 h=16 arg:armed="false">
+      <Rectangle name="Face" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="arg.armed ? $rec : $local.rec_off" />
+      <Rectangle name="Sheen" x=1 y=1 w=22 h=1 bind:w="pw - 2" bind:fill="$sheen" />
+      <Rectangle name="Hover" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="#ffffff1c" bind:visible="ui.hover == \"arm\" && ui.pressed == \"\"" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=23 h=15 radius=2 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Ellipse name="Dot" w=8 h=8 bind:x="(pw - 8) / 2" bind:y="(ph - 8) / 2" bind:fill="arg.armed ? #ffffff : $local.rec_dot" />
+    </Component>
+    <!-- Input monitoring: an I, green when on, orange on auto. -->
+    <Component name="monitor" w=24 h=16 arg:mode="0">
+      <Rectangle name="Face" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="arg.mode == 1 ? $monitor.tape : (arg.mode == 2 ? $local.monitor_auto : $hardware)" />
+      <Rectangle name="Sheen" x=1 y=1 w=22 h=1 bind:w="pw - 2" bind:fill="$sheen" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=23 h=15 radius=2 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Rectangle name="I" w=2 h=8 bind:x="(pw - 2) / 2" bind:y="(ph - 8) / 2" bind:fill="arg.mode == 0 ? $local.button_ink : $local.lit_ink" />
+    </Component>
+    <Component name="phase" w=24 h=16 arg:on="false">
+      <Rectangle name="Face" w=24 h=16 radius=2 bind:w="pw" bind:h="ph" bind:fill="arg.on ? $accent : $hardware" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=23 h=15 radius=2 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Polarity" w=400 h=14 size=10 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 12) / 2" bind:fill="$local.button_ink">Ø</Text>
+    </Component>
+    <!-- The pan knob: a dark knob in a grey rim, a white pointer, and a
+         green light that walks round the rim to the value. -->
+    <Component name="pan" w=32 h=32 arg:value="0">
+      <Ellipse name="Rim" x=3 y=3 w=26 h=26 bind:fill="$local.knob_rim" />
+      <Ellipse name="Well" x=4 y=4 w=24 h=24 fill="#141414" />
+      <Ellipse name="Knob" x=6 y=6 w=20 h=20 bind:fill="ui.hover == \"pan\" || ui.pressed == \"pan\" ? lighten($local.knob, 0.12) : $local.knob" />
+      <Vector name="Pointer" x=16 y=16 w=1 h=1 geometry="M -1 -9 L 1 -9 L 1 -2 L -1 -2 Z" fill="#f0f0f0" bind:rotation="clamp(arg.value, -1, 1) * 140" />
+      <Ellipse name="Light" w=4 h=4 bind:x="16 + 14 * sin(clamp(arg.value, -1, 1) * 2.4435) - 2" bind:y="16 - 14 * cos(clamp(arg.value, -1, 1) * 2.4435) - 2" bind:fill="$pan" />
+    </Component>
+    <!-- Volume: a black readout, the gain in green. -->
+    <Component name="volume" w=58 h=15 arg:value="0" arg:label="\"\"">
+      <Rectangle name="Well" w=58 h=15 radius=1 bind:w="pw" bind:h="ph" bind:fill="$local.readout" />
+      <Rectangle name="Edge" y=0 w=58 h=1 bind:w="pw" fill="#00000080" />
+      <Text name="Gain" x=5 w=400 h=12 size=9 weight=700 bind:y="(ph - 11) / 2" bind:text="arg.label" bind:fill="$local.readout_ink">0.0</Text>
+    </Component>
+    <!-- FX: a dark slot reading how many inserts the track has. -->
+    <Component name="fx" w=58 h=15 arg:count="0">
+      <Rectangle name="Face" w=58 h=15 radius=1 bind:w="pw" bind:h="ph" bind:fill="arg.count > 0 ? $local.slot_full : $local.slot" />
+      <Rectangle name="Hover" w=58 h=15 radius=1 bind:w="pw" bind:h="ph" bind:fill="#ffffff1c" bind:visible="ui.hover == \"fx\" && ui.pressed == \"\"" />
+      <Ellipse name="Dot" x=4 w=3 h=3 bind:y="(ph - 3) / 2" bind:fill="arg.count > 0 ? $local.slot_ink : $text.faint" />
+      <Text name="Inserts" w=400 h=12 size=9 weight=700 text-align="center" bind:x="(pw - 400) / 2" bind:y="(ph - 11) / 2" bind:visible="arg.count > 0" bind:text="fmt(arg.count) + (arg.count == 1 ? \" insert\" : \" inserts\")" bind:fill="$local.slot_ink">2 inserts</Text>
+    </Component>
+    <!-- Where the track goes: a light I/O selector with its caret, a mark
+         for sends and receives. -->
+    <Component name="routing" w=72 h=15 arg:parent_send="true" arg:sends="0" arg:receives="0">
+      <Rectangle name="Face" w=72 h=15 radius=2 bind:w="pw" bind:h="ph" bind:fill="$local.dropdown" />
+      <Rectangle name="Sheen" x=1 y=1 w=70 h=1 bind:w="pw - 2" fill="#ffffff40" />
+      <Rectangle name="Outline" x=0.5 y=0.5 w=71 h=14 radius=2 stroke-weight=1 stroke-align="center" bind:w="pw - 1" bind:h="ph - 1" bind:stroke="$hardware.edge" />
+      <Text name="Out" w=400 h=12 size=9 weight=700 text-align="center" bind:x="(pw - 14 - 400) / 2" bind:y="(ph - 11) / 2" bind:text="arg.parent_send ? \"Main\" : \"no output\"" bind:fill="arg.parent_send ? $local.dropdown_ink : #5a5a5a">Main</Text>
+      <Rectangle name="Send" w=3 h=3 bind:x="4" bind:y="ph / 2 - 1.5" bind:visible="arg.sends > 0" bind:fill="$route.send" />
+      <Rectangle name="Receive" w=3 h=3 bind:x="4" bind:y="ph / 2 + 2" bind:visible="arg.receives > 0" bind:fill="$route.recv" />
+      <Vector name="Caret" w=7 h=4 geometry="M 0 0 L 7 0 L 3.5 4 Z" bind:x="pw - 11" bind:y="(ph - 4) / 2" bind:fill="$local.dropdown_ink" />
+    </Component>
+  </Page>
+</Document>
