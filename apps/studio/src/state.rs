@@ -144,6 +144,9 @@ pub struct Place {
     /// The folder's path in its location.
     pub folder: String,
     pub chart: Option<crate::files::Hit>,
+    /// The arrangement the set plays (`@Live` on its line): a branch of the
+    /// song's session file. `None`: the song as recorded.
+    pub arrangement: Option<String>,
 }
 
 /// The playing song's audio, as the player found it.

@@ -36,11 +36,17 @@ pub fn EngineHost() -> Element {
                 if p.location != crate::files::DISK || p.folder.is_empty() {
                     return None;
                 }
-                files
+                let file = files
                     .borrow_mut()
                     .entry(p.folder.clone())
                     .or_insert_with(|| crate::session_file::song_file(&p.folder))
-                    .clone()
+                    .clone();
+                // An arrangement is its own branch of the song's file
+                // (`Song.session/Live`), which the engine opens as such.
+                match &p.arrangement {
+                    Some(name) => file.map(|f| f.join(name)),
+                    None => file,
+                }
             };
             let set: Vec<Option<PathBuf>> = n
                 .places
