@@ -329,13 +329,14 @@ impl Plugin for FtsSignalController {
 
         // ── 2. Process MIDI note events for scene switching ────────
         while let Some(event) = context.next_event() {
-            if let NoteEvent::NoteOn { note, .. } = event {
-                if (SCENE_SWITCH_BASE_NOTE..SCENE_SWITCH_BASE_NOTE + MAX_SCENES).contains(&note) {
-                    let scene = i32::from(note - SCENE_SWITCH_BASE_NOTE + 1);
-                    self.ui_state
-                        .requested_scene
-                        .store(scene, Ordering::Relaxed);
-                }
+            if let NoteEvent::NoteOn { key, .. } = event
+                && let Some(note) = key.number()
+                && (SCENE_SWITCH_BASE_NOTE..SCENE_SWITCH_BASE_NOTE + MAX_SCENES).contains(&note)
+            {
+                let scene = i32::from(note - SCENE_SWITCH_BASE_NOTE + 1);
+                self.ui_state
+                    .requested_scene
+                    .store(scene, Ordering::Relaxed);
             }
         }
 
