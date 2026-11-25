@@ -2,6 +2,7 @@
 //! resynthesis behind swappable backend traits (`PitchDetector`, `NoteSegmenter`,
 //! `PitchSynthesizer`).
 
+pub mod analyze;
 pub mod backends;
 pub mod correct;
 pub mod detect;
@@ -10,6 +11,7 @@ pub mod model;
 pub mod note;
 pub mod tracker;
 
+pub use analyze::{AnalyzeConfig, TuneAnalysis, analyze};
 pub use backends::{
     BackendInfo, EditableNote, NoteSegmenter, PitchAnalysisDoc, PitchDetector, PitchRegistry,
     PitchSynthesizer,
