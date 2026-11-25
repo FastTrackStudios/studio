@@ -1,294 +1,151 @@
-# `cargo xtask boundaries` (FastTrackStudios/architect xtask, STA-268): the
-# layer table for architect's docs/content/architecture/layout.md, applied to
-# studio (Session + Signal). Run with `just ci-boundaries`.
+# The monorepo's layout rules, checked by scripts/boundaries.py
+# (`just boundaries`, part of `just check`, `just ci-local` and CI).
+# Why the groups exist: crates/studio-*/AGENTS.md and the root AGENTS.md.
 #
-# Each [[row]] is a package + feature set, resolved with `cargo tree -p`:
-#   L0  contract: resolved for wasm32; must not reach an engine/storage/host/UI
-#       package, a tokio runtime, or a transport-host/server architect feature.
-#   L4  ui: must not reach an engine/storage/host package or a server feature.
-#   L1  everything else in features/ (engine, storage, glue): recorded, not
-#       constrained, until each feature folds into one crate with flags.
-# Workspace rules: nothing outside apps/ enables a transport host by default;
-# every member has `[lints] workspace = true`; one architect source in
-# Cargo.lock; every feature crate has a row.
+#   May depend on ->   core   connect   engine
+#   studio-core         yes     no        no
+#   studio-connect      yes     yes       no
+#   studio-engine       yes     no        yes
+#   apps/studio         yes     yes       yes
 #
-# studio already uses one crate per feature. L0 rows: crates with a `vox`
-# flag or a proto crate (their default set is the contract). L4 rows: each
-# crate's `ui`/`dioxus` flag and the remaining *-ui crates. L1: engines,
-# DSP and REAPER adapters (native by design; recorded, not constrained).
+# The one exception: the plugin bundles (crates/studio-engine/plugins/*) ship
+# their own GUI, so they may use crates/studio-connect/plugin-ui/*. Nothing
+# depends on a bundle.
 #
-# [baseline] is today's count per rule. Above it fails; below it fails until
-# you lower it here, so the numbers only go down.
+# The promise: no core or engine crate (the bundles aside) resolves Dioxus,
+# Blitz, app-shell or a studio-connect crate. The engine builds, runs and is
+# tested without the UI.
+#
+# This replaces the layer table for architect's `xtask boundaries`, whose
+# rows named the pre-monorepo crates. That tool can't group members by
+# directory, and it refuses unknown keys, so the two can't share this file.
 
-contract-target = "wasm32-unknown-unknown"
-# plugins/ and features/engine/ were under apps/ until the restructure
-# (apps/desktop and apps/web); they keep the host treatment until they get
-# rows of their own.
-host-dirs = ["apps", "plugins", "features/engine"]
-unmapped-ok = ["features/adapters/reaper/tests", "studio-adapters:features/adapters/reaper/daw-reaper/xtask"]
-single-source = ["architect", "architect-*", "auth", "auth-*", "crdt", "crdt-*", "ui-snapshot"]
+# Each member's group is the longest of these directories that holds it.
+[groups]
+core = "crates/studio-core"
+connect = "crates/studio-connect"
+engine = "crates/studio-engine"
+app = "apps"
+# Build tooling (the bundler, the CI generator, dev CLIs) and vendored
+# third-party crates.
+tools = ["xtask", "vendor"]
 
-[forbidden]
-engine = [
-    "sea-orm", "sea-orm-migration", "sqlx", "rusqlite", "libsql", "turso",
-    "axum", "tower-http", "iroh", "tokio-tungstenite",
+# What a member of each group may declare a path dependency on.
+[may-depend-on]
+core = ["core", "tools"]
+connect = ["core", "connect", "tools"]
+engine = ["core", "engine", "tools"]
+app = ["core", "connect", "engine", "app", "tools"]
+tools = ["*"]
+
+[[exception]]
+from = "crates/studio-engine/plugins/*"
+to = "crates/studio-connect/plugin-ui/*"
+
+[promise]
+groups = ["core", "engine"]
+exempt = ["crates/studio-engine/plugins"]
+forbidden = ["dioxus", "blitz", "app-shell", "studio-connect"]
+
+# Frame's core boundary (frame's scripts/check-core-boundary.sh): plugin GUIs
+# and hosts without architect link only the core, and architect never
+# depends on Frame.
+[[deny]]
+package = "frame"
+all-features = true
+forbidden = ["architect", "vox", "dioxus", "figcraft", "crdt"]
+why = "frame's core links no architect, vox, Dioxus, figcraft or crdt"
+
+# `just test <group>` runs every member of the group except these.
+[test]
+skip = [
+    # They drive a real, licensed REAPER.
+    "daw-perf-test",
+    "daw-reaper-dioxus-ext-test",
+    "session-reaper-xtask",
 ]
-ui = ["dioxus", "dioxus-core", "dioxus-web", "dioxus-desktop", "blitz-dom", "vello"]
-tokio-runtime = ["rt", "rt-multi-thread"]
-transport-host = ["host", "server", "server-axum", "http", "iroh", "dispatch-tokio"]
-architect-server = ["server-seaorm"]
 
-# A hand-written axum route describes a capability a second time; the trait
-# (#[architect::service] / #[architect::rpc], mounted by EngineHost) is the
-# one description.
-[[idiom]]
-name = "hand-routes"
-pattern = ".route("
-instead = "a #[architect::service] trait mounted by EngineHost"
+# ── Allow-list ─────────────────────────────────────────────────────────────
+# Written by `just boundaries tighten`, which only removes entries.
+# TODO(untangle): every entry below is a violation the untangling removes
+# (docs/MONOREPO-MIGRATION.md, the plan's "What has to be untangled").
+# Never add one: fix the dependency instead.
 
-[baseline]
-# 2026-10-21 first run (architect xtask d644a04, studio dev 5849ca8), 5m30s.
-#   contract-clean 17: tokio/rt 7, tokio/rt-multi-thread 3, dioxus/dioxus-core 6, vello 1.
-#   ui-reach 7: comp/drums/editor/guitar/keys/mic/synth `ui` reach tower-http.
-#   transport-host 2: session-extension enables architect/iroh + server-axum
-#   (session-extension was removed 2026-11-25; re-measure).
-#   lints 22: 9 vendored crates, 13 studio crates (align-dsp, fts-sample, ...).
-#   single-source 0, unmapped 0.
-#   hand-routes 31: sampler node_render 6, studio-desktop engine_tone3000 4 + engine_watch 4, ...
-# ratcheted down 2026-10-22 (STA-356): contract-clean 17 -> 14, ui-reach 7 -> 6 (CI measured 14 and 6).
-# ratcheted down 2026-10-23: lints 22 -> 14, the vendored forks gone to FastTrackStudios/vendor (CI measured 14).
-contract-clean = 14
-ui-reach = 6
-transport-host = 2
-# 2026-11-17: the base crates moved to FastTrackStudios/daw (studio#510), so
-# the rows for `midi` (L0, and L4 with `ui`) and `audio` (L1) went with them,
-# and two of the members counted under `lints` (utils, fts-sample: no
-# `[lints] workspace = true`) are no longer members. 14 -> 12 is that
-# arithmetic, NOT a measured run; contract-clean and ui-reach are unchanged
-# here and may be lower without the `midi` rows. Re-measure with
-# `just ci-boundaries`.
-# 2026-11-17: Signal's crates moved to FastTrackStudios/signal (studio#510);
-# their rows went with them, and two members counted under `lints`
-# (openwurli-dsp, tone3000: no `[lints] workspace = true`) are no longer
-# members. 12 -> 10 is that arithmetic, NOT a measured run; the other
-# baselines may be lower without the rigs' rows. Re-measure with
-# `just ci-boundaries`.
-# 2026-11-17: the adapters moved to FastTrackStudios/studio-adapters
-# (studio#510); their rows went with them, and three members counted
-# under `lints` (reaper-dioxus, reaper-embed, swell-ui: no `[lints]
-# workspace = true`) are no longer members. 10 -> 7 is that arithmetic,
-# NOT a measured run. Re-measure with `just ci-boundaries`.
-lints = 7
-hand-routes = 31
+# member -> the workspace crates it declares across a group line.
+[allow.edges]
+"arrangement-view" = ["daw", "daw-control"]
+"daw-extension" = ["daw-ui"]
+"daw-proto" = ["daw-transport-sync", "midi"]
+"daw-reaper-dioxus-ext" = ["daw-ui"]
+"daw-ui" = ["daw-control"]
+"daw-view" = ["daw", "daw-control", "daw-standalone", "dsp"]
+"daw-view-kit" = ["daw", "daw-control", "rhythm-hits", "signal-effects"]
+"daw-view-tools" = ["daw", "daw-control", "dynamic-template", "engine-domain", "studio", "studio-engine"]
+"drums-ui" = ["drums", "midi"]
+"editing" = ["plugin-ui"]
+"editor" = ["daw", "daw-control", "daw-test-macro", "dawfile-reaper", "fts-sample", "pitch-core"]
+"engine-client" = ["daw", "daw-control", "daw-standalone", "dsp-core", "dynamic-template", "editing", "engine-domain", "engine-runtime", "signal-effects", "studio"]
+"engine-domain" = ["lyrics-ui"]
+"engine-host" = ["app-shell", "arrangement-view", "daw-ui", "daw-view-kit", "dock", "fts-account", "fts-audio-ui", "midi-editor", "mixer-view", "studio-panels", "studio-ui"]
+"frame-doc" = ["plugin-faces"]
+"fts-audio-ui" = ["dsp-core"]
+"fts-model-comp" = ["plugin-ui"]
+"fts-model-delay" = ["plugin-ui"]
+"fts-model-eq" = ["plugin-ui"]
+"fts-model-reverb" = ["plugin-ui"]
+"fts-model-saturate" = ["plugin-ui"]
+"guitar-ui" = ["audio", "drums", "guitar", "signal-grid", "signal-rig-host"]
+"ignition" = ["ignition-viz"]
+"ignition-live-ui" = ["ignition-core"]
+"ignition-pane" = ["ignition-core", "ignition-daw", "ignition-show"]
+"ignition-session" = ["ignition-show"]
+"ignition-viz" = ["ignition-beams", "ignition-core", "ignition-dmx", "ignition-fixture"]
+"keyflow" = ["dawfile-reaper"]
+"keyflow-lang" = ["fts-sample"]
+"keys-ui" = ["keys", "midi"]
+"library-sync" = ["fts-account"]
+"midi-editor" = ["daw"]
+"midi-ui" = ["midi"]
+"mixer-view" = ["signal-effects"]
+"nam-plugin" = ["signal-tone3000"]
+"patch-list" = ["daw-standalone", "dynamic-template"]
+"plugin-ui" = ["dsp", "dsp-core", "plugin-core"]
+"reaper-input" = ["keybinds"]
+"session-format" = ["dawfile-reaper"]
+"session-sync" = ["daw-transport-sync"]
+"signal-grid-ui" = ["signal-grid"]
+"signal-proto" = ["signal-macromod"]
+"signal-tone3000" = ["signal-nam"]
+"signal-widgets" = ["plugin-core"]
+"song" = ["synth"]
+"studio-arrangement" = ["engine-domain", "studio-engine"]
+"studio-engine" = ["app-shell", "daw-ui", "dock", "editor", "engine-client", "fts-account", "plugin-ui", "timeline"]
+"studio-mixer" = ["engine-domain", "studio-engine"]
+"studio-navigator" = ["studio-engine"]
+"studio-panels" = ["daw", "daw-control", "dynamic-template", "engine-domain", "studio-engine"]
+"studio-ui" = ["daw", "dynamic-template"]
+"studio-view-link" = ["engine-domain", "studio-engine"]
+"synth-ui" = ["midi", "synth"]
+"themer" = ["daw", "studio"]
 
-# ── L0 contracts ──
-[[row]]
-package = "session"
-layer = "L0"
-
-# ── L4 ui ──
-[[row]]
-package = "comp"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "daw-ui"
-layer = "L4"
-note = "sibling ui crate; fold in as a ui flag"
-
-[[row]]
-package = "delay"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "dock"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "editor"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "eq"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "mic"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "modulation"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "reverb"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "saturate"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "session"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "trigger"
-features = ["ui"]
-layer = "L4"
-
-# ── L1 engine / DSP / adapters ──
-[[row]]
-package = "align-dsp"
-layer = "L1"
-
-[[row]]
-package = "app-shell"
-layer = "L1"
-
-[[row]]
-package = "fts-account"
-layer = "L1"
-
-[[row]]
-package = "audio-controls"
-layer = "L1"
-
-[[row]]
-package = "comp"
-layer = "L1"
-
-[[row]]
-package = "control-surfaces"
-layer = "L1"
-
-[[row]]
-package = "daw-reaper-dioxus-ext"
-layer = "L1"
-
-[[row]]
-package = "delay"
-layer = "L1"
-
-[[row]]
-package = "dock"
-layer = "L1"
-
-[[row]]
-package = "dynamic-template"
-layer = "L1"
-
-[[row]]
-package = "editing"
-layer = "L1"
-
-[[row]]
-package = "editor"
-layer = "L1"
-
-[[row]]
-package = "eq"
-layer = "L1"
-
-[[row]]
-package = "fts-sample"
-layer = "L1"
-
-[[row]]
-package = "fx-stack"
-layer = "L1"
-
-[[row]]
-package = "gate"
-layer = "L1"
-
-[[row]]
-package = "hits"
-layer = "L1"
-
-[[row]]
-package = "launcher"
-layer = "L1"
-
-[[row]]
-package = "level"
-layer = "L1"
-
-[[row]]
-package = "mic"
-layer = "L1"
-
-[[row]]
-package = "modulation"
-layer = "L1"
-
-[[row]]
-package = "multiband-dsp"
-layer = "L1"
-
-[[row]]
-package = "patch-list"
-layer = "L1"
-
-[[row]]
-package = "pitch"
-layer = "L1"
-
-[[row]]
-package = "plugin-faces"
-layer = "L1"
-
-[[row]]
-package = "reverb"
-layer = "L1"
-
-[[row]]
-package = "saturate"
-layer = "L1"
-
-[[row]]
-package = "signal-analyzer"
-layer = "L1"
-
-[[row]]
-package = "signal-separator"
-layer = "L1"
-
-[[row]]
-package = "song"
-layer = "L1"
-
-[[row]]
-package = "stretch"
-layer = "L1"
-
-[[row]]
-package = "themer"
-layer = "L1"
-
-[[row]]
-package = "timeline"
-layer = "L1"
-
-[[row]]
-package = "trigger"
-layer = "L1"
-
-[[row]]
-package = "tune"
-layer = "L1"
-
-[[row]]
-package = "web-audio-worklet"
-layer = "L1"
-
+# member -> the forbidden categories its default `cargo tree -e normal` reaches.
+[allow.promise]
+"daw-bridge" = ["blitz", "dioxus"]
+"daw-extension" = ["app-shell", "blitz", "dioxus", "studio-connect"]
+"daw-reaper-dioxus-ext" = ["blitz", "dioxus", "studio-connect"]
+"daw-reaper-dioxus-ext-test" = ["blitz", "dioxus"]
+"editing" = ["studio-connect"]
+"engine-domain" = ["studio-connect"]
+"engine-host" = ["app-shell", "blitz", "dioxus", "studio-connect"]
+"engine-runtime" = ["studio-connect"]
+"fts-model-comp" = ["blitz", "dioxus", "studio-connect"]
+"fts-model-delay" = ["blitz", "dioxus", "studio-connect"]
+"fts-model-eq" = ["blitz", "dioxus", "studio-connect"]
+"fts-model-reverb" = ["blitz", "dioxus", "studio-connect"]
+"fts-model-saturate" = ["blitz", "dioxus", "studio-connect"]
+"ignition" = ["studio-connect"]
+"reaper-dioxus" = ["blitz", "dioxus"]
+"reaper-input" = ["blitz", "dioxus", "studio-connect"]
+"signal-reaper-controller" = ["blitz", "dioxus"]
+"studio-engine" = ["app-shell", "blitz", "dioxus", "studio-connect"]
+"studio-tempo-map" = ["dioxus"]
