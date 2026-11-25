@@ -331,18 +331,28 @@ fn song_at(
     project: String,
     session: StudioSession,
 ) -> Song {
+    // An arrangement (`Song.session/Live`) is its song's: named by the
+    // song's file, not the branch, and saved where it was opened from.
+    let branch = crate::project_file::file_and_branch(path)
+        .filter(|(_, branch)| branch != session_format::store::MAIN);
+    let named_by = branch.as_ref().map_or(path, |(file, _)| file.as_path());
     let name = title.unwrap_or_else(|| {
-        path.file_stem()
-            .map_or_else(|| path.to_string_lossy(), |s| s.to_string_lossy())
+        named_by
+            .file_stem()
+            .map_or_else(|| named_by.to_string_lossy(), |s| s.to_string_lossy())
             .into_owned()
     });
     let mut song = Song::of(name, project, session);
-    song.saved = Some(if crate::open::is_session(path) {
-        path.to_path_buf()
+    song.saved = if branch.is_some() {
+        Some(path.to_path_buf())
     } else {
-        path.with_extension("session")
-    })
-    .filter(|saved| saved.exists());
+        Some(if crate::open::is_session(path) {
+            path.to_path_buf()
+        } else {
+            path.with_extension("session")
+        })
+        .filter(|saved| saved.exists())
+    };
     song
 }
 
