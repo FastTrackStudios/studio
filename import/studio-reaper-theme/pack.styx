@@ -1,0 +1,8 @@
+// studio-reaper-theme: REAPER's layout in FastTrackStudio's dark colours,
+// for daw-theme spec 1.
+name reaper
+title "REAPER"
+spec 1
+themes {
+    fts-dark { title "FTS Dark", layers (themes/fts-dark.frame), mode dark }
+}
