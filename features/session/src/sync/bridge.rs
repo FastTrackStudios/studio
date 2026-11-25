@@ -24,8 +24,10 @@ use crate::sync::doc::{ORIGIN_LOCAL, SessionDoc, Touched, Watch};
 use crate::sync::engine::{self, Blobs, Direct, EngineIds, MediaRoot};
 use crate::sync::model::SessionModel;
 
+pub mod check;
 pub mod claim;
 
+pub use check::{Check, Checked};
 pub use claim::AlreadyBridged;
 use claim::{Claim, engine_of};
 
@@ -60,6 +62,9 @@ pub struct Bridge {
     /// first, as nothing: an undo never reaches past a step the person
     /// took to the one before it.
     quiet: Vec<String>,
+    /// Where the engine differed from the doc after the last apply, as
+    /// read back ([`Self::last_apply_drift`]).
+    applied_drift: Vec<crate::sync::drift::Drift>,
 }
 
 /// A local step read off the engine ([`Bridge::read_step`]): what the
@@ -178,6 +183,7 @@ impl Bridge {
             naming,
             watch,
             quiet: Vec::new(),
+            applied_drift: Vec::new(),
         };
         // What the engine showed is what the doc now holds.
         bridge.take_touched();
@@ -226,6 +232,7 @@ impl Bridge {
             naming,
             watch,
             quiet: Vec::new(),
+            applied_drift: Vec::new(),
         };
         // The whole doc, whatever the watch has seen so far.
         tracing::info_span!("bridge.take_touched").in_scope(|| bridge.take_touched());
@@ -358,6 +365,7 @@ impl Bridge {
             naming,
             watch,
             quiet: Vec::new(),
+            applied_drift: Vec::new(),
         };
         // What it holds as the doc does is not an edit made here.
         bridge.adopt(&target);
@@ -642,6 +650,17 @@ impl Bridge {
         )
         .instrument(tracing::info_span!("bridge.read_back"))
         .await?;
+        // What the engine took of what it was given: the doc's model and
+        // what was read back, compared (the chart is not the engine's).
+        // A failed apply is its own error, not checked.
+        if applied.is_ok() {
+            let check = crate::sync::drift::span("apply");
+            self.applied_drift = check.in_scope(|| {
+                let found = crate::sync::drift::drift(&now, &target);
+                crate::sync::drift::report("apply", &found);
+                found
+            });
+        }
         now.chart = target.chart;
         self.shown = now;
         self.cursor = at;

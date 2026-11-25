@@ -22,6 +22,7 @@ pub mod diff;
 #[cfg(feature = "engine")]
 pub mod direct;
 pub mod doc;
+pub mod drift;
 #[cfg(feature = "engine")]
 pub mod engine;
 pub mod hold;

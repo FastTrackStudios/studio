@@ -971,6 +971,146 @@ fn a_step_read_from_the_journal_is_the_engine_read_whole() {
     });
 }
 
+/// The engine checked against the doc ([`Bridge::check`]): a song built,
+/// edited through the bridge and edited remotely matches at every turn —
+/// and is checked for free when nothing changed — while an edit made to
+/// the engine behind the bridge's back is found, by track, FX and field.
+async fn check(
+    bridge: &Bridge,
+    seen: &mut crate::sync::bridge::Checked,
+    whole: bool,
+) -> crate::sync::bridge::Check {
+    bridge.check(seen, whole, "test").await.expect("checked")
+}
+
+#[test]
+fn the_engine_checked_against_the_doc_finds_only_a_real_divergence() {
+    use crate::sync::bridge::{Check, Checked};
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        // A song's doc is written from an engine (a song saved, opened
+        // again): the synthetic one, built once and read back, is that.
+        let first = Standalone::new();
+        let built = in_place(&first, "first", &song).await;
+        let saved = SessionDoc::new();
+        saved.write(built.shown(), ORIGIN_LOCAL).expect("saved");
+        drop(built);
+        let song = Song { doc: saved, ..song };
+
+        let daw = Standalone::new();
+        let mut bridge = in_place(&daw, "song", &song).await;
+        assert!(
+            bridge.last_apply_drift().is_empty(),
+            "the build took the whole doc: {:?}",
+            bridge.last_apply_drift()
+        );
+        let mut seen = Checked::default();
+        assert_eq!(
+            check(&bridge, &mut seen, true).await,
+            Check::Matched { read: true },
+            "just built"
+        );
+
+        // A normal edit: made on the engine, recorded as a step.
+        daw.write_project("song", |p| {
+            if let Some(t) = p.tracks.first_mut() {
+                t.volume = 0.25;
+            }
+        });
+        assert!(bridge.local_step("Turn it down").await.expect("a step"));
+        assert_eq!(
+            check(&bridge, &mut seen, false).await,
+            Check::Matched { read: true },
+            "an edit recorded is no drift"
+        );
+        assert_eq!(
+            check(&bridge, &mut seen, false).await,
+            Check::Matched { read: false },
+            "nothing changed since: not read again"
+        );
+
+        // A remote edit: written into the doc, applied by the bridge.
+        let mut model = bridge.doc().read();
+        model.tracks[0].volume = 0.75;
+        model.tracks[0].muted = true;
+        bridge
+            .doc()
+            .write(&model, "remote")
+            .expect("a remote write");
+        assert_eq!(
+            check(&bridge, &mut seen, false).await,
+            Check::Pending,
+            "not yet applied: apart on purpose"
+        );
+        assert!(!bridge.remote_changed().await.expect("applied").is_empty());
+        assert!(
+            bridge.last_apply_drift().is_empty(),
+            "the engine took the remote edit: {:?}",
+            bridge.last_apply_drift()
+        );
+        assert_eq!(
+            check(&bridge, &mut seen, false).await,
+            Check::Matched { read: true }
+        );
+
+        // Behind the bridge's back: a track's pan and its FX bypassed.
+        let (track, name) = daw
+            .read_project("song", |p| {
+                let t = p
+                    .tracks
+                    .iter()
+                    .find(|t| {
+                        p.fx_chains
+                            .get(&daw_standalone::sync::FxChainKey::Track(t.guid.clone()))
+                            .is_some_and(|c| !c.is_empty())
+                    })
+                    .expect("a track with FX");
+                (t.guid.clone(), t.name.clone())
+            })
+            .expect("the song");
+        daw.write_project("song", |p| {
+            if let Some(t) = p.tracks.iter_mut().find(|t| t.guid == track) {
+                t.pan = -0.5;
+            }
+            if let Some(chain) = p
+                .fx_chains
+                .get_mut(&daw_standalone::sync::FxChainKey::Track(track.clone()))
+            {
+                for entry in chain.iter_mut() {
+                    entry.fx.enabled = false;
+                }
+            }
+        });
+        let Check::Drifted(found) = check(&bridge, &mut seen, false).await else {
+            panic!("the divergence went unseen");
+        };
+        let named: Vec<String> = found.iter().map(ToString::to_string).collect();
+        assert!(
+            found
+                .iter()
+                .any(|d| d.track.as_deref() == Some(name.as_str()) && d.field == "pan"),
+            "{named:?}"
+        );
+        assert!(
+            found
+                .iter()
+                .any(|d| d.fx.is_some() && d.field == "fx.enabled"),
+            "{named:?}"
+        );
+        // Found again, read whole.
+        assert!(matches!(
+            check(&bridge, &mut seen, true).await,
+            Check::Drifted(_)
+        ));
+    });
+}
+
 /// `song` opened in place into `daw` as `guid`, reaching the engine in
 /// this process (`direct`) or through its facade alone.
 async fn opened(daw: &Standalone, guid: &str, song: &Song, in_process: bool) -> Bridge {
