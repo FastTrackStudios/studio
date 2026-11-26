@@ -57,3 +57,16 @@ pub mod studio_engine;
 /// reads, OTLP export, the panic hook.
 #[cfg(feature = "native")]
 pub mod telemetry;
+
+// What a domain moves down into the core (shared by more than one domain),
+// each under its own heading, so the domains never edit the same lines.
+
+// ── from engine-listen ──
+
+// ── from engine-edit ──
+
+// ── from engine-mix ──
+
+// ── from engine-project ──
+
+// ── from engine-collab ──

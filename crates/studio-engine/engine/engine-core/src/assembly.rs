@@ -58,6 +58,13 @@ pub struct Assembly {
     pub reference: fn(&daw_standalone::sync::Standalone, &ProjectContext) -> eyre::Result<()>,
     /// Song `guid` saved as it now is (`projects::mark_saved`).
     pub mark_saved: fn(&Standalone, &str),
+    // A domain that the core (or another domain, through the core) must call
+    // adds its fields under its own heading.
+    // ── engine-listen's parts ──
+    // ── engine-edit's parts ──
+    // ── engine-mix's parts ──
+    // ── engine-project's parts ──
+    // ── engine-collab's parts ──
 }
 
 static ASSEMBLY: OnceLock<&'static Assembly> = OnceLock::new();

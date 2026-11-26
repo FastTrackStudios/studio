@@ -1,0 +1,29 @@
+[package]
+name = "engine-listen"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Listening and measuring: listen, mix_measure, the render worker, Signal's offline blocks, the off loop, the audio's health"
+
+# One of studio-engine's domains (docs/MONOREPO-MIGRATION.md, "Splitting
+# studio-engine"). It depends on engine-core and studio-core, never on
+# studio-engine or another domain. studio-engine depends on it, re-exports
+# its modules from their old paths and calls its `register` from the
+# Action List's collector (`actions::register_all`).
+
+[dependencies]
+engine-core = { workspace = true }
+architect = { workspace = true, features = ["action-list"] }
+
+[features]
+default = ["native"]
+# studio-engine's features, forwarded (its `native`, `signal`, `web`,
+# `show` turn these on): gate the modules here as they were gated there.
+native = ["engine-core/native"]
+signal = ["native", "engine-core/signal"]
+web = ["engine-core/web"]
+show = ["native", "engine-core/show"]
+
+[lints]
+workspace = true

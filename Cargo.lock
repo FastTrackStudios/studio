@@ -8591,6 +8591,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "engine-collab"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "engine-core",
+]
+
+[[package]]
 name = "engine-core"
 version = "26.10.3"
 dependencies = [
@@ -8734,6 +8742,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "engine-edit"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "engine-core",
+]
+
+[[package]]
 name = "engine-host"
 version = "26.10.3"
 dependencies = [
@@ -8800,6 +8816,30 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "winit 0.31.0-beta.4",
+]
+
+[[package]]
+name = "engine-listen"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "engine-core",
+]
+
+[[package]]
+name = "engine-mix"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "engine-core",
+]
+
+[[package]]
+name = "engine-project"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "engine-core",
 ]
 
 [[package]]
@@ -23841,8 +23881,13 @@ dependencies = [
  "dsp-core",
  "dynamic-template",
  "editing",
+ "engine-collab",
  "engine-core",
  "engine-domain",
+ "engine-edit",
+ "engine-listen",
+ "engine-mix",
+ "engine-project",
  "engine-runtime",
  "engine-sync",
  "eyre",

@@ -212,6 +212,11 @@ static ASSEMBLY: engine_core::assembly::Assembly = engine_core::assembly::Assemb
         Ok(())
     },
     mark_saved: crate::projects::mark_saved,
+    // ── engine-listen's parts ──
+    // ── engine-edit's parts ──
+    // ── engine-mix's parts ──
+    // ── engine-project's parts ──
+    // ── engine-collab's parts ──
 };
 
 pub fn install() {

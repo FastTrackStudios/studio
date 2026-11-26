@@ -69,10 +69,17 @@ pub(crate) fn fill(list: &ActionList) {
 /// [`ActionError::Duplicate`]: architect::action::ActionError::Duplicate
 fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError> {
     base::register(list)?;
+    // Each domain: its crate's `register`, and what is still here until
+    // its modules move (then the second line goes, with `actions/<domain>.rs`).
+    engine_edit::register(list)?;
     edit::register(list)?;
+    engine_mix::register(list)?;
     mix::register(list)?;
+    engine_listen::register(list)?;
     listen::register(list)?;
+    engine_project::register(list)?;
     project::register(list)?;
+    engine_collab::register(list)?;
     collab::register(list)?;
     Ok(())
 }
