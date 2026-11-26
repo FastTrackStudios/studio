@@ -12,9 +12,11 @@
 //! The render actions are registered on a list of this module's
 //! ([`register_routed`]), and the engine's list holds a forward of each
 //! that decides, per call, where it runs ([`policy::decide`]): in process,
-//! as before, or in the **render worker**. The default sends an agent's
-//! renders to the worker and keeps the app's own in process; the
-//! `RENDER_WORKER` action and `FTS_RENDER_WORKER` change that. An agent's
+//! as before, or in the **render worker**. The default keeps every render
+//! in process, on the song the engine already holds; `auto` sends an
+//! agent's renders to the worker (crash isolation, at the cost of loading
+//! the song a second time), set by the `RENDER_WORKER` action or
+//! `FTS_RENDER_WORKER`. An agent's
 //! call is told apart by a principal on its caller (the engine's MCP
 //! door), an `Agent` invocation, or `"_origin": "agent"` in its arguments
 //! (what survives every hop from Studio's control socket to here).
@@ -240,7 +242,7 @@ static WORKER: ActionMeta = crate::actions::meta(
     "RENDER_WORKER",
     "render_worker",
     "Render worker",
-    "Where an agent's offline renders run (LISTEN, LISTEN_BLOCK, LISTEN_AB, LISTEN_RENDER, MIX_MEASURE, MIX_RENDER): in the render worker, a process of its own whose crash never reaches the live session, or in this engine. `mode`: `auto` (the default: an agent's renders in the worker, the app's own here), `worker` (all of them there), `process` (all here); kept across restarts, unless `FTS_RENDER_WORKER` overrides it (then `overridden: true`). `restart: true` starts a fresh worker. A single call can say where it runs with `\"_render_in\": \"worker\"|\"process\"`, and who it is from with `\"_origin\": \"agent\"|\"app\"`, among its own arguments. A render that the worker dies in answers `plugin_crashed: …` naming the plugin it was processing when known; one that hangs past `FTS_RENDER_WORKER_TIMEOUT_S` (1800) answers `worker_timeout`; a fresh worker starts behind either. Answers `mode`, `kept`, `overridden`, and the worker: `pid` (null when none runs), `song` (the one it holds), `spawns`, `restarts`, `renders`, `last_crash`, `last_spawn_ms`, `last_sync_ms`.",
+    "Where an agent's offline renders run (LISTEN, LISTEN_BLOCK, LISTEN_AB, LISTEN_RENDER, MIX_MEASURE, MIX_RENDER): in the render worker, a process of its own whose crash never reaches the live session, or in this engine. `mode`: `process` (the default: all of them here, on the song this engine already holds), `auto` (an agent's renders in the worker, the app's own here), `worker` (all of them there); kept across restarts, unless `FTS_RENDER_WORKER` overrides it (then `overridden: true`). `restart: true` starts a fresh worker. A single call can say where it runs with `\"_render_in\": \"worker\"|\"process\"`, and who it is from with `\"_origin\": \"agent\"|\"app\"`, among its own arguments. A render that the worker dies in answers `plugin_crashed: …` naming the plugin it was processing when known; one that hangs past `FTS_RENDER_WORKER_TIMEOUT_S` (1800) answers `worker_timeout`; a fresh worker starts behind either. Answers `mode`, `kept`, `overridden`, and the worker: `pid` (null when none runs), `song` (the one it holds), `spawns`, `restarts`, `renders`, `last_crash`, `last_spawn_ms`, `last_sync_ms`.",
     "Mix",
     "",
 );

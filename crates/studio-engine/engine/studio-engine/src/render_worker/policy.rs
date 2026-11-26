@@ -1,10 +1,11 @@
 //! Where an offline render runs: in the engine's own process, or in the
 //! render worker. Pure decisions, tested without a process.
 //!
-//! The rule (`Mode::Auto`, the default): an agent's render runs in the
-//! worker, so a plugin that crashes takes only the worker down; the app's
-//! own (a key, a menu, a view) runs in process, as before. `Mode::Worker`
-//! and `Mode::Process` send every render one way. `FTS_RENDER_WORKER`
+//! The default is `Mode::Process`: every render, an agent's too, runs in
+//! this engine on the song it already has loaded (the worker has to load
+//! its own copy first, ~40 s on a big song). `Mode::Auto` sends an agent's
+//! renders to the worker, so a plugin that crashes takes only the worker
+//! down; `Mode::Worker` sends every render there. `FTS_RENDER_WORKER`
 //! (`auto`, `worker`, `process`; `off` is `process`) overrides the kept
 //! setting for the life of the process.
 
@@ -195,13 +196,13 @@ fn setting_path() -> Option<PathBuf> {
 }
 
 /// The mode in force: the environment's, else the kept setting, else
-/// [`Mode::Auto`].
+/// [`Mode::Process`] (renders on the song this engine already holds).
 #[must_use]
 pub fn mode() -> Mode {
     if let Some(m) = std::env::var(ENV).ok().as_deref().and_then(Mode::parse) {
         return m;
     }
-    kept().unwrap_or(Mode::Auto)
+    kept().unwrap_or(Mode::Process)
 }
 
 /// Whether the environment decides (a set mode is then not in force).
