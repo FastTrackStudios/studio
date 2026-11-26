@@ -418,6 +418,10 @@ modules (step 4).
 - **Song open toward REAPER's ~3 s:** cache the imported store by the
   `.session`'s hash (`store.import_snapshot` 7.9 s every open), per-plugin
   spans inside `fx.load_states`, then `bridge.read_doc` (2.8 s).
-- **Render worker stale sync:** after an edit the worker renders the song
-  as it was (`the_worker_renders_what_the_engine_renders…` fails on
-  `monorepo`). Renders default to the engine (`7aac60047`) meanwhile.
+- **Render worker stale sync:** fixed (`963c7dcd7`). TRACK_SET made no
+  undo step, so its edit never reached the song's doc, which the worker
+  syncs from; it is one step now, and
+  `the_worker_renders_what_the_engine_renders…` passes. Renders still
+  default to the engine (`7aac60047`): moving them back to the worker is
+  the owner's call. Any other action that edits without an undo block has
+  the same gap.
