@@ -19,7 +19,9 @@ fts-session = { workspace = true }
 # `Position` and the shared clock's estimator (plain data, no dependencies).
 daw-transport-sync = { workspace = true }
 eyre = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+# Not the workspace tokio: that one is `full` (net, fs, process: mio), which
+# doesn't build for wasm32, and the browser app links this crate.
+tokio = { version = "1.48", default-features = false, features = ["macros", "rt", "sync", "time"] }
 vox = { workspace = true, optional = true }
 crdt = { workspace = true, optional = true, features = ["vox"] }
 architect = { workspace = true, features = ["local", "platform", "vox"] }
