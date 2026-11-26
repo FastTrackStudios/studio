@@ -229,7 +229,13 @@ fn engine_program() -> Option<(PathBuf, Vec<String>)> {
     let target = exe
         .ancestors()
         .find(|a| a.file_name().is_some_and(|n| n == "target"))?;
-    let host = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
+    // The host triple the Justfile builds for (`dev_build`).
+    let os = if cfg!(target_os = "macos") {
+        "apple-darwin"
+    } else {
+        "unknown-linux-gnu"
+    };
+    let host = format!("{}-{os}", std::env::consts::ARCH);
     [
         target.join(&host).join("desktop-dev"),
         target.join("desktop-dev"),
