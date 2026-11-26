@@ -120,3 +120,6 @@ pub mod task_account;
 /// A set Task keeps: which, joined, tried again until Task answers.
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod task_set;
+/// Work on a page cut into slices, the page given its turn between them.
+#[cfg(feature = "web")]
+pub mod web_slices;

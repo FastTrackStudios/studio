@@ -13,16 +13,20 @@
 pub mod audio_health;
 pub use daw_view::automation;
 pub use daw_view::changes;
-#[cfg(feature = "native")]
-pub use engine_core::autosave;
-#[cfg(feature = "native")]
-pub use engine_mix::automation_actions;
-pub use engine_runtime::client::audio_mode;
-#[cfg(any(feature = "native", feature = "web"))]
-pub mod collab;
 pub use daw_view::edit_state;
 pub use daw_view::engine;
 pub use daw_view::folds;
+pub use daw_view::jobs;
+pub use daw_view::lanes;
+pub use daw_view::leveler;
+pub use daw_view::midi;
+pub use daw_view::num;
+#[cfg(any(feature = "native", feature = "web"))]
+pub use engine_collab::collab;
+#[cfg(feature = "native")]
+pub use engine_collab::live_host;
+#[cfg(feature = "native")]
+pub use engine_core::autosave;
 #[cfg(feature = "native")]
 pub use engine_edit::comp;
 #[cfg(feature = "native")]
@@ -32,50 +36,46 @@ pub use engine_edit::drum_group;
 #[cfg(feature = "native")]
 pub use engine_edit::grow;
 #[cfg(feature = "native")]
+pub use engine_mix::automation_actions;
+#[cfg(feature = "native")]
 pub use engine_mix::clap_fx;
 #[cfg(feature = "native")]
 pub use engine_mix::clap_host;
 #[cfg(feature = "native")]
 pub use engine_mix::fx_actions;
-pub use engine_runtime::folder;
-pub use engine_runtime::guide_instrument;
 #[cfg(feature = "native")]
 pub use engine_project::ingest;
 #[cfg(feature = "native")]
 pub use engine_project::instrument_tracks;
-pub use daw_view::jobs;
-pub use daw_view::lanes;
-pub use daw_view::leveler;
-#[cfg(feature = "native")]
-pub mod live_host;
-pub use daw_view::midi;
-pub use daw_view::num;
+pub use engine_runtime::client::audio_mode;
+pub use engine_runtime::folder;
+pub use engine_runtime::guide_instrument;
 #[cfg(feature = "native")]
 pub mod open;
 pub use daw_view::open_progress;
 pub use daw_view::options;
+pub use daw_view::play_return;
 pub use engine_core::open_core;
 #[cfg(feature = "native")]
-pub use engine_project::organize_edit;
-pub use daw_view::play_return;
-#[cfg(feature = "native")]
 pub use engine_core::project_file;
-pub use engine_runtime::client::presence;
+#[cfg(feature = "signal")]
+pub use engine_mix::rig_actions;
+#[cfg(feature = "native")]
+pub use engine_project::organize_edit;
 #[cfg(feature = "native")]
 pub use engine_project::project_new;
 #[cfg(feature = "native")]
 pub use engine_project::projects;
-#[cfg(feature = "signal")]
-pub use engine_mix::rig_actions;
 #[cfg(feature = "show")]
 pub use engine_project::show;
-pub use engine_runtime::client::slices;
-pub use engine_runtime::client::song_modes;
 pub use engine_project::song_stream;
 #[cfg(feature = "native")]
 pub use engine_project::stream_in;
 #[cfg(feature = "native")]
 pub use engine_project::stream_set;
+pub use engine_runtime::client::presence;
+pub use engine_runtime::client::slices;
+pub use engine_runtime::client::song_modes;
 // The engine side, behind its own boundary: the set, its actions, the
 // Action List's MCP server, and the engine with no window (`studio engine`).
 /// A page of bars, as a window steps through the song (`SESSION_PAGE`).
@@ -93,6 +93,8 @@ pub use daw_view::take_colors;
 /// The engine as a window sees it: one vox service beside the daw facade.
 pub use daw_view::view;
 #[cfg(feature = "native")]
+pub use engine_collab::agent;
+#[cfg(feature = "native")]
 pub use engine_core::task_account;
 #[cfg(any(feature = "native", feature = "web"))]
 pub use engine_core::task_set;
@@ -100,8 +102,6 @@ pub use engine_edit::track_regions;
 /// A window's link to its engine: replicas and calls.
 #[cfg(feature = "native")]
 pub use engine_runtime::client::view_client;
-#[cfg(feature = "native")]
-pub mod agent;
 #[cfg(feature = "native")]
 pub mod listen;
 #[cfg(feature = "native")]
@@ -140,6 +140,8 @@ pub mod actions;
 pub use daw_view::arrange_actions;
 pub use daw_view::hit_overlay;
 pub use daw_view::kit_gate;
+#[cfg(feature = "native")]
+pub use daw_view::notes_actions;
 pub use editing::groove;
 #[cfg(feature = "native")]
 pub use engine_core::audio_device;
@@ -199,15 +201,13 @@ pub use engine_edit::key_change;
 pub use engine_mix::algorithms;
 #[cfg(feature = "signal")]
 pub use engine_mix::bass_rig;
+pub use engine_mix::mix_chains;
+pub use engine_mix::mix_export;
+#[cfg(feature = "native")]
+pub use engine_project::library_actions;
 pub use engine_runtime::client::drum_edit;
 pub use engine_runtime::client::drum_settings;
 pub use engine_runtime::client::gain_stage;
-#[cfg(feature = "native")]
-pub use engine_project::library_actions;
-#[cfg(feature = "native")]
-pub use daw_view::notes_actions;
-pub use engine_mix::mix_chains;
-pub use engine_mix::mix_export;
 #[cfg(feature = "native")]
 pub mod perf;
 #[cfg(feature = "native")]
@@ -221,10 +221,8 @@ pub mod poi;
 pub use engine_core::prepare;
 #[cfg(feature = "native")]
 pub mod record;
-pub use engine_core::reference;
-#[cfg(feature = "native")]
-pub use engine_project::reference_play;
 pub use daw_view::routes;
+pub use engine_core::reference;
 #[cfg(feature = "native")]
 pub use engine_core::render_ahead;
 #[cfg(feature = "native")]
@@ -235,9 +233,11 @@ pub use engine_core::session_file;
 pub use engine_edit::sample_align;
 #[cfg(feature = "native")]
 pub use engine_edit::seams;
-pub use engine_runtime::section_colors;
+#[cfg(feature = "native")]
+pub use engine_project::reference_play;
 pub use engine_project::setlist;
 pub use engine_runtime::client::settings;
+pub use engine_runtime::section_colors;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod shared_actions;
 pub use daw_view::stretch;
@@ -267,9 +267,9 @@ pub use engine_runtime::client::zoom;
 /// The engine's body, installed for the window modules
 /// (`engine_runtime::client::body`).
 mod body;
+pub use body::install;
 #[cfg(feature = "native")]
 pub use engine_project::song_open;
-pub use body::install;
 
 #[cfg(test)]
 mod web_clock_tests;

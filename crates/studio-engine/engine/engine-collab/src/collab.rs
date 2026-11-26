@@ -1408,12 +1408,12 @@ async fn bridge_song(
     Ok((song, bridge, seeded))
 }
 
-/// `work`, on a page cut into slices (`web_engine::in_slices`): a song's
+/// `work`, on a page cut into slices (`web_slices::in_slices`): a song's
 /// bridge reads and rebuilds the whole song through the facade, and in
 /// one piece froze the page for most of a second per song.
 async fn sliced<T>(work: impl std::future::Future<Output = T>) -> T {
     #[cfg(all(feature = "web", not(feature = "native")))]
-    let done = crate::web_engine::in_slices(work).await;
+    let done = crate::web_slices::in_slices(work).await;
     #[cfg(not(all(feature = "web", not(feature = "native"))))]
     let done = work.await;
     done

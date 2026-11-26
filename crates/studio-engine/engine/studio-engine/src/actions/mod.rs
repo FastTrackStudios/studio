@@ -66,14 +66,12 @@ fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError>
     listen::register(list)?;
     engine_project::register(list)?;
     engine_collab::register(list)?;
-    collab::register(list)?;
     Ok(())
 }
 
 // Each domain's actions and its registration (`register`). The domains'
 // own modules register theirs (`crate::hits::register`, …) from these.
 mod base;
-mod collab;
 mod listen;
 #[allow(
     unused_imports,

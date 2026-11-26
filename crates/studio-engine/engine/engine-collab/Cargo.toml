@@ -14,15 +14,46 @@ description = "Working together: the live session, the agent, Task's account and
 
 [dependencies]
 engine-core = { workspace = true }
-architect = { workspace = true, features = ["action-list"] }
+architect = { workspace = true, features = ["action-list", "vox", "platform", "local"] }
+# The live session: a song's doc, its bridge, presence, relay and the
+# shared transport (`collab`).
+engine-sync = { workspace = true }
+# The engine's shared half with a window (`collab::Status`, `env_set`).
+engine-runtime = { workspace = true }
+daw = { workspace = true }
+daw-control = { workspace = true }
+daw-proto = { workspace = true }
+# Hosting what is open in Task (`live_host`): the org's library.
+library-sync = { workspace = true }
+# `Instant` that works in a browser.
+web-time = { workspace = true }
+eyre = { workspace = true }
+tracing = { workspace = true }
+facet = { workspace = true }
+serde_json = { workspace = true }
+vox = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+crdt = { workspace = true, optional = true, features = ["vox"] }
+vox-core = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
+daw-transport-sync = { workspace = true, optional = true }
+live-proto = { workspace = true, optional = true }
+task-dial = { workspace = true, optional = true }
+# Where this device's lock is remembered (`collab`).
+dirs = { workspace = true, optional = true }
+
+# The browser's tokio: channels and `select!` for the live session's loop,
+# no runtime (tasks and timers are the page's, `architect::platform`).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.48", default-features = false, features = ["sync", "macros"] }
 
 [features]
 default = ["native"]
 # studio-engine's features, forwarded (its `native`, `signal`, `web`,
 # `show` turn these on): gate the modules here as they were gated there.
-native = ["engine-core/native"]
+native = ["engine-core/native", "engine-runtime/native", "architect/host", "architect/iroh", "dep:tokio", "tokio?/net", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:live-proto", "dep:task-dial", "dep:dirs", "library-sync/publish", "library-sync/project-sync"]
 signal = ["native", "engine-core/signal"]
-web = ["engine-core/web"]
+web = ["engine-core/web", "engine-runtime/web", "dep:crdt", "dep:uuid", "dep:daw-transport-sync", "dep:live-proto", "dep:task-dial"]
 show = ["native", "engine-core/show"]
 
 [lints]
