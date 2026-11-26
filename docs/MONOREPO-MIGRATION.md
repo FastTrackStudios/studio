@@ -224,7 +224,32 @@ depending only on engine-core and studio-core, never on another domain):
 **Step 4: measure.** `cargo build --timings` of the engine before and after,
 and the edit-to-run time of a change in one domain (target: seconds).
 
+## Decision: two binaries, everything compiled in (owner, 2026-11-25)
+
+- **Two binaries in `apps/studio`, one app and one bundle:** `studio`, the
+  connect app (UI: studio-core + studio-connect), and `studio-engine`, the
+  engine (studio-core + studio-engine). Separate processes: the engine
+  iterates without the UI, the UI joins any engine by address (local,
+  remote, several instances), and a plugin crash takes the engine, not
+  the window.
+- **Every extension is compiled straight in by default**: on the engine
+  side `daw-extension`, rhythm, pitch, keyflow, tempo-map and Signal (no
+  longer a CLAP in Studio); on the UI side the view extensions
+  (arrangement, mixer, lyrics, navigator, link, chart). No extension
+  packaging (`extension.toml`), no install copy into
+  `~/.config/fts/studio-extensions-*`, no extensions folder at run time:
+  each binary runs what it was built with.
+- **Dev overrides stay, opt-in only**: loading an external build of one
+  extension (`STUDIO_EXT_DEV` or its successor) for rapid iteration, never
+  the default path.
+
 ## Queued (2026-11-25)
+
+- **The two binaries, every extension compiled in** (after the engine
+  split lands): fold `daw-extension` and `engine-host` into `apps/studio`'s
+  `studio-engine` binary; compile the engine extensions and the view
+  extensions in; drop the extension install/copy path; Studio launches the
+  engine binary from its own build (bundle) output.
 
 - **Signal compiled into the engine**, after the engine split lands: build
   the engine with `studio-engine`'s `signal` feature (`signal-fx`), and
