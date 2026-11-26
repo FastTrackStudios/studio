@@ -33,7 +33,7 @@ fts-session = { workspace = true }
 # The song as one file: its session a part of the store (studio one-file).
 song-file = { workspace = true }
 session-format = { workspace = true }
-daw-ui = { workspace = true }
+daw-ui = { workspace = true, features = ["studio"] }
 uuid = { workspace = true }
 tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread"] }
 # The engine's own log (engine.log): src/owner.rs.
