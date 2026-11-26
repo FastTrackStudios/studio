@@ -20,7 +20,7 @@ inputs:
   nixpkgs-dx:
     url: github:NixOS/nixpkgs/d99b013d5d1931ad77fe3912ed218170dec5d9a4
   devenv-fleet:
-    url: github:FastTrackStudios/devenv-fleet/2dbf51200d24914e2ce307008ed704180a530855
+    url: github:FastTrackStudios/devenv-fleet/8d18c794bb627377415af2aae3f067d136f6ddfd
     flake: false
 imports:
   - devenv-fleet/rust
