@@ -8,6 +8,7 @@
 
 mod actions;
 mod data;
+mod door;
 #[cfg(feature = "drive")]
 mod drive_sets;
 #[cfg(feature = "native")]
@@ -249,10 +250,15 @@ fn main() {
     // Warnings and up: Loro's encoder logs every block at info.
     #[cfg(not(feature = "native"))]
     dioxus::logger::init(dioxus::logger::tracing::Level::WARN).ok();
-    // Served under a path (`--base-path studio`), the node is reached
-    // under it too (`/studio/api/…`), so a site can hand Studio that path.
+    // The node is reached under the path it serves Studio at
+    // (`/studio/api/…`): the page's own path when served under one
+    // (`--base-path studio`), and `/studio` from the root of
+    // fasttrackstudio.app, whose front hands `/studio/api` to the node
+    // (door.rs).
     #[cfg(feature = "web")]
-    drive_dioxus::mount::set(&dioxus::cli_config::web_base_path().unwrap_or_default());
+    drive_dioxus::mount::set(door::node_mount(
+        &dioxus::cli_config::web_base_path().unwrap_or_default(),
+    ));
     // Drawn by Blitz on a desktop: the window has no system frame, the
     // shell's title bar is its frame (app-shell-native).
     #[cfg(feature = "native")]

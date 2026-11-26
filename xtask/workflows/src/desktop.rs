@@ -160,7 +160,7 @@ echo "sha=$sha" >> "$GITHUB_OUTPUT"
             Step::run(
                 "Summary",
                 r####"{
-  echo "### Studio desktop installers: $TAG ($MODE)"
+  echo "### Studio $GITHUB_WORKFLOW: $TAG ($MODE)"
   echo "- version: \`$VERSION\`"
   echo "- commit: \`${SHA:0:12}\`"
   if [ "$MODE" = validate ]; then echo "- **validate**: stopped before any build"; fi

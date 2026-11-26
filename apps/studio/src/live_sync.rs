@@ -107,11 +107,18 @@ mod web {
     /// Connects to Drive (the node this page came from) around the app.
     #[component]
     pub fn Provider(children: Element) -> Element {
-        rsx! {
+        let app = rsx! {
             DriveProvider {
                 Attach { {children} }
             }
-        }
+        };
+        // In a browser, a signed-out visitor gets the stand-in page.
+        #[cfg(feature = "web")]
+        return rsx! {
+            crate::door::Gate { {app} }
+        };
+        #[cfg(not(feature = "web"))]
+        app
     }
 
     /// Hands the connection and the spine to the app's state.
