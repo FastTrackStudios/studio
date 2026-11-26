@@ -6,8 +6,11 @@
 //! In a browser, spans are batched and posted as OTLP/JSON to the node
 //! (`<mount>/api/otlp/v1/traces`), which passes them to the collector it
 //! exports to; a node exporting nothing answers 404 and the page stops
-//! sending. Natively they are `tracing` spans, exported by app-shell's
-//! telemetry like the rest of the app's.
+//! sending. Each says which build sent it (`studio_otel::resource_attributes`:
+//! version, platform `web`, environment), and a panic is sent at once as a
+//! `crash` span ([`install_crash_hook`]). Natively they are `tracing` spans,
+//! exported by the app's subscriber (`crate::telemetry`) like the rest of the
+//! app's.
 
 #[cfg(target_arch = "wasm32")]
 pub use browser::*;
@@ -104,11 +107,9 @@ mod browser {
         }
     }
 
-    impl Drop for Span {
-        fn drop(&mut self) {
-            if OFF.with(Cell::get) {
-                return;
-            }
+    impl Span {
+        /// This span as OTLP/JSON, ended now.
+        fn json(&self) -> Value {
             let attributes: Vec<Value> = self
                 .attrs
                 .iter()
@@ -129,7 +130,7 @@ mod browser {
                 Some(m) => json!({ "code": 2, "message": m }),
                 None => json!({ "code": 1 }),
             };
-            let span = json!({
+            json!({
                 "traceId": self.trace,
                 "spanId": self.id,
                 "parentSpanId": self.parent,
@@ -139,7 +140,16 @@ mod browser {
                 "endTimeUnixNano": now_ns().to_string(),
                 "attributes": attributes,
                 "status": status,
-            });
+            })
+        }
+    }
+
+    impl Drop for Span {
+        fn drop(&mut self) {
+            if OFF.with(Cell::get) {
+                return;
+            }
+            let span = self.json();
             DONE.with(|d| d.borrow_mut().push(span));
             schedule();
         }
@@ -162,16 +172,7 @@ mod browser {
         if spans.is_empty() || OFF.with(Cell::get) {
             return;
         }
-        let body = json!({
-            "resourceSpans": [{
-                "resource": { "attributes": [
-                    { "key": "service.name", "value": { "stringValue": SERVICE } },
-                    { "key": "deployment.environment", "value": { "stringValue": "dev" } }
-                ]},
-                "scopeSpans": [{ "scope": { "name": "studio" }, "spans": spans }]
-            }]
-        })
-        .to_string();
+        let body = request(spans);
         let url = drive_dioxus::mount::api("/otlp/v1/traces");
         let sent = drive_dioxus::auth::fetch(
             "POST",
@@ -184,6 +185,77 @@ mod browser {
         if matches!(sent, Some((404, _))) {
             OFF.with(|o| o.set(true));
         }
+    }
+
+    /// The OTLP/JSON request for `spans`, under the page's resource: which
+    /// build sent them (`studio_otel::resource_attributes`).
+    fn request(spans: Vec<Value>) -> String {
+        let resource: Vec<Value> =
+            studio_otel::resource_attributes(SERVICE, utils::version::current())
+                .into_iter()
+                .map(|(k, v)| json!({ "key": k, "value": { "stringValue": v } }))
+                .collect();
+        json!({
+            "resourceSpans": [{
+                "resource": { "attributes": resource },
+                "scopeSpans": [{ "scope": { "name": "studio" }, "spans": spans }]
+            }]
+        })
+        .to_string()
+    }
+
+    /// Every panic in the page becomes a `crash` span (thread, where, what;
+    /// status error), posted at once, before the hook that was there (the
+    /// renderer's console report) runs. Posted with `keepalive` and not
+    /// awaited: after a panic the page may never run another task.
+    ///
+    /// Installed once the app renders, after the renderer has put its own
+    /// hook in place, so both run.
+    pub fn install_crash_hook() {
+        thread_local! {
+            static INSTALLED: Cell<bool> = const { Cell::new(false) };
+        }
+        if INSTALLED.with(|i| i.replace(true)) {
+            return;
+        }
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if !OFF.with(Cell::get) {
+                let crash = studio_otel::Crash::of(info);
+                let mut span = Span::root("crash");
+                span.set("crash.thread", crash.thread.as_str());
+                span.set("crash.at", crash.at.as_str());
+                span.set("crash.message", crash.message.as_str());
+                span.fail(crash.message.clone());
+                let json = span.json();
+                std::mem::forget(span);
+                send_now(&request(vec![json]));
+            }
+            previous(info);
+        }));
+    }
+
+    /// Post `body` to the node now, without waiting for its answer.
+    fn send_now(body: &str) {
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let init = web_sys::RequestInit::new();
+        init.set_method("POST");
+        // `keepalive` (the request outlives the page); web-sys has no
+        // setter for it.
+        let _ = js_sys::Reflect::set(
+            &init,
+            &wasm_bindgen::JsValue::from_str("keepalive"),
+            &wasm_bindgen::JsValue::TRUE,
+        );
+        init.set_body(&wasm_bindgen::JsValue::from_str(body));
+        if let Ok(headers) = web_sys::Headers::new() {
+            let _ = headers.set("content-type", "application/json");
+            init.set_headers(&headers);
+        }
+        let url = drive_dioxus::mount::api("/otlp/v1/traces");
+        let _ = window.fetch_with_str_and_init(&url, &init);
     }
 
     /// The span of the page itself: from navigation until the app has drawn.

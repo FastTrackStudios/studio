@@ -8,6 +8,14 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> std::process::ExitCode {
+    // The running version for what the engine reports (its spans, its crash
+    // reports, its MCP server): the release's, which the app that started
+    // it passes on (STUDIO_APP_VERSION); the workspace's when run on its own.
+    if let Ok(version) = std::env::var("STUDIO_APP_VERSION")
+        && !version.trim().is_empty()
+    {
+        utils::version::set(Box::leak(version.trim().to_owned().into_boxed_str()));
+    }
     // A render worker (`--render-worker`, spawned by an engine with its
     // socket in the environment): renders an agent asked for, apart from
     // the person's session.

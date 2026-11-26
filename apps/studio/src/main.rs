@@ -61,6 +61,8 @@ mod songs;
 mod stage;
 mod state;
 mod team;
+#[cfg(feature = "native")]
+mod telemetry;
 
 use dioxus::prelude::*;
 
@@ -222,6 +224,9 @@ fn main() {
     // SAFETY: the first statement of `main`, before any thread exists.
     unsafe {
         std::env::set_var("FTS_MCP_PRIVATE", "1");
+        // The release's version, for the engine Studio starts to report
+        // (daw-extension reads it; it cannot depend on fts-version).
+        std::env::set_var("STUDIO_APP_VERSION", fts_version::release_version());
         // One engine: the daw extension's launcher looks where Studio
         // starts its engine (`engine::engine_dir`).
         if std::env::var_os("FTS_DAW_ENGINE_DIR").is_none()
@@ -244,12 +249,19 @@ fn main() {
     // The views' keys: Studio's input profile.
     #[cfg(feature = "native")]
     studio_panels::hooks::install();
+    // The release's version, for whatever reports it (the app's spans and
+    // crash reports, the update check, the MCP server).
+    utils::version::set(fts_version::release_version());
     storage::init();
-    // Natively: stderr and, when OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set,
-    // the app's spans to that collector.
+    // Natively: stderr and, when a collector is named or a release baked
+    // one in, the app's spans and crash reports to it.
     #[cfg(feature = "native")]
-    let _telemetry =
-        app_shell_native::telemetry::init("studio-app", "warn,studio_app=info,drive_dioxus=info");
+    {
+        telemetry::init();
+        if std::env::args().nth(1).as_deref() == Some("--crash-test") {
+            telemetry::crash_test();
+        }
+    }
     // Warnings and up: Loro's encoder logs every block at info.
     #[cfg(not(feature = "native"))]
     dioxus::logger::init(dioxus::logger::tracing::Level::WARN).ok();
@@ -284,6 +296,9 @@ fn main() {
     // Studio keeps it (a development build, or STUDIO_KEEP_ENGINE=1).
     #[cfg(feature = "native")]
     engine::stop_started_engine();
+    // What the exporter still holds, sent before the process ends.
+    #[cfg(feature = "native")]
+    studio_otel::flush();
     #[cfg(not(feature = "native"))]
     dioxus::launch(App);
 }
@@ -339,6 +354,10 @@ fn App() -> Element {
     // From navigation until the app has first drawn.
     #[cfg(feature = "drive")]
     use_effect(trace::boot);
+    // In a browser, a panic is sent as a crash span (after the renderer's
+    // own panic hook is in, so both run).
+    #[cfg(all(feature = "drive", target_arch = "wasm32"))]
+    use_hook(trace::install_crash_hook);
     rsx! {
         document::Meta {
             name: "viewport",

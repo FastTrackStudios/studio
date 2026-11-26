@@ -19,6 +19,11 @@ path = "src/main.rs"
 # The release version `--version` prints (FTS_RELEASE_VERSION at build
 # time, else the workspace version). Binaries only depend on it.
 fts-version.workspace = true
+# The app's spans over OTLP and its crash reports (src/telemetry.rs), and in
+# a browser the same build attributes and crash span (src/trace.rs).
+studio-otel.workspace = true
+# The running version for library code (utils::version), set in `main`.
+utils.workspace = true
 session-sync.workspace = true
 # A one-file song read from its bytes (its session part, its id): pure Rust,
 # for the browser too.
@@ -124,9 +129,11 @@ native = [
     "dioxus/native",
     "local",
     "drive",
-    # The app's spans, exported by app-shell's telemetry (src/trace.rs).
+    # The app's spans and crash reports over OTLP (src/telemetry.rs,
+    # src/trace.rs).
     "dep:opentelemetry",
     "dep:tracing-opentelemetry",
+    "dep:tracing-subscriber",
     "dep:app-shell-native",
     "dep:app-shell-extensions",
     # The app's Action List served to agents: MCP on loopback with a
@@ -180,6 +187,7 @@ tokio = { version = "1", features = ["time"] }
 studio-shell.workspace = true
 opentelemetry = { version = "0.30", optional = true }
 tracing-opentelemetry = { version = "0.31", optional = true }
+tracing-subscriber = { workspace = true, optional = true }
 
 [dev-dependencies]
 # song_ids' tests write one-file songs.
