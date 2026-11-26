@@ -30,12 +30,12 @@ use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::Duration;
 
-use crdt::sync::PresencePeer;
 use dioxus::prelude::*;
 use ignition_core::{Class, CueList, CuePlayer, Show};
 use ignition_viz::Venue;
 use ignition_viz::playback::Playback;
 use ignition_viz::venue::VenueFiles;
+use live_doc::PresencePeer;
 use serde_json::{Value, json};
 use session::LaneId;
 use session::TempoMap;
@@ -49,15 +49,23 @@ const HOST: &str = "ignition-room-host";
 
 /// The recital's room, as the desk reads it from its directory.
 mod room {
-    pub const FIXTURES: &str = include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/fixtures.json");
-    pub const ROOM: &str = include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/room.json");
-    pub const SCREENS: &str = include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/screens.json");
-    pub const PROPS: &str = include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/props.json");
-    pub const GROUPS: &str = include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/groups.json");
-    pub const PALETTES: &str = include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/palettes.json");
-    pub const BINDING: &str = include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/profile.json");
+    pub const FIXTURES: &str =
+        include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/fixtures.json");
+    pub const ROOM: &str =
+        include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/room.json");
+    pub const SCREENS: &str =
+        include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/screens.json");
+    pub const PROPS: &str =
+        include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/props.json");
+    pub const GROUPS: &str =
+        include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/groups.json");
+    pub const PALETTES: &str =
+        include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/palettes.json");
+    pub const BINDING: &str =
+        include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/profile.json");
     /// The profile the room implements (its named tricks, its looks).
-    pub const PROFILE: &str = include_str!("../../../../../studio-engine/lighting/data/profiles/ignition.ig-profile");
+    pub const PROFILE: &str =
+        include_str!("../../../../../studio-engine/lighting/data/profiles/ignition.ig-profile");
 }
 
 /// The recital's room, from its documents.

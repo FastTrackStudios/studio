@@ -1,7 +1,7 @@
 //! Sharing a session over vox: one peer hosts, the others join.
 //!
-//! Built on architect's `crdt::sync`: the host serves `DocSync` (the doc)
-//! and `DocPresence` (who is doing what) for one session id; each joiner
+//! Built on [`live_doc`]: the host serves `DocSync` (the doc) and
+//! `DocPresence` (who is doing what) for one session id; each joiner
 //! holds both calls open for as long as it is connected. The transport is
 //! whatever carries vox — iroh between native peers (`architect::iroh_link`),
 //! a WebSocket from a browser, an in-process link in tests. It is hub and
@@ -10,12 +10,11 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 use architect::LayerRouter;
-use crdt::CrdtDoc;
-use crdt::sync::{DocPresenceClient, DocSyncClient, PresenceDriver, PresencePeer, SyncedDoc};
-// Hosting a set is a native thing (a desktop, Task): a browser only joins.
+use live_doc::{DocPresenceClient, DocSyncClient, PresenceDriver, PresencePeer, SyncedDoc};
+// Hosting a set is a native thing (a desktop): a browser only joins.
 #[cfg(not(target_arch = "wasm32"))]
-use crdt::sync::{
-    DocPresenceDispatcher, DocSyncDispatcher, DocSyncHost, PresenceHost,
+use live_doc::{
+    DocPresenceDispatcher, DocSyncDispatcher, DocSyncHost, Hosts, PresenceHost,
     doc_presence_service_descriptor, doc_sync_service_descriptor,
 };
 use std::sync::Arc;
@@ -48,49 +47,12 @@ pub fn song_id(set: &str, song: &str) -> Uuid {
 /// A whole setlist, shared: every song's doc under its own id
 /// ([`song_id`]), and one presence channel for the set under the set's
 /// id — so people can be on different songs and still see where
-/// everyone is. Built on architect's `DocRegistry`, whose factory hands
-/// out the songs' live docs (history and all).
+/// everyone is.
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 pub struct SetHost {
     id: Uuid,
-    registry: crdt::DocRegistry,
-    docs: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Uuid, loro::LoroDoc>>>,
-    /// Songs served through a host this set keeps ([`Self::add_relayed`]),
-    /// so what is relayed into them is sent on to their peers.
-    relayed: SetDocs,
-}
-
-/// The set's `DocSync`: a relayed song through its own host, anything else
-/// (the songs added as they are, the presence channel) through the
-/// registry.
-#[cfg(not(target_arch = "wasm32"))]
-#[derive(Clone)]
-struct SetDocs {
-    hosts: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Uuid, DocSyncHost>>>,
-    registry: crdt::DocRegistry,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl crdt::sync::DocSync for SetDocs {
-    async fn sync(
-        &self,
-        doc_id: Uuid,
-        from: Vec<u8>,
-        up: vox::Rx<Vec<u8>>,
-        down: vox::Tx<crdt::sync::SyncDown>,
-    ) -> Result<(), crdt::sync::SyncError> {
-        use crdt::sync::DocSync as _;
-        let host = self
-            .hosts
-            .lock()
-            .ok()
-            .and_then(|hosts| hosts.get(&doc_id).cloned());
-        match host {
-            Some(host) => host.sync(doc_id, from, up, down).await,
-            None => self.registry.sync(doc_id, from, up, down).await,
-        }
-    }
+    hosts: Hosts,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -98,25 +60,9 @@ impl SetHost {
     /// A set shared under `id` (see [`session_id`]).
     #[must_use]
     pub fn new(id: Uuid) -> Self {
-        let docs: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Uuid, loro::LoroDoc>>> =
-            std::sync::Arc::default();
-        let lookup = std::sync::Arc::clone(&docs);
-        let registry = crdt::DocRegistry::new(move |doc_id| {
-            let doc = lookup.lock().ok().and_then(|d| d.get(&doc_id).cloned());
-            // The set's own id has no doc — it is the presence channel —
-            // and a song this host does not have is an empty one.
-            Box::pin(async move { Ok(doc.map_or_else(CrdtDoc::ephemeral, CrdtDoc::from_loro)) })
-        })
-        .with_presence_timeout(PRESENCE_TIMEOUT_MS);
-        let relayed = SetDocs {
-            hosts: std::sync::Arc::default(),
-            registry: registry.clone(),
-        };
         Self {
             id,
-            registry,
-            docs,
-            relayed,
+            hosts: Hosts::new(PRESENCE_TIMEOUT_MS),
         }
     }
 
@@ -128,10 +74,7 @@ impl SetHost {
     /// by itself). Before anyone syncs it.
     #[must_use]
     pub fn add_relayed(&self, doc_id: Uuid, doc: &SessionDoc) -> crate::relay::Side {
-        let host = DocSyncHost::new(doc_id, CrdtDoc::from_loro(doc.loro().clone()));
-        if let Ok(mut hosts) = self.relayed.hosts.lock() {
-            hosts.insert(doc_id, host.clone());
-        }
+        let host = self.hosts.add(doc_id, doc.loro().clone());
         let into = doc.loro().clone();
         crate::relay::Side {
             doc: doc.loro().clone(),
@@ -148,9 +91,7 @@ impl SetHost {
 
     /// Share a song's doc under `doc_id`. Before anyone syncs it.
     pub fn add(&self, doc_id: Uuid, doc: &SessionDoc) {
-        if let Ok(mut docs) = self.docs.lock() {
-            docs.insert(doc_id, doc.loro().clone());
-        }
+        let _ = self.hosts.add(doc_id, doc.loro().clone());
     }
 
     #[must_use]
@@ -164,11 +105,11 @@ impl SetHost {
         router
             .with(
                 doc_sync_service_descriptor(),
-                DocSyncDispatcher::new(self.relayed.clone()),
+                DocSyncDispatcher::new(self.hosts.clone()),
             )
             .with(
                 doc_presence_service_descriptor(),
-                DocPresenceDispatcher::new(self.registry.clone()),
+                DocPresenceDispatcher::new(self.hosts.clone()),
             )
             // The session's shared clock: this host's (see `clock`).
             .with(
@@ -273,7 +214,7 @@ impl SetPeer {
         dial: Dial<DocSyncClient>,
     ) -> (SessionDoc, crate::relay::Side) {
         let doc = SessionDoc::new();
-        let mut synced = SyncedDoc::new(doc_id, CrdtDoc::from_loro(doc.loro().clone()));
+        let mut synced = SyncedDoc::new(doc_id, doc.loro().clone());
         let outbox = synced.outbox();
         let into = doc.loro().clone();
         let side = crate::relay::Side {
@@ -381,10 +322,9 @@ impl CollabHost {
     /// Serve `doc` — the same Loro doc this peer's own bridge edits.
     #[must_use]
     pub fn new(id: Uuid, doc: &SessionDoc) -> Self {
-        let crdt = CrdtDoc::from_loro(doc.loro().clone());
         Self {
             id,
-            sync: DocSyncHost::new(id, crdt),
+            sync: DocSyncHost::new(id, doc.loro().clone()),
             presence: PresenceHost::new(id, PRESENCE_TIMEOUT_MS),
         }
     }
@@ -445,7 +385,7 @@ impl CollabPeer {
     #[must_use]
     pub fn new(id: Uuid) -> Self {
         let doc = SessionDoc::new();
-        let synced = SyncedDoc::new(id, CrdtDoc::from_loro(doc.loro().clone()));
+        let synced = SyncedDoc::new(id, doc.loro().clone());
         let (presence, driver) = PresencePeer::new(id, PRESENCE_TIMEOUT_MS);
         Self {
             id,

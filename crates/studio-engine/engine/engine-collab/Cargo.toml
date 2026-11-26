@@ -33,7 +33,7 @@ facet = { workspace = true }
 serde_json = { workspace = true }
 vox = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
-crdt = { workspace = true, optional = true, features = ["vox"] }
+live-doc = { workspace = true, optional = true }
 vox-core = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 daw-transport-sync = { workspace = true, optional = true }
@@ -51,9 +51,9 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 default = ["native"]
 # studio-engine's features, forwarded (its `native`, `signal`, `web`,
 # `show` turn these on): gate the modules here as they were gated there.
-native = ["engine-core/native", "engine-runtime/native", "architect/host", "architect/iroh", "dep:tokio", "tokio?/net", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:live-proto", "dep:task-dial", "dep:dirs", "library-sync/publish", "library-sync/project-sync"]
+native = ["engine-core/native", "engine-runtime/native", "architect/host", "architect/iroh", "dep:tokio", "tokio?/net", "dep:live-doc", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:live-proto", "dep:task-dial", "dep:dirs", "library-sync/publish", "library-sync/project-sync"]
 signal = ["native", "engine-core/signal"]
-web = ["engine-core/web", "engine-runtime/web", "dep:crdt", "dep:uuid", "dep:daw-transport-sync", "dep:live-proto", "dep:task-dial"]
+web = ["engine-core/web", "engine-runtime/web", "dep:live-doc", "dep:uuid", "dep:daw-transport-sync", "dep:live-proto", "dep:task-dial"]
 show = ["native", "engine-core/show"]
 
 [lints]

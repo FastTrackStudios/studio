@@ -19,8 +19,8 @@
 use crate::night::Night;
 use crate::studio_clock::{set_beat, slugs};
 use anyhow::{Context, Result, anyhow};
-use crdt::sync::{DocPresenceClient, PresencePeer};
 use ignition_daw::BeatSource;
+use live_doc::{DocPresenceClient, PresencePeer};
 use session::Transport;
 use session::doc::transport_of;
 use std::sync::Arc;

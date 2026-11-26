@@ -3,7 +3,7 @@
 //!
 //! A song open in an engine has one doc and one bridge to it
 //! ([`crate::Bridge`], one per project: [`crate::bridge::claim`]).
-//! A live set keeps its own doc of the song (Task names it), and a browser
+//! A live set keeps its own doc of the song, and a browser
 //! in the set reads and edits only that. Bridging that doc to the engine
 //! too made two bridges on one project, each with its own map of which
 //! doc FX is which engine FX, and they added each other's FX chains again
@@ -68,20 +68,26 @@ pub fn same_lineage(a: &LoroDoc, b: &LoroDoc) -> bool {
 }
 
 /// The most one update passed across holds: a link takes 16 MiB a
-/// message (architect's `MAX_FRAME`), and the rest of a frame is room.
+/// message (`live_doc::MAX_FRAME`), and the rest of a frame is room.
 pub const FRAME: usize = 8 * 1024 * 1024;
 
-/// What seeds an empty doc as a copy of `from`, in frames.
+/// What seeds an empty doc as a copy of `from`.
 ///
-/// It is `from`'s whole history — the same operations, so what either side
-/// writes after merges into the other. Not a shallow snapshot: a doc seeded
-/// from one cannot hand a later replica (a peer joining with nothing) the
-/// history before it, and that replica would get an empty song. A long
-/// history goes in several frames ([`FRAME`]).
+/// The same operations as `from`, so what either side writes after merges
+/// into the other: its whole history, in frames ([`FRAME`]), or, for a
+/// song folded shallow at its open (which holds no history before that),
+/// its shallow snapshot, one blob that a live set's sync sends in pieces
+/// (a joiner with nothing is seeded the same way, so the history a shallow
+/// copy lacks is never asked of it).
 ///
 /// # Errors
 /// When `from` cannot be exported.
 pub fn seed(from: &LoroDoc) -> eyre::Result<Vec<Vec<u8>>> {
+    if from.is_shallow() {
+        return Ok(vec![
+            from.export(ExportMode::shallow_snapshot(&from.oplog_frontiers()))?,
+        ]);
+    }
     frames(from, &loro::VersionVector::default())
 }
 

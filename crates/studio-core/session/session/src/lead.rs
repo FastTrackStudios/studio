@@ -2,7 +2,7 @@
 //! host) calls so every view on every machine follows it.
 //!
 //! [`Leader::serve`] serves the session's presence over vox on a WebSocket
-//! (Architect's `PresenceHost`, which also serves the host's clock:
+//! (`live_doc::PresenceHost`, which also serves the host's clock:
 //! `DocPresence::now`), and joins that presence as peer `lead`.
 //! [`Leader::publish`] then puts the transport there as `lead/play`,
 //! stamped in the host's clock (`Here::play_now`): Keyflow's chart,
@@ -16,9 +16,8 @@ use std::time::Duration;
 use architect::LayerRouter;
 use architect::connect::{Endpoint, pool};
 use architect::host::EngineHost;
-use crdt::presence::{Here, PeerState};
-use crdt::sync::{
-    DocPresenceClient, DocPresenceDispatcher, PresenceHost, PresencePeer,
+use live_doc::{
+    DocPresenceClient, DocPresenceDispatcher, Here, PeerState, PresenceHost, PresencePeer,
     doc_presence_service_descriptor,
 };
 use uuid::Uuid;
