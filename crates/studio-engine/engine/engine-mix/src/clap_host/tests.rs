@@ -132,6 +132,8 @@ fn register_tests() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
         let list = crate::actions::list();
+        // The mix's own actions (SIGNAL_*), as the engine registers them.
+        crate::register(list).expect("the mix's actions");
         list.register(&ECHO, Effect::ReadOnly, |a: Said| {
             Ok::<_, String>(Said { word: a.word })
         })

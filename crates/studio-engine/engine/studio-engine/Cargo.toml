@@ -284,6 +284,8 @@ path = "src/bin/chain-probe.rs"
 required-features = ["native"]
 
 [dev-dependencies]
+# The mix's song of known signals (`mix_variants_match_tests`).
+engine-mix = { workspace = true, features = ["test-support"] }
 # A CLAP plugin and host built in memory, for the host-actions/1 bridge
 # (`clap_host::tests`).
 clap-sys = "0.5"

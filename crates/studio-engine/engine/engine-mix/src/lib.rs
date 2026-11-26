@@ -39,8 +39,10 @@ pub mod rig_actions;
 #[cfg(feature = "native")]
 pub mod signal_kit;
 
-#[cfg(test)]
-mod test_song;
+/// A song of known signals, for the mix's tests and the engine's.
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
+pub mod test_song;
 
 #[cfg(feature = "native")]
 pub use mix_actions::register;

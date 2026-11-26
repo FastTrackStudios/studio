@@ -114,6 +114,8 @@ pub use engine_mix::mix_snapshot;
 pub use engine_mix::mix_state;
 #[cfg(feature = "native")]
 pub use engine_mix::mix_variants;
+#[cfg(all(test, feature = "native"))]
+mod mix_variants_match_tests;
 #[cfg(feature = "native")]
 pub mod off_loop;
 #[cfg(feature = "native")]

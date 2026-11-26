@@ -65,6 +65,8 @@ native = ["engine-core/native", "daw-view/native", "daw-standalone/clap-host", "
 signal = ["native", "engine-core/signal", "dep:signal-fx"]
 web = ["engine-core/web", "daw-view/web"]
 show = ["native", "engine-core/show"]
+# The tests' song of known signals (`test_song`), for studio-engine's tests.
+test-support = ["native"]
 
 [lints]
 workspace = true
