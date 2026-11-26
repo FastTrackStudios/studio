@@ -12,37 +12,24 @@
 //! `default-config/frozen` here. A release build refuses to run without
 //! the captures.
 //!
-//! The table names each file by its path relative to `OUT_DIR` (an
-//! `include_bytes!` in an `include!`d file resolves against that file), so
-//! it holds no absolute path: with the target dir in the checkout it is the
-//! same text in every worktree, and the compiler cache (kache, which hashes
-//! it) serves one worktree's `guitar` — and everything above it — to the
-//! next.
+//! Each file is copied into `OUT_DIR/embed/<table>/` (a reflink on btrfs and
+//! APFS, so no bytes are copied) and the table names it by that path, which
+//! never leaves `OUT_DIR` (an `include_bytes!` in an `include!`d file
+//! resolves against that file). So the generated text is the same in every
+//! checkout and right wherever the target dir is. A path from `OUT_DIR` out
+//! to the checkout was neither: kache replays a build script's output by a
+//! key that leaves out where the target dir sits, and a run recorded with
+//! the target dir outside the checkout (`just test-unbreakable`'s) put
+//! `../../../../../../../monorepo/rig-library/…` into an in-checkout
+//! `target/`, which named no file.
 
 use std::fmt::Write as _;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
-/// `to` relative to the directory `from` (both canonical), or `to` itself
-/// when they share no root (another drive).
-fn relative(from: &Path, to: &Path) -> PathBuf {
-    let from: Vec<Component> = from.components().collect();
-    let to_parts: Vec<Component> = to.components().collect();
-    let common = from
-        .iter()
-        .zip(&to_parts)
-        .take_while(|(a, b)| a == b)
-        .count();
-    if common == 0 {
-        return to.to_path_buf();
-    }
-    let ups = std::iter::repeat_n(Component::ParentDir, from.len().saturating_sub(common));
-    ups.chain(to_parts.into_iter().skip(common)).collect()
-}
-
-/// `(file name, path relative to out_dir)` of every file in `dir` with one
-/// of `exts`, by name.
-fn files(dir: &Path, out_dir: &Path, exts: &[&str]) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = std::fs::read_dir(dir)
+/// Every file in `dir` with one of `exts`, by name, at its real path (`models/`
+/// can be a link into .assets, `just assets`).
+fn listed(dir: &Path, exts: &[&str]) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = std::fs::read_dir(dir)
         .map(|rd| {
             rd.filter_map(Result::ok)
                 .map(|e| e.path())
@@ -51,22 +38,28 @@ fn files(dir: &Path, out_dir: &Path, exts: &[&str]) -> Vec<(String, String)> {
                         .and_then(|e| e.to_str())
                         .is_some_and(|e| exts.contains(&e))
                 })
-                .map(|p| {
-                    // Embedded by its real path: `models/` is a link into
-                    // .assets (`just assets`), and a path through it is one
-                    // git cannot answer for, so cargo-rail could record no
-                    // evidence for any build of this crate.
-                    let real = std::fs::canonicalize(&p).unwrap_or_else(|_| p.clone());
-                    (
-                        p.file_name().unwrap().to_string_lossy().into_owned(),
-                        relative(out_dir, &real).to_string_lossy().into_owned(),
-                    )
-                })
+                .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
                 .collect()
         })
         .unwrap_or_default();
-    out.sort();
+    out.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
     out
+}
+
+/// `files` copied into `out_dir/embed/<table>/`: `(file name, its path
+/// relative to out_dir)` each.
+fn embedded(files: &[PathBuf], out_dir: &Path, table: &str) -> Vec<(String, String)> {
+    let dir = out_dir.join("embed").join(table);
+    std::fs::create_dir_all(&dir).unwrap();
+    files
+        .iter()
+        .map(|src| {
+            let name = src.file_name().unwrap().to_string_lossy().into_owned();
+            std::fs::copy(src, dir.join(&name))
+                .unwrap_or_else(|e| panic!("copying {} into OUT_DIR: {e}", src.display()));
+            (name.clone(), format!("embed/{table}/{name}"))
+        })
+        .collect()
 }
 
 /// One shipped library's tables, named `<prefix>_MODELS`, `_FROZEN`,
@@ -98,18 +91,27 @@ fn tables(src: &mut String, root: &Path, captures: &Path, out_dir: &Path, prefix
         }
         writeln!(src, "];").unwrap();
     };
-    bytes(
-        src,
-        &format!("{prefix}_MODELS"),
-        &files(&captures.join("models"), out_dir, &["nam", "wav"]),
+    let models = format!("{prefix}_MODELS");
+    let models_list = embedded(
+        &listed(&captures.join("models"), &["nam", "wav"]),
+        out_dir,
+        &models,
     );
-    bytes(
-        src,
-        &format!("{prefix}_FROZEN"),
-        &files(&captures.join("frozen"), out_dir, &["nam"]),
+    bytes(src, &models, &models_list);
+    let frozen = format!("{prefix}_FROZEN");
+    let frozen_list = embedded(
+        &listed(&captures.join("frozen"), &["nam"]),
+        out_dir,
+        &frozen,
     );
-    writeln!(src, "const {prefix}_PROFILES: &[(&str, &str)] = &[").unwrap();
-    for (file, path) in files(&root.join("profiles"), out_dir, &["styx"]) {
+    bytes(src, &frozen, &frozen_list);
+    let profiles = format!("{prefix}_PROFILES");
+    writeln!(src, "const {profiles}: &[(&str, &str)] = &[").unwrap();
+    for (file, path) in embedded(
+        &listed(&root.join("profiles"), &["styx"]),
+        out_dir,
+        &profiles,
+    ) {
         writeln!(src, "    ({file:?}, include_str!({path:?})),").unwrap();
     }
     writeln!(src, "];").unwrap();
@@ -120,7 +122,6 @@ fn main() {
     // the build script's own cache key.
     let here = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    let out_real = std::fs::canonicalize(&out_dir).unwrap_or_else(|_| out_dir.clone());
     // Where the captures and frozen Cores are: the building app's copy
     // (`SIGNAL_RIG_LIBRARY`), else this crate's own directories.
     println!("cargo:rerun-if-env-changed=SIGNAL_RIG_LIBRARY");
@@ -146,26 +147,29 @@ fn main() {
     if ships_a_rig && std::env::var("PROFILE").as_deref() == Ok("release") {
         for dir in [guitar.join("models"), bass.join("models")] {
             assert!(
-                !files(&dir, &out_real, &["nam", "wav"]).is_empty(),
+                !listed(&dir, &["nam", "wav"]).is_empty(),
                 "{} is empty: the rig's captures are in the rig-models repo (in Studio, `just assets` links them in) — a release build ships them",
                 dir.display(),
             );
         }
     }
+    // A file dropped from the library must not stay embedded from a run
+    // before.
+    let _ = std::fs::remove_dir_all(out_dir.join("embed"));
     let mut src = String::new();
     // The guitar's (`DEFAULT_*`, as they always were) and the bass's.
     tables(
         &mut src,
         &here.join("default-config"),
         &guitar,
-        &out_real,
+        &out_dir,
         "DEFAULT",
     );
     tables(
         &mut src,
         &here.join("default-config-bass"),
         &bass,
-        &out_real,
+        &out_dir,
         "BASS",
     );
     std::fs::write(out_dir.join("default_files.rs"), src).unwrap();
