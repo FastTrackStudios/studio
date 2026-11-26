@@ -40,9 +40,11 @@ default:
 
 # ── Run ──────────────────────────────────────────────────────────────────
 
+# Hot-patching off: it wraps rustc (RUSTC_WORKSPACE_WRAPPER), which kache passes through uncached;
+# with it off, the fleet's dx (DX_NO_RUSTC_WRAPPER=1, devenv-fleet's dioxus) runs plain cargo under kache
 # The desktop app (apps/studio, Blitz) under `dx serve`, with the engine it starts built first
 studio *ARGS: _engine-build
-    cd apps/studio && env {{otlp}} dx serve --platform desktop --renderer native --no-default-features --features native {{dev_build}} {{ARGS}}
+    cd apps/studio && env {{otlp}} dx serve --platform desktop --renderer native --no-default-features --features native --hot-patch false {{dev_build}} {{ARGS}}
 
 # The engine, headless: `run` (the default) starts it in the foreground; `status` and `stop` ask the running one
 engine ACTION="run": _engine-build
