@@ -1,9 +1,9 @@
 ---
 "studio-engine" = "minor"
-"session-ui" = "minor"
+"daw-view-kit" = "minor"
 "engine-host" = "patch"
 "session-reaper-xtask" = "none"
-"app-shell" = "none"
+"studio-shell" = "none"
 "dynamic-template" = "none"
 "daw-ui" = "none"
 "patch-list" = "none"

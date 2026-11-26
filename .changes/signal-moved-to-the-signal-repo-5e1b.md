@@ -1,5 +1,5 @@
 ---
-"app-shell" = "none"
+"studio-shell" = "none"
 "control-surfaces" = "none"
 "engine-host" = "none"
 "studio-engine" = "none"

@@ -1,5 +1,5 @@
 ---
-"session-ui" = "patch"
+"daw-view-kit" = "patch"
 "engine-host" = "patch"
 "studio-engine" = "patch"
 "dock" = "patch"

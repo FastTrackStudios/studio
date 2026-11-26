@@ -1,7 +1,7 @@
 ---
 "session" = "patch"
 "studio-engine" = "minor"
-"session-ui" = "minor"
+"daw-view-kit" = "minor"
 "engine-host" = "patch"
 ---
 

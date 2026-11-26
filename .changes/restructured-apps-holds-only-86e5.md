@@ -1,11 +1,11 @@
 ---
-"app-shell" = "minor"
+"studio-shell" = "minor"
 "fts-clap-host" = "minor"
 "guide-plugin" = "minor"
 "engine-host" = "minor"
 "studio-engine" = "minor"
 "engine-runtime" = "minor"
-"session-ui" = "minor"
+"daw-view-kit" = "minor"
 "xtask-workflows" = "minor"
 ---
 

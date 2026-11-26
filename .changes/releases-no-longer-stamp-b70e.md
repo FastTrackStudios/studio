@@ -1,5 +1,5 @@
 ---
-"app-shell" = "patch"
+"studio-shell" = "patch"
 "fts-version" = "patch"
 "engine-host" = "patch"
 "studio-engine" = "patch"

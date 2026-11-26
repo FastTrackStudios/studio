@@ -1,5 +1,5 @@
 ---
-"session-ui" = "patch"
+"daw-view-kit" = "patch"
 "studio-mixer" = "patch"
 ---
 
