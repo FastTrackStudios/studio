@@ -16,6 +16,9 @@ name = "Studio"
 path = "src/main.rs"
 
 [dependencies]
+# The release version `--version` prints (FTS_RELEASE_VERSION at build
+# time, else the workspace version). Binaries only depend on it.
+fts-version.workspace = true
 session-sync.workspace = true
 # A one-file song read from its bytes (its session part, its id): pure Rust,
 # for the browser too.

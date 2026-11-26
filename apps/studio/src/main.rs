@@ -196,6 +196,19 @@ impl Route {
 }
 
 fn main() {
+    // `--version`: the release's version and nothing else, before any
+    // window, engine, audio or log starts. The release's smoke test reads
+    // it headless (scripts/desktop/linux-smoke.sh expects `studio X.Y.Z`),
+    // and it is how a user tells which Studio they have.
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        use std::io::Write as _;
+        let _ = writeln!(
+            std::io::stdout(),
+            "studio {}",
+            fts_version::release_version()
+        );
+        return;
+    }
     // One MCP server: Studio's own, which also carries the engine's
     // actions (`hosted::forward_engine_actions`). The engine Studio starts
     // keeps its list as Studio's private line and publishes no discovery

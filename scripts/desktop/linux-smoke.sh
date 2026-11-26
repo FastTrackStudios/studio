@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # Smoke-test a Linux AppImage headless: it must start, with no display and no
 # audio, and print "studio <version>" for `--version`.
-# TODO(monorepo): apps/studio's program does not answer `--version` yet (it
-# has no fts-version); until it does, this smoke fails on a real AppImage.
 #
 #   scripts/desktop/linux-smoke.sh <file.AppImage> <X.Y.Z>
 #
