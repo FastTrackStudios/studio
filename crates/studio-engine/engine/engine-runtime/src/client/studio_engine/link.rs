@@ -188,17 +188,22 @@ pub fn publish(found: &Found) -> Option<PathBuf> {
     }
 }
 
-/// Whether this process may link to `found`: a named Studio instance
-/// (`STUDIO_INSTANCE`, a second Studio beside the person's) only to an
-/// engine whose socket is under its own runtime dir, since every engine's
-/// file is in the one shared [`dir`]. Unnamed, any engine.
+/// Whether this process may link to `found`: only an engine whose socket
+/// is under its own runtime dir, since every engine's file is in the one
+/// shared [`dir`]. That keeps the person's window off a sandboxed engine
+/// (a test's, a second named instance's) and a sandboxed window off the
+/// person's. With no runtime dir, any engine.
 fn of_this_instance(found: &Found) -> bool {
-    if std::env::var_os("STUDIO_INSTANCE").is_none_or(|i| i.is_empty()) {
-        return true;
-    }
+    under_own_runtime_dir(&found.socket)
+}
+
+/// Whether `socket` is under this process's `XDG_RUNTIME_DIR` (true when
+/// there is none).
+#[must_use]
+pub fn under_own_runtime_dir(socket: &std::path::Path) -> bool {
     std::env::var_os("XDG_RUNTIME_DIR")
         .filter(|d| !d.is_empty())
-        .is_some_and(|run| found.socket.starts_with(run))
+        .is_none_or(|run| socket.starts_with(run))
 }
 
 /// Every engine that has said where it is (and this instance may link
@@ -585,6 +590,20 @@ pub fn changed_songs(shown: &[String], engine: &[String]) -> SongsChanged {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_window_links_only_to_engines_under_its_own_runtime_dir() {
+        let Some(run) = std::env::var_os("XDG_RUNTIME_DIR").filter(|d| !d.is_empty()) else {
+            return;
+        };
+        let run = std::path::PathBuf::from(run);
+        assert!(under_own_runtime_dir(&run.join("fts/engine-1.sock")));
+        let sandbox = std::path::Path::new("/nonexistent-sandbox/run/fts/engine-2.sock");
+        assert!(
+            !under_own_runtime_dir(sandbox),
+            "a test's engine is not the person's"
+        );
+    }
 
     #[test]
     fn a_named_instance_keeps_what_it_opened_apart() {

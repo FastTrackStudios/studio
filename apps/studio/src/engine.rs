@@ -103,17 +103,14 @@ pub fn parse_found(bytes: &[u8]) -> Option<Found> {
     })
 }
 
-/// Whether this instance may attach to an engine: a named instance
-/// (`STUDIO_INSTANCE`) only to one whose socket is under its own runtime
-/// dir, so a second Studio never takes the person's engine (the engines'
-/// files are shared, under the config dir). Unnamed, any engine.
+/// Whether this instance may attach to an engine: only one whose socket
+/// is under its own runtime dir (the engines' files are shared, under the
+/// config dir), so a second Studio never takes the person's engine and the
+/// person's window never takes a test's or a second instance's.
 fn ours(f: &Found) -> bool {
-    if crate::instance::instance().is_none() {
-        return true;
-    }
     std::env::var_os("XDG_RUNTIME_DIR")
         .filter(|d| !d.is_empty())
-        .is_some_and(|run| f.socket.starts_with(run))
+        .is_none_or(|run| f.socket.starts_with(run))
 }
 
 /// Every engine that has said where it is (and this instance may use),
