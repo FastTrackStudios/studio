@@ -121,7 +121,9 @@ fn look(daw: &'static Standalone, guid: &str, seen: &mut HashMap<String, Seen>) 
     let (file, branch) = crate::project_file::save_target(&known.file);
     match crate::project_file::save(daw, guid, &file, &branch, "Autosave") {
         Ok(_) => {
-            crate::projects::mark_saved(daw, guid);
+            if let Some(engine) = crate::assembly::get() {
+                (engine.mark_saved)(daw, guid);
+            }
             known.saved = now;
             log(&known.file, "saved", now);
             true
@@ -137,7 +139,7 @@ fn look(daw: &'static Standalone, guid: &str, seen: &mut HashMap<String, Seen>) 
 /// beside the file it was (`Song.RPP` to `Song.session`). None for a song
 /// with no file yet.
 fn file_of(daw: &Standalone, guid: &str) -> Option<PathBuf> {
-    if crate::project_new::untitled(daw, guid) {
+    if crate::open::untitled(daw, guid) {
         return None;
     }
     let from = PathBuf::from(daw.read_project(guid, |p| p.info.path.clone())?);

@@ -36,6 +36,12 @@ pub mod headless;
 pub use engine_runtime::client::studio_engine::link;
 pub mod live;
 pub mod mcp;
-pub mod set;
+/// The set: the core's (`engine_core::studio_engine::set`), with its
+/// openers here.
+pub mod set {
+    pub use super::set_open::*;
+    pub use engine_core::studio_engine::set::*;
+}
 pub mod set_actions;
+mod set_open;
 pub mod view_host;

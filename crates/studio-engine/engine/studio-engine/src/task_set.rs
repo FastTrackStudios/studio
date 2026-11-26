@@ -51,23 +51,5 @@ pub async fn join(url: &str) -> eyre::Result<live_proto::LiveSet> {
         .map_err(|e| eyre::eyre!("the set could not be joined ({e:?})"))
 }
 
-/// A dial's error in a few words for a person: the HTTP status when the
-/// server answered one (a dial error carries the whole response — headers,
-/// and the body as bytes), else its first line, cut short.
-#[must_use]
-pub fn brief(error: &str) -> String {
-    if let Some(at) = error.find("status: ") {
-        let code: String = error[at + 8..]
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        if !code.is_empty() {
-            return format!("the server answered {code}");
-        }
-    }
-    let line = error.lines().next().unwrap_or_default();
-    match line.char_indices().nth(120) {
-        Some((cut, _)) => format!("{}…", &line[..cut]),
-        None => line.to_owned(),
-    }
-}
+/// An error, said briefly: the set's (`engine_core`).
+pub use engine_core::studio_engine::set::brief;

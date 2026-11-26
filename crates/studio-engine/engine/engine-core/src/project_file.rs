@@ -841,7 +841,7 @@ fn note_mark(open: &Open, name: &str, action: &str) -> Result<(), String> {
 /// Wait (at most `most`) until no step's doc write is running: what reads
 /// or rewrites the doc whole (an undo, a restore, a copy of the file)
 /// then sees every step recorded. Whether it got there.
-pub(crate) fn written(most: std::time::Duration) -> bool {
+pub fn written(most: std::time::Duration) -> bool {
     if WRITING.load(std::sync::atomic::Ordering::SeqCst) == 0 {
         return true;
     }
@@ -923,19 +923,19 @@ fn send_write(
 }
 
 /// The longest an undo, a restore or a copy waits for a step's write.
-pub(crate) const WRITE_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+pub const WRITE_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// How the kit's MIDI agrees with its hits after `labels` (the steps
 /// recorded together): an undo or a redo puts both back, so the views are
 /// written from the hits; any other step may be an edit of a view.
-fn sync_mode(labels: &[String]) -> crate::hits_midi::Mode {
+fn sync_mode(labels: &[String]) -> crate::assembly::StepSync {
     if labels
         .iter()
         .any(|l| l.starts_with("Undo ") || l.starts_with("Redo "))
     {
-        crate::hits_midi::Mode::Follow
+        crate::assembly::StepSync::Follow
     } else {
-        crate::hits_midi::Mode::Reconcile
+        crate::assembly::StepSync::Reconcile
     }
 }
 
@@ -951,9 +951,10 @@ pub fn record_steps() {
         let tx = Mutex::new(tx);
         daw::standalone::steps::listen(Arc::new(move |project, label| {
             // A CLAP's `hits:` subscriptions follow each step.
-            crate::clap_host::step_finished();
-            // The song's revision: a step no watched action made (a drag).
-            crate::agent::step_finished(label);
+            // and the song's revision: a step no watched action made (a drag).
+            if let Some(engine) = crate::assembly::get() {
+                (engine.step_finished)(label);
+            }
             if let Ok(tx) = tx.lock()
                 && tx
                     .send((
@@ -1009,8 +1010,10 @@ pub fn record_steps() {
                             steps.hits_removed = tracing::field::Empty,
                         )
                         .entered();
-                        if let Some(daw) = crate::open::local_engine() {
-                            crate::actions::samples_follow(
+                        if let Some(daw) = crate::open::local_engine()
+                            && let Some(engine) = crate::assembly::get()
+                        {
+                            (engine.samples_follow)(
                                 daw,
                                 &daw::service::ProjectContext::Project(project.clone()),
                                 sync_mode(&labels),
@@ -1077,7 +1080,7 @@ pub fn with_open_store<T: Send>(
 /// # Errors
 /// The song is not open from its project file.
 #[cfg(feature = "native")]
-pub(crate) fn with_song_doc<T: Send>(
+pub fn with_song_doc<T: Send>(
     guid: &str,
     read: impl FnOnce(&engine_sync::loro::LoroDoc) -> T + Send,
 ) -> Result<T, String> {
@@ -1103,7 +1106,7 @@ pub fn steps_pending() -> usize {
 /// The engine finished the step `label` in the song `project_guid`: read
 /// it into the song's doc as one commit and append that to its file — if
 /// the song is open from one.
-pub(crate) fn record(project_guid: &str, label: &str, action: Option<&str>) -> Result<(), String> {
+pub fn record(project_guid: &str, label: &str, action: Option<&str>) -> Result<(), String> {
     let guid = project_guid.to_owned();
     let label = label.to_owned();
     let action = action.map(str::to_owned);

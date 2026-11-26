@@ -887,18 +887,9 @@ pub fn steps(
         // chains set).
         #[cfg(feature = "native")]
         {
-            let chains = crate::mix_chains::add(daw, &project)?;
-            tracing::info!(
-                tone = chains.tone,
-                buses = chains.buses,
-                process = chains.process,
-                gates = ?chains.gates,
-                one_notes = ?chains.one_notes,
-                returns = chains.returns,
-                mics = ?chains.mics,
-                unknown = ?chains.unknown,
-                "prepare: mix chains"
-            );
+            if let Some(engine) = crate::assembly::get() {
+                (engine.mix_chains)(daw, &project)?;
+            }
         }
     }
     if organize {
@@ -922,15 +913,9 @@ pub fn steps(
         // The engine's (native): a browser prepares nothing by reference.
         #[cfg(feature = "native")]
         {
-            let reference = crate::instrument_tracks::file_reference(daw, &project)
-                .map_err(|e| eyre::eyre!("reference: {e}"))?;
-            let by_reference = crate::instrument_tracks::settle_hearing(daw, &project)
-                .map_err(|e| eyre::eyre!("reference: {e}"))?;
-            tracing::info!(
-                reference = ?reference,
-                heard_by_reference = by_reference,
-                "prepare: the song's reference"
-            );
+            if let Some(engine) = crate::assembly::get() {
+                (engine.reference)(daw, &project)?;
+            }
         }
     }
     Ok(())

@@ -36,7 +36,7 @@ pub fn current() -> RenderAhead {
 
 /// Change it, keep it, and play on with it: the audio device is opened
 /// again, which is how an engine takes it up. Says what it is now.
-pub(crate) fn set(want: RenderAhead) -> RenderAhead {
+pub fn set(want: RenderAhead) -> RenderAhead {
     let now = RenderAhead {
         depth_ms: want.depth_ms.clamp(1, MOST_MS),
         ..want

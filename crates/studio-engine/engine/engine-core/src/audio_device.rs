@@ -80,7 +80,7 @@ pub fn current() -> AudioDevice {
 
 /// Change it, keep it, and play on through it: the device is opened
 /// again. Says what it is now.
-pub(crate) fn set(want: AudioDevice) -> AudioDevice {
+pub fn set(want: AudioDevice) -> AudioDevice {
     let changed = {
         let mut held = store()
             .lock()

@@ -205,9 +205,7 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
     setlist.order = titles;
     crate::collab::join_task_in_background(set, name);
     let (arrive, arrivals) = tokio::sync::mpsc::unbounded_channel();
-    if let Ok(mut slot) = ARRIVALS.lock() {
-        *slot = Some(arrivals);
-    }
+    hold_arrivals(arrivals);
     open_behind_all(runtime, rest, &arrive);
     Ok(setlist)
 }
@@ -331,38 +329,8 @@ async fn bring_in(source: &Source, cache: &std::path::Path) -> eyre::Result<Stre
     .await
 }
 
-/// The set's songs after the first, as each opens — once, for the window
-/// that shows them.
-static ARRIVALS: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Arrival>>> = Mutex::new(None);
-
-/// The songs arriving behind the first (see [`open`]), for the window to
-/// add to its set; `None` while another holds them, or when nothing is
-/// arriving. Given back when the holder drops them: a window mounted again
-/// (the welcome screen handing the set over) picks up where the last one
-/// stopped — taken for good, the songs after it never arrived.
-pub fn take_arrivals() -> Option<Arrivals> {
-    ARRIVALS.lock().ok()?.take().map(|rx| Arrivals(Some(rx)))
-}
-
-/// The arrivals, held — given back on drop ([`take_arrivals`]).
-pub struct Arrivals(Option<tokio::sync::mpsc::UnboundedReceiver<Arrival>>);
-
-impl Arrivals {
-    /// The next song to arrive; `None` once every one has.
-    pub async fn recv(&mut self) -> Option<Arrival> {
-        self.0.as_mut()?.recv().await
-    }
-}
-
-impl Drop for Arrivals {
-    fn drop(&mut self) {
-        if let (Some(rx), Ok(mut slot)) = (self.0.take(), ARRIVALS.lock())
-            && slot.is_none()
-        {
-            *slot = Some(rx);
-        }
-    }
-}
+/// The songs arriving behind the first: the set's (`engine_core`).
+pub use engine_core::studio_engine::set::{Arrivals, hold_arrivals, take_arrivals};
 
 /// Where streamed songs' small files are kept: the same bytes at the same
 /// version are not fetched twice.
@@ -1218,13 +1186,8 @@ pub const READY_AHEAD: f64 = 4.0;
 /// How far [`readiness`] looks.
 pub const LOOK_AHEAD: f64 = 30.0;
 
-/// The transport's playhead and whether it moves, for `project`.
-pub fn transport_of(project: &str) -> Option<(f64, bool)> {
-    let daw = crate::open::local_engine()?;
-    let backend = daw.sync_backend(project)?;
-    let snap = daw_transport_sync::TransportBackend::snapshot(&backend)?;
-    Some((snap.playhead_seconds, snap.is_playing))
-}
+/// Where `project`'s transport is: the set's (`engine_core`).
+pub use engine_core::studio_engine::set::transport_of;
 
 /// Whether `project` (a song streaming in) can play from its playhead —
 /// by what it is heard by now: its live tracks, and its stems or its

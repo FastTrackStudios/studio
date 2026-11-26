@@ -3713,7 +3713,6 @@ pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::Actio
     crate::grow::register(list)?;
     crate::edit_actions::register(list)?;
     crate::trigger_from_mics::register(list)?;
-    crate::safety_net::register(list)?;
     crate::edit_reads::register(list)?;
     crate::comp_rank::register(list)?;
     crate::comp_song::register(list)?;

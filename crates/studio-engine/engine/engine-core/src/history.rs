@@ -235,7 +235,9 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         let moment = moment?;
         let (daw, project) = crate::actions::song()?;
         let stage = tracing::info_span!("history.follow").entered();
-        crate::actions::samples_follow(daw, &project, crate::hits_midi::Mode::Follow);
+        if let Some(engine) = crate::assembly::get() {
+            (engine.samples_follow)(daw, &project, crate::assembly::StepSync::Follow);
+        }
         drop(stage);
         let stage = tracing::info_span!("history.resync").entered();
         crate::changes::announce(crate::changes::Change::Marks);

@@ -1,0 +1,59 @@
+//! The engine's core: the bottom of studio-engine, what every domain
+//! (listen, edit, mix, project, collab) builds on.
+//!
+//! - the set the engine has open ([`studio_engine::set`]);
+//! - opening and saving a song ([`open`], [`open_core`], [`project_file`],
+//!   [`session_file`], [`prepare`], [`reference`]) and the song as an action
+//!   reads it ([`song`]);
+//! - its history ([`history`], [`history_marks`], [`edit_trace`]),
+//!   [`autosave`] and [`backup`]s;
+//! - the audio device ([`audio_device`]) and rendering ahead
+//!   ([`render_ahead`]);
+//! - a checkpoint before a rewrite ([`safety_net`]) and the engine's
+//!   telemetry ([`telemetry`]);
+//! - what every domain's actions share ([`actions`]);
+//! - what the core asks of the engine around it ([`assembly`]).
+//!
+//! The engine's shared half with a window (`engine_runtime::client`) is
+//! re-exported here under the paths the modules were written against.
+//! studio-engine re-exports every module of this crate from its old path.
+
+pub use engine_runtime::client::*;
+
+#[cfg(feature = "native")]
+pub mod actions;
+#[cfg(feature = "native")]
+pub mod assembly;
+#[cfg(feature = "native")]
+pub mod audio_device;
+#[cfg(feature = "native")]
+pub mod autosave;
+#[cfg(feature = "native")]
+pub mod backup;
+#[cfg(feature = "native")]
+pub mod edit_trace;
+#[cfg(feature = "native")]
+pub mod history;
+#[cfg(feature = "native")]
+pub mod history_marks;
+#[cfg(feature = "native")]
+pub mod open;
+pub mod open_core;
+pub mod prepare;
+#[cfg(feature = "native")]
+pub mod project_file;
+pub mod reference;
+#[cfg(feature = "native")]
+pub mod render_ahead;
+#[cfg(feature = "native")]
+pub mod safety_net;
+#[cfg(feature = "native")]
+pub mod session_file;
+#[cfg(feature = "native")]
+pub mod song;
+#[cfg(feature = "native")]
+pub mod studio_engine;
+/// The engine's telemetry on plain `tracing`: the span ring `PERF_RECENT`
+/// reads, OTLP export, the panic hook.
+#[cfg(feature = "native")]
+pub mod telemetry;

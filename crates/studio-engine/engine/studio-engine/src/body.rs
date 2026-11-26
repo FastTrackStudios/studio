@@ -158,9 +158,67 @@ static BODY: EngineBody = EngineBody;
 /// Install the engine's body for the window modules in this process, and
 /// its actions into the Action List: once, as the engine comes up (its
 /// first open, its runtime, the list's first use). Idempotent.
+/// What the core asks of the engine around it (`engine_core::assembly`):
+/// the domains' parts of an open, a step and a prepared song.
+#[cfg(feature = "native")]
+static ASSEMBLY: engine_core::assembly::Assembly = engine_core::assembly::Assembly {
+    install,
+    serve_mcp: || {
+        let _ = crate::studio_engine::mcp::start();
+    },
+    clap_host: crate::clap_host::install,
+    view_router: crate::studio_engine::view_host::router,
+    audio_attached: |daw, stats, rate| {
+        crate::audio_health::watch(daw.clone(), std::sync::Arc::clone(&stats), rate);
+        crate::perf_meter::watch(daw.clone(), stats, rate);
+    },
+    step_finished: |label| {
+        // A CLAP's `hits:` subscriptions follow each step.
+        crate::clap_host::step_finished();
+        crate::agent::step_finished(label);
+    },
+    samples_follow: |daw, project, sync| {
+        let mode = match sync {
+            engine_core::assembly::StepSync::Follow => crate::hits_midi::Mode::Follow,
+            engine_core::assembly::StepSync::Reconcile => crate::hits_midi::Mode::Reconcile,
+        };
+        crate::actions::samples_follow(daw, project, mode);
+    },
+    mix_chains: |daw, project| {
+        let chains = crate::mix_chains::add(daw, project)?;
+        tracing::info!(
+            tone = chains.tone,
+            buses = chains.buses,
+            process = chains.process,
+            gates = ?chains.gates,
+            one_notes = ?chains.one_notes,
+            returns = chains.returns,
+            mics = ?chains.mics,
+            unknown = ?chains.unknown,
+            "prepare: mix chains"
+        );
+        Ok(())
+    },
+    reference: |daw, project| {
+        let reference = crate::instrument_tracks::file_reference(daw, project)
+            .map_err(|e| eyre::eyre!("reference: {e}"))?;
+        let by_reference = crate::instrument_tracks::settle_hearing(daw, project)
+            .map_err(|e| eyre::eyre!("reference: {e}"))?;
+        tracing::info!(
+            reference = ?reference,
+            heard_by_reference = by_reference,
+            "prepare: the song's reference"
+        );
+        Ok(())
+    },
+    mark_saved: crate::projects::mark_saved,
+};
+
 pub fn install() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
+        #[cfg(feature = "native")]
+        engine_core::assembly::install(&ASSEMBLY);
         engine_runtime::client::body::install(&BODY);
         engine_runtime::client::body::install_studio(&BODY);
         // And Studio behind the window modules in this process.

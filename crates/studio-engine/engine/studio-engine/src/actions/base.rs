@@ -1493,6 +1493,7 @@ pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::Actio
     crate::perf_meter::register(list)?;
     crate::history::register(list)?;
     crate::backup::register(list)?;
+    crate::safety_net::register(list)?;
     crate::poi::register(list)?;
     crate::track_regions::register(list)?;
     Ok(())

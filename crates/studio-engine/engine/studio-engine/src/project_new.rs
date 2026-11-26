@@ -123,12 +123,8 @@ fn stamp(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Result<
     Ok(())
 }
 
-/// Whether the song `guid` has never been saved: no file behind it.
-#[must_use]
-pub fn untitled(daw: &daw::standalone::Standalone, guid: &str) -> bool {
-    daw.read_project(guid, |p| p.info.path.trim().is_empty())
-        .unwrap_or(false)
-}
+/// Whether song `guid` has no file yet: the core's (`engine_core::open`).
+pub use engine_core::open::untitled;
 
 /// The song `guid`, saved for the first time as `to` (into the file
 /// `at`): named for `to`, and `at` its own file from now on.

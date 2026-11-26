@@ -20,13 +20,12 @@
 //! cache moves to the window when it reads projects over the facade
 //! (`docs/design/engine-boundary.md`, step 5).
 
-use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use tokio::sync::watch;
 
 use crate::open_progress::Progress;
-use crate::setlist::{Arrival, Setlist, SetlistOpen as _};
+use crate::setlist::{Arrival, Setlist};
 
 pub use engine_runtime::client::studio_engine::set::*;
 
@@ -241,7 +240,7 @@ fn cell() -> &'static watch::Sender<SetView> {
 
 /// Change the set with `change`; published, with a new revision, when it
 /// says it changed something.
-fn update(change: impl FnOnce(&mut SetView) -> bool) {
+pub fn update(change: impl FnOnce(&mut SetView) -> bool) {
     cell().send_if_modified(|view| {
         let changed = change(view);
         if changed {
@@ -364,11 +363,11 @@ pub fn close() {
     });
 }
 
-/// The songs arriving behind the first ([`crate::stream_set::take_arrivals`])
+/// The songs arriving behind the first ([`take_arrivals`])
 /// into the set of `epoch`, on the engine's runtime, until they stop or
 /// another set replaces it.
 fn drain_arrivals(epoch: u64) {
-    let Some(mut arrivals) = crate::stream_set::take_arrivals() else {
+    let Some(mut arrivals) = take_arrivals() else {
         return;
     };
     let Some(runtime) = crate::open::runtime() else {
@@ -446,37 +445,8 @@ fn playhead_now(lineup: &Lineup) -> f64 {
     lineup
         .songs
         .get(lineup.at)
-        .and_then(|(_, project)| crate::stream_set::transport_of(project))
+        .and_then(|(_, project)| transport_of(project))
         .map_or(0.0, |(at, _)| at)
-}
-
-/// Give song `index` a colour by hand (`None`: the one its title makes) —
-/// on its SONG region and in its `.session` (`Setlist::recolor`).
-///
-/// The region and the file are written outside the set's lock: in Remote
-/// that is a call to the other system, which may take seconds.
-pub fn recolor(index: usize, color: Option<String>) {
-    let shown = view();
-    let Some(mut setlist) = shown.setlist else {
-        return;
-    };
-    setlist.recolor(index, color);
-    let Some(recoloured) = setlist.songs.get(index).cloned() else {
-        return;
-    };
-    update(|view| {
-        let song = view
-            .setlist
-            .as_mut()
-            .filter(|_| view.epoch == shown.epoch)
-            .and_then(|s| s.songs.get_mut(index))
-            .filter(|song| song.project == recoloured.project);
-        let Some(song) = song else {
-            return false;
-        };
-        song.color = recoloured.color;
-        true
-    });
 }
 
 /// Move song `song` to `to`, the current song staying current.
@@ -587,172 +557,91 @@ fn finish_open(outcome: eyre::Result<Setlist>) {
 
 fn failed(e: &eyre::Report) {
     tracing::warn!(error = %e, "set: the set did not open");
-    let why = crate::task_set::brief(&format!("{e:#}"));
+    let why = brief(&format!("{e:#}"));
     update(|view| {
         view.opening = Opening::Failed(why);
         true
     });
 }
 
-/// Stream `request`'s setlist in from the library, as the person signed in
-/// on this machine (`fts_account`, `FTS_ACCOUNT_FILE`): what a click on it
-/// in a window does, and `SESSION_OPEN_SETLIST`.
-///
-/// # Errors
-///
-/// Another open is under way.
-pub fn open_library(request: LibraryOpen) -> Result<(), Busy> {
-    open_with(
-        Progress::Joining { retry: None },
-        Box::new(move |progress| open_library_now(&request, progress)),
-    )
-}
-
-fn open_library_now(request: &LibraryOpen, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist> {
-    use crate::task_account::AccountLibrary as _;
-    let account = crate::task_account::signed_in()
-        .ok_or_else(|| eyre::eyre!("not signed in to Task on this machine"))?;
-    let org = request
-        .org
-        .clone()
-        .or_else(|| std::env::var("FTS_TASK_ORG").ok().filter(|o| !o.is_empty()))
-        .or_else(crate::task_account::remembered_org)
-        .ok_or_else(|| eyre::eyre!("which org's library? (`org`, or FTS_TASK_ORG)"))?;
-    let library = account.library(&org);
-    // One song of the library alone, in no list: a set of it.
-    if request.setlist.trim().is_empty() {
-        let want = request
-            .song
-            .clone()
-            .ok_or_else(|| eyre::eyre!("which setlist, or which song?"))?;
-        let songs = crate::stream_set::with_library(&library, |l| async move { l.songs().await })?;
-        let song = songs
-            .into_iter()
-            .map(|(song, _)| song)
-            .find(|s| s.slug.eq_ignore_ascii_case(&want) || s.title.eq_ignore_ascii_case(&want))
-            .ok_or_else(|| eyre::eyre!("no song {want:?} in {org}'s library"))?;
-        let setlist = crate::stream_set::LibrarySetlist {
-            id: format!("song-{}", song.slug),
-            title: song.title.clone(),
-            kind: crate::stream_set::ListKind::Songs,
-            songs: vec![song],
-        };
-        return crate::stream_set::open(
-            crate::stream_set::Remote::Library {
-                library,
-                setlist,
-                name: account.name(),
-            },
-            progress,
-        );
-    }
-    let lists = crate::stream_set::setlists(&library)?;
-    let titles: Vec<&str> = lists.iter().map(|l| l.title.as_str()).collect();
-    let at = position_named(&titles, &request.setlist)
-        .ok_or_else(|| eyre::eyre!("no setlist {:?} in {org}'s library", request.setlist))?;
-    let mut setlist = lists
-        .into_iter()
-        .nth(at)
-        .ok_or_else(|| eyre::eyre!("the library's lists changed while reading them"))?;
-    if let Some(song) = &request.song {
-        setlist
-            .songs
-            .retain(|s| s.slug.eq_ignore_ascii_case(song) || s.title.eq_ignore_ascii_case(song));
-        if setlist.songs.is_empty() {
-            eyre::bail!("no song {song:?} in {:?}", request.setlist);
-        }
-    }
-    tracing::info!(
-        open.org = %org,
-        open.songs = setlist.songs.len(),
-        "set: opening a library setlist"
-    );
-    crate::stream_set::open(
-        crate::stream_set::Remote::Library {
-            library,
-            setlist,
-            name: account.name(),
-        },
-        progress,
-    )
-}
-
 /// Where `want` is among `titles`, ignoring case and the space around it.
-fn position_named(titles: &[&str], want: &str) -> Option<usize> {
+pub fn position_named(titles: &[&str], want: &str) -> Option<usize> {
     let want = want.trim();
     titles
         .iter()
         .position(|t| t.trim().eq_ignore_ascii_case(want))
 }
 
-/// Open what is at `path` — a song (`.RPP`, `.session`, a song's folder) or
-/// a setlist (`.setlist`, a folder of songs) — as the set: `SESSION_OPEN`.
-///
-/// # Errors
-///
-/// Another open is under way.
-pub fn open_path(path: PathBuf) -> Result<(), Busy> {
-    let title = path.file_stem().map_or_else(
-        || path.display().to_string(),
-        |n| n.to_string_lossy().into_owned(),
-    );
-    open_with(
-        Progress::Opening { title },
-        Box::new(move |_| {
-            let songs = songs_at(&path)
-                .ok_or_else(|| eyre::eyre!("{} is not a song or a setlist", path.display()))?;
-            Setlist::open(&songs)
-        }),
-    )
+// ── The songs arriving, the transport, an error said briefly ─────────────
+
+/// The set's songs after the first, as each opens — once, for the window
+/// that shows them.
+static ARRIVALS: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Arrival>>> = Mutex::new(None);
+
+/// The songs arriving behind the first (see [`open`]), for the window to
+/// add to its set; `None` while another holds them, or when nothing is
+/// arriving. Given back when the holder drops them: a window mounted again
+/// (the welcome screen handing the set over) picks up where the last one
+/// stopped — taken for good, the songs after it never arrived.
+pub fn take_arrivals() -> Option<Arrivals> {
+    ARRIVALS.lock().ok()?.take().map(|rx| Arrivals(Some(rx)))
 }
 
-/// Join a set Task keeps, by its live link (`link`), as `name`: its songs
-/// stream in and play here — `SESSION_JOIN`.
-///
-/// # Errors
-///
-/// Another open is under way.
-pub fn open_live(link: String, name: String) -> Result<(), Busy> {
-    open_with(
-        Progress::Joining { retry: None },
-        Box::new(move |progress| {
-            crate::stream_set::open(crate::stream_set::Remote::Live { link, name }, progress)
-        }),
-    )
-}
+/// The arrivals, held — given back on drop ([`take_arrivals`]).
+pub struct Arrivals(Option<tokio::sync::mpsc::UnboundedReceiver<Arrival>>);
 
-/// A new, untitled song as the set — `SESSION_NEW`.
-///
-/// # Errors
-///
-/// Another open is under way.
-pub fn open_new() -> Result<(), Busy> {
-    open_with(
-        Progress::Opening {
-            title: crate::project_new::UNTITLED.to_owned(),
-        },
-        Box::new(|_| crate::project_new::setlist(None)),
-    )
-}
-
-/// The songs at `target`: itself for a song, the songs a setlist names, the
-/// song in a song's folder; `None` when it is none of those.
-#[must_use]
-pub fn songs_at(target: &Path) -> Option<Vec<PathBuf>> {
-    use crate::setlist::{read_setlist, song_in};
-    if target.is_dir() && !crate::open::is_session(target) {
-        if let Some(song) = song_in(target) {
-            return Some(vec![song]);
-        }
-    } else if !target
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("setlist"))
-    {
-        return Some(vec![target.to_path_buf()]);
+impl Arrivals {
+    /// The next song to arrive; `None` once every one has.
+    pub async fn recv(&mut self) -> Option<Arrival> {
+        self.0.as_mut()?.recv().await
     }
-    read_setlist(target)
-        .inspect_err(|e| tracing::error!(error = %e, "the setlist could not be read"))
-        .ok()
+}
+
+impl Drop for Arrivals {
+    fn drop(&mut self) {
+        if let (Some(rx), Ok(mut slot)) = (self.0.take(), ARRIVALS.lock())
+            && slot.is_none()
+        {
+            *slot = Some(rx);
+        }
+    }
+}
+
+/// Hold `arrivals`, the songs arriving behind the first of a set just
+/// opened (`stream_set::open`), for [`take_arrivals`].
+pub fn hold_arrivals(arrivals: tokio::sync::mpsc::UnboundedReceiver<Arrival>) {
+    if let Ok(mut slot) = ARRIVALS.lock() {
+        *slot = Some(arrivals);
+    }
+}
+
+/// The transport's playhead and whether it moves, for `project`.
+pub fn transport_of(project: &str) -> Option<(f64, bool)> {
+    let daw = crate::open::local_engine()?;
+    let backend = daw.sync_backend(project)?;
+    let snap = daw_transport_sync::TransportBackend::snapshot(&backend)?;
+    Some((snap.playhead_seconds, snap.is_playing))
+}
+
+/// A dial's error in a few words for a person: the HTTP status when the
+/// server answered one (a dial error carries the whole response — headers,
+/// and the body as bytes), else its first line, cut short.
+#[must_use]
+pub fn brief(error: &str) -> String {
+    if let Some(at) = error.find("status: ") {
+        let code: String = error[at + 8..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        if !code.is_empty() {
+            return format!("the server answered {code}");
+        }
+    }
+    let line = error.lines().next().unwrap_or_default();
+    match line.char_indices().nth(120) {
+        Some((cut, _)) => format!("{}…", &line[..cut]),
+        None => line.to_owned(),
+    }
 }
 
 #[cfg(test)]

@@ -43,7 +43,9 @@ pub fn lock_us() -> u64 {
 
 /// A drum-edit action's span, named after the action, with every count an
 /// edit says declared on it (recorded later, as they are known).
-macro_rules! edit_span {
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __edit_span {
     ($name:literal) => {
         tracing::info_span!(
             $name,
@@ -66,10 +68,12 @@ macro_rules! edit_span {
         )
     };
 }
-pub(crate) use edit_span;
+pub use __edit_span as edit_span;
 
 /// A stage of an edit, with the counts a stage may say declared on it.
-macro_rules! stage_span {
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __stage_span {
     ($name:literal) => {
         tracing::info_span!(
             $name,
@@ -84,7 +88,7 @@ macro_rules! stage_span {
         )
     };
 }
-pub(crate) use stage_span;
+pub use __stage_span as stage_span;
 
 /// An action's span, entered for as long as this is held: when it is let
 /// go, the span says how long the action held the project lock.

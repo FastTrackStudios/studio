@@ -92,6 +92,8 @@ mod project;
 pub use self::{base::*, edit::*, mix::*};
 
 pub use crate::shared_actions::meta;
+/// The open song and a track in it, as every action reads them: the core's.
+pub use engine_core::actions::{resolve, song};
 
 use crate::shared_actions::{
     FOLD, FoldArg, PHASE, PhaseArg, SELECT_TRACK, SelectTrackArg, TRACK_SET, TrackSetArg,
@@ -116,23 +118,6 @@ pub(crate) fn also_in_the_window(id: &str, args: String) {
 #[cfg(feature = "native")]
 #[derive(Facet)]
 struct NoArg {}
-
-/// The engine and the open song, as a pair — for the call sites not yet
-/// on [`crate::song::Song`], which new code takes instead.
-pub(crate) fn song() -> Result<(&'static daw::standalone::Standalone, ProjectContext), String> {
-    let song = crate::song::Song::current()?;
-    Ok((song.daw(), song.context()))
-}
-
-/// A track by its GUID, its path (`Kick/Sum/Trig`, any tail of it) or its
-/// name — refused, naming the candidates, when more than one fits.
-pub fn resolve(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    what: &str,
-) -> Result<String, String> {
-    crate::shared_actions::resolve_in(&Tracks::all(daw, project.clone()), what)
-}
 
 #[cfg(all(test, feature = "native"))]
 mod presses {
