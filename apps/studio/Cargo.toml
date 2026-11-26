@@ -167,6 +167,13 @@ native = [
     "dep:architect-settings",
     "dep:architect-views",
     "dep:architect-process-view",
+    # On iPhone and iPad: the engine linked into the app (no second
+    # process there; src/engine.rs). A no-op on every other target.
+    "dep:daw-extension",
+    # On iPhone and iPad: the UIScene lifecycle iOS 27 requires (winit's
+    # window handed to the app's scene, studio-shell's `ios_scene`).
+    "dep:studio-shell",
+    "dep:raw-window-handle",
 ]
 local = ["dep:drive-local"]
 mobile = ["dioxus/mobile"]
@@ -178,16 +185,28 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 # The browser's crypto for getrandom 0.3 (Loro's ids).
 getrandom = { version = "0.3", features = ["wasm_js"] }
 
+# The engine on iPhone and iPad, linked in: the daw extension (the same
+# one a desktop runs as a process), its engine started in the app's own
+# process (`native` turns it on).
+[target.'cfg(target_os = "ios")'.dependencies]
+daw-extension = { workspace = true, optional = true }
+# The scene delegate (`StudioSceneDelegate`, named in Info.plist by
+# ios/build.sh) and winit's view handed to it.
+studio-shell = { workspace = true, optional = true }
+raw-window-handle = { version = "0.6", optional = true }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["time"] }
+# The app's telemetry (src/telemetry.rs, src/trace.rs), on every native
+# target, iOS too.
+opentelemetry = { version = "0.30", optional = true }
+tracing-opentelemetry = { version = "0.31", optional = true }
+tracing-subscriber = { workspace = true, optional = true }
 
 # Desktop Studio updating itself from its signed releases (src/self_update.rs):
 # macOS and Linux; iOS updates through TestFlight, the web is its deploy.
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
 studio-shell.workspace = true
-opentelemetry = { version = "0.30", optional = true }
-tracing-opentelemetry = { version = "0.31", optional = true }
-tracing-subscriber = { workspace = true, optional = true }
 
 [dev-dependencies]
 # song_ids' tests write one-file songs.

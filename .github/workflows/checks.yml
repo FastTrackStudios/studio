@@ -614,6 +614,38 @@ jobs:
           bash scripts/desktop/macos-libs.sh guard "$RUNNER_TEMP/$built"
         done
         EOF
+  ios:
+    name: iOS (simulator build and boot)
+    needs:
+    - plan
+    - rail
+    if: ${{ needs.rail.outputs.check == 'true' || needs.rail.outputs.cargo == 'true' }}
+    runs-on:
+    - self-hosted
+    - macos
+    - studio-release-mac
+    timeout-minutes: 150
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        clean: false
+        persist-credentials: false
+    - name: devenv CLI
+      uses: ./.github/actions/devenv
+    - name: 'iOS: the app for the simulator; a session opens and plays with the click'
+      run: |
+        app="$(bash apps/studio/ios/build.sh sim | tail -1)"
+        python3 -I apps/studio/ios/sim-test.py --app "$app" \
+          --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out"
+    - name: Keep the app's output on failure
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ios-sim-test
+        path: |
+          ${{ runner.temp }}/ios-sim-out
+        if-no-files-found: ignore
+        retention-days: 7
   ci-passed:
     name: CI passed
     needs:
@@ -625,6 +657,7 @@ jobs:
     - tests
     - release-macos
     - apple
+    - ios
     if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -641,6 +674,7 @@ jobs:
         TESTS: ${{ needs.tests.result }}
         RELEASE_MACOS: ${{ needs.release-macos.result }}
         APPLE: ${{ needs.apple.result }}
+        IOS: ${{ needs.ios.result }}
       run: |
         set -u
         fail=0
@@ -653,7 +687,7 @@ jobs:
         done
         # The builds: skipped is fine when the rail plan skipped them (nothing they
         # cover changed since a green base); anything else must have succeeded.
-        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE"; do
+        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
           case "${job#*:}" in
             success | skipped) ;;
             *) bad "${job%%:*}: ${job#*:}" ;;

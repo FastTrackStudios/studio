@@ -27,6 +27,16 @@
 //! never waits on the engine. What the window wants ([`Want`]) goes in;
 //! what the engine does ([`Snapshot`]) comes out, read by the window on
 //! its timer.
+//!
+//! **On iPhone and iPad** an app runs no second process, so the engine is
+//! linked into the app: the daw extension, linked like the views, starts
+//! it in this process (`daw_extension::start_engine`) and links the views
+//! to it in memory. Studio drives it the same way, its calls answered here
+//! ([`Door::Here`]) rather than over loopback; finding and spawning are
+//! the desktop's.
+
+// Finding and spawning an engine of its own process: never on iOS.
+#![cfg_attr(target_os = "ios", allow(dead_code))]
 
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -50,8 +60,19 @@ const POLL: Duration = Duration::from_millis(100);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Found {
     pub pid: u32,
+    /// Its facade's socket (none for an engine in this process).
     pub socket: PathBuf,
-    pub mcp: String,
+    pub door: Door,
+}
+
+/// Where an engine answers its Action List.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Door {
+    /// Its MCP server on loopback: an engine in a process of its own.
+    Mcp(String),
+    /// This process: the engine linked into the app (iOS), over the
+    /// in-memory link it serves the views on.
+    Here,
 }
 
 /// How Studio has its engine (`FTS_ENGINE`).
@@ -105,7 +126,7 @@ pub fn parse_found(bytes: &[u8]) -> Option<Found> {
     Some(Found {
         pid: u32::try_from(v.get("pid")?.as_u64()?).ok()?,
         socket: PathBuf::from(v.get("socket")?.as_str()?),
-        mcp: v.get("mcp")?.as_str()?.to_string(),
+        door: Door::Mcp(v.get("mcp")?.as_str()?.to_string()),
     })
 }
 
@@ -142,7 +163,11 @@ fn found() -> Vec<Found> {
 }
 
 fn alive(f: &Found) -> bool {
-    std::os::unix::net::UnixStream::connect(&f.socket).is_ok()
+    match f.door {
+        // It lives as long as the app does.
+        Door::Here => true,
+        Door::Mcp(_) => std::os::unix::net::UnixStream::connect(&f.socket).is_ok(),
+    }
 }
 
 /// Whether the engine's Action List is its own: an engine whose port was
@@ -151,10 +176,13 @@ fn alive(f: &Found) -> bool {
 /// (`/proc/net/tcp`, then the engine's descriptors); elsewhere it is
 /// taken on trust.
 fn serves_its_own(f: &Found) -> bool {
+    let Door::Mcp(mcp) = &f.door else {
+        return true;
+    };
     if !cfg!(target_os = "linux") {
         return true;
     }
-    let Some(port) = split_url(&f.mcp).and_then(|(host, _)| {
+    let Some(port) = split_url(mcp).and_then(|(host, _)| {
         host.rsplit_once(':')
             .and_then(|(_, p)| p.parse::<u16>().ok())
     }) else {
@@ -404,7 +432,35 @@ fn spawn(bin: &Path, args: &[String], wait: Duration) -> Result<Found, String> {
     ))
 }
 
+/// On iPhone and iPad: the engine in this process, started by the linked
+/// daw extension (once; it starts with the extensions too), up when its
+/// Action List answers.
+#[cfg(target_os = "ios")]
+fn choose(_mode: Mode, span: &mut Span) -> Result<Found, String> {
+    span.set("engine.plan", "here");
+    daw_extension::start_engine(None);
+    let here = Found {
+        pid: std::process::id(),
+        socket: PathBuf::new(),
+        door: Door::Here,
+    };
+    let began = Instant::now();
+    loop {
+        match run(&here, "SESSION_TRANSPORT", Value::Null) {
+            Ok(_) => return Ok(here),
+            Err(e) if began.elapsed() > SPAWN_WAIT => {
+                return Err(format!(
+                    "the engine in the app did not come up within {} s: {e}",
+                    SPAWN_WAIT.as_secs()
+                ));
+            }
+            Err(_) => std::thread::sleep(Duration::from_millis(200)),
+        }
+    }
+}
+
 /// A running engine, or one started: what a playing set needs.
+#[cfg(not(target_os = "ios"))]
 fn choose(mode: Mode, span: &mut Span) -> Result<Found, String> {
     span.set("engine.mode", mode.word());
     let running = found();
@@ -522,8 +578,23 @@ pub fn action_answer(rpc: &Value) -> Result<Value, String> {
     Ok(serde_json::from_str(text).unwrap_or(Value::String(text.to_string())))
 }
 
+/// Runs action `id` of the engine `found` with `args`, at its door.
+fn run(found: &Found, id: &str, args: Value) -> Result<Value, String> {
+    match &found.door {
+        Door::Mcp(mcp) => run_over_mcp(mcp, id, args),
+        Door::Here => run_here(id, &args),
+    }
+}
+
+/// Runs action `id` of the engine in this process, over the in-memory
+/// link the views use.
+fn run_here(id: &str, args: &Value) -> Result<Value, String> {
+    let out = engine_client::view_client::run(id, args.to_string().as_bytes())?;
+    Ok(serde_json::from_str(&out).unwrap_or(Value::String(out)))
+}
+
 /// Runs action `id` of the engine at `mcp` with `args`.
-fn run(mcp: &str, id: &str, args: Value) -> Result<Value, String> {
+fn run_over_mcp(mcp: &str, id: &str, args: Value) -> Result<Value, String> {
     let (host, path) = split_url(mcp).ok_or("the engine's MCP address is not http")?;
     let addr = std::net::ToSocketAddrs::to_socket_addrs(&host)
         .map_err(|e| e.to_string())?
@@ -686,7 +757,7 @@ fn worker(rx: &Receiver<Cmd>, snapshot: &Mutex<Snapshot>) {
     let linked = choose(mode, &mut span).and_then(|f| {
         // An engine that has said where it is but whose Action List is not
         // served (its port was taken) cannot be driven.
-        run(&f.mcp, "SESSION_TRANSPORT", Value::Null).map(|_| f)
+        run(&f, "SESSION_TRANSPORT", Value::Null).map(|_| f)
     });
     let found = match linked {
         Ok(f) => {
@@ -763,7 +834,7 @@ fn worker(rx: &Receiver<Cmd>, snapshot: &Mutex<Snapshot>) {
                 let mut span = Span::root("studio.engine.song");
                 span.set("studio.song", title.clone());
                 span.set("engine.number", u64::from(n));
-                match run(&found.mcp, "SESSION_SONG", json!({ "to": n.to_string() })) {
+                match run(&found, "SESSION_SONG", json!({ "to": n.to_string() })) {
                     Ok(_) => {
                         span.set("engine.outcome", "current");
                         on_number = Some(n);
@@ -840,11 +911,11 @@ fn worker(rx: &Receiver<Cmd>, snapshot: &Mutex<Snapshot>) {
             continue;
         }
         if let Some(at) = seek
-            && let Err(e) = run(&found.mcp, "SESSION_SEEK", json!({ "at": at }))
+            && let Err(e) = run(&found, "SESSION_SEEK", json!({ "at": at }))
         {
             tracing::warn!(error = %e, "engine: the seek was refused");
         }
-        let Ok(t) = run(&found.mcp, "SESSION_TRANSPORT", Value::Null) else {
+        let Ok(t) = run(&found, "SESSION_TRANSPORT", Value::Null) else {
             continue;
         };
         let mut playing = t.get("playing").and_then(Value::as_bool).unwrap_or(false);
@@ -892,7 +963,7 @@ fn worker(rx: &Receiver<Cmd>, snapshot: &Mutex<Snapshot>) {
             } else if !want.playing && playing {
                 let mut span = Span::root("studio.engine.pause");
                 span.set("studio.song", title);
-                if let Err(e) = run(&found.mcp, "SESSION_PLAY_PAUSE", Value::Null) {
+                if let Err(e) = run(&found, "SESSION_PLAY_PAUSE", Value::Null) {
                     span.fail(e);
                 }
                 playing = false;
@@ -970,7 +1041,7 @@ fn open_set(
         .and_then(|file| open(found, &file, name))
         .and_then(|()| {
             loop {
-                let songs = run(&found.mcp, "SESSION_SONGS", Value::Null)?;
+                let songs = run(&found, "SESSION_SONGS", Value::Null)?;
                 let all = songs.as_array().cloned().unwrap_or_default();
                 let open = all
                     .iter()
@@ -1009,7 +1080,7 @@ fn open(found: &Found, path: &Path, title: &str) -> Result<(), String> {
     span.set("engine.pid", found.pid);
     let began = Instant::now();
     let path_arg = path.to_string_lossy().to_string();
-    if let Err(e) = run(&found.mcp, "SESSION_OPEN", json!({ "path": path_arg })) {
+    if let Err(e) = run(&found, "SESSION_OPEN", json!({ "path": path_arg })) {
         span.set("engine.outcome", "refused");
         span.fail(e.clone());
         return Err(e);
@@ -1017,7 +1088,7 @@ fn open(found: &Found, path: &Path, title: &str) -> Result<(), String> {
     let mut seen_opening = false;
     let result = loop {
         std::thread::sleep(Duration::from_millis(150));
-        let state = run(&found.mcp, "SESSION_OPENING", Value::Null)?;
+        let state = run(&found, "SESSION_OPENING", Value::Null)?;
         match state.get("state").and_then(Value::as_str) {
             Some("failed") => {
                 break Err(state
@@ -1053,11 +1124,7 @@ fn play(found: &Found, title: &str, from: f64) {
     span.set("studio.song", title);
     span.set("engine.pid", found.pid);
     span.set("engine.from_s", from);
-    match run(
-        &found.mcp,
-        "SESSION_PLAY_FROM",
-        json!({ "at": from.max(0.0) }),
-    ) {
+    match run(found, "SESSION_PLAY_FROM", json!({ "at": from.max(0.0) })) {
         Ok(_) => span.set("engine.outcome", "playing"),
         Err(e) => {
             span.set("engine.outcome", "refused");
@@ -1078,8 +1145,26 @@ mod tests {
         )
         .unwrap();
         assert_eq!(f.pid, 12);
-        assert_eq!(f.mcp, "http://127.0.0.1:47811/mcp");
+        assert_eq!(f.door, Door::Mcp("http://127.0.0.1:47811/mcp".into()));
         assert!(parse_found(b"{}").is_none());
+    }
+
+    #[test]
+    fn an_engine_in_this_process_needs_no_socket_or_port() {
+        let here = Found {
+            pid: std::process::id(),
+            socket: PathBuf::new(),
+            door: Door::Here,
+        };
+        assert!(alive(&here));
+        assert!(serves_its_own(&here));
+        assert!(drivable(&here));
+        let gone = Found {
+            pid: 1,
+            socket: PathBuf::from("/nonexistent/studio-703.sock"),
+            door: Door::Mcp("http://127.0.0.1:1/mcp".into()),
+        };
+        assert!(!alive(&gone));
     }
 
     #[test]

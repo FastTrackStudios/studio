@@ -43,7 +43,9 @@
 //!   macos-latest   release tooling (the sandbox, macOS's own tools)
 //!   airlock        Apple builds (`studio-release-mac`: the macOS app linked
 //!                  and refused if it links anything from /nix/store), so a
-//!                  tag's .dmg builds before the tag (studio#444)
+//!                  tag's .dmg builds before the tag (studio#444); and the
+//!                  iOS app, built for the simulator and booted in one
+//!                  (Seam 3, studio#703)
 //! ```
 //!
 //! One job per BUILD KIND, as Task's lint/tests/wasm: check mode, clippy's
@@ -104,6 +106,7 @@ workflow_dispatch:
     .job("tests", tests())
     .job("release-macos", release_macos())
     .job("apple", apple())
+    .job("ios", ios())
     .job("ci-passed", ci_passed()?))
 }
 
@@ -367,8 +370,7 @@ fn release_macos() -> Job {
 /// scripts/desktop/macos.sh), linked as the .dmg links it and held to its
 /// no-/nix/store guard. v26.11.0 and v26.11.1 shipped no .dmg for a
 /// macOS-only compile error no Linux check could see; v26.11.2 shipped none
-/// for a macOS link of nixpkgs' zlib (studio#444). (The iOS build went with
-/// the old rig app; apps/studio has no iOS release job yet.)
+/// for a macOS link of nixpkgs' zlib (studio#444). The iOS app is [`ios`].
 fn apple() -> Job {
     Job::new(RunsOn::Labels(&[
         "self-hosted",
@@ -390,6 +392,52 @@ fn apple() -> Job {
         &in_shell(MACOS),
     ))
 }
+
+/// REQUIRED (through `CI passed`): Studio for iPhone and iPad, the engine
+/// linked into the app, built for the simulator
+/// (apps/studio/ios/build.sh) and booted in a simulator of its own, where
+/// a session opens and plays with the click (Seam 3 of studio#689:
+/// apps/studio/ios/sim-test.py, driven over the app's MCP door). On
+/// airlock, the only Mac with Xcode and its simulators; the simulators'
+/// device set goes under the runner's temp dir, deleted after.
+fn ios() -> Job {
+    Job::new(RunsOn::Labels(&[
+        "self-hosted",
+        "macos",
+        "studio-release-mac",
+    ]))
+    .name("iOS (simulator build and boot)")
+    .needs(&["plan", "rail"])
+    .cond(CHECK_PLANNED)
+    .timeout(150)
+    .step(
+        checkout()
+            .with("clean", false)
+            .with("persist-credentials", false),
+    )
+    .step(Step::uses("devenv CLI", "./.github/actions/devenv"))
+    .step(Step::run(
+        "iOS: the app for the simulator; a session opens and plays with the click",
+        IOS,
+    ))
+    .step(
+        Step::uses(
+            "Keep the app's output on failure",
+            crate::model::pinned::UPLOAD_ARTIFACT,
+        )
+        .cond("${{ failure() }}")
+        .with("name", "ios-sim-test")
+        .with("path", "${{ runner.temp }}/ios-sim-out\n")
+        .with("if-no-files-found", "ignore")
+        .with("retention-days", 7),
+    )
+}
+
+/// The build prints the .app's path last; the test boots it.
+const IOS: &str = r#"app="$(bash apps/studio/ios/build.sh sim | tail -1)"
+python3 -I apps/studio/ios/sim-test.py --app "$app" \
+  --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out"
+"#;
 
 /// The .dmg's app linked as scripts/desktop/macos.sh links it (zlib from the
 /// macOS SDK: `macos-libs.sh config`), then its guard on a copy: a binary
@@ -833,6 +881,7 @@ fn ci_passed() -> Result<Job> {
             "tests",
             "release-macos",
             "apple",
+            "ios",
         ])
         .cond(&format!("${{{{ always() && ({NOT_DRAFT}) }}}}"))
         .timeout(5)
@@ -846,7 +895,8 @@ fn ci_passed() -> Result<Job> {
                 .env("WASM", "${{ needs.wasm.result }}")
                 .env("TESTS", "${{ needs.tests.result }}")
                 .env("RELEASE_MACOS", "${{ needs.release-macos.result }}")
-                .env("APPLE", "${{ needs.apple.result }}"),
+                .env("APPLE", "${{ needs.apple.result }}")
+                .env("IOS", "${{ needs.ios.result }}"),
         )
         .step(
             Step::run(
@@ -875,7 +925,7 @@ for job in "gates:$GATES" "release-macos:$RELEASE_MACOS"; do
 done
 # The builds: skipped is fine when the rail plan skipped them (nothing they
 # cover changed since a green base); anything else must have succeeded.
-for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE"; do
+for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
   case "${job#*:}" in
     success | skipped) ;;
     *) bad "${job%%:*}: ${job#*:}" ;;

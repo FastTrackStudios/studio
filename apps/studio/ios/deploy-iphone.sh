@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Build (device arch) + sign + install + launch the iPhone app on a paired
-# device over the cable. Must run in the Mac's GUI login session — codesign
+# Studio on a paired iPhone over the cable, without TestFlight: built for
+# the device (build.sh device), signed for development, installed and
+# launched. Must run in the Mac's GUI login session — codesign
 # needs the unlocked login keychain (SSH sessions can't reach it).
 #
-#   ./ios/deploy-iphone.sh
+#   apps/studio/ios/deploy-iphone.sh
 #
 # Config via env (defaults are voyager's):
 #   PHONE_UDID   devicectl device id (xcrun devicectl list devices)
@@ -12,17 +13,9 @@
 #   TEAM_ID      Apple Developer team id
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
-
 PHONE_UDID="${PHONE_UDID:-06AFA75D-D8FC-57AB-B91A-E06CCC7B2DD9}"  # devicectl id
 SIGN_ID="${SIGN_ID:-991CD4E0B4B81F4DB8AAF0B8D7DC895560A69715}"
 TEAM_ID="${TEAM_ID:-28C2G63DA7}"
-NIX="${NIX:-/run/current-system/sw/bin/nix}"
-
-BIN_IOS="$HOME/bin-ios"
-mkdir -p "$BIN_IOS"
-ln -sf /usr/bin/xcrun "$BIN_IOS/xcrun"
-
 # Fail fast if the phone isn't connected (else the device queries hang).
 # (No `timeout` here — it isn't present on stock macOS.)
 echo "=== checking device ==="
@@ -37,37 +30,22 @@ fi
 echo "=== provisioning profile ==="
 HW_UDID="$(xcrun devicectl device info details --device "$PHONE_UDID" 2>/dev/null | awk '/udid:/{print $NF; exit}')"
 [ -n "$HW_UDID" ] || { echo "ERROR: couldn't read device UDID (is it unlocked?)" >&2; exit 1; }
-# shellcheck disable=SC1090
+# shellcheck disable=SC1090,SC1091
 source "$HOME/.appstoreconnect/config.env"
-PROFILE="$(ruby "$(dirname "$0")/mint-dev-profile.rb" "$HW_UDID" | awk -F= '/PROFILE_PATH=/{print $2}')"
+PROFILE="$(ruby "$(dirname "$0")/mint-dev-profile.rb" "$HW_UDID" app.fasttrackstudio.studio | awk -F= '/PROFILE_PATH=/{print $2}')"
 echo "profile: $PROFILE"
 
 echo "=== building (device arch) ==="
-"$NIX" develop "$(git rev-parse --show-toplevel)" -c bash -c \
-    "unset DEVELOPER_DIR SDKROOT; export PATH=$BIN_IOS:\$PATH; \
-     dx build --platform ios --device --no-default-features --features session-domain,charts" \
-    2>&1 | tail -2
-
-# NOTE: verify this against dx's actual output dir/app name on first run —
-# dx derives it from the crate name (`engine-host`) since the rename.
-APP="$(git rev-parse --show-toplevel)/target/dx/engine-host/debug/ios/Session-desktop.app"
+APP="$(bash "$(dirname "$0")/build.sh" device | tail -1)"
 BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
 echo "=== app: $APP ($BUNDLE) ==="
 
-# cpal's duplex audio session can request mic access even when only output
-# is used; Apple requires the usage string regardless. Files-app sharing so
-# Documents/Session (the setlist library) is visible and manageable on-device.
-/usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'Used for the audio session during setlist playback.'" "$APP/Info.plist" 2>/dev/null || true
-/usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" "$APP/Info.plist" 2>/dev/null || true
-/usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" "$APP/Info.plist" 2>/dev/null || true
-
-# Home-screen icon: compile the FTS asset catalog into the bundle (dx emits
-# no app icon). actool produces Assets.car + a partial plist (CFBundleIcons /
-# asset-name keys) we merge in.
-ICONS_DIR="$(git rev-parse --show-toplevel)/apps/desktop/ios/Assets.xcassets"
+# Home-screen icon: the asset catalog the desktop's installers share,
+# compiled into the bundle (dx emits no app icon).
+ICONS_DIR="$(cd "$(dirname "$0")/../../.." && pwd)/crates/studio-engine/engine/engine-host/ios/Assets.xcassets"
 if [ -d "$ICONS_DIR" ]; then
     actool "$ICONS_DIR" --compile "$APP" --platform iphoneos \
-        --minimum-deployment-target 15.0 --app-icon AppIcon \
+        --minimum-deployment-target 16.0 --app-icon AppIcon \
         --output-partial-info-plist /tmp/fts-icon.plist >/dev/null 2>&1 \
         && /usr/libexec/PlistBuddy -c "Merge /tmp/fts-icon.plist" "$APP/Info.plist" 2>/dev/null \
         || echo "warn: app-icon compile skipped"
