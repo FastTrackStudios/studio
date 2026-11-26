@@ -24,7 +24,7 @@ pub fn node_mount(base_path: &str) -> &str {
 pub struct Here {
     /// The page is the issuer coming back (`<mount>/auth/callback`).
     pub callback: bool,
-    /// A sign-in's tokens are stored (fresh or not).
+    /// A sign-in's token is stored and still good (no refresh needed).
     pub token: bool,
 }
 
@@ -95,13 +95,22 @@ mod web {
         let mut door = use_signal(|| {
             Door::without_asking(Here {
                 callback: auth::is_callback(),
-                token: auth::token().is_some(),
+                token: matches!(auth::settled_token(MARGIN_MS), Some(Some(_))),
             })
         });
         use_future(move || async move {
-            if door.peek().is_none() {
-                door.set(Some(Door::from_answer(ask().await)));
+            if door.peek().is_some() {
+                return;
             }
+            // A token that runs out soon is refreshed first: still signed
+            // in, it is the app. Refused (signed out at the issuer), or
+            // none stored, the node says which page it is.
+            let next = if auth::fresh_token(MARGIN_MS).await.is_some() {
+                Door::App
+            } else {
+                Door::from_answer(ask().await)
+            };
+            door.set(Some(next));
         });
         match door() {
             Some(Door::App) => children,
@@ -109,6 +118,10 @@ mod web {
             None => rsx! { div { style: PAGE } },
         }
     }
+
+    /// How long a token must still be good to count as signed in: what
+    /// Drive's boot asks of it before refreshing.
+    const MARGIN_MS: f64 = 60_000.0;
 
     const PAGE: &str = "min-height:100vh;display:grid;place-items:center;background:var(--desk,#000);color:var(--ink,#f4f4f5);font:16px/1.5 var(--font,system-ui),sans-serif;padding:24px;box-sizing:border-box;";
     const PANEL: &str =

@@ -61,8 +61,8 @@ workflow_dispatch:
 }
 
 /// The release pool on THEBATTLESHIP: the web build in the dev shell, in a
-/// target dir of its own in the pool's shared cache (a wasm release build
-/// shares no fingerprints with the installers').
+/// target dir of its own in the pool's shared cache, size-capped as the
+/// installers' is (a wasm release build shares no fingerprints with theirs).
 fn build() -> Job {
     Job::new(RunsOn::Labels(&["self-hosted", "thebattleship-release"]))
         .name("Web bundle")
@@ -76,11 +76,22 @@ fn build() -> Job {
         ))
         .step(stamp("${{ env.TAG }}").cond(STAMPED))
         .step(Step::run(
-            "Own target dir",
+            "Own target dir, size-capped",
             r#"base="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}"
 dir="$base/web/$RUNNER_NAME/target"
+cap_gb="${TARGET_CAP_GB-60}"
 mkdir -p "$dir"
-echo "target dir: $dir ($(du -sh "$dir" | cut -f1))"
+used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"
+free_gb="$(df -BG --output=avail "$base" | tail -1 | tr -dc '0-9')"
+echo "target dir: $dir (${used_gb} GB used, cap ${cap_gb} GB; ${free_gb} GB free on its disk)"
+if [ "$used_gb" -gt "$cap_gb" ]; then
+  echo "::warning::$dir is ${used_gb} GB, over the ${cap_gb} GB cap: emptying it (cold build)"
+  rm -rf "$dir"; mkdir -p "$dir"
+fi
+if [ "$free_gb" -lt 30 ]; then
+  echo "::error::under 30 GB free on the runner's disk ($base): clean it before building"
+  exit 1
+fi
 echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
 "#,
         ))

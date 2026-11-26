@@ -15,7 +15,9 @@ until the landing page (studio#706) replaces it.
 | The node | the Drive node on THEBATTLESHIP (`~/.flake`, `hosts/THEBATTLESHIP/drive.nix`) | it serves Studio under `/studio`, so it answers Studio's calls under `/studio/api` |
 
 A release changes nothing live. The VPS takes a new bundle when infra's
-`studio-web` source is moved to the tag and the owner deploys it.
+`studio-web` source is moved to the tag (`update.sh <tag>`, a PR) and the
+owner deploys it. Until that step is automated, "a release deploys the web
+build" is that PR plus the owner's deploy.
 
 ## How the root reaches the node
 
@@ -29,7 +31,7 @@ root of the same name. The front on the VPS routes:
 |---|---|
 | `/studio/api/*` (HTTP and the `/studio/api/sync` WebSocket) | the Drive node: over the tailnet to THEBATTLESHIP's `tailscale serve` on 9444, as `drive.fasttrackstudio.app` already is |
 | `/studio/auth/callback` | `index.html` (the issuer coming back; the app finishes signing in, then returns to where it began) |
-| `/studio`, `/studio/` | redirect to `/` (Drive's "Try again" button) |
+| any other `/studio/<path>` | redirect to `/<path>` (Drive's "Try again" goes to `/studio/`; the calendar's links are `/studio/set/<id>`, `sets::BASE`) |
 | `/assets/*` | the bundle, immutable |
 | a file in the bundle | that file |
 | anything else | `index.html` (the app routes itself) |
@@ -49,12 +51,23 @@ serves the old landing page. The cutover, in order:
 2. **infra PR** (nothing live yet):
    - `packages/studio-web/{package.nix,source.json,update.sh}`, as
      `packages/architect-web`.
-   - `modules/services/studio-web.nix`: `fts.ingress.static."fasttrackstudio.app"`
-     with the bundle as root, the routes above, the `/studio/api/*` proxy to
-     `services.drive.upstream:9444` (with the drive module's MagicDNS
-     resolver and streaming settings), and `www` redirecting to the apex.
-   - Set on `architect-vps` with `domain = "fasttrackstudio.app"`.
-   - `just check` (VM test) green.
+   - **The ingress can't express this site yet**
+     (`modules/service/_module.nix`): `fts.ingress.static` has no SPA
+     fallback (a missing file is `404.html` with 404), `rewrites` match
+     exact paths only, there are no redirects, and `fts.ingress.proxies`
+     takes a whole domain and refuses one a static site has. Extend it
+     first: an opt-in `fallback = "/index.html"` on a static site,
+     redirects (prefix-preserving), a path-scoped proxy to an upstream
+     off the host (the drive proxy's MagicDNS resolver, streaming, no size
+     limit or timeout, X-Forwarded-* replaced), and a redirect-only host
+     (for `www`).
+   - `modules/services/studio-web.nix`: the static site for
+     `fasttrackstudio.app` from the bundle, with the routes above and the
+     `/studio/api/*` proxy to `services.drive.upstream:9444`; `www`
+     redirecting to the apex. Set on `architect-vps` with
+     `domain = "fasttrackstudio.app"`.
+   - `just check` (VM test) green, with the VM test covering the
+     fallback, the redirects and the path proxy.
 3. **Deploy to the VPS** (`just plan`, then `just deploy`, on the owner's
    word). Caddy can't get the apex's certificate yet: the name still
    points at the cluster, so the HTTP challenge fails. Nothing else

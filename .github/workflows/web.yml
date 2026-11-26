@@ -126,12 +126,23 @@ jobs:
         else
           echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
         fi
-    - name: Own target dir
+    - name: Own target dir, size-capped
       run: |
         base="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}"
         dir="$base/web/$RUNNER_NAME/target"
+        cap_gb="${TARGET_CAP_GB-60}"
         mkdir -p "$dir"
-        echo "target dir: $dir ($(du -sh "$dir" | cut -f1))"
+        used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"
+        free_gb="$(df -BG --output=avail "$base" | tail -1 | tr -dc '0-9')"
+        echo "target dir: $dir (${used_gb} GB used, cap ${cap_gb} GB; ${free_gb} GB free on its disk)"
+        if [ "$used_gb" -gt "$cap_gb" ]; then
+          echo "::warning::$dir is ${used_gb} GB, over the ${cap_gb} GB cap: emptying it (cold build)"
+          rm -rf "$dir"; mkdir -p "$dir"
+        fi
+        if [ "$free_gb" -lt 30 ]; then
+          echo "::error::under 30 GB free on the runner's disk ($base): clean it before building"
+          exit 1
+        fi
         echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
     - name: Build the web bundle
       env:

@@ -31,10 +31,11 @@ In short:
 - **A merge to `main` runs CI and nothing else.** It ships nothing.
 - **A release is a `vYY.M.MICRO` tag**, pushed by `just release` on a green
   commit. The tag ships everything, from the tag alone and in parallel:
-  Studio's node and web tarballs, the desktop installers and the one
-  GitHub Release. **Production is the latest `v*` tag.** This repo deploys
-  nothing: the infra repo runs the release's node tarball as a NixOS
-  service. There is no image, and no TestFlight build until apps/desktop
+  the desktop installers, the web bundle (`studio-web-X.Y.Z.tar.gz`, for
+  the root of fasttrackstudio.app) and the one GitHub Release.
+  **Production is the latest `v*` tag.** This repo deploys nothing live:
+  the infra repo takes the web bundle by tag and serves it from the VPS
+  (apps/studio/docs/web-deploy.md). There is no image, and no TestFlight build until apps/desktop
   has an iOS target (the old rig app that built it is gone). The REAPER integration suites are not in CI; check them
   locally (`just reaper-test`, `just reaper daw-test`).
 
@@ -44,7 +45,7 @@ stack a◀b◀c  ─merge commits, titled with each PR title─┘              
                        just release ─▶ tag v26.10.4 on main's newest green commit
                                           │ (the tag alone, in parallel:)
                                           ├─ desktop: .dmg + AppImage, attached to the Release
-                                          ├─ studio: the distribution's node + web tarballs (docs/architect-distribution.md)
+                                          ├─ web: studio-web-X.Y.Z.tar.gz, attached to the Release (apps/studio/docs/web-deploy.md)
                                           │    (each of the two above ends with SHA256SUMS over what it built + the signed sums, then publishes the draft)
                                           └─ release: the GitHub Release (notes from .changes/)
 
