@@ -224,6 +224,8 @@ static ASSEMBLY: engine_core::assembly::Assembly = engine_core::assembly::Assemb
     signal_run: crate::clap_host::signal::run,
     drum_returns: crate::mix_chains::drum_returns,
     // ── engine-project's parts ──
+    streams_read: crate::studio_engine::view_host::streams_read,
+    song_opened: crate::collab::song_opened,
     // ── engine-collab's parts ──
     local_chart: crate::collab::local_chart,
     join_task_in_background: crate::collab::join_task_in_background,

@@ -65,7 +65,6 @@ fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError>
     engine_listen::register(list)?;
     listen::register(list)?;
     engine_project::register(list)?;
-    project::register(list)?;
     engine_collab::register(list)?;
     collab::register(list)?;
     Ok(())
@@ -76,7 +75,6 @@ fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError>
 mod base;
 mod collab;
 mod listen;
-mod project;
 #[allow(
     unused_imports,
     reason = "the domains' items, under the paths they had in actions.rs"

@@ -137,10 +137,7 @@ pub fn engine_edit(
 pub fn reach_song_end(daw: &daw::standalone::Standalone, project: &daw::service::ProjectContext) {
     use daw::service::{Markers, Regions};
     let song_lane = engine_domain::ruler_lanes::CoreLane::Song.lane_index();
-    let last = crate::actions::sections(daw, project)
-        .iter()
-        .map(|s| s.end)
-        .fold(0.0_f64, f64::max);
+    let last = last_section_end(&Regions::all(daw, project.clone()));
     let short = |at: f64| at < last - 1e-6;
     for marker in Markers::all(daw, project.clone()) {
         let (Some(id), Some(at)) = (marker.id, marker.position.seconds()) else {
@@ -186,4 +183,16 @@ mod tests {
         );
         assert_eq!(Button::from_key("Section(Polka)"), None);
     }
+}
+
+/// Where the last section ends (0 with none): the latest end of a region on
+/// the sections lane (a region on no lane is on it), not the song's own
+/// region nor an edit zone.
+fn last_section_end(regions: &[daw_proto::Region]) -> f64 {
+    let sections = engine_domain::ruler_lanes::CoreLane::Sections.lane_index();
+    regions
+        .iter()
+        .filter(|r| r.lane.is_none_or(|l| l == sections))
+        .map(|r| r.time_range.end_seconds())
+        .fold(0.0_f64, f64::max)
 }

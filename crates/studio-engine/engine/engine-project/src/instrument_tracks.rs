@@ -114,7 +114,7 @@ fn names_a_mix(name: &str) -> bool {
 /// # Errors
 ///
 /// A backend call failed.
-pub(crate) fn file_reference(
+pub fn file_reference(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
 ) -> Result<Option<String>, String> {
@@ -171,7 +171,7 @@ pub(crate) fn file_reference(
 /// # Errors
 ///
 /// A backend call failed.
-pub(crate) fn settle_hearing(
+pub fn settle_hearing(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
 ) -> Result<bool, String> {

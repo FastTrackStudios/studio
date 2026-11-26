@@ -40,9 +40,9 @@ pub use engine_mix::fx_actions;
 pub use engine_runtime::folder;
 pub use engine_runtime::guide_instrument;
 #[cfg(feature = "native")]
-pub mod ingest;
+pub use engine_project::ingest;
 #[cfg(feature = "native")]
-pub mod instrument_tracks;
+pub use engine_project::instrument_tracks;
 pub use daw_view::jobs;
 pub use daw_view::lanes;
 pub use daw_view::leveler;
@@ -56,26 +56,26 @@ pub use daw_view::open_progress;
 pub use daw_view::options;
 pub use engine_core::open_core;
 #[cfg(feature = "native")]
-pub mod organize_edit;
+pub use engine_project::organize_edit;
 pub use daw_view::play_return;
 #[cfg(feature = "native")]
 pub use engine_core::project_file;
 pub use engine_runtime::client::presence;
 #[cfg(feature = "native")]
-pub mod project_new;
+pub use engine_project::project_new;
 #[cfg(feature = "native")]
-pub mod projects;
+pub use engine_project::projects;
 #[cfg(feature = "signal")]
 pub use engine_mix::rig_actions;
 #[cfg(feature = "show")]
-pub mod show;
+pub use engine_project::show;
 pub use engine_runtime::client::slices;
 pub use engine_runtime::client::song_modes;
-pub mod song_stream;
+pub use engine_project::song_stream;
 #[cfg(feature = "native")]
-pub mod stream_in;
+pub use engine_project::stream_in;
 #[cfg(feature = "native")]
-pub mod stream_set;
+pub use engine_project::stream_set;
 // The engine side, behind its own boundary: the set, its actions, the
 // Action List's MCP server, and the engine with no window (`studio engine`).
 /// A page of bars, as a window steps through the song (`SESSION_PAGE`).
@@ -203,7 +203,7 @@ pub use engine_runtime::client::drum_edit;
 pub use engine_runtime::client::drum_settings;
 pub use engine_runtime::client::gain_stage;
 #[cfg(feature = "native")]
-pub mod library_actions;
+pub use engine_project::library_actions;
 #[cfg(feature = "native")]
 pub use daw_view::notes_actions;
 pub use engine_mix::mix_chains;
@@ -223,7 +223,7 @@ pub use engine_core::prepare;
 pub mod record;
 pub use engine_core::reference;
 #[cfg(feature = "native")]
-pub mod reference_play;
+pub use engine_project::reference_play;
 pub use daw_view::routes;
 #[cfg(feature = "native")]
 pub use engine_core::render_ahead;
@@ -236,7 +236,7 @@ pub use engine_edit::sample_align;
 #[cfg(feature = "native")]
 pub use engine_edit::seams;
 pub use engine_runtime::section_colors;
-pub mod setlist;
+pub use engine_project::setlist;
 pub use engine_runtime::client::settings;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod shared_actions;
@@ -268,7 +268,7 @@ pub use engine_runtime::client::zoom;
 /// (`engine_runtime::client::body`).
 mod body;
 #[cfg(feature = "native")]
-pub mod song_open;
+pub use engine_project::song_open;
 pub use body::install;
 
 #[cfg(test)]

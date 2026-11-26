@@ -23,8 +23,7 @@ use crate::view::{
     ActionCall, Applied, AutomationRead, Change, Changed, ChangesAsk, DetailAsk, EditAsked,
     EditBatch, EditShown, EngineView, EngineViewStreamSource, ItemChanges, ItemNow, JobRow,
     JobsFrame, LiveFrame, MarksFrame, OverlayFrame, PerfFrame, Playhead, Queued, SetFrame,
-    SetOpening, SongFacts, StreamSong, StreamsFrame, ViewError, WaveRead, WavesAsk, WindowAction,
-    WindowAnswer,
+    SetOpening, SongFacts, StreamsFrame, ViewError, WaveRead, WavesAsk, WindowAction, WindowAnswer,
 };
 
 /// The engine's view host: its hubs and what each last said.
@@ -272,37 +271,12 @@ pub fn marks_changed() {
     });
 }
 
-/// The streaming state, as the engine reads it every half second.
-pub fn streams_read(
-    shown: &crate::stream_set::Shown,
-    waiting: bool,
-    listening: crate::view::Listening,
-) {
+/// The streaming state, as the engine reads it every half second
+/// (engine-project's `stream_set`, through the core's `assembly`): `frame`
+/// published under the next revision.
+pub fn streams_read(mut frame: StreamsFrame) {
     let host = host();
-    let mut items: Vec<(String, f32)> = shown.items.iter().map(|(k, v)| (k.clone(), *v)).collect();
-    items.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut songs: Vec<(String, StreamSong)> = shown
-        .songs
-        .iter()
-        .map(|(k, v)| {
-            (
-                k.clone(),
-                StreamSong {
-                    arrived: v.arrived,
-                    ready: v.ready,
-                    waiting_on: v.waiting_on,
-                },
-            )
-        })
-        .collect();
-    songs.sort_by(|a, b| a.0.cmp(&b.0));
-    let frame = StreamsFrame {
-        version: host.inner.revision.fetch_add(1, Ordering::AcqRel) + 1,
-        items,
-        songs,
-        waiting,
-        listening,
-    };
+    frame.version = host.inner.revision.fetch_add(1, Ordering::AcqRel) + 1;
     if let Ok(mut last) = host.inner.last_streams.lock() {
         *last = frame.clone();
     }

@@ -10,7 +10,7 @@ use architect::action::{ActionList, Effect};
 use facet::Facet;
 use library_sync::{Library, ListKind, Setlist, Song};
 
-use crate::shared_actions::meta;
+use crate::actions::meta;
 
 pub static LISTS: architect::action::ActionMeta = meta(
     "LIBRARY_LISTS",

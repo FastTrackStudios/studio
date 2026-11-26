@@ -21,9 +21,9 @@ use std::sync::{Arc, Mutex};
 use daw::standalone::audio_engine::materialize::playing_media;
 use daw::standalone::audio_engine::media_fetch::StreamedTake;
 
-use crate::collab::TaskSet;
 use crate::open_progress::Progress;
 use crate::setlist::{Arrival, Opening, Setlist, SetlistOpen as _};
+use crate::task_set::TaskSet;
 
 use crate::song_stream::{FetchGuard, Keep, ShareSource, SongSource, StreamedSong, TaskSource};
 pub use engine_runtime::client::stream_set::*;
@@ -83,7 +83,7 @@ where
 /// The set could not be joined, or none of its songs opened.
 pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist> {
     // Until this open says otherwise, what it opens is not a library set.
-    crate::live_host::opened_from_library(false);
+    crate::task_set::opened_from_library(false);
     crate::setlist::forget_pictures();
     use crate::task_set::until_ok;
     let runtime = crate::open::engine_runtime()?;
@@ -122,7 +122,7 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
         } => {
             // A set of the library: it is there already — auto-hosting
             // leaves it be rather than make another of the songs' names.
-            crate::live_host::opened_from_library(true);
+            crate::task_set::opened_from_library(true);
             // Each song is looked up in the library when its turn comes —
             // not all of them before the first can open.
             let sources: Vec<(String, Source)> = setlist
@@ -203,7 +203,7 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
     setlist.pending = rest.iter().map(|(title, _)| title.clone()).collect();
     ARRIVING.store(rest.len(), std::sync::atomic::Ordering::Release);
     setlist.order = titles;
-    crate::collab::join_task_in_background(set, name);
+    crate::collab_calls::join_task_in_background(set, name);
     let (arrive, arrivals) = tokio::sync::mpsc::unbounded_channel();
     hold_arrivals(arrivals);
     open_behind_all(runtime, rest, &arrive);
@@ -1270,7 +1270,9 @@ fn watch() {
                     };
                     let now = (rounded(&next), waiting, listening);
                     if told.as_ref() != Some(&now) {
-                        crate::studio_engine::view_host::streams_read(&next, waiting, listening);
+                        if let Some(assembly) = crate::assembly::get() {
+                            (assembly.streams_read)(frame(&next, waiting, listening));
+                        }
                         // A window linked here adopts what was published
                         // (`adopt_shown`); without one, this process's own
                         // readers (the waveforms' retry) keep up here.
@@ -1409,5 +1411,36 @@ mod gate_tests {
             proxies_missing: 3,
             ..done
         }));
+    }
+}
+
+/// The streaming state as a window reads it: `shown`'s items and songs,
+/// each sorted by its key (the revision is the publisher's).
+fn frame(
+    shown: &Shown,
+    waiting: bool,
+    listening: crate::view::Listening,
+) -> crate::view::StreamsFrame {
+    let mut items: Vec<(String, f32)> = shown.items.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    items.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut songs: Vec<(String, crate::view::StreamSong)> = shown
+        .songs
+        .iter()
+        .map(|(k, v)| {
+            let song = crate::view::StreamSong {
+                arrived: v.arrived,
+                ready: v.ready,
+                waiting_on: v.waiting_on,
+            };
+            (k.clone(), song)
+        })
+        .collect();
+    songs.sort_by(|a, b| a.0.cmp(&b.0));
+    crate::view::StreamsFrame {
+        version: 0,
+        items,
+        songs,
+        waiting,
+        listening,
     }
 }

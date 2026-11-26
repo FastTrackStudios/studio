@@ -86,7 +86,7 @@ pub fn create(audio: Option<bool>) -> Result<String, String> {
         .with_instrument(crate::prepare::GUIDE_INSTRUMENT)
         .generate(engine_domain::guide::GuideScope::All)
         .map_err(|e| format!("the guide: {e}"))?;
-    crate::actions::request_mode(engine_domain::modes::Mode::Organize);
+    engine_runtime::client::actions::request_mode(engine_domain::modes::Mode::Organize);
     crate::song_model::request_resync();
     crate::actions::list().changed("project", UNTITLED);
     tracing::info!(

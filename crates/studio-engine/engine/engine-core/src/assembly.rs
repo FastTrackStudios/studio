@@ -98,6 +98,12 @@ pub struct Assembly {
     pub drum_returns:
         fn(&daw_standalone::sync::Standalone, &ProjectContext, bool) -> eyre::Result<Vec<String>>,
     // ── engine-project's parts ──
+    /// The streaming state published to the windows, under the next
+    /// revision (`view_host::streams_read`); `frame.version` is ignored.
+    pub streams_read: fn(daw_view::view::StreamsFrame),
+    /// Song `project` opened into the set: a live session's host offers it
+    /// (`collab::song_opened`).
+    pub song_opened: fn(&str),
     // ── engine-collab's parts ──
     /// The chart was edited here, on the song on screen: into the live
     /// session's doc, or held while this device is locked
