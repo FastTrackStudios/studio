@@ -228,9 +228,13 @@ async fn serve_client(stream: tokio::net::UnixStream, router: daw::LayerRouter) 
     }
 }
 
-/// Where the Action List is served, as `crate::studio_engine::mcp`
-/// serves it.
+/// Where the Action List is served: the address it was bound to, else
+/// (not served yet, or still waiting for its port) the one it is asked
+/// for.
 fn mcp_url() -> String {
+    if let Some(url) = crate::studio_engine::mcp::served_url() {
+        return url.to_owned();
+    }
     let port = std::env::var("FTS_MCP_PORT")
         .ok()
         .and_then(|p| p.parse::<u16>().ok())

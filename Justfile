@@ -92,6 +92,13 @@ test GROUP="core" *ARGS:
     [ "${#pkgs[@]}" -gt 0 ] || { echo "no packages in group $group" >&2; exit 1; }
     cargo nextest run --cargo-profile desktop-dev --target {{host}} "${pkgs[@]}" --no-fail-fast "$@"
 
+# What a person or agent does by hand on Unbreakable, timed against budgets (open, play, LISTEN, LISTEN_AB, MIX_RENDER),
+# on the real engine binary, headless and isolated; then the same on a synthetic song. The song is skipped where it isn't
+# (FTS_UNBREAKABLE names another, `off` skips it). Budgets: crates/studio-engine/extensions/daw/tests/unbreakable/budgets.toml;
+# the record goes to target/, the trend to docs/perf/unbreakable.jsonl. Extra arguments go to nextest
+test-unbreakable *ARGS:
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p {{engine_package}} --test unbreakable --run-ignored all --no-capture --no-fail-fast {{ARGS}}
+
 # The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
 ci-local BASE="":
     bash scripts/ci-local.sh {{BASE}}

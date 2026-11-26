@@ -8,6 +8,12 @@
 //!
 //! Studio's audio settings (`studio.audio-settings`) set it beside the
 //! rig engine's (`docs/design/signal-extensions.md`).
+//!
+//! `FTS_AUDIO_DEVICE` names the output for this process only, over the
+//! kept setting, and nothing this process changes is kept: a second
+//! engine (a test's, an agent's) plays where it is told, `null` for no
+//! device at all (`daw_standalone`'s null output, at real time), and
+//! never moves the person's default.
 
 use architect::action::{ActionList, ActionMeta, Effect};
 use daw::standalone::audio_engine::AudioIoPrefs;
@@ -40,9 +46,27 @@ impl AudioDevice {
     }
 }
 
+/// The process's own output, over the kept setting.
+pub const ENV: &str = "FTS_AUDIO_DEVICE";
+
 fn store() -> &'static std::sync::Mutex<AudioDevice> {
     static STORE: std::sync::OnceLock<std::sync::Mutex<AudioDevice>> = std::sync::OnceLock::new();
-    STORE.get_or_init(|| std::sync::Mutex::new(load().unwrap_or_default()))
+    STORE.get_or_init(|| {
+        std::sync::Mutex::new(
+            from_env(std::env::var(ENV).ok())
+                .or_else(load)
+                .unwrap_or_default(),
+        )
+    })
+}
+
+/// The device `ENV`'s value names, when it names one.
+fn from_env(value: Option<String>) -> Option<AudioDevice> {
+    let name = value.filter(|v| !v.trim().is_empty())?;
+    Some(AudioDevice {
+        output_device: name.trim().to_owned(),
+        ..AudioDevice::default()
+    })
 }
 
 /// The device as it stands.
@@ -80,6 +104,11 @@ fn load() -> Option<AudioDevice> {
 }
 
 fn save(device: &AudioDevice) {
+    // A process told its device keeps nothing: the setting is someone
+    // else's.
+    if from_env(std::env::var(ENV).ok()).is_some() {
+        return;
+    }
     let Some(path) = path() else { return };
     if let Some(dir) = path.parent()
         && std::fs::create_dir_all(dir).is_err()
@@ -153,6 +182,20 @@ mod tests {
         // What the render ahead asked for stays.
         assert_eq!(opened.render_ahead_ms, 200);
         assert!(!opened.want_input);
+    }
+
+    #[test]
+    fn the_environment_names_the_output_and_nothing_else() {
+        assert_eq!(super::from_env(None), None);
+        assert_eq!(super::from_env(Some("  ".to_owned())), None);
+        assert_eq!(
+            super::from_env(Some("null".to_owned())),
+            Some(AudioDevice {
+                output_device: "null".to_owned(),
+                sample_rate: 0,
+                buffer_size: 0,
+            })
+        );
     }
 
     #[test]

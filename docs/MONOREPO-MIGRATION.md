@@ -258,9 +258,12 @@ and the edit-to-run time of a change in one domain (target: seconds).
   serialisation; `fx.load_states` was 13.7 s on Unbreakable with a stale
   installed `Signal Dev.clap`) and the plugin is always the built
   version. The CLAP build stays for other hosts.
-- **Unbreakable integration test** (running, branch `test/unbreakable`):
-  the open/play/listen/render sequence on the real song, timed from the
-  engine's spans against budgets that only shrink; `just test-unbreakable`.
+- **Unbreakable integration test** (landed): the open/play/listen/render
+  sequence on the real song, timed from the engine's spans against budgets
+  that only shrink; `just test-unbreakable`. It lives in `daw-extension`'s
+  `tests/unbreakable` and drives the binary only (`CARGO_BIN_EXE_…`, the MCP
+  door): when the engine binary moves to `apps/studio`, the test folder
+  and the recipe's `-p` move with it.
 - **Song open toward REAPER's ~3 s:** cache the imported store by the
   `.session`'s hash (`store.import_snapshot` 7.9 s every open), per-plugin
   spans inside `fx.load_states`, then `bridge.read_doc` (2.8 s).

@@ -1,0 +1,57 @@
+# What each step of `just test-unbreakable` may take, and what its results
+# must be (tests/unbreakable/main.rs). Budgets only shrink: a run well
+# under one prints the tighter budget to write here.
+#
+# A step fails when it takes longer than its budget plus `margin` of it
+# (and never less than `min_margin_ms` over). A step's time is the
+# engine's own span for it where it has one, else the wall clock.
+
+margin = 0.25
+min_margin_ms = 50
+# A step under this share of its budget asks for a tighter one.
+hint_below = 0.8
+
+# The owner's song, as measured live on 2026-11-25 (the drum-mixing
+# skill's log): song.open 28.6 s, first play to first audio 70 ms, the
+# first LISTEN 3.3–3.5 s, LISTEN_AB 1.0–1.6 s replayed, whole-song
+# MIX_RENDER 55 s.
+[unbreakable.budget_ms]
+open = 28600
+first_audio = 70
+first_listen = 3500
+listen_ab = 1600
+render = 55000
+
+[unbreakable.expect]
+# The snare's shape against REFERENCES/REHEARSAL/Drums/Snare - Unbreakable
+# over CH 1: mean |difference| 150 Hz–8 kHz, dB (2.0 after the 2026-11-25
+# "splat" move).
+snare_shape_db = 2.0
+snare_shape_tolerance = 0.5
+# Whole-song MIX_RENDER integrated loudness, IN to OUT end (276 s), of
+# the cached copy taken 2026-11-26 (refresh it, then store the new value).
+render_lufs = -18.95
+render_lufs_tolerance = 0.5
+
+# A few seconds of generated drums: the harness itself, everywhere CI
+# runs. Loose on purpose (a busy CI runner), tight enough to catch a hang,
+# so they ask for no tightening. Measured 2026-11-26 on THEBATTLESHIP:
+# open 0.54 s, first audio 35 ms, LISTEN 90 ms, LISTEN_AB 113 ms, render
+# 0.37 s; the whole test 3.3 s.
+[synthetic]
+hint_below = 0
+
+[synthetic.budget_ms]
+open = 20000
+first_audio = 1000
+first_listen = 5000
+listen_ab = 5000
+render = 20000
+
+[synthetic.expect]
+# Generated audio, so these hold anywhere: a change here is a change in
+# how the engine renders (or in the template opening applies).
+render_lufs = -15.61
+render_lufs_tolerance = 0.5
+snare_shape_db = 16.78
+snare_shape_tolerance = 0.5

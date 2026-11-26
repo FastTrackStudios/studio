@@ -401,23 +401,51 @@ pub struct SetAudio {
     aux: AuxSlot,
     stream_error: Arc<AtomicBool>,
     stats: Arc<EngineStats>,
-    _stream: Stream,
+    _stream: Output,
+}
+
+/// What drives the set's callback: a device's stream, or the
+/// [`null_output`] (`output_device: "null"`).
+enum Output {
+    Device(Stream),
+    Null(null_output::NullOutput),
+}
+
+impl Output {
+    fn pause(&mut self) {
+        match self {
+            Self::Device(stream) => {
+                let _ = stream.pause();
+            }
+            Self::Null(null) => null.pause(),
+        }
+    }
 }
 
 impl SetAudio {
     /// Open the output device `prefs` choose and start the stream, with
-    /// no voices yet (silence, the aux hook still runs).
+    /// no voices yet (silence, the aux hook still runs). The device named
+    /// `null` is no device: the callback runs at real time on a thread of
+    /// its own and its output is thrown away ([`null_output`]).
     pub fn open(daw: &Standalone, prefs: &AudioIoPrefs) -> Result<Self, String> {
-        let out = ResolvedOutput::open(prefs)?;
+        let out = if null_output::chosen(prefs) {
+            None
+        } else {
+            Some(ResolvedOutput::open(prefs)?)
+        };
+        let config = out
+            .as_ref()
+            .map_or_else(|| null_output::config(prefs), |o| o.config);
         tracing::info!(
-            audio.channels = out.channels,
-            audio.sample_rate = out.sample_rate,
-            audio.format = ?out.sample_format,
+            audio.channels = config.channels,
+            audio.sample_rate = config.sample_rate,
+            audio.format = ?out.as_ref().map(|o| o.sample_format),
+            audio.null = out.is_none(),
             "set audio: output open"
         );
         let stats = Arc::new(EngineStats::default());
         let setup = VoiceSetup {
-            sample_rate: out.sample_rate,
+            sample_rate: config.sample_rate,
             max_frames: AUX_MAX_FRAMES,
             ahead: AheadPrefs::chosen(prefs),
             stats: stats.clone(),
@@ -435,15 +463,24 @@ impl SetAudio {
             stream_error: stream_error.clone(),
             stats: stats.clone(),
         };
-        let stream = match out.sample_format {
-            SampleFormat::F32 => build_set_stream::<f32>(&out.device, &out.config, wiring)?,
-            SampleFormat::I16 => build_set_stream::<i16>(&out.device, &out.config, wiring)?,
-            SampleFormat::U16 => build_set_stream::<u16>(&out.device, &out.config, wiring)?,
-            format => return Err(format!("Unsupported sample format: {format:?}")),
+        let stream = match out {
+            None => Output::Null(null_output::NullOutput::start(
+                &config,
+                set_callback::<f32>(&config, wiring),
+            )?),
+            Some(out) => {
+                let stream = match out.sample_format {
+                    SampleFormat::F32 => build_set_stream::<f32>(&out.device, &out.config, wiring)?,
+                    SampleFormat::I16 => build_set_stream::<i16>(&out.device, &out.config, wiring)?,
+                    SampleFormat::U16 => build_set_stream::<u16>(&out.device, &out.config, wiring)?,
+                    format => return Err(format!("Unsupported sample format: {format:?}")),
+                };
+                stream
+                    .play()
+                    .map_err(|e| format!("Failed to start audio stream: {e}"))?;
+                Output::Device(stream)
+            }
         };
-        stream
-            .play()
-            .map_err(|e| format!("Failed to start audio stream: {e}"))?;
         Ok(Self {
             daw: daw.clone(),
             voices,
@@ -626,7 +663,7 @@ impl Drop for SetAudio {
     fn drop(&mut self) {
         // The callback stops driving the transports before their soft
         // clocks take them back: never two drivers for one block.
-        let _ = self._stream.pause();
+        self._stream.pause();
         for voice in self.voices.load().iter() {
             voice.release();
         }
@@ -708,76 +745,14 @@ fn build_set_stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
     config: &StreamConfig,
     wiring: StreamWiring,
 ) -> Result<Stream, String> {
-    let StreamWiring {
-        daw,
-        voices,
-        aux,
-        stream_error,
-        stats,
-    } = wiring;
-    let channels = usize::from(config.channels);
-    let sample_rate = config.sample_rate;
-    routing::MixerRouting::shared().set_channel_count(channels);
-    // Pre-sized so the callback never allocates: the set's stereo sum,
-    // and the interleaved device-channel stage the aux hook adds into.
-    let mut mix = vec![0.0f32; AUX_MAX_FRAMES * 2];
-    let mut stage = vec![0.0f32; AUX_MAX_FRAMES * channels.max(1)];
-    let mut stamps = daw_transport_sync::BufferClock::default();
-    let mut realtime = false;
-    let voices_on_error = voices.clone();
-    let stats_on_error = stats.clone();
+    let voices_on_error = wiring.voices.clone();
+    let stats_on_error = wiring.stats.clone();
+    let stream_error = wiring.stream_error.clone();
+    let mut callback = set_callback::<T>(config, wiring);
     device
         .build_output_stream(
             *config,
-            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                if !realtime {
-                    realtime = true;
-                    let _ = audio::io::realtime::promote_current_thread();
-                }
-                let entry_micros = crate::transport_sync::now_micros();
-                if channels == 0 || data.is_empty() {
-                    return;
-                }
-                let frames = data.len() / channels;
-                let stamp = stamps.tick(entry_micros, frames as u32, f64::from(sample_rate));
-                let period = stamps.period_micros();
-                let t0 = Instant::now();
-                stats.calls.fetch_add(1, Ordering::Relaxed);
-                stats.block_frames.store(frames as u32, Ordering::Relaxed);
-                let list = voices.load();
-                let mut current_played = false;
-                // A device block past the staging buffers renders in
-                // pieces, each stamped where it starts.
-                let mut done = 0;
-                while done < frames {
-                    let n = (frames - done).min(AUX_MAX_FRAMES);
-                    let clock = BlockClock {
-                        frames: n as u32,
-                        stamp_micros: stamp + period * done as f64 / frames as f64,
-                        period_micros: period * n as f64 / frames as f64,
-                    };
-                    let block = render_set_block(&list, clock, &mut mix[..n * 2]);
-                    current_played |= block.current.is_some_and(|p| p.any_playing());
-                    let stage = &mut stage[..n * channels];
-                    let snap = routing::MixerRouting::shared().snapshot();
-                    routing::stage_main(stage, channels, n, &mix[..n * 2], snap);
-                    run_aux(
-                        &aux,
-                        stage,
-                        &aux_clock(&list, &block, sample_rate, channels),
-                    );
-                    routing::finish_routing(stage, channels, n, snap);
-                    let dst = &mut data[done * channels..(done + n) * channels];
-                    for (out, &v) in dst.iter_mut().zip(stage.iter()) {
-                        *out = T::from_sample(v);
-                    }
-                    done += n;
-                }
-                if !current_played {
-                    silence_meters(&daw);
-                }
-                stats.record_render_at(t0.elapsed().as_nanos() as u64, sample_rate);
-            },
+            move |data: &mut [T], _: &cpal::OutputCallbackInfo| callback(data),
             move |err| {
                 if is_xrun(&err) {
                     stats_on_error.xruns.fetch_add(1, Ordering::Relaxed);
@@ -800,6 +775,82 @@ fn build_set_stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
         )
         .map_err(|e| format!("Failed to build output stream: {e}"))
 }
+
+/// The set's output callback for a stream of `config`: one block of the
+/// device's interleaved samples filled per call. A device's stream and
+/// the null output both run it.
+fn set_callback<T: cpal::SizedSample + cpal::FromSample<f32>>(
+    config: &StreamConfig,
+    wiring: StreamWiring,
+) -> impl FnMut(&mut [T]) + Send + 'static {
+    let StreamWiring {
+        daw,
+        voices,
+        aux,
+        stream_error: _,
+        stats,
+    } = wiring;
+    let channels = usize::from(config.channels);
+    let sample_rate = config.sample_rate;
+    routing::MixerRouting::shared().set_channel_count(channels);
+    // Pre-sized so the callback never allocates: the set's stereo sum,
+    // and the interleaved device-channel stage the aux hook adds into.
+    let mut mix = vec![0.0f32; AUX_MAX_FRAMES * 2];
+    let mut stage = vec![0.0f32; AUX_MAX_FRAMES * channels.max(1)];
+    let mut stamps = daw_transport_sync::BufferClock::default();
+    let mut realtime = false;
+    move |data: &mut [T]| {
+        if !realtime {
+            realtime = true;
+            let _ = audio::io::realtime::promote_current_thread();
+        }
+        let entry_micros = crate::transport_sync::now_micros();
+        if channels == 0 || data.is_empty() {
+            return;
+        }
+        let frames = data.len() / channels;
+        let stamp = stamps.tick(entry_micros, frames as u32, f64::from(sample_rate));
+        let period = stamps.period_micros();
+        let t0 = Instant::now();
+        stats.calls.fetch_add(1, Ordering::Relaxed);
+        stats.block_frames.store(frames as u32, Ordering::Relaxed);
+        let list = voices.load();
+        let mut current_played = false;
+        // A device block past the staging buffers renders in
+        // pieces, each stamped where it starts.
+        let mut done = 0;
+        while done < frames {
+            let n = (frames - done).min(AUX_MAX_FRAMES);
+            let clock = BlockClock {
+                frames: n as u32,
+                stamp_micros: stamp + period * done as f64 / frames as f64,
+                period_micros: period * n as f64 / frames as f64,
+            };
+            let block = render_set_block(&list, clock, &mut mix[..n * 2]);
+            current_played |= block.current.is_some_and(|p| p.any_playing());
+            let stage = &mut stage[..n * channels];
+            let snap = routing::MixerRouting::shared().snapshot();
+            routing::stage_main(stage, channels, n, &mix[..n * 2], snap);
+            run_aux(
+                &aux,
+                stage,
+                &aux_clock(&list, &block, sample_rate, channels),
+            );
+            routing::finish_routing(stage, channels, n, snap);
+            let dst = &mut data[done * channels..(done + n) * channels];
+            for (out, &v) in dst.iter_mut().zip(stage.iter()) {
+                *out = T::from_sample(v);
+            }
+            done += n;
+        }
+        if !current_played {
+            silence_meters(&daw);
+        }
+        stats.record_render_at(t0.elapsed().as_nanos() as u64, sample_rate);
+    }
+}
+
+mod null_output;
 
 #[cfg(test)]
 mod tests;

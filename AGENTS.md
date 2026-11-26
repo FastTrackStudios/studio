@@ -65,6 +65,7 @@ just check         # cargo check --workspace + just boundaries
 just check-web     # the browser builds for wasm32 (studio-app --features web, Keyflow's editor)
 just test <group>  # core | connect | engine | app | tools | all; extra args go to nextest
 just ci-local      # the PR gate on this machine, for what `cargo rail plan` says you touched
+just test-unbreakable  # the owner's song, opened, played, listened to and rendered, timed against budgets
 just ci            # what CI runs after a merge, in its order
 ```
 
@@ -81,6 +82,13 @@ just ci            # what CI runs after a merge, in its order
   triple, into `target/<host>/desktop-dev`. The window, the engine and the
   recipes share it; `release-fast` and `--release` are for shipping and
   measuring.
+- **Optimising the engine:** `just test-unbreakable` runs what a person
+  does by hand on Unbreakable against the real engine binary (headless,
+  isolated, over its MCP door) and times each step against
+  `crates/studio-engine/extensions/daw/tests/unbreakable/budgets.toml`. Read
+  the numbers in its output and `target/<host>/desktop-dev/unbreakable/`;
+  each run appends to `docs/perf/unbreakable.jsonl`. Commit that line with
+  the change it measures. A run is about 2 minutes.
 - Developing the app itself (the engine it finds, its actions, overriding
   an extension while it runs): `apps/studio/docs/development.md`.
 - Your own target dir in a worktree, named `target` (`CARGO_TARGET_DIR`

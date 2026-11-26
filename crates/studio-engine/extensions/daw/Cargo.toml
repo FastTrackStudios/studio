@@ -54,5 +54,15 @@ audio = { workspace = true, features = ["io"] }
 # engine is studio-engine).
 engine-domain = { workspace = true }
 
+# tests/unbreakable: the engine binary driven as a person or agent drives
+# it (its MCP door), its spans received over OTLP, timed against budgets.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+dirs = { workspace = true }
+hound = { workspace = true }
+opentelemetry-proto = { workspace = true }
+prost = { workspace = true }
+tempfile = { workspace = true }
+toml = { workspace = true }
+
 [lints]
 workspace = true

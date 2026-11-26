@@ -504,8 +504,21 @@ fn relink(mode: Mode, attach: fn(&Found) -> Result<(), String>) {
 
 /// Where an engine keeps what it last opened (`id` and its arguments), for
 /// one started in its place to open it again.
+/// What the last engine opened: `last-open.json`, or for a named
+/// instance (`STUDIO_INSTANCE`, not `main`) `last-open-<instance>.json`,
+/// so a second engine (a test's, an agent's) never changes what the
+/// person's engine reopens.
 fn last_open_file() -> Option<PathBuf> {
-    Some(dir()?.join("last-open.json"))
+    Some(dir()?.join(last_open_name(
+        std::env::var("STUDIO_INSTANCE").ok().as_deref(),
+    )))
+}
+
+fn last_open_name(instance: Option<&str>) -> String {
+    match instance.map(str::trim) {
+        Some(name) if !name.is_empty() && name != "main" => format!("last-open-{name}.json"),
+        _ => "last-open.json".to_owned(),
+    }
 }
 
 /// The engine opened something with `id` and `args`: kept, for an engine
@@ -570,6 +583,14 @@ pub fn changed_songs(shown: &[String], engine: &[String]) -> SongsChanged {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_named_instance_keeps_what_it_opened_apart() {
+        assert_eq!(last_open_name(None), "last-open.json");
+        assert_eq!(last_open_name(Some("")), "last-open.json");
+        assert_eq!(last_open_name(Some("main")), "last-open.json");
+        assert_eq!(last_open_name(Some("kf")), "last-open-kf.json");
+    }
 
     fn engine(pid: u32) -> Found {
         Found {

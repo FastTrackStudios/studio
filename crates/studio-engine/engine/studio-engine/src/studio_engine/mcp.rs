@@ -3,8 +3,9 @@
 //! Whatever Session can do is an action in its Action List
 //! (`crate::actions`); this puts a model on it while you work — the
 //! window's process or `studio engine` with no window, the same list — on
-//! `http://127.0.0.1:47811/mcp` (`FTS_MCP_PORT` to move it, `FTS_MCP=0`
-//! for none). Found without asking: the repository's `.mcp.json` names
+//! `http://127.0.0.1:47811/mcp` (`FTS_MCP_PORT` to move it, `0` for a
+//! free port, `FTS_MCP=0` for none). Where it is bound goes in the
+//! engine's file under `<config>/fts/engines/` ([`served_url`]). Found without asking: the repository's `.mcp.json` names
 //! it for Claude Code, and `~/.config/fts/session-mcp.json` says where it
 //! is for any other client.
 //!
@@ -138,7 +139,18 @@ fn serve(
 /// (`<config>/fts/engines/`) and not published for other clients.
 pub const PRIVATE: &str = "FTS_MCP_PRIVATE";
 
+/// Where the Action List is served, once it is: the address bound, which
+/// with `FTS_MCP_PORT=0` is a free port the system chose.
+static SERVED: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// The URL the Action List is served on, when it is.
+#[must_use]
+pub fn served_url() -> Option<&'static str> {
+    SERVED.get().map(String::as_str)
+}
+
 fn announce(serving: &architect_mcp::http::Serving) {
+    let _ = SERVED.set(serving.url.clone());
     let private = std::env::var_os(PRIVATE).is_some_and(|v| !v.is_empty() && v != "0");
     if !private && let Err(error) = serving.publish(DISCOVERY_NAME) {
         tracing::warn!(error = %error, "mcp: could not write where it is served");

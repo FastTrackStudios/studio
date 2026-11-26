@@ -82,6 +82,26 @@ files, and `$XDG_RUNTIME_DIR/fts/` the same number of `engine-<pid>.sock`
 files. Engines that crashed never remove theirs, so the registry only
 grows.
 
+**A second engine today, without the registry** (2026-11-26, for
+`just test-unbreakable`): `crates/studio-engine/extensions/daw/tests/unbreakable/engine.rs`
+starts one beside the owner's with `FTS_DAW_ENGINE_DIR`, `XDG_RUNTIME_DIR`
+and `XDG_DATA_HOME` of its own and a `STUDIO_INSTANCE`. Four small engine
+changes make that enough:
+
+- `FTS_MCP_PORT=0` binds a free port, and the engine's registry file now
+  names the port bound, not the one asked for (#1). With `FTS_MCP_PRIVATE`,
+  `session-mcp.json` is left alone (#6).
+- A named instance keeps `last-open-<name>.json` (#3).
+- `FTS_AUDIO_DEVICE` names the output for the process, and nothing it
+  changes is kept (#9 for the device). `null` is a real-time output with no
+  device (#15): ALSA's `null` takes 2 s of audio in 6 ms.
+
+Still shared: `~/.config/fts/engines/` (the test reads its own pid's file),
+the settings other than the device, and the media folder's `Peaks/`.
+SIGTERM stops the engine thread of `daw-extension --engine` but not the
+process (its control loop keeps running), so the test stops it through
+`control.sock`.
+
 ## 2. Where instances collide
 
 | # | What | Where | Effect |

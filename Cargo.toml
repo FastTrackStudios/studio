@@ -622,6 +622,10 @@ opentelemetry-otlp = { version = "0.30", default-features = false, features = [
   "metrics",
 ] }
 opentelemetry-appender-tracing = "0.30"
+# OTLP's messages, decoded by a test's own receiver (daw-extension's
+# tests/unbreakable): the features the exporter above already builds.
+opentelemetry-proto = { version = "0.30", default-features = false, features = ["gen-tonic-messages", "trace", "logs", "metrics"] }
+prost = "0.13"
 opentelemetry-semantic-conventions = "0.30"
 tracing-opentelemetry = "0.31"
 
