@@ -96,6 +96,7 @@ pub fn open(engine: &Engine, path: &Path) -> Result<Vec<Value>, String> {
 pub fn session(engine: &Engine, fixture: &Fixture, out: &mut Checks) {
     let mcp = &engine.mcp;
     sections(mcp, "sections", &fixture.sections, out);
+    section_ends(mcp, &fixture.section_ends, out);
     click(mcp, out);
     match plays(mcp, 0.0) {
         Ok(said) => out.add("plays", true, said),
@@ -361,4 +362,34 @@ pub fn arrangements(
         sections(mcp, "the song's own, after", &fixture.sections, out);
     }
     Ok(file)
+}
+
+/// Whether the open song's sections end at `want` (seconds, in order):
+/// the song's own timeline, read apart from its chart's arithmetic.
+fn section_ends(mcp: &Mcp, want: &[f64], out: &mut Checks) {
+    if want.is_empty() {
+        return;
+    }
+    let have: Vec<f64> = match mcp.run("SESSION_SECTIONS", &json!({})) {
+        Ok(rows) => rows
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|s| s["end"].as_f64())
+            .collect(),
+        Err(why) => return out.failed("section ends", why),
+    };
+    let ok = have.len() == want.len() && have.iter().zip(want).all(|(h, w)| (h - w).abs() < 0.01);
+    out.add(
+        "section ends",
+        ok,
+        format!(
+            "{have:?}{}",
+            if ok {
+                String::new()
+            } else {
+                format!(" (wanted {want:?})")
+            }
+        ),
+    );
 }

@@ -1,5 +1,8 @@
-# Two recordings with the same file name in different folders
-# (studio#289): each track must play its own, 30 dB apart.
+# Two recordings with the same file name in different folders: each
+# track must play its own, 30 dB apart. This is the song opened from its
+# own files; studio#289's collision is in the streamed path
+# (engine-runtime's song_stream: proxies, peaks, fetched originals),
+# which a local fixture does not reach, so passing here does not close it.
 about = "two recordings with the same file name"
 
 [[media]]

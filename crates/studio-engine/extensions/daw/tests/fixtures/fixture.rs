@@ -23,6 +23,7 @@
 //! lufs_max = -10
 //!
 //! sections = ["Intro", "Verse 1"]   # the song's sections, in order
+//! section_ends = [4.0, 12.0]          # and where each ends, seconds
 //!
 //! [[arrangement]]           # another arrangement: a branch of the song's
 //! name = "Big Chorus"       # project file, made over MCP as the test runs
@@ -54,6 +55,8 @@ pub struct Fixture {
     pub chart: Vec<ChartPoint>,
     /// The song's sections, in order (unchecked when empty).
     pub sections: Vec<String>,
+    /// Where each of them ends, seconds (unchecked when empty).
+    pub section_ends: Vec<f64>,
     pub arrangements: Vec<Arrangement>,
 }
 
@@ -197,6 +200,21 @@ impl Fixture {
             .collect::<Result<_, String>>()?;
         Ok(Self {
             sections: names(&table, "sections"),
+            section_ends: table
+                .get("section_ends")
+                .and_then(toml::Value::as_array)
+                .map(|v| {
+                    v.iter()
+                        .filter_map(|n| {
+                            n.as_float().or_else(|| {
+                                n.as_integer()
+                                    .and_then(|i| i32::try_from(i).ok())
+                                    .map(f64::from)
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
             arrangements,
             name: name.to_owned(),
             about: table

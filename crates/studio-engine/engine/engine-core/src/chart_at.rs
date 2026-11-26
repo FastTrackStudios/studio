@@ -46,8 +46,8 @@ pub fn chart_bar(chart: &str, at: f64) -> Result<Option<ChartBar>, String> {
         .enumerate()
         .find(|(_, b)| b.start <= at && at < b.end)
         .map(|(index, b)| ChartBar {
-            bar: count(index),
-            written: count(b.bar),
+            bar: one_based(index),
+            written: one_based(b.bar),
             pass: b.pass,
             section: parsed
                 .sections
@@ -60,7 +60,7 @@ pub fn chart_bar(chart: &str, at: f64) -> Result<Option<ChartBar>, String> {
 }
 
 /// A 0-based index as a 1-based number.
-fn count(index: usize) -> u32 {
+fn one_based(index: usize) -> u32 {
     u32::try_from(index).map_or(u32::MAX, |i| i.saturating_add(1))
 }
 
