@@ -89,16 +89,19 @@ struct Held {
 }
 
 /// The worker's `main`, when [`SOCKET_ENV`] says this process is one.
-/// `None` when it is not.
+/// `None` when it is not. `install` stands the engine up around the core
+/// first (the binary's `studio_engine::install`): the worker renders with
+/// every domain, as the engine that spawned it does.
 #[must_use]
-pub fn main_if_worker() -> Option<Result<(), String>> {
+pub fn main_if_worker(install: fn()) -> Option<Result<(), String>> {
     let socket = std::env::var_os(SOCKET_ENV)?;
-    Some(main(PathBuf::from(socket)))
+    Some(main(PathBuf::from(socket), install))
 }
 
-fn main(socket: PathBuf) -> Result<(), String> {
+fn main(socket: PathBuf, install: fn()) -> Result<(), String> {
     IS_WORKER.store(true, std::sync::atomic::Ordering::SeqCst);
     init_tracing();
+    install();
     if let Some(report) = std::env::var_os(REPORT_ENV) {
         super::crash::install(std::path::Path::new(&report))?;
     }

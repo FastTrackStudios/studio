@@ -216,6 +216,8 @@ static ASSEMBLY: engine_core::assembly::Assembly = engine_core::assembly::Assemb
     render_span: crate::mix_measure::render_span,
     signal_analyze: crate::signal_offline::analyze,
     signal_after_step: crate::signal_offline::after_step,
+    publish_perf: crate::studio_engine::view_host::perf,
+    last_perf: crate::studio_engine::view_host::last_perf,
     // ── engine-edit's parts ──
     // ── engine-mix's parts ──
     place: crate::algorithms::place,

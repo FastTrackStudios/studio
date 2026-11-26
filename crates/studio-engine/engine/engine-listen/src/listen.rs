@@ -332,7 +332,7 @@ fn probe_of(
         Ok(n) if (1..=chain.len()).contains(&n) => n - 1,
         Ok(n) => return Err(format!("the track has {} FX, no #{n}", chain.len())),
         Err(_) => {
-            let (_, fx) = crate::fx_actions::target(daw, project, track, which)?;
+            let (_, fx) = crate::fx_target::target(daw, project, track, which)?;
             chain
                 .iter()
                 .position(|f| f.guid == fx.guid)
@@ -490,8 +490,8 @@ fn dynamics_before(
         .iter()
         .enumerate()
         .take(end)
-        .filter(|(_, f)| f.enabled && is_dynamics(&crate::clap_fx::display_name(f)))
-        .map(|(i, f)| (i, crate::clap_fx::display_name(f), f.guid.clone()))
+        .filter(|(_, f)| f.enabled && is_dynamics(&crate::fx_target::display_name(f)))
+        .map(|(i, f)| (i, crate::fx_target::display_name(f), f.guid.clone()))
         .collect()
 }
 
@@ -656,8 +656,8 @@ fn span_of(
     to: &str,
 ) -> Result<(f64, f64), String> {
     Ok((
-        crate::fx_actions::moment(daw, project, from)?,
-        crate::fx_actions::moment(daw, project, to)?,
+        crate::moment::moment(daw, project, from)?,
+        crate::moment::moment(daw, project, to)?,
     ))
 }
 
@@ -766,7 +766,7 @@ pub fn listen_points(
     if a.points.is_empty() {
         return Err("no points to listen to: give `track` or `points`".to_owned());
     }
-    let song = crate::fx_actions::project_guid(project)?;
+    let song = crate::moment::project_guid(project)?;
     let (from, to) = span_of(daw, project, a.from, a.to)?;
     let solo: Option<HashSet<String>> = match a.solo {
         Some(names) if !names.is_empty() => Some(
@@ -954,7 +954,7 @@ fn points_answer(h: &PointsHeard, ms: f64) -> Value {
 /// Signal instance publishes its piece's hits to the session, and the
 /// piece's gates follow them), each with its piece's mics.
 pub(crate) fn keyed(daw: &Standalone, project: &ProjectContext) -> Vec<render::Keyed> {
-    let (kit, _) = crate::hits::kit(daw, project);
+    let (kit, _) = crate::kit::kit(daw, project);
     kit.into_iter()
         .map(|p| render::Keyed {
             from: p.trigger,
@@ -970,7 +970,7 @@ fn hit_times(
     piece: &str,
     span: Option<(f64, f64)>,
 ) -> Vec<f64> {
-    crate::hits::playback(daw, project)
+    crate::kit::playback(daw, project)
         .iter()
         .filter(|h| h.piece.eq_ignore_ascii_case(piece))
         .filter(|h| span.is_none_or(|(f, t)| h.time >= f && h.time < t))
@@ -993,7 +993,7 @@ fn piece_tracks(
     piece: &str,
     (sum, reference): (Option<&str>, Option<&str>),
 ) -> Result<PieceTracks, String> {
-    let (kit, _) = crate::hits::kit(daw, project);
+    let (kit, _) = crate::kit::kit(daw, project);
     let found = kit.iter().find(|p| p.name.eq_ignore_ascii_case(piece));
     let all = Tracks::all(daw, project.clone());
     let first_mic = found.and_then(|p| p.mics.first()).cloned();
@@ -1061,7 +1061,7 @@ fn hit_windows(
     project: &ProjectContext,
     a: &HitsArg,
 ) -> Result<HitWindows, String> {
-    let song = crate::fx_actions::project_guid(project)?;
+    let song = crate::moment::project_guid(project)?;
     let tracks = piece_tracks(
         daw,
         project,
@@ -1070,8 +1070,8 @@ fn hit_windows(
     )?;
     let asked = match (&a.from, &a.to) {
         (Some(f), Some(t)) => Some(span_of(daw, project, f, t)?),
-        (Some(f), None) => Some((crate::fx_actions::moment(daw, project, f)?, f64::MAX)),
-        (None, Some(t)) => Some((0.0, crate::fx_actions::moment(daw, project, t)?)),
+        (Some(f), None) => Some((crate::moment::moment(daw, project, f)?, f64::MAX)),
+        (None, Some(t)) => Some((0.0, crate::moment::moment(daw, project, t)?)),
         (None, None) => None,
     };
     let mut times = hit_times(daw, project, &a.piece, asked);
@@ -1304,7 +1304,7 @@ pub fn render_at(
     project: &ProjectContext,
     r: &RenderAt<'_>,
 ) -> Result<Audio, String> {
-    let song = crate::fx_actions::project_guid(project)?;
+    let song = crate::moment::project_guid(project)?;
     let track = resolve(daw, project, r.track)?;
     let point = point_of(daw, project, &track, r.at)?;
     let points = [ProbeAt {
@@ -2025,7 +2025,7 @@ fn live_point(
 
 /// `LISTEN_LIVE`.
 fn listen_live(daw: &Standalone, project: &ProjectContext, a: &LiveArg) -> Result<Value, String> {
-    let song = crate::fx_actions::project_guid(project)?;
+    let song = crate::moment::project_guid(project)?;
     let (point, path, at) = live_point(daw, project, &a.track, a.at.as_deref())?;
     if a.on {
         live::open(

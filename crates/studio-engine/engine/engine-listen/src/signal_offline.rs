@@ -75,7 +75,7 @@ pub fn source_revision(daw: &Standalone, project: &ProjectContext, track_guid: &
         return String::new();
     };
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    for item in crate::vocal_level::playing(daw, project, &track) {
+    for item in crate::vocal_lanes::playing(daw, project, &track) {
         item.guid.hash(&mut h);
         item.position.as_seconds().to_bits().hash(&mut h);
         item.length.as_seconds().to_bits().hash(&mut h);
@@ -92,7 +92,7 @@ pub fn source_revision(daw: &Standalone, project: &ProjectContext, track_guid: &
 fn items_span(daw: &Standalone, project: &ProjectContext, track_guid: &str) -> Option<(f64, f64)> {
     let track =
         daw::service::Tracks::get(daw, project.clone(), TrackRef::Guid(track_guid.to_owned()))?;
-    crate::vocal_level::playing(daw, project, &track)
+    crate::vocal_lanes::playing(daw, project, &track)
         .iter()
         .map(|i| {
             (

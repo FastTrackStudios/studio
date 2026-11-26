@@ -266,7 +266,9 @@ pub fn watch(daw: Standalone, stats: Arc<EngineStats>, _rate: u32) {
                 sys = now_sys;
                 render = now_render;
                 metrics::record(&frame, &asleep);
-                crate::studio_engine::view_host::perf(frame);
+                if let Some(assembly) = crate::assembly::get() {
+                    (assembly.publish_perf)(frame);
+                }
             }
         });
     if let Err(e) = spawned {
@@ -414,7 +416,9 @@ pub fn register(
         &PERF,
         architect::action::Effect::ReadOnly,
         |PerfArg { sort, limit }: PerfArg| {
-            let mut frame = crate::studio_engine::view_host::last_perf();
+            let mut frame = crate::assembly::get()
+                .map(|assembly| (assembly.last_perf)())
+                .unwrap_or_default();
             let key = |t: &TrackPerf| match sort.as_deref() {
                 Some("fx") => t.fx_cpu_pct,
                 Some("media") => t.media_cpu_pct,

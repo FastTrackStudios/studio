@@ -4,26 +4,61 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-description = "Listening and measuring: listen, mix_measure, the render worker, Signal's offline blocks, the off loop, the audio's health"
+description = "Listening and measuring: listen, mix_measure, the render worker, Signal's offline blocks, the audio's health and the performance meter"
 
 # One of studio-engine's domains (docs/MONOREPO-MIGRATION.md, "Splitting
-# studio-engine"). It depends on engine-core and studio-core, never on
-# studio-engine or another domain. studio-engine depends on it, re-exports
+# studio-engine"). It depends on engine-core, studio-core and engine-mix
+# (the one permitted edge between domains), never on studio-engine or
+# another domain. studio-engine depends on it, re-exports
 # its modules from their old paths and calls its `register` from the
 # Action List's collector (`actions::register_all`).
 
 [dependencies]
 engine-core = { workspace = true }
+# The one permitted edge between two domains: measuring reads the mix's
+# FX, sends and Signal instances (clap_fx, clap_host, mix_sends,
+# mix_snapshot, signal_kit). engine-mix never depends on listen.
+engine-mix = { workspace = true }
 architect = { workspace = true, features = ["action-list"] }
+daw = { workspace = true }
+daw-proto = { workspace = true }
+daw-standalone = { workspace = true, features = ["bootstrap", "rpp-project-wasm"] }
+dsp = { workspace = true, features = ["level"] }
+engine-sync = { workspace = true }
+eyre = { workspace = true }
+facet = { workspace = true }
+libc = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+web-time = { workspace = true }
+base64 = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+dirs = { workspace = true, optional = true }
+fts-sample = { workspace = true, optional = true, features = ["engine-core"] }
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
+realfft = { workspace = true, optional = true }
+resvg = { workspace = true, optional = true }
+session-format = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
+
+[dev-dependencies]
+# The metrics, read back through an in-memory exporter.
+opentelemetry_sdk = { workspace = true, features = ["metrics", "testing"] }
+tempfile = { workspace = true }
+fts-sample = { workspace = true, features = ["engine-native"] }
 
 [features]
 default = ["native"]
 # studio-engine's features, forwarded (its `native`, `signal`, `web`,
 # `show` turn these on): gate the modules here as they were gated there.
-native = ["engine-core/native"]
-signal = ["native", "engine-core/signal"]
-web = ["engine-core/web"]
-show = ["native", "engine-core/show"]
+native = ["engine-core/native", "engine-mix/native", "architect/host", "dep:base64", "dep:chrono", "dep:dirs", "dep:fts-sample", "fts-sample/engine-native", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:rayon", "dep:realfft", "dep:resvg", "dep:session-format", "session-format/store", "dep:tokio", "dep:tracing-subscriber", "dep:uuid"]
+signal = ["native", "engine-core/signal", "engine-mix/signal"]
+web = ["engine-core/web", "engine-mix/web"]
+show = ["native", "engine-core/show", "engine-mix/show"]
 
 [lints]
 workspace = true

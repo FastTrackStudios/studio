@@ -77,6 +77,11 @@ pub struct Assembly {
     /// After an edit step: the watched Signal FX told where their tracks'
     /// sources moved (`signal_offline::after_step`).
     pub signal_after_step: fn(&Standalone, &ProjectContext),
+    /// A performance meter frame to every window, kept for SESSION_PERF
+    /// (`view_host::perf`).
+    pub publish_perf: fn(crate::view::PerfFrame),
+    /// The last performance meter frame (`view_host::last_perf`).
+    pub last_perf: fn() -> crate::view::PerfFrame,
     // ── engine-edit's parts ──
     // ── engine-mix's parts ──
     /// Where a performance's hits play (`algorithms::place`).

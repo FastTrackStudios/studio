@@ -10,7 +10,7 @@
 //! publishes. See docs/design/engine-boundary.md.
 
 #[cfg(feature = "native")]
-pub mod audio_health;
+pub use engine_listen::audio_health;
 pub use daw_view::automation;
 pub use daw_view::changes;
 pub use daw_view::edit_state;
@@ -103,9 +103,9 @@ pub use engine_edit::track_regions;
 #[cfg(feature = "native")]
 pub use engine_runtime::client::view_client;
 #[cfg(feature = "native")]
-pub mod listen;
+pub use engine_listen::listen;
 #[cfg(feature = "native")]
-pub mod mix_measure;
+pub use engine_listen::mix_measure;
 #[cfg(feature = "native")]
 pub use engine_mix::mix_sends;
 #[cfg(feature = "native")]
@@ -119,11 +119,17 @@ mod mix_variants_match_tests;
 #[cfg(feature = "native")]
 pub mod off_loop;
 #[cfg(feature = "native")]
-pub mod render_worker;
+pub use engine_listen::render_worker;
+/// A real render worker, serving the engine's whole Action List.
+#[cfg(all(test, feature = "native"))]
+mod render_worker_tests;
 #[cfg(feature = "native")]
 pub use engine_mix::signal_kit;
 #[cfg(feature = "native")]
-pub mod signal_offline;
+pub use engine_listen::signal_offline;
+/// A test that reads listen, the mix and edit at once (the assembly's).
+#[cfg(all(test, feature = "native"))]
+mod signal_offline_level_tests;
 #[cfg(feature = "native")]
 pub use daw_view::wave_pool;
 #[cfg(feature = "native")]
@@ -211,7 +217,7 @@ pub use engine_runtime::client::gain_stage;
 #[cfg(feature = "native")]
 pub mod perf;
 #[cfg(feature = "native")]
-pub mod perf_meter;
+pub use engine_listen::perf_meter;
 /// The engine's telemetry on plain `tracing`: the span ring `PERF_RECENT`
 /// reads, OTLP export, the panic hook.
 #[cfg(feature = "native")]

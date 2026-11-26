@@ -545,8 +545,8 @@ fn span_of(
     to: &str,
 ) -> Result<(f64, f64), String> {
     Ok((
-        crate::fx_actions::moment(daw, project, from)?,
-        crate::fx_actions::moment(daw, project, to)?,
+        crate::moment::moment(daw, project, from)?,
+        crate::moment::moment(daw, project, to)?,
     ))
 }
 
@@ -583,7 +583,7 @@ fn measure(
     );
     let _in = span.enter();
     let began = web_time::Instant::now();
-    let guid = crate::fx_actions::project_guid(project)?;
+    let guid = crate::moment::project_guid(project)?;
     let (from, to) = span_of(daw, project, &a.from, &a.to)?;
     let bands = bands_of(a.bands.as_deref())?;
     let post_fader = a.post_fader.unwrap_or(true);
@@ -793,7 +793,7 @@ fn render(daw: &Standalone, project: &ProjectContext, a: &RenderArg) -> Result<R
     );
     let _in = span.enter();
     let began = web_time::Instant::now();
-    let guid = crate::fx_actions::project_guid(project)?;
+    let guid = crate::moment::project_guid(project)?;
     let (from, to) = span_of(daw, project, &a.from, &a.to)?;
     let names: Vec<&String> = a.tracks.iter().chain(a.solo.iter()).flatten().collect();
     let solo: Option<HashSet<String>> = if names.is_empty() {

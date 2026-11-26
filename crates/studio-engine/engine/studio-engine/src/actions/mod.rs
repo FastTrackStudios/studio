@@ -63,7 +63,6 @@ fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError>
     engine_edit::register(list)?;
     engine_mix::register(list)?;
     engine_listen::register(list)?;
-    listen::register(list)?;
     engine_project::register(list)?;
     engine_collab::register(list)?;
     Ok(())
@@ -72,7 +71,6 @@ fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError>
 // Each domain's actions and its registration (`register`). The domains'
 // own modules register theirs (`crate::hits::register`, …) from these.
 mod base;
-mod listen;
 #[allow(
     unused_imports,
     reason = "the domains' items, under the paths they had in actions.rs"
