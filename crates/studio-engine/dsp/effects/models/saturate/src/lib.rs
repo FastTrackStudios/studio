@@ -39,8 +39,8 @@ use dsp::saturate::digital::DigitalStage;
 use dsp::saturate::emphasis::EmphasisEq;
 use dsp::saturate::preamp::ClassAPreamp;
 use dsp::saturate::profiles::Engine;
-use dsp::saturate::ui::params::{MAX_STAGES, SatParams, SatStageParams, SatUiState};
 use dsp::stack::{Stage, StagePool};
+use plugin_core::fx::saturate::{MAX_STAGES, SatParams, SatStageParams, SatUiState};
 
 const PLUGIN_NAME: &str = "FTS Saturate";
 
@@ -231,6 +231,7 @@ impl Stage for SatStage {
 pub struct FtsSaturate {
     params: Arc<SatParams>,
     ui_state: Arc<SatUiState>,
+    #[cfg(feature = "gui")]
     editor_state: Arc<DioxusState>,
     /// The stack: a fixed pool of complete saturators, topology from params.
     pool: StagePool<SatStage>,
@@ -247,14 +248,15 @@ impl Default for FtsSaturate {
         Self {
             params: Arc::new(SatParams::default()),
             ui_state: Arc::new(SatUiState::default()),
-            // The editor sizes itself — see dsp::saturate::ui::control_view.
+            // The editor sizes itself — see plugin_ui::saturate::ui::control_view.
+            #[cfg(feature = "gui")]
             editor_state: DioxusState::new(|| {
                 (
-                    dsp::saturate::ui::control_view::EDITOR_W,
-                    dsp::saturate::ui::control_view::EDITOR_H,
+                    plugin_ui::saturate::ui::control_view::EDITOR_W,
+                    plugin_ui::saturate::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(dsp::saturate::ui::control_view::resize_hint()),
+            .with_resize_hint(plugin_ui::saturate::ui::control_view::resize_hint()),
             pool: StagePool::new((0..MAX_STAGES).map(|_| SatStage::new(48_000.0)).collect()),
             buf_l: Vec::new(),
             buf_r: Vec::new(),
@@ -277,7 +279,7 @@ impl FtsSaturate {
                 stage.sync(sp);
             }
         }
-        dsp::stack::host::sync_pool(&mut self.pool, &*self.params);
+        plugin_core::fx::stack_host::sync_pool(&mut self.pool, &*self.params);
     }
 }
 
@@ -295,7 +297,11 @@ impl Plugin for FtsSaturate {
         ..AudioIOLayout::const_default()
     }];
 
+    #[cfg(feature = "gui")]
     type Editor = plugin_core::nice_plug_dioxus::editor::DioxusEditor;
+    // No editor: the host (or the engine running it in-process) shows none.
+    #[cfg(not(feature = "gui"))]
+    type Editor = ();
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -303,14 +309,15 @@ impl Plugin for FtsSaturate {
         self.params.clone()
     }
 
+    #[cfg(feature = "gui")]
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
-            Arc::new(dsp::saturate::ui::control_view::SatUi {
+            Arc::new(plugin_ui::saturate::ui::control_view::SatUi {
                 params: self.params.clone(),
                 state: self.ui_state.clone(),
             }),
-            dsp::saturate::ui::control_view::App,
+            plugin_ui::saturate::ui::control_view::App,
         )
     }
 

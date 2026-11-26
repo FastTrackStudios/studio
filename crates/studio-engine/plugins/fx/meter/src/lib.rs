@@ -9,6 +9,7 @@
 //! The audio path is a bit-exact passthrough: analysis taps only.
 
 use nice_plug::prelude::*;
+#[cfg(feature = "gui")]
 use nice_plug_dioxus::{DioxusState, create_dioxus_editor_with_state};
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -17,6 +18,7 @@ use dsp_core::meter::lufs::{LufsMeter, LufsState};
 use dsp_core::meter::phase::{PhaseCorrelation, PhaseState};
 use dsp_core::meter::spectrum::{SpectrumAnalyzer, SpectrumState};
 
+#[cfg(feature = "gui")]
 mod editor;
 
 const PLUGIN_NAME: &str = "FTS Meter";
@@ -37,6 +39,7 @@ pub struct MeterParams {}
 
 pub struct FtsMeter {
     params: Arc<MeterParams>,
+    #[cfg(feature = "gui")]
     editor_state: Arc<DioxusState>,
     lufs: LufsMeter,
     phase: PhaseCorrelation,
@@ -60,6 +63,7 @@ impl Default for FtsMeter {
         });
         Self {
             params: Arc::new(MeterParams::default()),
+            #[cfg(feature = "gui")]
             editor_state: DioxusState::new(|| (EDITOR_W, EDITOR_H)),
             lufs,
             phase,
@@ -87,7 +91,11 @@ impl Plugin for FtsMeter {
 
     // `Plugin::Editor` is an associated type as of the baseview 0.3 rework,
     // so the editor is named here rather than returned as a trait object.
+    #[cfg(feature = "gui")]
     type Editor = nice_plug_dioxus::editor::DioxusEditor;
+    // No editor: the host (or the engine running it in-process) shows none.
+    #[cfg(not(feature = "gui"))]
+    type Editor = ();
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -95,6 +103,7 @@ impl Plugin for FtsMeter {
         self.params.clone()
     }
 
+    #[cfg(feature = "gui")]
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(self.editor_state.clone(), self.shared.clone(), editor::App)
     }

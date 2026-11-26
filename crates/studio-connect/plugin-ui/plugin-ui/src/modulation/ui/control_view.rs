@@ -19,7 +19,7 @@ use nice_plug_dioxus::prelude::use_param_context;
 
 use crate::modulation::ui::faces::ModFace;
 use crate::modulation::ui::param_adapter::param_handle;
-use crate::modulation::ui::params::{ModParams, ModUiState};
+use crate::modulation::ui::params::{EditorFormParams, ModParams, ModUiState};
 
 pub use fts_audio_ui::shell::RAIL_W;
 

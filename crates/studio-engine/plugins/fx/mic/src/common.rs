@@ -1,5 +1,5 @@
 //! Where the models live (the mic list and parameter helpers are
-//! `plugin_ui::mic::ui::params`).
+//! `plugin_core::fx::mic`).
 //!
 //! Installed models (`$FTS_MIC_MODELS`, else `~/.local/share/fts/mic-models`,
 //! a checkout of the private `mic-models` repository) are read first, so they
@@ -8,7 +8,7 @@
 use dsp::mic::MicModel;
 use std::path::PathBuf;
 
-pub use plugin_ui::mic::ui::params::{MICS, index};
+pub use plugin_core::fx::mic::{MICS, index};
 
 pub fn models_dir() -> PathBuf {
     std::env::var_os("FTS_MIC_MODELS").map_or_else(

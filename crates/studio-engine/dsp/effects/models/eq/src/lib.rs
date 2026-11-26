@@ -20,10 +20,10 @@ use dsp::eq::hardware::hardware_eq::{
 use dsp::eq::hardware::neve_1073::{
     Neve1073Hpf, Neve1073LowFreq, Neve1073MidFreq, Neve1073Model, Neve1073Settings,
 };
-use dsp::eq::ui::params::{
+use dsp::stack::{Stage, StagePool};
+use plugin_core::fx::eq::{
     EqStageParams, EqUiState, FtsEqParams, MAX_STAGES, NUM_BANDS, SPECTRUM_BINS,
 };
-use dsp::stack::{Stage, StagePool};
 
 /// The most latency one stage can add, in samples: the spectral engine's
 /// 4096-point STFT (`FtsEq::prepare`), the only latency an EQ stage has.
@@ -353,6 +353,7 @@ impl Stage for EqStage {
 pub struct FtsEqPlugin {
     params: Arc<FtsEqParams>,
     ui_state: Arc<EqUiState>,
+    #[cfg(feature = "gui")]
     editor_state: Arc<DioxusState>,
     /// The stack: a fixed pool of complete EQs, topology from params.
     pool: StagePool<EqStage>,
@@ -375,13 +376,14 @@ impl Default for FtsEqPlugin {
         Self {
             params,
             ui_state,
+            #[cfg(feature = "gui")]
             editor_state: DioxusState::new(|| {
                 (
-                    dsp::eq::ui::control_view::EDITOR_W,
-                    dsp::eq::ui::control_view::EDITOR_H,
+                    plugin_ui::eq::ui::control_view::EDITOR_W,
+                    plugin_ui::eq::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(dsp::eq::ui::control_view::resize_hint()),
+            .with_resize_hint(plugin_ui::eq::ui::control_view::resize_hint()),
             pool: StagePool::new((0..MAX_STAGES).map(|_| EqStage::new()).collect()),
             last_latency: 0,
             sample_rate: 48000.0,
@@ -406,7 +408,7 @@ impl FtsEqPlugin {
                 stage.sync(p);
             }
         }
-        dsp::stack::host::sync_pool(&mut self.pool, &*self.params);
+        plugin_core::fx::stack_host::sync_pool(&mut self.pool, &*self.params);
     }
 
     /// The stage the editor is looking at — what the per-stage readouts
@@ -486,7 +488,11 @@ impl Plugin for FtsEqPlugin {
 
     // `Plugin::Editor` is an associated type as of the baseview 0.3 rework,
     // so the editor is named here rather than returned as a trait object.
+    #[cfg(feature = "gui")]
     type Editor = plugin_core::nice_plug_dioxus::editor::DioxusEditor;
+    // No editor: the host (or the engine running it in-process) shows none.
+    #[cfg(not(feature = "gui"))]
+    type Editor = ();
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -494,11 +500,12 @@ impl Plugin for FtsEqPlugin {
         self.params.clone()
     }
 
+    #[cfg(feature = "gui")]
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
             self.ui_state.clone(),
-            dsp::eq::ui::control_view::App,
+            plugin_ui::eq::ui::control_view::App,
         )
     }
 

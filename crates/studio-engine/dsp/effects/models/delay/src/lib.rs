@@ -2,7 +2,7 @@
 //!
 //! A thin nice-plug shell over a **stack** of the [`delay`] facade's
 //! [`DelayChain`]s (docs/spec/fx/stack.md): up to
-//! [`dsp::delay::ui::params::MAX_STAGES`] complete stereo delays — each with
+//! [`plugin_core::fx::delay::MAX_STAGES`] complete stereo delays — each with
 //! its own profile, time/sync, feedback, tone, drive, wow/flutter, duck and
 //! mix — arranged into parallel lanes of serial stages by the stack params
 //! and run through [`dsp::stack::StagePool`]. Every vocal delay a mix wants
@@ -19,7 +19,7 @@
 use plugin_core::prelude::*;
 use std::sync::Arc;
 
-use dsp::delay::ui::params::{DelayParams, DelayStageParams, DelayUiState, MAX_STAGES};
+use plugin_core::fx::delay::{DelayParams, DelayStageParams, DelayUiState, MAX_STAGES};
 
 use dsp::delay::DelayChain;
 use dsp::stack::{Stage, StagePool};
@@ -122,6 +122,7 @@ impl Stage for DelayStage {
 
 pub struct FtsDelay {
     ui_state: Arc<DelayUiState>,
+    #[cfg(feature = "gui")]
     editor_state: Arc<DioxusState>,
     params: Arc<DelayParams>,
     /// The stack: a fixed pool of complete stereo delays, topology from
@@ -135,14 +136,15 @@ impl Default for FtsDelay {
         Self {
             params: Arc::new(DelayParams::default()),
             ui_state: Arc::new(DelayUiState::default()),
-            // The editor sizes itself — see dsp::delay::ui::control_view.
+            // The editor sizes itself — see plugin_ui::delay::ui::control_view.
+            #[cfg(feature = "gui")]
             editor_state: DioxusState::new(|| {
                 (
-                    dsp::delay::ui::control_view::EDITOR_W,
-                    dsp::delay::ui::control_view::EDITOR_H,
+                    plugin_ui::delay::ui::control_view::EDITOR_W,
+                    plugin_ui::delay::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(dsp::delay::ui::control_view::resize_hint()),
+            .with_resize_hint(plugin_ui::delay::ui::control_view::resize_hint()),
             pool: StagePool::new((0..MAX_STAGES).map(|_| DelayStage::new()).collect()),
             last_latency: 0,
         }
@@ -164,7 +166,7 @@ impl FtsDelay {
                 }
             }
         }
-        dsp::stack::host::sync_pool(&mut self.pool, &*self.params);
+        plugin_core::fx::stack_host::sync_pool(&mut self.pool, &*self.params);
     }
 }
 
@@ -182,18 +184,23 @@ impl Plugin for FtsDelay {
         ..AudioIOLayout::const_default()
     }];
 
+    #[cfg(feature = "gui")]
     type Editor = plugin_core::nice_plug_dioxus::editor::DioxusEditor;
+    // No editor: the host (or the engine running it in-process) shows none.
+    #[cfg(not(feature = "gui"))]
+    type Editor = ();
     type SysExMessage = ();
     type BackgroundTask = ();
 
+    #[cfg(feature = "gui")]
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
-            Arc::new(dsp::delay::ui::control_view::DelayUi {
+            Arc::new(plugin_ui::delay::ui::control_view::DelayUi {
                 params: self.params.clone(),
                 state: self.ui_state.clone(),
             }),
-            dsp::delay::ui::control_view::App,
+            plugin_ui::delay::ui::control_view::App,
         )
     }
 
@@ -335,7 +342,7 @@ nice_export_vst3!(FtsDelay);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dsp::stack::host::StackHost;
+    use plugin_core::fx::stack_host::StackHost;
 
     /// A fresh instance is the plain plugin: one stage, on lane 0.
     #[test]

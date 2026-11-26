@@ -26,7 +26,7 @@ use nice_plug_dioxus::prelude::use_param_context;
 
 use crate::saturate::ui::faces::SatFace;
 use crate::saturate::ui::param_adapter::param_handle;
-use crate::saturate::ui::params::{SatParams, SatUiState};
+use crate::saturate::ui::params::{EditorFormParams, SatParams, SatUiState};
 use crate::stack::host::{FocusedStage, StackHandle, StackHost, add_stage, add_target_lane};
 
 pub use fts_audio_ui::shell::RAIL_W;
@@ -377,27 +377,5 @@ fn FaceInBox(
     }
 }
 
-/// The rail badge for a space: short enough for a 48px rail.
-#[must_use]
-pub fn profile_badge(profile_id: &str) -> String {
-    match profile_id {
-        "triode" => "TRI",
-        "pentode" => "PENT",
-        "tape" => "TAPE",
-        "tape_hot" => "HOT",
-        "transformer" => "XFMR",
-        "transistor" => "SS",
-        "fuzz" => "FUZZ",
-        "clip" => "CLIP",
-        "crush" => "BITS",
-        "deluxe" => "DLX",
-        "bluebox" => "BBX",
-        "bluebox_low" => "BBXL",
-        "bluebox_high" => "BBXH",
-        "bluebox_alt" => "BBXA",
-        "bluebox_alt_low" => "BXAL",
-        "bluebox_alt_high" => "BXAH",
-        _ => "SAT",
-    }
-    .to_string()
-}
+/// The rail badge for a space (the param tree's: the stack strip reads it).
+pub use super::params::profile_badge;

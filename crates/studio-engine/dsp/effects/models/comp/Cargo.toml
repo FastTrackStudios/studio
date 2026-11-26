@@ -14,7 +14,7 @@ crate-type = ["cdylib", "lib"]
 workspace = true
 
 [dependencies]
-plugin-core = { workspace = true }
+plugin-core = { workspace = true, features = ["fx-comp"] }
 # Plugin framework. `nice_plug` must be a DIRECT dep: `#[derive(Params)]` and
 # `nice_export_clap!`/`nice_export_vst3!` expand to absolute `::nice_plug::…`
 # paths, so the crate has to be nameable here. `vst3` is on by default.
@@ -23,7 +23,9 @@ nice-plug = { workspace = true, features = ["vst3"] }
 # The DSP facade (re-exports comp-dsp). Never depend on comp-dsp directly.
 # The effect and its parameters' faces: plugins' `plugin-ui`, which re-exports
 # `dsp` with each module's `ui` at the paths fts-fx had.
-dsp = {path = "../../../../../studio-connect/plugin-ui/plugin-ui", package = "plugin-ui", features = ["comp", "comp-native", "comp-ui", "stack"]}
+dsp = { workspace = true, features = ["comp", "stack"] }
+# The editor (feature gui).
+plugin-ui = { workspace = true, optional = true, features = ["comp", "comp-native", "comp-ui", "stack"] }
 # The stack core (docs/spec/fx/stack.md): lanes of serial stages, sum laws,
 # lane latency compensation.
 # The full Dioxus plugin editor (control view, params, GR meter) —
@@ -31,10 +33,14 @@ dsp = {path = "../../../../../studio-connect/plugin-ui/plugin-ui", package = "pl
 
 [features]
 default = []
+# The editor: the Dioxus face (plugin-ui) on nice-plug-dioxus. Off, the
+# plugin is its DSP and parameters only, as the engine runs it in-process.
+gui = ["dep:plugin-ui", "plugin-core/gui"]
 # The CLAP / VST3 entry points, on only for the bundle build (`just
 # plugins-bundle` passes `--features export`): every plugin exports the
 # same `clap_entry` / `GetPluginFactory` symbols, so two in one binary —
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
-export = []
+# A bundle has its editor.
+export = ["gui"]
 

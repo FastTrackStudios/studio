@@ -25,7 +25,7 @@ use nice_plug_dioxus::prelude::use_param_context;
 
 use crate::delay::ui::faces::EchoFace;
 use crate::delay::ui::param_adapter::param_handle;
-use crate::delay::ui::params::{DelayParams, DelayUiState};
+use crate::delay::ui::params::{DelayParams, DelayUiState, EditorFormParams};
 use crate::stack::host::{FocusedStage, StackHandle, StackHost, StackStrip};
 
 pub use fts_audio_ui::shell::RAIL_W;
@@ -295,25 +295,5 @@ pub fn App() -> Element {
     }
 }
 
-/// The rail badge for a space: short enough for a 48px rail.
-#[must_use]
-pub fn profile_badge(profile_id: &str) -> String {
-    match profile_id {
-        "digital" => "DIG",
-        "filter" => "FLT",
-        "tape" => "TAPE",
-        "oilcan" => "OIL",
-        "bbd" => "BBD",
-        "lofi" => "LOFI",
-        "pitch" => "PCH",
-        "shimmer" => "SHM",
-        "multitap" => "TAPS",
-        "rhythm" => "RHY",
-        "drum" => "DRM",
-        "reverse" => "REV",
-        "spectral" => "SPEC",
-        "reverb_delay" => "DIFF",
-        _ => "DLY",
-    }
-    .to_string()
-}
+/// The rail badge for a space (the param tree's: the stack strip reads it).
+pub use super::params::profile_badge;

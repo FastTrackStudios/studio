@@ -31,7 +31,7 @@ use plugin_core::prelude::*;
 
 use crate::comp::ui::faces::{Face, profile_id_for_index};
 use crate::comp::ui::param_adapter::param_handle;
-use crate::comp::ui::params::{CompUiState, PROFILE_LABELS};
+use crate::comp::ui::params::{CompUiState, EditorFormParams, PROFILE_LABELS};
 use crate::comp::ui::profile_view::{ProfileSkin, profile_skin};
 
 /// Width the shell rail takes out of the window, in CSS px.

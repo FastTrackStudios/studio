@@ -1,5 +1,6 @@
 //! Plugin Core: what every FTS plugin is built on — nice-plug's prelude,
-//! the editor state, and the shared plugin UI.
+//! the FX plugins' parameter trees ([`fx`]) and the audio→editor feeds
+//! ([`feed`]), and (feature `gui`) the editor state and the shared plugin UI.
 //!
 //! Provides a unified interface for building FTS audio plugins with
 //! consistent UI, state management, and plugin configuration.
@@ -15,6 +16,8 @@
 pub mod canvas;
 #[cfg(feature = "editor")]
 pub mod editor;
+pub mod feed;
+pub mod fx;
 #[cfg(feature = "meters")]
 pub mod meters;
 pub mod time_params;

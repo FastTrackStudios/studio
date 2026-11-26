@@ -16,7 +16,7 @@ workspace = true
 [dependencies]
 nice-plug = { workspace = true }
 nice-plug-dioxus = { workspace = true }
-plugin-core = { workspace = true }
+plugin-core = { workspace = true, features = ["gui"] }
 dsp = { workspace = true, features = ["eq", "eq-analyzer"] }
 plugin-ui = { workspace = true, features = ["eq", "eq-native", "eq-ui"] }
 atomic_float = { workspace = true }

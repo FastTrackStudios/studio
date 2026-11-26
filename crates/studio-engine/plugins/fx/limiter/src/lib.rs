@@ -13,17 +13,18 @@
 //! onto that chain (Input → drive, Ceiling → output ceiling, Release →
 //! `BlockParty` release, Character → clip-stage morph).
 //!
-//! Params + shared UI state live in [`plugin_ui::comp::ui::limiter::params`] (like `comp-ui`),
-//! so the Dioxus editor ([`plugin_ui::comp::ui::limiter::control_view::App`]) renders against
+//! Params + shared UI state live in `plugin_core::fx::limiter` (like `comp-ui`),
+//! so the Dioxus editor (`plugin_ui::comp::ui::limiter::control_view::App`, feature gui) renders against
 //! them without a circular dep.
 
 use nice_plug::prelude::*;
+#[cfg(feature = "gui")]
 use nice_plug_dioxus::{DioxusState, create_dioxus_editor_with_state};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use dsp::comp::limiter::{GoldenClip, sin_clip};
-use plugin_ui::comp::ui::limiter::params::{LimiterParams, LimiterUiState};
+use plugin_core::fx::limiter::{LimiterParams, LimiterUiState};
 
 const PLUGIN_NAME: &str = "FTS Limiter";
 
@@ -129,6 +130,7 @@ pub struct FtsLimiter {
     params: Arc<LimiterParams>,
     /// One lane per channel (linked-free, mono detection each).
     ui_state: Arc<LimiterUiState>,
+    #[cfg(feature = "gui")]
     editor_state: Arc<DioxusState>,
     channels: Vec<Channel>,
     sample_rate: f64,
@@ -141,6 +143,7 @@ impl Default for FtsLimiter {
         Self {
             params,
             ui_state,
+            #[cfg(feature = "gui")]
             editor_state: DioxusState::new(|| {
                 (
                     plugin_ui::comp::ui::limiter::control_view::EDITOR_W,
@@ -168,7 +171,11 @@ impl Plugin for FtsLimiter {
         ..AudioIOLayout::const_default()
     }];
 
+    #[cfg(feature = "gui")]
     type Editor = nice_plug_dioxus::editor::DioxusEditor;
+    // No editor: the host (or the engine running it in-process) shows none.
+    #[cfg(not(feature = "gui"))]
+    type Editor = ();
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -176,6 +183,7 @@ impl Plugin for FtsLimiter {
         self.params.clone()
     }
 
+    #[cfg(feature = "gui")]
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),

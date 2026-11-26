@@ -1,0 +1,984 @@
+//! The reverb's parameters, and the pieces of editor state a session has
+//! to remember.
+//!
+//! Lives here rather than in the plugin shell for the same reason the
+//! compressor's do: the editor is what constrains them. The profile is a
+//! parameter so a host can automate the space; the profile *id* is persisted
+//! state so growing the list cannot repoint an old project at a different
+//! reverb.
+//!
+//! The tree is an FX stack (`fx.stack.params`, docs/spec/fx/stack.md): a pool
+//! of [`MAX_STAGES`] complete reverbs ([`ReverbStageParams`]), each with its
+//! own space, knobs, Post / Decay Rate EQs and impulse response, plus the
+//! lanes and the stack globals. Stage 1 is nested bare, so its ids and
+//! persist keys are the pre-stack plugin's and an old session loads into it
+//! unchanged; stage *n* is prefixed `s{n}_`.
+//!
+//! The tree is the plugin's, so it lives in `plugin-core` (the plugin runs
+//! it in-process with no editor); `plugin_ui::reverb::ui::params` re-exports
+//! it for the editor.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+
+use atomic_float::AtomicF32;
+use crossbeam_channel::{Sender, TrySendError};
+use dsp::reverb::ir::PreparedIrPair;
+use nice_plug::prelude::*;
+use parking_lot::Mutex;
+
+/// How many stages the reverb stack can hold (`fx.stack.limits`).
+pub const MAX_STAGES: usize = 8;
+
+/// Live values the editor reads and the audio thread writes, plus the
+/// editor's side of IR loading.
+///
+/// The meters are plain atomics rather than a channel: the editor samples them
+/// when it draws, and a frame that misses an update simply draws the next one.
+///
+/// IR loading is per stage — a stage is a complete reverb (`fx.stack.model`),
+/// and two convolution stages each convolve with their own impulse — so the
+/// IR fields are arrays indexed by stage (0-based).
+#[derive(Default)]
+pub struct ReverbUiState {
+    /// The host's tempo, as the audio thread last saw it. Zero means the host
+    /// has no transport — the face shows the free-running pre-delay then,
+    /// because a note value with no tempo behind it is not a duration.
+    pub tempo_bpm: AtomicF32,
+    /// Wet output level in dB, for the tail display.
+    pub tail_db: AtomicF32,
+    /// Input level in dB, so a face can show what is feeding it.
+    pub input_db: AtomicF32,
+    /// The stage the editor is focused on (`fx.stack.focus`), written by the
+    /// editor. The two meters above are the stack's edges, so they do not
+    /// follow it; anything that meters a stage's own state reads it here.
+    pub focused_stage: AtomicUsize,
+    /// Where each stage's finished impulse responses are posted.
+    ///
+    /// The plugin owns the other ends and hands them over at construction.
+    /// The audio thread only ever *receives* on them, inside each stage's
+    /// chain, and swaps a pointer — the decode, the resample and the FFT
+    /// partitioning all happen on a worker this state spawns.
+    pub ir_tx: [Mutex<Option<Sender<PreparedIrPair>>>; MAX_STAGES],
+    /// Sample rate the IR has to be resampled to. Written by the plugin when
+    /// the host tells it, read by the worker.
+    pub sample_rate: AtomicF32,
+    /// What each stage has loaded now — the file's display name, for the
+    /// panel.
+    pub ir_loaded: [Mutex<String>; MAX_STAGES],
+    /// A decode is in flight for that stage. The panel says so rather than
+    /// looking broken for the second and a half a long IR takes.
+    pub ir_loading: [AtomicBool; MAX_STAGES],
+    /// The stage's last failure, if the file could not be read.
+    pub ir_error: [Mutex<Option<String>>; MAX_STAGES],
+    /// Bumped by every [`Self::load_ir`] on that stage. Workers finish in
+    /// whatever order their files take to decode, so each one carries the
+    /// number it started with and posts nothing once a newer load has begun
+    /// — otherwise a slow restore could land after the user's pick and
+    /// replace it, while the saved path still names the pick.
+    pub ir_generation: [AtomicU64; MAX_STAGES],
+}
+
+impl ReverbUiState {
+    /// Load an impulse response into stage `stage` (0-based), off the GUI
+    /// thread and nowhere near the audio one.
+    ///
+    /// Reading a file, resampling it and partitioning it for convolution is
+    /// unbounded work — seconds, for a long IR — so it runs on a worker and
+    /// arrives as finished partitions that the chain swaps in with a pointer
+    /// move. Everything the panel shows while that happens (Loading…, the
+    /// name, an error) is written here by the worker.
+    pub fn load_ir(self: &Arc<Self>, stage: usize, path: PathBuf) {
+        let stage = stage.min(MAX_STAGES - 1);
+        let state = self.clone();
+        let generation = state.ir_generation[stage].fetch_add(1, Ordering::Relaxed) + 1;
+        state.ir_loading[stage].store(true, Ordering::Relaxed);
+        *state.ir_error[stage].lock() = None;
+        std::thread::spawn(move || {
+            let name = path.file_stem().map_or_else(
+                || path.display().to_string(),
+                |s| s.to_string_lossy().into_owned(),
+            );
+            let sample_rate = f64::from(state.sample_rate.load(Ordering::Relaxed));
+            let sample_rate = if sample_rate > 0.0 {
+                sample_rate
+            } else {
+                48_000.0
+            };
+
+            let loaded = dsp::reverb::ir::IrAsset::load(&path, sample_rate).map(|asset| {
+                // A mono file convolves to both sides; a stereo one keeps
+                // its own image, which is most of why you record a space
+                // in stereo in the first place.
+                let left = asset.channels[0].clone();
+                let right = asset
+                    .channels
+                    .get(1)
+                    .cloned()
+                    .unwrap_or_else(|| left.clone());
+                PreparedIrPair::build(&left, &right)
+            });
+
+            // The generation check and the send happen under the channel's
+            // lock, so a newer load that started after this check posts
+            // after this one and wins.
+            let tx = state.ir_tx[stage].lock();
+            if state.ir_generation[stage].load(Ordering::Relaxed) != generation {
+                // Superseded: the newer load owns the panel state too.
+                return;
+            }
+            match loaded {
+                Ok(pair) => match tx.as_ref().map(|tx| tx.try_send(pair)) {
+                    Some(Ok(())) => *state.ir_loaded[stage].lock() = name,
+                    // The chain drains its queue every block, so a full one
+                    // means the stage is not running (not built yet) and
+                    // already has impulses waiting. Never block here: this
+                    // worker holds the lock the next load needs.
+                    Some(Err(TrySendError::Full(_))) => {
+                        *state.ir_error[stage].lock() = Some(format!("{name}: engine busy"));
+                    }
+                    // No channel (or a plugin that has gone) means the
+                    // editor is running without an engine behind it (the
+                    // headless harness), which is worth saying rather than
+                    // silently doing nothing.
+                    Some(Err(TrySendError::Disconnected(_))) | None => {
+                        *state.ir_error[stage].lock() = Some(format!("{name}: no engine attached"));
+                    }
+                },
+                Err(e) => *state.ir_error[stage].lock() = Some(format!("{name}: {e}")),
+            }
+            state.ir_loading[stage].store(false, Ordering::Relaxed);
+        });
+    }
+}
+
+/// Where impulse responses are looked for.
+///
+/// `FTS_IR_DIR` overrides; otherwise the user's own IR folder. A missing
+/// directory is not an error — it is an empty library, and the panel says so.
+#[must_use]
+pub fn ir_library_root() -> PathBuf {
+    if let Some(dir) = std::env::var_os("FTS_IR_DIR") {
+        return PathBuf::from(dir);
+    }
+    dirs_home().map_or_else(
+        || PathBuf::from("irs"),
+        |home| home.join(".local/share/fts/irs"),
+    )
+}
+
+fn dirs_home() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(PathBuf::from)
+}
+
+/// One stage of the stack (`fx.stack.model`): everything a single-space
+/// reverb has — the space, its knobs, its two embedded EQs, its impulse
+/// response — then its place in the stack. The id order up to `decay_div`
+/// is the pre-stack plugin's and must not change (hosts persist VST3 state
+/// by index).
+#[derive(Params)]
+pub struct ReverbStageParams {
+    /// Which of the seven families' profiles is active, as an index into
+    /// [`dsp::reverb::profiles::PROFILES`]. A parameter because the space is worth
+    /// automating; see [`Self::profile_id`] for what a session actually saves.
+    #[id = "profile"]
+    pub profile: IntParam,
+
+    #[id = "decay"]
+    pub decay: FloatParam,
+
+    #[id = "size"]
+    pub size: FloatParam,
+
+    /// Read the pre-delay as a note value against the host's tempo instead
+    /// of as milliseconds. The free-running value is kept either way.
+    #[id = "pre_sync"]
+    pub predelay_sync: BoolParam,
+
+    /// Which note the pre-delay locks to while `predelay_sync` is on.
+    #[id = "pre_div"]
+    pub predelay_div: IntParam,
+
+    #[id = "predelay"]
+    pub predelay: FloatParam,
+
+    #[id = "damping"]
+    pub damping: FloatParam,
+
+    #[id = "tone"]
+    pub tone: FloatParam,
+
+    #[id = "width"]
+    pub width: FloatParam,
+
+    #[id = "mix"]
+    pub mix: FloatParam,
+
+    /// How dense the reflections are — sparse and grainy through to a
+    /// smear with no individual echoes left in it.
+    #[id = "diffusion"]
+    pub diffusion: FloatParam,
+
+    /// Movement inside the tail. A hall wants a little to stop it ringing
+    /// metallically; a chorale wants a lot.
+    #[id = "modulation"]
+    pub modulation: FloatParam,
+
+    /// How long the low band rings relative to the rest. Above 1 the lows
+    /// outlast the top, which is what a warm hall does and a plate does not.
+    #[id = "bass"]
+    pub bass: FloatParam,
+
+    /// The first of the engine's two algorithm-specific controls.
+    ///
+    /// Every algorithm in `reverb-dsp` takes an `extra_a` / `extra_b` pair and
+    /// means something different by them: shimmer amount and pitch, magneto's
+    /// saturation, bloom's feedback stages, non-linear's gate shape, spring's
+    /// modulation rate. That is not a shortcoming to paper over — it is the
+    /// per-family personality, and the panel is what names it. Each face
+    /// legends these two with what they do on *that* machine.
+    #[id = "chara"]
+    pub character_a: FloatParam,
+
+    #[id = "charb"]
+    pub character_b: FloatParam,
+
+    // ── Engine controls that `extra_a` / `extra_b` cannot reach ──────────
+    //
+    // The chain carries a struct per algorithm with the settings that are
+    // genuinely that engine's own — a shimmer's interval in semitones, how
+    // many springs are in the tank. The coarse pair gets you an amount; these
+    // get you the thing itself.
+    /// Shimmer's first voice, in semitones. The engine's own control: the
+    /// coarse `extra_b` mapping only offers octave-up, fifth and octave-down.
+    #[id = "shimint"]
+    pub shimmer_interval: FloatParam,
+
+    /// Springs in the tank (1–3). Two is the usual guitar amp; one is
+    /// thinner and drips harder; three is the big outboard tank.
+    #[id = "springs"]
+    pub springs: IntParam,
+
+    /// Bloom's overtone generator — octave-up partials fed into the trail.
+    /// Zero is off and costs nothing.
+    #[id = "harmonics"]
+    pub harmonics: FloatParam,
+
+    /// Chorale's per-voice randomisation: how much the singers drift apart
+    /// from each other. Zero is one voice in unison with itself.
+    #[id = "singers"]
+    pub singers: FloatParam,
+
+    /// Magneto's feedback into the tape input — the repeats piling up.
+    #[id = "regen"]
+    pub regen: FloatParam,
+
+    /// Non-linear's chop depth: the LFO that cuts the tail into slices.
+    #[id = "chop"]
+    pub chop: FloatParam,
+
+    /// The impulse response a session reopens with.
+    ///
+    /// A path rather than the audio: IRs are large, and a project that
+    /// silently embedded megabytes of convolution data would be a surprise.
+    /// A file that has moved is reported rather than guessed at.
+    #[persist = "ir_path"]
+    pub ir_path: parking_lot::RwLock<String>,
+
+    /// What a session restores from.
+    ///
+    /// The index is not stable: adding a family, or another plate, renumbers
+    /// everything after it, and a project saved last year would open on
+    /// whatever now sits at that number. The id is stable, so it is what gets
+    /// written down. Same contract as the compressor's.
+    #[persist = "profile_id"]
+    pub profile_id: parking_lot::RwLock<String>,
+
+    // ── Appended (never reorder anything above) ────────────────────────
+    /// The Post EQ (`fx.reverb.post-eq`): six bands on the final reverb
+    /// sound, wet path only, wet gain auto-compensated. Ids `pshape_1`…
+    /// `pq_6`.
+    #[nested(array, group = "Post EQ")]
+    pub post_eq: [PostBandParams; dsp::reverb::chain::POST_EQ_BANDS],
+    /// The Decay Rate EQ (`fx.reverb.decay-eq`): six curves of decay-time
+    /// multipliers over frequency, ×0.25…×4. Ids `dshape_1`…`dq_6`.
+    #[nested(array, group = "Decay EQ")]
+    pub decay_eq: [DecayBandParams; dsp::reverb::algorithm::DECAY_BANDS],
+
+    /// How the tail is set ([`DECAY_MODE_LABELS`]): `%` — a position on the
+    /// space's own span, what every preset made before times saved and
+    /// still opens as — a **Time** in seconds, or a note value against the
+    /// host's tempo (**Sync**). A time is the RT60 the space rings, at any
+    /// size (`dsp::reverb::calibration`).
+    #[id = "decay_mode"]
+    pub decay_mode: IntParam,
+    /// The tail in seconds, while Decay Mode is Time — and Sync's, with no
+    /// tempo to read a note against.
+    #[id = "decay_time"]
+    pub decay_time: FloatParam,
+    /// The note value the tail lasts, while Decay Mode is Sync.
+    #[id = "decay_div"]
+    pub decay_div: IntParam,
+
+    /// Where this stage sits in the stack (`use`, `on`, `lane`). Last, so
+    /// the ids above keep their pre-stack order.
+    #[nested]
+    pub place: crate::fx::stack_host::StagePlacement,
+}
+
+/// The full parameter tree: the stage pool, the lanes, and the stack
+/// globals (`fx.stack.params`).
+///
+/// Stage 1 is nested bare so its ids are the pre-stack plugin's, unchanged;
+/// stages 2–8 are prefixed `s2_`…`s8_`.
+#[derive(Params)]
+pub struct ReverbParams {
+    #[nested]
+    pub stage1: ReverbStageParams,
+    #[nested(id_prefix = "s2", group = "Stage 2")]
+    pub stage2: ReverbStageParams,
+    #[nested(id_prefix = "s3", group = "Stage 3")]
+    pub stage3: ReverbStageParams,
+    #[nested(id_prefix = "s4", group = "Stage 4")]
+    pub stage4: ReverbStageParams,
+    #[nested(id_prefix = "s5", group = "Stage 5")]
+    pub stage5: ReverbStageParams,
+    #[nested(id_prefix = "s6", group = "Stage 6")]
+    pub stage6: ReverbStageParams,
+    #[nested(id_prefix = "s7", group = "Stage 7")]
+    pub stage7: ReverbStageParams,
+    #[nested(id_prefix = "s8", group = "Stage 8")]
+    pub stage8: ReverbStageParams,
+
+    /// Per-lane gain / mute / solo, ids `lgain_1`…`lsolo_8`.
+    #[nested(array, group = "Lane")]
+    pub lanes: [crate::fx::stack_host::LaneParams; MAX_STAGES],
+
+    /// Parallel sum law (`fx.stack.sum`).
+    #[id = "summode"]
+    pub sum_mode: IntParam,
+    /// Stack output trim.
+    #[id = "stktrim"]
+    pub output_trim_db: FloatParam,
+
+    /// The editor's form factor, persisted by id. One window, so one form —
+    /// not per stage.
+    #[persist = "editor_form"]
+    pub editor_form: parking_lot::RwLock<String>,
+
+    /// Which stage the editor is focused on (`fx.stack.focus`), 0-based —
+    /// UI state, persisted so the editor reopens where it was left.
+    #[persist = "focused_stage"]
+    pub focused_stage: parking_lot::RwLock<String>,
+}
+
+/// Decay Mode's choices, by index.
+pub const DECAY_MODE_LABELS: &[&str] = &["%", "Time", "Sync"];
+
+/// What a time-set decay can ask for, seconds: from a slap of a room to a
+/// cloud's longest. A space that cannot reach a time holds to the nearest
+/// it can.
+pub const MIN_DECAY_S: f64 = 0.1;
+pub const MAX_DECAY_S: f64 = 120.0;
+
+/// The note a synced tail lasts until someone picks another: a half note,
+/// gone before the next backbeat.
+pub const DECAY_DEFAULT_DIV: dsp_core::time::MusicalTime = dsp_core::time::MusicalTime::new(
+    dsp_core::time::NoteValue::Half,
+    dsp_core::time::Flavour::Straight,
+);
+
+/// One Post EQ band (`fx.embed-eq.band-params`).
+#[derive(Params)]
+pub struct PostBandParams {
+    /// 0 Bell, 1 Low Shelf, 2 High Shelf, 3 Low Cut, 4 High Cut.
+    #[id = "pshape"]
+    pub shape: IntParam,
+    #[id = "pfreq"]
+    pub freq_hz: FloatParam,
+    #[id = "pgain"]
+    pub gain_db: FloatParam,
+    #[id = "pq"]
+    pub q: FloatParam,
+}
+
+pub const POST_SHAPE_LABELS: &[&str] = &["Bell", "Low Shelf", "High Shelf", "Low Cut", "High Cut"];
+
+impl PostBandParams {
+    fn new(default_freq: f32) -> Self {
+        Self {
+            shape: IntParam::new("Post Shape", 0, IntRange::Linear { min: 0, max: 4 })
+                .with_value_to_string(Arc::new(|v| {
+                    POST_SHAPE_LABELS
+                        .get(v.max(0) as usize)
+                        .map_or_else(|| v.to_string(), std::string::ToString::to_string)
+                })),
+            freq_hz: band_freq_param("Post Freq", default_freq),
+            gain_db: FloatParam::new(
+                "Post Gain",
+                0.0,
+                FloatRange::Linear {
+                    min: -24.0,
+                    max: 24.0,
+                },
+            )
+            .with_unit(" dB")
+            .with_value_to_string(formatters::v2s_f32_rounded(1)),
+            q: band_q_param("Post Q"),
+        }
+    }
+
+    /// This band as the chain takes it.
+    pub fn to_band(&self) -> dsp::reverb::chain::PostEqBand {
+        dsp::reverb::chain::PostEqBand {
+            shape: self.shape.value().max(0) as u32,
+            freq_hz: f64::from(self.freq_hz.value()),
+            gain_db: f64::from(self.gain_db.value()),
+            q: f64::from(self.q.value()),
+        }
+    }
+}
+
+/// One Decay Rate EQ band. `rate_db` is 20·log10 of the decay multiplier:
+/// ±12 dB ≡ ×0.25…×4 — exactly the EQ display's gain axis
+/// (`fx.reverb.eq-display`).
+#[derive(Params)]
+pub struct DecayBandParams {
+    /// 0 Bell, 1 Low Shelf, 2 High Shelf.
+    #[id = "dshape"]
+    pub shape: IntParam,
+    #[id = "dfreq"]
+    pub freq_hz: FloatParam,
+    #[id = "drate"]
+    pub rate_db: FloatParam,
+    #[id = "dq"]
+    pub q: FloatParam,
+}
+
+pub const DECAY_SHAPE_LABELS: &[&str] = &["Bell", "Low Shelf", "High Shelf"];
+
+impl DecayBandParams {
+    fn new(default_freq: f32) -> Self {
+        Self {
+            shape: IntParam::new("Decay Shape", 0, IntRange::Linear { min: 0, max: 2 })
+                .with_value_to_string(Arc::new(|v| {
+                    DECAY_SHAPE_LABELS
+                        .get(v.max(0) as usize)
+                        .map_or_else(|| v.to_string(), std::string::ToString::to_string)
+                })),
+            freq_hz: band_freq_param("Decay Freq", default_freq),
+            rate_db: FloatParam::new(
+                "Decay Rate",
+                0.0,
+                FloatRange::Linear {
+                    min: -12.0,
+                    max: 12.0,
+                },
+            )
+            // Stored in dB so it shares the EQ display's gain axis, shown as
+            // the multiplier it means. The parser is the same conversion
+            // backwards — without it the field is read-only in every host,
+            // and this is the one control on the decay EQ you would want to
+            // type an exact value into.
+            .with_value_to_string(Arc::new(|v| format!("{:.2}×", 10.0f32.powf(v / 20.0))))
+            .with_string_to_value(Arc::new(|s| {
+                s.trim()
+                    .trim_end_matches(['×', 'x', 'X'])
+                    .trim()
+                    .parse::<f32>()
+                    .ok()
+                    .filter(|m| *m > 0.0)
+                    .map(|m| 20.0 * m.log10())
+            })),
+            q: band_q_param("Decay Q"),
+        }
+    }
+
+    /// This band as the algorithm takes it.
+    pub fn to_band(&self) -> dsp::reverb::algorithm::DecayBand {
+        dsp::reverb::algorithm::DecayBand {
+            shape: self.shape.value().max(0) as u32,
+            freq_hz: f64::from(self.freq_hz.value()),
+            rate: 10.0f64.powf(f64::from(self.rate_db.value()) / 20.0),
+            q: f64::from(self.q.value()),
+        }
+    }
+}
+
+fn band_freq_param(name: &'static str, default_freq: f32) -> FloatParam {
+    FloatParam::new(
+        name,
+        default_freq,
+        FloatRange::Skewed {
+            min: 20.0,
+            max: 20_000.0,
+            factor: FloatRange::skew_factor(-2.0),
+        },
+    )
+    // No `.with_unit(" Hz")` here: `v2s_f32_hz_then_khz` writes the
+    // unit itself, and switches it to kHz above 1000. Adding one on
+    // top printed "1.3 kHz Hz".
+    .with_value_to_string(formatters::v2s_f32_hz_then_khz(1))
+    .with_string_to_value(formatters::s2v_f32_hz_then_khz())
+}
+
+fn band_q_param(name: &'static str) -> FloatParam {
+    FloatParam::new(
+        name,
+        0.707,
+        FloatRange::Skewed {
+            min: 0.1,
+            max: 18.0,
+            factor: FloatRange::skew_factor(-1.5),
+        },
+    )
+    .with_value_to_string(formatters::v2s_f32_rounded(2))
+}
+
+/// Default frequency for band `i` of `count` — a useful spread, idle until
+/// moved.
+///
+/// Computed rather than tabulated because the two embedded EQs no longer have
+/// the same number of bands: the Post EQ has six and the Decay Rate EQ now has
+/// eight, one per octave the analyzer measures. A fixed table silently had to
+/// match both, and stopped doing so the moment one of them changed — the
+/// decay array indexed straight off the end of it.
+///
+/// Log-spaced from 80 Hz to 10 kHz, because that is how the spacing is heard.
+#[must_use]
+pub fn eq_default_freq(i: usize, count: usize) -> f32 {
+    const LOW_HZ: f32 = 80.0;
+    const HIGH_HZ: f32 = 10_000.0;
+    if count <= 1 {
+        return LOW_HZ;
+    }
+    let t = (i.min(count - 1)) as f32 / (count - 1) as f32;
+    LOW_HZ * (HIGH_HZ / LOW_HZ).powf(t)
+}
+
+impl Default for ReverbStageParams {
+    fn default() -> Self {
+        Self::new(true)
+    }
+}
+
+impl ReverbStageParams {
+    /// A stage's params. `first` = stage 1, which starts in the stack (the
+    /// plain plugin); the rest start unused until added (`fx.stack.add`).
+    #[must_use]
+    pub fn new(first: bool) -> Self {
+        Self {
+            profile: IntParam::new(
+                "Space",
+                dsp::reverb::profiles::profile_index("hall_concert").unwrap_or(0) as i32,
+                IntRange::Linear {
+                    min: 0,
+                    max: (dsp::reverb::profiles::PROFILES.len() - 1) as i32,
+                },
+            )
+            .with_value_to_string(Arc::new(|v| {
+                dsp::reverb::profiles::PROFILES
+                    .get(v.max(0) as usize)
+                    .map_or_else(|| "—".to_string(), |p| p.name.to_string())
+            })),
+
+            decay: FloatParam::new("Decay", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            size: FloatParam::new("Size", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            // Off by default. A pre-delay is usually set by ear against the
+            // source, not against the grid — but when it IS set to the grid
+            // it wants to be exact, which is what this is for.
+            predelay_sync: crate::time_params::sync_param("Pre-Delay Sync", false),
+            // A sixteenth: the pre-delay that puts the reverb's onset on the
+            // next subdivision rather than smearing across it.
+            predelay_div: crate::time_params::division_param("Pre-Delay Div", PREDELAY_DEFAULT_DIV),
+
+            predelay: FloatParam::new(
+                "Pre-Delay",
+                20.0,
+                FloatRange::Skewed {
+                    min: MIN_PREDELAY_MS as f32,
+                    max: MAX_PREDELAY_MS as f32,
+                    factor: FloatRange::skew_factor(-2.0),
+                },
+            )
+            .with_unit(" ms")
+            .with_value_to_string(formatters::v2s_f32_rounded(1)),
+
+            damping: FloatParam::new("Damping", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            tone: FloatParam::new("Tone", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            width: FloatParam::new("Width", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            mix: FloatParam::new("Mix", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            diffusion: FloatParam::new("Diffusion", 0.7, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            modulation: FloatParam::new(
+                "Modulation",
+                0.2,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            bass: FloatParam::new("Bass", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+
+            character_a: FloatParam::new(
+                "Character A",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            character_b: FloatParam::new(
+                "Character B",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            shimmer_interval: FloatParam::new(
+                "Interval",
+                12.0,
+                FloatRange::Linear {
+                    min: -12.0,
+                    max: 12.0,
+                },
+            )
+            .with_unit(" st")
+            .with_value_to_string(formatters::v2s_f32_rounded(0)),
+
+            springs: IntParam::new("Springs", 2, IntRange::Linear { min: 1, max: 3 }),
+
+            harmonics: FloatParam::new("Harmonics", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            singers: FloatParam::new("Singers", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            regen: FloatParam::new("Regen", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            chop: FloatParam::new("Chop", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            ir_path: parking_lot::RwLock::new(String::new()),
+            profile_id: parking_lot::RwLock::new(String::new()),
+            post_eq: std::array::from_fn(|i| {
+                PostBandParams::new(eq_default_freq(i, dsp::reverb::chain::POST_EQ_BANDS))
+            }),
+            decay_eq: std::array::from_fn(|i| {
+                DecayBandParams::new(eq_default_freq(i, dsp::reverb::algorithm::DECAY_BANDS))
+            }),
+
+            // `%` until asked: a session saved before times opens as it was.
+            decay_mode: IntParam::new(
+                "Decay Mode",
+                0,
+                IntRange::Linear {
+                    min: 0,
+                    max: (DECAY_MODE_LABELS.len() - 1) as i32,
+                },
+            )
+            .with_value_to_string(Arc::new(|v| {
+                DECAY_MODE_LABELS
+                    .get(v.max(0) as usize)
+                    .map_or_else(|| "—".to_string(), |l| (*l).to_string())
+            }))
+            .with_string_to_value(Arc::new(|s| {
+                DECAY_MODE_LABELS
+                    .iter()
+                    .position(|l| l.eq_ignore_ascii_case(s.trim()))
+                    .map(|i| i as i32)
+            })),
+            decay_time: FloatParam::new(
+                "Decay Time",
+                2.0,
+                FloatRange::Skewed {
+                    min: MIN_DECAY_S as f32,
+                    max: MAX_DECAY_S as f32,
+                    factor: FloatRange::skew_factor(-2.0),
+                },
+            )
+            .with_unit(" s")
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            decay_div: crate::time_params::division_param("Decay Div", DECAY_DEFAULT_DIV),
+            place: crate::fx::stack_host::StagePlacement::new(first, MAX_STAGES),
+        }
+    }
+}
+
+/// What the pre-delay control can reach, in milliseconds — the same bounds
+/// its parameter declares. Named so the sync clamp cannot drift from them: a
+/// half note at 60 BPM is two seconds and this control stops at 1.5 s.
+pub const MIN_PREDELAY_MS: f64 = 0.0;
+pub const MAX_PREDELAY_MS: f64 = dsp::reverb::chain::MAX_PREDELAY_S * 1000.0;
+
+/// The note the pre-delay locks to until someone picks another.
+///
+/// A sixteenth: the pre-delay that puts the reverb's onset on the next
+/// subdivision instead of smearing across it.
+pub const PREDELAY_DEFAULT_DIV: dsp_core::time::MusicalTime = dsp_core::time::MusicalTime::new(
+    dsp_core::time::NoteValue::Sixteenth,
+    dsp_core::time::Flavour::Straight,
+);
+
+impl ReverbStageParams {
+    /// The tail the audio thread should ask the engine for, in seconds —
+    /// `None` while Decay Mode is `%` (the position is used as it is). A
+    /// synced tail reads its note against `tempo`; with none, the free time.
+    #[must_use]
+    pub fn decay_seconds(&self, tempo: Option<f64>) -> Option<f64> {
+        let free_s = f64::from(self.decay_time.value());
+        match self.decay_mode.value() {
+            1 => Some(free_s),
+            2 => Some(
+                dsp_core::time::SyncedTime {
+                    mode: dsp_core::time::TimeMode::Synced,
+                    free_ms: free_s * 1000.0,
+                    division: dsp_core::time::MusicalTime::from_param(self.decay_div.value()),
+                }
+                .resolve_ms(tempo)
+                    / 1000.0,
+            ),
+            _ => None,
+        }
+    }
+
+    /// The pre-delay as the audio thread should read it: milliseconds, with
+    /// the note value already resolved against `tempo` if Sync is on.
+    ///
+    /// `tempo` is an `Option` because that is how a host reports it. With no
+    /// transport there is no tempo, and the honest answer is the number the
+    /// user dialled rather than silence.
+    #[must_use]
+    pub fn predelay_ms(&self, tempo: Option<f64>) -> f64 {
+        dsp_core::time::SyncedTime {
+            mode: if self.predelay_sync.value() {
+                dsp_core::time::TimeMode::Synced
+            } else {
+                dsp_core::time::TimeMode::Free
+            },
+            free_ms: f64::from(self.predelay.value()),
+            division: dsp_core::time::MusicalTime::from_param(self.predelay_div.value()),
+        }
+        .resolve_ms_clamped(tempo, MIN_PREDELAY_MS, MAX_PREDELAY_MS)
+    }
+    /// This stage's profile index.
+    ///
+    /// The persisted id wins when this build still has it; otherwise the
+    /// index, which is what a pre-id session has.
+    pub fn resolved_profile_index(&self) -> usize {
+        let id = self.profile_id.read();
+        dsp::reverb::profiles::profile_index(&id).unwrap_or_else(|| {
+            (self.profile.value().max(0) as usize).min(dsp::reverb::profiles::PROFILES.len() - 1)
+        })
+    }
+
+    /// The active profile.
+    pub fn resolved_profile(&self) -> &'static dsp::reverb::profiles::Profile {
+        &dsp::reverb::profiles::PROFILES[self.resolved_profile_index()]
+    }
+
+    /// Record the id for `index` — call wherever the profile changes.
+    pub fn store_profile_id(&self, index: usize) {
+        let id = dsp::reverb::profiles::PROFILES
+            .get(index)
+            .map_or("hall_concert", |p| p.id);
+        *self.profile_id.write() = id.to_string();
+    }
+}
+
+impl Default for ReverbParams {
+    fn default() -> Self {
+        Self {
+            stage1: ReverbStageParams::new(true),
+            stage2: ReverbStageParams::new(false),
+            stage3: ReverbStageParams::new(false),
+            stage4: ReverbStageParams::new(false),
+            stage5: ReverbStageParams::new(false),
+            stage6: ReverbStageParams::new(false),
+            stage7: ReverbStageParams::new(false),
+            stage8: ReverbStageParams::new(false),
+            lanes: std::array::from_fn(|_| crate::fx::stack_host::LaneParams::default()),
+            sum_mode: crate::fx::stack_host::sum_mode_param(),
+            output_trim_db: crate::fx::stack_host::output_trim_param(),
+            editor_form: parking_lot::RwLock::new(String::new()),
+            focused_stage: parking_lot::RwLock::new(String::new()),
+        }
+    }
+}
+
+impl ReverbParams {
+    /// Stage `i` (0-based).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i >= MAX_STAGES`.
+    #[must_use]
+    pub fn stage(&self, i: usize) -> &ReverbStageParams {
+        match i {
+            0 => &self.stage1,
+            1 => &self.stage2,
+            2 => &self.stage3,
+            3 => &self.stage4,
+            4 => &self.stage5,
+            5 => &self.stage6,
+            6 => &self.stage7,
+            7 => &self.stage8,
+            _ => panic!("stage {i} out of range"),
+        }
+    }
+
+    /// All stages, in pool order.
+    pub fn stages(&self) -> impl Iterator<Item = &ReverbStageParams> {
+        (0..MAX_STAGES).map(|i| self.stage(i))
+    }
+}
+
+impl crate::fx::stack_host::StackHost for ReverbParams {
+    fn max_stages(&self) -> usize {
+        MAX_STAGES
+    }
+
+    fn placement(&self, stage: usize) -> &crate::fx::stack_host::StagePlacement {
+        &self.stage(stage).place
+    }
+
+    fn lane(&self, lane: usize) -> &crate::fx::stack_host::LaneParams {
+        &self.lanes[lane]
+    }
+
+    fn sum_mode(&self) -> &IntParam {
+        &self.sum_mode
+    }
+
+    fn output_trim_db(&self) -> &FloatParam {
+        &self.output_trim_db
+    }
+
+    fn focused_cell(&self) -> &parking_lot::RwLock<String> {
+        &self.focused_stage
+    }
+
+    fn style_param(&self, stage: usize) -> &IntParam {
+        &self.stage(stage).profile
+    }
+
+    fn resolved_style(&self, stage: usize) -> usize {
+        self.stage(stage).resolved_profile_index()
+    }
+
+    fn store_style_id(&self, stage: usize, index: usize) {
+        self.stage(stage).store_profile_id(index);
+    }
+
+    fn style_badge(&self, index: usize) -> String {
+        dsp::reverb::profiles::PROFILES
+            .get(index)
+            .map_or_else(|| "RVB".to_string(), |p| profile_badge(p.id))
+    }
+
+    fn style_name(&self, index: usize) -> String {
+        dsp::reverb::profiles::PROFILES
+            .get(index)
+            .map_or_else(|| "—".to_string(), |p| p.name.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A load that a newer one has superseded posts nothing, whichever
+    /// finishes first: the stage ends up reporting the newer file.
+    #[test]
+    fn superseded_ir_load_posts_nothing() {
+        let state = Arc::new(ReverbUiState::default());
+        // Hold the publish lock so both workers queue up behind it.
+        let guard = state.ir_tx[0].lock();
+        state.load_ir(0, PathBuf::from("/nonexistent/sta560-old.wav"));
+        state.load_ir(0, PathBuf::from("/nonexistent/sta560-new.wav"));
+        drop(guard);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.ir_loading[0].load(Ordering::Relaxed) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        // Let a stale worker that lost the race for the lock run too.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let error = state.ir_error[0].lock().clone().unwrap_or_default();
+        assert!(error.contains("sta560-new"), "{error}");
+        assert!(!state.ir_loading[0].load(Ordering::Relaxed));
+    }
+}
+
+/// The rail badge for a space: short enough for a 48px rail.
+#[must_use]
+pub fn profile_badge(profile_id: &str) -> String {
+    match profile_id {
+        "ir" => "IR",
+        "hall_concert" => "CON",
+        "hall_cathedral" => "CTH",
+        "hall_arena" => "ARN",
+        "plate_classic" => "PLT",
+        "plate_224" => "224",
+        "plate_progenitor" => "PRG",
+        "room_medium" => "ROOM",
+        "room_chamber" => "CHM",
+        "room_studio" => "STU",
+        "spring_classic" => "SPR",
+        "spring_vintage" => "VTG",
+        "cloud" => "CLD",
+        "bloom" => "BLM",
+        "swell" => "SWL",
+        "velvet" => "VLV",
+        "shimmer" => "SHM",
+        "chorale" => "CHO",
+        "magneto" => "MAG",
+        "nonlinear" => "NL",
+        "reflections" => "REF",
+        "freeverb" => "FRV",
+        "random" => "RND",
+        _ => "RVB",
+    }
+    .to_string()
+}

@@ -33,6 +33,7 @@ stack-host = [
     "dep:nice-plug-dioxus",
     "dep:plugin-core",
     "plugin-core/editor",
+    "plugin-core/fx-stack",
     "dep:parking_lot",
 ]
 
@@ -58,6 +59,8 @@ comp-viz = [
     "dep:fts-audio-ui",
 ]
 comp-native = [
+    "plugin-core/fx-comp",
+    "plugin-core/fx-limiter",
     "comp",
     "dep:architect-ui",
     "dep:fts-audio-ui",
@@ -98,6 +101,7 @@ delay-viz = [
     "dep:fts-audio-ui",
 ]
 delay-native = [
+    "plugin-core/fx-delay",
     "stack-host",
     "delay",
     "dep:architect-ui",
@@ -162,6 +166,7 @@ eq-ui = [
     "eq-analyzer",
 ]
 eq-native = [
+    "plugin-core/fx-eq",
     "stack-host",
     "eq",
     "eq-analyzer",
@@ -179,6 +184,7 @@ eq-native = [
 
 mic = ["dsp/mic"]
 mic-ui = [
+    "plugin-core/fx-mic",
     "mic",
     "dep:dioxus",
     "dep:fts-audio-ui",
@@ -208,6 +214,7 @@ modulation-viz = [
     "dep:fts-audio-ui",
 ]
 modulation-native = [
+    "plugin-core/fx-modulation",
     "modulation",
     "dep:architect-ui",
     "dep:atomic_float",
@@ -240,6 +247,7 @@ reverb-viz = [
     "dep:fts-audio-ui",
 ]
 reverb-native = [
+    "plugin-core/fx-reverb",
     "stack-host",
     "reverb",
     "dep:architect-ui",
@@ -275,6 +283,7 @@ saturate-viz = [
     "dep:peniko",
 ]
 saturate-native = [
+    "plugin-core/fx-saturate",
     "stack-host",
     "saturate",
     "dep:architect-ui",

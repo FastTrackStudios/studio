@@ -27,7 +27,7 @@ use nice_plug_dioxus::prelude::use_param_context;
 
 use crate::reverb::ui::faces::SpaceFace;
 use crate::reverb::ui::param_adapter::param_handle;
-use crate::reverb::ui::params::{ReverbParams, ReverbUiState};
+use crate::reverb::ui::params::{EditorFormParams, ReverbParams, ReverbUiState};
 use crate::stack::host::{FocusedStage, StackHandle, StackHost, add_stage, add_target_lane};
 
 pub use fts_audio_ui::shell::RAIL_W;
@@ -492,34 +492,5 @@ fn FaceInBox(
     }
 }
 
-/// The rail badge for a space: short enough for a 48px rail.
-#[must_use]
-pub fn profile_badge(profile_id: &str) -> String {
-    match profile_id {
-        "ir" => "IR",
-        "hall_concert" => "CON",
-        "hall_cathedral" => "CTH",
-        "hall_arena" => "ARN",
-        "plate_classic" => "PLT",
-        "plate_224" => "224",
-        "plate_progenitor" => "PRG",
-        "room_medium" => "ROOM",
-        "room_chamber" => "CHM",
-        "room_studio" => "STU",
-        "spring_classic" => "SPR",
-        "spring_vintage" => "VTG",
-        "cloud" => "CLD",
-        "bloom" => "BLM",
-        "swell" => "SWL",
-        "velvet" => "VLV",
-        "shimmer" => "SHM",
-        "chorale" => "CHO",
-        "magneto" => "MAG",
-        "nonlinear" => "NL",
-        "reflections" => "REF",
-        "freeverb" => "FRV",
-        "random" => "RND",
-        _ => "RVB",
-    }
-    .to_string()
-}
+/// The rail badge for a space (the param tree's: the stack strip reads it).
+pub use super::params::profile_badge;

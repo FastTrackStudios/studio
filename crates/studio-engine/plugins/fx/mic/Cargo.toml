@@ -15,17 +15,24 @@ workspace = true
 [dependencies]
 nice-plug = { workspace = true, features = ["vst3"] }
 dsp = { workspace = true, features = ["mic"] }
-plugin-ui = { workspace = true, features = ["mic", "mic-ui"] }
-nice-plug-dioxus.workspace = true
+# The params and the mic list (no editor).
+plugin-core = { workspace = true, features = ["fx-mic"] }
+# The editor (feature gui).
+plugin-ui = { workspace = true, optional = true, features = ["mic", "mic-ui"] }
+nice-plug-dioxus = { workspace = true, optional = true }
 dsp-core = { workspace = true }
 crossbeam-channel = { workspace = true }
 
 [features]
 default = []
+# The editor: the Dioxus face (plugin-ui) on nice-plug-dioxus. Off, the
+# plugin is its DSP and parameters only, as the engine runs it in-process.
+gui = ["dep:plugin-ui", "dep:nice-plug-dioxus"]
 # The CLAP / VST3 entry points, on only for the bundle build (`just
 # plugins-bundle` passes `--features export`): every plugin exports the
 # same `clap_entry` / `GetPluginFactory` symbols, so two in one binary —
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
-export = []
+# A bundle has its editor.
+export = ["gui"]
 

@@ -19,13 +19,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
-pub use plugin_ui::mic::ui::params::MicParams;
-use plugin_ui::mic::ui::params::MicUiState;
 use dsp::mic::{
     DualMic, DualSettings, MicChain, Settings, Solo, StereoMic, StereoSettings, latency,
 };
 use nice_plug::prelude::*;
+#[cfg(feature = "gui")]
 use nice_plug_dioxus::{DioxusState, create_dioxus_editor_with_state};
+pub use plugin_core::fx::mic::MicParams;
+#[cfg(feature = "gui")]
+use plugin_core::fx::mic::MicUiState;
 
 const PLUGIN_NAME: &str = "FTS Mic";
 
@@ -99,7 +101,10 @@ fn loader(
 
 pub struct FtsMic {
     params: Arc<MicParams>,
+    // What the editor reads (feature gui).
+    #[cfg(feature = "gui")]
     ui_state: Arc<MicUiState>,
+    #[cfg(feature = "gui")]
     editor_state: Arc<DioxusState>,
     engine: Option<Loaded>,
     have: Option<Want>,
@@ -126,9 +131,14 @@ impl Default for FtsMic {
         let params = Arc::new(MicParams::default());
         Self {
             params: params.clone(),
+            #[cfg(feature = "gui")]
             ui_state: Arc::new(MicUiState::new(params)),
+            #[cfg(feature = "gui")]
             editor_state: DioxusState::new(|| {
-                (plugin_ui::mic::ui::view::EDITOR_W, plugin_ui::mic::ui::view::EDITOR_H)
+                (
+                    plugin_ui::mic::ui::view::EDITOR_W,
+                    plugin_ui::mic::ui::view::EDITOR_H,
+                )
             })
             .with_resize_hint(plugin_ui::mic::ui::view::resize_hint()),
             engine: None,
@@ -260,7 +270,11 @@ impl Plugin for FtsMic {
         ..AudioIOLayout::const_default()
     }];
 
+    #[cfg(feature = "gui")]
     type Editor = nice_plug_dioxus::editor::DioxusEditor;
+    // No editor: the host (or the engine running it in-process) shows none.
+    #[cfg(not(feature = "gui"))]
+    type Editor = ();
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -268,6 +282,7 @@ impl Plugin for FtsMic {
         self.params.clone()
     }
 
+    #[cfg(feature = "gui")]
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),

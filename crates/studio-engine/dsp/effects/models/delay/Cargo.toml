@@ -21,8 +21,10 @@ nice-plug = { workspace = true, features = ["vst3"] }
 # The Blitz/nice-plug editor: the six families and their panels.
 # The effect and its parameters' faces: plugins' `plugin-ui`, which re-exports
 # `dsp` with each module's `ui` at the paths fts-fx had.
-dsp = {path = "../../../../../studio-connect/plugin-ui/plugin-ui", package = "plugin-ui", features = ["delay", "delay-native", "delay-profiles", "delay-ui", "delay-viz"]}
-plugin-core = { workspace = true }
+dsp = { workspace = true, features = ["delay", "delay-profiles", "stack"] }
+# The editor (feature gui).
+plugin-ui = { workspace = true, optional = true, features = ["delay", "delay-native", "delay-profiles", "delay-ui", "delay-viz"] }
+plugin-core = { workspace = true, features = ["fx-delay"] }
 
 # The DSP facade (re-exports delay-dsp). Never depend on delay-dsp directly.
 
@@ -33,10 +35,14 @@ dsp-core = { workspace = true, features = ["audio"] }
 
 [features]
 default = []
+# The editor: the Dioxus face (plugin-ui) on nice-plug-dioxus. Off, the
+# plugin is its DSP and parameters only, as the engine runs it in-process.
+gui = ["dep:plugin-ui", "plugin-core/gui"]
 # The CLAP / VST3 entry points, on only for the bundle build (`just
 # plugins-bundle` passes `--features export`): every plugin exports the
 # same `clap_entry` / `GetPluginFactory` symbols, so two in one binary —
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
-export = []
+# A bundle has its editor.
+export = ["gui"]
 

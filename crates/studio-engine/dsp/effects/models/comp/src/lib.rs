@@ -1,7 +1,7 @@
 //! FTS Comp — CLAP/VST3 compressor plugin.
 //!
 //! A nice-plug shell over a **stack** of [`dsp::comp::CompChain`]s
-//! (docs/spec/fx/stack.md): up to [`dsp::comp::ui::params::MAX_STAGES`] complete
+//! (docs/spec/fx/stack.md): up to [`plugin_core::fx::comp::MAX_STAGES`] complete
 //! compressors — each with its own profile, classic and extended surface —
 //! arranged into parallel lanes of serial stages by the stack params and run
 //! through [`dsp::stack::StagePool`]. The default is one stage on one lane:
@@ -13,8 +13,8 @@
 //! smoothing and metering stay per channel inside the shared
 //! `ProC3Compressor` core.
 //!
-//! Params + shared UI state live in [`dsp::comp::ui::params`] (like `eq-ui`), so
-//! the Dioxus editor ([`dsp::comp::ui::control_view::App`]) renders against them
+//! Params + shared UI state live in [`plugin_core::fx::comp`] (like `eq-ui`), so
+//! the Dioxus editor ([`plugin_ui::comp::ui::control_view::App`]) renders against them
 //! without a circular dep.
 
 use plugin_core::prelude::*;
@@ -22,8 +22,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use dsp::comp::CompChain;
-use dsp::comp::ui::params::{CompParams, CompStageParams, CompUiState, MAX_STAGES};
 use dsp::stack::{LaneCtl, Stage, StagePool, SumMode};
+use plugin_core::fx::comp::{CompParams, CompStageParams, CompUiState, MAX_STAGES};
 
 const PLUGIN_NAME: &str = "FTS Comp";
 
@@ -34,7 +34,7 @@ const MAX_LOOKAHEAD_MS: f64 = 10.0;
 // The param layer and the DSP must agree on the sidechain EQ's band count —
 // they cannot share the constant (comp-ui does not link the DSP), so the
 // crate that links both pins it.
-const _: () = assert!(dsp::comp::ui::params::SC_EQ_BANDS == dsp::comp::chain::SC_EQ_BANDS);
+const _: () = assert!(plugin_core::fx::comp::SC_EQ_BANDS == dsp::comp::chain::SC_EQ_BANDS);
 
 // ── Stage adapter ─────────────────────────────────────────────────────────
 
@@ -158,6 +158,7 @@ impl Stage for CompStage {
 pub struct FtsComp {
     params: Arc<CompParams>,
     ui_state: Arc<CompUiState>,
+    #[cfg(feature = "gui")]
     editor_state: Arc<DioxusState>,
     /// The stack: a fixed pool of complete compressors, topology from params.
     pool: StagePool<CompStage>,
@@ -175,16 +176,17 @@ impl Default for FtsComp {
         Self {
             params,
             ui_state,
-            // Sized by the editor surface itself — see dsp::comp::ui::control_view::
+            // Sized by the editor surface itself — see plugin_ui::comp::ui::control_view::
             // EDITOR_W/EDITOR_H for why it is a hard constraint rather than a
             // preference.
+            #[cfg(feature = "gui")]
             editor_state: DioxusState::new(|| {
                 (
-                    dsp::comp::ui::control_view::EDITOR_W,
-                    dsp::comp::ui::control_view::EDITOR_H,
+                    plugin_ui::comp::ui::control_view::EDITOR_W,
+                    plugin_ui::comp::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(dsp::comp::ui::control_view::resize_hint()),
+            .with_resize_hint(plugin_ui::comp::ui::control_view::resize_hint()),
             pool: StagePool::new((0..MAX_STAGES).map(|_| CompStage::new()).collect()),
             buf_l: Vec::new(),
             buf_r: Vec::new(),
@@ -254,7 +256,11 @@ impl Plugin for FtsComp {
 
     // `Plugin::Editor` is an associated type as of the baseview 0.3 rework,
     // so the editor is named here rather than returned as a trait object.
+    #[cfg(feature = "gui")]
     type Editor = plugin_core::nice_plug_dioxus::editor::DioxusEditor;
+    // No editor: the host (or the engine running it in-process) shows none.
+    #[cfg(not(feature = "gui"))]
+    type Editor = ();
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -262,11 +268,12 @@ impl Plugin for FtsComp {
         self.params.clone()
     }
 
+    #[cfg(feature = "gui")]
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
             self.ui_state.clone(),
-            dsp::comp::ui::control_view::App,
+            plugin_ui::comp::ui::control_view::App,
         )
     }
 

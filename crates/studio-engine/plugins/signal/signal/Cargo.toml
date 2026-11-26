@@ -45,7 +45,7 @@ serde_json = { workspace = true }
 daw-clap-ext = { workspace = true }
 # The editor: the FTS plugin UI kit (nice-plug-dioxus + Blitz), and the
 # strip model's JSON.
-plugin-core = { workspace = true }
+plugin-core = { workspace = true, features = ["gui"] }
 serde = { workspace = true, features = ["derive"] }
 # The families' algorithms (SIGNAL_ALGORITHMS).
 plugin-processors = { workspace = true, features = ["std"] }

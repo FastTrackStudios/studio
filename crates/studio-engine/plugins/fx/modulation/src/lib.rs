@@ -25,10 +25,10 @@ use std::sync::atomic::Ordering;
 use dsp::modulation::chorus::chain::ChorusChain;
 use dsp::modulation::profiles::Chain;
 use dsp::modulation::trem::chain::TremChain;
-use plugin_ui::modulation::ui::params::{ModParams, ModUiState};
 use dsp::modulation::wah::chain::WahChain;
 use dsp_core::audio::{AudioConfig, Processor};
 use dsp_core::modulation::tempo::TransportInfo;
+use plugin_core::fx::modulation::{ModParams, ModUiState};
 
 const PLUGIN_NAME: &str = "FTS Modulation";
 
@@ -37,6 +37,7 @@ const PLUGIN_NAME: &str = "FTS Modulation";
 pub struct FtsModulation {
     params: Arc<ModParams>,
     ui_state: Arc<ModUiState>,
+    #[cfg(feature = "gui")]
     editor_state: Arc<DioxusState>,
     /// All three chains live for the life of the plugin: switching families
     /// is a dispatch, not a rebuild, and coming back to one finds it as you
@@ -60,6 +61,7 @@ impl Default for FtsModulation {
             params: Arc::new(ModParams::default()),
             ui_state: Arc::new(ModUiState::default()),
             // The editor sizes itself — see plugin_ui::modulation::ui::control_view.
+            #[cfg(feature = "gui")]
             editor_state: DioxusState::new(|| {
                 (
                     plugin_ui::modulation::ui::control_view::EDITOR_W,
@@ -125,7 +127,11 @@ impl Plugin for FtsModulation {
         ..AudioIOLayout::const_default()
     }];
 
+    #[cfg(feature = "gui")]
     type Editor = plugin_core::nice_plug_dioxus::editor::DioxusEditor;
+    // No editor: the host (or the engine running it in-process) shows none.
+    #[cfg(not(feature = "gui"))]
+    type Editor = ();
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -133,6 +139,7 @@ impl Plugin for FtsModulation {
         self.params.clone()
     }
 
+    #[cfg(feature = "gui")]
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),

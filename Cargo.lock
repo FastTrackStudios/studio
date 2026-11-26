@@ -10375,6 +10375,7 @@ dependencies = [
 name = "fts-model-comp"
 version = "26.10.3"
 dependencies = [
+ "dsp",
  "nice-plug",
  "plugin-core",
  "plugin-ui",
@@ -10384,6 +10385,7 @@ dependencies = [
 name = "fts-model-delay"
 version = "26.10.3"
 dependencies = [
+ "dsp",
  "dsp-core",
  "nice-plug",
  "plugin-core",
@@ -10394,6 +10396,7 @@ dependencies = [
 name = "fts-model-eq"
 version = "26.10.3"
 dependencies = [
+ "dsp",
  "dsp-core",
  "nice-plug",
  "plugin-core",
@@ -10413,6 +10416,7 @@ name = "fts-model-reverb"
 version = "26.10.3"
 dependencies = [
  "crossbeam-channel",
+ "dsp",
  "dsp-core",
  "nice-plug",
  "plugin-core",
@@ -10424,6 +10428,7 @@ name = "fts-model-saturate"
 version = "26.10.3"
 dependencies = [
  "atomic_float",
+ "dsp",
  "nice-plug",
  "plugin-core",
  "plugin-ui",
@@ -14603,6 +14608,7 @@ dependencies = [
  "dsp",
  "nice-plug",
  "nice-plug-dioxus",
+ "plugin-core",
  "plugin-ui",
 ]
 
@@ -15485,6 +15491,7 @@ dependencies = [
  "dsp-core",
  "nice-plug",
  "nice-plug-dioxus",
+ "plugin-core",
  "plugin-ui",
 ]
 
@@ -18799,7 +18806,9 @@ version = "26.10.3"
 dependencies = [
  "architect-ui",
  "atomic_float",
+ "crossbeam-channel",
  "dioxus",
+ "dsp",
  "dsp-core",
  "fts-audio-ui",
  "nice-plug",

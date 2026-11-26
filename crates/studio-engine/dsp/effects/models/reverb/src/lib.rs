@@ -2,7 +2,7 @@
 //!
 //! A thin nice-plug shell over a **stack** of the reverb engine's realtime
 //! chains (docs/spec/fx/stack.md): up to
-//! [`dsp::reverb::ui::params::MAX_STAGES`] complete reverbs — each a
+//! [`plugin_core::fx::reverb::MAX_STAGES`] complete reverbs — each a
 //! [`ReverbChain`] (input filtering → pre-delay → algorithm → output EQ →
 //! width → mix) with its own space, knobs, Post / Decay Rate EQs and impulse
 //! response — arranged into parallel lanes of serial stages by the stack
@@ -20,7 +20,7 @@
 //! ducking, and saturation are chain features not yet surfaced here.
 
 use dsp::reverb::ir::PreparedIrPair;
-use dsp::reverb::ui::params::{MAX_STAGES, ReverbParams, ReverbStageParams, ReverbUiState};
+use plugin_core::fx::reverb::{MAX_STAGES, ReverbParams, ReverbStageParams, ReverbUiState};
 use plugin_core::prelude::*;
 use std::sync::Arc;
 
@@ -155,6 +155,7 @@ fn sync_chain(chain: &mut ReverbChain, p: &ReverbStageParams, tempo: Option<f64>
 pub struct FtsReverb {
     params: Arc<ReverbParams>,
     ui_state: Arc<ReverbUiState>,
+    #[cfg(feature = "gui")]
     editor_state: Arc<DioxusState>,
     /// The stack: a fixed pool of complete reverbs, topology from params.
     pool: StagePool<ReverbStage>,
@@ -188,14 +189,15 @@ impl Default for FtsReverb {
         Self {
             params,
             ui_state,
-            // The editor sizes itself — see dsp::reverb::ui::control_view.
+            // The editor sizes itself — see plugin_ui::reverb::ui::control_view.
+            #[cfg(feature = "gui")]
             editor_state: DioxusState::new(|| {
                 (
-                    dsp::reverb::ui::control_view::EDITOR_W,
-                    dsp::reverb::ui::control_view::EDITOR_H,
+                    plugin_ui::reverb::ui::control_view::EDITOR_W,
+                    plugin_ui::reverb::ui::control_view::EDITOR_H,
                 )
             })
-            .with_resize_hint(dsp::reverb::ui::control_view::resize_hint()),
+            .with_resize_hint(plugin_ui::reverb::ui::control_view::resize_hint()),
             pool: StagePool::new(stages),
             scratch_l: Vec::new(),
             scratch_r: Vec::new(),
@@ -233,7 +235,7 @@ impl FtsReverb {
                 }
             }
         }
-        dsp::stack::host::sync_pool(&mut self.pool, &*self.params);
+        plugin_core::fx::stack_host::sync_pool(&mut self.pool, &*self.params);
     }
 
     /// Load every stage's saved impulse again.
@@ -276,7 +278,11 @@ impl Plugin for FtsReverb {
         ..AudioIOLayout::const_default()
     }];
 
+    #[cfg(feature = "gui")]
     type Editor = plugin_core::nice_plug_dioxus::editor::DioxusEditor;
+    // No editor: the host (or the engine running it in-process) shows none.
+    #[cfg(not(feature = "gui"))]
+    type Editor = ();
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -284,14 +290,15 @@ impl Plugin for FtsReverb {
         self.params.clone()
     }
 
+    #[cfg(feature = "gui")]
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
         create_dioxus_editor_with_state(
             self.editor_state.clone(),
-            Arc::new(dsp::reverb::ui::control_view::ReverbUi {
+            Arc::new(plugin_ui::reverb::ui::control_view::ReverbUi {
                 params: self.params.clone(),
                 state: self.ui_state.clone(),
             }),
-            dsp::reverb::ui::control_view::App,
+            plugin_ui::reverb::ui::control_view::App,
         )
     }
 
@@ -343,7 +350,7 @@ impl Plugin for FtsReverb {
         // Every reverb stage is zero-latency, so lane alignment needs no
         // buffer beyond the pool's minimum.
         self.pool.prepare(max, 0);
-        dsp::stack::host::sync_pool(&mut self.pool, &*self.params);
+        plugin_core::fx::stack_host::sync_pool(&mut self.pool, &*self.params);
         self.latency = self.pool.latency();
         context.set_latency_samples(u32::try_from(self.latency).unwrap_or(u32::MAX));
         true
@@ -437,7 +444,7 @@ nice_export_vst3!(FtsReverb);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dsp::stack::host::StackHost;
+    use plugin_core::fx::stack_host::StackHost;
 
     /// A fresh instance is the plain plugin (`fx.stack.model`): one stage,
     /// on lane 0, and only that stage's chain built.

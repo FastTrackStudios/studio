@@ -17,12 +17,14 @@ workspace = true
 # Plugin framework. Must be a direct dep — the export macros expand to
 # absolute `::nice_plug::…` paths.
 nice-plug = { workspace = true, features = ["vst3"] }
-plugin-core = { workspace = true }
+plugin-core = { workspace = true, features = ["fx-saturate"] }
 
 # The DSP facade (re-exports saturate-dsp). Never depend on saturate-dsp directly.
 # The effect and its parameters' faces: plugins' `plugin-ui`, which re-exports
 # `dsp` with each module's `ui` at the paths fts-fx had.
-dsp = {path = "../../../../../studio-connect/plugin-ui/plugin-ui", package = "plugin-ui", features = ["saturate", "saturate-native", "saturate-profiles", "saturate-ui", "saturate-viz"]}
+dsp = { workspace = true, features = ["saturate", "saturate-profiles", "stack"] }
+# The editor (feature gui).
+plugin-ui = { workspace = true, optional = true, features = ["saturate", "saturate-native", "saturate-profiles", "saturate-ui", "saturate-viz"] }
 # What each circuit IS, and the only place that knows how a knob reaches the
 # DSP — the shell deliberately carries no voicing table of its own.
 # The Blitz/nice-plug editor: the five circuits and their panels. `native`
@@ -32,10 +34,14 @@ atomic_float = { workspace = true }
 
 [features]
 default = []
+# The editor: the Dioxus face (plugin-ui) on nice-plug-dioxus. Off, the
+# plugin is its DSP and parameters only, as the engine runs it in-process.
+gui = ["dep:plugin-ui", "plugin-core/gui"]
 # The CLAP / VST3 entry points, on only for the bundle build (`just
 # plugins-bundle` passes `--features export`): every plugin exports the
 # same `clap_entry` / `GetPluginFactory` symbols, so two in one binary —
 # the session engine's built-in FX, or a workspace test build, where cargo
 # unifies features — collide.
-export = []
+# A bundle has its editor.
+export = ["gui"]
 

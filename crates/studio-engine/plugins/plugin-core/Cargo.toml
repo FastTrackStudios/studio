@@ -5,21 +5,37 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "What every FTS plugin is built on: nice-plug's prelude, the editor state, and the shared plugin UI"
+description = "What every FTS plugin is built on: nice-plug's prelude, the FX plugins' parameter trees, and (feature gui) the editor state and the shared plugin UI"
 
 [lints]
 workspace = true
 
 [features]
-default = ["gui"]
-editor = ["gui", "dep:architect-ui", "dep:atomic_float", "dep:dioxus", "dep:fts-audio-ui", "dep:nice-plug-dioxus"]
+# No editor by default: the engine runs the FX in-process with none. A
+# plugin bundle (or anything that opens an editor) turns on `gui`.
+default = []
+editor = ["gui", "dep:architect-ui", "dep:dioxus", "dep:fts-audio-ui", "dep:nice-plug-dioxus"]
 gui = ["dep:nice-plug-dioxus", "dep:parking_lot"]
 meters = ["dsp-core/meter", "dep:nice-plug-dioxus", "dep:parking_lot"]
+# The FX plugins' parameter trees and the state they share with their
+# editors (`fx`): what a plugin runs with no editor. plugin-ui's
+# `*-native` features re-export them for the editors.
+fx-stack = ["dep:dsp", "dsp/stack", "dep:parking_lot"]
+fx-comp = ["fx-stack", "dsp/comp", "dsp/comp-profiles", "dsp-core/audio"]
+fx-delay = ["fx-stack", "dsp/delay", "dsp/delay-profiles", "dsp-core/audio"]
+fx-eq = ["fx-stack", "dsp/eq", "dsp/eq-analyzer", "dsp/eq-profiles", "dsp-core/audio"]
+fx-limiter = []
+fx-mic = ["dep:dsp", "dsp/mic"]
+fx-modulation = ["dep:dsp", "dsp/modulation", "dsp/modulation-profiles", "dsp-core/audio", "dep:parking_lot"]
+fx-reverb = ["fx-stack", "dsp/reverb", "dsp/reverb-profiles", "dsp-core/audio", "dep:crossbeam-channel"]
+fx-saturate = ["fx-stack", "dsp/saturate", "dsp/saturate-profiles"]
 
 [dependencies]
 architect-ui = { workspace = true, optional = true }
-atomic_float = { workspace = true, optional = true }
+atomic_float = { workspace = true }
+crossbeam-channel = { workspace = true, optional = true }
 dioxus = { workspace = true, optional = true }
+dsp = { workspace = true, optional = true }
 dsp-core = { workspace = true }
 fts-audio-ui = { workspace = true, optional = true }
 nice-plug = { workspace = true }

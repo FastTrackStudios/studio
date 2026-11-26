@@ -5,6 +5,15 @@
 //! Dioxus views, Vello/WGPU visualizers, `nice-plug` parameter trees, and stack
 //! host adapters on top while preserving the familiar module layout.
 
+#[cfg(any(
+    all(feature = "comp-native", feature = "comp-ui"),
+    all(feature = "delay-native", feature = "delay-ui"),
+    all(feature = "modulation-native", feature = "modulation-ui"),
+    all(feature = "reverb-native", feature = "reverb-ui"),
+    all(feature = "saturate-native", feature = "saturate-ui"),
+))]
+pub mod editor_form;
+
 #[cfg(feature = "multiband")]
 pub use ::dsp::multiband;
 
@@ -39,6 +48,8 @@ pub mod delay {
 
 #[cfg(feature = "eq")]
 pub mod eq {
+    #[cfg(feature = "eq-profiles")]
+    pub use ::dsp::eq::profiles;
     pub use ::dsp::eq::{
         Ballistics, BandConfig, BandId, BiquadCoefficients, Character, Complex, CutSlope,
         DetectorSource, Dynamics, DynamicsMode, EqConfig, EqProcessor, Error, Filter,
@@ -46,8 +57,6 @@ pub mod eq {
         ProcessSpec, Steepness, StereoResponse, Stream, Threshold, Transient, design, dynamics,
         engine, hardware, host, math, model, pultec_color, runtime,
     };
-    #[cfg(feature = "eq-profiles")]
-    pub use ::dsp::eq::profiles;
 
     #[cfg(feature = "eq-analyzer")]
     #[allow(
