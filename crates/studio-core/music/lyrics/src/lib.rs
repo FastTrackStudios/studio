@@ -22,6 +22,16 @@
 //! recording's: [`Lyrics::from_lrc`] is told where the recording's 0
 //! lands (the song's start, SONGSTART, by default).
 
+// Came from Session as it was, and its lint debt with it: paid down on
+// its own, not in the move. New code here keeps to the workspace's lints.
+#![allow(
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::string_slice,
+    clippy::too_long_first_doc_paragraph,
+    clippy::or_fun_call
+)]
+
 use std::ops::Range;
 
 /// How many lines a slide holds, as a church projects them: two lines

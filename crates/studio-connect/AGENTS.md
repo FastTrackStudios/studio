@@ -8,7 +8,7 @@ and a session opens with no engine running at all (its state is the
 
 | Folder | What it holds |
 |---|---|
-| `client/` | `engine-client` (the engine, by address), `fts-account` (sign-in, orgs) |
+| `client/` | `engine-client` (the engine, by address) |
 | `theme/` | `daw-theme`, `themer`, the theme packs |
 | `kit/` | the view kit: `daw-ui`, `timeline`, `audio-controls`, `dock`, `daw-view-kit`, `studio-panels`, `studio-ui`, `transport-ui`, `studio-shell` (package `app-shell`) |
 | `views/` | arrangement, mixer, MIDI and the expression editor, chart (Keyflow's UI and editor), lyrics, lighting (Ignition's live UI and visualizer), rigs, navigator |

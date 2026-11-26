@@ -25,8 +25,8 @@ vox = []
 [dependencies]
 studio-proto = { workspace = true }
 engine-sync = { workspace = true }
-# The lyrics model (and, with `ui`, its panel): one source with Studio's share-page island.
-lyrics-ui = { workspace = true, features = ["lrc"] }
+# The lyrics model (studio-core): one source with the lyrics panel and Studio's share-page island.
+lyrics = { workspace = true, features = ["lrc"] }
 # The progress bar and transport (`ui`): one source with Studio's share-page island.
 serde_json = { workspace = true, optional = true }
 architect = { workspace = true, features = ["local", "platform", "vox"] }

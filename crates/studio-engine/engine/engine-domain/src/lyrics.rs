@@ -1,9 +1,9 @@
-//! A song's lyrics: the model is `lyrics-ui`'s (one source with the
-//! lyrics panel and Studio's share-page island), re-exported here; what
+//! A song's lyrics: the model is studio-core's `lyrics` (one source with
+//! the lyrics panel and Studio's share-page island), re-exported here; what
 //! needs Session's DAW, putting the lines on a project's Lyrics track
 //! ([`stamp_lines`]), is Session's.
 
-pub use lyrics_ui::lyrics::*;
+pub use lyrics::*;
 
 /// Put `lyrics` on the Lyrics track — made in the Keyflow folder, before
 /// its closing HITS, if the song has none — in place of whatever lines

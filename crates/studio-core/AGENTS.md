@@ -9,9 +9,9 @@ logic.
 |---|---|---|
 | `proto/` | the UI↔engine contract: `daw-proto`, `daw-edit`, `daw-view`, `daw-timeline`, `daw-module`, `studio-proto`, Signal's and Ignition's protos | daw, signal, Ignition |
 | `session/` | the `.session` format (one Loro document per song) and its file I/O: `session`, `session-sync`, `session-format`, `song`, `song-file`, `library-sync`, the Keyflow and Ignition lanes | session, studio |
-| `music/` | `music-convention`, `monarchy`, Keyflow (`keyflow`, `keyflow-lang`, `keyflow-proto`, `engraver`, `tree-sitter-keyflow`) | music-convention, keyflow |
+| `music/` | `music-convention`, `monarchy`, `lyrics` (the lyrics model), Keyflow (`keyflow`, `keyflow-lang`, `keyflow-proto`, `engraver`, `tree-sitter-keyflow`) | music-convention, keyflow |
 | `frame/` | `frame` (the `.frame` format and renderer), `frame-doc` | frame |
-| `util/` | `utils`, `fts-version` | daw, studio |
+| `util/` | `utils`, `fts-version`, `fts-account` (sign-in, the kept session, org sync; its `ui` feature is the sign-in panel, to move out to studio-connect) | daw, studio |
 
 ## Rules
 

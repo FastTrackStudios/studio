@@ -1,0 +1,20 @@
+[package]
+name = "lyrics"
+description = "A song's lyrics in layers on its timeline (lines against the song's sections, slides): the model the lyrics panel draws and the engine reads and stamps, with no UI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# `Lyrics::from_lrc`: timed lines from a synced `.lrc`, read by Keyflow's parser.
+lrc = ["dep:keyflow"]
+
+[dependencies]
+keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
+
+[lints]
+workspace = true

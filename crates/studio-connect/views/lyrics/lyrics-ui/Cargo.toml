@@ -15,14 +15,15 @@ default = []
 view = ["dep:dioxus", "dep:futures-channel", "dep:futures-util", "dep:web-time", "dep:wasm-bindgen-futures", "dep:gloo-timers"]
 # `Lyrics::from_lrc`: timed lines from a synced `.lrc`, read by Keyflow's
 # parser (Session's; the share-page island is handed lines, not a file).
-lrc = ["dep:keyflow"]
+lrc = ["lyrics/lrc"]
 
 [dependencies]
 dioxus = { workspace = true, optional = true }
 futures-channel = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
-keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
+# The model (studio-core).
+lyrics = { workspace = true }
 
 # The panel's tick on a page (no threads there): the browser's timer.
 [target.'cfg(target_arch = "wasm32")'.dependencies]

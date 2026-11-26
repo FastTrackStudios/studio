@@ -8622,7 +8622,7 @@ dependencies = [
  "keyflow",
  "keyflow-daw-analysis",
  "loro",
- "lyrics-ui",
+ "lyrics",
  "monarchy",
  "music-catalog",
  "num-traits",
@@ -15113,6 +15113,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lyrics"
+version = "26.10.3"
+dependencies = [
+ "keyflow",
+]
+
+[[package]]
 name = "lyrics-ui"
 version = "26.10.3"
 dependencies = [
@@ -15120,7 +15127,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "gloo-timers 0.3.0",
- "keyflow",
+ "lyrics",
  "wasm-bindgen-futures",
  "web-time",
 ]
