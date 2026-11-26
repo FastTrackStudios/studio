@@ -21,7 +21,7 @@ use daw::service::ProjectContext;
 use editing::scope::{Node, Profile, Scope, Span};
 use facet::Facet;
 
-pub use engine_client::edit_actions::*;
+pub use engine_runtime::client::edit_actions::*;
 
 static SCOPE: ActionMeta = crate::actions::meta(
     "EDIT_SCOPE",

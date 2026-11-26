@@ -16,32 +16,32 @@ struct Studio;
 impl daw_view::host::Host for Studio {
     fn current_song(&self) -> Option<String> {
         #[cfg(feature = "native")]
-        return crate::open::song_here();
+        return crate::client::open::song_here();
         #[cfg(not(feature = "native"))]
-        crate::open::page_song()
+        crate::client::open::page_song()
     }
 
     #[cfg(feature = "native")]
     fn local_engine(&self) -> Option<&'static daw::standalone::Standalone> {
-        crate::open::local_engine()
+        crate::client::open::local_engine()
     }
 
     #[cfg(feature = "native")]
-    fn set_arrived(&self, frame: crate::view::SetFrame) {
-        crate::view_client::set_arrived(frame);
+    fn set_arrived(&self, frame: crate::client::view::SetFrame) {
+        crate::client::view_client::set_arrived(frame);
     }
 
     #[cfg(feature = "native")]
-    fn streams_arrived(&self, frame: crate::view::StreamsFrame) {
-        crate::stream_set::adopt_shown(frame);
+    fn streams_arrived(&self, frame: crate::client::view::StreamsFrame) {
+        crate::client::stream_set::adopt_shown(frame);
     }
 
-    fn live_arrived(&self, frame: &crate::view::LiveFrame) {
-        crate::presence::publish_everyone(
+    fn live_arrived(&self, frame: &crate::client::view::LiveFrame) {
+        crate::client::presence::publish_everyone(
             frame
                 .people
                 .iter()
-                .map(|p| crate::presence::Person {
+                .map(|p| crate::client::presence::Person {
                     project: p.project.clone(),
                     song: p.song.clone(),
                     name: p.name.clone(),
@@ -54,14 +54,14 @@ impl daw_view::host::Host for Studio {
     #[cfg(feature = "native")]
     fn streaming(&self) -> (u64, std::collections::HashMap<String, f32>) {
         (
-            crate::stream_set::version(),
-            crate::stream_set::shown().items,
+            crate::client::stream_set::version(),
+            crate::client::stream_set::shown().items,
         )
     }
 
     #[cfg(feature = "web")]
     fn output_latency(&self) -> f64 {
-        crate::web_audio::latency_seconds()
+        crate::client::web_audio::latency_seconds()
     }
 
     fn shut_by_default(&self, folder: &Track) -> bool {
@@ -73,7 +73,7 @@ impl daw_view::host::Host for Studio {
     }
 
     fn edit_grid(&self) -> u32 {
-        crate::drum_settings::current().grid
+        crate::client::drum_settings::current().grid
     }
 }
 

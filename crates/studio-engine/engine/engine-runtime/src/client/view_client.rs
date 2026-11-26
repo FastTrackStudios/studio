@@ -2,7 +2,7 @@
 //! (`daw_view::view_client`, re-exported here) and Studio's replica of the
 //! engine's set beside it — the setlist the set reads back as, its songs,
 //! how far an open has got — which the link hands Studio as each frame
-//! arrives (`crate::host`).
+//! arrives (`crate::client::host`).
 
 use std::sync::{Mutex, OnceLock};
 
@@ -10,12 +10,12 @@ use tokio::sync::watch;
 
 pub use daw_view::view_client::*;
 
-use crate::view::SetFrame;
+use crate::client::view::SetFrame;
 
 /// Link this window to the engine `caller` reaches, as
 /// [`daw_view::view_client::connect`] does, with Studio behind it.
 pub fn connect(caller: vox::Caller) {
-    crate::host::install();
+    crate::client::host::install();
     daw_view::view_client::connect(caller);
 }
 
@@ -23,35 +23,36 @@ pub fn connect(caller: vox::Caller) {
 
 /// The set as this window shows it: the engine's, each song read back
 /// through the facade.
-fn set_cell() -> &'static watch::Sender<crate::studio_engine::set::SetView> {
-    static CELL: OnceLock<watch::Sender<crate::studio_engine::set::SetView>> = OnceLock::new();
-    CELL.get_or_init(|| watch::Sender::new(crate::studio_engine::set::SetView::default()))
+fn set_cell() -> &'static watch::Sender<crate::client::studio_engine::set::SetView> {
+    static CELL: OnceLock<watch::Sender<crate::client::studio_engine::set::SetView>> =
+        OnceLock::new();
+    CELL.get_or_init(|| watch::Sender::new(crate::client::studio_engine::set::SetView::default()))
 }
 
 /// The set this window shows, from now on.
 #[must_use]
-pub fn subscribe_set() -> watch::Receiver<crate::studio_engine::set::SetView> {
+pub fn subscribe_set() -> watch::Receiver<crate::client::studio_engine::set::SetView> {
     set_cell().subscribe()
 }
 
 /// The set this window shows now.
 #[must_use]
-pub fn set_view() -> crate::studio_engine::set::SetView {
+pub fn set_view() -> crate::client::studio_engine::set::SetView {
     set_cell().borrow().clone()
 }
 
 /// `f` with the set this window shows, without copying it.
-pub fn peek_set<R>(f: impl FnOnce(&crate::studio_engine::set::SetView) -> R) -> R {
+pub fn peek_set<R>(f: impl FnOnce(&crate::client::studio_engine::set::SetView) -> R) -> R {
     f(&set_cell().borrow())
 }
 
 /// Show `setlist` as this window's set: one it drives on another system
 /// (a REAPER, Remote or Cue), which has no engine set to follow.
-pub fn show_set(setlist: crate::setlist::Setlist) {
+pub fn show_set(setlist: crate::client::setlist::Setlist) {
     set_cell().send_modify(|view| {
         view.setlist = Some(setlist);
         view.epoch += 1;
-        view.opening = crate::studio_engine::set::Opening::Idle;
+        view.opening = crate::client::studio_engine::set::Opening::Idle;
         view.revision += 1;
     });
 }
@@ -93,9 +94,9 @@ pub(crate) fn set_arrived(frame: SetFrame) {
             .unwrap_or_default()
     });
     let engine: Vec<String> = frame.songs.iter().map(|(_, p)| p.clone()).collect();
-    match crate::studio_engine::link::changed_songs(&shown, &engine) {
-        crate::studio_engine::link::SongsChanged::Same => follow_in_place(&frame),
-        crate::studio_engine::link::SongsChanged::Read => read_set(frame),
+    match crate::client::studio_engine::link::changed_songs(&shown, &engine) {
+        crate::client::studio_engine::link::SongsChanged::Same => follow_in_place(&frame),
+        crate::client::studio_engine::link::SongsChanged::Read => read_set(frame),
     }
 }
 
@@ -125,7 +126,7 @@ fn follow_in_place(frame: &SetFrame) {
 
 /// `setlist` (this window's) made to say what `frame` (the engine's) says
 /// of the same songs; whether anything changed.
-fn follow_setlist(setlist: &mut crate::setlist::Setlist, frame: &SetFrame) -> bool {
+fn follow_setlist(setlist: &mut crate::client::setlist::Setlist, frame: &SetFrame) -> bool {
     let mut changed = false;
     if let Some(at) = frame.current.map(|at| at as usize)
         && at != setlist.at
@@ -148,12 +149,16 @@ fn follow_setlist(setlist: &mut crate::setlist::Setlist, frame: &SetFrame) -> bo
     changed
 }
 
-fn opening_of(opening: &crate::view::SetOpening) -> crate::studio_engine::set::Opening {
+fn opening_of(
+    opening: &crate::client::view::SetOpening,
+) -> crate::client::studio_engine::set::Opening {
     match opening {
-        crate::view::SetOpening::Idle => crate::studio_engine::set::Opening::Idle,
-        crate::view::SetOpening::Busy(p) => crate::studio_engine::set::Opening::Busy(p.clone()),
-        crate::view::SetOpening::Failed(why) => {
-            crate::studio_engine::set::Opening::Failed(why.clone())
+        crate::client::view::SetOpening::Idle => crate::client::studio_engine::set::Opening::Idle,
+        crate::client::view::SetOpening::Busy(p) => {
+            crate::client::studio_engine::set::Opening::Busy(p.clone())
+        }
+        crate::client::view::SetOpening::Failed(why) => {
+            crate::client::studio_engine::set::Opening::Failed(why.clone())
         }
     }
 }
@@ -194,7 +199,7 @@ fn read_set(frame: SetFrame) {
 
 /// Read `frame`'s songs (those not shown already) and show the set.
 fn install_read(frame: &SetFrame) {
-    let have: Vec<crate::setlist::Song> = peek_set(|view| {
+    let have: Vec<crate::client::setlist::Song> = peek_set(|view| {
         view.setlist
             .as_ref()
             .map(|s| s.songs.clone())
@@ -217,7 +222,7 @@ fn install_read(frame: &SetFrame) {
         set.outcome = tracing::field::Empty
     );
     let _in = span.enter();
-    let read = crate::setlist::Setlist::from_link(frame, have);
+    let read = crate::client::setlist::Setlist::from_link(frame, have);
     match read {
         Ok((mut setlist, read)) => {
             span.record("set.read", read);
@@ -338,7 +343,7 @@ pub mod ask {
     ///
     /// The engine refused (another open is under way).
     pub fn open_library(
-        request: &crate::studio_engine::set::LibraryOpen,
+        request: &crate::client::studio_engine::set::LibraryOpen,
     ) -> Result<String, String> {
         let args = serde_json::json!({
             "setlist": request.setlist,

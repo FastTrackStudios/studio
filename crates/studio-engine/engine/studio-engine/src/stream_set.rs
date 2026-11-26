@@ -26,7 +26,7 @@ use crate::open_progress::Progress;
 use crate::setlist::{Arrival, Opening, Setlist, SetlistOpen as _};
 
 use crate::song_stream::{FetchGuard, Keep, ShareSource, SongSource, StreamedSong, TaskSource};
-pub use engine_client::stream_set::*;
+pub use engine_runtime::client::stream_set::*;
 
 /// A setlist in an org's library, as [`setlists`] lists them.
 pub use library_sync::Setlist as LibrarySetlist;

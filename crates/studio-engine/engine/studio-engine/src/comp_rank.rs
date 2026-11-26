@@ -362,7 +362,7 @@ fn kit_takes(project: &ProjectContext) -> crate::take_colors::TakeColors {
         {
             folder = parent;
         }
-        let under = daw_ui::studio::folded::under(tracks, &folder.guid);
+        let under = daw_view::song::folded::under(tracks, &folder.guid);
         // As the window counts them: each item's take name and length.
         let mut longest: std::collections::HashMap<&str, f64> = std::collections::HashMap::new();
         for guid in std::iter::once(folder)

@@ -2,7 +2,7 @@
 //!
 //! A control in the dock host (a tab dragged and dropped, a divider let go,
 //! a screenset recalled, a panel closed) does not change the layout itself:
-//! it asks the [`Dock`](crate::host::Dock) for an intent. An app may route
+//! it asks the `dock::host::Dock` for an intent. An app may route
 //! intents (`Dock::set_router`) — the Session window runs each as a named
 //! action, so a guide, a test or the CLI sees and can make the same change —
 //! and hand them back to `Dock::apply`; with no router, the dock applies

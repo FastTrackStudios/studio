@@ -94,7 +94,7 @@ fn DemoView(
     let mode = use_signal(|| Mode::Live);
     use_context_provider(|| mode);
     crate::shows::provide(mode);
-    use_context_provider(|| crate::setlist::ReadOnlySet(read_only));
+    use_context_provider(|| ::engine_client::setlist::ReadOnlySet(read_only));
     // The lyrics' Audience / Performer and layer, held across songs.
     use_context_provider(crate::lyrics_panel::LyricsChoice::new);
     // The songs — a signal from here on, which the tabs read and a pick
@@ -740,7 +740,7 @@ fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Eleme
     let mode = use_signal(|| Mode::Live);
     use_context_provider(|| mode);
     crate::shows::provide(mode);
-    use_context_provider(|| crate::setlist::ReadOnlySet(true));
+    use_context_provider(|| ::engine_client::setlist::ReadOnlySet(true));
     use_context_provider(crate::lyrics_panel::LyricsChoice::new);
     let mut setlist = use_context_provider(|| Signal::new(hosted_songs()));
     // The page-level set is the truth: this view's copy follows it.

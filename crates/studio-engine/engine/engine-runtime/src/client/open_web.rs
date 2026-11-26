@@ -3,7 +3,7 @@
 //! read-only, the way they do natively before a session is open. The web
 //! host drives the engine its own way (`web_host`).
 
-pub use engine_runtime::open_core::{
+pub use crate::open_core::{
     AsItIs, Media, OpenHost, Opened, ProjectText, SongPlan, is_session, project_text,
     project_text_in,
 };
@@ -23,17 +23,17 @@ static CURRENT: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None)
 
 /// The page shows `project` now.
 pub fn set_current_song(project: &str) {
-    crate::host::install();
+    crate::client::host::install();
     if let Ok(mut slot) = CURRENT.write() {
         *slot = Some(project.to_owned());
     }
 }
 
 /// Make `project_guid` the song on screen — what picking a setlist tab
-/// does; on a page, [`crate::web_engine::switch_song`].
+/// does; on a page, [`crate::client::web_engine::switch_song`].
 pub fn switch_song(project_guid: &str) {
     #[cfg(feature = "web")]
-    crate::body::studio_body().web_switch_song(project_guid);
+    crate::client::body::studio_body().web_switch_song(project_guid);
     #[cfg(not(feature = "web"))]
     set_current_song(project_guid);
 }

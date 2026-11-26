@@ -21,6 +21,9 @@ use daw_view_kit::*;
 #[cfg(all(any(feature = "native", feature = "web"), not(feature = "engine")))]
 #[allow(unused_imports)]
 use ::engine_client::collab;
+/// The window's mode follows the song (a Dioxus hook, so the window's,
+/// not the engine's): for a shell over its setlist and its mode.
+pub use ::engine_client::song_modes::use_song_modes;
 #[cfg(feature = "native")]
 #[allow(unused_imports)]
 use ::engine_client::view_client;

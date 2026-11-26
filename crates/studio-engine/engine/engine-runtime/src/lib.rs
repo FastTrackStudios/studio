@@ -25,6 +25,7 @@
 //!
 //! `studio-engine` re-exports each from its old path.
 
+pub mod client;
 pub mod folder;
 pub mod guide_instrument;
 pub mod link;

@@ -25,7 +25,7 @@
 //! seconds to parse and its media longer, and a blank screen for the
 //! duration is a self-inflicted wait — so this runs on a worker thread
 //! and the UI waits for the facade to appear
-//! (`daw_ui::studio::project::fetch_when_ready`).
+//! (`daw_view::song::project::fetch_when_ready`).
 //!
 //! # The audio mode
 //!
@@ -34,7 +34,7 @@
 //! **Engine** owns (the in-process engine plays), **Remote** borrows (the
 //! other system plays; nothing here does), **Cue** borrows with a local
 //! click and guide. It is set once at launch ([`launch_mode`],
-//! [`set_mode`]) and can climb at runtime (see [`crate::audio_mode`]).
+//! [`set_mode`]) and can climb at runtime (see [`crate::client::audio_mode`]).
 //!
 //! Everything that reaches the local engine rather than the facade goes
 //! through here and says what it needs ([`with_local_engine`],
@@ -48,9 +48,13 @@ use std::sync::{Arc, OnceLock};
 
 use daw::standalone::Standalone;
 
-pub use crate::audio_mode::{
+pub use crate::client::audio_mode::{
     Assets, AudioMode, ModeState, RemoteTarget, begin_asset_load, set_assets_progress,
     set_cue_ready,
+};
+pub use crate::open_core::{
+    AsItIs, Media, OpenHost, Opened, ProjectText, SongPlan, is_session, project_text,
+    project_text_in,
 };
 /// The runtime a window's link and engine calls run on, the ways sync code
 /// waits on it, and the song on screen: the views' contract's
@@ -60,17 +64,13 @@ pub use daw_view::open::{
     block_on_engine, current_song, engine_runtime, facade_blocking, in_song, runtime,
     traced_blocking,
 };
-pub use engine_runtime::open_core::{
-    AsItIs, Media, OpenHost, Opened, ProjectText, SongPlan, is_session, project_text,
-    project_text_in,
-};
 
 /// Keeps the in-process link's acceptor alive for the process's
 /// lifetime. Dropping it silently disconnects every panel.
 pub static BUNDLE: OnceLock<Served> = OnceLock::new();
 
 /// The engine's router served in this process over an in-memory vox link:
-/// the daw facade and the view service (`crate::studio_engine::view_host`)
+/// the daw facade and the view service (`crate::client::studio_engine::view_host`)
 /// on one connection — what the engine's own code and a window in this
 /// process (iOS, a test) reach it through, as a window on the desktop
 /// reaches `studio engine` over its socket.
@@ -86,7 +86,7 @@ pub struct Served {
 static ENGINE: OnceLock<Standalone> = OnceLock::new();
 
 pub fn engine() -> &'static Standalone {
-    crate::host::install();
+    crate::client::host::install();
     ENGINE.get_or_init(|| {
         let daw = Standalone::new();
         equip(&daw);
@@ -102,12 +102,10 @@ pub fn equip(daw: &Standalone) {
     // An effect's automated parameter reads as the effect writes it: daw has
     // no effects of its own, so it is told how Signal's (`builtin`, i.e.
     // signal-effects) say a value.
-    crate::automation::install_param_reading(builtin::engine::reading);
-    engine_runtime::guide_instrument::install(
+    crate::client::automation::install_param_reading(builtin::engine::reading);
+    crate::guide_instrument::install(
         daw,
-        engine_runtime::guide_instrument::Library::Folder(
-            engine_runtime::guide_instrument::samples_dir(),
-        ),
+        crate::guide_instrument::Library::Folder(crate::guide_instrument::samples_dir()),
     );
 }
 
@@ -123,8 +121,8 @@ pub fn equip(daw: &Standalone) {
 pub fn switch_song(project_guid: &str) {
     let state = mode();
     if state.owns_project() {
-        // The engine's own, in this process: its switch (`crate::body`).
-        crate::body::studio_body().switch_local(project_guid);
+        // The engine's own, in this process: its switch (`crate::client::body`).
+        crate::client::body::studio_body().switch_local(project_guid);
         return;
     }
     set_remote_current(Some(project_guid.to_owned()));
@@ -146,7 +144,7 @@ pub fn switch_song(project_guid: &str) {
 }
 
 /// A Cue window's click and guide follow the song by themselves: the Cue
-/// task ([`crate::stream_in`]) watches the remote's current song, whoever changed
+/// task ([`crate::client::stream_in`]) watches the remote's current song, whoever changed
 /// it (a pick here, a tab in REAPER).
 fn cue_follow_song(project_guid: &str) {
     tracing::debug!(
@@ -197,7 +195,7 @@ static WARNED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(
 /// (the Organize toolbar), so nothing is warned about.
 #[must_use]
 pub fn local_engine() -> Option<&'static Standalone> {
-    crate::audio_mode::owns_project().then(engine)
+    crate::client::audio_mode::owns_project().then(engine)
 }
 
 /// Run `f` against the process's engine when this window owns its project
@@ -229,7 +227,7 @@ pub fn with_local_engine<R>(what: LocalOnly, f: impl FnOnce(&Standalone) -> R) -
 #[must_use]
 pub(crate) fn song_here() -> Option<String> {
     use daw::service::Projects as _;
-    if crate::audio_mode::owns_project() {
+    if crate::client::audio_mode::owns_project() {
         return engine().current().map(|p| p.guid);
     }
     REMOTE_CURRENT.read().ok().and_then(|slot| slot.clone())
@@ -259,7 +257,7 @@ fn watch_remote_current(rt: &'static tokio::runtime::Runtime) {
     rt.spawn(async {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            if crate::audio_mode::owns_project() {
+            if crate::client::audio_mode::owns_project() {
                 continue;
             }
             let Some(daw) = daw::rpc::Daw::try_get() else {
@@ -348,7 +346,7 @@ static ATTACHED_TO: std::sync::RwLock<Option<Option<std::path::PathBuf>>> =
 /// mutually exclusive by construction, since there is one global facade
 /// and it can only point at one backend.
 pub fn attach_to_reaper(socket: Option<std::path::PathBuf>) -> eyre::Result<Attached> {
-    crate::host::install();
+    crate::client::host::install();
     if BUNDLE.get().is_some() {
         eyre::bail!("this window already owns a project; it cannot also attach to REAPER");
     }
@@ -422,22 +420,22 @@ pub fn source() -> Option<Source> {
 }
 
 /// Attach to a live REAPER rather than opening a file.
-pub const REAPER_ENV: &str = crate::audio_mode::REAPER_ENV;
+pub const REAPER_ENV: &str = crate::client::audio_mode::REAPER_ENV;
 /// Which REAPER, when more than one is running.
-pub const SOCKET_ENV: &str = crate::audio_mode::SOCKET_ENV;
+pub const SOCKET_ENV: &str = crate::client::audio_mode::SOCKET_ENV;
 
 // ── the audio mode ───────────────────────────────────────────────────
 
 /// The process's audio mode: requested, effective, the target, loading.
 #[must_use]
 pub fn mode() -> ModeState {
-    crate::audio_mode::state()
+    crate::client::audio_mode::state()
 }
 
 /// Set the process's audio mode — at launch, before the first open or
 /// attach.
 pub fn set_mode(state: ModeState) {
-    crate::audio_mode::set(state);
+    crate::client::audio_mode::set(state);
 }
 
 /// The mode this launch asks for, from the command line
@@ -446,7 +444,7 @@ pub fn set_mode(state: ModeState) {
 /// `FTS_AUDIO_TARGET`), whether a project was named
 /// (`FTS_SESSION_PROJECT` / `FTS_SESSION_SETLIST` / `SESSION_DAW_PROJECT`
 /// or a path argument — Engine), and what the picker last chose — in that
-/// order (see [`crate::audio_mode::from_launch`]). Does not install it.
+/// order (see [`crate::client::audio_mode::from_launch`]). Does not install it.
 #[must_use]
 pub fn launch_mode() -> ModeState {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -461,7 +459,7 @@ pub fn launch_mode() -> ModeState {
         || args
             .first()
             .is_some_and(|a| !a.starts_with("--") && Path::new(a).exists());
-    crate::audio_mode::from_launch(&args, &env, named, remembered_mode())
+    crate::client::audio_mode::from_launch(&args, &env, named, remembered_mode())
 }
 
 /// Where the picker's choice is kept between launches.
@@ -499,7 +497,7 @@ pub fn request_mode(to: AudioMode) -> bool {
     }
     let live = !state.owns_project() && to != AudioMode::Engine;
     if live {
-        crate::audio_mode::update_requested(to);
+        crate::client::audio_mode::update_requested(to);
     }
     live
 }
@@ -511,7 +509,7 @@ pub fn request_mode(to: AudioMode) -> bool {
 /// As [`attach_to_reaper`]; a Session engine target is not wired yet
 /// (#142 follow-up) and says so rather than attaching to something else.
 pub fn attach(target: &RemoteTarget) -> eyre::Result<Attached> {
-    crate::host::install();
+    crate::client::host::install();
     let attached = match target {
         RemoteTarget::Reaper { socket } => attach_to_reaper(socket.clone()),
         RemoteTarget::Session { address } => attach_to_engine(address),
@@ -519,7 +517,7 @@ pub fn attach(target: &RemoteTarget) -> eyre::Result<Attached> {
     }?;
     // Idle unless Cue is asked for; then the click and guide play here,
     // locked to what this window drives.
-    crate::body::studio_body().cue_start();
+    crate::client::body::studio_body().cue_start();
     Ok(attached)
 }
 
@@ -558,7 +556,7 @@ pub fn set_engine_dialer(dialer: EngineDialer) {
 /// When this window already owns a project, no dialer is installed, the
 /// engine cannot be reached, or its project cannot be read back.
 pub fn attach_to_engine(address: &str) -> eyre::Result<Attached> {
-    crate::host::install();
+    crate::client::host::install();
     if BUNDLE.get().is_some() {
         eyre::bail!("this window already owns a project; it cannot also drive a Session engine");
     }
@@ -588,26 +586,26 @@ pub fn attach_to_engine(address: &str) -> eyre::Result<Attached> {
 
 /// Link a window in this process to the engine in it, over the in-memory
 /// link the engine serves itself on: the same client a desktop window has
-/// to `studio engine` over its socket (`crate::view_client`) — what iOS
+/// to `studio engine` over its socket (`crate::client::view_client`) — what iOS
 /// (no helper process) and a test do. Starts the engine when it is not up.
 ///
 /// # Errors
 ///
 /// The engine could not be started.
 pub fn link_window_here() -> eyre::Result<()> {
-    crate::host::install();
+    crate::client::host::install();
     if BUNDLE.get().is_none() {
-        crate::body::studio_body().start_engine()?;
+        crate::client::body::studio_body().start_engine()?;
     }
     let served = BUNDLE
         .get()
         .ok_or_else(|| eyre::eyre!("the engine's link did not come up"))?;
-    crate::view_client::connect(served.caller.clone());
+    crate::client::view_client::connect(served.caller.clone());
     Ok(())
 }
 
 /// Attach to a Studio engine on this machine (`studio engine`, found or
-/// spawned by `crate::studio_engine::link`) over its Unix socket — the
+/// spawned by `crate::client::studio_engine::link`) over its Unix socket — the
 /// lanes REAPER's bridge serves, so the facade is the same one. The engine
 /// owns the set and plays it; this window drives it. Unlike REAPER it may
 /// have nothing open yet: then there is no project to read back, and the
@@ -617,7 +615,7 @@ pub fn link_window_here() -> eyre::Result<()> {
 ///
 /// When this window already owns a project, or the socket does not answer.
 pub fn attach_to_local_engine(socket: &Path) -> eyre::Result<Attached> {
-    crate::host::install();
+    crate::client::host::install();
     if BUNDLE.get().is_some() {
         eyre::bail!("this window already owns a project; it cannot also drive a Studio engine");
     }
@@ -637,7 +635,7 @@ pub fn attach_to_local_engine(socket: &Path) -> eyre::Result<Attached> {
     );
     daw::init_from_parts(connection.daw.clone(), block_on_rt);
     // The engine's view of itself, over the same connection.
-    crate::view_client::connect(connection.daw.caller().clone());
+    crate::client::view_client::connect(connection.daw.caller().clone());
     if let Ok(mut slot) = CONNECTION.write() {
         *slot = Some(connection);
     }

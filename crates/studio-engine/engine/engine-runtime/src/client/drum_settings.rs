@@ -5,7 +5,7 @@
 //! (`~/.config/fts/drum-edit.json`). A call may still carry its own for
 //! that call alone ([`Patch`], flattened into its arguments), without
 //! moving the ones that stay. How the hits are found is the hit
-//! detector's own (`crate::hits`).
+//! detector's own (`crate::client::hits`).
 
 pub use editing::settings::{Fills, Patch, Settings, Target};
 

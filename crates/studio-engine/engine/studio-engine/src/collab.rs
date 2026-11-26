@@ -96,7 +96,7 @@ fn local() -> Option<std::sync::Arc<dyn engine_sync::engine::Direct>> {
     }
 }
 
-pub use engine_client::collab::{Status, env_set};
+pub use engine_runtime::client::collab::{Status, env_set};
 
 /// One song of the set, as the session keeps it.
 #[derive(Clone)]

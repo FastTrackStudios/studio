@@ -553,7 +553,7 @@ fn SongTable(setlist: Signal<Setlist>, on_pick: Option<EventHandler<usize>>) -> 
     let roomy = room >= 520.0;
     // A row's buttons: a thumb's width each, a little less on a phone —
     // none in a set this page only views (a guest's, `ReadOnlySet`).
-    let read_only = crate::setlist::ReadOnlySet::here();
+    let read_only = ::engine_client::setlist::ReadOnlySet::here();
     let row_w: u32 = match (read_only, roomy) {
         (true, _) => 0,
         (false, true) => 48,

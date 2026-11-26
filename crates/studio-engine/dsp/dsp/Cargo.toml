@@ -26,7 +26,7 @@ eq = ["std", "dep:dsp-core", "dsp-core/audio", "dep:realfft", "dep:smallvec"]
 eq-analyzer = ["eq", "dep:once_cell", "dep:parking_lot", "dep:rtrb"]
 eq-profiles = ["eq"]
 gate = ["dep:dsp-core", "dep:libm"]
-level = ["std", "dep:dsp-core", "dsp-core/audio"]
+level = ["std", "dep:dsp-core", "dsp-core/audio", "dep:facet"]
 mic = ["std", "dep:dsp-core", "dep:realfft"]
 modulation = ["std", "dep:dsp-core", "dsp-core/audio", "dsp-core/modulation"]
 modulation-profiles = ["modulation"]
@@ -56,6 +56,8 @@ transient = ["dep:dsp-core", "dep:libm"]
 trigger = ["std", "dep:dsp-core", "dsp-core/audio", "eq", "dep:rustfft"]
 
 [dependencies]
+# The leveler's lanes as an item keeps them (`level::stored`), as JSON.
+facet = { workspace = true, optional = true }
 crossbeam-channel = { workspace = true, optional = true }
 dsp-core = { workspace = true, optional = true }
 libm = { workspace = true, optional = true }

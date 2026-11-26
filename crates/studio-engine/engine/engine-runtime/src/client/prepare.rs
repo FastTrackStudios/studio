@@ -9,5 +9,9 @@ use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn chart_beside(project: &std::path::Path) -> Option<PathBuf> {
-    crate::folder::Folder::only_with_extension(&crate::folder::Disk, project.parent()?, "kf")
+    crate::client::folder::Folder::only_with_extension(
+        &crate::client::folder::Disk,
+        project.parent()?,
+        "kf",
+    )
 }

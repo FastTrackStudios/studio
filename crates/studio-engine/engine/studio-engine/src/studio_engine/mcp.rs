@@ -112,7 +112,7 @@ fn serve(
     let server = architect_mcp::Server::new(
         "FastTrackStudio Session",
         // The running app's release version (set by the binary at start).
-        app_shell::version::current(),
+        utils::version::current(),
         crate::actions::list().clone(),
     )
     .with_instructions(INSTRUCTIONS);

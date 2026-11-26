@@ -18,20 +18,19 @@ pub mod builtin;
 pub mod context;
 pub mod defaults;
 pub mod diff;
-pub mod dockspace;
+// The model with no UI is core's (`dock-model`), here under its old paths.
+pub use dock_model::{dockspace, intent, screenset};
 pub mod drop_zone;
 pub mod history;
 pub mod hit;
 #[cfg(feature = "host")]
 pub mod host;
 pub mod id;
-pub mod intent;
 pub mod layout;
 pub mod panel;
 pub mod persistence;
 pub mod preset;
 pub mod registry;
-pub mod screenset;
 pub mod tab_group;
 pub mod tree;
 pub mod workspace;

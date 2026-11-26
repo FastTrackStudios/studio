@@ -17,6 +17,8 @@ ui = ["dep:serde", "dep:serde_json", "dep:tokio", "web"]
 web = ["dep:dioxus", "dep:tracing"]
 
 [dependencies]
+# The model with no UI: the dockspace, screensets, intents.
+dock-model = { workspace = true }
 # host: the arrange key stands aside while text is typed (`utils::keyboard`).
 utils = { workspace = true, optional = true }
 dioxus = { workspace = true, optional = true }

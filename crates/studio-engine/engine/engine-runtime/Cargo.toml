@@ -23,7 +23,7 @@ daw = { workspace = true, features = ["standalone-decode", "standalone-session-f
 daw-proto = { workspace = true }
 # `stream-ogg`: a proxy streamed as it arrives; `reapeaks`: its waveform
 # cache (`song_stream`).
-daw-standalone = { workspace = true, features = ["stream-ogg", "reapeaks"] }
+daw-standalone = { workspace = true, features = ["stream-ogg", "reapeaks", "bootstrap"] }
 # The guide engine the Click / Count / Guide MIDI tracks play through
 # (`guide_instrument`).
 engine-domain = { workspace = true }
@@ -34,7 +34,7 @@ web-time = { workspace = true }
 tracing = { workspace = true }
 # The host's clock on native fetch retries (`song_stream::fetch_proxy`);
 # already in the tree through `daw`.
-architect = { workspace = true }
+architect = { workspace = true, features = ["vox", "platform", "action-list", "local"] }
 # A streamed proxy's bytes and page index (`song_stream`).
 fts-sample = { workspace = true, features = ["engine-core"] }
 # A song's documents fetched side by side (`song_stream::mirror`).
@@ -42,6 +42,32 @@ futures-util = { workspace = true }
 # A Task share link's listing (`source::ShareSource`).
 reqwest = { workspace = true }
 serde_json = { workspace = true }
+
+# The half a window shares in-process (`client`, what was `engine-client`):
+# the views' contract, the session's presence and sync, the template's
+# plans, the drum editing's settings, the leveler's math, the dock's
+# intents as action arguments.
+daw-view = { workspace = true }
+daw-control = { workspace = true }
+fts-session = { workspace = true, features = ["store"] }
+session-sync = { workspace = true }
+studio-proto = { workspace = true }
+keyflow = { workspace = true, features = ["text", "engraver"] }
+dynamic-template = { workspace = true }
+dsp = { workspace = true, features = ["level"] }
+dsp-core = { workspace = true, features = ["audio"] }
+studio = { workspace = true }
+utils = { workspace = true }
+editing = { workspace = true }
+dock-model = { workspace = true }
+num-traits = { workspace = true }
+facet = { workspace = true }
+facet-json = { workspace = true }
+vox = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+rayon = { workspace = true, optional = true }
+dirs = { workspace = true, optional = true }
 # The FTS processors as built-in FX beside the guide (`builtin`), and
 # signal's rigs (`signal`): the desktop's factory chain.
 builtin = { workspace = true, optional = true, features = ["engine"] }
@@ -56,6 +82,8 @@ web-sys = { workspace = true, optional = true, features = [
     "Blob", "BlobPropertyBag", "Url", "Worklet", "WorkletOptions",
     # A streamed song's proxies kept in the browser's cache (`song_stream`).
     "CacheStorage", "Cache", "Response",
+    # The window's half (`client`): the page's preferences and pointer.
+    "Element", "HtmlElement", "Storage", "MediaQueryList",
 ] }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
@@ -65,6 +93,9 @@ gloo-timers = { workspace = true, optional = true }
 # Natively, the DAW's audio engine: the post-render hook a song's reference
 # is mixed in by (`reference_play`). A browser mixes it in its own loop
 # (`web_audio`).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.48", default-features = false, features = ["sync", "macros"] }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 daw-standalone = { workspace = true, features = ["audio"] }
 
@@ -77,8 +108,14 @@ signal = ["builtin", "dep:signal-fx"]
 # A source's chart written into the song's library folder
 # (`song_stream`'s mirror, on disk): `session::library`.
 library = []
-# The browser: the page's audio loop and its AudioWorklet (`web_audio`).
-web = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers"]
+# The browser: the page's audio loop and its AudioWorklet (`web_audio`),
+# and the window's half in a page (`client`).
+web = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "daw-view/web", "daw-view/standalone", "vox"]
+# The window's half in a native process (`client`): its link on a tokio
+# runtime, the engine in this process, the app's data folder.
+native = ["daw-view/native", "daw-view/local", "session-sync/net", "dep:rayon", "dep:dirs", "dep:tokio", "builtin", "daw/standalone-rpp", "daw/standalone-bootstrap", "studio/cli", "dynamic-template/reaper", "vox"]
+# What `#[architect::rpc]` checks in the crate that uses it.
+vox = []
 
 [lints]
 workspace = true

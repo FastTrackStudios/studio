@@ -28,5 +28,7 @@ pub use signal_rig_shell::tokens;
 pub mod ui;
 #[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
 pub mod updates;
-pub mod version;
+/// The running app's version: core's (`utils::version`), so the engine reads
+/// it without the shell.
+pub use utils::version;
 pub mod web_config;

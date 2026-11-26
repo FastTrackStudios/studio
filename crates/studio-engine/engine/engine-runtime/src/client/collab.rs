@@ -1,5 +1,5 @@
 //! The live session as a window shows it: its status (`Status`), read off
-//! the engine's link (`crate::view_client::live`) or this process's own
+//! the engine's link (`crate::client::view_client::live`) or this process's own
 //! (`studio_engine::collab`, which runs it).
 
 /// What the collaboration is doing, for the toolbar.

@@ -28,7 +28,7 @@ use tokio::sync::watch;
 use crate::open_progress::Progress;
 use crate::setlist::{Arrival, Setlist, SetlistOpen as _};
 
-pub use engine_client::studio_engine::set::*;
+pub use engine_runtime::client::studio_engine::set::*;
 
 /// The set's songs as titles and projects — what the Action List lists and
 /// picks from, without the window's read-back of each song.

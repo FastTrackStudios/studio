@@ -18,7 +18,7 @@
 
 use std::path::{Path, PathBuf};
 
-pub use engine_client::projects::Version;
+pub use engine_runtime::client::projects::Version;
 
 /// How many songs the list keeps.
 const KEPT: usize = 30;

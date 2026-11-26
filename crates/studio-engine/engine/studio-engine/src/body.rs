@@ -1,9 +1,9 @@
 //! The engine's body, as the window modules reach it (`daw_view::body`,
-//! and Studio's half, `engine_client::body::StudioBody`):
+//! and Studio's half, `engine_runtime::client::body::StudioBody`):
 //! installed by [`install`] as the engine
 //! comes up in a process — its first open, its runtime, its Action List.
 
-use engine_client::body::{Body, StudioBody};
+use engine_runtime::client::body::{Body, StudioBody};
 
 /// The engine in this process.
 struct EngineBody;
@@ -50,7 +50,7 @@ impl Body for EngineBody {
     }
 
     #[cfg(feature = "native")]
-    fn readiness(&self, project: &str) -> Option<engine_client::body::Readiness> {
+    fn readiness(&self, project: &str) -> Option<engine_runtime::client::body::Readiness> {
         crate::stream_set::readiness(project)
     }
 
@@ -161,11 +161,11 @@ static BODY: EngineBody = EngineBody;
 pub fn install() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        engine_client::body::install(&BODY);
-        engine_client::body::install_studio(&BODY);
+        engine_runtime::client::body::install(&BODY);
+        engine_runtime::client::body::install_studio(&BODY);
         // And Studio behind the window modules in this process.
-        engine_client::host::install();
+        engine_runtime::client::host::install();
         #[cfg(feature = "native")]
-        engine_client::actions::fill_with(crate::actions::fill);
+        engine_runtime::client::actions::fill_with(crate::actions::fill);
     });
 }

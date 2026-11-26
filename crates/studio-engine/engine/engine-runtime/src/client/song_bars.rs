@@ -1,7 +1,7 @@
 //! Bars as a song counts them, for everything that says or takes a bar:
 //! the bar its `SONGSTART` falls in is bar 1, the count-in before it
 //! bars −1, −2 …, with no bar 0 — as the ruler and the transport number
-//! them ([`crate::ruler::from_song`]). The engine counts measures from
+//! them ([`crate::client::ruler::from_song`]). The engine counts measures from
 //! the project's start; these convert both ways.
 
 use daw::service::{Markers, ProjectContext, TempoMap};

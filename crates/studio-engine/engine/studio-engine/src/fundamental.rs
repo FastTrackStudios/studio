@@ -442,7 +442,7 @@ impl<'a> Reader<'a> {
         self.daw
             .get_items(self.project.clone(), TrackRef::Guid(track.to_owned()))
             .into_iter()
-            .filter(|i| !i.muted && daw_ui::studio::project::on_playing_lane(&t, i))
+            .filter(|i| !i.muted && daw_view::song::project::on_playing_lane(&t, i))
             .collect()
     }
 

@@ -31,6 +31,7 @@ pub mod changes;
 pub mod edit_actions;
 pub mod edit_state;
 pub mod engine;
+pub mod folders;
 pub mod folds;
 pub mod hit_overlay;
 pub mod host;

@@ -9,7 +9,7 @@
 //! in a process group of its own, so the audio outlives the window). There
 //! is no engine in a desktop window's process. Linked ([`set_linked`]), the
 //! window's actions that are not its own run on the engine ([`run`]), and
-//! everything it shows comes over its link (`crate::view_client`).
+//! everything it shows comes over its link (`crate::client::view_client`).
 //!
 //! The decisions ([`Mode::parse`], [`plan`], [`newest_first`], [`changed_songs`])
 //! are pure; the rest is the file system, a socket and a child process.
@@ -367,13 +367,13 @@ pub fn linked() -> Option<Found> {
 }
 
 /// Run `id` with `args` (JSON) on the engine's Action List, over the
-/// window's link to it (`crate::view_client`); what it said.
+/// window's link to it (`crate::client::view_client`); what it said.
 ///
 /// # Errors
 ///
 /// Not linked, the engine did not answer, or the action refused.
 pub fn run(id: &str, args: &[u8]) -> Result<String, String> {
-    crate::view_client::run(id, args)
+    crate::client::view_client::run(id, args)
 }
 
 // ── Kept linked ─────────────────────────────────────────────────────
@@ -414,7 +414,9 @@ pub fn keep_linked(mode: Mode, attach: fn(&Found) -> Result<(), String>) {
             let mut pause = Duration::from_millis(250);
             loop {
                 std::thread::sleep(Duration::from_millis(250));
-                if crate::view_client::state() != crate::view_client::LinkState::Down {
+                if crate::client::view_client::state()
+                    != crate::client::view_client::LinkState::Down
+                {
                     pause = Duration::from_millis(250);
                     continue;
                 }
@@ -547,7 +549,7 @@ pub fn reopen_last() {
     let (Some(id), Some(args)) = (kept["id"].as_str(), kept.get("args")) else {
         return;
     };
-    let ran = crate::actions::list().run_json(id, args.to_string().as_bytes());
+    let ran = crate::client::actions::list().run_json(id, args.to_string().as_bytes());
     match ran {
         Ok(_) => tracing::info!(
             engine.reopen = id,

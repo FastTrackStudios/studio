@@ -3,8 +3,8 @@
 //! set itself — installing, picking, opening — is the engine's
 //! (`studio_engine::studio_engine::set`).
 
-use crate::open_progress::Progress;
-use crate::setlist::Setlist;
+use crate::client::open_progress::Progress;
+use crate::client::setlist::Setlist;
 
 /// Where opening a set has got to.
 #[derive(Clone, Debug, Default, PartialEq)]

@@ -25,7 +25,7 @@
 //! seconds to parse and its media longer, and a blank screen for the
 //! duration is a self-inflicted wait — so this runs on a worker thread
 //! and the UI waits for the facade to appear
-//! (`daw_ui::studio::project::fetch_when_ready`).
+//! (`daw_view::song::project::fetch_when_ready`).
 //!
 //! # The audio mode
 //!
@@ -43,7 +43,7 @@
 //! is done through it — the song on screen ([`current_song`]), switching
 //! songs ([`switch_song`]), a song's colour ([`set_song_color`]).
 
-pub use engine_client::open::*;
+pub use engine_runtime::client::open::*;
 
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -260,7 +260,7 @@ pub fn switch_to(daw: &Standalone, project_guid: &str, audio: bool) {
 
 /// The song on screen, on this process's engine: [`switch_to`] it, with the
 /// audio when this window plays — what `switch_song` does in Engine mode
-/// (`engine_client::open::switch_song`, through the body).
+/// (`engine_runtime::client::open::switch_song`, through the body).
 pub fn switch_local(project_guid: &str) {
     switch_to(
         engine(),

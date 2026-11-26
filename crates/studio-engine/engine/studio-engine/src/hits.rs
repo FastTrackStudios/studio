@@ -2945,7 +2945,7 @@ pub fn gaps(
         let mut slices: Vec<(f64, f64)> = daw
             .get_items(project.clone(), TrackRef::Guid(track.guid.clone()))
             .iter()
-            .filter(|i| !i.muted && daw_ui::studio::project::on_playing_lane(&track, i))
+            .filter(|i| !i.muted && daw_view::song::project::on_playing_lane(&track, i))
             .map(|i| {
                 let at = i.position.as_seconds();
                 (at, at + i.length.as_seconds())
@@ -3088,7 +3088,7 @@ fn comp_ranges(
     let mut out: HashMap<String, Vec<(f64, f64)>> = HashMap::new();
     for item in daw.get_items(project.clone(), TrackRef::Guid(track.guid.clone())) {
         let comped = lane.map_or_else(
-            || daw_ui::studio::project::on_playing_lane(track, &item),
+            || daw_view::song::project::on_playing_lane(track, &item),
             |lane| item.fixed_lane.unwrap_or(0) == lane,
         );
         if item.muted || !comped {

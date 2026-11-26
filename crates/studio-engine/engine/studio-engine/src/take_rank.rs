@@ -260,7 +260,7 @@ fn recordings_of(
     let pass = crate::hits::pass_key(path);
     let tracks = Tracks::all(daw, project.clone());
     let kit: Vec<&daw_proto::Track> = crate::track_regions::kit_folder(daw, project)
-        .map(|folder| daw_ui::studio::folded::under(&tracks, &folder))
+        .map(|folder| daw_view::song::folded::under(&tracks, &folder))
         .unwrap_or_default();
     if !kit.iter().any(|t| t.guid == item.track_guid) {
         return vec![(item.guid.clone(), path.to_owned())];

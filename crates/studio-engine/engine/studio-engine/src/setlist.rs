@@ -1,8 +1,8 @@
 //! The set on the engine: opening a setlist's songs into the one engine,
 //! attaching to a remote system's projects, a song's colour. The set
-//! itself, as a window reads it, is `engine_client::setlist`.
+//! itself, as a window reads it, is `engine_runtime::client::setlist`.
 
-pub use engine_client::setlist::*;
+pub use engine_runtime::client::setlist::*;
 
 #[cfg(feature = "native")]
 use crate::song_model::StudioSession;
@@ -12,7 +12,7 @@ use crate::song_open::OpenSession as _;
 #[cfg(feature = "native")]
 /// What a set does on the engine: opening its songs into it, attaching to a
 /// remote system's, colouring one. Methods of [`Setlist`] before the window
-/// half (`engine_client::setlist`) moved out of this crate.
+/// half (`engine_runtime::client::setlist`) moved out of this crate.
 pub trait SetlistOpen: Sized {
     /// Open every song into the one engine — each prepared once and saved
     /// as `.session` if it was not already (see `StudioSession::open`) —

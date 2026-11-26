@@ -117,7 +117,7 @@ pub fn Shell() -> Element {
     let opened: studio_engine::setlist::Setlist = use_context();
     let mut setlist = use_context_provider(|| Signal::new(opened));
     // Each song in the mode it was last worked in.
-    studio_engine::song_modes::use_song_modes(setlist, mode);
+    studio_panels::use_song_modes(setlist, mode);
     // In Mix mode, the guide folder muted.
     studio_panels::mix_guide::use_mix_guide(setlist, mode);
     // The set is the engine's, followed over the link: the songs arriving

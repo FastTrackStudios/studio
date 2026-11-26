@@ -8,7 +8,7 @@
 //!   (and none is still heard by its reference), the originals are fetched
 //!   one at a time, the lowest priority there is, and each take moves from
 //!   its proxy to its original when its file is complete and its song is
-//!   stopped ([`crate::stream_set`]). Natively only: a browser has no disk
+//!   stopped ([`crate::client::stream_set`]). Natively only: a browser has no disk
 //!   to keep a set's WAVs on, and a share link serves an original whole.
 //!
 //! Kept with `utils::prefs` (`stream-quality`): a file under the config
@@ -81,7 +81,7 @@ pub fn current() -> Quality {
 }
 
 /// Keep `quality` as this device's choice. What streams now takes it up
-/// on its next look ([`crate::stream_set`] checks before each original).
+/// on its next look ([`crate::client::stream_set`] checks before each original).
 pub fn set(quality: Quality) {
     utils::prefs::set_raw(KEY, quality.key());
 }

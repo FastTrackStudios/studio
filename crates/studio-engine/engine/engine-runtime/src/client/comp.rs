@@ -3,7 +3,7 @@
 
 use architect::action::ActionMeta;
 
-pub static SWIPE_COMP: architect::action::ActionMeta = crate::actions::meta(
+pub static SWIPE_COMP: architect::action::ActionMeta = crate::client::actions::meta(
     "TRACK_COMP_FROM_LANE",
     "track_comp_from_lane",
     "Comp from a lane",
@@ -12,7 +12,7 @@ pub static SWIPE_COMP: architect::action::ActionMeta = crate::actions::meta(
     "",
 );
 
-pub static SHOW_LANES: ActionMeta = crate::actions::meta(
+pub static SHOW_LANES: ActionMeta = crate::client::actions::meta(
     "TRACK_SHOW_LANES",
     "track_show_lanes",
     "Show a track's lanes",

@@ -56,14 +56,14 @@ pub trait StudioBody: Send + Sync {
     /// The page's engine's track kinds for `project`
     /// (`studio_engine::web_engine::kinds_of`).
     #[cfg(feature = "web")]
-    fn web_kinds_of(&self, _project: &str) -> Option<crate::plan::Kinds> {
+    fn web_kinds_of(&self, _project: &str) -> Option<crate::client::plan::Kinds> {
         None
     }
 
     /// Make `project` the page's song (`studio_engine::web_engine::switch_song`).
     #[cfg(feature = "web")]
     fn web_switch_song(&self, project: &str) {
-        crate::open::set_current_song(project);
+        crate::client::open::set_current_song(project);
     }
 }
 

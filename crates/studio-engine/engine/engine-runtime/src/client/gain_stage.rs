@@ -256,13 +256,13 @@ pub struct Plan {
 }
 
 /// Decide the staging of `tracks`: `items` every item of the project,
-/// `wave` an item's peaks ([`crate::midi::Wave`], read from its active
+/// `wave` an item's peaks ([`crate::client::midi::Wave`], read from its active
 /// take), asked only of the items on a playing lane.
 #[must_use]
 pub fn plan(
     tracks: &[daw_proto::Track],
     items: &[daw_proto::Item],
-    mut wave: impl FnMut(&daw_proto::Item) -> Option<crate::midi::Wave>,
+    mut wave: impl FnMut(&daw_proto::Item) -> Option<crate::client::midi::Wave>,
 ) -> Plan {
     let by_guid: std::collections::HashMap<&str, &daw_proto::Track> =
         tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
@@ -284,7 +284,7 @@ pub fn plan(
         let mut step = 0.0;
         for item in own
             .iter()
-            .filter(|item| daw_ui::studio::project::on_playing_lane(track, item))
+            .filter(|item| daw_view::song::project::on_playing_lane(track, item))
         {
             if let Some(read) = wave(item) {
                 step = read.step;
@@ -348,9 +348,9 @@ where
             project.clone(),
             ItemRef::Guid(item.guid.clone()),
             TakeRef::Active,
-            crate::midi::ANALYSIS_BLOCK,
+            crate::client::midi::ANALYSIS_BLOCK,
         );
-        crate::midi::Wave::from_peaks(&data)
+        crate::client::midi::Wave::from_peaks(&data)
     });
     for each in &planned.moves {
         for item in &each.items {
@@ -379,7 +379,7 @@ where
 pub async fn stage_live(project: &daw_control::Project) -> eyre::Result<Report> {
     let tracks = project.tracks().all().await?;
     let items = project.items().all().await?;
-    let mut waves: std::collections::HashMap<String, crate::midi::Wave> =
+    let mut waves: std::collections::HashMap<String, crate::client::midi::Wave> =
         std::collections::HashMap::new();
     let by_guid: std::collections::HashMap<&str, &daw_proto::Track> =
         tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
@@ -389,7 +389,7 @@ pub async fn stage_live(project: &daw_control::Project) -> eyre::Result<Report> 
             continue;
         };
         if role(&path_of(track, &by_guid)).is_none()
-            || !daw_ui::studio::project::on_playing_lane(track, item)
+            || !daw_view::song::project::on_playing_lane(track, item)
         {
             continue;
         }
@@ -398,9 +398,9 @@ pub async fn stage_live(project: &daw_control::Project) -> eyre::Result<Report> 
         };
         if let Ok(data) = handle
             .active_take()
-            .peaks(crate::midi::ANALYSIS_BLOCK)
+            .peaks(crate::client::midi::ANALYSIS_BLOCK)
             .await
-            && let Some(wave) = crate::midi::Wave::from_peaks(&data)
+            && let Some(wave) = crate::client::midi::Wave::from_peaks(&data)
         {
             waves.insert(item.guid.clone(), wave);
         }

@@ -10,7 +10,7 @@
 use architect::action::ActionMeta;
 use facet::Facet;
 
-pub use engine_client::actions::meta;
+pub use engine_runtime::client::actions::meta;
 
 pub static TRACK_SET: ActionMeta = meta(
     "TRACK_SET",
@@ -57,7 +57,7 @@ pub static PHASE: ActionMeta = meta(
     "",
 );
 
-pub use engine_client::comp::SHOW_LANES;
+pub use engine_runtime::client::comp::SHOW_LANES;
 
 /// What to set on a track.
 #[derive(Facet)]

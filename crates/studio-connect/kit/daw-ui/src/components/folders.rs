@@ -1,58 +1,9 @@
 //! Folder visibility shared by track panels, the arrange canvas, and mixer.
 //! REAPER stores nesting as a delta applied *after* each track.
-use std::collections::HashSet;
-
-use daw_proto::Track;
 use dioxus::prelude::*;
 
-#[derive(Clone, Default, PartialEq)]
-pub struct FolderState {
-    collapsed: HashSet<String>,
-}
-
-impl FolderState {
-    pub fn is_collapsed(&self, guid: &str) -> bool {
-        self.collapsed.contains(guid)
-    }
-
-    pub fn toggle(&mut self, guid: &str) {
-        if !self.collapsed.remove(guid) {
-            self.collapsed.insert(guid.to_owned());
-        }
-    }
-
-    /// Preserve project order and original track numbers. Hidden descendants
-    /// still contribute their closing deltas; nested collapse choices survive
-    /// closing and reopening their parent.
-    pub fn visible(&self, tracks: &[Track]) -> (Vec<Track>, Vec<u32>) {
-        let mut visible = Vec::new();
-        let mut depths = Vec::new();
-        let mut depth = 0_u32;
-        let mut hidden_below = None;
-        for track in tracks {
-            if hidden_below.is_some_and(|parent| depth <= parent) {
-                hidden_below = None;
-            }
-            if hidden_below.is_none() {
-                if track.visible_in_tcp {
-                    visible.push(track.clone());
-                    depths.push(depth);
-                    if track.folder_depth > 0 && self.is_collapsed(&track.guid) {
-                        hidden_below = Some(depth);
-                    }
-                } else if track.folder_depth > 0 {
-                    // Hidden from the track panel, and a folder: hiding it
-                    // hides what it holds, so unhiding the one track (the
-                    // MIX BUS) brings the whole tree back. The mixer does
-                    // not read this — it shows them all.
-                    hidden_below = Some(depth);
-                }
-            }
-            depth = depth.saturating_add_signed(track.folder_depth);
-        }
-        (visible, depths)
-    }
-}
+/// The folder state is plain data: the views' contract's (`daw_view::folders`).
+pub use daw_view::folders::FolderState;
 
 /// A window may provide this signal to synchronize its panels. A standalone
 /// panel owns its own state when no window context is available.

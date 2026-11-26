@@ -5,7 +5,7 @@
 use architect::action::ActionMeta;
 
 #[cfg(feature = "native")]
-pub static ADD: ActionMeta = crate::actions::meta(
+pub static ADD: ActionMeta = crate::client::actions::meta(
     "TRACK_ADD_INSTRUMENT",
     "track_add_instrument",
     "Add an instrument",

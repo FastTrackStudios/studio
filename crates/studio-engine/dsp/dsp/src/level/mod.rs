@@ -33,6 +33,7 @@ pub mod filter;
 pub mod gate;
 pub mod rider;
 pub mod segment;
+pub mod stored;
 
 pub use analyze::{
     Analysis, AnalyzedBlock, GainPoint, RenderConfig, analyze, apply_envelope, render_gain_envelope,

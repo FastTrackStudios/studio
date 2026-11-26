@@ -8,7 +8,7 @@ use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::{Markers, ProjectContext, TempoMap as _, Tracks};
 use facet::Facet;
 
-pub use engine_client::page::*;
+pub use engine_runtime::client::page::*;
 
 /// A little of the bars either side of a page is shown too: a hit on its
 /// first downbeat, or the next page's, is seen whole.

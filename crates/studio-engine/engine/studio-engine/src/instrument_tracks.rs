@@ -27,7 +27,7 @@ use dynamic_template::golden_session::shape::Node;
 use dynamic_template::golden_session::{GROUP_KEY, KIND_KEY, Kind};
 use facet::Facet;
 
-pub use engine_client::instrument_tracks::*;
+pub use engine_runtime::client::instrument_tracks::*;
 
 static RENAME: ActionMeta = crate::actions::meta(
     "TRACK_RENAME",

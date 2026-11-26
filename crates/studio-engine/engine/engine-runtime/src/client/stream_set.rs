@@ -1,6 +1,6 @@
 //! What a window shows of the songs streaming in: how much of each has
 //! arrived, whether a play waits, how they are heard — as the engine last
-//! told it (`crate::view_client`), or as this process's own engine keeps it
+//! told it (`crate::client::view_client`), or as this process's own engine keeps it
 //! (`studio_engine::stream_set`, which streams them).
 
 /// How far a streamed song can play from where it is: the engine's body
@@ -34,9 +34,9 @@ pub struct SongShown {
 static SHOWN: std::sync::RwLock<Option<Shown>> = std::sync::RwLock::new(None);
 static SHOWN_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// What the engine told this window streams in (`crate::view::StreamsFrame`,
+/// What the engine told this window streams in (`crate::client::view::StreamsFrame`,
 /// over its link): shown from now on.
-pub fn adopt_shown(frame: crate::view::StreamsFrame) {
+pub fn adopt_shown(frame: crate::client::view::StreamsFrame) {
     let shown = Shown {
         items: frame.items.into_iter().collect(),
         songs: frame
@@ -58,7 +58,7 @@ pub fn adopt_shown(frame: crate::view::StreamsFrame) {
 }
 
 /// This process's [`shown`] (and whether a play waits), moved on.
-pub fn keep_shown(shown: Shown, waiting: bool, listening: crate::view::Listening) {
+pub fn keep_shown(shown: Shown, waiting: bool, listening: crate::client::view::Listening) {
     if let Ok(mut s) = SHOWN.write() {
         *s = Some(shown);
     }
@@ -80,8 +80,8 @@ static WAITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::n
 /// How the streamed songs are heard, as the engine last told this window:
 /// by their stems, and whether any is heard by its reference.
 #[must_use]
-pub fn listening() -> crate::view::Listening {
-    crate::view::Listening {
+pub fn listening() -> crate::client::view::Listening {
+    crate::client::view::Listening {
         stems: STEMS.load(std::sync::atomic::Ordering::Acquire),
         referenced: REFERENCED.load(std::sync::atomic::Ordering::Acquire),
     }

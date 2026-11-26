@@ -13,7 +13,7 @@ use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::ProjectContext;
 use facet::Facet;
 
-pub use engine_client::poi::*;
+pub use engine_runtime::client::poi::*;
 
 /// Where the list is kept: the song's ext state.
 const SECTION: &str = "fts";

@@ -326,7 +326,7 @@ fn keep(
     (item, lanes, digest): (&str, &Contributions, u64),
     anchor: &crate::leveler::Anchor,
 ) {
-    let kept = editor::daw::state::ItemEnvelopes::capture(item, lanes, digest);
+    let kept = dsp::level::stored::ItemEnvelopes::capture(item, lanes, digest);
     let Ok(text) = facet_json::to_string(&kept) else {
         return;
     };
@@ -428,7 +428,7 @@ fn kept_all(
         .filter(|e| e.key != LANE_SHOWN)
         .filter_map(|e| {
             let item = e.key.strip_prefix(LANES_KEY)?;
-            let lanes = facet_json::from_str::<editor::daw::state::ItemEnvelopes>(&e.value)
+            let lanes = facet_json::from_str::<dsp::level::stored::ItemEnvelopes>(&e.value)
                 .ok()?
                 .restore();
             let anchor = anchors.get(item).cloned().or_else(|| {
@@ -591,7 +591,7 @@ pub fn kept(
     Tracks::ext_state(daw, project.clone(), TrackRef::Guid(track.to_owned()))
         .into_iter()
         .find(|e| e.key == key)
-        .and_then(|e| facet_json::from_str::<editor::daw::state::ItemEnvelopes>(&e.value).ok())
+        .and_then(|e| facet_json::from_str::<dsp::level::stored::ItemEnvelopes>(&e.value).ok())
         .map(|e| e.restore())
 }
 

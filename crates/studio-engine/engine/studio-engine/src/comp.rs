@@ -20,7 +20,7 @@ use daw::service::{ItemRef, Items as _, ProjectContext, TakeRef, Takes as _, Tra
 use daw_proto::primitives::{Duration, PositionInSeconds};
 use facet::Facet;
 
-pub use engine_client::comp::*;
+pub use engine_runtime::client::comp::*;
 
 /// The crossfade a swiped piece meets the comp with, seconds — the one the
 /// window's own comp ([`crate::arrange_edit::Editor::comp`]) makes.

@@ -21,7 +21,7 @@ use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::{ProjectContext, TrackRef, Tracks};
 use facet::Facet;
 
-pub use engine_client::track_regions::*;
+pub use engine_runtime::client::track_regions::*;
 
 /// A grid as a whole note's division, from `1/2T`, `1/16`, `half triplet`
 /// or a number (`12`).

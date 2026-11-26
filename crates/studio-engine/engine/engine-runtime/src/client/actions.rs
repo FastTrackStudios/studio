@@ -77,10 +77,10 @@ pub enum DockRequest {
     TogglePanel(String),
     /// Hide every edge dock, or bring back the ones hidden.
     ToggleDocks,
-    /// A dock control's change of the layout (`dock::DockIntent`): a panel
+    /// A dock control's change of the layout (`dock_model::DockIntent`): a panel
     /// moved, opened, closed, shown, maximised, a divider or a dock's edge
     /// set, a floating window placed.
-    Intent(dock::DockIntent),
+    Intent(dock_model::DockIntent),
 }
 
 static DOCK_REQUESTS: Mutex<Vec<DockRequest>> = Mutex::new(Vec::new());

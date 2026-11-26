@@ -8,6 +8,7 @@
 pub mod keyboard;
 pub mod paths;
 pub mod prefs;
+pub mod version;
 
 /// Creates a branded string ID type with Display, From, and AsRef impls.
 /// Used for categorical IDs like `RigTypeId` that remain human-readable strings.

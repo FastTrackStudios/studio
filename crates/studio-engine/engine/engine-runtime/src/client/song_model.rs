@@ -4,11 +4,11 @@
 //! ([`request_resync`]).
 //!
 //! Engine side: nothing here draws. The arrangement panel that stands on it
-//! is `crate::studio`, which re-exports all of this.
+//! is `crate::client::studio`, which re-exports all of this.
 
 use std::sync::Arc;
 
-use daw_ui::studio::{ProjectRef, RowsRef};
+use daw_view::song::{ProjectRef, RowsRef};
 
 /// The song as a view reads it and the read-back an engine asks for after
 /// an edit: the views' contract's (`daw_view::song`).
@@ -27,9 +27,9 @@ pub use daw_view::song::{fetch, mark_seen, patch_items};
 pub struct StudioSession {
     pub project: ProjectRef,
     pub rows: RowsRef,
-    pub previews: crate::midi::Previews,
+    pub previews: crate::client::midi::Previews,
     /// The song's chart, parsed once at [`StudioSession::open`] — what the
-    /// Chart panel paints (`crate::chart_panel`). `None` when the session
+    /// Chart panel paints (`crate::client::chart_panel`). `None` when the session
     /// was opened with no `--chart`, or the file failed to parse: the DAW
     /// and Performance views still work without it.
     pub chart: Option<Arc<keyflow::Chart>>,
@@ -45,19 +45,19 @@ pub struct StudioSession {
 /// How Studio plans a panel's rows: by its template's scenes, over the
 /// track kinds the template wrote into the song (read once, at open).
 pub struct TemplatePlans {
-    pub kinds: Arc<crate::plan::Kinds>,
+    pub kinds: Arc<crate::client::plan::Kinds>,
 }
 
 impl Plans for TemplatePlans {
     fn rows(
         &self,
-        raw: &daw_ui::studio::project::Project,
+        raw: &daw_view::song::project::Project,
         scene: Option<&str>,
     ) -> (ProjectRef, RowsRef) {
         plan_rows_with(raw, scene, &self.kinds)
     }
 
-    fn strips(&self, raw: &daw_ui::studio::project::Project, scene: Option<&str>) -> RowsRef {
+    fn strips(&self, raw: &daw_view::song::project::Project, scene: Option<&str>) -> RowsRef {
         RowsRef(Arc::new(plan_strips_with(raw, scene, &self.kinds)))
     }
 
@@ -67,32 +67,33 @@ impl Plans for TemplatePlans {
     /// leave it.
     fn mixer(
         &self,
-        raw: &daw_ui::studio::project::Project,
+        raw: &daw_view::song::project::Project,
         scene: Option<&str>,
-        settings: crate::settings::Settings,
+        settings: crate::client::settings::Settings,
         extent: f64,
     ) -> RowsRef {
-        let (visible, depths) =
-            daw_ui::components::folders::FolderState::default().visible(&raw.tracks);
+        let (visible, depths) = daw_view::folders::FolderState::default().visible(&raw.tracks);
         let planned: Vec<(daw_proto::Track, u32)> = visible.into_iter().zip(depths).collect();
         let Some(scene) = scene.and_then(dynamic_template::scenes::scene) else {
-            return RowsRef(Arc::new(crate::folds::apply(planned)));
+            return RowsRef(Arc::new(crate::client::folds::apply(planned)));
         };
-        // And the folders the window shut (`crate::folds`), over the
+        // And the folders the window shut (`crate::client::folds`), over the
         // scene's: shut in the arrangement, shut here — and a folder
         // opened or shut on a strip in Mix mode is.
-        RowsRef(Arc::new(crate::folds::apply(crate::plan::apply_scene(
-            &planned,
-            &self.kinds,
-            scene,
-            crate::plan::Panel {
-                surface: crate::plan::Surface::Mixer,
-                mode: None,
-                settings,
-                extent,
-                active_language: None,
-            },
-        ))))
+        RowsRef(Arc::new(crate::client::folds::apply(
+            crate::client::plan::apply_scene(
+                &planned,
+                &self.kinds,
+                scene,
+                crate::client::plan::Panel {
+                    surface: crate::client::plan::Surface::Mixer,
+                    mode: None,
+                    settings,
+                    extent,
+                    active_language: None,
+                },
+            ),
+        )))
     }
 
     fn scene_name(&self, slug: &str) -> Option<&'static str> {
@@ -118,9 +119,9 @@ impl Plans for TemplatePlans {
 /// A planner over `raw` that plans by Studio's template ([`TemplatePlans`]).
 #[must_use]
 pub fn template_planner(
-    raw: Arc<daw_ui::studio::project::Project>,
+    raw: Arc<daw_view::song::project::Project>,
     scene: Option<&'static str>,
-    kinds: Arc<crate::plan::Kinds>,
+    kinds: Arc<crate::client::plan::Kinds>,
 ) -> Planner {
     Planner::new(raw, scene, Arc::new(TemplatePlans { kinds }))
 }
@@ -130,16 +131,16 @@ pub fn template_planner(
 pub trait TemplatePlanner {
     /// The track kinds the planner plans with (none when it does not plan
     /// by Studio's template).
-    fn kinds(&self) -> Arc<crate::plan::Kinds>;
+    fn kinds(&self) -> Arc<crate::client::plan::Kinds>;
 }
 
 impl TemplatePlanner for Planner {
-    fn kinds(&self) -> Arc<crate::plan::Kinds> {
+    fn kinds(&self) -> Arc<crate::client::plan::Kinds> {
         self.plans()
             .as_any()
             .downcast_ref::<TemplatePlans>()
             .map_or_else(
-                || Arc::new(crate::plan::Kinds::default()),
+                || Arc::new(crate::client::plan::Kinds::default()),
                 |t| Arc::clone(&t.kinds),
             )
     }
@@ -198,7 +199,7 @@ impl StudioSession {
                     .project(project.to_owned())
                     .await
                     .map_err(|e| eyre::eyre!("{name} is not in the engine: {e}"))?;
-                let raw = daw_ui::studio::project::fetch_of(handle.clone())
+                let raw = daw_view::song::project::fetch_of(handle.clone())
                     .await
                     .ok_or_else(|| eyre::eyre!("could not read {name} back"))?;
                 Ok::<_, eyre::Report>((handle, raw))
@@ -213,15 +214,15 @@ impl StudioSession {
                 // Its automation lanes: from this process's engine, or
                 // through the facade from wherever the engine is.
                 #[cfg(feature = "native")]
-                let local = crate::open::local_engine().is_some();
+                let local = crate::client::open::local_engine().is_some();
                 #[cfg(not(feature = "native"))]
                 let local = false;
                 if local {
                     #[cfg(feature = "native")]
-                    crate::automation::refresh_in(project, &raw.tracks);
+                    crate::client::automation::refresh_in(project, &raw.tracks);
                 } else {
-                    let (lanes, takes) = crate::automation::read_remote(&raw.tracks).await;
-                    crate::automation::adopt_remote(lanes, takes);
+                    let (lanes, takes) = crate::client::automation::read_remote(&raw.tracks).await;
+                    crate::client::automation::adopt_remote(lanes, takes);
                 }
             },
             tracing::info_span!("read.automation"),
@@ -236,18 +237,18 @@ impl StudioSession {
             Arc::new({
                 // A project file has no text to read them from: the engine
                 // holds them, as it does for the song on screen.
-                let from_text = crate::plan::Kinds::from_text(rpp_text);
+                let from_text = crate::client::plan::Kinds::from_text(rpp_text);
                 #[cfg(feature = "native")]
                 let from_text = if from_text.is_empty() {
-                    crate::open::local_engine()
-                        .map(|daw| crate::plan::Kinds::from_engine(daw, project))
+                    crate::client::open::local_engine()
+                        .map(|daw| crate::client::plan::Kinds::from_engine(daw, project))
                         .unwrap_or(from_text)
                 } else {
                     from_text
                 };
                 #[cfg(all(feature = "web", not(feature = "native")))]
                 let from_text = if from_text.is_empty() {
-                    crate::body::studio_body()
+                    crate::client::body::studio_body()
                         .web_kinds_of(project)
                         .unwrap_or(from_text)
                 } else {
@@ -265,7 +266,7 @@ impl StudioSession {
         let plan_ms = at.elapsed().as_secs_f64() * 1e3;
         tracing::Span::current().record("song.tracks", studio.0.tracks.len());
         let at = web_time::Instant::now();
-        let previews = crate::midi::Previews::default();
+        let previews = crate::client::midi::Previews::default();
         let items = || studio.0.items.values().flatten();
         tracing::Instrument::instrument(
             async {
@@ -329,7 +330,7 @@ impl StudioSession {
 
 impl StudioSession {
     /// The song `project` of the engine this window is linked to
-    /// (`crate::view_client`), read back as the studio lays it out: its
+    /// (`crate::client::view_client`), read back as the studio lays it out: its
     /// tracks and items through the facade, its track kinds, chart,
     /// automation and waveforms as the engine has them — by the project, so
     /// reading it does not select it.
@@ -362,9 +363,9 @@ impl StudioSession {
                     .await
                     .map_err(|e| eyre::eyre!("{name} is not in the engine: {e}"))?;
                 let (raw, facts, automation) = futures_util::join!(
-                    daw_ui::studio::project::fetch_of(handle.clone()),
-                    crate::view_client::song_facts(project),
-                    crate::view_client::automation_of(project),
+                    daw_view::song::project::fetch_of(handle.clone()),
+                    crate::client::view_client::song_facts(project),
+                    crate::client::view_client::automation_of(project),
                 );
                 let raw = raw.ok_or_else(|| eyre::eyre!("could not read {name} back"))?;
                 let facts = facts.unwrap_or_default();
@@ -377,18 +378,18 @@ impl StudioSession {
         let at = web_time::Instant::now();
         let step = tracing::info_span!("read.plan").entered();
         if let Some(read) = automation {
-            crate::automation::adopt_read(read);
+            crate::client::automation::adopt_read(read);
         }
         let planner = template_planner(
             Arc::new(raw),
             Some(SCENE),
-            Arc::new(crate::plan::Kinds::from_entries(facts.kinds)),
+            Arc::new(crate::client::plan::Kinds::from_entries(facts.kinds)),
         );
         let (studio, rows) = planner.plan(&planner.raw);
         drop(step);
         let plan_ms = at.elapsed().as_secs_f64() * 1e3;
         let at = web_time::Instant::now();
-        let previews = crate::midi::Previews::default();
+        let previews = crate::client::midi::Previews::default();
         let items = || studio.0.items.values().flatten();
         let step = tracing::info_span!("read.previews");
         tracing::Instrument::instrument(
@@ -409,7 +410,7 @@ impl StudioSession {
             .filter(|item| !studio.0.is_midi(&item.guid))
             .map(|item| item.guid.clone())
             .collect();
-        if let Some(rt) = crate::open::runtime() {
+        if let Some(rt) = crate::client::open::runtime() {
             let previews = previews.clone();
             let song = project.to_owned();
             // Behind the read, but still its work: its trace (under the
@@ -446,7 +447,7 @@ impl StudioSession {
         let chart_file = Some(std::path::PathBuf::from(&facts.path))
             .filter(|p| p.exists())
             .as_deref()
-            .and_then(crate::prepare::chart_beside);
+            .and_then(crate::client::prepare::chart_beside);
         Ok(Self {
             project: studio,
             rows,
@@ -494,7 +495,7 @@ impl StudioSession {
     /// wrote are read from it); `chart` the `.kf` to show beside it.
     ///
     /// What a Remote window's songs are made of: REAPER's project, read
-    /// back rather than opened (see `crate::setlist::Setlist::attach`).
+    /// back rather than opened (see `crate::client::setlist::Setlist::attach`).
     ///
     /// # Errors
     ///
@@ -517,14 +518,14 @@ impl StudioSession {
             Arc::new(raw),
             Some(SCENE),
             Arc::new({
-                let engine = crate::open::local_engine()
-                    .zip(crate::open::current_song())
-                    .map(|(daw, song)| crate::plan::Kinds::from_engine(daw, &song))
+                let engine = crate::client::open::local_engine()
+                    .zip(crate::client::open::current_song())
+                    .map(|(daw, song)| crate::client::plan::Kinds::from_engine(daw, &song))
                     .unwrap_or_default();
                 if engine.is_empty() {
                     path.filter(|p| p.exists())
-                        .and_then(|p| crate::open::project_text(p).ok())
-                        .map(|read| crate::plan::Kinds::from_text(&read.text))
+                        .and_then(|p| crate::client::open::project_text(p).ok())
+                        .map(|read| crate::client::plan::Kinds::from_text(&read.text))
                         .unwrap_or_default()
                 } else {
                     engine
@@ -579,18 +580,19 @@ const fn chart_of_song(_project: Option<&str>) -> Option<Arc<keyflow::Chart>> {
 }
 
 /// A chart for the song `project` (the current one when `None`) written
-/// from its sections ([`crate::song_chart`]), when it is in this
+/// from its sections ([`crate::client::song_chart`]), when it is in this
 /// process's engine and has sections: what the chart view shows for a
 /// song with no chart of its own.
 #[cfg(feature = "native")]
 fn chart_of_song(project: Option<&str>) -> Option<Arc<keyflow::Chart>> {
     use daw::service::Projects as _;
-    let daw = crate::open::local_engine()?;
+    let daw = crate::client::open::local_engine()?;
     let guid = match project {
         Some(guid) => guid.to_owned(),
-        None => crate::open::current_song().or_else(|| daw.current().map(|p| p.guid))?,
+        None => crate::client::open::current_song().or_else(|| daw.current().map(|p| p.guid))?,
     };
-    let text = crate::song_chart::of_song(daw, &daw::service::ProjectContext::Project(guid))?;
+    let text =
+        crate::client::song_chart::of_song(daw, &daw::service::ProjectContext::Project(guid))?;
     let chart = keyflow::parse(text.as_str())
         .inspect_err(|e| tracing::warn!(error = %e, "chart: the song's sections did not make one"))
         .ok()?;
@@ -607,40 +609,43 @@ fn chart_of_song(project: Option<&str>) -> Option<Arc<keyflow::Chart>> {
 /// shows them.
 #[must_use]
 pub fn plan_rows(
-    raw: &daw_ui::studio::project::Project,
+    raw: &daw_view::song::project::Project,
     scene: Option<&str>,
     project_path: &std::path::Path,
 ) -> (ProjectRef, RowsRef) {
-    plan_rows_with(raw, scene, &crate::plan::Kinds::current(project_path))
+    plan_rows_with(
+        raw,
+        scene,
+        &crate::client::plan::Kinds::current(project_path),
+    )
 }
 
 /// [`plan_rows`], with the track kinds already read.
 #[must_use]
 pub fn plan_rows_with(
-    raw: &daw_ui::studio::project::Project,
+    raw: &daw_view::song::project::Project,
     scene: Option<&str>,
-    kinds: &crate::plan::Kinds,
+    kinds: &crate::client::plan::Kinds,
 ) -> (ProjectRef, RowsRef) {
     let step = tracing::info_span!("plan.clone").entered();
     let project = ProjectRef(Arc::new(raw.clone()));
     drop(step);
     let step = tracing::info_span!("plan.rows").entered();
-    let (visible, depths) =
-        daw_ui::components::folders::FolderState::default().visible(&project.tracks);
+    let (visible, depths) = daw_view::folders::FolderState::default().visible(&project.tracks);
     let mut planned: Vec<(daw_proto::Track, u32)> = visible.into_iter().zip(depths).collect();
     // The session file carries no per-track height; the heights are a
     // layout the scene decides.
-    let settings = crate::settings::Settings {
+    let settings = crate::client::settings::Settings {
         folded_takes: std::env::var("FTS_BLITZ_FOLDED_TAKES").as_deref() != Ok("0"),
-        ..crate::settings::Settings::default()
+        ..crate::client::settings::Settings::default()
     };
     if let Some(slug) = scene.and_then(dynamic_template::scenes::scene) {
-        planned = crate::plan::apply_scene(
+        planned = crate::client::plan::apply_scene(
             &planned,
             kinds,
             slug,
-            crate::plan::Panel {
-                surface: crate::plan::Surface::Arrange,
+            crate::client::plan::Panel {
+                surface: crate::client::plan::Surface::Arrange,
                 mode: None,
                 settings,
                 extent: 1440.0,
@@ -648,8 +653,8 @@ pub fn plan_rows_with(
             },
         );
     }
-    // And the folders the window shut (`crate::folds`), over the scene's.
-    planned = crate::folds::apply(planned);
+    // And the folders the window shut (`crate::client::folds`), over the scene's.
+    planned = crate::client::folds::apply(planned);
     drop(step);
     let step = tracing::info_span!("plan.refold").entered();
     // A folder the scene shut keeps its row and gets its children's items,
@@ -660,17 +665,17 @@ pub fn plan_rows_with(
         let shown: Vec<daw_proto::Track> = planned.iter().map(|(t, _)| t.clone()).collect();
         let folded = Arc::make_mut(&mut project.0);
         // A shut folder whose `+` is open shows every lane under it, lane
-        // by lane (`crate::lanes::folder_view`).
-        daw_ui::studio::folded::refold_lanes(
+        // by lane (`crate::client::lanes::folder_view`).
+        daw_view::song::folded::refold_lanes(
             folded,
             &shown,
             settings.folded_takes,
-            &|tracks, folder| crate::lanes::folder_view(tracks, folder).is_some(),
+            &|tracks, folder| crate::client::lanes::folder_view(tracks, folder).is_some(),
         );
         drop(step);
         let step = tracing::info_span!("plan.join").entered();
-        if !crate::folds::cuts_shown() {
-            daw_ui::studio::folded::join_seams(folded);
+        if !crate::client::folds::cuts_shown() {
+            daw_view::song::folded::join_seams(folded);
         }
         drop(step);
     }
@@ -681,24 +686,23 @@ pub fn plan_rows_with(
 /// [`Planner::plan_strips`].
 #[must_use]
 pub fn plan_strips_with(
-    raw: &daw_ui::studio::project::Project,
+    raw: &daw_view::song::project::Project,
     scene: Option<&str>,
-    kinds: &crate::plan::Kinds,
+    kinds: &crate::client::plan::Kinds,
 ) -> Vec<(daw_proto::Track, u32)> {
-    let (visible, depths) =
-        daw_ui::components::folders::FolderState::default().visible(&raw.tracks);
+    let (visible, depths) = daw_view::folders::FolderState::default().visible(&raw.tracks);
     let planned: Vec<(daw_proto::Track, u32)> = visible.into_iter().zip(depths).collect();
     let Some(slug) = scene.and_then(dynamic_template::scenes::scene) else {
-        return crate::folds::apply(planned);
+        return crate::client::folds::apply(planned);
     };
-    let strips = crate::plan::apply_scene(
+    let strips = crate::client::plan::apply_scene(
         &planned,
         kinds,
         slug,
-        crate::plan::Panel {
-            surface: crate::plan::Surface::Mixer,
+        crate::client::plan::Panel {
+            surface: crate::client::plan::Surface::Mixer,
             mode: None,
-            settings: crate::settings::Settings::default(),
+            settings: crate::client::settings::Settings::default(),
             extent: 1440.0,
             active_language: None,
         },
@@ -708,7 +712,7 @@ pub fn plan_strips_with(
         .iter()
         .map(|(track, _)| (track.guid.as_str(), track))
         .collect();
-    crate::folds::apply(
+    crate::client::folds::apply(
         strips
             .into_iter()
             .map(|(track, depth)| {

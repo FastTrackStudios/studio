@@ -501,7 +501,7 @@ fn heard_end(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use engine_client::prepare::chart_beside;
+pub use engine_runtime::client::prepare::chart_beside;
 
 /// Prepare the song at `rpp` and save it as `Song.session` beside it —
 /// what the app does the first time it opens a multitrack, done ahead of

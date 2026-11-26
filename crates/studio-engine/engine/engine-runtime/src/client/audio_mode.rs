@@ -7,7 +7,7 @@
 //!   today, another Session engine soon) through the `daw` facade, and that
 //!   system owns the project and plays it.
 //! - **Cue** — Remote, plus a small local engine that plays the click and
-//!   the guide, sample-locked to the remote (`crate::cue`; it reports
+//!   the guide, sample-locked to the remote (`crate::client::cue`; it reports
 //!   through [`set_cue_ready`]).
 //! - **Engine** — everything: the in-process daw-standalone engine owns the
 //!   project and plays it through this machine's device.
@@ -33,10 +33,10 @@
 //! effective mode: a streamed Engine is the local engine filling up, not a
 //! remote one ([`ModeState::owns_project`]). That is what every call site
 //! that used to reach the local engine directly now asks
-//! (`crate::open::with_local_engine`).
+//! (`crate::client::open::with_local_engine`).
 //!
 //! Platform-neutral (the web page's top bar reads it too); the native
-//! launch that SETS it lives in `crate::open`.
+//! launch that SETS it lives in `crate::client::open`.
 
 use std::path::PathBuf;
 use std::sync::RwLock;
@@ -111,7 +111,7 @@ pub enum RemoteTarget {
     Session { address: String },
     /// A Studio engine on this machine (`studio engine`), over its Unix
     /// socket: the engine this window spawned or found
-    /// (`crate::studio_engine::link`). It owns the set; this window is a
+    /// (`crate::client::studio_engine::link`). It owns the set; this window is a
     /// view of it.
     Engine { socket: PathBuf },
 }
@@ -451,7 +451,7 @@ fn update(f: impl FnOnce(&mut ModeState)) {
 
 /// Ask for `to` over the same backend — Remote ⇄ Cue. Changing whether
 /// the local engine owns the project is a relaunch, not this
-/// (`crate::open::request_mode`).
+/// (`crate::client::open::request_mode`).
 pub fn update_requested(to: AudioMode) {
     update(|s| {
         if s.owns_project() == (to == AudioMode::Engine) {

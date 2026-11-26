@@ -31,11 +31,11 @@ use editing::quantize::{
     to_lines_either_side, uncrossed,
 };
 
-pub use engine_client::actions::*;
+pub use engine_runtime::client::actions::*;
 
 /// The Action List, every action registered: the window's (when a window
 /// runs here) and the engine's, filled into the window's list
-/// (`engine_client::actions::list`) on first use.
+/// (`engine_runtime::client::actions::list`) on first use.
 ///
 /// A registration architect refuses (a duplicate id) is a bug the
 /// `the_list_registers_cleanly` test catches before it ships; a build that
@@ -43,7 +43,7 @@ pub use engine_client::actions::*;
 /// rather than taking the window down.
 pub fn list() -> &'static ActionList {
     crate::install();
-    engine_client::actions::list()
+    engine_runtime::client::actions::list()
 }
 
 /// The engine's actions, into the list: what [`crate::install`] hands the
@@ -492,14 +492,14 @@ struct SaveAsArg {
 /// The dock actions' one argument.
 #[derive(Facet)]
 struct DockIntentArg {
-    intent: dock::DockIntent,
+    intent: dock_model::DockIntent,
 }
 
 /// The action a dock intent runs and its arguments (JSON) — for the layout's
 /// intents; `None` for a screenset's or Arrange's, which run
 /// `SESSION_SCREENSET*` / `SESSION_ARRANGE` by name.
 #[must_use]
-pub fn dock_action(intent: &dock::DockIntent) -> Option<(&'static str, String)> {
+pub fn dock_action(intent: &dock_model::DockIntent) -> Option<(&'static str, String)> {
     let id = dock_intent_id(intent)?;
     let arg = DockIntentArg {
         intent: intent.clone(),
@@ -508,8 +508,8 @@ pub fn dock_action(intent: &dock::DockIntent) -> Option<(&'static str, String)> 
 }
 
 /// Which dock action names `intent`.
-fn dock_intent_id(intent: &dock::DockIntent) -> Option<&'static str> {
-    use dock::DockIntent as I;
+fn dock_intent_id(intent: &dock_model::DockIntent) -> Option<&'static str> {
+    use dock_model::DockIntent as I;
     Some(match intent {
         I::Move { .. } | I::Attach { .. } => PANEL_MOVE.id,
         I::Open { .. } | I::Duplicate { .. } => PANEL_OPEN.id,
@@ -2366,7 +2366,7 @@ fn register_items(list: &ActionList) -> Result<(), architect::action::ActionErro
                                 .map(|f| f.to_string_lossy().into_owned())
                         }),
                         lane: i.fixed_lane.unwrap_or(0),
-                        plays: daw_ui::studio::project::on_playing_lane(&track, &i),
+                        plays: daw_view::song::project::on_playing_lane(&track, &i),
                         guid: i.guid.clone(),
                         position,
                         length: i.length.as_seconds(),
@@ -5440,7 +5440,7 @@ macro_rules! dock_action {
             $display,
             concat!(
                 $what,
-                " `intent`: the dock's own words for it (`dock::DockIntent`, by panel, stack, split and window ids as SESSION_WINDOW gives them). The window's dock carries it out."
+                " `intent`: the dock's own words for it (`dock_model::DockIntent`, by panel, stack, split and window ids as SESSION_WINDOW gives them). The window's dock carries it out."
             ),
             "Dock",
             "",

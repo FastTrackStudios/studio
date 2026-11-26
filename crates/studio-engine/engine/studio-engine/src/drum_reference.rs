@@ -117,7 +117,7 @@ pub fn notes(
     let mut out: Vec<RefNote> = Vec::new();
     for item in daw.get_items(project.clone(), TrackRef::Guid(track.to_owned())) {
         let heard = if areas.is_empty() {
-            daw_ui::studio::project::on_playing_lane(&t, &item)
+            daw_view::song::project::on_playing_lane(&t, &item)
         } else {
             item.fixed_lane
                 .is_some_and(|lane| areas.iter().any(|a| a.2 == lane))

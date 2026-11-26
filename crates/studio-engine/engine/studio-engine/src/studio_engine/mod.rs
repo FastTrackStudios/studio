@@ -33,7 +33,7 @@
 //! [`set`]'s operations; it never holds the set itself.
 
 pub mod headless;
-pub use engine_client::studio_engine::link;
+pub use engine_runtime::client::studio_engine::link;
 pub mod live;
 pub mod mcp;
 pub mod set;

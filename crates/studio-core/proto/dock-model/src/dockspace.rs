@@ -2,7 +2,7 @@
 //! floating windows, each a tree of splits ending in stacks of panels.
 //!
 //! The model behind REAPER-style docking (docs/design/docking.md). Unlike
-//! [`DockLayout`](crate::DockLayout), whose tabs hold a panel *kind*, a
+//! `dock::DockLayout`, whose tabs hold a panel *kind*, a
 //! stack here holds panel *instances* ([`Panel`]): two arrangement views at
 //! different zooms, or one MIDI and one audio editor, are two instances of
 //! one kind, each with its own saved view state.

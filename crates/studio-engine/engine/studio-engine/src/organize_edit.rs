@@ -5,7 +5,7 @@
 
 use fts_session::section_kinds::KeyflowAction;
 
-pub use engine_client::organize_edit::*;
+pub use engine_runtime::client::organize_edit::*;
 
 static PRESS: architect::action::ActionMeta = crate::actions::meta(
     "ORGANIZE_PRESS",

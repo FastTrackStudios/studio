@@ -236,7 +236,7 @@ struct TicketArg {
     name: Option<String>,
 }
 
-pub use engine_client::studio_engine::set_actions::person_name;
+pub use engine_runtime::client::studio_engine::set_actions::person_name;
 
 /// The set's actions, into `list`.
 ///

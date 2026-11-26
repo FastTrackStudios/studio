@@ -931,7 +931,7 @@ fn gate_threshold(
             project.clone(),
             daw::service::TrackRef::Guid(track.guid.clone()),
         ) {
-            if !daw_ui::studio::project::on_playing_lane(track, &item) {
+            if !daw_view::song::project::on_playing_lane(track, &item) {
                 continue;
             }
             let peaks = daw.take_peaks(

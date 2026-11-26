@@ -16,7 +16,7 @@ use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::{TrackRef, Tracks};
 use facet::Facet;
 
-pub use engine_client::render_ahead::*;
+pub use engine_runtime::client::render_ahead::*;
 
 /// The longest render ahead taken, ms.
 const MOST_MS: u32 = 2_000;

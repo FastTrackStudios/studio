@@ -1,7 +1,7 @@
 //! Opening a song on the process's engine and reading it back the way the
 //! studio lays it out — `StudioSession`'s opening, here with the engine; the
 //! model itself, what a window draws, is
-//! `engine_client::song_model`.
+//! `engine_runtime::client::song_model`.
 
 use crate::song_model::StudioSession;
 

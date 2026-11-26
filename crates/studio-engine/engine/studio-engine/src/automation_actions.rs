@@ -32,7 +32,7 @@ use daw_proto::primitives::{Duration, PositionInSeconds};
 
 use crate::automation::Kind;
 
-pub use engine_client::automation_actions::*;
+pub use engine_runtime::client::automation_actions::*;
 
 type Daw = daw::standalone::Standalone;
 

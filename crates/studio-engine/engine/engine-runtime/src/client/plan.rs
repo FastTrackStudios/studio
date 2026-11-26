@@ -95,11 +95,11 @@ impl Kinds {
 
     /// Every track it knows, as a window is told them.
     #[must_use]
-    pub fn entries(&self) -> Vec<crate::view::TrackKind> {
-        let mut out: Vec<crate::view::TrackKind> = self
+    pub fn entries(&self) -> Vec<crate::client::view::TrackKind> {
+        let mut out: Vec<crate::client::view::TrackKind> = self
             .by_guid
             .values()
-            .map(|ext| crate::view::TrackKind {
+            .map(|ext| crate::client::view::TrackKind {
                 guid: ext.guid.clone(),
                 name: ext.name.clone(),
                 kind: ext.kind.map(|k| k.as_str().to_owned()),
@@ -112,7 +112,7 @@ impl Kinds {
 
     /// The kinds a window was told ([`Self::entries`]).
     #[must_use]
-    pub fn from_entries(entries: Vec<crate::view::TrackKind>) -> Self {
+    pub fn from_entries(entries: Vec<crate::client::view::TrackKind>) -> Self {
         use dynamic_template::golden_session::Kind;
         Self {
             by_guid: entries
@@ -137,10 +137,11 @@ impl Kinds {
     #[must_use]
     pub fn current(path: &std::path::Path) -> Self {
         #[cfg(feature = "native")]
-        let engine = crate::open::local_engine()
+        let engine = crate::client::open::local_engine()
             .and_then(|daw| {
                 use daw::service::Projects as _;
-                let song = crate::open::current_song().or_else(|| daw.current().map(|p| p.guid))?;
+                let song = crate::client::open::current_song()
+                    .or_else(|| daw.current().map(|p| p.guid))?;
                 Some(Self::from_engine(daw, &song))
             })
             .unwrap_or_default();
@@ -179,7 +180,7 @@ pub struct Panel<'a> {
     /// The DAW mode, which the common prelude reads.
     pub mode: Option<&'a str>,
     /// The right rail's switches.
-    pub settings: crate::settings::Settings,
+    pub settings: crate::client::settings::Settings,
     /// The panel's own extent in the axis the focus width comes off: the
     /// mixer's height, or the arrangement's.
     pub extent: f64,
@@ -296,7 +297,7 @@ pub fn instrument_of(tracks: &[(Track, u32)], kinds: &Kinds, guid: &str) -> Opti
 /// the scene focused and a track the user selected open to the same
 /// width.
 #[must_use]
-pub fn mixer_width(size: Size, settings: crate::settings::Settings, height: f64) -> f64 {
+pub fn mixer_width(size: Size, settings: crate::client::settings::Settings, height: f64) -> f64 {
     if size == Size::Focus {
         return settings.focus_width(height);
     }
@@ -311,7 +312,7 @@ pub fn row_height(size: Size) -> f64 {
 
 /// A pixel count, for the `u32` the track model stores.
 fn pixels(value: f64) -> u32 {
-    crate::num::index(value.max(1.0))
+    crate::client::num::index(value.max(1.0))
         .try_into()
         .unwrap_or(u32::MAX)
 }
