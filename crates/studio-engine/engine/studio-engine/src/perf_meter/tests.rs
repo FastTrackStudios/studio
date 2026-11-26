@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use daw::standalone::audio_engine::perf::TrackCost;
 
-use super::{TrackInfo, cpu_seconds, field, rows};
+use super::{TrackInfo, cpu_seconds, field, rows, sleep_fractions};
 
 #[test]
 fn a_tracks_row_is_its_share_of_a_core_over_the_interval_with_its_fx_and_their_pdc() {
@@ -22,10 +22,12 @@ fn a_tracks_row_is_its_share_of_a_core_over_the_interval_with_its_fx_and_their_p
         TrackCost {
             media_us: 1_000,
             fx_us: 2_000,
+            ..TrackCost::default()
         },
         TrackCost {
             media_us: 0,
             fx_us: 0,
+            ..TrackCost::default()
         },
     ];
     // Half a second: 250 ms of media on the kick is half a core.
@@ -33,10 +35,12 @@ fn a_tracks_row_is_its_share_of_a_core_over_the_interval_with_its_fx_and_their_p
         TrackCost {
             media_us: 251_000,
             fx_us: 52_000,
+            ..TrackCost::default()
         },
         TrackCost {
             media_us: 5_000,
             fx_us: 0,
+            ..TrackCost::default()
         },
     ];
     let pdc = HashMap::from([("comp".to_owned(), 64), ("eq".to_owned(), 0)]);
@@ -67,4 +71,15 @@ fn the_process_cpu_and_the_kernels_fields_are_read_as_they_are_written() {
     assert_eq!(field(io, "read_bytes"), Some(4096));
     assert_eq!(field(io, "write_bytes"), Some(512));
     assert_eq!(field(io, "cancelled_write_bytes"), None);
+}
+
+#[test]
+fn a_tracks_sleep_is_the_share_of_its_plugin_blocks_not_called_between_two_reads() {
+    let at = |ran, slept| TrackCost {
+        fx_ran: ran,
+        fx_slept: slept,
+        ..TrackCost::default()
+    };
+    let f = sleep_fractions(&[at(100, 0), at(5, 5)], &[at(150, 150), at(5, 5), at(0, 4)]);
+    assert_eq!(f, vec![0.75, 0.0, 1.0]);
 }

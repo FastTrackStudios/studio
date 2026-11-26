@@ -8,7 +8,8 @@
 //!
 //! Each frame goes to every window (`EngineView::perf`), to `SESSION_PERF`,
 //! and out as metrics (`process.*`, `system.memory.available`,
-//! `audio.rt_cpu`, `audio.track.fx_cpu` / `.media_cpu` by `track.name`).
+//! `audio.rt_cpu`, `audio.track.fx_cpu` / `.media_cpu` / `.fx_sleep` by
+//! `track.name`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -73,6 +74,17 @@ pub fn rows(
                 pdc_samples: t.fx.iter().filter_map(|g| pdc.get(g)).sum(),
             }
         })
+        .collect()
+}
+
+/// Each track's share of its plugins' blocks that slept between two reads
+/// (`daw::standalone::plugin_sleep`: a chain with nothing to play is not
+/// called), 0..1, by track index.
+#[must_use]
+pub fn sleep_fractions(before: &[TrackCost], now: &[TrackCost]) -> Vec<f64> {
+    now.iter()
+        .enumerate()
+        .map(|(i, is)| is.sleep_fraction(&before.get(i).copied().unwrap_or_default()))
         .collect()
 }
 
@@ -219,6 +231,7 @@ pub fn watch(daw: Standalone, stats: Arc<EngineStats>, _rate: u32) {
                 }
                 let latencies = pdc.update(&daw, &tracks);
                 let rows = rows(&costs, &now_costs, elapsed_us, &tracks, &latencies);
+                let asleep = sleep_fractions(&costs, &now_costs);
                 costs = now_costs;
 
                 let now_sys = System::now();
@@ -252,7 +265,7 @@ pub fn watch(daw: Standalone, stats: Arc<EngineStats>, _rate: u32) {
                 };
                 sys = now_sys;
                 render = now_render;
-                metrics::record(&frame);
+                metrics::record(&frame, &asleep);
                 crate::studio_engine::view_host::perf(frame);
             }
         });
@@ -280,13 +293,15 @@ mod metrics {
         track_fx: Gauge<f64>,
         track_media: Gauge<f64>,
         track_pdc: Gauge<u64>,
+        track_sleep: Gauge<f64>,
     }
 
     /// A track under this share of a core (both columns) is left out of
     /// the metrics: a hundred idle tracks are a hundred series of zeros.
     const QUIET_PCT: f64 = 0.05;
 
-    pub fn record(f: &PerfFrame) {
+    /// `asleep`: each track's [`super::sleep_fractions`], by index.
+    pub fn record(f: &PerfFrame, asleep: &[f64]) {
         static MADE: OnceLock<Instruments> = OnceLock::new();
         let at = MADE.get_or_init(|| {
             let m = opentelemetry::global::meter("studio-engine");
@@ -330,6 +345,13 @@ mod metrics {
                     .with_unit("{sample}")
                     .with_description("A track's FX delay compensation, by `track.name`")
                     .build(),
+                track_sleep: m
+                    .f64_gauge("audio.track.fx_sleep")
+                    .with_unit("1")
+                    .with_description(
+                        "The share of a track's plugin blocks not called for being asleep, by `track.name`",
+                    )
+                    .build(),
             }
         });
         at.cpu.record(f.cpu_pct, &[]);
@@ -349,13 +371,18 @@ mod metrics {
         at.free.record(f.system_free_bytes, &[]);
         for t in &f.tracks {
             let busy = t.fx_cpu_pct >= QUIET_PCT || t.media_cpu_pct >= QUIET_PCT;
-            if !busy && t.pdc_samples == 0 {
+            // An asleep chain costs nothing: what says so is its sleep.
+            let sleep = asleep.get(t.index as usize).copied().unwrap_or(0.0);
+            if !busy && t.pdc_samples == 0 && sleep == 0.0 {
                 continue;
             }
             let name = [KeyValue::new("track.name", t.name.clone())];
             at.track_fx.record(t.fx_cpu_pct, &name);
             at.track_media.record(t.media_cpu_pct, &name);
             at.track_pdc.record(u64::from(t.pdc_samples), &name);
+            if t.fx_count > 0 {
+                at.track_sleep.record(sleep, &name);
+            }
         }
     }
 }
