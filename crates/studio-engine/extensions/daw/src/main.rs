@@ -8,6 +8,9 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> std::process::ExitCode {
+    // The running version for what the engine reports (its spans, its crash
+    // reports, its MCP server): the release's, not the workspace's.
+    utils::version::set(fts_version::release_version());
     // A render worker (`--render-worker`, spawned by an engine with its
     // socket in the environment): renders an agent asked for, apart from
     // the person's session.

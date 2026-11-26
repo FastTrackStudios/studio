@@ -1,0 +1,28 @@
+[package]
+name = "studio-otel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Studio's spans over OTLP on plain tracing + OpenTelemetry: the export layer every Studio process installs, the resource that says which build and platform sent them, the shipped collector a release bakes in, and the crash report a panic leaves"
+
+build = "build.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+tracing = { workspace = true }
+
+# The exporter: native processes only. A browser page posts its spans as
+# OTLP/JSON itself (apps/studio's `trace`), with this crate's attributes.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
+tracing-subscriber = { workspace = true }

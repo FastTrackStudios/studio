@@ -38,6 +38,10 @@ uuid = { workspace = true }
 tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread"] }
 # The engine's own log (engine.log): src/owner.rs.
 tracing-subscriber = { workspace = true }
+# The release's version, set first thing in `main` (utils::version), so the
+# engine's spans and crash reports say which build sent them.
+fts-version = { workspace = true }
+utils = { workspace = true }
 # flock (one engine) and setsid (it outlives the window): src/owner.rs.
 libc = { workspace = true }
 architect-scene = { workspace = true }

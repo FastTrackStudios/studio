@@ -12,9 +12,10 @@
 //!   measuring and mixing ones `keep = true` ([`kept_whole`]), so the
 //!   collector's tail sampling keeps their traces whatever their length.
 //! - [`otel`]: OTLP export of every span (and the global meter's metrics)
-//!   when `OTEL_EXPORTER_OTLP_ENDPOINT` (or its `_TRACES_` form) is set.
-//! - [`install_panic_hook`]: a panic logged through `tracing`, then the
-//!   hook that was there before.
+//!   when `OTEL_EXPORTER_OTLP_ENDPOINT` (or its `_TRACES_` form) is set, or
+//!   a release baked its collector in (`studio-otel`).
+//! - [`install_panic_hook`]: a panic as a `crash` span, flushed to the
+//!   collector, then the hook that was there before.
 //!
 //! A step of a unit of work is a child span, entered and dropped before
 //! the next:
@@ -323,10 +324,12 @@ pub mod action_metrics {
 }
 
 /// OTLP export for `service`: a layer exporting every span, with the
-/// global meter's metrics exported beside it, when an endpoint is named
-/// (`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT`,
-/// http/protobuf). `None` when none is, or the exporter could not be
-/// made. The providers live for the process.
+/// global meter's metrics exported beside it, when a collector is named:
+/// `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT`
+/// (http/protobuf), else the one a release baked in (`studio_otel::Endpoint`).
+/// Each span's resource carries the running version (`utils::version`) and
+/// the platform. `None` when no collector is named, or the exporter could
+/// not be made. The providers live for the process.
 #[must_use]
 pub fn otel<S>(
     service: &'static str,
@@ -334,58 +337,14 @@ pub fn otel<S>(
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
-    use opentelemetry::trace::TracerProvider as _;
-    let named = |var: &str| std::env::var(var).is_ok_and(|v| !v.trim().is_empty());
-    if !(named("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") || named("OTEL_EXPORTER_OTLP_ENDPOINT")) {
-        return None;
-    }
-    let resource = || {
-        opentelemetry_sdk::Resource::builder()
-            .with_service_name(service)
-            .build()
-    };
-    let exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_http()
-        .build()
-        .ok()?;
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-        .with_batch_exporter(exporter)
-        .with_resource(resource())
-        .build();
-    let tracer = provider.tracer(service);
-    opentelemetry::global::set_tracer_provider(provider);
-    if let Ok(metrics) = opentelemetry_otlp::MetricExporter::builder()
-        .with_http()
-        .build()
-    {
-        opentelemetry::global::set_meter_provider(
-            opentelemetry_sdk::metrics::SdkMeterProvider::builder()
-                .with_periodic_exporter(metrics)
-                .with_resource(resource())
-                .build(),
-        );
-    }
-    Some(tracing_opentelemetry::layer().with_tracer(tracer))
+    studio_otel::layer(service, utils::version::current())
 }
 
-/// Log every panic through `tracing` (`tracing::error!`, with the thread
-/// and where), then run the hook that was installed before it.
+/// Every panic as a `crash` span (its thread, where and what, logged
+/// through `tracing` inside it), flushed to the collector, then the hook
+/// that was installed before it (`studio_otel::install_crash_hook`).
 pub fn install_panic_hook() {
-    let previous = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        let thread = std::thread::current();
-        let at = info
-            .location()
-            .map(|l| format!("{}:{}", l.file(), l.line()))
-            .unwrap_or_default();
-        tracing::error!(
-            panic.thread = thread.name().unwrap_or("<unnamed>"),
-            panic.at = %at,
-            panic.what = %info,
-            "panic"
-        );
-        previous(info);
-    }));
+    studio_otel::install_crash_hook();
 }
 
 #[cfg(test)]

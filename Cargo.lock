@@ -6336,6 +6336,7 @@ dependencies = [
  "daw-ui",
  "dirs 6.0.0",
  "engine-domain",
+ "fts-version",
  "hound",
  "libc",
  "opentelemetry-proto",
@@ -6350,6 +6351,7 @@ dependencies = [
  "toml 0.8.2",
  "tracing",
  "tracing-subscriber",
+ "utils",
  "uuid",
 ]
 
@@ -8635,7 +8637,6 @@ dependencies = [
  "live-proto",
  "num-traits",
  "opentelemetry",
- "opentelemetry-otlp",
  "opentelemetry_sdk",
  "rayon",
  "realfft",
@@ -8650,6 +8651,7 @@ dependencies = [
  "signal-effects",
  "signal-fx",
  "studio",
+ "studio-otel",
  "task-dial",
  "tempfile",
  "tokio",
@@ -23982,11 +23984,14 @@ dependencies = [
  "studio-lyrics",
  "studio-mixer",
  "studio-navigator",
+ "studio-otel",
  "studio-panels",
  "studio-view-link",
  "tokio",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
+ "utils",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -24175,6 +24180,18 @@ dependencies = [
  "studio-engine",
  "studio-panels",
  "studio-view-link",
+]
+
+[[package]]
+name = "studio-otel"
+version = "26.10.3"
+dependencies = [
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
 ]
 
 [[package]]

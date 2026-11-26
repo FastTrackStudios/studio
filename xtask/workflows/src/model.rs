@@ -335,6 +335,11 @@ impl Step {
         self.env.insert(key.to_owned(), value.to_owned());
         self
     }
+
+    /// Every `(key, value)` of `vars` as [`Step::env`].
+    pub fn envs(self, vars: &[(&str, &str)]) -> Self {
+        vars.iter().fold(self, |step, (k, v)| step.env(k, v))
+    }
 }
 
 /// Third-party actions the release bots use, pinned by full commit SHA

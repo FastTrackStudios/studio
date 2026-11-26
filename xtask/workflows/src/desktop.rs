@@ -173,6 +173,16 @@ echo "sha=$sha" >> "$GITHUB_OUTPUT"
         ))
 }
 
+/// The collector a shipped build reports to, baked in at compile time
+/// (`studio-otel`: `STUDIO_OTLP_ENDPOINT`, `STUDIO_OTLP_TOKEN`): the
+/// organization's OTLP ingest (task-server's authenticated `/otlp`, the
+/// org variable and secret Task's own builds use). Both empty, the build
+/// sends nothing.
+const SHIPPED_COLLECTOR: &[(&str, &str)] = &[
+    ("STUDIO_OTLP_ENDPOINT", "${{ vars.TASK_OTLP_ENDPOINT }}"),
+    ("STUDIO_OTLP_TOKEN", "${{ secrets.TASK_OTLP_TOKEN }}"),
+];
+
 /// airlock's `studio-release-mac`: build, Developer-ID sign, notarize,
 /// staple (scripts/desktop/macos.sh). A missing runner becomes a red X within the time limit, not a
 /// job that waits for hours.
@@ -226,7 +236,8 @@ ls -l target/desktop
             )
             .env("KEYCHAIN", "fts-build.keychain")
             .env("KEYCHAIN_PW", "fts-build")
-            .env("VERSION", "${{ needs.resolve.outputs.version }}"),
+            .env("VERSION", "${{ needs.resolve.outputs.version }}")
+            .envs(SHIPPED_COLLECTOR),
         )
         .step(
             Step::uses("Keep the .dmg", crate::model::pinned::UPLOAD_ARTIFACT)
@@ -301,7 +312,8 @@ echo "TARGET_CAP_GB=$cap_gb" >> "$GITHUB_ENV"
                 "Build the AppImage",
                 "set -euo pipefail\nrm -rf target/desktop\nbash scripts/desktop/linux.sh\nls -l target/desktop\n",
             )
-            .env("VERSION", "${{ needs.resolve.outputs.version }}"),
+            .env("VERSION", "${{ needs.resolve.outputs.version }}")
+            .envs(SHIPPED_COLLECTOR),
         )
         // --version with no display: the file starts on a machine without
         // the app's libraries (scripts/desktop/linux-smoke.sh: appimage-run,

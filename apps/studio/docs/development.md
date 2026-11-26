@@ -128,6 +128,29 @@ STUDIO_EXT_DEV_END  {"folder": "<the same folder>"}                 # back to th
 When the work is done, merge it in its repository, bump Studio's pin, and
 end the override: the linked copy runs again, at full speed.
 
+## Telemetry and crash reports
+
+The app (`studio-app`), the engine (`studio-engine`) and a page in a
+browser (`studio-web`) send their spans over OTLP, on plain `tracing` and
+OpenTelemetry's crates (`crates/studio-core/util/studio-otel`). Every span
+carries which build sent it: `service.version`, `studio.platform`
+(`linux`, `macos`, `web`), `host.arch` and `deployment.environment`.
+
+- **Where they go:** the process's `OTEL_EXPORTER_OTLP_ENDPOINT` (the
+  local collector on 127.0.0.1:4318, read in OpenObserve on :5080) if it
+  is set. Otherwise a release build sends to the collector it baked in:
+  `desktop.yml` sets `STUDIO_OTLP_ENDPOINT` and `STUDIO_OTLP_TOKEN` from
+  the organization's `TASK_OTLP_ENDPOINT` variable and `TASK_OTLP_TOKEN`
+  secret. A plain build with neither sends nothing.
+- **A crash** is a `crash` span (`crash.thread`, `crash.at`,
+  `crash.message`, status error), flushed before the process goes.
+  `Studio --crash-test` crashes on purpose once telemetry is up: run it
+  with the local collector named and look for `operation_name = 'crash'`.
+- **In a browser** the page posts its spans as OTLP/JSON to its node
+  (`/api/otlp/v1/traces`), which passes them on to the collector the
+  node's own `OTEL_EXPORTER_OTLP_*` names. A panic posts its crash span
+  at once (`keepalive`); a failed call is a span with status error.
+
 ## Co-developing Studio and another repo
 
 Studio takes Architect, app-shell, daw, session, Keyflow, Ignition, Drive
