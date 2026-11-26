@@ -59,13 +59,6 @@ const ALLOWED: &[Allowance] = &[
         count: 1,
         why: "after SESSION_FOLD: this process's folds (see the arrangement's)",
     },
-    // Debt: still to route.
-    Allowance {
-        file: "mixer_panel.rs",
-        pattern: "mode_phases::choose(",
-        count: 1,
-        why: "the first sync of the shell's phase",
-    },
 ];
 
 #[test]

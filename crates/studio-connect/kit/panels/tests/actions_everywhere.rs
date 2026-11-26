@@ -10,6 +10,20 @@ use daw_view_kit::bypass_guard::{Allowance, problems};
 /// (the inventory in the design doc).
 const ALLOWED: &[Allowance] = &[
     Allowance {
+        file: "hooks.rs",
+        pattern: "mode_phases::choose(",
+        count: 1,
+        why: "the mixer's first sync of the shell's phase (crate::app::choose_phase, \
+              moved here from the mixer panel)",
+    },
+    Allowance {
+        file: "hooks.rs",
+        pattern: "request_dock(",
+        count: 1,
+        why: "the hook the kit's window asks Studio's dock through (daw-view-kit's \
+              app::request_dock), as daw-view-kit allows its own definition",
+    },
+    Allowance {
         file: "mix_guide.rs",
         pattern: "applier.send(",
         count: 1,

@@ -374,7 +374,8 @@ mod tests {
     /// what [`EDITOR`] declares.
     #[test]
     fn the_editor_paints_with_what_it_declares() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../views/midi/view/src");
         let src: String = ["expression.rs", "editor_view.rs"]
             .iter()
             .map(|f| std::fs::read_to_string(dir.join(f)).expect("source"))

@@ -455,10 +455,11 @@ fn both_apps_register_the_performer_panels_through_one_function() {
         let p = reg.get(id).unwrap_or_else(|| panic!("{id} not registered"));
         assert_eq!(p.region, region, "{id}");
     }
-    // Session's mount (the engine crates, once features/engine), and every
-    // other source there.
+    // Session's mount (its panels, now in studio-connect's kit), and every
+    // source in the engine crates.
     let mut files = Vec::new();
     rust_files(&root.join("crates/studio-engine/engine"), &mut files);
+    rust_files(&root.join("crates/studio-connect/kit/panels"), &mut files);
     assert!(!files.is_empty(), "no app sources under {}", root.display());
     let mut mounts = Vec::new();
     for f in &files {
@@ -489,7 +490,9 @@ fn both_apps_register_the_performer_panels_through_one_function() {
         }
     }
     assert!(
-        mounts.iter().any(|m| m.starts_with("features/engine/")),
+        mounts
+            .iter()
+            .any(|m| m.starts_with("crates/studio-connect/kit/panels/")),
         "Session mounts the PerformerScreen: {mounts:?}"
     );
 }

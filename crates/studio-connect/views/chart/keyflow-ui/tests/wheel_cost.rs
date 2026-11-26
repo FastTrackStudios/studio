@@ -28,7 +28,7 @@ const NOTCHES: u32 = 600;
 
 fn chart_text(name: &str) -> String {
     let path = format!(
-        "{}/../../apps/architect/vault/{name}",
+        "{}/../../../../studio-core/music/keyflow-lang/tests/fixtures/vault/{name}",
         env!("CARGO_MANIFEST_DIR")
     );
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
