@@ -595,41 +595,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "app-shell"
-version = "26.10.3"
-dependencies = [
- "architect",
- "axum",
- "dioxus",
- "dioxus-native",
- "dioxus-test 0.1.0 (git+https://github.com/FastTrackStudios/vendor?rev=c892de83e77b3d51e9c3dd17d9f9e8471d01e112)",
- "dirs 6.0.0",
- "dock",
- "facet",
- "facet-json",
- "facet-styx",
- "futures-timer",
- "objc2 0.6.5",
- "objc2-foundation 0.3.2",
- "objc2-ui-kit 0.3.2",
- "signal-rig-shell",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "utils",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
 name = "app-shell-extensions"
 version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/app-shell?rev=46a0d04a9bde95deac00745fa996313c874e9be8#46a0d04a9bde95deac00745fa996313c874e9be8"
 dependencies = [
  "anyrender",
- "app-shell 0.1.0",
+ "app-shell",
  "architect",
  "architect-extensions",
  "architect-extensions-dioxus",
@@ -660,7 +631,7 @@ source = "git+https://github.com/FastTrackStudios/app-shell?rev=46a0d04a9bde95de
 dependencies = [
  "anyrender",
  "anyrender_vello_cpu",
- "app-shell 0.1.0",
+ "app-shell",
  "blitz-dom",
  "blitz-html",
  "blitz-net",
@@ -8798,7 +8769,6 @@ dependencies = [
 name = "engine-host"
 version = "26.10.3"
 dependencies = [
- "app-shell 26.10.3",
  "architect",
  "arrangement-view",
  "axum",
@@ -8845,6 +8815,7 @@ dependencies = [
  "studio",
  "studio-engine",
  "studio-panels",
+ "studio-shell",
  "studio-ui",
  "thiserror 2.0.20",
  "tokio",
@@ -14766,7 +14737,6 @@ version = "26.10.3"
 dependencies = [
  "anyrender",
  "anyrender_vello",
- "app-shell 26.10.3",
  "blitz-dom",
  "blitz-paint",
  "blitz-traits",
@@ -14775,6 +14745,7 @@ dependencies = [
  "futures-timer",
  "image",
  "lucide-dioxus",
+ "studio-shell",
  "utils",
  "uuid",
 ]
@@ -23938,7 +23909,7 @@ dependencies = [
 name = "studio-app"
 version = "26.10.3"
 dependencies = [
- "app-shell 0.1.0",
+ "app-shell",
  "app-shell-extensions",
  "app-shell-native",
  "architect",
@@ -24184,7 +24155,6 @@ version = "26.10.3"
 dependencies = [
  "anyrender",
  "anyrender_vello",
- "app-shell 26.10.3",
  "architect",
  "architect-input",
  "blitz-dom",
@@ -24224,6 +24194,7 @@ dependencies = [
  "session-sync",
  "studio-engine",
  "studio-proto",
+ "studio-shell",
  "studio-ui",
  "tokio",
  "tracing",
@@ -24251,6 +24222,35 @@ dependencies = [
  "uuid",
  "vox",
  "vox-types",
+]
+
+[[package]]
+name = "studio-shell"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "axum",
+ "dioxus",
+ "dioxus-native",
+ "dioxus-test 0.1.0 (git+https://github.com/FastTrackStudios/vendor?rev=c892de83e77b3d51e9c3dd17d9f9e8471d01e112)",
+ "dirs 6.0.0",
+ "dock",
+ "facet",
+ "facet-json",
+ "facet-styx",
+ "futures-timer",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
+ "objc2-ui-kit 0.3.2",
+ "signal-rig-shell",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "utils",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

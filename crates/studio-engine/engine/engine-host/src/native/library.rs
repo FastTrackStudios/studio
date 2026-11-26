@@ -103,7 +103,7 @@ pub fn LibraryEditor(
     on_back: EventHandler<()>,
     on_play: EventHandler<LibrarySetlist>,
 ) -> Element {
-    let keys = app_shell::ui::use_text_focus();
+    let keys = studio_shell::ui::use_text_focus();
     let mut lists = use_signal(|| lists);
     let mut songs = use_signal(|| Load::<Vec<(LibrarySong, bool)>>::Waiting);
     let mut selected = use_signal(|| {
@@ -861,7 +861,7 @@ pub fn SongEditor(
     /// Done: saved, deleted, or left.
     on_done: EventHandler<()>,
 ) -> Element {
-    let keys = app_shell::ui::use_text_focus();
+    let keys = studio_shell::ui::use_text_focus();
     let is_new = song.is_none();
     let title = use_signal(|| song.as_ref().map(|s| s.title.clone()).unwrap_or_default());
     let key = use_signal(|| song.as_ref().map(|s| s.key.clone()).unwrap_or_default());

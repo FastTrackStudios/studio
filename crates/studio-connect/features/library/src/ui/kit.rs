@@ -2,9 +2,9 @@
 //! pieces every screen repeats (a sync mark, a player's initials, a
 //! button, a heading with its trailing action).
 
-use app_shell::tokens as t;
 use dioxus::prelude::*;
 use lucide_dioxus::{Check, Cloud, CloudDownload, HardDriveDownload, RefreshCw};
+use studio_shell::tokens as t;
 
 use crate::model::{Ready, Sync};
 

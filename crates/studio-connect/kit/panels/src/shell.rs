@@ -137,9 +137,9 @@ pub const SAFE_AREA: &str = "position:absolute; top:0; left:0; width:100vw; heig
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);";
 
 /// [`SAFE_AREA`] on dioxus-native, where Blitz fills no CSS `env()`: the
-/// same box, padded by `insets` (the screen's, `app_shell::ui::Screen`).
+/// same box, padded by `insets` (the screen's, `studio_shell::ui::Screen`).
 #[must_use]
-pub fn safe_area_box(insets: app_shell::ui::Insets) -> String {
+pub fn safe_area_box(insets: studio_shell::ui::Insets) -> String {
     format!(
         "position:absolute; top:0; left:0; width:100vw; height:100vh; \
          box-sizing:border-box; display:flex; overflow:hidden; background:#17181b; \

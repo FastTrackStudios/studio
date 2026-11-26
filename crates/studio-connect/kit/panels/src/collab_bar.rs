@@ -207,7 +207,7 @@ pub fn use_collab_start() {
 
 #[component]
 pub fn CollabBar() -> Element {
-    let keys = app_shell::ui::use_text_focus();
+    let keys = studio_shell::ui::use_text_focus();
     let mut status = use_signal(live::status);
     let mut error = use_signal(|| None::<String>);
     // A playground's time left, in whole seconds (ticks the countdown).

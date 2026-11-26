@@ -20,16 +20,16 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use app_shell::ui::perform::{NowBand, SyncPill, TransportNudgeRow};
-use app_shell::ui::performer::{self, PerformerBodies, SESSION_SCOPE, performer_registry};
-use app_shell::ui::playback::{PlaybackModel, PlaybackView, SectionView, SongView};
-use app_shell::ui::rig::{RigClient, RigLink, SwitchNo};
-use app_shell::ui::{
+use dioxus::prelude::*;
+use dioxus_test::DocumentTester;
+use studio_shell::ui::perform::{NowBand, SyncPill, TransportNudgeRow};
+use studio_shell::ui::performer::{self, PerformerBodies, SESSION_SCOPE, performer_registry};
+use studio_shell::ui::playback::{PlaybackModel, PlaybackView, SectionView, SongView};
+use studio_shell::ui::rig::{RigClient, RigLink, SwitchNo};
+use studio_shell::ui::{
     PerformDock, PerformerScreen, RigCrumb, provide_playback, provide_rig, rig_half,
     use_panel_registry,
 };
-use dioxus::prelude::*;
-use dioxus_test::DocumentTester;
 
 // ── Fakes ──────────────────────────────────────────────────────────────────
 

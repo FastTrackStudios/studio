@@ -6,15 +6,15 @@
 //! One purpose per screen, and nothing that does not earn its place:
 //! Review is the player at full width with the version history under it,
 //! and the comments as the one panel (on the right when the iPad is
-//! sideways, in the bottom drawer upright, and movable: `app_shell::ui`).
+//! sideways, in the bottom drawer upright, and movable: `studio_shell::ui`).
 //! Status has no panels; the sheet is the page.
 
-use app_shell::ui::{
-    Panel, PanelRegistry, Region, ShellFrame, use_panel_registry, use_shell_state,
-};
 use dioxus::prelude::*;
 use lucide_dioxus::{
     Check, ChevronLeft, ChevronRight, FolderOpen, Link, MessageSquare, Pause, Play,
+};
+use studio_shell::ui::{
+    Panel, PanelRegistry, Region, ShellFrame, use_panel_registry, use_shell_state,
 };
 
 use super::home::Page;
@@ -443,7 +443,7 @@ fn VersionRow(mix: MixVersion, on: bool, comments: usize, on_press: EventHandler
 /// box comments at the playhead on the version playing.
 #[component]
 fn CommentsPanel() -> Element {
-    let keys = app_shell::ui::use_text_focus();
+    let keys = studio_shell::ui::use_text_focus();
     let lib = use_library();
     let here = use_context::<Here>();
     let player = use_player();

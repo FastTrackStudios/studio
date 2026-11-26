@@ -114,7 +114,7 @@ dsp = { path = "crates/studio-engine/dsp/dsp" }
 # path-deps-only — it left the tree so it can track upstream.
 nice-plug = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 nice-plug-xtask = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
-app-shell = {path = "crates/studio-connect/kit/studio-shell"}
+studio-shell = {path = "crates/studio-connect/kit/studio-shell"}
 # The release version a shipped binary reports (FTS_RELEASE_VERSION at build
 # time). Binaries only: see its Cargo.toml.
 fts-version = {path = "crates/studio-core/util/fts-version"}
