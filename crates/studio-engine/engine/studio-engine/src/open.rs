@@ -49,6 +49,18 @@ pub fn open_untitled(name: &str, audio: Option<bool>) -> eyre::Result<Opened> {
     engine_core::open::open_untitled(name, audio)
 }
 
+/// [`engine_core::open::link_window_here`], the engine installed first:
+/// the window's in-memory link (iOS, the browser) starts this process's
+/// engine through the body.
+///
+/// # Errors
+///
+/// As the core's.
+pub fn link_window_here() -> eyre::Result<()> {
+    crate::install();
+    engine_core::open::link_window_here()
+}
+
 /// [`engine_core::open::start_engine`], the engine installed first.
 ///
 /// # Errors
