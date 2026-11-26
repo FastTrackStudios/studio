@@ -4,7 +4,7 @@
 # Move them only with devenv-fleet: its `scripts/fleet-pins --write .`
 # rewrites this file and the lock.
 require_version: ">=2.4.0"
-# The telemetry module's Teley (8787) and collector (4318) are host
+# The telemetry module's OpenObserve (5080) and collector (4318) are host
 # singletons on fixed ports: fail loudly rather than move them.
 strict_ports: true
 inputs:
@@ -20,7 +20,7 @@ inputs:
   nixpkgs-dx:
     url: github:NixOS/nixpkgs/d99b013d5d1931ad77fe3912ed218170dec5d9a4
   devenv-fleet:
-    url: github:FastTrackStudios/devenv-fleet/c4ddec850ad97b5da74c746bff39a988f02b13a4
+    url: github:FastTrackStudios/devenv-fleet/2dbf51200d24914e2ce307008ed704180a530855
     flake: false
 imports:
   - devenv-fleet/rust

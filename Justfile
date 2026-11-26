@@ -28,6 +28,11 @@ dev_out := target_dir / host / "desktop-dev"
 # these two lines change, and nothing else.
 engine_package := "daw-extension"
 engine_bin := "daw-extension"
+# What `just studio` and `just engine` export to: the local collector that
+# devenv-fleet's telemetry runs (otelcol on 4318 → OpenObserve on 5080). An
+# OTEL_* already in the environment wins. Only these recipes export, so tests
+# and checks never try to reach a collector.
+otlp := "OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://127.0.0.1:4318} OTEL_METRIC_EXPORT_INTERVAL=${OTEL_METRIC_EXPORT_INTERVAL:-5000}"
 
 # List the recipes.
 default:
@@ -37,15 +42,24 @@ default:
 
 # The desktop app (apps/studio, Blitz) under `dx serve`, with the engine it starts built first
 studio *ARGS: _engine-build
-    cd apps/studio && dx serve --platform desktop --renderer native --no-default-features --features native {{dev_build}} {{ARGS}}
+    cd apps/studio && env {{otlp}} dx serve --platform desktop --renderer native --no-default-features --features native {{dev_build}} {{ARGS}}
 
 # The engine, headless: `run` (the default) starts it in the foreground; `status` and `stop` ask the running one
 engine ACTION="run": _engine-build
-    {{dev_out}}/{{engine_bin}} {{ if ACTION == "run" { "--engine" } else { "--" + ACTION } }}
+    env {{otlp}} {{dev_out}}/{{engine_bin}} {{ if ACTION == "run" { "--engine" } else { "--" + ACTION } }}
 
 # The web app under `dx serve` (its /studio/api goes to the Drive node on :8096, apps/studio/Dioxus.toml)
 web *ARGS:
     cd apps/studio && dx serve --platform web --features web {{ARGS}}
+
+# Starts nothing: `devenv up` runs OpenObserve and the collector (or attaches to the ones already running).
+# Metrics, logs and traces from the app and the engine: is the local stack up, and where to look
+telemetry:
+    #!/usr/bin/env bash
+    up() { curl -s --max-time 2 "$1" >/dev/null && echo up || echo DOWN; }
+    echo "OpenObserve  http://127.0.0.1:5080   $(up http://127.0.0.1:5080/healthz)   (traces, metrics, logs; login in ~/.config/openobserve/credentials.json)"
+    echo "collector    http://127.0.0.1:4318   $(curl -s --max-time 2 -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4318/v1/traces -H 'content-type: application/json' -d '{}' | grep -qE '^(200|400)$' && echo up || echo DOWN)   (what \`just studio\` and \`just engine\` export to)"
+    echo "If either is DOWN: \`devenv up openobserve otelcol\`"
 
 _engine-build:
     cargo build {{dev_build}} -p {{engine_package}} --bin {{engine_bin}}

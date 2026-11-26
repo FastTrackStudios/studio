@@ -20,17 +20,17 @@
     "devenv-fleet": {
       "flake": false,
       "locked": {
-        "lastModified": 1793915787,
-        "narHash": "sha256-91dnNYTCKRA9xAWBEtcTrQJK1Kc46rS/TP8pNUfetzE=",
+        "lastModified": 1795653888,
+        "narHash": "sha256-o13SxnjSew23KZl5Tn0E1ZI8bfkhkMW6BdoIMpRZkDI=",
         "owner": "FastTrackStudios",
         "repo": "devenv-fleet",
-        "rev": "c4ddec850ad97b5da74c746bff39a988f02b13a4",
+        "rev": "2dbf51200d24914e2ce307008ed704180a530855",
         "type": "github"
       },
       "original": {
         "owner": "FastTrackStudios",
         "repo": "devenv-fleet",
-        "rev": "c4ddec850ad97b5da74c746bff39a988f02b13a4",
+        "rev": "2dbf51200d24914e2ce307008ed704180a530855",
         "type": "github"
       }
     },
