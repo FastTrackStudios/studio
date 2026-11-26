@@ -137,35 +137,6 @@ fn guid(daw: &Standalone, ctx: &ProjectContext, path: &str) -> String {
     crate::actions::resolve(daw, ctx, path).expect(path)
 }
 
-/// The Signal FX's parameter lanes on `track`: (name, points), with
-/// points as (seconds, normalized value).
-fn fx_lanes(
-    daw: &Standalone,
-    ctx: &ProjectContext,
-    track: &str,
-    fx: &str,
-) -> Vec<(String, Vec<(f64, f64)>)> {
-    Automation::envelopes(daw, ctx.clone(), TrackRef::Guid(track.to_owned()))
-        .into_iter()
-        .filter(|e| e.fx_guid.as_deref() == Some(fx))
-        .filter_map(|e| {
-            let index = e.param_index?;
-            let at = EnvelopeLocation::new(
-                TrackRef::Guid(track.to_owned()),
-                EnvelopeRef::FxParam {
-                    fx_guid: fx.to_owned(),
-                    param_index: index,
-                },
-            );
-            let pts = Automation::points(daw, ctx.clone(), at)
-                .iter()
-                .map(|p| (p.time.as_seconds(), p.value))
-                .collect::<Vec<_>>();
-            (!pts.is_empty()).then(|| (param_name(daw, ctx, track, fx, index), pts))
-        })
-        .collect()
-}
-
 /// FX `fx`'s parameter `index`, by its own name (`Rescue · Level · Ride`).
 fn param_name(daw: &Standalone, ctx: &ProjectContext, track: &str, fx: &str, index: u32) -> String {
     daw_proto::fx::Effects::parameters(
@@ -179,74 +150,6 @@ fn param_name(daw: &Standalone, ctx: &ProjectContext, track: &str, fx: &str, ind
     .into_iter()
     .find(|p| p.index == index)
     .map_or_else(|| format!("param {index}"), |p| p.name)
-}
-
-/// A linear lane's value at `t`.
-fn at(points: &[(f64, f64)], t: f64) -> f64 {
-    let i = points.partition_point(|p| p.0 <= t);
-    match (i.checked_sub(1).and_then(|j| points.get(j)), points.get(i)) {
-        (Some(a), Some(b)) if b.0 > a.0 => a.1 + (b.1 - a.1) * (t - a.0) / (b.0 - a.0),
-        (Some(a), _) => a.1,
-        (None, Some(b)) => b.1,
-        (None, None) => 0.0,
-    }
-}
-
-/// The Signal block's curves as SIGNAL_ANALYSIS gives them (plain dB).
-fn curves(
-    daw: &Standalone,
-    ctx: &ProjectContext,
-    track: &str,
-) -> std::collections::HashMap<String, Vec<(f64, f64)>> {
-    let out = signal::run(daw, ctx, (track, None), "SIGNAL_ANALYSIS", "{}").expect("its analysis");
-    out["result"]["blocks"][0]["analysis"]["lanes"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|l| {
-            let pts = l["curve"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|p| Some((p[0].as_f64()?, p[1].as_f64()?)))
-                .collect();
-            (l["param"].as_str().unwrap_or_default().to_owned(), pts)
-        })
-        .collect()
-}
-
-/// `track`'s signal at `at` (LISTEN's words), `from`..`to`, the left
-/// channel, rendered in one piece.
-fn heard(
-    daw: &Standalone,
-    ctx: &ProjectContext,
-    track: &str,
-    at: &str,
-    (from, to): (f64, f64),
-) -> Vec<f32> {
-    let audio = crate::listen::render_at(
-        daw,
-        ctx,
-        &crate::listen::RenderAt {
-            track,
-            at,
-            from,
-            to,
-            exact: true,
-        },
-    )
-    .expect("a render");
-    super::left(&audio.samples)
-}
-
-/// The power in dB of each 10 ms block of `x`.
-fn block_db(x: &[f32]) -> Vec<f64> {
-    x.chunks(480)
-        .map(|c| {
-            let p = c.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>() / c.len().max(1) as f64;
-            10.0 * p.max(1e-20).log10()
-        })
-        .collect()
 }
 
 #[test]

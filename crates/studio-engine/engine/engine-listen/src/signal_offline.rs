@@ -104,7 +104,7 @@ fn items_span(daw: &Standalone, project: &ProjectContext, track_guid: &str) -> O
 }
 
 /// A mono float WAV of `samples` at `rate`.
-fn wav(samples: &[f32], rate: u32) -> Vec<u8> {
+pub fn wav(samples: &[f32], rate: u32) -> Vec<u8> {
     let data = u32::try_from(samples.len() * 4).unwrap_or(u32::MAX);
     let mut out = Vec::with_capacity(44 + samples.len() * 4);
     out.extend_from_slice(b"RIFF");
@@ -126,7 +126,7 @@ fn wav(samples: &[f32], rate: u32) -> Vec<u8> {
 }
 
 /// The left channel (a dual-capsule vocal's front capsule) of one point.
-fn left(interleaved: &[f32]) -> Vec<f32> {
+pub fn left(interleaved: &[f32]) -> Vec<f32> {
     interleaved.iter().step_by(2).copied().collect()
 }
 

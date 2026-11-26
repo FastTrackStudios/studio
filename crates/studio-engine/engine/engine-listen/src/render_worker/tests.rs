@@ -3,7 +3,6 @@
 //! the same as the engine does, to the bit, surviving a plugin crash that
 //! the engine never sees.
 
-use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use architect::action::{ActionCaller, Invocation, InvocationSource, Principal};

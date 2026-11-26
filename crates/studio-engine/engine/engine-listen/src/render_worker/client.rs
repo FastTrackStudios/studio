@@ -639,7 +639,7 @@ fn restarts_metric(why: &'static str) {
 }
 
 /// The process's worker, started as this program again.
-pub(crate) fn global() -> &'static Mutex<Worker> {
+pub fn global() -> &'static Mutex<Worker> {
     static WORKER: std::sync::LazyLock<Mutex<Worker>> =
         std::sync::LazyLock::new(|| Mutex::new(Worker::new(Spawner::this_program())));
     &WORKER
