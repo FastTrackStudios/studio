@@ -33,7 +33,7 @@ tokio = { workspace = true, features = ["rt", "net", "time", "signal", "sync", "
 # Following a session's transport (`--clock session:…`, src/session_clock.rs):
 # its host's presence and clock over vox, as the Lighting pane follows it.
 session = { path = "../../../studio-core/session/session", package = "session", features = ["architect", "sync"] }
-crdt = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", features = ["vox"] }
+live-doc = { path = "../../../studio-core/session/live-doc" }
 architect = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", features = ["vox", "connect"] }
 uuid.workspace = true
 # The visualizer as an Architect process view (`--process-view`): the

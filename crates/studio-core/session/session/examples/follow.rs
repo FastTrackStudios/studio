@@ -6,8 +6,8 @@
 //! follow follow ws://HOST:4141/vox 30      # follows for 30 s, then reports
 //! ```
 //!
-//! The leader serves Architect's presence (a `DocRegistry`'s, which also
-//! serves its clock: `DocPresence::now`) over vox on a WebSocket
+//! The leader serves presence (`live_doc::Hosts`, which also serves its
+//! clock: `DocPresence::now`) over vox on a WebSocket
 //! (`architect::host::EngineHost`), joins its own presence as peer
 //! `lead`, and plays a loop: play from 0 at 1 s, seek to 42 s at 5 s, stop
 //! at 8 s, every 10 s. It is the session host, so its clock is the shared
@@ -45,21 +45,19 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use architect::LayerRouter;
 use architect::connect::{Endpoint, pool};
 use architect::host::EngineHost;
-use crdt::CrdtDoc;
-use crdt::DocRegistry;
-use crdt::presence::{Here, PeerState};
-use crdt::sync::{
+use live_doc::{
     DocPresenceClient, DocPresenceDispatcher, PresencePeer, doc_presence_service_descriptor,
 };
+use live_doc::{Here, Hosts, PeerState};
 use session::Transport;
 use session::doc::transport_of;
 use session::sync::Tracker;
 use uuid::Uuid;
 
 /// This process's clock, microseconds: the one the presence clock's
-/// offset is to (`crdt::presence::clock_ms`).
+/// offset is to (`live_doc::clock_ms`).
 fn now_micros_f64() -> f64 {
-    crdt::presence::clock_ms() * 1000.0
+    live_doc::clock_ms() * 1000.0
 }
 
 /// The one presence channel both join: a fixed document id.
@@ -89,7 +87,7 @@ async fn join(url: &str, me: &str) -> PresencePeer {
 }
 
 async fn lead(bind: &str) {
-    let registry = DocRegistry::new(|_| Box::pin(async { Ok(CrdtDoc::ephemeral()) }));
+    let registry = Hosts::new(30_000);
     let router = LayerRouter::new().with(
         doc_presence_service_descriptor(),
         DocPresenceDispatcher::new(registry),

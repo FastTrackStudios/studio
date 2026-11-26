@@ -35,15 +35,15 @@ use std::time::Duration;
 use architect::connect::{Endpoint, pool};
 use architect_extensions::hostcall::HostRequest;
 use architect_extensions::linked::Handle;
-use crdt::clock::SharedClock;
-use crdt::presence::clock_ms;
-use crdt::sync::{DocPresenceClient, PresencePeer};
 use ignition_daw::ableton::{LiveSet, LiveSetSong};
 use ignition_session::{
     Ask, AskFuture, CueFollower, Take, load, set_bar_one, set_tempo, store, tempo,
 };
 use ignition_show::CueList;
 use ignition_show::show_file::ShowDocument;
+use live_doc::SharedClock;
+use live_doc::clock_ms;
+use live_doc::{DocPresenceClient, PresencePeer};
 use serde_json::{Value, json};
 use session::LaneId;
 use session::doc::transport_of;
