@@ -20,7 +20,7 @@ use ignition_show::tricks::{Grid, GridAxes, apply_all_grid};
 use ignition_show::{Attribute, Palettes, Recipe, RecipeApply, Selection, Show, Step, Waveform};
 use serde_json::{Value, json};
 
-use super::env::room;
+use super::env::venue;
 use super::library::{layers, profile_path};
 use super::song::{preset_of, roles_of, selection};
 use super::{Ctx, Res, arr, count_f, f32_of, flag, list, num, obj, opt_text, text, whole};
@@ -29,7 +29,7 @@ use super::{Ctx, Res, arr, count_f, f32_of, flag, list, num, obj, opt_text, text
 /// what each gets of a spread. `step` names one unit (wrapping), for
 /// stepping through them.
 fn units(cx: &Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let l = layers(cx, args)?;
     let chans = r.resolve(args.get("target").ok_or("`target` is required")?)?;
     let preset = match args.get("tricks") {
@@ -318,7 +318,7 @@ fn effect_make(cx: &mut Ctx, args: &Value) -> Res {
 /// `beats` at `bpm`, and answers what each fixture does at each sample.
 /// Nothing is saved.
 fn preview(cx: &Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let l = layers(cx, args)?;
     let roles = roles_of(cx, &l);
     let mut recipe: Recipe = if let Some(name) = opt_text(args, "effect") {
@@ -342,7 +342,7 @@ fn preview(cx: &Ctx, args: &Value) -> Res {
             preset_of(&l, t)?.apply(&mut recipe);
         }
     }
-    // What the show would play from: the room's palettes, the profile's
+    // What the show would play from: the venue's palettes, the profile's
     // colours and effects, the library laid over them.
     let mut palettes: Palettes = cx
         .json(&r.dir.join("palettes.json"))

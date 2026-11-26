@@ -584,7 +584,7 @@ pub fn PatchPane() -> Element {
                 }
                 button {
                     class: if adding() { "patch-key on" } else { "patch-key" },
-                    title: "add fixtures to this room",
+                    title: "add fixtures to this venue",
                     onclick: move |_| adding.toggle(),
                     "ADD"
                 }

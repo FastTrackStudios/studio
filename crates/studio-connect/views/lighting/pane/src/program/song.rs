@@ -1478,9 +1478,9 @@ fn set_check(cx: &Ctx, args: &Value) -> Res {
                         other => l.find(other, &n).is_some(),
                     };
                     if !ok {
-                        problems.push(json!({ "what": kind, "name": n, key: name, "why": "not in the library, the profile or the room" }));
+                        problems.push(json!({ "what": kind, "name": n, key: name, "why": "not in the library, the profile or the venue" }));
                     } else if kind == "roles" && !bound.contains(&n) && !bound.is_empty() {
-                        problems.push(json!({ "what": "role", "name": n, key: name, "why": "the room binds no fixtures to this role: the part lights nothing here" }));
+                        problems.push(json!({ "what": "role", "name": n, key: name, "why": "the venue binds no fixtures to this role: the part lights nothing here" }));
                     }
                 }
                 if let Some(section) = item.get("at").and_then(|a| opt_text(a, "section")) {

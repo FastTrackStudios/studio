@@ -16,13 +16,13 @@
 //!   positions are relative to the song's sections) resolved against the
 //!   Live set's song `locator`, as the night resolves it, and the set's
 //!   tempo over the song made the session's, so a cue's bar and time agree
-//!   with the room's; `bar_one` (a session bar) is where the chart's bar
+//!   with the visualizer's; `bar_one` (a session bar) is where the chart's bar
 //!   1 is, after a count-in (session `bar_one`); `tempo: false` leaves the
 //!   session's tempo map to its host (the DAW engine).
-//! - `IGNITION_SESSION_ROOM {url, doc, song}`: the room follows the
+//! - `IGNITION_SESSION_VIZ {url, doc, song}`: the visualizer follows the
 //!   session: its tempo read through the service as this extension, then
-//!   the room's clock set to the session host's transport
-//!   (`--clock session:<url>#<doc>@<song>`; the room restarts on it).
+//!   the visualizer's clock set to the session host's transport
+//!   (`--clock session:<url>#<doc>@<song>`; the visualizer restarts on it).
 //!
 //! Every read and write is a host service call made as this extension
 //! (`HostRequest::Service`), so the session's provider answers for
@@ -112,13 +112,13 @@ pub async fn cues(args: Value) -> Result<Value, String> {
     Ok(json!({ "name": list.name, "cues": cues }))
 }
 
-/// The room follows session `doc`, hosted at `url`, as the night's song
+/// The visualizer follows session `doc`, hosted at `url`, as the night's song
 /// `song`: the session is read through `fts.session` as this extension
 /// (its tempo, so a session this extension may not read is refused here),
-/// then the room's clock is set to its host's transport. The renderer is
+/// then the visualizer's clock is set to its host's transport. The renderer is
 /// a program, not this extension: it follows the transport (presence,
 /// never the document) itself.
-pub async fn room(args: Value) -> Result<Value, String> {
+pub async fn visualizer(args: Value) -> Result<Value, String> {
     let url = text(&args, "url")?;
     let doc = text(&args, "doc")?;
     let song = text(&args, "song")?;
@@ -226,7 +226,7 @@ pub fn song_tempo(set: &LiveSet, song: &LiveSetSong) -> TempoMapData {
 
 /// How long to wait before dialling a session's host again after `failed`
 /// dials in a row came to nothing (0: it answered, then went): a quarter
-/// second, doubling, at most five seconds. The room's renderer waits the
+/// second, doubling, at most five seconds. The visualizer's renderer waits the
 /// same (`ignition::session_clock::redial_after`).
 #[must_use]
 pub fn redial_after(failed: u32) -> std::time::Duration {
@@ -261,7 +261,7 @@ pub fn follow_session(url: &str, doc: &str) -> Result<PresencePeer, String> {
             };
             runtime.block_on(async move {
                 let endpoint = Endpoint::url(&url);
-                // As the room's clock: a host not up yet (a restored
+                // As the visualizer's clock: a host not up yet (a restored
                 // layout) or gone and back (the engine restarting) is
                 // dialled until it answers.
                 let mut failed: u32 = 0;

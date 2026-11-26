@@ -57,7 +57,7 @@ params = '{"type":"object","properties":{"doc":{"type":"string"},"request":{}},"
 [[actions]]
 id = "DAW_STATE"
 name = "Studio engine: state"
-description = "Whether the engine is up, its socket and its Action List's MCP address; the song's session document (`session`: its path, id and the URL its transport is led from, for KEYFLOW_SESSION_FOLLOW and IGNITION_SESSION_ROOM); the deck."
+description = "Whether the engine is up, its socket and its Action List's MCP address; the song's session document (`session`: its path, id and the URL its transport is led from, for KEYFLOW_SESSION_FOLLOW and IGNITION_SESSION_VIZ); the deck."
 group = "DAW"
 effect = "read_only"
 

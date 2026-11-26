@@ -119,7 +119,7 @@ All additive. The window draws as before.
   id, url}`; a launcher then runs `EXT_SERVICE_USE {"service":
   "fts.session", "provider": "daw"}`, `KEYFLOW_SESSION_FOLLOW {url, id,
   chart_path}`, the chart on `session:<id>`, `IGNITION_SESSION_SONG {…,
-  "tempo": false}` and `IGNITION_SESSION_ROOM {url, doc, song, lane}`.
+  "tempo": false}` and `IGNITION_SESSION_VIZ {url, doc, song, lane}`.
   Proved in one 5120 px window: play, seek to 66 s and 93 s, and the
   arrangement playhead, the mixer meters, the chart's playhead (bar 1 the
   Verse), the room and the cue list land on the same bar

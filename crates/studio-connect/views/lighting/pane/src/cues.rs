@@ -2,9 +2,9 @@
 //! session's transport is in lit, and the transport's time and bar.
 //!
 //! What it shows is the setting [`SETTING`] (`<url>#<doc>@<lane>`, which
-//! `IGNITION_SESSION_ROOM` sets): the list is read through `fts.session`
+//! `IGNITION_SESSION_VIZ` sets): the list is read through `fts.session`
 //! as this extension (`ignition_session::load`), and the transport is
-//! followed as the room follows it, presence in the host's clock
+//! followed as the visualizer follows it, presence in the host's clock
 //! ([`crate::session::follow_session`]). The view writes nothing.
 
 use std::time::Duration;
@@ -135,14 +135,14 @@ pub fn CuesView() -> Element {
         }
     });
     match place() {
-        // In a browser the room is in the page: its own list, each cue a
+        // In a browser the visualizer is in the page: its own list, each cue a
         // press that takes it.
         #[cfg(all(feature = "pane", target_arch = "wasm32"))]
-        None => rsx! { crate::web::RoomCues {} },
+        None => rsx! { crate::web::VisualizerCues {} },
         #[cfg(not(all(feature = "pane", target_arch = "wasm32")))]
         None => rsx! {
             div { style: "flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; color: var(--muted-foreground); font-size: 13px; text-align: center;",
-                "No session yet: IGNITION_SESSION_ROOM points the room and this list at one."
+                "No session yet: IGNITION_SESSION_VIZ points the visualizer and this list at one."
             }
         },
         // A list of one, so its key is diffed: another session mounts the
@@ -225,8 +225,8 @@ fn Cues(place: Place) -> Element {
     }
 }
 
-/// A press on a cue: in a browser the room is in the page and takes it;
-/// natively the room follows its clock, and a press does nothing.
+/// A press on a cue: in a browser the visualizer is in the page and takes it;
+/// natively the visualizer follows its clock, and a press does nothing.
 #[cfg_attr(
     not(all(feature = "pane", target_arch = "wasm32")),
     expect(

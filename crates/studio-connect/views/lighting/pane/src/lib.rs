@@ -2,17 +2,17 @@
 //!
 //! The pane is a process view (architect#641): the app runs the
 //! `ignition` program with `--process-view`, and the program renders the
-//! room, the rig and the cues following the clock it is given, sending
+//! venue, the rig and the cues following the clock it is given, sending
 //! its frames over shared memory. Natively nothing of Bevy is in this
-//! crate; a browser runs no programs, so there the room is Bevy in the
+//! crate; a browser runs no programs, so there the visualizer is Bevy in the
 //! page (`web`).
 //!
 //! What the pane runs is the extension's settings ([`Picks`]): the show,
 //! the Live set, the camera, the clock and the renderer — set on the
 //! settings page or by its actions, read live. Linked in (feature `pane`)
 //! the view is the GPU pane; run as a process (a development copy) it is
-//! a status pane that opens the room in a window (see `ext`). Linked into
-//! a browser build (`pane` on wasm32) the room is Ignition's web renderer
+//! a status pane that opens the visualizer in a window (see `ext`). Linked into
+//! a browser build (`pane` on wasm32) the visualizer is Ignition's web renderer
 //! in the page.
 
 // In a browser nothing is `Send`: the page's futures run on its one thread.
@@ -32,7 +32,7 @@ pub mod program;
 /// The show's cue list in a session (the session primitive).
 #[cfg(feature = "extension")]
 pub mod session;
-/// The room in a browser: Ignition's web renderer in a canvas, following
+/// The visualizer in a browser: Ignition's web renderer in a canvas, following
 /// the session.
 #[cfg(all(feature = "pane", target_arch = "wasm32"))]
 pub mod web;
@@ -95,7 +95,7 @@ impl Picks {
         if let Some(camera) = non_empty(&self.camera) {
             args.extend(["--camera".to_owned(), camera.to_owned()]);
         }
-        // Only the pane drives the rig: a popped-out room is a picture.
+        // Only the pane drives the rig: a popped-out visualizer is a picture.
         if pane && self.output {
             args.push("--output".to_owned());
         }

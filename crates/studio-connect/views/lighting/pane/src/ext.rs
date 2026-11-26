@@ -1,9 +1,9 @@
 //! The extension: one `linked::Extension`, linked into Studio Architect
 //! (feature `pane`: its `show` view is the GPU process view) or served as
 //! a process (`src/main.rs`: a development or installed copy). A process
-//! copy's room is the manifest's `room` view (`kind = "process"`,
+//! copy's visualizer is the manifest's `visualizer` view (`kind = "process"`,
 //! architect#838), which the app draws from the renderer in the package;
-//! its own `show` view is the room's controls.
+//! its own `show` view is the visualizer's controls.
 
 use std::sync::{Mutex, PoisonError};
 
@@ -22,8 +22,8 @@ pub struct Lighting;
 /// Its id and its views', as the manifest names them.
 pub const EXTENSION: &str = "ignition";
 pub const VIEW: &str = "show";
-/// The room drawn by the renderer in the package (`kind = "process"`).
-pub const ROOM: &str = "room";
+/// The visualizer drawn by the renderer in the package (`kind = "process"`).
+pub const VISUALIZER: &str = "visualizer";
 
 /// Which way this copy runs: in the app, its view the GPU pane; or as a
 /// process, its view a status pane.
@@ -48,12 +48,12 @@ impl Extension for Lighting {
         {
             MANIFEST
         }
-        // A browser runs no programs: the `room` view (a process view,
-        // the package's renderer) is not there; the room is `show`'s.
+        // A browser runs no programs: the `visualizer` view (a process view,
+        // the package's renderer) is not there; the visualizer is `show`'s.
         #[cfg(target_arch = "wasm32")]
         {
             static WEB: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-            WEB.get_or_init(|| without_view(MANIFEST, ROOM))
+            WEB.get_or_init(|| without_view(MANIFEST, VISUALIZER))
         }
     }
 
@@ -96,15 +96,15 @@ impl Extension for Lighting {
             .action("IGNITION_SESSION_STORE", crate::session::store_song)
             .action("IGNITION_SESSION_CUES", crate::session::cues)
             .action("IGNITION_SESSION_FOLLOW", crate::session::follow)
-            .action("IGNITION_SESSION_ROOM", crate::session::room)
+            .action("IGNITION_SESSION_VIZ", crate::session::visualizer)
             .action("IGNITION_SESSION_SONG", crate::session::song)
             .action("IGNITION_SESSION_TAKEN", |_| async move {
                 Ok(crate::session::report())
             })
-            .action("IGNITION_ROOM_CUES", room::hand_cues)
-            .action("IGNITION_ROOM_CUE", room::take_cue)
-            .action("IGNITION_ROOM_GO", room::go)
-            .action("IGNITION_ROOM_STATE", |_| async move { room::state() })
+            .action("IGNITION_VIZ_CUES", visualizer::hand_cues)
+            .action("IGNITION_VIZ_CUE", visualizer::take_cue)
+            .action("IGNITION_VIZ_GO", visualizer::go)
+            .action("IGNITION_VIZ_STATE", |_| async move { visualizer::state() })
             .action("IGNITION_STATE", |_| async move {
                 let picks = picks().await?;
                 Ok(json!({
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn a_browser_manifest_has_no_process_view() {
-        let web = without_view(MANIFEST, ROOM);
+        let web = without_view(MANIFEST, VISUALIZER);
         let manifest: toml::Value = toml::from_str(&web).expect("still TOML");
         let views: Vec<&str> = manifest["views"]
             .as_array()
@@ -156,12 +156,39 @@ mod tests {
             .iter()
             .filter_map(|v| v["id"].as_str())
             .collect();
-        assert!(!views.contains(&ROOM));
+        assert!(!views.contains(&VISUALIZER));
         assert!(views.contains(&VIEW));
         assert!(views.contains(&crate::cues::VIEW));
         let actions = manifest["actions"].as_array().expect("actions").len();
         let all: toml::Value = toml::from_str(MANIFEST).expect("the manifest is TOML");
         assert_eq!(actions, all["actions"].as_array().expect("actions").len());
+    }
+
+    /// The visualizer's actions were the room's until #692: scripts,
+    /// toolbars and keys that name the old ids still reach them.
+    #[test]
+    fn the_rooms_old_action_names_run_the_visualizers() {
+        let manifest: toml::Value = toml::from_str(MANIFEST).expect("the manifest is TOML");
+        let actions = manifest["actions"].as_array().expect("actions");
+        let declared = |id: &str| actions.iter().any(|a| a["id"].as_str() == Some(id));
+        for (old, new) in [
+            ("IGNITION_SESSION_ROOM", "IGNITION_SESSION_VIZ"),
+            ("IGNITION_ROOM_CUES", "IGNITION_VIZ_CUES"),
+            ("IGNITION_ROOM_CUE", "IGNITION_VIZ_CUE"),
+            ("IGNITION_ROOM_GO", "IGNITION_VIZ_GO"),
+            ("IGNITION_ROOM_STATE", "IGNITION_VIZ_STATE"),
+        ] {
+            let alias = actions
+                .iter()
+                .find(|a| a["id"].as_str() == Some(old))
+                .unwrap_or_else(|| panic!("{old} is gone"));
+            assert_eq!(alias["preset"]["action"].as_str(), Some(new), "{old}");
+            assert!(
+                alias["preset"].get("args").is_none(),
+                "{old} passes its arguments on"
+            );
+            assert!(declared(new), "{new} is declared");
+        }
     }
 }
 
@@ -176,11 +203,11 @@ const fn pid() -> u32 {
     0
 }
 
-/// The room's operator actions: in a browser the room is in the page
+/// The visualizer's operator actions: in a browser the visualizer is in the page
 /// (`crate::web`); natively it is the `ignition` program, which follows
 /// its clock, so they are refused.
 #[cfg(all(feature = "pane", target_arch = "wasm32"))]
-mod room {
+mod visualizer {
     pub use crate::web::{go, hand_cues, take_cue};
 
     #[expect(
@@ -193,10 +220,10 @@ mod room {
 }
 
 #[cfg(not(all(feature = "pane", target_arch = "wasm32")))]
-mod room {
+mod visualizer {
     use serde_json::Value;
 
-    const NATIVE: &str = "the room is the `ignition` program here, which follows its clock (IGNITION_CLOCK_PICK, IGNITION_SESSION_ROOM); these are the browser's room's";
+    const NATIVE: &str = "the visualizer is the `ignition` program here, which follows its clock (IGNITION_CLOCK_PICK, IGNITION_SESSION_VIZ); these are the browser's visualizer's";
 
     pub async fn hand_cues(_args: Value) -> Result<Value, String> {
         Err(NATIVE.to_owned())
@@ -212,10 +239,10 @@ mod room {
     }
 }
 
-/// Opens the room: a linked copy's `show` view (its GPU pane), else the
-/// `room` view the app draws from the package's renderer.
+/// Opens the visualizer: a linked copy's `show` view (its GPU pane), else the
+/// `visualizer` view the app draws from the package's renderer.
 async fn open() -> Result<Value, String> {
-    let view = if LINKED { VIEW } else { ROOM };
+    let view = if LINKED { VIEW } else { VISUALIZER };
     open_view(view).await?;
     Ok(
         json!({ "opened": format!("{EXTENSION}/{view}"), "copy": if LINKED { "linked" } else { "process" } }),
@@ -333,8 +360,8 @@ fn pop_in() -> bool {
 }
 
 /// The view: the picks, read again when a setting changes (once a
-/// second), and what draws the room. Public so a view of another linked
-/// extension can show the room (studio-web's `lighting`).
+/// second), and what draws the visualizer. Public so a view of another linked
+/// extension can show the visualizer (studio-web's `lighting`).
 #[component]
 pub fn ShowView() -> Element {
     let mut current = use_signal(|| None::<Picks>);
@@ -355,14 +382,14 @@ pub fn ShowView() -> Element {
             }
         };
     };
-    rsx! { Room { picks } }
+    rsx! { Visualizer { picks } }
 }
 
 /// Linked in: the GPU pane, `ignition --process-view`, started again
 /// whenever a pick changes (the previous renderer stopped).
 #[cfg(all(feature = "pane", any(target_os = "linux", target_os = "macos")))]
 #[component]
-fn Room(picks: Picks) -> Element {
+fn Visualizer(picks: Picks) -> Element {
     use architect_process_view::host::{ProcessViewPane, Program, sessions};
     let key = picks.session_key();
     // One renderer at a time: the sessions of earlier picks stop.
@@ -398,7 +425,7 @@ fn Room(picks: Picks) -> Element {
     }
 }
 
-/// Linked into an iPhone or iPad build: no GPU process to draw the room
+/// Linked into an iPhone or iPad build: no GPU process to draw the visualizer
 /// in (`architect_process_view` hosts one on Linux and macOS only), and
 /// Ignition's renderer is not built for iOS yet.
 #[cfg(all(
@@ -407,32 +434,32 @@ fn Room(picks: Picks) -> Element {
     not(any(target_os = "linux", target_os = "macos"))
 ))]
 #[component]
-fn Room(picks: Picks) -> Element {
+fn Visualizer(picks: Picks) -> Element {
     let _ = picks;
     rsx! {
         div { style: "flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--muted-foreground); font-size: 13px;",
-            "The lighting room draws on the desktop app and in a browser; on this device it is not built yet."
+            "The lighting visualizer draws on the desktop app and in a browser; on this device it is not built yet."
         }
     }
 }
 
-/// Linked into a browser build: the room in the page, Ignition's web
+/// Linked into a browser build: the visualizer in the page, Ignition's web
 /// renderer (`crate::web`). It plays the session (or a list handed in),
 /// not the picks' Live set: a browser has no files to read it from.
 #[cfg(all(feature = "pane", target_arch = "wasm32"))]
 #[component]
-fn Room(picks: Picks) -> Element {
+fn Visualizer(picks: Picks) -> Element {
     let _ = picks;
-    rsx! { crate::web::Room {} }
+    rsx! { crate::web::Visualizer {} }
 }
 
-/// As a process (a development or installed copy): the room is the
-/// `room` view, which the app draws from the package's renderer; this is
+/// As a process (a development or installed copy): the visualizer is the
+/// `visualizer` view, which the app draws from the package's renderer; this is
 /// what it runs, a button that opens it, and one that pops it out to a
 /// display of its own.
 #[cfg(not(feature = "pane"))]
 #[component]
-fn Room(picks: Picks) -> Element {
+fn Visualizer(picks: Picks) -> Element {
     let mut said = use_signal(String::new);
     let program = picks.program().display().to_string();
     let args = picks.args(false).join(" ");
@@ -440,7 +467,7 @@ fn Room(picks: Picks) -> Element {
         div { style: "flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 20px; font-size: 13px;",
             div { style: "font-size: 15px; font-weight: 600;", "Lighting" }
             div { style: "color: var(--muted-foreground);",
-                "The room is drawn by the renderer in this package, in its own pane (Lighting: room); the show, the camera and the clock are this extension's settings."
+                "The visualizer is drawn by the renderer in this package, in its own pane (Lighting: visualizer); the show, the camera and the clock are this extension's settings."
             }
             div { style: "font-family: monospace; font-size: 12px;", "{program} {args}" }
             div { style: "display: flex; gap: 8px;",
@@ -448,12 +475,12 @@ fn Room(picks: Picks) -> Element {
                     style: "padding: 6px 12px;",
                     onclick: move |_| {
                         spawn(async move {
-                            if let Err(e) = open_view(ROOM).await {
+                            if let Err(e) = open_view(VISUALIZER).await {
                                 said.set(e);
                             }
                         });
                     },
-                    "Open the room"
+                    "Open the visualizer"
                 }
                 button {
                     style: "padding: 6px 12px;",

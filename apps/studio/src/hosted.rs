@@ -537,7 +537,7 @@ fn forward_engine_actions(actions: &[serde_json::Value]) -> usize {
 }
 
 /// Keyflow's chart and Ignition's room follow the song the engine has:
-/// told again (`KEYFLOW_SESSION_FOLLOW`, `IGNITION_SESSION_ROOM`) as the
+/// told again (`KEYFLOW_SESSION_FOLLOW`, `IGNITION_SESSION_VIZ`) as the
 /// engine goes to another song, and the chart's pane moved to its
 /// session. The signal is the session followed now.
 pub fn use_follow_session(ui: ExtensionUi, layout: Signal<Workspace>) -> Signal<Option<Followed>> {
@@ -682,13 +682,13 @@ async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
         );
     }
     match run(
-        "IGNITION_SESSION_ROOM",
+        "IGNITION_SESSION_VIZ",
         serde_json::json!({ "url": f.url, "doc": f.id, "song": song, "lane": lane }),
     )
     .await
     {
-        Ok(_) => span.set("studio.follow.room", "ok"),
-        Err(e) => span.set("studio.follow.room", e),
+        Ok(_) => span.set("studio.follow.lighting", "ok"),
+        Err(e) => span.set("studio.follow.lighting", e),
     }
 }
 

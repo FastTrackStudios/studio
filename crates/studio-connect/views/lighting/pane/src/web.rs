@@ -1,28 +1,28 @@
-//! The room in a browser: Ignition's web renderer (`ignition_viz::run_web`,
+//! The visualizer in a browser: Ignition's web renderer (`ignition_viz::run_web`,
 //! Bevy on WebGPU) in a canvas of the page's, following the session the
 //! way the desktop's renderer does.
 //!
-//! Natively the room is a program (`ignition --process-view`) the app
+//! Natively the visualizer is a program (`ignition --process-view`) the app
 //! runs; a browser runs no programs, so here the visualizer is in the
-//! page, compiled into the app's wasm with this extension. One room per
+//! page, compiled into the app's wasm with this extension. One visualizer per
 //! page: Bevy's event loop is made once, so the canvas is made once too,
-//! kept, and moved into whichever view shows the room (`show`, or
+//! kept, and moved into whichever view shows the visualizer (`show`, or
 //! studio-web's `lighting`).
 //!
 //! What it plays:
 //!
 //! - **a session** (`ignition.session`, `<url>#<doc>@<lane>`, which
-//!   `IGNITION_SESSION_ROOM` sets): the lane's cue list read through the
+//!   `IGNITION_SESSION_VIZ` sets): the lane's cue list read through the
 //!   host's `fts.session` as this extension (`ignition_session::load`),
 //!   the session's tempo map, and its host's transport followed through
 //!   presence (`crate::session::follow_session`): every frame the song's
 //!   player is put where the session's playhead is, as the desktop's
 //!   `--clock session:…` does;
-//! - **a cue list handed in** (`IGNITION_ROOM_CUES`), stepped through by
-//!   `IGNITION_ROOM_GO` and `IGNITION_ROOM_CUE`, or a press on a cue of the
-//!   `cues` view: the room as an operator's, with no session.
+//! - **a cue list handed in** (`IGNITION_VIZ_CUES`), stepped through by
+//!   `IGNITION_VIZ_GO` and `IGNITION_VIZ_CUE`, or a press on a cue of the
+//!   `cues` view: the visualizer as an operator's, with no session.
 //!
-//! The room is the recital's (`data/venues/room138-cbu`, the default show's
+//! The venue is the recital's (`data/venues/room138-cbu`, the default show's
 //! venue), its documents compiled in; the visualizer's models are served
 //! beside the app (`ignition_viz::WEB_ASSETS`).
 
@@ -43,12 +43,12 @@ use web_sys::wasm_bindgen::JsCast as _;
 
 use crate::cues::Place;
 
-/// The canvas the room is drawn in, and the element of a view it sits in.
-const CANVAS: &str = "ignition-room";
-const HOST: &str = "ignition-room-host";
+/// The canvas the visualizer is drawn in, and the element of a view it sits in.
+const CANVAS: &str = "ignition-visualizer";
+const HOST: &str = "ignition-visualizer-host";
 
-/// The recital's room, as the desk reads it from its directory.
-mod room {
+/// The recital's venue, as the desk reads it from its directory.
+mod recital {
     pub const FIXTURES: &str =
         include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/fixtures.json");
     pub const ROOM: &str =
@@ -63,23 +63,23 @@ mod room {
         include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/palettes.json");
     pub const BINDING: &str =
         include_str!("../../../../../studio-engine/lighting/data/venues/room138-cbu/profile.json");
-    /// The profile the room implements (its named tricks, its looks).
+    /// The profile the venue implements (its named tricks, its looks).
     pub const PROFILE: &str =
         include_str!("../../../../../studio-engine/lighting/data/profiles/ignition.ig-profile");
 }
 
-/// The recital's room, from its documents.
+/// The recital's venue, from its documents.
 fn venue() -> Result<Venue, String> {
     Venue::from_files(&VenueFiles {
-        fixtures: room::FIXTURES.to_owned(),
-        room: room::ROOM.to_owned(),
-        screens: room::SCREENS.to_owned(),
-        props: room::PROPS.to_owned(),
-        groups: Some(room::GROUPS.to_owned()),
-        palettes: Some(room::PALETTES.to_owned()),
-        profile: Some(room::BINDING.to_owned()),
+        fixtures: recital::FIXTURES.to_owned(),
+        room: recital::ROOM.to_owned(),
+        screens: recital::SCREENS.to_owned(),
+        props: recital::PROPS.to_owned(),
+        groups: Some(recital::GROUPS.to_owned()),
+        palettes: Some(recital::PALETTES.to_owned()),
+        profile: Some(recital::BINDING.to_owned()),
         areas: None,
-        profile_document: Some(room::PROFILE.to_owned()),
+        profile_document: Some(recital::PROFILE.to_owned()),
         // A page sends no DMX and keeps no local layer.
         dmx: None,
         layer: None,
@@ -87,7 +87,7 @@ fn venue() -> Result<Venue, String> {
     .map_err(|e| e.to_string())
 }
 
-/// What the page asks of the room, taken at the start of a frame.
+/// What the page asks of the visualizer, taken at the start of a frame.
 enum Ask {
     /// Play this list (the song's player starts on it).
     List(CueList),
@@ -97,7 +97,7 @@ enum Ask {
     Go,
 }
 
-/// What the room is doing, as of its last frame.
+/// What the visualizer is doing, as of its last frame.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Now {
     /// The list's name.
@@ -130,7 +130,7 @@ fn desk() -> Arc<Desk> {
 }
 
 /// The song's player, with the show it plays against (created empty
-/// when the room has none yet).
+/// when the visualizer has none yet).
 fn with_song(playback: &mut Playback, take: impl FnOnce(&mut CuePlayer, &Show<'_>)) {
     let Playback {
         playbacks,
@@ -190,7 +190,7 @@ impl ignition_viz::WebDesk for Desk {
                 Ask::Go => with_song(playback, CuePlayer::go),
             }
         }
-        // The session's playhead, when the room follows one.
+        // The session's playhead, when the visualizer follows one.
         FOLLOWING.with(|f| {
             if let Some(following) = f.borrow_mut().as_mut() {
                 following.frame(playback);
@@ -207,7 +207,7 @@ impl ignition_viz::WebDesk for Desk {
     }
 }
 
-/// What the room is doing now.
+/// What the visualizer is doing now.
 #[must_use]
 pub fn now() -> Now {
     desk()
@@ -217,12 +217,12 @@ pub fn now() -> Now {
         .clone()
 }
 
-/// Takes cue `index` of the room's list (to the end of its fade).
+/// Takes cue `index` of the visualizer's list (to the end of its fade).
 pub fn take(index: usize) {
     desk().ask(Ask::Cue(index));
 }
 
-/// The session the room follows: its list's lane, its tempo, its host's
+/// The session the visualizer follows: its list's lane, its tempo, its host's
 /// transport through presence.
 struct Following {
     peer: PresencePeer,
@@ -263,13 +263,13 @@ thread_local! {
     static FOLLOWING: RefCell<Option<Following>> = const { RefCell::new(None) };
     /// Whether the visualizer runs (it is started once a page).
     static STARTED: Cell<bool> = const { Cell::new(false) };
-    /// The room's canvas, kept while no view shows it.
+    /// The visualizer's canvas, kept while no view shows it.
     static CANVAS_EL: RefCell<Option<web_sys::HtmlCanvasElement>> = const { RefCell::new(None) };
-    /// Why the room is not drawn, if it is not.
+    /// Why the visualizer is not drawn, if it is not.
     static FAILED: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
-/// The room's canvas, made the first time.
+/// The visualizer's canvas, made the first time.
 fn canvas(document: &web_sys::Document) -> Result<web_sys::HtmlCanvasElement, String> {
     if let Some(canvas) = CANVAS_EL.with(|c| c.borrow().clone()) {
         return Ok(canvas);
@@ -289,7 +289,7 @@ fn canvas(document: &web_sys::Document) -> Result<web_sys::HtmlCanvasElement, St
     Ok(canvas)
 }
 
-/// Puts the room's canvas in the view's element (moving it from a view
+/// Puts the visualizer's canvas in the view's element (moving it from a view
 /// that showed it before).
 fn attach() -> Result<(), String> {
     let document = web_sys::window()
@@ -297,18 +297,18 @@ fn attach() -> Result<(), String> {
         .ok_or("no document")?;
     let host = document
         .get_element_by_id(HOST)
-        .ok_or("the room's view is not in the page yet")?;
+        .ok_or("the visualizer's view is not in the page yet")?;
     let canvas = canvas(&document)?;
     if canvas.parent_element().as_ref() != Some(&host) {
         host.append_child(&canvas)
-            .map_err(|_| "the page would not take the room's canvas".to_owned())?;
+            .map_err(|_| "the page would not take the visualizer's canvas".to_owned())?;
     }
     Ok(())
 }
 
-/// Draws the room in the view's element: the visualizer started the first
+/// Draws the visualizer in the view's element: Ignition's renderer started the first
 /// time, the canvas moved in after.
-async fn show_room() -> Result<(), String> {
+async fn show_visualizer() -> Result<(), String> {
     attach()?;
     if let Some(why) = FAILED.with(|f| f.borrow().clone()) {
         return Err(why);
@@ -319,7 +319,7 @@ async fn show_room() -> Result<(), String> {
     STARTED.set(true);
     let started = start().await;
     if let Err(why) = &started {
-        tracing::warn!(lighting.room = "refused", lighting.why = %why, "lighting: the room is not drawn");
+        tracing::warn!(lighting.visualizer = "refused", lighting.why = %why, "lighting: the visualizer is not drawn");
         FAILED.with(|f| *f.borrow_mut() = Some(why.clone()));
     }
     started
@@ -327,14 +327,14 @@ async fn show_room() -> Result<(), String> {
 
 async fn start() -> Result<(), String> {
     webgpu().await?;
-    let venue = venue().map_err(|e| format!("the room did not read: {e}"))?;
+    let venue = venue().map_err(|e| format!("the venue did not read: {e}"))?;
     let assets = ignition_viz::WEB_ASSETS.to_string();
     let desk: Arc<dyn ignition_viz::WebDesk> = desk();
     ignition_viz::run_web(
         venue,
         &ignition_viz::WebShow {
             cuelist: None,
-            profile: Some(room::PROFILE),
+            profile: Some(recital::PROFILE),
             song: None,
         },
         &format!("#{CANVAS}"),
@@ -350,7 +350,7 @@ async fn start() -> Result<(), String> {
 /// instead (the visualizer is WebGPU, not WebGL 2).
 async fn webgpu() -> Result<(), String> {
     use web_sys::wasm_bindgen::JsValue;
-    const NO_WEBGPU: &str = "This browser has no WebGPU, which the room needs.";
+    const NO_WEBGPU: &str = "This browser has no WebGPU, which the visualizer needs.";
     const NO_ADAPTER: &str = "This browser has WebGPU but gave no adapter (on Linux, Chrome needs chrome://flags/#enable-unsafe-webgpu).";
     let window = web_sys::window().ok_or("no window")?;
     let gpu = js_sys::Reflect::get(&window.navigator(), &JsValue::from_str("gpu"))
@@ -391,7 +391,7 @@ async fn follow_the_session() {
                     Err(why) => tracing::warn!(
                         lighting.session = "refused",
                         lighting.why = %why,
-                        "lighting: the room does not follow the session"
+                        "lighting: the visualizer does not follow the session"
                     ),
                 }
             }
@@ -420,7 +420,7 @@ async fn follow(place: &Place) -> Result<Following, String> {
     })
 }
 
-/// `IGNITION_ROOM_CUES {cues}`: the room plays this cue list (a song's cue
+/// `IGNITION_VIZ_CUES {cues}`: the visualizer plays this cue list (a song's cue
 /// file, as an object or its text), standing before its first cue.
 ///
 /// # Errors
@@ -438,11 +438,11 @@ pub async fn hand_cues(args: Value) -> Result<Value, String> {
     Ok(reply)
 }
 
-/// `IGNITION_ROOM_CUE {index | number}`: the room to the end of that cue.
+/// `IGNITION_VIZ_CUE {index | number}`: the visualizer to the end of that cue.
 ///
 /// # Errors
 ///
-/// Neither is given, or the room's list has no cue of that number.
+/// Neither is given, or the visualizer's list has no cue of that number.
 pub async fn take_cue(args: Value) -> Result<Value, String> {
     let index = match (
         args.get("index").and_then(Value::as_u64),
@@ -453,24 +453,24 @@ pub async fn take_cue(args: Value) -> Result<Value, String> {
             .cues
             .iter()
             .position(|(n, _)| (f64::from(*n) - number).abs() < 1e-3)
-            .ok_or_else(|| format!("the room's list has no cue {number}"))?,
+            .ok_or_else(|| format!("the visualizer's list has no cue {number}"))?,
         (None, None) => return Err("`index` or `number` is required".to_owned()),
     };
     take(index);
     Ok(json!({ "cue": index }))
 }
 
-/// `IGNITION_ROOM_GO`: the room's next cue.
+/// `IGNITION_VIZ_GO`: the visualizer's next cue.
 ///
 /// # Errors
 ///
-/// None: it is asked of the room, which takes it at its next frame.
+/// None: it is asked of the visualizer, which takes it at its next frame.
 pub async fn go(_args: Value) -> Result<Value, String> {
     desk().ask(Ask::Go);
     Ok(json!({ "go": true }))
 }
 
-/// `IGNITION_ROOM_STATE`: what the room is doing.
+/// `IGNITION_VIZ_STATE`: what the visualizer is doing.
 #[must_use]
 pub fn state() -> Value {
     let now = now();
@@ -484,14 +484,14 @@ pub fn state() -> Value {
     })
 }
 
-/// The room, in the view's element.
+/// The visualizer, in the view's element.
 #[component]
-pub fn Room() -> Element {
-    let mut said = use_signal(|| Some("Lighting: starting the room…".to_owned()));
+pub fn Visualizer() -> Element {
+    let mut said = use_signal(|| Some("Lighting: starting the visualizer…".to_owned()));
     use_future(move || async move {
         // The view's element is in the page once this has rendered.
         architect::platform::sleep(Duration::from_millis(0)).await;
-        match show_room().await {
+        match show_visualizer().await {
             Ok(()) => said.set(None),
             Err(why) => said.set(Some(why)),
         }
@@ -508,11 +508,11 @@ pub fn Room() -> Element {
     }
 }
 
-/// The room's own list (one handed in, or the session's as the room
+/// The visualizer's own list (one handed in, or the session's as the visualizer
 /// plays it), each cue a press that takes it: the cue list view's, with
 /// no session to read.
 #[component]
-pub fn RoomCues() -> Element {
+pub fn VisualizerCues() -> Element {
     let mut shown = use_signal(now);
     use_future(move || async move {
         loop {
@@ -527,7 +527,7 @@ pub fn RoomCues() -> Element {
     if at.cues.is_empty() {
         return rsx! {
             div { style: "flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; color: var(--muted-foreground); font-size: 13px; text-align: center;",
-                "No cues yet: IGNITION_SESSION_ROOM points the room at a session, IGNITION_ROOM_CUES hands it a cue list."
+                "No cues yet: IGNITION_SESSION_VIZ points the visualizer at a session, IGNITION_VIZ_CUES hands it a cue list."
             }
         };
     }

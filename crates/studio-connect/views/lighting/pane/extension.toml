@@ -7,9 +7,9 @@
 #   - as a process (src/main.rs, [entry]): a development or installed
 #     copy loaded into the running app (`architect dev --extension
 #     <folder>`) shadows the linked one live, `undev` gives it back. Its
-#     room is the `room` view below (`kind = "process"`, architect#838),
+#     visualizer is the `visualizer` view below (`kind = "process"`, architect#838),
 #     drawn by the renderer in the package on Linux and macOS; its `show`
-#     view is the room's controls.
+#     view is the visualizer's controls.
 # The renderer is swappable live too: `ignition.renderer` (or
 # IGNITION_BIN) names the program the pane runs.
 id = "ignition"
@@ -17,7 +17,7 @@ name = "Lighting"
 version = "0.2.0"
 kind = "process"
 api = "0.1"
-description = "The lighting show in 3D: the room, the rig and the cues, following Studio's playback. Pick the show, the camera and the clock; drag to orbit, right-drag to move, the wheel to come closer, the number keys for the room's camera presets."
+description = "The lighting show in 3D: the venue, the rig and the cues, following Studio's playback. Pick the show, the camera and the clock; drag to orbit, right-drag to move, the wheel to come closer, the number keys for the venue's camera presets."
 authors = ["FastTrackStudios"]
 
 [entry]
@@ -37,15 +37,15 @@ path = "features/lighting/pane"
 [capabilities]
 actions = ["EXT_VIEW_OPEN"]
 effect = "mutating"
-# The room's renderer, run from the package by the app's process-view pane
-# (the `room` view below, architect#838): asked for, granted like any
+# The visualizer's renderer, run from the package by the app's process-view pane
+# (the `visualizer` view below, architect#838): asked for, granted like any
 # capability.
 programs = ["bin/ignition"]
 
 [[actions]]
 id = "IGNITION_SHOW_OPEN"
-name = "Lighting: show the room"
-description = "Opens (or focuses) the room: the show in 3D, following the clock it is set to (a process copy's `room` view, a linked copy's pane)."
+name = "Lighting: show the visualizer"
+description = "Opens (or focuses) the visualizer: the show in 3D, following the clock it is set to (a process copy's `visualizer` view, a linked copy's pane)."
 group = "Lighting"
 effect = "mutating"
 
@@ -60,7 +60,7 @@ params = '{"type":"object","properties":{"show":{"type":"string"},"live_set":{"t
 [[actions]]
 id = "IGNITION_CAMERA_PICK"
 name = "Lighting: pick the camera"
-description = "The camera preset the pane opens on (`Wide`, or a preset of the room's cameras.json; empty: the room's first)."
+description = "The camera preset the pane opens on (`Wide`, or a preset of the venue's cameras.json; empty: the venue's first)."
 group = "Lighting"
 effect = "mutating"
 params = '{"type":"object","properties":{"camera":{"type":"string"}},"required":["camera"]}'
@@ -76,7 +76,7 @@ params = '{"type":"object","properties":{"clock":{"type":"string"}},"required":[
 [[actions]]
 id = "IGNITION_POP_OUT"
 name = "Lighting: pop out to a display"
-description = "The room fullscreen on a display of its own (a projector, the stage monitor): Studio runs the renderer borderless fullscreen with the pane's show, camera and clock. `display` (optional) is the display's index, 0 the first; none: the one Studio is on. Popping out again replaces it."
+description = "The visualizer fullscreen on a display of its own (a projector, the stage monitor): Studio runs the renderer borderless fullscreen with the pane's show, camera and clock. `display` (optional) is the display's index, 0 the first; none: the one Studio is on. Popping out again replaces it."
 group = "Lighting"
 effect = "mutating"
 params = '{"type":"object","properties":{"display":{"type":"integer","minimum":0}}}'
@@ -84,7 +84,7 @@ params = '{"type":"object","properties":{"display":{"type":"integer","minimum":0
 [[actions]]
 id = "IGNITION_POP_IN"
 name = "Lighting: pop back in"
-description = "Closes the popped-out room (the pane keeps running)."
+description = "Closes the popped-out visualizer (the pane keeps running)."
 group = "Lighting"
 effect = "mutating"
 
@@ -124,14 +124,14 @@ default = "Wide"
 [[sections.settings]]
 key = "ignition.clock"
 title = "Clock"
-description = "studio, studio:<socket>, internal, midi:<port> or session:<url>#<doc>@<song> (IGNITION_SESSION_ROOM sets it)."
+description = "studio, studio:<socket>, internal, midi:<port> or session:<url>#<doc>@<song> (IGNITION_SESSION_VIZ sets it)."
 control = "text"
 default = "studio"
 
 [[sections.settings]]
 key = "ignition.session"
 title = "Session"
-description = "The session the cue list view follows: <url>#<doc>@<lane> (IGNITION_SESSION_ROOM sets it)."
+description = "The session the cue list view follows: <url>#<doc>@<lane> (IGNITION_SESSION_VIZ sets it)."
 control = "text"
 default = ""
 
@@ -154,7 +154,7 @@ id = "show"
 title = "Lighting"
 icon = "lightbulb"
 
-# The room itself, drawn by the renderer in the package on its own GPU
+# The visualizer itself, drawn by the renderer in the package on its own GPU
 # device (architect#838: `kind = "process"`). Any copy shows it, built in,
 # installed or in development: nothing is compiled into the app. Its
 # arguments name the extension's settings (`{{setting:<key>}}`): a pick
@@ -166,8 +166,8 @@ title = "Lighting: cues"
 icon = "list"
 
 [[views]]
-id = "room"
-title = "Lighting: room"
+id = "visualizer"
+title = "Lighting: visualizer"
 icon = "box"
 kind = "process"
 program = "bin/ignition"
@@ -205,9 +205,9 @@ effect = "mutating"
 params = '{"type":"object","properties":{"url":{"type":"string"},"doc":{"type":"string"},"lane":{"type":"string"}},"required":["url","doc","lane"]}'
 
 [[actions]]
-id = "IGNITION_SESSION_ROOM"
-name = "Lighting: the room follows a session"
-description = "The room plays the night's song `song` (slug or number) from session `doc`'s transport, hosted at `url` (`ws://host:port/vox`): the session read through fts.session, then the room's clock set to `session:<url>#<doc>@<song>`, and the cue list view (`cues`) to that session's lane `lane` (default `main`)."
+id = "IGNITION_SESSION_VIZ"
+name = "Lighting: the visualizer follows a session"
+description = "The visualizer plays the night's song `song` (slug or number) from session `doc`'s transport, hosted at `url` (`ws://host:port/vox`): the session read through fts.session, then the visualizer's clock set to `session:<url>#<doc>@<song>`, and the cue list view (`cues`) to that session's lane `lane` (default `main`)."
 group = "Lighting"
 effect = "mutating"
 params = '{"type":"object","properties":{"url":{"type":"string"},"doc":{"type":"string"},"song":{"type":"string"},"lane":{"type":"string"}},"required":["url","doc","song"]}'
@@ -227,39 +227,80 @@ description = "What the follower took (each cue and the session time it was take
 group = "Lighting"
 effect = "read_only"
 
-# The room in a browser (src/web.rs): a browser runs no programs, so the
-# room is Ignition's web renderer in the page, and these are its
-# operator's. Natively the room is the `ignition` program, which follows
+# The visualizer in a browser (src/web.rs): a browser runs no programs, so the
+# visualizer is Ignition's web renderer in the page, and these are its
+# operator's. Natively the visualizer is the `ignition` program, which follows
 # its clock: they are refused there.
 [[actions]]
-id = "IGNITION_ROOM_CUES"
-name = "Lighting: hand the room a cue list"
-description = "In a browser, the room plays `cues` (a song's cue list: the file's object, or its text), standing before its first cue. A session the room follows (IGNITION_SESSION_ROOM) hands it its own."
+id = "IGNITION_VIZ_CUES"
+name = "Lighting: hand the visualizer a cue list"
+description = "In a browser, the visualizer plays `cues` (a song's cue list: the file's object, or its text), standing before its first cue. A session the visualizer follows (IGNITION_SESSION_VIZ) hands it its own."
 group = "Lighting"
 effect = "mutating"
 params = '{"type":"object","properties":{"cues":{"description":"A cue list (data/songs/<song>.json, or lighting/cues/<song>.json in a project): the object or its text."}},"required":["cues"]}'
 
 [[actions]]
-id = "IGNITION_ROOM_CUE"
-name = "Lighting: take a cue in the room"
-description = "In a browser, the room to the end of a cue of its list: `index` (from 0, GO order) or `number` (the cue's number)."
+id = "IGNITION_VIZ_CUE"
+name = "Lighting: take a cue in the visualizer"
+description = "In a browser, the visualizer to the end of a cue of its list: `index` (from 0, GO order) or `number` (the cue's number)."
 group = "Lighting"
 effect = "mutating"
 params = '{"type":"object","properties":{"index":{"type":"integer"},"number":{"type":"number"}}}'
 
 [[actions]]
-id = "IGNITION_ROOM_GO"
-name = "Lighting: GO in the room"
-description = "In a browser, the room's next cue."
+id = "IGNITION_VIZ_GO"
+name = "Lighting: GO in the visualizer"
+description = "In a browser, the visualizer's next cue."
 group = "Lighting"
 effect = "mutating"
 
 [[actions]]
-id = "IGNITION_ROOM_STATE"
-name = "Lighting: the room in the page"
-description = "In a browser, what the room is doing: whether it is drawn (or why not), whether it follows a session, its list's name, how many cues and the one standing."
+id = "IGNITION_VIZ_STATE"
+name = "Lighting: the visualizer in the page"
+description = "In a browser, what the visualizer is doing: whether it is drawn (or why not), whether it follows a session, its list's name, how many cues and the one standing."
 group = "Lighting"
 effect = "read_only"
+
+# Old names (#692: Ignition's lighting is no longer called a room).
+[[actions]]
+id = "IGNITION_SESSION_ROOM"
+name = "Lighting: IGNITION_SESSION_ROOM (the old name of IGNITION_SESSION_VIZ)"
+description = "The old name of IGNITION_SESSION_VIZ, kept so scripts, toolbars and keys that name it keep working; it runs IGNITION_SESSION_VIZ with its arguments."
+group = "Lighting"
+effect = "mutating"
+preset = { action = "IGNITION_SESSION_VIZ" }
+
+[[actions]]
+id = "IGNITION_ROOM_CUES"
+name = "Lighting: IGNITION_ROOM_CUES (the old name of IGNITION_VIZ_CUES)"
+description = "The old name of IGNITION_VIZ_CUES, kept so scripts, toolbars and keys that name it keep working; it runs IGNITION_VIZ_CUES with its arguments."
+group = "Lighting"
+effect = "mutating"
+preset = { action = "IGNITION_VIZ_CUES" }
+
+[[actions]]
+id = "IGNITION_ROOM_CUE"
+name = "Lighting: IGNITION_ROOM_CUE (the old name of IGNITION_VIZ_CUE)"
+description = "The old name of IGNITION_VIZ_CUE, kept so scripts, toolbars and keys that name it keep working; it runs IGNITION_VIZ_CUE with its arguments."
+group = "Lighting"
+effect = "mutating"
+preset = { action = "IGNITION_VIZ_CUE" }
+
+[[actions]]
+id = "IGNITION_ROOM_GO"
+name = "Lighting: IGNITION_ROOM_GO (the old name of IGNITION_VIZ_GO)"
+description = "The old name of IGNITION_VIZ_GO, kept so scripts, toolbars and keys that name it keep working; it runs IGNITION_VIZ_GO with its arguments."
+group = "Lighting"
+effect = "mutating"
+preset = { action = "IGNITION_VIZ_GO" }
+
+[[actions]]
+id = "IGNITION_ROOM_STATE"
+name = "Lighting: IGNITION_ROOM_STATE (the old name of IGNITION_VIZ_STATE)"
+description = "The old name of IGNITION_VIZ_STATE, kept so scripts, toolbars and keys that name it keep working; it runs IGNITION_VIZ_STATE with its arguments."
+group = "Lighting"
+effect = "read_only"
+preset = { action = "IGNITION_VIZ_STATE" }
 
 # >>> programming actions (tools/program_actions.py writes this from actions.json)
 
@@ -583,7 +624,7 @@ params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The l
 [[actions]]
 id = "IGNITION_SET_CHECK"
 name = "Lighting: check the set"
-description = "What the set's songs refer to that is not there: colours, slots, palettes, effects, looks, bundles, splits, tricks, focus points, roles (and roles the room binds nothing to), groups, sections."
+description = "What the set's songs refer to that is not there: colours, slots, palettes, effects, looks, bundles, splits, tricks, focus points, roles (and roles the venue binds nothing to), groups, sections."
 group = "Lighting"
 effect = "read_only"
 params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"}}}"
@@ -599,7 +640,7 @@ params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The l
 [[actions]]
 id = "IGNITION_ENV_GET"
 name = "Lighting: an environment"
-description = "One environment: its room (floor, walls, audience), props (truss, risers, people), screens, people, groups, role bindings, focus points and where its universes go; and, for a measured room (environment.json), its dimensions, every object of its model (kind, position, turn, shown, movable) and its own light groups."
+description = "One environment: its shell (`room`: floor, walls, audience), props (truss, risers, people), screens, people, groups, role bindings, focus points and where its universes go; and, for a measured venue (environment.json), its dimensions, every object of its model (kind, position, turn, shown, movable) and its own light groups."
 group = "Lighting"
 effect = "read_only"
 params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"}}}"
@@ -607,7 +648,7 @@ params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The l
 [[actions]]
 id = "IGNITION_ENV_CREATE"
 name = "Lighting: make an environment"
-description = "A room from its dimensions (metres): a floor and four walls, and when asked a stage riser, an audience area and trusses. Empty of fixtures; seven focus points and the Wide and Top cameras come with it."
+description = "A venue from its dimensions (metres): a floor and four walls, and when asked a stage riser, an audience area and trusses. Empty of fixtures; seven focus points and the Wide and Top cameras come with it."
 group = "Lighting"
 effect = "mutating"
 params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"name\":{\"description\":\"Its name (the folder is its slug).\",\"type\":\"string\"},\"title\":{\"description\":\"What it is called.\",\"type\":\"string\"},\"width\":{\"description\":\"Across, metres.\",\"type\":\"number\"},\"depth\":{\"description\":\"Front to back, metres.\",\"type\":\"number\"},\"height\":{\"description\":\"Metres (default 4).\",\"type\":\"number\"},\"upstage\":{\"description\":\"How far the upstage wall is behind the origin (default a fifth of the depth).\",\"type\":\"number\"},\"stage\":{\"description\":\"{width, depth, height, y}: a riser.\",\"type\":\"object\"},\"audience\":{\"description\":\"{depth, width, front}: the audience area.\",\"type\":\"object\"},\"truss\":{\"description\":\"[{name, x, y, z, width, turn}].\",\"type\":\"array\"}},\"required\":[\"name\",\"width\",\"depth\"]}"
@@ -630,32 +671,32 @@ params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The l
 
 [[actions]]
 id = "IGNITION_ENV_PIECE_SET"
-name = "Lighting: add or change a piece of the room"
-description = "Adds or changes a piece by name: a wall, the floor, the audience area (`in: room`), a truss, a riser or any prop (`in: props`), a screen (`in: screens`). Position is its centre on the floor, size {x across, y deep, z tall}, eulers degrees. `in: environment` moves, turns (eulers.z), shows or hides an object of a measured room's model (`visible`, `move`); the architecture moves only with `force`."
+name = "Lighting: add or change a piece of the venue"
+description = "Adds or changes a piece by name: a wall, the floor, the audience area (`in: room`), a truss, a riser or any prop (`in: props`), a screen (`in: screens`). Position is its centre on the floor, size {x across, y deep, z tall}, eulers degrees. `in: environment` moves, turns (eulers.z), shows or hides an object of a measured venue's model (`visible`, `move`); the architecture moves only with `force`."
 group = "Lighting"
 effect = "mutating"
-params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"name\":{\"description\":\"The piece.\",\"type\":\"string\"},\"in\":{\"description\":\"room (default), props, screens, or environment (a measured room's objects).\",\"type\":\"string\"},\"visible\":{\"description\":\"With `in: environment`: whether the object is shown.\",\"type\":\"boolean\"},\"move\":{\"description\":\"With `in: environment`: {x, y, z} to shift by.\",\"type\":\"object\"},\"force\":{\"description\":\"With `in: environment`: move an object marked not movable.\",\"type\":\"boolean\"},\"position\":{\"description\":\"{x, y, z} metres.\",\"type\":\"object\"},\"size\":{\"description\":\"{x, y, z} metres.\",\"type\":\"object\"},\"eulers\":{\"description\":\"{x, y, z} degrees.\",\"type\":\"object\"},\"kind\":{\"description\":\"floor, wall, audience, truss, riser…\",\"type\":\"string\"},\"set\":{\"description\":\"Any other keys.\",\"type\":\"object\"}},\"required\":[\"name\"]}"
+params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"name\":{\"description\":\"The piece.\",\"type\":\"string\"},\"in\":{\"description\":\"room (default: the floor, walls and audience), props, screens, or environment (a measured venue's objects).\",\"type\":\"string\"},\"visible\":{\"description\":\"With `in: environment`: whether the object is shown.\",\"type\":\"boolean\"},\"move\":{\"description\":\"With `in: environment`: {x, y, z} to shift by.\",\"type\":\"object\"},\"force\":{\"description\":\"With `in: environment`: move an object marked not movable.\",\"type\":\"boolean\"},\"position\":{\"description\":\"{x, y, z} metres.\",\"type\":\"object\"},\"size\":{\"description\":\"{x, y, z} metres.\",\"type\":\"object\"},\"eulers\":{\"description\":\"{x, y, z} degrees.\",\"type\":\"object\"},\"kind\":{\"description\":\"floor, wall, audience, truss, riser…\",\"type\":\"string\"},\"set\":{\"description\":\"Any other keys.\",\"type\":\"object\"}},\"required\":[\"name\"]}"
 
 [[actions]]
 id = "IGNITION_ENV_PIECE_REMOVE"
-name = "Lighting: remove a piece of the room"
+name = "Lighting: remove a piece of the venue"
 description = "Removes a piece by name."
 group = "Lighting"
 effect = "destructive"
-params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"name\":{\"description\":\"The piece.\",\"type\":\"string\"},\"in\":{\"description\":\"room (default), props or screens.\",\"type\":\"string\"}},\"required\":[\"name\"]}"
+params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"name\":{\"description\":\"The piece.\",\"type\":\"string\"},\"in\":{\"description\":\"room (default: the floor, walls and audience), props or screens.\",\"type\":\"string\"}},\"required\":[\"name\"]}"
 
 [[actions]]
 id = "IGNITION_ENV_LIGHTS"
-name = "Lighting: the room's own lights"
-description = "A measured room's own lights (the house lights, not the rig): its groups, how many lights each has and whether each starts on. With `group` and `on`, switches one."
+name = "Lighting: the venue's own lights"
+description = "A measured venue's own lights (the house lights, not the rig): its groups, how many lights each has and whether each starts on. With `group` and `on`, switches one."
 group = "Lighting"
 effect = "mutating"
 params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"group\":{\"description\":\"A light group (house…).\",\"type\":\"string\"},\"on\":{\"description\":\"Whether it starts on.\",\"type\":\"boolean\"}}}"
 
 [[actions]]
 id = "IGNITION_ENV_LOOK"
-name = "Lighting: how the room looks to the camera"
-description = "The air and the camera of an environment: `haze` (0 a clear room, 1 normally hazed; a room with no hazer is near 0, and then beams do not show in the air) `exposure` (stops on the stage exposure; 0 as calibrated) and `output` (what the rig delivers of its nominal flux, 1 as labelled: budget LED fixtures deliver less, and a lux reading sets it). The renderer and the stills read them. With neither, answers what is set."
+name = "Lighting: how the venue looks to the camera"
+description = "The air and the camera of an environment: `haze` (0 clear air, 1 normally hazed; a venue with no hazer is near 0, and then beams do not show in the air) `exposure` (stops on the stage exposure; 0 as calibrated) and `output` (what the rig delivers of its nominal flux, 1 as labelled: budget LED fixtures deliver less, and a lux reading sets it). The renderer and the stills read them. With neither, answers what is set."
 group = "Lighting"
 effect = "mutating"
 params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"haze\":{\"description\":\"0 to 2; null gives the renderer its default (0.8).\",\"type\":\"number\"},\"exposure\":{\"description\":\"Stops, e.g. 0.5 or -1; null for the default (0).\",\"type\":\"number\"},\"output\":{\"description\":\"0 to 4; one par at full white read with a lux meter at 1 m, over its nominal candela. null for 1.\",\"type\":\"number\"}}}"
@@ -687,10 +728,10 @@ params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The l
 [[actions]]
 id = "IGNITION_BLOCKING_SET"
 name = "Lighting: save positions for a song or section"
-description = "Saves where people stand for a song (`section` *, the default) or one section: {name: {x, y, z?, facing_deg?}}. `show: true` also moves the room's people there."
+description = "Saves where people stand for a song (`section` *, the default) or one section: {name: {x, y, z?, facing_deg?}}. `show: true` also moves the venue's people there."
 group = "Lighting"
 effect = "mutating"
-params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"Move the room's people there too.\",\"type\":\"boolean\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"song\":{\"description\":\"The song.\",\"type\":\"string\"},\"section\":{\"description\":\"A section, or * for the whole song.\",\"type\":\"string\"},\"positions\":{\"description\":\"{person: {x, y, z?, facing_deg?}}.\",\"type\":\"object\"}},\"required\":[\"song\"]}"
+params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"Move the venue's people there too.\",\"type\":\"boolean\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"song\":{\"description\":\"The song.\",\"type\":\"string\"},\"section\":{\"description\":\"A section, or * for the whole song.\",\"type\":\"string\"},\"positions\":{\"description\":\"{person: {x, y, z?, facing_deg?}}.\",\"type\":\"object\"}},\"required\":[\"song\"]}"
 
 [[actions]]
 id = "IGNITION_FOCUS_ON"
@@ -703,7 +744,7 @@ params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The l
 [[actions]]
 id = "IGNITION_FOCUS_SET"
 name = "Lighting: add, move or remove a focus point"
-description = "Adds or moves a named point of the room (a position palette entry every show there shares); `remove: true` deletes it."
+description = "Adds or moves a named point of the venue (a position palette entry every show there shares); `remove: true` deletes it."
 group = "Lighting"
 effect = "mutating"
 params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"name\":{\"description\":\"The point.\",\"type\":\"string\"},\"target\":{\"description\":\"{x, y, z} metres.\",\"type\":\"object\"},\"remove\":{\"description\":\"Delete it.\",\"type\":\"boolean\"}},\"required\":[\"name\"]}"
@@ -767,7 +808,7 @@ params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The l
 [[actions]]
 id = "IGNITION_ROLE_BIND"
 name = "Lighting: bind a role"
-description = "Says which fixtures of this room play a role of the profile: `to` a group or a selection (null unbinds); `focus` binds a focus role to a focus point."
+description = "Says which fixtures of this venue play a role of the profile: `to` a group or a selection (null unbinds); `focus` binds a focus role to a focus point."
 group = "Lighting"
 effect = "mutating"
 params = "{\"type\":\"object\",\"properties\":{\"root\":{\"description\":\"The lighting data root (the folder holding data/); default IGNITION_ROOT.\",\"type\":\"string\"},\"show\":{\"description\":\"The show: a path to an .ig-show or a name under data/shows; default IGNITION_SHOW, else the recital.\",\"type\":\"string\"},\"env\":{\"description\":\"An environment: a name under data/venues or a path; default the show's venue.\",\"type\":\"string\"},\"role\":{\"description\":\"The role (Key, Wash, Back, Movers…; or a focus role with `focus`).\",\"type\":\"string\"},\"to\":{\"description\":\"A group's name, a selection, or null.\"},\"focus\":{\"description\":\"A focus point's name, or null.\"}},\"required\":[\"role\"]}"

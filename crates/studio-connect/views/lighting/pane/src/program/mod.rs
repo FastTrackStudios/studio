@@ -19,7 +19,7 @@
 //! - [`library`]: colours, palettes, splits, effects, looks, focus points,
 //!   beam presets and trick presets, in three layers.
 //! - [`song`]: cues, sections, markers, fills, and the same over a set.
-//! - [`env`]: environments (rooms), people, fixtures, groups and the patch.
+//! - [`env`]: environments (venues), people, fixtures, groups and the patch.
 //! - [`tricks`]: units, grids and spreads (grandMA3's MAtricks), effects
 //!   made from parameters, and previews.
 
