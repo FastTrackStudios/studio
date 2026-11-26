@@ -70,3 +70,18 @@ pub mod telemetry;
 // ── from engine-project ──
 
 // ── from engine-collab ──
+/// What other domains ask of the live session (engine-collab's `collab`),
+/// through the engine around the core.
+#[cfg(feature = "native")]
+pub mod collab_calls;
+/// The song's journal and revision, and the in-flight tracking every door
+/// into the Action List uses (engine-collab's `agent` acts on it).
+#[cfg(feature = "native")]
+pub mod journal;
+/// Task's account on this machine: signing in, the org libraries, the org
+/// picked.
+#[cfg(feature = "native")]
+pub mod task_account;
+/// A set Task keeps: which, joined, tried again until Task answers.
+#[cfg(any(feature = "native", feature = "web"))]
+pub mod task_set;

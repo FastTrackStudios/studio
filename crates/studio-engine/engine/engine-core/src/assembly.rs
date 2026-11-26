@@ -65,6 +65,13 @@ pub struct Assembly {
     // ── engine-mix's parts ──
     // ── engine-project's parts ──
     // ── engine-collab's parts ──
+    /// The chart was edited here, on the song on screen: into the live
+    /// session's doc, or held while this device is locked
+    /// (`collab::local_chart`).
+    pub local_chart: fn(&str),
+    /// Join the set Task keeps, as `name`, off the calling thread
+    /// (`collab::join_task_in_background`).
+    pub join_task_in_background: fn(crate::task_set::TaskSet, String),
 }
 
 static ASSEMBLY: OnceLock<&'static Assembly> = OnceLock::new();

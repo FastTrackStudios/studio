@@ -803,76 +803,7 @@ fn parse_ticket(ticket: &str) -> eyre::Result<(architect::iroh_link::iroh::Endpo
     ))
 }
 
-/// A set Task keeps (`live-proto`): where to reach Task, and which
-/// setlist — a member's org lane with its token, or a live share link's
-/// guest lane with none.
-#[derive(Clone, Debug)]
-pub struct TaskSet {
-    /// The vox URL (`wss://…/org/<org>/vox`, or `…/org/<org>/share/<token>/vox`).
-    pub url: String,
-    /// The member's bearer token; `None` on a share link.
-    pub token: Option<String>,
-    /// The setlist's id in Task.
-    pub setlist: String,
-}
-
-/// How the environment names a set Task keeps (`FTS_COLLAB_TASK`): a
-/// setlist's id, joined as a member of the library's org (`FTS_TASK_*`), or
-/// `share:<live share link>`, joined as a guest of the link's set.
-pub const TASK_SET_ENV: &str = "FTS_COLLAB_TASK";
-
-impl TaskSet {
-    /// Joined through a live share link (`…/share/<token>/vox`): a guest,
-    /// who plays the set but never seeds it ([`may_seed`]).
-    #[must_use]
-    pub fn is_guest(&self) -> bool {
-        self.url.contains("/share/")
-    }
-
-    /// The set `FTS_COLLAB_TASK` names, if it names one.
-    #[must_use]
-    pub fn from_env() -> Option<Self> {
-        let value = std::env::var(TASK_SET_ENV)
-            .ok()
-            .filter(|v| !v.trim().is_empty())?;
-        Some(Self::parse(value.trim()))
-    }
-
-    /// A setlist id, or `share:<link>`.
-    #[must_use]
-    pub fn parse(value: &str) -> Self {
-        match value.strip_prefix("share:") {
-            Some(link) => {
-                let link = link.trim_end_matches('/');
-                let base = link.split('?').next().unwrap_or(link);
-                let url = base
-                    .replacen("https://", "wss://", 1)
-                    .replacen("http://", "ws://", 1);
-                Self {
-                    url: format!("{url}/vox"),
-                    token: None,
-                    setlist: String::new(),
-                }
-            }
-            #[cfg(feature = "native")]
-            None => {
-                let library = library_sync::Library::from_env();
-                Self {
-                    url: library.org_url(),
-                    token: library.token,
-                    setlist: value.to_owned(),
-                }
-            }
-            // A page joins by link: a member's lane is the app's.
-            #[cfg(not(feature = "native"))]
-            None => Self {
-                url: String::new(),
-                token: None,
-                setlist: value.to_owned(),
-            },
-        }
-    }
-}
+pub use engine_core::task_set::{TASK_SET_ENV, TaskSet};
 
 /// [`join_task`] off the calling thread.
 pub fn join_task_in_background(set: TaskSet, name: String) {

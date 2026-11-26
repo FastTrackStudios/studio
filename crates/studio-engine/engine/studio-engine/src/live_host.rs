@@ -61,18 +61,7 @@ const POLL: Duration = Duration::from_secs(3);
 /// The longest wait after a failure before trying again.
 const MOST_BACKOFF: Duration = Duration::from_secs(120);
 
-/// What is open came from a set of the library (`stream_set::open`, a
-/// library's set or one song of it) — until something else is opened.
-static FROM_LIBRARY: AtomicBool = AtomicBool::new(false);
-
-/// Say whether what is open now was streamed in from a library set.
-pub fn opened_from_library(yes: bool) {
-    FROM_LIBRARY.store(yes, Ordering::Release);
-}
-
-fn from_library() -> bool {
-    FROM_LIBRARY.load(Ordering::Acquire)
-}
+pub use engine_core::task_set::{from_library, opened_from_library};
 
 /// The set this device is hosting in Task.
 #[derive(Debug, Clone, PartialEq, Eq)]

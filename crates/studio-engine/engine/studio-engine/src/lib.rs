@@ -91,9 +91,9 @@ pub mod engine_host;
 pub mod studio_engine;
 pub use daw_view::take_colors;
 #[cfg(feature = "native")]
-pub mod task_account;
+pub use engine_core::task_account;
 #[cfg(any(feature = "native", feature = "web"))]
-pub mod task_set;
+pub use engine_core::task_set;
 pub mod track_regions;
 /// The engine as a window sees it: one vox service beside the daw facade.
 pub use daw_view::view;

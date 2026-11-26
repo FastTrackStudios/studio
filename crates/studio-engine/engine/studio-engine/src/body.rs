@@ -217,6 +217,8 @@ static ASSEMBLY: engine_core::assembly::Assembly = engine_core::assembly::Assemb
     // ── engine-mix's parts ──
     // ── engine-project's parts ──
     // ── engine-collab's parts ──
+    local_chart: crate::collab::local_chart,
+    join_task_in_background: crate::collab::join_task_in_background,
 };
 
 pub fn install() {
