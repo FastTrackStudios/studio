@@ -1,0 +1,31 @@
+# Two recordings with the same file name in different folders
+# (studio#289): each track must play its own, 30 dB apart.
+about = "two recordings with the same file name"
+
+[[media]]
+file = "Media/bass.wav"
+kind = "tone"
+hz = 55
+db = -6
+seconds = 8
+
+[[media]]
+file = "Samples/Imported/bass.wav"
+kind = "tone"
+hz = 110
+db = -36
+seconds = 8
+
+[[listen]]
+track = "Bass DI"
+from = "Verse 1"
+to = "Verse 1 end"
+lufs_min = -18
+lufs_max = -4
+
+[[listen]]
+track = "Bass Amp"
+from = "Verse 1"
+to = "Verse 1 end"
+lufs_min = -48
+lufs_max = -30

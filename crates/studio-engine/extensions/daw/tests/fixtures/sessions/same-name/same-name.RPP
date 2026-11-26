@@ -1,0 +1,28 @@
+<REAPER_PROJECT 0.1 "7.0/fixture" 1700000000
+  SAMPLERATE 48000 0 0
+  TEMPO 120 4 4 0
+  MARKER 1 0 "Verse 1" 1 0 1 B {00000000-0000-0000-0000-000000000401} 0
+  MARKER 1 8 "" 1
+  <TRACK
+    NAME "Bass DI"
+    <ITEM
+      POSITION 0
+      LENGTH 8
+      NAME bass.wav
+      <SOURCE WAVE
+        FILE "Media/bass.wav"
+      >
+    >
+  >
+  <TRACK
+    NAME "Bass Amp"
+    <ITEM
+      POSITION 0
+      LENGTH 8
+      NAME bass.wav
+      <SOURCE WAVE
+        FILE "Samples/Imported/bass.wav"
+      >
+    >
+  >
+>

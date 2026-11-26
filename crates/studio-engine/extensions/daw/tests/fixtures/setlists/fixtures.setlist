@@ -1,0 +1,8 @@
+# The fixture sessions in running order (tests/fixtures/main.rs). The
+# last two places are one song in its two arrangements: the song's own,
+# then its "Big Chorus" branch.
+../sessions/multitrack-click
+../sessions/chart-repeats
+../sessions/markers-only
+../sessions/arrangements/arrangements.session
+../sessions/arrangements/arrangements.session/Big Chorus

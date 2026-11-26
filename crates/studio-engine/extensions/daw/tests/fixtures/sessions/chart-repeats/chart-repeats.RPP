@@ -1,0 +1,15 @@
+<REAPER_PROJECT 0.1 "7.0/fixture" 1700000000
+  SAMPLERATE 48000 0 0
+  TEMPO 120 4 4 0
+  <TRACK
+    NAME "Bass"
+    <ITEM
+      POSITION 0
+      LENGTH 16
+      NAME bass.wav
+      <SOURCE WAVE
+        FILE "Media/bass.wav"
+      >
+    >
+  >
+>

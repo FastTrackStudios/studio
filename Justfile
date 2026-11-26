@@ -99,6 +99,12 @@ test GROUP="core" *ARGS:
 test-unbreakable *ARGS:
     cargo nextest run --cargo-profile desktop-dev --target {{host}} -p {{engine_package}} --test unbreakable --run-ignored all --no-capture --no-fail-fast {{ARGS}}
 
+# The fixture sessions and setlist (crates/studio-engine/extensions/daw/tests/fixtures), opened and played over MCP on
+# the real engine binary, headless and isolated: the click, the chart following the playhead, each track heard, the
+# setlist moved through. Pass or fail per session; records in target/. Extra arguments go to nextest
+test-fixtures *ARGS:
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p {{engine_package}} --test fixtures --no-fail-fast {{ARGS}}
+
 # The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
 ci-local BASE="":
     bash scripts/ci-local.sh {{BASE}}

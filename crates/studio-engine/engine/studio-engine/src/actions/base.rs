@@ -206,11 +206,104 @@ pub(crate) static SECTIONS: ActionMeta = meta(
 /// Moved down into the core (`fx_actions::moment` reads them).
 pub use engine_core::moment::{SectionOut, sections};
 
+pub(crate) static CHART_AT: ActionMeta = meta(
+    "SESSION_CHART_AT",
+    "chart_at",
+    "Where the chart is",
+    "Where the current song's chart is at `at` seconds (left out: the playhead), as a chart following the playhead shows it: the `bar` as played (1 the first after the count-in; a repeat's second pass is the next bars along), the `written` bar it plays and its `pass`, its `section`, and the bar's `start` and `end`. From the song's Keyflow chart (the `.kf` beside it: `source` chart); a song with none counts its bars and names its sections from its markers (`source` markers, no `written` or `pass`). No `bar` in a count-in or past the end. Read-only.",
+    "View",
+    "",
+);
+
+/// When, seconds; left out, the playhead.
+#[derive(Facet)]
+pub(crate) struct ChartAtArg {
+    at: Option<f64>,
+}
+
+/// Where the chart is, as `SESSION_CHART_AT` says it.
+#[derive(Facet)]
+pub(crate) struct ChartAtOut {
+    at: f64,
+    source: String,
+    bar: Option<u32>,
+    written: Option<u32>,
+    pass: Option<u32>,
+    section: Option<String>,
+    start: Option<f64>,
+    end: Option<f64>,
+}
+
+/// Where the open song's chart is at `at` (the playhead when `None`).
+fn chart_at(at: Option<f64>) -> Result<ChartAtOut, String> {
+    let (daw, project) = song()?;
+    let at = match at {
+        Some(at) => at,
+        None => crate::open::current_song()
+            .as_deref()
+            .and_then(crate::stream_set::transport_of)
+            .map(|(position, _)| position)
+            .ok_or("the song has no playhead")?,
+    };
+    let guid = engine_core::moment::project_guid(&project)?;
+    let chart = daw
+        .read_project(&guid, |p| p.info.path.clone())
+        .map(std::path::PathBuf::from)
+        .and_then(|path| {
+            use crate::folder::Folder as _;
+            crate::folder::Disk.only_with_extension(path.parent()?, "kf")
+        });
+    if let Some(file) = chart {
+        let text =
+            std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+        let bar = engine_core::chart_at::chart_bar(&text, at)?;
+        // Named as the song names it: its region there (`Verse 1`), the
+        // chart's own name (`Verse`) where it has none.
+        let region = bar.as_ref().and_then(|b| {
+            let mid = (b.start + b.end) / 2.0;
+            sections(daw, &project)
+                .into_iter()
+                .find(|s| s.start <= mid && mid < s.end)
+                .map(|s| s.name)
+        });
+        return Ok(ChartAtOut {
+            at,
+            source: "chart".to_owned(),
+            bar: bar.as_ref().map(|b| b.bar),
+            written: bar.as_ref().map(|b| b.written),
+            pass: bar.as_ref().map(|b| b.pass),
+            section: region.or_else(|| bar.as_ref().map(|b| b.section.clone())),
+            start: bar.as_ref().map(|b| b.start),
+            end: bar.as_ref().map(|b| b.end),
+        });
+    }
+    // No chart: the markers' — the bar the tempo map counts, the section
+    // the regions name.
+    let all = sections(daw, &project);
+    let section = all.iter().find(|s| s.start <= at && at < s.end);
+    let ends = all.iter().map(|s| s.end).reduce(f64::max).unwrap_or(0.0);
+    let inside = at < ends;
+    let bar = crate::song_bars::musical(daw, &project, at).0;
+    let start = crate::song_bars::time(daw, &project, bar, 1, 0.0);
+    let end = crate::song_bars::time(daw, &project, bar.saturating_add(1), 1, 0.0);
+    Ok(ChartAtOut {
+        at,
+        source: "markers".to_owned(),
+        bar: u32::try_from(bar).ok().filter(|b| inside && *b > 0),
+        written: None,
+        pass: None,
+        section: section.map(|s| s.name.clone()),
+        start: inside.then_some(start),
+        end: inside.then_some(end),
+    })
+}
+
 pub(crate) fn register_sections(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SECTIONS, Effect::ReadOnly, |(): ()| {
         let (daw, project) = song()?;
         Ok(sections(daw, &project))
     })?;
+    list.register(&CHART_AT, Effect::ReadOnly, |a: ChartAtArg| chart_at(a.at))?;
     Ok(())
 }
 
