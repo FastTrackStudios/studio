@@ -8,11 +8,13 @@
 //!   engine finds the owner's lock and exits);
 //! - `XDG_RUNTIME_DIR`: its facade socket;
 //! - `XDG_DATA_HOME`: the recent-songs list it writes on open;
+//! - `FTS_ENGINES_DIR`: its registry file (`studio-<pid>.json`) and its
+//!   `last-open-<name>.json` in the sandbox, never in the owner's
+//!   `<config>/fts/engines`, where a window could find it;
 //! - `STUDIO_INSTANCE`: its own `last-open-<name>.json`, so the owner's
 //!   `--reopen` never opens the test's copy;
 //! - `FTS_MCP_PORT=0`, `FTS_MCP_PRIVATE=1`: its MCP door on a free port,
-//!   found in its own registry file (`<config>/fts/engines/studio-<pid>.json`),
-//!   and `session-mcp.json` left to the owner;
+//!   found in its registry file, and `session-mcp.json` left to the owner;
 //! - `FTS_AUDIO_DEVICE=null`: no sound card, the callback at real time;
 //! - `FTS_RENDER_WORKER=process`: renders in the engine, as the owner's;
 //! - `OTEL_EXPORTER_OTLP_ENDPOINT`: the test's receiver, never the
@@ -64,7 +66,8 @@ impl Engine {
             .map_err(|e| format!("a sandbox: {e}"))?;
         let root = sandbox.path();
         let (run, data, engine_dir) = (root.join("run"), root.join("data"), root.join("engine"));
-        for dir in [&run, &data, &engine_dir] {
+        let engines = root.join("engines");
+        for dir in [&run, &data, &engine_dir, &engines] {
             std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         }
         let log = root.join("engine.out");
@@ -84,6 +87,7 @@ impl Engine {
             "FTS_ENGINE_SILENT",
             "STUDIO_ENGINE",
             "STUDIO_EXT_DEV",
+            "FTS_ENGINES_DIR",
         ] {
             command.env_remove(var);
         }
@@ -91,6 +95,7 @@ impl Engine {
             .env("FTS_DAW_ENGINE_DIR", &engine_dir)
             .env("XDG_RUNTIME_DIR", &run)
             .env("XDG_DATA_HOME", &data)
+            .env("FTS_ENGINES_DIR", &engines)
             .env("STUDIO_INSTANCE", instance)
             .env("FTS_MCP_PORT", "0")
             .env("FTS_MCP_PRIVATE", "1")
@@ -131,7 +136,7 @@ impl Engine {
             mcp_url: String::new(),
             log,
             engine_dir,
-            registry: registry_file(pid),
+            registry: Some(engines.join(format!("studio-{pid}.json"))),
             _sandbox: sandbox,
         };
         let began = Instant::now();
@@ -207,16 +212,6 @@ impl Drop for Engine {
     fn drop(&mut self) {
         self.stop();
     }
-}
-
-/// Where engine `pid` says where it is: `<config>/fts/engines/studio-<pid>.json`.
-fn registry_file(pid: u32) -> Option<PathBuf> {
-    Some(
-        dirs::config_dir()?
-            .join("fts")
-            .join("engines")
-            .join(format!("studio-{pid}.json")),
-    )
 }
 
 /// The MCP URL a registry file names.
