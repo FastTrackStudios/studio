@@ -12,7 +12,7 @@
 //! song's latency is known at the first block, and reads each track's tap
 //! and master that many samples late — each is then the span exactly.
 
-pub(crate) mod analysis;
+pub use engine_core::measure::analysis;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -25,12 +25,10 @@ use daw_standalone::plugin::{PluginInstance, Plugins};
 use daw_standalone::sync::Standalone;
 use facet::Facet;
 
-pub use analysis::{Bands, FLOOR, Stats, measure as analyse};
+pub use engine_core::measure::{Bands, FLOOR, RATE, Rendered, Span, Stats, analyse};
 
 use crate::actions::{meta, resolve, song};
 
-/// The rate a span is rendered at.
-pub const RATE: u32 = 48_000;
 /// Frames a block.
 const BLOCK: usize = 1_024;
 /// How long before `from` the render starts, seconds: what a compressor's
@@ -192,24 +190,6 @@ pub struct RenderRow {
     pub blocks_ms: f64,
 }
 
-/// A span rendered: master and the tracks asked for, each exactly
-/// `from`..`to`, interleaved stereo.
-pub struct Rendered {
-    pub master: Vec<f32>,
-    /// By track GUID.
-    pub tracks: HashMap<String, Vec<f32>>,
-    /// Each tapped track's latency, samples, by GUID.
-    pub latencies: HashMap<String, u32>,
-    pub latency: u32,
-    pub copied: u32,
-    pub failures: Vec<String>,
-    /// Copying the plugins, priming them, and rendering the blocks, ms.
-    pub copy_ms: f64,
-    pub prime_ms: f64,
-    pub blocks_ms: f64,
-    pub ms: f64,
-}
-
 /// Copies dropped off the action's thread: tearing a kit's instances down
 /// takes seconds, and nothing waits for it.
 fn drop_later(copies: Vec<Box<dyn PluginInstance>>) {
@@ -222,17 +202,6 @@ fn drop_later(copies: Vec<Box<dyn PluginInstance>>) {
     if spawned.is_err() {
         tracing::warn!("mix: the copies are dropped here, a thread would not start");
     }
-}
-
-/// How a span is rendered.
-pub struct Span<'a> {
-    pub from: f64,
-    pub to: f64,
-    /// Tracks to tap, by GUID.
-    pub tap: &'a HashSet<String>,
-    pub post_fader: bool,
-    pub bypass_fx: HashSet<String>,
-    pub solo: Option<HashSet<String>>,
 }
 
 /// A plugin made the way an instance's bundle would now load: from the

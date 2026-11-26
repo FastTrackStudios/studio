@@ -54,21 +54,7 @@ static ANALYSIS: architect::action::ActionMeta = meta(
     "",
 );
 
-/// What SIGNAL_ANALYZE takes.
-#[derive(Facet, Default)]
-pub struct AnalyzeArg {
-    pub track: String,
-    pub fx: Option<String>,
-    pub block: Option<String>,
-    pub from: Option<f64>,
-    pub to: Option<f64>,
-    pub consistency: Option<f64>,
-    pub range_db: Option<f64>,
-    pub target_db: Option<f64>,
-    pub replace_user_edits: Option<bool>,
-    pub reference: Option<String>,
-    pub window_s: Option<f64>,
-}
+pub use engine_core::signal_offline::AnalyzeArg;
 
 /// Which Signal FX, and which block.
 #[derive(Facet)]

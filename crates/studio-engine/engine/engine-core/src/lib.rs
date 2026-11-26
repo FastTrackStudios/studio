@@ -62,6 +62,15 @@ pub mod telemetry;
 // each under its own heading, so the domains never edit the same lines.
 
 // ── from engine-listen ──
+/// A span rendered offline and measured (MIX_MEASURE's numbers).
+#[cfg(feature = "native")]
+pub mod measure;
+/// Blocking work off the async thread that asked for it.
+#[cfg(feature = "native")]
+pub mod off_loop;
+/// Signal's offline blocks, as another domain asks for them.
+#[cfg(feature = "native")]
+pub mod signal_offline;
 
 // ── from engine-edit ──
 /// The drum MIDI as written, mapped to the kit (engine-edit's, read by

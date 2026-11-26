@@ -65,23 +65,7 @@ pub async fn run_by(id: &str, args: &[u8], by: crate::agent::By) -> Result<Vec<u
     })
 }
 
-/// Run blocking `work` on the runtime's blocking pool under the caller's
-/// span and await it; outside a runtime it runs here. `Err` when its
-/// thread ended without an answer (it panicked).
-///
-/// # Errors
-/// Its thread panicked or was cancelled.
-pub async fn blocking<T: Send + 'static>(
-    work: impl FnOnce() -> T + Send + 'static,
-) -> Result<T, String> {
-    if tokio::runtime::Handle::try_current().is_err() {
-        return Ok(work());
-    }
-    let span = tracing::Span::current();
-    tokio::task::spawn_blocking(move || span.in_scope(work))
-        .await
-        .map_err(|e| format!("its thread ended without an answer: {e}"))
-}
+pub use engine_core::off_loop::blocking;
 
 #[cfg(test)]
 mod tests;

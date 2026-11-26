@@ -213,6 +213,9 @@ static ASSEMBLY: engine_core::assembly::Assembly = engine_core::assembly::Assemb
     },
     mark_saved: crate::projects::mark_saved,
     // ── engine-listen's parts ──
+    render_span: crate::mix_measure::render_span,
+    signal_analyze: crate::signal_offline::analyze,
+    signal_after_step: crate::signal_offline::after_step,
     // ── engine-edit's parts ──
     // ── engine-mix's parts ──
     // ── engine-project's parts ──

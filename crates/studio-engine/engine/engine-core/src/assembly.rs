@@ -61,6 +61,22 @@ pub struct Assembly {
     // A domain that the core (or another domain, through the core) must call
     // adds its fields under its own heading.
     // ── engine-listen's parts ──
+    /// A span of song `project` rendered offline
+    /// (`mix_measure::render_span`).
+    pub render_span: for<'a> fn(
+        &Standalone,
+        &str,
+        &crate::measure::Span<'a>,
+    ) -> Result<crate::measure::Rendered, String>,
+    /// SIGNAL_ANALYZE (`signal_offline::analyze`).
+    pub signal_analyze: fn(
+        &Standalone,
+        &ProjectContext,
+        &crate::signal_offline::AnalyzeArg,
+    ) -> Result<serde_json::Value, String>,
+    /// After an edit step: the watched Signal FX told where their tracks'
+    /// sources moved (`signal_offline::after_step`).
+    pub signal_after_step: fn(&Standalone, &ProjectContext),
     // ── engine-edit's parts ──
     // ── engine-mix's parts ──
     // ── engine-project's parts ──
