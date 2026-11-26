@@ -811,8 +811,22 @@ impl Effects for Standalone {
         if let Some(loaded) = load_live_state(self, &guid, &key, &target, &chunk) {
             return loaded;
         }
-        let text = String::from_utf8(chunk)
-            .map_err(|_| DawError::operation_failed("non-UTF8 state chunk"))?;
+        let Ok(text) = String::from_utf8(chunk) else {
+            // A plugin's binary state, with no instance of it to load it:
+            // say which, since the reason is nearly always its plugin.
+            let name = self
+                .with_project(&guid, |p| {
+                    let chain = p.fx_chains.get(&key)?;
+                    let i = find_fx_index(chain, &target.fx)?;
+                    Some(chain[i].fx.name.clone())
+                })
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            return Err(DawError::operation_failed(format!(
+                "{name}: its state is binary and no instance of it is loaded (is its plugin on this machine?)"
+            )));
+        };
         self.with_project_mut(&guid, |p| {
             let chain = p.fx_chains.get_mut(&key).ok_or_else(not_found_fx)?;
             let i = find_fx_index(chain, &target.fx).ok_or_else(not_found_fx)?;
