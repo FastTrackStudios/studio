@@ -244,5 +244,13 @@ pub fn install() {
         engine_runtime::client::host::install();
         #[cfg(feature = "native")]
         engine_runtime::client::actions::fill_with(crate::actions::fill);
+        // Signal, compiled in: a song's Signal (`Signal Dev`, a bundle's
+        // path from any machine) is this build's, hosted in-process as its
+        // CLAP, with nothing installed, found or loaded from disk.
+        #[cfg(feature = "native")]
+        daw_standalone::plugin::register_builtin_clap(daw_standalone::plugin::BuiltinClap {
+            names: signal_clap::is_signal,
+            entry: &signal_clap::entry::ENTRY,
+        });
     });
 }

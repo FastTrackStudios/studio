@@ -654,6 +654,37 @@ impl ClapHost {
         self.load_entry(&entry, plugin_index)
     }
 
+    /// Instantiate the plugin built into this process whose entry is
+    /// `entry` (a [`crate::plugin::BuiltinClap`]'s): as a bundle is, but
+    /// nothing is found, opened or copied. Its entry is kept, like a
+    /// bundle's, for the process.
+    pub fn load_builtin(
+        &self,
+        entry: &'static clack_host::entry::EntryDescriptor,
+    ) -> Result<LoadedClapPlugin, ClapHostError> {
+        use std::collections::HashMap;
+        use std::sync::{Mutex, OnceLock};
+        static BUILTINS: OnceLock<Mutex<HashMap<usize, PluginEntry>>> = OnceLock::new();
+        let loaded = {
+            let mut map = BUILTINS
+                .get_or_init(|| Mutex::new(HashMap::new()))
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let key = std::ptr::from_ref(entry) as usize;
+            if let Some(loaded) = map.get(&key) {
+                loaded.clone()
+            } else {
+                // SAFETY: a CLAP entry compiled into this binary, valid for
+                // the process; it has no file, so its path is empty.
+                let loaded = unsafe { PluginEntry::load_from_raw(entry, c"") }
+                    .map_err(|_| ClapHostError::BundleLoad)?;
+                map.insert(key, loaded.clone());
+                loaded
+            }
+        };
+        self.load_entry(&loaded, 0)
+    }
+
     /// [`load`](Self::load) from an entry already loaded: a bundle's, or a
     /// plugin built into this binary (the tests').
     pub(crate) fn load_entry(

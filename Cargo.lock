@@ -22346,6 +22346,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-clap"
+version = "26.10.3"
+dependencies = [
+ "daw-clap-ext",
+ "eyre",
+ "facet",
+ "facet-styx",
+ "nice-plug",
+ "plugin-processors",
+ "sampler",
+ "serde",
+ "serde_json",
+ "signal-core",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "signal-content-client"
 version = "26.10.3"
 dependencies = [
@@ -22657,19 +22675,13 @@ dependencies = [
  "daw",
  "daw-clap-ext",
  "daw-proto",
- "eyre",
- "facet",
- "facet-styx",
  "hound",
  "nice-plug",
  "plugin-core",
- "plugin-processors",
- "sampler",
- "serde",
  "serde_json",
+ "signal-clap",
  "signal-core",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -24088,6 +24100,7 @@ dependencies = [
  "serde_json",
  "session",
  "session-format",
+ "signal-clap",
  "signal-effects",
  "signal-fx",
  "studio",
