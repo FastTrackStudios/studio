@@ -5,7 +5,7 @@
 //! (`crate::install`), which only the assembly has.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use web_time::Instant;
 
 use architect::action::{ActionCaller, Invocation, InvocationSource, Principal};
 use serde_json::{Value, json};

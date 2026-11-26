@@ -8,7 +8,9 @@
 //! seconds.
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use web_time::Instant;
 
 use architect::action::{ActionMeta, Effect};
 
