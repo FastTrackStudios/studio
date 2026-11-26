@@ -1390,29 +1390,40 @@ pub(crate) fn register_track_set(list: &ActionList) -> Result<(), architect::act
         let guid = resolve(daw, &project, &a.track)?;
         let at = || TrackRef::Guid(guid.clone());
         let failed = |e: daw_proto::DawError| e.to_string();
-        if let Some(db) = a.volume_db {
-            Tracks::set_volume(daw, project.clone(), at(), 10_f64.powf(db / 20.0))
-                .map_err(failed)?;
-        }
-        if let Some(pan) = a.pan {
-            Tracks::set_pan(daw, project.clone(), at(), pan.clamp(-1.0, 1.0)).map_err(failed)?;
-        }
-        if let Some(mute) = a.mute {
-            Tracks::set_muted(daw, project.clone(), at(), mute).map_err(failed)?;
-        }
-        if let Some(solo) = a.solo {
-            Tracks::set_soloed(daw, project.clone(), at(), solo).map_err(failed)?;
-        }
-        if let Some(monitor) = a.monitor.as_deref() {
-            let mode = crate::shared_actions::monitor_mode(monitor)?;
-            Tracks::set_input_monitor(daw, project.clone(), at(), mode).map_err(failed)?;
-        }
-        if let Some(phase) = a.phase {
-            Tracks::set_phase_inverted(daw, project.clone(), at(), phase).map_err(failed)?;
-        }
-        if let Some(name) = a.name.as_deref() {
-            Tracks::rename(daw, project, at(), name).map_err(failed)?;
-        }
+        // One undo step: what makes the set a step of the song (its doc,
+        // its file, its history, a render worker's copy), as REAPER's
+        // fader moves are.
+        let label = "Set track";
+        daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+        let set = (|| {
+            if let Some(db) = a.volume_db {
+                Tracks::set_volume(daw, project.clone(), at(), 10_f64.powf(db / 20.0))
+                    .map_err(failed)?;
+            }
+            if let Some(pan) = a.pan {
+                Tracks::set_pan(daw, project.clone(), at(), pan.clamp(-1.0, 1.0))
+                    .map_err(failed)?;
+            }
+            if let Some(mute) = a.mute {
+                Tracks::set_muted(daw, project.clone(), at(), mute).map_err(failed)?;
+            }
+            if let Some(solo) = a.solo {
+                Tracks::set_soloed(daw, project.clone(), at(), solo).map_err(failed)?;
+            }
+            if let Some(monitor) = a.monitor.as_deref() {
+                let mode = crate::shared_actions::monitor_mode(monitor)?;
+                Tracks::set_input_monitor(daw, project.clone(), at(), mode).map_err(failed)?;
+            }
+            if let Some(phase) = a.phase {
+                Tracks::set_phase_inverted(daw, project.clone(), at(), phase).map_err(failed)?;
+            }
+            if let Some(name) = a.name.as_deref() {
+                Tracks::rename(daw, project.clone(), at(), name).map_err(failed)?;
+            }
+            Ok::<(), String>(())
+        })();
+        daw::service::Projects::end_undo_block(daw, project, label, None);
+        set?;
         crate::actions::list().changed("tracks", &guid);
         Ok(())
     })?;
