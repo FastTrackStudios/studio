@@ -5,7 +5,7 @@
 //! (`crate::install`), which only the assembly has.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use web_time::Instant;
 
 use architect::action::{ActionCaller, Invocation, InvocationSource, Principal};
 use serde_json::{Value, json};
@@ -218,18 +218,20 @@ fn the_worker_renders_what_the_engine_renders_and_survives_a_plugin_crash() {
     numbers.push(("LISTEN in the worker after an edit (update sync)", ms));
     assert_ne!(figures(&pe), figures(&p1), "the edit changed what is heard");
     assert_eq!(figures(&we), figures(&pe), "the worker heard the edit");
-    assert_eq!(crate::render_worker::client::status().song.as_deref(), Some(live.as_str()));
+    assert_eq!(
+        crate::render_worker::client::status().song.as_deref(),
+        Some(live.as_str())
+    );
 
     // A plugin crashes in the worker: the call says so and names it, this
     // process (the live session) goes on, and a fresh worker renders.
     let before = crate::render_worker::client::status();
     let crashed = {
         let song = crate::render_worker::LiveSong::current().expect("the song");
-        crate::render_worker::client::global().lock().expect("the worker").fault(
-            &song,
-            "segv",
-            "Kick: Crashy (test)",
-        )
+        crate::render_worker::client::global()
+            .lock()
+            .expect("the worker")
+            .fault(&song, "segv", "Kick: Crashy (test)")
     };
     match crashed {
         Err(Failure::PluginCrashed { plugin, signal, .. }) => {
@@ -271,5 +273,8 @@ fn the_worker_renders_what_the_engine_renders_and_survives_a_plugin_crash() {
         serde_json::to_string_pretty(&table).unwrap_or_default(),
     )
     .ok();
-    crate::render_worker::client::global().lock().expect("the worker").stop();
+    crate::render_worker::client::global()
+        .lock()
+        .expect("the worker")
+        .stop();
 }
