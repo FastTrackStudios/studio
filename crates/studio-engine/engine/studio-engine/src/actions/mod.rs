@@ -74,7 +74,6 @@ fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError>
     engine_edit::register(list)?;
     edit::register(list)?;
     engine_mix::register(list)?;
-    mix::register(list)?;
     engine_listen::register(list)?;
     listen::register(list)?;
     engine_project::register(list)?;
@@ -90,13 +89,12 @@ mod base;
 mod collab;
 mod edit;
 mod listen;
-mod mix;
 mod project;
 #[allow(
     unused_imports,
     reason = "the domains' items, under the paths they had in actions.rs"
 )]
-pub use self::{base::*, edit::*, mix::*};
+pub use self::{base::*, edit::*};
 
 pub use crate::shared_actions::meta;
 /// The open song and a track in it, as every action reads them: the core's.

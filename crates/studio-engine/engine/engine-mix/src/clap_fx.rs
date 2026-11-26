@@ -376,7 +376,7 @@ mod tests {
 
 /// What the CLAP tests share: a CLAP to host, and a song of nested tracks.
 #[cfg(test)]
-pub(crate) mod test_support {
+pub mod test_support {
     use daw::service::{ProjectContext, TrackRef, Tracks as _};
     use daw::standalone::Standalone;
 

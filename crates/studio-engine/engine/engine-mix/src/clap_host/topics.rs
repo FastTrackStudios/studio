@@ -425,8 +425,8 @@ fn hits(daw: &Standalone, project: &ProjectContext, path: &str) -> Value {
     let Some(piece) = piece_of(daw, project, path) else {
         return json!({ "track": path, "error": format!("{path} is no piece of the song's kit"), "hits": [] });
     };
-    let played = crate::hits::playback(daw, project);
-    let notes: Vec<Value> = crate::hits_midi::hit_notes(&played, &|t| t)
+    let played = crate::kit::playback(daw, project);
+    let notes: Vec<Value> = crate::kit::hit_notes(&played, &|t| t)
         .into_iter()
         .filter(|n| n.piece == piece)
         .map(|n| json!({ "time": n.time, "velocity": n.velocity }))
@@ -434,7 +434,7 @@ fn hits(daw: &Standalone, project: &ProjectContext, path: &str) -> Value {
     json!({
         "piece": piece,
         "track": path,
-        "note": crate::hits_midi::note_for(&piece),
+        "note": crate::kit::note_for(&piece),
         "count": notes.len(),
         "hits": notes,
     })
@@ -443,7 +443,7 @@ fn hits(daw: &Standalone, project: &ProjectContext, path: &str) -> Value {
 /// The kit's piece `path` names: a track of the piece (its trigger, a
 /// close mic), its folder, or its name.
 fn piece_of(daw: &Standalone, project: &ProjectContext, path: &str) -> Option<String> {
-    let (pieces, _) = crate::hits::kit(daw, project);
+    let (pieces, _) = crate::kit::kit(daw, project);
     let named = |name: &str| {
         pieces
             .iter()

@@ -171,82 +171,82 @@ static END: ActionMeta = meta(
 
 /// One variant, as its group lists it (its mix is kept beside it).
 #[derive(Facet, Clone, Debug, PartialEq, Default)]
-pub(crate) struct Variant {
-    pub(crate) name: String,
+pub struct Variant {
+    pub name: String,
     #[facet(default)]
-    pub(crate) note: String,
+    pub note: String,
     #[facet(default)]
-    pub(crate) measurements: String,
+    pub measurements: String,
     #[facet(default)]
-    pub(crate) parent: String,
+    pub parent: String,
     /// Integrated loudness of the scope's output, LUFS, when matched.
     #[facet(default)]
-    pub(crate) lufs: Option<f64>,
+    pub lufs: Option<f64>,
     /// dB at the scope's output while auditioning, when matched.
     #[facet(default)]
-    pub(crate) trim_db: f64,
+    pub trim_db: f64,
     #[facet(default)]
-    pub(crate) stars: u32,
+    pub stars: u32,
     #[facet(default)]
-    pub(crate) picked: bool,
+    pub picked: bool,
     #[facet(default)]
-    pub(crate) comments: Vec<String>,
+    pub comments: Vec<String>,
 }
 
 /// A group of variants of one decision.
 #[derive(Facet, Clone, Debug, PartialEq, Default)]
-pub(crate) struct Group {
-    pub(crate) name: String,
+pub struct Group {
+    pub name: String,
     #[facet(default)]
-    pub(crate) note: String,
+    pub note: String,
     /// The tracks the scope was named by, GUIDs (none: the whole mix).
     #[facet(default)]
-    pub(crate) roots: Vec<String>,
+    pub roots: Vec<String>,
     /// Every track in scope, GUIDs.
     #[facet(default)]
-    pub(crate) scope: Vec<String>,
+    pub scope: Vec<String>,
     #[facet(default)]
-    pub(crate) only: Vec<String>,
+    pub only: Vec<String>,
     #[facet(default)]
-    pub(crate) variants: Vec<Variant>,
+    pub variants: Vec<Variant>,
     #[facet(default)]
-    pub(crate) blind: bool,
+    pub blind: bool,
     /// When blind: label `i` is variant `order[i]`.
     #[facet(default)]
-    pub(crate) order: Vec<u32>,
+    pub order: Vec<u32>,
     #[facet(default)]
-    pub(crate) revealed: bool,
+    pub revealed: bool,
     /// Whether the loudness trims are applied while auditioning.
     #[facet(default)]
-    pub(crate) matched: bool,
+    pub matched: bool,
     /// The variant playing, while auditioning.
     #[facet(default)]
-    pub(crate) current: Option<u32>,
+    pub current: Option<u32>,
     #[facet(default)]
-    pub(crate) auditioning: bool,
+    pub auditioning: bool,
     /// The trim on the scope's output now, dB.
     #[facet(default)]
-    pub(crate) applied_trim_db: f64,
+    pub applied_trim_db: f64,
     #[facet(default)]
-    pub(crate) kept: String,
+    pub kept: String,
     #[facet(default)]
-    pub(crate) ended: bool,
+    pub ended: bool,
     #[facet(default)]
-    pub(crate) created: String,
+    pub created: String,
 }
 
 /// Which variant: what a switch, a rating or a keep names.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct Pick {
-    pub(crate) name: Option<String>,
-    pub(crate) label: Option<String>,
-    pub(crate) index: Option<u32>,
-    pub(crate) next: bool,
-    pub(crate) prev: bool,
+pub struct Pick {
+    pub name: Option<String>,
+    pub label: Option<String>,
+    pub index: Option<u32>,
+    pub next: bool,
+    pub prev: bool,
 }
 
 /// Label `i`: A … Z, AA, AB, …
-pub(crate) fn label(i: usize) -> String {
+pub fn label(i: usize) -> String {
     let mut n = i;
     let mut out = Vec::new();
     loop {
@@ -274,7 +274,7 @@ fn label_index(word: &str) -> Option<usize> {
 }
 
 /// A shuffle of `0..n` from `seed` (Fisher–Yates on a xorshift).
-pub(crate) fn shuffle(n: usize, seed: u64) -> Vec<u32> {
+pub fn shuffle(n: usize, seed: u64) -> Vec<u32> {
     let mut order: Vec<u32> = (0..u32::try_from(n).unwrap_or(u32::MAX)).collect();
     let mut x = seed | 1;
     for i in (1..order.len()).rev() {
@@ -289,7 +289,7 @@ pub(crate) fn shuffle(n: usize, seed: u64) -> Vec<u32> {
 
 impl Group {
     /// Whether names are hidden from reads.
-    pub(crate) const fn hidden(&self) -> bool {
+    pub const fn hidden(&self) -> bool {
         self.blind && !self.revealed
     }
 
@@ -306,7 +306,7 @@ impl Group {
     }
 
     /// Variant `i`'s label index.
-    pub(crate) fn label_of(&self, i: usize) -> usize {
+    pub fn label_of(&self, i: usize) -> usize {
         if self.blind {
             self.order
                 .iter()
@@ -340,7 +340,7 @@ impl Group {
     ///
     /// # Errors
     /// It names none, or the group has none.
-    pub(crate) fn resolve(&self, pick: &Pick) -> Result<usize, String> {
+    pub fn resolve(&self, pick: &Pick) -> Result<usize, String> {
         let n = self.variants.len();
         if n == 0 {
             return Err(format!("group {:?} has no variants yet", self.name));
@@ -387,7 +387,7 @@ impl Group {
     }
 
     /// Add `v`, or replace the variant of its name; its index.
-    pub(crate) fn add(&mut self, v: Variant) -> usize {
+    pub fn add(&mut self, v: Variant) -> usize {
         if let Some(i) = self.by_name(&v.name) {
             let votes = (
                 self.variants[i].stars,
@@ -411,7 +411,7 @@ impl Group {
     }
 
     /// Blind on (shuffled by `seed`) or off.
-    pub(crate) fn set_blind(&mut self, on: bool, seed: u64) {
+    pub fn set_blind(&mut self, on: bool, seed: u64) {
         self.blind = on;
         self.revealed = !on;
         self.order = if on {
@@ -425,7 +425,7 @@ impl Group {
     ///
     /// # Errors
     /// More than five stars.
-    pub(crate) fn rate(
+    pub fn rate(
         &mut self,
         i: usize,
         stars: Option<u32>,
@@ -453,12 +453,12 @@ impl Group {
     }
 
     /// The picked variant.
-    pub(crate) fn picked(&self) -> Option<usize> {
+    pub fn picked(&self) -> Option<usize> {
         self.variants.iter().position(|v| v.picked)
     }
 
     /// What a read says of it (`paths`: the scope's track paths).
-    pub(crate) fn view(&self, paths: Vec<String>) -> StateRow {
+    pub fn view(&self, paths: Vec<String>) -> StateRow {
         let hide = self.hidden();
         let current = self
             .current
@@ -601,20 +601,20 @@ pub struct MatchRow {
 
 /// A change to a variant's copy of the mix.
 #[derive(Facet, Clone, Debug, Default)]
-pub(crate) struct SetOp {
-    pub(crate) track: String,
-    pub(crate) send: Option<String>,
-    pub(crate) nth: Option<u32>,
-    pub(crate) fx: Option<String>,
-    pub(crate) volume_db: Option<f64>,
-    pub(crate) nudge_db: Option<f64>,
-    pub(crate) level_db: Option<f64>,
-    pub(crate) pan: Option<f64>,
-    pub(crate) mute: Option<bool>,
-    pub(crate) solo: Option<bool>,
-    pub(crate) phase: Option<bool>,
-    pub(crate) on: Option<bool>,
-    pub(crate) params: Option<Vec<String>>,
+pub struct SetOp {
+    pub track: String,
+    pub send: Option<String>,
+    pub nth: Option<u32>,
+    pub fx: Option<String>,
+    pub volume_db: Option<f64>,
+    pub nudge_db: Option<f64>,
+    pub level_db: Option<f64>,
+    pub pan: Option<f64>,
+    pub mute: Option<bool>,
+    pub solo: Option<bool>,
+    pub phase: Option<bool>,
+    pub on: Option<bool>,
+    pub params: Option<Vec<String>>,
 }
 
 fn r2(x: f64) -> f64 {
@@ -627,7 +627,7 @@ fn r2(x: f64) -> f64 {
 /// # Errors
 /// The track, send or FX is not in the mix, or the change does not fit
 /// what it names.
-pub(crate) fn apply_set(
+pub fn apply_set(
     mix: &mut Mix,
     op: &SetOp,
     track: &str,
@@ -776,7 +776,7 @@ fn find_fx<'a>(
 }
 
 /// `mix` cut to `scope` (GUIDs; empty: as it is) and `only`.
-pub(crate) fn rescope(mut mix: Mix, scope: &[String], only: Only) -> Mix {
+pub fn rescope(mut mix: Mix, scope: &[String], only: Only) -> Mix {
     if !scope.is_empty() {
         let s: HashSet<&str> = scope.iter().map(String::as_str).collect();
         mix.tracks.retain(|t| s.contains(t.guid.as_str()));
@@ -814,7 +814,7 @@ fn delete(daw: &Standalone, project: &ProjectContext, key: &str) {
 }
 
 /// The song's variant groups.
-pub(crate) fn groups(daw: &Standalone, project: &ProjectContext) -> Vec<String> {
+pub fn groups(daw: &Standalone, project: &ProjectContext) -> Vec<String> {
     get(daw, project, GROUPS)
         .map(|t| {
             t.lines()
@@ -851,7 +851,7 @@ fn group_name(
     }
 }
 
-pub(crate) fn load_group(
+pub fn load_group(
     daw: &Standalone,
     project: &ProjectContext,
     group: &str,
@@ -884,7 +884,7 @@ fn save_mix(
 ///
 /// # Errors
 /// No such group or variant.
-pub(crate) fn load_mix(
+pub fn load_mix(
     daw: &Standalone,
     project: &ProjectContext,
     group: &str,
@@ -927,16 +927,16 @@ fn ms(began: web_time::Instant) -> f64 {
 // ---------------------------------------------------------------- doing
 
 #[derive(Facet, Default)]
-pub(crate) struct CreateArg {
-    pub(crate) group: String,
-    pub(crate) scope: Option<Vec<String>>,
-    pub(crate) only: Option<Vec<String>>,
-    pub(crate) note: Option<String>,
-    pub(crate) again: Option<bool>,
+pub struct CreateArg {
+    pub group: String,
+    pub scope: Option<Vec<String>>,
+    pub only: Option<Vec<String>>,
+    pub note: Option<String>,
+    pub again: Option<bool>,
 }
 
 /// `MIX_VARIANTS_CREATE`.
-pub(crate) fn create(
+pub fn create(
     daw: &Standalone,
     project: &ProjectContext,
     a: &CreateArg,
@@ -979,21 +979,17 @@ pub(crate) fn create(
 }
 
 #[derive(Facet, Default)]
-pub(crate) struct AddArg {
-    pub(crate) group: Option<String>,
-    pub(crate) name: String,
-    pub(crate) note: Option<String>,
-    pub(crate) measurements: Option<String>,
-    pub(crate) from: Option<String>,
-    pub(crate) set: Option<Vec<SetOp>>,
+pub struct AddArg {
+    pub group: Option<String>,
+    pub name: String,
+    pub note: Option<String>,
+    pub measurements: Option<String>,
+    pub from: Option<String>,
+    pub set: Option<Vec<SetOp>>,
 }
 
 /// `MIX_VARIANT_ADD`.
-pub(crate) fn add(
-    daw: &Standalone,
-    project: &ProjectContext,
-    a: &AddArg,
-) -> Result<AddRow, String> {
+pub fn add(daw: &Standalone, project: &ProjectContext, a: &AddArg) -> Result<AddRow, String> {
     let span = tracing::info_span!(
         "MIX_VARIANT_ADD",
         mix.set = a.set.as_ref().map_or(0, Vec::len),
@@ -1208,13 +1204,13 @@ fn play(
 }
 
 #[derive(Facet, Default)]
-pub(crate) struct SwitchArg {
-    pub(crate) group: Option<String>,
-    pub(crate) name: Option<String>,
-    pub(crate) label: Option<String>,
-    pub(crate) index: Option<u32>,
-    pub(crate) next: Option<bool>,
-    pub(crate) prev: Option<bool>,
+pub struct SwitchArg {
+    pub group: Option<String>,
+    pub name: Option<String>,
+    pub label: Option<String>,
+    pub index: Option<u32>,
+    pub next: Option<bool>,
+    pub prev: Option<bool>,
 }
 
 impl SwitchArg {
@@ -1230,7 +1226,7 @@ impl SwitchArg {
 }
 
 /// `MIX_VARIANT_SWITCH`.
-pub(crate) fn switch(
+pub fn switch(
     daw: &Standalone,
     project: &ProjectContext,
     a: &SwitchArg,
@@ -1277,19 +1273,15 @@ pub(crate) fn switch(
 }
 
 #[derive(Facet, Default)]
-pub(crate) struct BlindArg {
-    pub(crate) group: Option<String>,
-    pub(crate) on: Option<bool>,
-    pub(crate) reveal: Option<bool>,
-    pub(crate) seed: Option<u64>,
+pub struct BlindArg {
+    pub group: Option<String>,
+    pub on: Option<bool>,
+    pub reveal: Option<bool>,
+    pub seed: Option<u64>,
 }
 
 /// `MIX_VARIANTS_BLIND`.
-pub(crate) fn blind(
-    daw: &Standalone,
-    project: &ProjectContext,
-    a: &BlindArg,
-) -> Result<StateRow, String> {
+pub fn blind(daw: &Standalone, project: &ProjectContext, a: &BlindArg) -> Result<StateRow, String> {
     let span = tracing::info_span!("MIX_VARIANTS_BLIND", mix.on = a.on, mix.reveal = a.reveal);
     let _in = span.enter();
     let group = group_name(daw, project, a.group.as_deref())?;
@@ -1310,21 +1302,17 @@ pub(crate) fn blind(
 }
 
 #[derive(Facet, Default)]
-pub(crate) struct RateArg {
-    pub(crate) group: Option<String>,
-    pub(crate) name: Option<String>,
-    pub(crate) label: Option<String>,
-    pub(crate) stars: Option<u32>,
-    pub(crate) pick: Option<bool>,
-    pub(crate) comment: Option<String>,
+pub struct RateArg {
+    pub group: Option<String>,
+    pub name: Option<String>,
+    pub label: Option<String>,
+    pub stars: Option<u32>,
+    pub pick: Option<bool>,
+    pub comment: Option<String>,
 }
 
 /// `MIX_VARIANT_RATE`.
-pub(crate) fn rate(
-    daw: &Standalone,
-    project: &ProjectContext,
-    a: &RateArg,
-) -> Result<StateRow, String> {
+pub fn rate(daw: &Standalone, project: &ProjectContext, a: &RateArg) -> Result<StateRow, String> {
     let span = tracing::info_span!(
         "MIX_VARIANT_RATE",
         mix.stars = a.stars,
@@ -1352,7 +1340,7 @@ pub(crate) fn rate(
 }
 
 /// `MIX_VARIANTS_STATE`.
-pub(crate) fn state(
+pub fn state(
     daw: &Standalone,
     project: &ProjectContext,
     group: Option<&str>,
@@ -1390,18 +1378,14 @@ pub(crate) fn state(
 }
 
 #[derive(Facet, Default)]
-pub(crate) struct KeepArg {
-    pub(crate) group: Option<String>,
-    pub(crate) name: Option<String>,
-    pub(crate) label: Option<String>,
+pub struct KeepArg {
+    pub group: Option<String>,
+    pub name: Option<String>,
+    pub label: Option<String>,
 }
 
 /// `MIX_VARIANT_KEEP`.
-pub(crate) fn keep(
-    daw: &Standalone,
-    project: &ProjectContext,
-    a: &KeepArg,
-) -> Result<KeepRow, String> {
+pub fn keep(daw: &Standalone, project: &ProjectContext, a: &KeepArg) -> Result<KeepRow, String> {
     let span = tracing::info_span!(
         "MIX_VARIANT_KEEP",
         mix.changed = tracing::field::Empty,
@@ -1461,7 +1445,7 @@ pub(crate) fn keep(
 }
 
 /// `MIX_VARIANTS_END`.
-pub(crate) fn end(
+pub fn end(
     daw: &Standalone,
     project: &ProjectContext,
     group: Option<&str>,
@@ -1497,11 +1481,11 @@ pub(crate) fn end(
 }
 
 #[derive(Facet, Default)]
-pub(crate) struct MatchArg {
-    pub(crate) group: Option<String>,
-    pub(crate) from: Option<String>,
-    pub(crate) to: Option<String>,
-    pub(crate) off: Option<bool>,
+pub struct MatchArg {
+    pub group: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub off: Option<bool>,
 }
 
 /// Interleaved stereo, split.
@@ -1518,10 +1502,10 @@ fn scope_lufs(
     (from, to): (f64, f64),
 ) -> Result<f64, String> {
     let tap: HashSet<String> = g.roots.iter().cloned().collect();
-    let r = crate::mix_measure::render_span(
+    let r = crate::measure::render_span(
         daw,
         song,
-        &crate::mix_measure::Span {
+        &crate::measure::Span {
             from,
             to,
             tap: &tap,
@@ -1542,18 +1526,12 @@ fn scope_lufs(
         sum
     };
     let (l, rr) = split(&out);
-    Ok(crate::mix_measure::analyse(
-        &l,
-        &rr,
-        crate::mix_measure::RATE,
-        crate::mix_measure::Bands::Octave,
-    )
-    .lufs)
+    Ok(crate::measure::analyse(&l, &rr, crate::measure::RATE, crate::measure::Bands::Octave).lufs)
 }
 
 /// The trims that bring each loudness down to the quietest: `None` (no
 /// loudness: silent) gets none.
-pub(crate) fn trims(lufs: &[Option<f64>]) -> (Option<f64>, Vec<f64>) {
+pub fn trims(lufs: &[Option<f64>]) -> (Option<f64>, Vec<f64>) {
     let target = lufs
         .iter()
         .flatten()
@@ -1571,7 +1549,7 @@ pub(crate) fn trims(lufs: &[Option<f64>]) -> (Option<f64>, Vec<f64>) {
 }
 
 /// `MIX_VARIANTS_MATCH`.
-pub(crate) fn match_loudness(
+pub fn match_loudness(
     daw: &Standalone,
     project: &ProjectContext,
     a: &MatchArg,

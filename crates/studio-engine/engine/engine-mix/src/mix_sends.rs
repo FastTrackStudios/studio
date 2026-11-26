@@ -266,7 +266,7 @@ pub fn list(
 }
 
 /// The sends from `from` to `to`, by their index among `from`'s.
-pub(crate) fn between(
+pub fn between(
     daw: &Standalone,
     project: &ProjectContext,
     from: &str,
@@ -280,7 +280,7 @@ pub(crate) fn between(
 
 /// Whether a send from `from` to `to` would feed back: `to` is `from`, is
 /// inside it, or already reaches it (through its folders and sends).
-pub(crate) fn feeds_back(daw: &Standalone, project: &ProjectContext, from: &str, to: &str) -> bool {
+pub fn feeds_back(daw: &Standalone, project: &ProjectContext, from: &str, to: &str) -> bool {
     let tracks = Tracks::all(daw, project.clone());
     let parent: std::collections::HashMap<&str, Option<&str>> = tracks
         .iter()

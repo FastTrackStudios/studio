@@ -15,14 +15,55 @@ description = "The mix: its state, snapshots, variants, chains and sends, the FX
 [dependencies]
 engine-core = { workspace = true }
 architect = { workspace = true, features = ["action-list"] }
+# The window's halves the mix reads (`automation`, `midi`).
+daw-view = { workspace = true }
+engine-runtime = { workspace = true }
+engine-domain = { workspace = true }
+daw = { workspace = true }
+daw-proto = { workspace = true }
+daw-standalone = { workspace = true, features = ["bootstrap", "rpp-project-wasm"] }
+# The DAW's editing contract (`algorithms`).
+daw-edit = { workspace = true }
+# The mix chains a template adds.
+dynamic-template = { workspace = true }
+facet = { workspace = true }
+facet-json = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+eyre = { workspace = true }
+tracing = { workspace = true }
+web-time = { workspace = true }
+num-traits = { workspace = true }
+# An FX's state as base64 (FX_STATE / FX_STATE_SET).
+base64 = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+dirs = { workspace = true, optional = true }
+blake3 = { workspace = true, optional = true }
+# The FTS processors as built-in FX.
+builtin = { workspace = true, optional = true, features = ["engine"] }
+dawfile-reaper = { workspace = true, optional = true }
+session-format = { workspace = true, optional = true }
+# The engine's algorithms as Architect extensions (`algorithms`).
+architect-extensions = { workspace = true, optional = true, features = ["host", "process"] }
+architect-settings = { workspace = true, optional = true }
+semver = { workspace = true, optional = true }
+# signal's rigs, as built-in FX (`signal` feature).
+signal-fx = { workspace = true, optional = true }
+
+[dev-dependencies]
+# A CLAP plugin and host built in memory (`clap_host::tests`).
+clap-sys = "0.5"
+builtin = { workspace = true, features = ["engine"] }
+tempfile = { workspace = true }
+dawfile-reaper = { workspace = true }
 
 [features]
 default = ["native"]
 # studio-engine's features, forwarded (its `native`, `signal`, `web`,
 # `show` turn these on): gate the modules here as they were gated there.
-native = ["engine-core/native"]
-signal = ["native", "engine-core/signal"]
-web = ["engine-core/web"]
+native = ["engine-core/native", "daw-view/native", "daw-standalone/clap-host", "dep:base64", "dep:chrono", "dep:dirs", "dep:blake3", "dep:builtin", "dep:dawfile-reaper", "dep:session-format", "session-format/store", "dep:architect-extensions", "dep:architect-settings", "dep:semver", "architect/host"]
+signal = ["native", "engine-core/signal", "dep:signal-fx"]
+web = ["engine-core/web", "daw-view/web"]
 show = ["native", "engine-core/show"]
 
 [lints]

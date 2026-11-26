@@ -186,69 +186,69 @@ impl Only {
 
 /// A track's mix.
 #[derive(Facet, Clone, Debug, PartialEq)]
-pub(crate) struct TrackMix {
-    pub(crate) guid: String,
-    pub(crate) path: String,
-    pub(crate) volume_db: f64,
-    pub(crate) pan: f64,
-    pub(crate) mute: bool,
-    pub(crate) solo: bool,
-    pub(crate) phase: bool,
+pub struct TrackMix {
+    pub guid: String,
+    pub path: String,
+    pub volume_db: f64,
+    pub pan: f64,
+    pub mute: bool,
+    pub solo: bool,
+    pub phase: bool,
 }
 
 /// A send's mix.
 #[derive(Facet, Clone, Debug, PartialEq)]
-pub(crate) struct SendMix {
-    pub(crate) from: String,
-    pub(crate) to: String,
+pub struct SendMix {
+    pub from: String,
+    pub to: String,
     /// Its place among the sends from `from` to `to`.
-    pub(crate) nth: u32,
-    pub(crate) level_db: f64,
-    pub(crate) pan: f64,
-    pub(crate) mute: bool,
-    pub(crate) tap: String,
+    pub nth: u32,
+    pub level_db: f64,
+    pub pan: f64,
+    pub mute: bool,
+    pub tap: String,
 }
 
 /// An FX's mix.
 #[derive(Facet, Clone, Debug, PartialEq)]
-pub(crate) struct FxMix {
-    pub(crate) guid: String,
+pub struct FxMix {
+    pub guid: String,
     /// The track whose chain it is on.
-    pub(crate) track: String,
-    pub(crate) name: String,
-    pub(crate) on: bool,
+    pub track: String,
+    pub name: String,
+    pub on: bool,
     /// Held parameter values: `id=value`, sorted.
-    pub(crate) params: Vec<String>,
+    pub params: Vec<String>,
     /// The plugin's state, base64 (empty when it keeps none).
-    pub(crate) state: String,
+    pub state: String,
 }
 
 /// A whole mix.
 #[derive(Facet, Clone, Debug, PartialEq, Default)]
-pub(crate) struct Mix {
-    pub(crate) name: String,
-    pub(crate) taken: String,
-    pub(crate) master_db: f64,
-    pub(crate) master_pan: f64,
-    pub(crate) master_mute: bool,
-    pub(crate) tracks: Vec<TrackMix>,
-    pub(crate) sends: Vec<SendMix>,
-    pub(crate) fx: Vec<FxMix>,
+pub struct Mix {
+    pub name: String,
+    pub taken: String,
+    pub master_db: f64,
+    pub master_pan: f64,
+    pub master_mute: bool,
+    pub tracks: Vec<TrackMix>,
+    pub sends: Vec<SendMix>,
+    pub fx: Vec<FxMix>,
     /// The tracks it holds, by GUID, when scoped (empty: the whole mix,
     /// the master too).
     #[facet(default)]
-    pub(crate) scope: Vec<String>,
+    pub scope: Vec<String>,
     /// The categories it holds ([`Only::words`]; empty: all).
     #[facet(default)]
-    pub(crate) only: Vec<String>,
+    pub only: Vec<String>,
     /// The snapshot or `group:variant` it came from (empty: none known).
     #[facet(default)]
-    pub(crate) parent: String,
+    pub parent: String,
 }
 
 impl Mix {
     /// Its scope, as a set (`None`: the whole mix).
-    pub(crate) fn scope_set(&self) -> Option<HashSet<String>> {
+    pub fn scope_set(&self) -> Option<HashSet<String>> {
         (!self.scope.is_empty()).then(|| self.scope.iter().cloned().collect())
     }
 }
@@ -295,7 +295,7 @@ fn r2(x: f64) -> f64 {
 }
 
 /// `roots` and every track inside each, by GUID, in track order.
-pub(crate) fn subtree(tracks: &[daw_proto::Track], roots: &[String]) -> Vec<String> {
+pub fn subtree(tracks: &[daw_proto::Track], roots: &[String]) -> Vec<String> {
     let parent: HashMap<&str, Option<&str>> = tracks
         .iter()
         .map(|t| (t.guid.as_str(), t.parent_guid.as_deref()))
@@ -323,7 +323,7 @@ pub(crate) fn subtree(tracks: &[daw_proto::Track], roots: &[String]) -> Vec<Stri
 ///
 /// # Errors
 /// A name fits no track, or more than one.
-pub(crate) fn scope_of(
+pub fn scope_of(
     daw: &Standalone,
     project: &ProjectContext,
     scope: Option<&[String]>,
@@ -347,7 +347,7 @@ fn take(daw: &Standalone, project: &ProjectContext, song: &str, name: &str) -> M
 
 /// The mix as it stands on song `song`, only the tracks in `scope` (their
 /// sends and FX) when there is one.
-pub(crate) fn take_scoped(
+pub fn take_scoped(
     daw: &Standalone,
     project: &ProjectContext,
     song: &str,
@@ -471,7 +471,7 @@ fn names(daw: &Standalone, project: &ProjectContext) -> Vec<String> {
 
 /// Snapshot `name`, or — with no snapshot of that name — variant
 /// `group:variant` of a mix variant group.
-pub(crate) fn load(daw: &Standalone, project: &ProjectContext, name: &str) -> Result<Mix, String> {
+pub fn load(daw: &Standalone, project: &ProjectContext, name: &str) -> Result<Mix, String> {
     let Some(text) = daw_proto::ExtState::get_project(daw, project.clone(), SECTION, &key(name))
     else {
         if let Some((group, variant)) = name.split_once(':') {
@@ -486,12 +486,12 @@ pub(crate) fn load(daw: &Standalone, project: &ProjectContext, name: &str) -> Re
 }
 
 /// The snapshot (or `group:variant`) last taken, restored or kept.
-pub(crate) fn head(daw: &Standalone, project: &ProjectContext) -> String {
+pub fn head(daw: &Standalone, project: &ProjectContext) -> String {
     daw_proto::ExtState::get_project(daw, project.clone(), SECTION, HEAD).unwrap_or_default()
 }
 
 /// Say `name` is the song's head now (not an undo step: bookkeeping).
-pub(crate) fn set_head(daw: &Standalone, project: &ProjectContext, name: &str) {
+pub fn set_head(daw: &Standalone, project: &ProjectContext, name: &str) {
     if let Err(e) = daw_proto::ExtState::set_project(daw, project.clone(), SECTION, HEAD, name) {
         tracing::warn!(mix.error = %e, "mix: the head would not be kept");
     }
@@ -610,21 +610,21 @@ fn restore_with(
 ///
 /// # Errors
 /// The song has no GUID.
-pub(crate) fn current(daw: &Standalone, project: &ProjectContext) -> Result<Mix, String> {
+pub fn current(daw: &Standalone, project: &ProjectContext) -> Result<Mix, String> {
     let song = crate::fx_actions::project_guid(project)?;
     Ok(take(daw, project, &song, "current"))
 }
 
 /// How [`put_with`] puts a mix back.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Put {
+pub struct Put {
     /// As one undo step (MIX_RESTORE, a variant kept), or as no step at
     /// all (a variant auditioned: switched to dozens of times).
-    pub(crate) undo: bool,
+    pub undo: bool,
     /// Its undo step says a variant was kept, not a snapshot restored.
-    pub(crate) keep: bool,
+    pub keep: bool,
     /// The categories put back (with what `want` itself holds).
-    pub(crate) only: Only,
+    pub only: Only,
 }
 
 /// Put the mix back as `want` has it (`name` its label), as MIX_RESTORE
@@ -632,7 +632,7 @@ pub(crate) struct Put {
 ///
 /// # Errors
 /// A track, send or FX would not take its setting.
-pub(crate) fn put(
+pub fn put(
     daw: &Standalone,
     project: &ProjectContext,
     name: &str,
@@ -657,7 +657,7 @@ pub(crate) fn put(
 ///
 /// # Errors
 /// A track, send or FX would not take its setting.
-pub(crate) fn put_with(
+pub fn put_with(
     daw: &Standalone,
     project: &ProjectContext,
     name: &str,
@@ -933,7 +933,7 @@ fn note(out: &mut Vec<String>, what: String, x: String, y: String) {
 
 /// What differs from `a` to `b`, in the categories `only` (and both
 /// mixes) allow; the master only when neither is scoped.
-pub(crate) fn differences(a: &Mix, b: &Mix, only: Only) -> Vec<String> {
+pub fn differences(a: &Mix, b: &Mix, only: Only) -> Vec<String> {
     let mut out = Vec::new();
     let only = only.and(Only::saved(&a.only)).and(Only::saved(&b.only));
     // `note`, when `c` is compared.
@@ -1185,4 +1185,4 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
 }
 
 #[cfg(test)]
-pub(crate) mod tests;
+pub mod tests;

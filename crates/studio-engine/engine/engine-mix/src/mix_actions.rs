@@ -1,13 +1,18 @@
-//! The mix's actions here: the bass rig. They go with `engine-mix`.
+//! The mix's actions: the bass rig's here, every other module's in its
+//! own `register`, all collected by [`register`] (studio-engine's
+//! collector calls it as `engine_mix::register`).
 
-#[allow(
-    clippy::wildcard_imports,
-    reason = "split out of actions.rs: the parent's helpers and imports, as before"
-)]
-use super::*;
+use architect::action::{ActionError, ActionList};
+#[cfg(feature = "signal")]
+use architect::action::{ActionMeta, Effect};
+#[cfg(feature = "signal")]
+use facet::Facet;
 
 #[cfg(feature = "signal")]
-pub(crate) static BASS_RIG: ActionMeta = meta(
+use crate::actions::{meta, song};
+
+#[cfg(feature = "signal")]
+pub static BASS_RIG: ActionMeta = meta(
     "BASS_RIG",
     "bass_rig",
     "Bass rig on the bass",
@@ -19,14 +24,14 @@ pub(crate) static BASS_RIG: ActionMeta = meta(
 /// Whether to only say.
 #[cfg(feature = "signal")]
 #[derive(Facet)]
-pub(crate) struct BassRigArg {
+pub struct BassRigArg {
     profile: Option<String>,
     patches: Option<bool>,
     dry_run: Option<bool>,
 }
 
 #[cfg(feature = "signal")]
-pub(crate) fn register_bass_rig(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub fn register_bass_rig(list: &ActionList) -> Result<(), ActionError> {
     list.register(&BASS_RIG, Effect::Mutating, |a: BassRigArg| {
         let (daw, project) = song()?;
         let setup = if a.patches.unwrap_or(false) {
@@ -45,7 +50,7 @@ pub(crate) fn register_bass_rig(list: &ActionList) -> Result<(), architect::acti
 /// # Errors
 ///
 /// The first registration the list refuses.
-pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub fn register(list: &ActionList) -> Result<(), ActionError> {
     #[cfg(feature = "signal")]
     register_bass_rig(list)?;
     #[cfg(feature = "native")]

@@ -1,19 +1,46 @@
 //! The mix: its state, snapshots, variants, chains and sends, the FX and automation actions, the Signal kit, the CLAP host and its FX.
 //!
-//! One of studio-engine's domains, on engine-core. Empty until its modules
-//! move here from studio-engine (docs/MONOREPO-MIGRATION.md, "Splitting
-//! studio-engine", the handoff); studio-engine re-exports each from its old
-//! path.
+//! One of studio-engine's domains, on engine-core
+//! (docs/MONOREPO-MIGRATION.md, "Splitting studio-engine"); studio-engine
+//! re-exports each module from its old path. engine-listen reads the mix
+//! (the one permitted edge between domains: listen → mix), so the modules
+//! it reads are `pub`. The mix itself reads only the core.
 
-use architect::action::{ActionError, ActionList};
+// The core's modules under the paths these were written against; the
+// modules here shadow the glob.
+pub use engine_core::*;
 
-/// This domain's actions, into the engine's Action List: what the engine
-/// binary's collector (`studio_engine::actions::register_all`) calls.
-///
-/// # Errors
-///
-/// The first registration the list refuses ([`ActionError::Duplicate`]).
-pub fn register(list: &ActionList) -> Result<(), ActionError> {
-    let _ = list;
-    Ok(())
-}
+#[cfg(feature = "native")]
+pub mod algorithms;
+#[cfg(feature = "native")]
+pub mod automation_actions;
+#[cfg(feature = "signal")]
+pub mod bass_rig;
+#[cfg(feature = "native")]
+pub mod clap_fx;
+#[cfg(feature = "native")]
+pub mod clap_host;
+#[cfg(feature = "native")]
+pub mod fx_actions;
+#[cfg(feature = "native")]
+mod mix_actions;
+pub mod mix_chains;
+pub mod mix_export;
+#[cfg(feature = "native")]
+pub mod mix_sends;
+#[cfg(feature = "native")]
+pub mod mix_snapshot;
+#[cfg(feature = "native")]
+pub mod mix_state;
+#[cfg(feature = "native")]
+pub mod mix_variants;
+#[cfg(feature = "signal")]
+pub mod rig_actions;
+#[cfg(feature = "native")]
+pub mod signal_kit;
+
+#[cfg(test)]
+mod test_song;
+
+#[cfg(feature = "native")]
+pub use mix_actions::register;

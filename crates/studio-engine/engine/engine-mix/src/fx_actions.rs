@@ -409,7 +409,7 @@ pub fn shape_of(word: Option<&str>) -> Result<daw::service::automation::Envelope
 }
 
 /// A shape's word.
-pub(crate) const fn shape_word(shape: daw::service::automation::EnvelopeShape) -> &'static str {
+pub const fn shape_word(shape: daw::service::automation::EnvelopeShape) -> &'static str {
     use daw::service::automation::EnvelopeShape;
     match shape {
         EnvelopeShape::Linear => "linear",
@@ -439,7 +439,7 @@ pub fn mode_of(word: &str) -> Result<daw::service::AutomationMode, String> {
 }
 
 /// A mode's word.
-pub(crate) const fn mode_word(mode: daw::service::AutomationMode) -> &'static str {
+pub const fn mode_word(mode: daw::service::AutomationMode) -> &'static str {
     use daw::service::AutomationMode;
     match mode {
         AutomationMode::Read => "read",
@@ -692,7 +692,7 @@ fn settle(
 ///
 /// # Errors
 /// No such track or FX.
-pub(crate) fn set(
+pub fn set(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     (track, fx): (&str, &str),
@@ -924,7 +924,7 @@ fn state_set(
 }
 
 /// Whether the FX named `name` in its chain is the bundle at `bundle`.
-pub(crate) fn is_bundle(name: &str, bundle: &std::path::Path) -> bool {
+pub fn is_bundle(name: &str, bundle: &std::path::Path) -> bool {
     let path = std::path::Path::new(name);
     path == bundle || std::fs::canonicalize(path).is_ok_and(|p| p == bundle)
 }

@@ -6,8 +6,8 @@ use daw_proto::ProjectContext;
 use daw_standalone::sync::Standalone;
 
 use super::{DiffArg, Only, SnapshotArg, diff, restore, restore_with, snapshot, snapshot_with};
-use crate::mix_measure::tests::song;
 use crate::mix_sends::{AddArg, SetArg};
+use crate::test_song::song;
 
 #[test]
 fn a_snapshot_round_trips_faders_sends_and_fx() {
@@ -158,7 +158,7 @@ fn a_snapshot_round_trips_faders_sends_and_fx() {
 }
 
 /// What differs from `a` to `b` (MIX_DIFF).
-pub(crate) fn diff_of(daw: &Standalone, ctx: &ProjectContext, a: &str, b: &str) -> Vec<String> {
+pub fn diff_of(daw: &Standalone, ctx: &ProjectContext, a: &str, b: &str) -> Vec<String> {
     diff(
         daw,
         ctx,

@@ -6,7 +6,7 @@ use daw_proto::ProjectContext;
 use daw_standalone::sync::Standalone;
 
 use super::*;
-use crate::mix_measure::tests::song;
+use crate::test_song::song;
 
 fn group_of(names: &[&str]) -> Group {
     let mut g = Group {

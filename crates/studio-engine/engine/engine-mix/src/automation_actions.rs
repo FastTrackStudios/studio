@@ -251,7 +251,7 @@ fn kind_of(name: &str) -> String {
 pub fn analyse(daw: &Daw, project: &ProjectContext) -> Vec<Analysis> {
     use daw_proto::{ItemRef, Peaks as _, TakeRef};
     const BLOCK: u32 = 4_800;
-    let sections = crate::actions::sections(daw, project);
+    let sections = crate::moment::sections(daw, project);
     let tracks = Tracks::all(daw, project.clone());
     let by_guid: HashMap<&str, &daw_proto::Track> =
         tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
@@ -267,7 +267,7 @@ pub fn analyse(daw: &Daw, project: &ProjectContext) -> Vec<Analysis> {
         if path.iter().any(|p| p.trim().eq_ignore_ascii_case("trig")) {
             continue;
         }
-        for item in crate::vocal_level::playing(daw, project, track) {
+        for item in crate::vocal_lanes::playing(daw, project, track) {
             let peaks = daw.take_peaks(
                 project.clone(),
                 ItemRef::Guid(item.guid.clone()),
@@ -478,8 +478,8 @@ fn menu_facts(daw: &Daw, project: &ProjectContext, a: &MenuArg) -> MenuFacts {
     let takes = daw::service::Tracks::ext_state(daw, project.clone(), track.clone())
         .iter()
         .any(|e| e.key == crate::automation::TAKE_LINES_KEY && e.value == "1");
-    let leveler = crate::vocal_level::has_lanes(daw, project, &a.track)
-        .then(|| crate::vocal_level::lane_shown(daw, project, &a.track));
+    let leveler = crate::vocal_lanes::has_lanes(daw, project, &a.track)
+        .then(|| crate::vocal_lanes::lane_shown(daw, project, &a.track));
     let mode = daw::service::Tracks::get(daw, project.clone(), track).map(|t| t.automation_mode);
     let chain = daw_proto::fx::FxChainContext::Track(a.track.clone());
     let list = daw_proto::fx::Effects::list(daw, project.clone(), chain.clone());
@@ -1200,7 +1200,7 @@ pub fn register(
             || a.envelope.trim().eq_ignore_ascii_case("leveler")
         {
             let shown = a.shown.unwrap_or(true);
-            crate::vocal_level::show_lane(daw, &project, &track.guid, shown);
+            crate::vocal_lanes::show_lane(daw, &project, &track.guid, shown);
             crate::song_model::request_resync();
             return Ok(format!(
                 "{} on {}: {}",
