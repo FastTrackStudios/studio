@@ -79,6 +79,24 @@ pub struct Assembly {
     pub signal_after_step: fn(&Standalone, &ProjectContext),
     // ── engine-edit's parts ──
     // ── engine-mix's parts ──
+    /// Where a performance's hits play (`algorithms::place`).
+    pub place: fn(&daw_edit::PlaceRequest) -> Result<daw_edit::PlaceAnswer, String>,
+    /// Where a kit's played hits should go (`algorithms::plan`).
+    pub plan: fn(&daw_edit::PlanRequest) -> Result<daw_edit::PlanAnswer, String>,
+    /// A Signal FX's chain, as data (`clap_host::signal::chain`).
+    pub signal_chain:
+        fn(&Standalone, &ProjectContext, &str, Option<&str>) -> Result<serde_json::Value, String>,
+    /// A Signal action run on a track's Signal (`clap_host::signal::run`).
+    pub signal_run: fn(
+        &Standalone,
+        &ProjectContext,
+        (&str, Option<&str>),
+        &str,
+        &str,
+    ) -> Result<serde_json::Value, String>,
+    /// The drum pieces' reverb returns set (`mix_chains::drum_returns`).
+    pub drum_returns:
+        fn(&daw_standalone::sync::Standalone, &ProjectContext, bool) -> eyre::Result<Vec<String>>,
     // ── engine-project's parts ──
     // ── engine-collab's parts ──
     /// The chart was edited here, on the song on screen: into the live

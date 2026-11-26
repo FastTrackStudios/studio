@@ -89,6 +89,12 @@ pub mod kit;
 pub mod vocal_lanes;
 
 // ── from engine-mix ──
+#[cfg(feature = "native")]
+pub mod fx_target;
+#[cfg(feature = "native")]
+pub mod mix_calls;
+#[cfg(feature = "native")]
+pub mod moment;
 
 // ── from engine-project ──
 

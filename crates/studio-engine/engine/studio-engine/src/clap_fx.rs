@@ -106,19 +106,8 @@ pub fn is_hosted_clap(daw: &Standalone, fx: &daw_proto::fx::Fx) -> bool {
         && daw.with_plugin_instance(&fx.guid, |_| ()).is_some()
 }
 
-/// The name an FX goes by in a list: a hosted plugin's own name, else its
-/// chain name.
-#[must_use]
-pub fn display_name(fx: &daw_proto::fx::Fx) -> String {
-    let path_named = Path::new(&fx.name)
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("clap") || e.eq_ignore_ascii_case("vst3"));
-    if path_named && !fx.plugin_name.is_empty() {
-        fx.plugin_name.clone()
-    } else {
-        fx.name.clone()
-    }
-}
+/// Moved down into the core (shared with `fx_actions::target`).
+pub use engine_core::fx_target::display_name;
 
 /// The normalized (0..1) value a hosted plugin reads `text` as, for the
 /// parameter at `slot` (its place in the plugin's list, as FX_PARAMS

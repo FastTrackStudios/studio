@@ -218,6 +218,11 @@ static ASSEMBLY: engine_core::assembly::Assembly = engine_core::assembly::Assemb
     signal_after_step: crate::signal_offline::after_step,
     // ── engine-edit's parts ──
     // ── engine-mix's parts ──
+    place: crate::algorithms::place,
+    plan: crate::algorithms::plan,
+    signal_chain: crate::clap_host::signal::chain,
+    signal_run: crate::clap_host::signal::run,
+    drum_returns: crate::mix_chains::drum_returns,
     // ── engine-project's parts ──
     // ── engine-collab's parts ──
     local_chart: crate::collab::local_chart,

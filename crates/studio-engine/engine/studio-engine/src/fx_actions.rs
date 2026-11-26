@@ -14,10 +14,14 @@
 //! `Chorus 1 end`), each point's value in the same words a setting takes.
 
 use architect::action::{ActionList, ActionMeta, Effect};
-use daw::service::{Effects, FxChainContext, FxRef, FxTarget, ProjectContext, TempoMap as _};
+use daw::service::{Effects, FxChainContext, FxRef, FxTarget, ProjectContext};
 use facet::Facet;
 
 use crate::actions::{meta, resolve, song};
+
+/// Moved down into the core (shared with edit and listen).
+pub use engine_core::fx_target::target;
+pub use engine_core::moment::{moment, project_guid};
 
 static LIST: ActionMeta = meta(
     "FX_LIST",
@@ -283,76 +287,6 @@ struct ParamRow {
     choices: Vec<String>,
 }
 
-/// `track`'s chain and the FX `which` names in it.
-pub fn target(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    track: &str,
-    which: &str,
-) -> Result<(FxTarget, daw_proto::fx::Fx), String> {
-    let guid = resolve(daw, project, track)?;
-    let context = FxChainContext::Track(guid);
-    let chain = Effects::list(daw, project.clone(), context.clone());
-    let which = which.trim();
-    let found = if let Some(place) = which.strip_prefix('#') {
-        let place: usize = place
-            .parse()
-            .map_err(|_| format!("{which:?} is not a place"))?;
-        chain
-            .get(place.checked_sub(1).ok_or("places count from #1")?)
-            .cloned()
-    } else {
-        let lower = which.to_lowercase();
-        let named: Vec<&daw_proto::fx::Fx> = chain
-            .iter()
-            .filter(|fx| {
-                fx.name.to_lowercase().contains(&lower)
-                    || fx.plugin_name.to_lowercase().contains(&lower)
-            })
-            .collect();
-        match named.as_slice() {
-            [] => None,
-            [one] => Some((*one).clone()),
-            many => {
-                // An exact name wins over the others it is part of.
-                many.iter()
-                    .find(|fx| {
-                        fx.name.eq_ignore_ascii_case(which)
-                            || fx.plugin_name.eq_ignore_ascii_case(which)
-                    })
-                    .map(|fx| (*fx).clone())
-                    .ok_or_else(|| {
-                        format!(
-                            "{which:?} could be any of {} — name one, or its #place",
-                            many.iter()
-                                .map(|fx| crate::clap_fx::display_name(fx))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )
-                    })
-                    .map(Some)?
-            }
-        }
-    };
-    let fx = found.ok_or_else(|| {
-        format!(
-            "no {which:?} on the track — it has {}",
-            chain
-                .iter()
-                .map(crate::clap_fx::display_name)
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    })?;
-    Ok((
-        FxTarget {
-            context,
-            fx: FxRef::Guid(fx.guid.clone()),
-        },
-        fx,
-    ))
-}
-
 /// The parameter `which` names among `params`: `#index`, a name, or a
 /// repeated name with its count (`Post Freq 6`).
 pub fn param_of<'a>(
@@ -456,53 +390,6 @@ pub fn value_for(
         );
     }
     value_of(&fx.name, param, text)
-}
-
-/// Where `text` is, seconds: a bar (`33`, `33:2`, `33:2.5` — beat 2 and a
-/// half), a time (`12.5s`), or a section by name (`Chorus 1`; its end with
-/// ` end`).
-pub fn moment(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    text: &str,
-) -> Result<f64, String> {
-    let text = text.trim();
-    if let Some(secs) = text.strip_suffix('s')
-        && let Ok(secs) = secs.trim().parse::<f64>()
-    {
-        return Ok(secs.max(0.0));
-    }
-    let (bar, beat) = text.split_once(':').unwrap_or((text, "1"));
-    if let (Ok(bar), Ok(beat)) = (bar.trim().parse::<i32>(), beat.trim().parse::<f64>()) {
-        use num_traits::ToPrimitive as _;
-        let whole = beat.floor().max(1.0);
-        let into = beat - whole;
-        let beat = whole.to_i32().ok_or_else(|| format!("no beat {whole}"))?;
-        // The beat's start, then the fraction of it on.
-        // The bar as the song counts it.
-        let bar = crate::song_bars::measure(daw, &project, bar);
-        let start = daw.musical_to_time(project.clone(), bar, beat, 0.0);
-        let next = daw.musical_to_time(project.clone(), bar, beat.saturating_add(1), 0.0);
-        return Ok(into.mul_add(next - start, start));
-    }
-    let (name, end) = text
-        .strip_suffix(" end")
-        .map_or((text, false), |name| (name, true));
-    let sections = crate::actions::sections(daw, project);
-    sections
-        .iter()
-        .find(|s| s.name.trim().eq_ignore_ascii_case(name.trim()))
-        .map(|s| if end { s.end } else { s.start })
-        .ok_or_else(|| {
-            format!(
-                "{text:?} is not a bar (`33:2`), a time (`12.5s`) or a section — the sections are {}",
-                sections
-                    .iter()
-                    .map(|s| s.name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        })
 }
 
 /// The shape a word names.
@@ -960,14 +847,6 @@ fn add(
     span.record("fx.added", out.is_ok());
     span.record("fx.ms", began.elapsed().as_secs_f64() * 1e3);
     out
-}
-
-/// The song's guid in `project`.
-pub(crate) fn project_guid(project: &ProjectContext) -> Result<String, String> {
-    match project {
-        ProjectContext::Project(guid) => Ok(guid.clone()),
-        ProjectContext::Current => Err("no song open".to_owned()),
-    }
 }
 
 /// The size of a blob, as a row says it.

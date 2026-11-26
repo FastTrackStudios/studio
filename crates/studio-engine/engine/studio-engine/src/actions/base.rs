@@ -203,42 +203,8 @@ pub(crate) static SECTIONS: ActionMeta = meta(
     "",
 );
 
-/// One section.
-#[derive(Facet)]
-pub struct SectionOut {
-    pub name: String,
-    pub start: f64,
-    pub end: f64,
-    pub first_bar: i32,
-    pub last_bar: i32,
-}
-
-/// The song's sections, in order.
-pub fn sections(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<SectionOut> {
-    let mut all: Vec<SectionOut> =
-        <daw::standalone::Standalone as daw::service::region::Regions>::all(daw, project.clone())
-            .into_iter()
-            // The sections lane's (a region on no lane is on it): not the
-            // song's own region, nor an edit zone on the Drums lane.
-            .filter(|r| {
-                r.lane.is_none_or(|l| {
-                    l == engine_domain::ruler_lanes::CoreLane::Sections.lane_index()
-                })
-            })
-            .map(|r| {
-                let (start, end) = (r.time_range.start_seconds(), r.time_range.end_seconds());
-                SectionOut {
-                    name: r.name,
-                    start,
-                    end,
-                    first_bar: crate::song_bars::musical(daw, &project, start + 1e-6).0,
-                    last_bar: crate::song_bars::musical(daw, &project, (end - 1e-6).max(start)).0,
-                }
-            })
-            .collect();
-    all.sort_by(|a, b| a.start.total_cmp(&b.start));
-    all
-}
+/// Moved down into the core (`fx_actions::moment` reads them).
+pub use engine_core::moment::{SectionOut, sections};
 
 pub(crate) fn register_sections(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SECTIONS, Effect::ReadOnly, |(): ()| {
