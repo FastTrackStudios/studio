@@ -89,7 +89,13 @@ impl Mode {
 
 // ── finding and spawning ───────────────────────────────────────────────
 
+/// Where engines say where they are: `FTS_ENGINES_DIR` when set (a
+/// sandboxed engine's and window's, the engine's `link::DIR_VAR`), else
+/// `<config>/fts/engines`.
 fn engines_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("FTS_ENGINES_DIR").filter(|d| !d.is_empty()) {
+        return Some(PathBuf::from(dir));
+    }
     Some(crate::storage::config_dir()?.join("fts").join("engines"))
 }
 

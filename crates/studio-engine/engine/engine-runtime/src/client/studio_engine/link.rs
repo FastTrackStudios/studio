@@ -164,10 +164,23 @@ pub fn stop(found: &Found, wait: Duration) -> Result<(), String> {
 
 // ── Where engines say they are ───────────────────────────────────────
 
-/// Where engines say where they are.
+/// The variable that moves [`dir`] somewhere else: a sandboxed engine's
+/// (a test's) registry and last-open files stay in its sandbox, out of the
+/// person's config.
+pub const DIR_VAR: &str = "FTS_ENGINES_DIR";
+
+/// Where engines say where they are: [`DIR_VAR`] when set, else
+/// `<config>/fts/engines`.
 #[must_use]
 pub fn dir() -> Option<PathBuf> {
-    Some(dirs::config_dir()?.join("fts").join("engines"))
+    dir_in(std::env::var_os(DIR_VAR), dirs::config_dir())
+}
+
+fn dir_in(over: Option<std::ffi::OsString>, config: Option<PathBuf>) -> Option<PathBuf> {
+    match over.filter(|d| !d.is_empty()) {
+        Some(d) => Some(PathBuf::from(d)),
+        None => Some(config?.join("fts").join("engines")),
+    }
 }
 
 /// `found`, written where engines are looked for; the file, or `None` when
@@ -602,6 +615,28 @@ mod tests {
         assert!(
             !under_own_runtime_dir(sandbox),
             "a test's engine is not the person's"
+        );
+    }
+
+    #[test]
+    fn a_sandboxed_engine_keeps_its_files_in_its_sandbox() {
+        let config = Some(PathBuf::from("/home/p/.config"));
+        assert_eq!(
+            dir_in(None, config.clone()),
+            Some(PathBuf::from("/home/p/.config/fts/engines"))
+        );
+        assert_eq!(
+            dir_in(Some("".into()), config.clone()),
+            Some(PathBuf::from("/home/p/.config/fts/engines")),
+            "an empty override is no override"
+        );
+        assert_eq!(
+            dir_in(Some("/tmp/ube-1/engines".into()), config),
+            Some(PathBuf::from("/tmp/ube-1/engines"))
+        );
+        assert_eq!(
+            dir_in(Some("/tmp/x".into()), None),
+            Some(PathBuf::from("/tmp/x"))
         );
     }
 
