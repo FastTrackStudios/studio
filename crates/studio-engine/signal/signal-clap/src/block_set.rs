@@ -16,7 +16,7 @@ use serde_json::Value;
 use signal_core::param::{ParamSpec, Unit};
 
 use crate::ext::{chain, find_block};
-use crate::plugin::{FtsSignal, Shared};
+use crate::plugin::Shared;
 
 /// One parameter to set: where it is in the running graph (lane, block,
 /// parameter), its id, its plain value.
@@ -170,7 +170,7 @@ fn apply(
     let plugin = shared.ext.plugin.load(Ordering::Acquire);
     if !plugin.is_null() {
         // SAFETY: the instance's own pointer, alive as long as it is.
-        unsafe { nice_plug::wrapper::clap::clap_request_rescan::<FtsSignal>(plugin, false, true) };
+        unsafe { (shared.rescan)(plugin, false, true) };
     }
 }
 
@@ -188,7 +188,7 @@ mod tests {
             BlockSpec::signal("eq", "eq").phase(Phase::Tone),
             BlockSpec::signal("comp", "comp").phase(Phase::Tone),
         ];
-        let plugin = FtsSignal::default();
+        let plugin = <crate::plugin::FtsSignal>::default();
         let shared = plugin.shared();
         let text = String::from_utf8(SignalState::new(preset).to_blob()).expect("utf-8");
         shared.load_state_text(text, false);

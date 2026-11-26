@@ -405,6 +405,36 @@ pub struct Shared {
     built: AtomicU64,
     /// FastTrackStudio's extensions' side of it.
     pub(crate) ext: crate::ext::Ext,
+    /// nice-plug's rescan request for this instance's own plugin type (the
+    /// bundle's, with its editor, or the engine's, without): the wrapper
+    /// is typed, and [`Shared`] is not.
+    pub(crate) rescan: unsafe fn(*const nice_plug::wrapper::clap::clap_plugin, bool, bool),
+}
+
+/// What an instance's editor is: the bundle's Dioxus window
+/// (plugins/signal/signal), or none at all, as Studio's engine hosts it.
+pub trait SignalEditor: Send + Sync + 'static {
+    /// nice-plug's editor type (`()` for none).
+    type Editor: nice_plug::prelude::Editor;
+    /// What the instance keeps for its editor (its window's size, …).
+    type State: Send + Sync + 'static;
+    /// A new instance's.
+    fn state() -> Self::State;
+    /// The editor, for the instance's `shared` state.
+    fn editor(state: &Self::State, shared: Arc<Shared>) -> Option<Self::Editor>;
+}
+
+/// No editor: Studio's engine hosts Signal in-process, and its UI is the
+/// window's, over the protocol.
+pub struct NoEditor;
+
+impl SignalEditor for NoEditor {
+    type Editor = ();
+    type State = ();
+    fn state() {}
+    fn editor((): &(), _shared: Arc<Shared>) -> Option<()> {
+        None
+    }
 }
 
 impl Shared {
@@ -540,7 +570,9 @@ fn rebuild(shared: &Shared, on_main: bool) {
 /// Background work: rebuild the graph from the state field.
 pub struct Rebuild;
 
-pub struct FtsSignal {
+/// The plugin, with editor `E`: the bundle's Dioxus window, or (the
+/// default) none, as Studio's engine hosts it.
+pub struct FtsSignal<E: SignalEditor = NoEditor> {
     params: Arc<SignalParams>,
     shared: Arc<Shared>,
     processor: Processor,
@@ -557,8 +589,8 @@ pub struct FtsSignal {
     applied: Vec<u32>,
     /// The latency the host was told.
     latency: u32,
-    /// The editor window's size and whether it's open.
-    editor_state: Arc<plugin_core::prelude::DioxusState>,
+    /// What its editor keeps (the window's size and whether it's open).
+    editor_state: E::State,
     /// Calibrating: since when (frames), and when it last stepped.
     calibrating: bool,
     calibrate_frames: usize,
@@ -566,7 +598,7 @@ pub struct FtsSignal {
     sleep: crate::sleep::Sleep,
 }
 
-impl Default for FtsSignal {
+impl<E: SignalEditor> Default for FtsSignal<E> {
     fn default() -> Self {
         let params = Arc::new(SignalParams::default());
         let (controller, processor) = processor_pair();
@@ -577,6 +609,7 @@ impl Default for FtsSignal {
             tables: Mailbox::default(),
             built: AtomicU64::new(0),
             ext: crate::ext::Ext::default(),
+            rescan: nice_plug::wrapper::clap::clap_request_rescan::<Self>,
         });
         crate::ext::register(&shared);
         let weak = Arc::downgrade(&shared);
@@ -597,7 +630,7 @@ impl Default for FtsSignal {
             table: Arc::new(Table::default()),
             applied: vec![0; SLOTS],
             latency: 0,
-            editor_state: plugin_core::prelude::DioxusState::new(|| crate::editor::SIZE),
+            editor_state: E::state(),
             calibrating: false,
             calibrate_frames: 0,
             sleep: crate::sleep::Sleep::default(),
@@ -605,10 +638,10 @@ impl Default for FtsSignal {
     }
 }
 
-impl FtsSignal {
+impl<E: SignalEditor> FtsSignal<E> {
     /// What the instance shares with its extensions and editor.
     #[must_use]
-    pub(crate) fn shared(&self) -> Arc<Shared> {
+    pub fn shared(&self) -> Arc<Shared> {
         self.shared.clone()
     }
 }
@@ -675,7 +708,7 @@ fn build_from(
     (state, graph, report)
 }
 
-impl Plugin for FtsSignal {
+impl<E: SignalEditor> Plugin for FtsSignal<E> {
     const NAME: &'static str = PLUGIN_NAME;
     const VENDOR: &'static str = "FastTrackStudio";
     const URL: &'static str = "https://fasttrackstudio.com";
@@ -702,8 +735,9 @@ impl Plugin for FtsSignal {
     ];
     const MIDI_INPUT: MidiConfig = MidiConfig::MidiCCs;
 
-    // The kit's mixer (crate::editor); the host's own view sets parameters.
-    type Editor = plugin_core::nice_plug_dioxus::editor::DioxusEditor;
+    // The kit's mixer (the bundle's editor), or none; the host's own view
+    // sets parameters.
+    type Editor = E::Editor;
     type SysExMessage = ();
     type BackgroundTask = Rebuild;
 
@@ -712,13 +746,7 @@ impl Plugin for FtsSignal {
     }
 
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
-        plugin_core::prelude::create_dioxus_editor_with_state(
-            self.editor_state.clone(),
-            Arc::new(crate::editor::EditorState {
-                shared: self.shared.clone(),
-            }),
-            crate::editor::App,
-        )
+        E::editor(&self.editor_state, self.shared.clone())
     }
 
     fn task_executor(&mut self) -> TaskExecutor<Self> {
@@ -1023,7 +1051,7 @@ fn init_logging() {
                 .with_env_filter(
                     tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
                         tracing_subscriber::EnvFilter::new(
-                            "signal_plugin=info,signal_core=info,signal::usage=info,warn",
+                            "signal_clap=info,signal_plugin=info,signal_core=info,signal::usage=info,warn",
                         )
                     }),
                 )
@@ -1034,7 +1062,7 @@ fn init_logging() {
     });
 }
 
-impl ClapPlugin for FtsSignal {
+impl<E: SignalEditor> ClapPlugin for FtsSignal<E> {
     const CLAP_ID: &'static str = CLAP_ID;
 
     fn clap_extension(id: &std::ffi::CStr) -> Option<*const std::ffi::c_void> {
@@ -1042,15 +1070,13 @@ impl ClapPlugin for FtsSignal {
             return Some(std::ptr::from_ref(&crate::sleep::EXT_SLEEP_VERSION).cast());
         }
         if id == daw_clap_ext::sys::FTS_EXT_SIGNAL {
-            return Some(daw_clap_ext::plugin::SignalVtable::<crate::ext::Lookup>::as_ptr());
+            return Some(daw_clap_ext::plugin::SignalVtable::<crate::ext::Lookup<E>>::as_ptr());
         }
         if id == crate::ext::FTS_EXT_SIGNAL_REVISIONS {
-            let v: &'static crate::ext::SignalRevisions = &crate::ext::REVISIONS;
-            return Some(std::ptr::from_ref(v).cast());
+            return Some(crate::ext::Vtables::<E>::revisions());
         }
         if id == daw_clap_ext::sys::FTS_EXT_HOST_EVENTS {
-            let v: &'static daw_clap_ext::sys::fts_plugin_host_events = &crate::ext::HOST_EVENTS;
-            return Some(std::ptr::from_ref(v).cast());
+            return Some(crate::ext::Vtables::<E>::host_events());
         }
         None
     }
@@ -1081,7 +1107,7 @@ impl ClapPlugin for FtsSignal {
     ];
 }
 
-impl Vst3Plugin for FtsSignal {
+impl<E: SignalEditor> Vst3Plugin for FtsSignal<E> {
     const VST3_CLASS_ID: [u8; 16] = VST3_ID;
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
         &[Vst3SubCategory::Instrument, Vst3SubCategory::Fx];

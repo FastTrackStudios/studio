@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "FTS Signal as a CLAP/VST3: signal-core (rigs, DSP chains, the sampler) wrapped for any DAW, and Studio's hot-reloadable development copy"
+description = "FTS Signal as a CLAP/VST3: signal-clap (signal-core as a plugin) with its editor, for any DAW and as Studio's hot-reloadable development copy"
 
 [lib]
 # cdylib → the loadable CLAP/VST3 binary; lib → tests + a future standalone host.
@@ -16,46 +16,31 @@ workspace = true
 [features]
 # The development build: "Signal Dev" (com.fasttrackstudio.signal.dev), a
 # plugin of its own beside a released FTS Signal.
-dev = []
+dev = ["signal-clap/dev"]
 
 [dependencies]
-# Plugin framework. `nice_plug` must be a DIRECT dep: `#[derive(Params)]` and
+# Plugin framework. `nice_plug` must be a DIRECT dep:
 # `nice_export_clap!`/`nice_export_vst3!` expand to absolute `::nice_plug::…`
 # paths, so the crate has to be nameable here. `vst3` is on by default.
 nice-plug.workspace = true
-
-# The one processor (signal#26): rigs, chains, the session.
-signal-core = { workspace = true, features = ["std", "fx", "nam", "offline"] }
-# The sampler engine, as the desktop `sampler` block.
-sampler = { workspace = true }
-
-# Rig config (.styx) parsing — same stack as signal-sampler-clap's PatchConfig
-facet.workspace = true
-facet-styx.workspace = true
-
-# Observability (file logger — hosts eat stderr)
-tracing.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
-
-eyre.workspace = true
-# The CLAP state stream's JSON (`plugin::clap_state`).
-serde_json = { workspace = true }
-# FastTrackStudio's CLAP extensions: signal/1 (Studio drives Signal),
-# host-actions/1 and host-events/1 (Signal calls the host).
-daw-clap-ext = { workspace = true }
+# The plugin itself, without its editor: what Studio's engine hosts too.
+signal-clap = { workspace = true }
 # The editor: the FTS plugin UI kit (nice-plug-dioxus + Blitz), and the
 # strip model's JSON.
 plugin-core = { workspace = true, features = ["gui"] }
-serde = { workspace = true, features = ["derive"] }
-# The families' algorithms (SIGNAL_ALGORITHMS).
-plugin-processors = { workspace = true, features = ["std"] }
+serde_json = { workspace = true }
+tracing.workspace = true
 
 [dev-dependencies]
+# The tests and the example drive the processor and its state directly.
+signal-core = { workspace = true, features = ["std", "fx", "nam", "offline"] }
 # The headless host test (tests/clap_host.rs): load the bundled .clap
 # through daw's plugin host, as Studio's engine does.
 daw = { workspace = true, features = ["clap-host"] }
 serde_json = { workspace = true }
 # examples/render_kit.rs: the stems in, the mix out.
 hound = { workspace = true }
-# tests/kit_sessions.rs: a note-on into the plugin.
+# tests/kit_sessions.rs: a note-on into the plugin, and a host's
+# host-actions/1 and host-events/1.
 daw-proto = { workspace = true }
+daw-clap-ext = { workspace = true }

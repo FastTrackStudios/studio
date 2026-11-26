@@ -594,11 +594,55 @@ pub struct LoadOptions {
     pub timeline: bool,
 }
 
+/// A CLAP compiled into this process (Signal, in Studio's engine): an FX
+/// whose name [`names`](Self::names) recognises is made from its entry,
+/// through the same CLAP host as a bundle, with no file found or loaded.
+#[cfg(feature = "clap-host")]
+#[derive(Clone, Copy)]
+pub struct BuiltinClap {
+    /// Whether `name` (an FX's name, a `CLAP: … (vendor)` name, a bundle's
+    /// path from any machine) is this plugin.
+    pub names: fn(&str) -> bool,
+    /// Its entry, as a bundle's `clap_entry` is.
+    pub entry: &'static clack_host::entry::EntryDescriptor,
+}
+
+#[cfg(feature = "clap-host")]
+static BUILTIN_CLAPS: std::sync::RwLock<Vec<BuiltinClap>> = std::sync::RwLock::new(Vec::new());
+
+/// Make every FX `clap.names` recognises from `clap` (the engine's start).
+#[cfg(feature = "clap-host")]
+pub fn register_builtin_clap(clap: BuiltinClap) {
+    BUILTIN_CLAPS
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push(clap);
+}
+
+/// The CLAP built into this process that `name` is, if any.
+#[cfg(feature = "clap-host")]
+#[must_use]
+pub fn builtin_clap(name: &str) -> Option<BuiltinClap> {
+    BUILTIN_CLAPS
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .find(|c| (c.names)(name))
+        .copied()
+}
+
 /// [`load_plugin`], offering the plugin what `options` holds.
 pub fn load_plugin_with(
     name_or_path: &str,
     options: &LoadOptions,
 ) -> Result<Option<Box<dyn PluginInstance>>, PluginError> {
+    // A plugin built in is made before any file is looked for: it wins over
+    // an installed bundle of the same plugin, and over a path from another
+    // machine that is not here.
+    #[cfg(feature = "clap-host")]
+    if let Some(builtin) = builtin_clap(name_or_path) {
+        return load_builtin_clap(builtin, options);
+    }
     let format = PluginFormat::from_path_or_name(name_or_path);
     match format {
         PluginFormat::Synthetic => Ok(None),
@@ -608,13 +652,10 @@ pub fn load_plugin_with(
     }
 }
 
+/// The CLAP host a plugin is loaded through, offered what `options` holds.
 #[cfg(feature = "clap-host")]
-fn load_clap(
-    path: &str,
-    options: &LoadOptions,
-) -> Result<Option<Box<dyn PluginInstance>>, PluginError> {
-    use crate::audio_engine::plugin_host::ClapHost;
-    let mut host = ClapHost::default();
+fn clap_host_for(options: &LoadOptions) -> crate::audio_engine::plugin_host::ClapHost {
+    let mut host = crate::audio_engine::plugin_host::ClapHost::default();
     if let Some(actions) = &options.actions {
         host = host.with_actions(actions.clone());
     }
@@ -624,7 +665,27 @@ fn load_clap(
     if options.timeline {
         host = host.with_timeline();
     }
-    let plugin = host
+    host
+}
+
+/// [`load_clap`] for a CLAP built into this process.
+#[cfg(feature = "clap-host")]
+fn load_builtin_clap(
+    builtin: BuiltinClap,
+    options: &LoadOptions,
+) -> Result<Option<Box<dyn PluginInstance>>, PluginError> {
+    let plugin = clap_host_for(options)
+        .load_builtin(builtin.entry)
+        .map_err(|e| PluginError::LoadFailed(format!("{e:?}")))?;
+    Ok(Some(Box::new(plugin.into_send())))
+}
+
+#[cfg(feature = "clap-host")]
+fn load_clap(
+    path: &str,
+    options: &LoadOptions,
+) -> Result<Option<Box<dyn PluginInstance>>, PluginError> {
+    let plugin = clap_host_for(options)
         .load(Path::new(path), 0)
         .map_err(|e| PluginError::LoadFailed(format!("{e:?}")))?;
     // Wrap so the instance is `Send` for storage in the shared
