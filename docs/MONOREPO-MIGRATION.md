@@ -223,3 +223,22 @@ depending only on engine-core and studio-core, never on another domain):
 
 **Step 4: measure.** `cargo build --timings` of the engine before and after,
 and the edit-to-run time of a change in one domain (target: seconds).
+
+## Queued (2026-11-25)
+
+- **Signal compiled into the engine**, after the engine split lands: build
+  the engine with `studio-engine`'s `signal` feature (`signal-fx`), and
+  have the engine make the built-in Signal wherever a song names the
+  Signal CLAP (`Signal Dev`), so state restores directly (no CLAP
+  serialisation; `fx.load_states` was 13.7 s on Unbreakable with a stale
+  installed `Signal Dev.clap`) and the plugin is always the built
+  version. The CLAP build stays for other hosts.
+- **Unbreakable integration test** (running, branch `test/unbreakable`):
+  the open/play/listen/render sequence on the real song, timed from the
+  engine's spans against budgets that only shrink; `just test-unbreakable`.
+- **Song open toward REAPER's ~3 s:** cache the imported store by the
+  `.session`'s hash (`store.import_snapshot` 7.9 s every open), per-plugin
+  spans inside `fx.load_states`, then `bridge.read_doc` (2.8 s).
+- **Render worker stale sync:** after an edit the worker renders the song
+  as it was (`the_worker_renders_what_the_engine_renders…` fails on
+  `monorepo`). Renders default to the engine (`7aac60047`) meanwhile.
