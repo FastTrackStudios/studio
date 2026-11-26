@@ -457,6 +457,69 @@ fn key(name: &str) -> String {
     format!("snapshot:{}", name.trim())
 }
 
+/// A plugin state, kept once in the section by what it is: `state:<hash>`.
+fn state_key(hash: &str) -> String {
+    format!("state:{hash}")
+}
+
+/// `mix` as it is kept: each plugin state stored once, under its hash, and
+/// named in the mix by it (`@<hash>`).
+///
+/// A song's 54 snapshots held 280 MB of plugin state, 8 MB of it unique: a
+/// snapshot repeats every FX's state, most of them unchanged since the
+/// last. An older snapshot, its states inline, reads as it did. (A state
+/// no snapshot names any more stays: the ext state cannot be listed.)
+///
+/// # Errors
+/// A state would not be kept, or the mix would not encode.
+pub(crate) fn encode_mix(
+    daw: &Standalone,
+    project: &ProjectContext,
+    mix: &Mix,
+) -> Result<String, String> {
+    let mut kept = mix.clone();
+    for fx in &mut kept.fx {
+        // Base64 never starts with `@`.
+        if fx.state.is_empty() || fx.state.starts_with('@') {
+            continue;
+        }
+        // Half the hash (128 bits): hex, so cut on a character.
+        let hash: String = blake3::hash(fx.state.as_bytes())
+            .to_hex()
+            .chars()
+            .take(32)
+            .collect();
+        let hash = hash.as_str();
+        let at = state_key(hash);
+        if !daw_proto::ExtState::has_project(daw, project.clone(), SECTION, &at) {
+            daw_proto::ExtState::set_project(daw, project.clone(), SECTION, &at, &fx.state)
+                .map_err(|e| e.to_string())?;
+        }
+        fx.state = format!("@{hash}");
+    }
+    facet_json::to_string(&kept).map_err(|e| e.to_string())
+}
+
+/// A mix as [`encode_mix`] kept it, its plugin states looked up.
+///
+/// # Errors
+/// The text is not a mix, or a state it names is gone.
+pub(crate) fn decode_mix(
+    daw: &Standalone,
+    project: &ProjectContext,
+    text: &str,
+) -> Result<Mix, String> {
+    let mut mix = facet_json::from_str::<Mix>(text).map_err(|e| e.to_string())?;
+    for fx in &mut mix.fx {
+        if let Some(hash) = fx.state.strip_prefix('@') {
+            fx.state =
+                daw_proto::ExtState::get_project(daw, project.clone(), SECTION, &state_key(hash))
+                    .ok_or_else(|| format!("{}: its plugin state {hash} is gone", fx.name))?;
+        }
+    }
+    Ok(mix)
+}
+
 /// The song's snapshot names.
 fn names(daw: &Standalone, project: &ProjectContext) -> Vec<String> {
     daw_proto::ExtState::get_project(daw, project.clone(), SECTION, NAMES)
@@ -482,7 +545,7 @@ pub fn load(daw: &Standalone, project: &ProjectContext, name: &str) -> Result<Mi
             names(daw, project)
         ));
     };
-    facet_json::from_str::<Mix>(&text).map_err(|e| format!("snapshot {name:?}: {e}"))
+    decode_mix(daw, project, &text).map_err(|e| format!("snapshot {name:?}: {e}"))
 }
 
 /// The snapshot (or `group:variant`) last taken, restored or kept.
@@ -543,19 +606,28 @@ fn snapshot_with(
         .unwrap_or_else(|| head(daw, project))
         .trim()
         .to_owned();
-    let text = facet_json::to_string(&mix).map_err(|e| e.to_string())?;
     let mut all = names(daw, project);
     if !all.iter().any(|n| n == name.trim()) {
         all.push(name.trim().to_owned());
     }
     let label = format!("Mix snapshot {name}");
     daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
-    let kept = daw_proto::ExtState::set_project(daw, project.clone(), SECTION, &key(name), &text)
-        .and_then(|()| {
-            daw_proto::ExtState::set_project(daw, project.clone(), SECTION, NAMES, &all.join("\n"))
-        });
+    let kept = encode_mix(daw, project, &mix).and_then(|text| {
+        daw_proto::ExtState::set_project(daw, project.clone(), SECTION, &key(name), &text)
+            .and_then(|()| {
+                daw_proto::ExtState::set_project(
+                    daw,
+                    project.clone(),
+                    SECTION,
+                    NAMES,
+                    &all.join("\n"),
+                )
+            })
+            .map(|()| text.len())
+            .map_err(|e| e.to_string())
+    });
     daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
-    kept.map_err(|e| e.to_string())?;
+    let kept_bytes = kept?;
     set_head(daw, project, name.trim());
     let out = SnapshotRow {
         name: name.trim().to_owned(),
@@ -564,7 +636,7 @@ fn snapshot_with(
         fx: u32::try_from(mix.fx.len()).unwrap_or(u32::MAX),
         states: u32::try_from(mix.fx.iter().filter(|f| !f.state.is_empty()).count())
             .unwrap_or(u32::MAX),
-        bytes: u32::try_from(text.len()).unwrap_or(u32::MAX),
+        bytes: u32::try_from(kept_bytes).unwrap_or(u32::MAX),
         ms: began.elapsed().as_secs_f64() * 1e3,
     };
     span.record("mix.tracks", out.tracks);

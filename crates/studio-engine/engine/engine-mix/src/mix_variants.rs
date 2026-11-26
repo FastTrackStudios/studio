@@ -876,7 +876,7 @@ fn save_mix(
     key: &str,
     mix: &Mix,
 ) -> Result<(), String> {
-    let text = facet_json::to_string(mix).map_err(|e| e.to_string())?;
+    let text = crate::mix_snapshot::encode_mix(daw, project, mix)?;
     set(daw, project, key, &text)
 }
 
@@ -897,11 +897,13 @@ pub fn load_mix(
     })?;
     let text = get(daw, project, &mix_key(group, &g.variants[i].name))
         .ok_or_else(|| format!("variant {group}:{name} has lost its mix"))?;
-    facet_json::from_str::<Mix>(&text).map_err(|e| format!("variant {group}:{name}: {e}"))
+    crate::mix_snapshot::decode_mix(daw, project, &text)
+        .map_err(|e| format!("variant {group}:{name}: {e}"))
 }
 
 fn base_mix(daw: &Standalone, project: &ProjectContext, group: &str) -> Option<Mix> {
-    get(daw, project, &base_key(group)).and_then(|t| facet_json::from_str::<Mix>(&t).ok())
+    get(daw, project, &base_key(group))
+        .and_then(|t| crate::mix_snapshot::decode_mix(daw, project, &t).ok())
 }
 
 fn seed_now() -> u64 {

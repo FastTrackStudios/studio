@@ -272,3 +272,39 @@ fn a_scoped_snapshot_touches_only_its_tracks_and_records_its_parent() {
     assert_eq!(names.parents, vec!["kick ← all".to_owned()]);
     assert_eq!(names.head, "kick");
 }
+
+#[test]
+fn a_plugin_state_is_kept_once_however_many_mixes_hold_it() {
+    use super::{FxMix, Mix, decode_mix, encode_mix};
+    let (daw, ctx) = song("snapshot-states", None);
+    let state = "c3RhdGUgb2YgYSBwbHVnaW4=".repeat(1_000);
+    let fx = |guid: &str| FxMix {
+        guid: guid.into(),
+        track: "kick".into(),
+        name: "Comp".into(),
+        on: true,
+        params: Vec::new(),
+        state: state.clone(),
+    };
+    let mix = Mix {
+        name: "A".into(),
+        fx: vec![fx("{A}"), fx("{B}")],
+        ..Mix::default()
+    };
+    let text = encode_mix(&daw, &ctx, &mix).expect("kept");
+    assert!(
+        text.len() < state.len(),
+        "the state is not in the mix: {} bytes",
+        text.len()
+    );
+    assert_eq!(text.matches("\"state\":\"@").count(), 2);
+    assert_eq!(decode_mix(&daw, &ctx, &text).expect("read"), mix);
+
+    // A second mix of the same states adds nothing to keep.
+    let again = encode_mix(&daw, &ctx, &mix).expect("kept again");
+    assert_eq!(again, text);
+
+    // A snapshot from before, its states inline, reads as it did.
+    let inline = facet_json::to_string(&mix).expect("inline");
+    assert_eq!(decode_mix(&daw, &ctx, &inline).expect("read"), mix);
+}
