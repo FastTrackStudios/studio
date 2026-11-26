@@ -76,20 +76,28 @@ fn bundle_in(what: &str, roots: &[PathBuf]) -> Option<PathBuf> {
     } else {
         format!("{what}.clap")
     };
+    // The bundle as its folder spells it (a case-insensitive file system,
+    // macOS's, would take `root.join(&file)` in any case), the exact name
+    // first; never a link to a bundle that is gone.
     for root in roots {
-        let exact = root.join(&file);
-        if exact.exists() {
-            return Some(exact);
-        }
         let Ok(entries) = std::fs::read_dir(root) else {
             continue;
         };
-        if let Some(found) = entries.flatten().map(|e| e.path()).find(|p| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.eq_ignore_ascii_case(&file))
-        }) {
-            return Some(found);
+        let named: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.exists()
+                    && p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.eq_ignore_ascii_case(&file))
+            })
+            .collect();
+        let exact = named
+            .iter()
+            .find(|p| p.file_name().and_then(|n| n.to_str()) == Some(file.as_str()));
+        if let Some(found) = exact.or_else(|| named.first()) {
+            return Some(found.clone());
         }
     }
     None
@@ -371,6 +379,17 @@ mod tests {
         );
         assert_eq!(bundle_in("FTS Nothing", &roots), None);
         assert_eq!(bundle_in("/no/such.clap", &roots), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_to_a_bundle_that_is_gone_is_not_found() {
+        let dir = tempfile::tempdir().expect("a folder");
+        std::os::unix::fs::symlink(dir.path().join("gone"), dir.path().join("FTS EQ.clap"))
+            .expect("a link");
+        let roots = vec![dir.path().to_path_buf()];
+        assert_eq!(bundle_in("FTS EQ", &roots), None);
+        assert_eq!(bundle_in("fts eq", &roots), None);
     }
 }
 
