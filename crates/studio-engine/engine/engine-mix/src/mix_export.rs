@@ -142,21 +142,71 @@ fn splice(text: &str, guid: &str, block: &str) -> Option<String> {
     Some(out.join("\n") + "\n")
 }
 
-/// Write `project_guid` as a REAPER project named `name` (`.RPP` added)
-/// beside the file it was opened from, the session's own tracks given
-/// the template's chains ([`chain_for`]).
+/// The folder a song's own files go in: the one it was opened from, or
+/// for a `.session` folder's song the folder that holds it. Its media
+/// paths, relative to that folder, still find the audio.
 ///
 /// # Errors
 ///
-/// No such project, no file it was opened from, or the write failed.
+/// No such project, or it has no file it was opened from.
+pub fn beside(
+    daw: &daw_standalone::sync::Standalone,
+    project_guid: &str,
+) -> eyre::Result<std::path::PathBuf> {
+    let from = daw
+        .info(ProjectContext::Project(project_guid.to_owned()))?
+        .path;
+    let dir = std::path::Path::new(&from)
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .ok_or_else(|| eyre::eyre!("the song has no file it was opened from: {from:?}"))?;
+    // A `.session` folder's project is written beside the folder.
+    let dir = if dir.extension().is_some_and(|e| e == "session") {
+        dir.parent().unwrap_or(dir)
+    } else {
+        dir
+    };
+    Ok(dir.to_path_buf())
+}
+
+/// The name [`export`] gives a song's project when it is given none: the
+/// song's own, marked as Studio's, so it never writes over the file the
+/// song came from.
+#[must_use]
+pub fn default_name(song: &str) -> String {
+    format!("{} (Studio)", song.trim())
+}
+
+/// Write `project_guid` as a REAPER project named `name` (`.RPP` added)
+/// beside the file it was opened from ([`beside`]), the session's own
+/// tracks given the template's chains ([`chain_for`]).
+///
+/// # Errors
+///
+/// No such project, no file it was opened from, a `name` that is a path
+/// or would write over that file, or the write failed.
 pub fn write_rpp(
     daw: &daw_standalone::sync::Standalone,
     project_guid: &str,
     name: &str,
 ) -> eyre::Result<Exported> {
+    let name = name.trim();
+    if name.is_empty() || name.contains(['/', '\\']) || name == "." || name == ".." {
+        eyre::bail!("{name:?} is not a file name");
+    }
     let project = ProjectContext::Project(project_guid.to_owned());
-    let mut text = daw_standalone::session_file::project_rpp_text(daw, project_guid)
-        .map_err(|e| eyre::eyre!("project as RPP: {e}"))?;
+    let dir = beside(daw, project_guid)?;
+    let path = dir.join(format!("{name}.RPP"));
+    let from = daw.info(project.clone())?.path;
+    if same_file(&path, std::path::Path::new(&from)) {
+        eyre::bail!(
+            "{} is the file the song was opened from: give another name",
+            path.display()
+        );
+    }
+    let mut text =
+        daw_standalone::session_file::project_rpp_text_relative_to(daw, project_guid, Some(&dir))
+            .map_err(|e| eyre::eyre!("project as RPP: {e}"))?;
     let mut chained = Vec::new();
     for track in Tracks::all(daw, project.clone()) {
         let Some(block) = chain_for(&track.name) else {
@@ -167,17 +217,139 @@ pub fn write_rpp(
             chained.push(track.name.clone());
         }
     }
-    let from = daw.info(project)?.path;
-    let dir = std::path::Path::new(&from)
-        .parent()
-        .ok_or_else(|| eyre::eyre!("the project has no folder: {from:?}"))?;
-    // A `.session` folder's project is written beside the folder.
-    let dir = if dir.extension().is_some_and(|e| e == "session") {
-        dir.parent().unwrap_or(dir)
-    } else {
-        dir
-    };
-    let path = dir.join(format!("{name}.RPP"));
     std::fs::write(&path, text)?;
     Ok(Exported { path, chained })
+}
+
+/// Whether `a` and `b` name one file (case aside, as macOS's disks are).
+fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&b.to_string_lossy()),
+    }
+}
+
+static EXPORT: architect::action::ActionMeta = crate::actions::meta(
+    "MIX_EXPORT",
+    "mix_export",
+    "Export the session as a REAPER project",
+    "Write the open song as a REAPER project (`.RPP`) beside the file it was opened from (a `.session` folder's song beside the folder), so its media paths still find the audio and REAPER opens it as it is: every track, item, fader, send and the FX chain each track came with; the tracks the session made itself (the buses, the drum Process folder) get the golden template's chains as REAPER's stock plugins. `name`: the file's name without `.RPP` (default: the song's, with ` (Studio)`); never the file the song was opened from. Touches neither playback nor the song. Says the `file`, how many `tracks` it holds and the tracks given a template chain (`chained`).",
+    "Mix",
+    "",
+);
+
+/// What to export.
+#[derive(facet::Facet)]
+struct ExportArg {
+    name: Option<String>,
+}
+
+/// What [`export`] wrote, as MIX_EXPORT answers it.
+#[derive(facet::Facet, Debug)]
+pub struct ExportRow {
+    pub file: String,
+    pub tracks: u32,
+    pub chained: Vec<String>,
+}
+
+/// `MIX_EXPORT`: `project_guid` as a REAPER project named `name` (or
+/// [`default_name`]) beside its file.
+///
+/// # Errors
+///
+/// As [`write_rpp`].
+pub fn export(
+    daw: &daw_standalone::sync::Standalone,
+    project_guid: &str,
+    name: Option<&str>,
+) -> eyre::Result<ExportRow> {
+    let project = ProjectContext::Project(project_guid.to_owned());
+    let name = match name.map(str::trim).filter(|n| !n.is_empty()) {
+        Some(name) => name.to_owned(),
+        None => default_name(&daw.info(project.clone())?.name),
+    };
+    let done = write_rpp(daw, project_guid, &name)?;
+    let tracks = u32::try_from(Tracks::all(daw, project).len()).unwrap_or(u32::MAX);
+    Ok(ExportRow {
+        file: done.path.display().to_string(),
+        tracks,
+        chained: done.chained,
+    })
+}
+
+/// Register `MIX_EXPORT`.
+///
+/// # Errors
+///
+/// The list refuses it.
+pub fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
+    list.register(
+        &EXPORT,
+        architect::action::Effect::ReadOnly,
+        |a: ExportArg| {
+            let _s = tracing::info_span!("MIX_EXPORT").entered();
+            let (daw, project) = crate::actions::song()?;
+            let guid = crate::moment::project_guid(&project)?;
+            export(daw, &guid, a.name.as_deref()).map_err(|e| format!("{e:#}"))
+        },
+    )?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use daw::service::Tracks as _;
+
+    use super::{default_name, export};
+
+    /// The test song, opened from `Song.RPP` in a folder of its own.
+    fn song_in(dir: &std::path::Path) -> (daw_standalone::sync::Standalone, String) {
+        let from = dir.join("Song.RPP");
+        std::fs::write(&from, "<REAPER_PROJECT 0.1 \"7.0\" 0\n>\n").expect("the song's file");
+        let (daw, _) = crate::test_song::song_at("Song", None, &from.to_string_lossy());
+        (daw, "Song".to_owned())
+    }
+
+    #[test]
+    fn mix_export_writes_a_reaper_project_beside_the_song() {
+        let dir = tempfile::tempdir().expect("a folder");
+        let (daw, guid) = song_in(dir.path());
+        let out = export(&daw, &guid, None).expect("exported");
+        let file = dir.path().join(format!("{}.RPP", default_name("Song")));
+        assert_eq!(out.file, file.display().to_string());
+        let text = std::fs::read_to_string(&file).expect("the RPP");
+        let project = dawfile_reaper::parse_project_text(&text).expect("REAPER reads it");
+        let names: Vec<String> = project.tracks.iter().map(|t| t.name.clone()).collect();
+        let ours: Vec<String> = daw
+            .all(daw::service::ProjectContext::Project(guid))
+            .into_iter()
+            .map(|t| t.name)
+            .collect();
+        assert_eq!(names, ours);
+        assert_eq!(out.tracks as usize, ours.len());
+        // The song's own file is as it was.
+        let original = std::fs::read_to_string(dir.path().join("Song.RPP")).expect("the song");
+        assert_eq!(original, "<REAPER_PROJECT 0.1 \"7.0\" 0\n>\n");
+    }
+
+    #[test]
+    fn mix_export_never_writes_over_the_song_or_out_of_its_folder() {
+        let dir = tempfile::tempdir().expect("a folder");
+        let (daw, guid) = song_in(dir.path());
+        assert!(export(&daw, &guid, Some("Song")).is_err());
+        assert!(export(&daw, &guid, Some("../elsewhere")).is_err());
+        let named = export(&daw, &guid, Some("For Mixing")).expect("exported");
+        assert!(named.file.ends_with("For Mixing.RPP"), "{}", named.file);
+    }
+
+    #[test]
+    fn mix_export_refuses_a_song_with_no_file() {
+        let (daw, _) = crate::test_song::song("nowhere", None);
+        let err = export(&daw, "nowhere", None).expect_err("no folder to write in");
+        assert!(err.to_string().contains("no file"), "{err}");
+    }
 }

@@ -63,6 +63,8 @@ pub fn register(list: &ActionList) -> Result<(), ActionError> {
     #[cfg(feature = "native")]
     crate::mix_state::register(list)?;
     #[cfg(feature = "native")]
+    crate::mix_export::register(list)?;
+    #[cfg(feature = "native")]
     crate::mix_snapshot::register(list)?;
     #[cfg(feature = "native")]
     crate::mix_variants::register(list)?;

@@ -50,7 +50,8 @@ not the truth: a live drummer plays other fills. Mixing is by measurement: MIX_M
 span offline through the whole mix (every FX, Signal's CLAPs too, sends, folders, faders, plugin \
 delay compensated) without touching playback, and gives each track and bus its loudness, peaks, \
 crest, bands, width and share of its folder (`bypass_signal: true` adds the raw drums beside it: \
-Signal's gain per track); MIX_RENDER writes the same to a WAV to listen to. Sends are SENDS_LIST, \
+Signal's gain per track); MIX_RENDER writes the same to a WAV to listen to, and MIX_EXPORT writes \
+the session as a REAPER project beside it (the windows' Render and Export buttons). Sends are SENDS_LIST, \
 SEND_ADD, SEND_SET and SEND_REMOVE; SIGNAL_KIT `sends: true` makes the kit's routing. \
 MIX_SNAPSHOT, MIX_RESTORE and MIX_DIFF keep and compare whole mixes (or a scope of tracks, \
 some categories only), for A/B. To let the user choose between takes on one decision, make \

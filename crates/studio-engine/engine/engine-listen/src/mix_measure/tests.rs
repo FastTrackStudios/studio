@@ -110,12 +110,21 @@ impl daw_standalone::plugin::FxFactory for Plugins {
 /// Drums{Kick, Snare} and a top-level Bus. Kick plays a 1 kHz sine at
 /// -18 dB RMS; Snare and Bus are silent unless `snare` is given.
 pub(crate) fn song(guid: &str, snare: Option<Vec<f32>>) -> (Standalone, ProjectContext) {
+    song_at(guid, snare, "")
+}
+
+/// [`song`], opened from the file `path` (empty: from none).
+pub(crate) fn song_at(
+    guid: &str,
+    snare: Option<Vec<f32>>,
+    path: &str,
+) -> (Standalone, ProjectContext) {
     let daw = Standalone::new();
     daw.set_fx_factory(Arc::new(Plugins));
     daw.seed_project(daw_proto::ProjectInfo {
         guid: guid.into(),
         name: guid.into(),
-        path: String::new(),
+        path: path.into(),
     });
     let stems = vec![
         StemSpec::new("Kick", "/x/kick.wav", Some("Drums")),
@@ -423,11 +432,11 @@ fn mix_render_writes_what_was_measured() {
         &daw,
         &ctx,
         &RenderArg {
-            from: "1s".into(),
-            to: "3s".into(),
+            from: Some("1s".into()),
+            to: Some("3s".into()),
             tracks: Some(vec!["Drums/Kick".into()]),
             solo: None,
-            to_file: file.to_string_lossy().into_owned(),
+            to_file: Some(file.to_string_lossy().into_owned()),
             bypass_signal: None,
             exact: None,
             full: None,
@@ -440,6 +449,51 @@ fn mix_render_writes_what_was_measured() {
     assert!((out.lufs - -15.0).abs() < 0.2, "{}", out.lufs);
     // The song is not soloed by it.
     assert!(daw.all(ctx).iter().all(|t| !t.soloed));
+}
+
+/// The window's Render button: MIX_RENDER with nothing given renders the
+/// whole song to `Renders/<song>.wav` beside the song's file.
+#[test]
+fn mix_render_with_nothing_given_renders_the_song_beside_its_file() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let from = dir.path().join("Song.RPP");
+    let (daw, ctx) = song_at("Song", None, &from.to_string_lossy());
+    let none = RenderArg {
+        from: None,
+        to: None,
+        tracks: None,
+        solo: None,
+        to_file: None,
+        bypass_signal: None,
+        exact: None,
+        full: None,
+    };
+    let out = render(&daw, &ctx, &none).expect("rendered");
+    let file = dir.path().join("Renders").join("Song.wav");
+    assert_eq!(out.file, file.display().to_string());
+    // The stems' items run 0..10 s.
+    assert!((out.seconds - 10.0).abs() < 1e-6, "{}", out.seconds);
+    let read = fts_sample::load_audio(&file, f64::from(RATE)).expect("a wav");
+    assert_eq!(read.data.len(), 10 * RATE as usize);
+    assert!(out.lufs.is_finite(), "{}", out.lufs);
+}
+
+/// A song opened from no file has nowhere to put a render by itself.
+#[test]
+fn mix_render_with_no_file_and_no_song_file_says_to_give_one() {
+    let (daw, ctx) = song("nowhere", None);
+    let none = RenderArg {
+        from: Some("1s".into()),
+        to: Some("2s".into()),
+        tracks: None,
+        solo: None,
+        to_file: None,
+        bypass_signal: None,
+        exact: None,
+        full: None,
+    };
+    let err = render(&daw, &ctx, &none).err().expect("refused");
+    assert!(err.contains("to_file"), "{err}");
 }
 
 /// Unbreakable's Signal kit, on a song of its manifest's tracks, measured

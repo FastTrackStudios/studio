@@ -24,6 +24,8 @@ path = "studio-arrangement"
 [capabilities]
 effect = "mutating"
 ui = ["engine"]
+# The Render and Export buttons' (below).
+actions = ["MIX_RENDER", "MIX_EXPORT"]
 
 [[views]]
 id = "arrangement"
@@ -66,3 +68,39 @@ description = "The track panel compact (`compact`: true: each track's name) or e
 group = "Arrangement"
 effect = "mutating"
 params = '{"type":"object","properties":{"compact":{"type":"boolean"}}}'
+
+# The window's Render and Export buttons, on the arrangement's own pane (they go
+# wherever it is docked): the engine's MIX_RENDER and MIX_EXPORT with
+# nothing given — the whole song to `Renders/<song>.wav` beside it (48 kHz,
+# 32-bit float), and the session as a REAPER project beside it. Each
+# answers the file it wrote.
+[[actions]]
+id = "STUDIO_ARRANGEMENT_RENDER"
+name = "Arrangement: render the mix to WAV"
+description = "Renders the whole song through the mix, offline, to `Renders/<song>.wav` beside the song's file (48 kHz, 32-bit float, stereo): MIX_RENDER with nothing given. Touches neither playback nor the song. Answers the file, its length and its loudness."
+group = "Arrangement"
+effect = "read_only"
+preset = { action = "MIX_RENDER", args = '{}' }
+
+[[actions]]
+id = "STUDIO_ARRANGEMENT_EXPORT"
+name = "Arrangement: export as a REAPER project"
+description = "Writes the session as a REAPER project (`<song> (Studio).RPP`) beside the song's file, every track, item, fader, send and FX chain in it: MIX_EXPORT with nothing given. Never writes over the song's own file. Answers the file."
+group = "Arrangement"
+effect = "read_only"
+preset = { action = "MIX_EXPORT", args = '{}' }
+
+[[toolbars]]
+id = "output"
+title = "Render and export"
+where = "view:studio.arrangement/arrangement"
+
+[[toolbars.items]]
+action = "STUDIO_ARRANGEMENT_RENDER"
+icon = "file-audio"
+label = "Render"
+
+[[toolbars.items]]
+action = "STUDIO_ARRANGEMENT_EXPORT"
+icon = "file-output"
+label = "Export RPP"

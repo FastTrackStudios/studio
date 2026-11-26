@@ -109,12 +109,17 @@ impl daw_standalone::plugin::FxFactory for Plugins {
 /// Drums{Kick, Snare} and a top-level Bus. Kick plays a 1 kHz sine at
 /// -18 dB RMS; Snare and Bus are silent unless `snare` is given.
 pub fn song(guid: &str, snare: Option<Vec<f32>>) -> (Standalone, ProjectContext) {
+    song_at(guid, snare, "")
+}
+
+/// [`song`], opened from the file `path` (empty: from none).
+pub fn song_at(guid: &str, snare: Option<Vec<f32>>, path: &str) -> (Standalone, ProjectContext) {
     let daw = Standalone::new();
     daw.set_fx_factory(Arc::new(Plugins));
     daw.seed_project(daw_proto::ProjectInfo {
         guid: guid.into(),
         name: guid.into(),
-        path: String::new(),
+        path: path.into(),
     });
     let stems = vec![
         StemSpec::new("Kick", "/x/kick.wav", Some("Drums")),
