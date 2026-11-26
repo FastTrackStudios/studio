@@ -68,7 +68,7 @@ pub fn App() -> Element {
             if let Ok(handle) = window.window_handle()
                 && let RawWindowHandle::UiKit(uikit) = handle.as_raw()
             {
-                app_shell::ios_scene::window_created(uikit.ui_view);
+                studio_shell::ios_scene::window_created(uikit.ui_view);
             }
             // An audio app, as iOS knows one: its session (the loudspeaker,
             // Bluetooth, AirPlay) set before the engine opens the device,
@@ -340,7 +340,7 @@ fn use_width() -> Signal<f64> {
 
 #[component]
 fn Start() -> Element {
-    let keys = app_shell::ui::use_text_focus();
+    let keys = studio_shell::ui::use_text_focus();
     let mut opening = use_signal(|| Opening::Idle);
     let mut local = use_signal(documents);
     // The songs opened lately, each with its alternatives — read again
@@ -1930,7 +1930,7 @@ fn SongsList(
     on_download: EventHandler<(LibrarySong, Offline)>,
     on_edit: EventHandler<LibrarySong>,
 ) -> Element {
-    let keys = app_shell::ui::use_text_focus();
+    let keys = studio_shell::ui::use_text_focus();
     let mut query = use_signal(String::new);
     let wanted = query().trim().to_lowercase();
     rsx! {

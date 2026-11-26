@@ -85,7 +85,11 @@ pub fn recolour_strips(frame: &mut [u8], strips: &[u16], bars: &[u16]) {
     const CELLS: usize = 8;
     let byte = |frame: &[u8], at: usize| frame.get(at).copied().unwrap_or(0);
     let rgb_at = |frame: &[u8], at: usize| -> [u8; 3] {
-        [byte(frame, at), byte(frame, at.saturating_add(1)), byte(frame, at.saturating_add(2))]
+        [
+            byte(frame, at),
+            byte(frame, at.saturating_add(1)),
+            byte(frame, at.saturating_add(2)),
+        ]
     };
     let hue: Vec<[u8; 3]> = bars
         .iter()
@@ -98,7 +102,10 @@ pub fn recolour_strips(frame: &mut [u8], strips: &[u16], bars: &[u16]) {
     let lit: Vec<&[u8; 3]> = hue.iter().filter(|c| c.iter().any(|v| *v > 0)).collect();
     let n = u32::try_from(lit.len()).unwrap_or(1);
     let average: [u8; 3] = [0, 1, 2].map(|k| {
-        let sum: u32 = lit.iter().map(|c| u32::from(c.get(k).copied().unwrap_or(0))).sum();
+        let sum: u32 = lit
+            .iter()
+            .map(|c| u32::from(c.get(k).copied().unwrap_or(0)))
+            .sum();
         u8::try_from(sum.checked_div(n).unwrap_or(255)).unwrap_or(255)
     });
     let total = strips.len().saturating_mul(CELLS);
@@ -147,14 +154,28 @@ pub fn spread_tower_colour(frame: &mut [u8], towers: &[u16]) {
     for a in towers {
         let start = usize::from(*a).saturating_sub(1);
         let at = |k: usize| start.saturating_add(k);
-        let lamps_dark = (0..18_usize).all(|k| frame.get(at(LAMPS.saturating_add(k))).is_none_or(|v| *v == 0));
-        let rgb: Vec<u8> = (0..3_usize).map(|k| frame.get(at(BAR_RGB.saturating_add(k))).copied().unwrap_or(0)).collect();
+        let lamps_dark = (0..18_usize).all(|k| {
+            frame
+                .get(at(LAMPS.saturating_add(k)))
+                .is_none_or(|v| *v == 0)
+        });
+        let rgb: Vec<u8> = (0..3_usize)
+            .map(|k| {
+                frame
+                    .get(at(BAR_RGB.saturating_add(k)))
+                    .copied()
+                    .unwrap_or(0)
+            })
+            .collect();
         if !lamps_dark || rgb.iter().all(|v| *v == 0) {
             continue;
         }
         for lamp in 0..6_usize {
             for (k, v) in rgb.iter().enumerate() {
-                if let Some(b) = frame.get_mut(at(LAMPS.saturating_add(lamp.saturating_mul(3)).saturating_add(k))) {
+                if let Some(b) = frame.get_mut(at(LAMPS
+                    .saturating_add(lamp.saturating_mul(3))
+                    .saturating_add(k)))
+                {
                     *b = *v;
                 }
             }

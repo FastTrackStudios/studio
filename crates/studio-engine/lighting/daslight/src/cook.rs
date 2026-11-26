@@ -394,7 +394,9 @@ mod tests {
 
     #[test]
     fn a_held_look_is_one_frame() {
-        let f = frames(&[0, 40, 80, 120, 120, 120, 120, 120, 120, 120, 120, 120, 120, 120]);
+        let f = frames(&[
+            0, 40, 80, 120, 120, 120, 120, 120, 120, 120, 120, 120, 120, 120,
+        ]);
         assert_eq!(
             find_cycle(&f, 4, 1),
             Cycle {
@@ -413,7 +415,9 @@ mod tests {
 
     #[test]
     fn a_chase_repeats_every_four_frames() {
-        let f = frames(&[9, 9, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0]);
+        let f = frames(&[
+            9, 9, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0,
+        ]);
         let c = find_cycle(&f, 2, 1);
         assert_eq!((c.len, c.exact), (4, true));
     }
@@ -424,7 +428,11 @@ mod tests {
         let f: Vec<Vec<u8>> = (0..80)
             .map(|i| {
                 let x = (f64::from(i) * std::f64::consts::TAU / 13.3).sin();
-                vec![format!("{:.0}", 127.0_f64.mul_add(x, 127.5)).parse().unwrap_or(0)]
+                vec![
+                    format!("{:.0}", 127.0_f64.mul_add(x, 127.5))
+                        .parse()
+                        .unwrap_or(0),
+                ]
             })
             .collect();
         let c = find_cycle(&f, 0, 1);

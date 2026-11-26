@@ -1,5 +1,5 @@
 use core::{
-    any::{type_name, Any, TypeId},
+    any::{Any, TypeId, type_name},
     marker::PhantomData,
 };
 
@@ -8,7 +8,7 @@ use bevy_diagnostic::{Diagnostic, DiagnosticPath, Diagnostics, RegisterDiagnosti
 use bevy_ecs::{resource::Resource, system::Res};
 use bevy_platform::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use bevy_render::{
-    material_bind_groups::MaterialBindGroupAllocators, Extract, ExtractSchedule, RenderApp,
+    Extract, ExtractSchedule, RenderApp, material_bind_groups::MaterialBindGroupAllocators,
 };
 
 use crate::Material;

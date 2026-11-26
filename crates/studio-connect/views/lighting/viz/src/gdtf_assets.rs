@@ -587,7 +587,8 @@ mod tests {
     // r[verify viz.gdtf-meshes] - bevy_gltf loads a profile's GLB through the source
     #[test]
     fn bevy_gltf_loads_a_scene_through_the_source() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../studio-engine/lighting/data/gdtf");
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../studio-engine/lighting/data/gdtf");
         let Some(file) = std::fs::read_dir(&dir).ok().and_then(|d| {
             d.filter_map(|e| e.ok().map(|e| e.path()))
                 .find(|p| p.to_string_lossy().contains("SlimPAR_Quad_12"))
@@ -607,7 +608,8 @@ mod tests {
     // r[verify viz.gdtf-meshes] - a real profile's GLB is served out of its zip
     #[test]
     fn reads_a_real_glb_out_of_a_gdtf_zip() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../studio-engine/lighting/data/gdtf");
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../studio-engine/lighting/data/gdtf");
         let Some(file) = std::fs::read_dir(&dir).ok().and_then(|d| {
             d.filter_map(|e| e.ok().map(|e| e.path()))
                 .find(|p| p.to_string_lossy().contains("SlimPAR_Quad_12"))

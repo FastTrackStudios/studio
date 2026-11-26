@@ -11,8 +11,8 @@
 use std::sync::Arc;
 
 use dsp::eq::analyzer::{Analyzer, AudioFeed};
-use plugin_ui::eq::ui::params::EqUiState;
 use pipewire as pw;
+use plugin_ui::eq::ui::params::EqUiState;
 use pw::spa;
 
 /// Spawn the `PipeWire` capture thread. Returns an error only on setup that can be

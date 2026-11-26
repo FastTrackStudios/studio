@@ -2,7 +2,7 @@ use crate::meshlet::asset::{MeshletAabb, MeshletAabbErrorOffset, MeshletCullData
 
 use super::asset::{BvhNode, Meshlet, MeshletBoundingSphere, MeshletMesh};
 use alloc::borrow::Cow;
-use bevy_math::{ops::log2, IVec3, Isometry3d, Vec2, Vec3, Vec3A, Vec3Swizzles};
+use bevy_math::{IVec3, Isometry3d, Vec2, Vec3, Vec3A, Vec3Swizzles, ops::log2};
 use bevy_mesh::{Indices, Mesh, MeshVertexAttribute};
 use bevy_platform::collections::HashMap;
 use bevy_render::render_resource::PrimitiveTopology;
@@ -12,10 +12,10 @@ use bitvec::{order::Lsb0, vec::BitVec, view::BitView};
 use core::ops::Range;
 use itertools::Itertools;
 use meshopt::{
-    build_meshlets, ffi::meshopt_Meshlet, generate_position_remap,
-    simplify_with_attributes_and_locks, Meshlets, SimplifyOptions, VertexDataAdapter,
+    Meshlets, SimplifyOptions, VertexDataAdapter, build_meshlets, ffi::meshopt_Meshlet,
+    generate_position_remap, simplify_with_attributes_and_locks,
 };
-use metis::{option::Opt, Graph};
+use metis::{Graph, option::Opt};
 use smallvec::SmallVec;
 use thiserror::Error;
 use tracing::debug_span;
@@ -673,11 +673,7 @@ fn merge_spheres(a: BoundingSphere, b: BoundingSphere) -> BoundingSphere {
     let br = a.radius().max(b.radius());
     let len = a.center.distance(b.center);
     if len + sr <= br || sr == 0.0 || len == 0.0 {
-        if a.radius() > b.radius() {
-            a
-        } else {
-            b
-        }
+        if a.radius() > b.radius() { a } else { b }
     } else {
         let radius = (sr + br + len) / 2.0;
         let center =
@@ -1070,11 +1066,7 @@ fn octahedral_encode(v: Vec3) -> Vec2 {
             if n.x >= 0.0 { 1.0 } else { -1.0 },
             if n.y >= 0.0 { 1.0 } else { -1.0 },
         );
-    if n.z >= 0.0 {
-        n.xy()
-    } else {
-        octahedral_wrap
-    }
+    if n.z >= 0.0 { n.xy() } else { octahedral_wrap }
 }
 
 // https://www.w3.org/TR/WGSL/#pack2x16snorm-builtin

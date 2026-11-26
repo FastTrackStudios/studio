@@ -15,7 +15,9 @@ use ignition_show::library::TrickPreset;
 use serde_json::{Map, Value, json};
 
 use super::library::{Layers, dir_of, join, layers, names_in, profile_path, song_path};
-use super::{Ctx, Res, arr, count_f, f32_of, flag, list, merge, num, obj, opt_text, slug, text, whole};
+use super::{
+    Ctx, Res, arr, count_f, f32_of, flag, list, merge, num, obj, opt_text, slug, text, whole,
+};
 
 /// One section of a song.
 #[derive(Debug, Clone)]
@@ -33,7 +35,12 @@ pub(crate) fn sections(doc: &Value) -> Vec<Sect> {
     let mut out: Vec<Sect> = Vec::new();
     let push = |name: &str, bar: u32, bars: f64, out: &mut Vec<Sect>| {
         let ordinal = out.iter().filter(|s| s.name == name).count();
-        out.push(Sect { name: name.to_owned(), ordinal, bar, bars });
+        out.push(Sect {
+            name: name.to_owned(),
+            ordinal,
+            bar,
+            bars,
+        });
     };
     if let Some(given) = doc.get("sections").and_then(Value::as_array) {
         let mut next = 1;
@@ -41,7 +48,11 @@ pub(crate) fn sections(doc: &Value) -> Vec<Sect> {
             let name = opt_text(s, "name").unwrap_or("?");
             let bars = num(s, "bars").unwrap_or(8.0);
             let bar = s.get("bar").and_then(whole).unwrap_or(next);
-            #[allow(clippy::as_conversions, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[allow(
+                clippy::as_conversions,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
             let len = bars.ceil().max(1.0) as u32;
             next = bar + len;
             push(name, bar, bars, &mut out);
@@ -53,7 +64,9 @@ pub(crate) fn sections(doc: &Value) -> Vec<Sect> {
         let at = cue.get("at").cloned().unwrap_or_default();
         let (Some(name), Some(bar)) = (
             opt_text(&at, "section"),
-            cue.get("resolved").and_then(|r| r.get("bar")).and_then(whole),
+            cue.get("resolved")
+                .and_then(|r| r.get("bar"))
+                .and_then(whole),
         ) else {
             continue;
         };
@@ -64,33 +77,45 @@ pub(crate) fn sections(doc: &Value) -> Vec<Sect> {
     }
     starts.sort_by_key(|(_, bar)| *bar);
     for (i, (name, bar)) in starts.iter().enumerate() {
-        let bars = starts.get(i + 1).map_or(8.0, |(_, next)| f64::from(next.saturating_sub(*bar)));
+        let bars = starts
+            .get(i + 1)
+            .map_or(8.0, |(_, next)| f64::from(next.saturating_sub(*bar)));
         push(name, *bar, bars, &mut out);
     }
     out
 }
 
 fn find_section<'a>(sects: &'a [Sect], name: &str, ordinal: usize) -> Option<&'a Sect> {
-    sects.iter().find(|s| s.name == name && s.ordinal == ordinal).or_else(|| {
-        let want = name.to_lowercase();
-        sects.iter().filter(|s| s.name.to_lowercase() == want).nth(ordinal)
-    })
+    sects
+        .iter()
+        .find(|s| s.name == name && s.ordinal == ordinal)
+        .or_else(|| {
+            let want = name.to_lowercase();
+            sects
+                .iter()
+                .filter(|s| s.name.to_lowercase() == want)
+                .nth(ordinal)
+        })
 }
 
 /// A position as the file stores it and the bar it resolves to.
 pub(crate) fn place(doc: &Value, at: &Value) -> Result<(Value, Value), String> {
     let sects = sections(doc);
     let bar_beat = |bar: u32, beat: f64| json!({ "bar": bar, "beat": beat });
-    let in_section = |name: &str, ordinal: usize, bars: u32, beat: f64| -> Result<(Value, Value), String> {
-        let s = find_section(&sects, name, ordinal).ok_or_else(|| {
-            let have: Vec<&str> = sects.iter().map(|s| s.name.as_str()).collect();
-            format!("no section {name:?} (occurrence {}); the song has {have:?}", ordinal + 1)
-        })?;
-        Ok((
-            json!({ "section": s.name, "ordinal": ordinal, "bars": bars, "beat": beat }),
-            bar_beat(s.bar + bars, beat),
-        ))
-    };
+    let in_section =
+        |name: &str, ordinal: usize, bars: u32, beat: f64| -> Result<(Value, Value), String> {
+            let s = find_section(&sects, name, ordinal).ok_or_else(|| {
+                let have: Vec<&str> = sects.iter().map(|s| s.name.as_str()).collect();
+                format!(
+                    "no section {name:?} (occurrence {}); the song has {have:?}",
+                    ordinal + 1
+                )
+            })?;
+            Ok((
+                json!({ "section": s.name, "ordinal": ordinal, "bars": bars, "beat": beat }),
+                bar_beat(s.bar + bars, beat),
+            ))
+        };
     match at {
         Value::Number(_) => {
             let bar = whole(at).ok_or("a bar is a whole number, from 1")?;
@@ -100,20 +125,28 @@ pub(crate) fn place(doc: &Value, at: &Value) -> Result<(Value, Value), String> {
             let s = s.trim();
             let mut parts = s.splitn(2, '.');
             if let (Some(Ok(bar)), beat) = (parts.next().map(str::parse::<u32>), parts.next()) {
-                let beat = beat.map_or(Ok(1.0), str::parse::<f64>).map_err(|_| format!("{s:?}: bar.beat"))?;
+                let beat = beat
+                    .map_or(Ok(1.0), str::parse::<f64>)
+                    .map_err(|_| format!("{s:?}: bar.beat"))?;
                 return Ok((bar_beat(bar, beat), bar_beat(bar, beat)));
             }
-            if let Some(m) = list(doc, "markers").iter().find(|m| opt_text(m, "name") == Some(s)) {
+            if let Some(m) = list(doc, "markers")
+                .iter()
+                .find(|m| opt_text(m, "name") == Some(s))
+            {
                 return place(doc, &json!({ "marker": m.get("name") }));
             }
             let (rest, bars) = match s.rsplit_once('+') {
-                Some((rest, n)) if n.trim().parse::<u32>().is_ok() => (rest.trim(), n.trim().parse().unwrap_or(0)),
+                Some((rest, n)) if n.trim().parse::<u32>().is_ok() => {
+                    (rest.trim(), n.trim().parse().unwrap_or(0))
+                }
                 _ => (s, 0),
             };
             let (name, ordinal) = match rest.rsplit_once('#') {
-                Some((name, n)) if n.trim().parse::<usize>().is_ok() => {
-                    (name.trim(), n.trim().parse::<usize>().unwrap_or(1).saturating_sub(1))
-                }
+                Some((name, n)) if n.trim().parse::<usize>().is_ok() => (
+                    name.trim(),
+                    n.trim().parse::<usize>().unwrap_or(1).saturating_sub(1),
+                ),
                 _ => (rest, 0),
             };
             in_section(name, ordinal, bars, 1.0)
@@ -124,22 +157,36 @@ pub(crate) fn place(doc: &Value, at: &Value) -> Result<(Value, Value), String> {
                     .iter()
                     .find(|m| opt_text(m, "name") == Some(name))
                     .ok_or_else(|| format!("no marker {name:?}"))?;
-                let bar = m.get("bar").and_then(whole).ok_or("the marker has no bar")?;
+                let bar = m
+                    .get("bar")
+                    .and_then(whole)
+                    .ok_or("the marker has no bar")?;
                 let beat = num(m, "beat").unwrap_or(1.0);
                 return Ok((bar_beat(bar, beat), bar_beat(bar, beat)));
             }
             if let Some(name) = map.get("section").and_then(Value::as_str) {
-                let ordinal = map.get("ordinal").and_then(whole).map_or(0, |o| usize::try_from(o).unwrap_or(0));
+                let ordinal = map
+                    .get("ordinal")
+                    .and_then(whole)
+                    .map_or(0, |o| usize::try_from(o).unwrap_or(0));
                 if map.get("last_bar").and_then(Value::as_bool) == Some(true) {
-                    let s = find_section(&sects, name, ordinal).ok_or_else(|| format!("no section {name:?}"))?;
-                    #[allow(clippy::as_conversions, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let s = find_section(&sects, name, ordinal)
+                        .ok_or_else(|| format!("no section {name:?}"))?;
+                    #[allow(
+                        clippy::as_conversions,
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss
+                    )]
                     let last = s.bar + (s.bars.ceil().max(1.0) as u32) - 1;
                     return Ok((at.clone(), bar_beat(last, 1.0)));
                 }
                 let bars = map.get("bars").and_then(whole).unwrap_or(0);
                 return in_section(name, ordinal, bars, num(at, "beat").unwrap_or(1.0));
             }
-            let bar = map.get("bar").and_then(whole).ok_or("`at`: a bar, \"bar.beat\", a section, or {marker}")?;
+            let bar = map
+                .get("bar")
+                .and_then(whole)
+                .ok_or("`at`: a bar, \"bar.beat\", a section, or {marker}")?;
             let beat = num(at, "beat").unwrap_or(1.0);
             Ok((bar_beat(bar, beat), bar_beat(bar, beat)))
         }
@@ -150,7 +197,9 @@ pub(crate) fn place(doc: &Value, at: &Value) -> Result<(Value, Value), String> {
 fn bar_key(v: &Value) -> (u32, f64) {
     let r = v.get("resolved").or_else(|| v.get("at"));
     (
-        r.and_then(|r| r.get("bar")).and_then(whole).unwrap_or(u32::MAX),
+        r.and_then(|r| r.get("bar"))
+            .and_then(whole)
+            .unwrap_or(u32::MAX),
         r.and_then(|r| num(r, "beat")).unwrap_or(1.0),
     )
 }
@@ -170,19 +219,31 @@ fn sort_cues(doc: &mut Value, key: &str) -> Result<(), String> {
 fn cue_index(doc: &Value, cue: &Value) -> Result<usize, String> {
     let cues = list(doc, "cues");
     if let Some(i) = cue.get("index").and_then(whole) {
-        return usize::try_from(i).ok().filter(|i| *i < cues.len()).ok_or_else(|| format!("no cue at index {i}"));
+        return usize::try_from(i)
+            .ok()
+            .filter(|i| *i < cues.len())
+            .ok_or_else(|| format!("no cue at index {i}"));
     }
     if let Some(name) = cue.as_str() {
         if let Some(i) = cues.iter().position(|c| opt_text(c, "name") == Some(name)) {
             return Ok(i);
         }
     }
-    let n = cue.as_f64().or_else(|| cue.as_str().and_then(|s| s.parse().ok()));
+    let n = cue
+        .as_f64()
+        .or_else(|| cue.as_str().and_then(|s| s.parse().ok()));
     if let Some(n) = n {
-        if let Some(i) = cues.iter().position(|c| num(c, "number").is_some_and(|x| (x - n).abs() < 1e-6)) {
+        if let Some(i) = cues
+            .iter()
+            .position(|c| num(c, "number").is_some_and(|x| (x - n).abs() < 1e-6))
+        {
             return Ok(i);
         }
-        #[allow(clippy::as_conversions, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[allow(
+            clippy::as_conversions,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss
+        )]
         let i = (n - 1.0).max(0.0) as usize;
         if n.fract() == 0.0 && i < cues.len() {
             return Ok(i);
@@ -200,7 +261,11 @@ fn section_cue(doc: &Value, s: &Sect) -> Option<usize> {
         .position(|c| {
             let at = c.get("at").cloned().unwrap_or_default();
             opt_text(&at, "section") == Some(s.name.as_str())
-                && at.get("ordinal").and_then(whole).map_or(0, |o| usize::try_from(o).unwrap_or(0)) == s.ordinal
+                && at
+                    .get("ordinal")
+                    .and_then(whole)
+                    .map_or(0, |o| usize::try_from(o).unwrap_or(0))
+                    == s.ordinal
                 && at.get("bars").and_then(whole).unwrap_or(0) == 0
                 && at.get("last_bar").is_none()
                 && num(&at, "beat").unwrap_or(1.0) <= 1.0
@@ -222,14 +287,22 @@ pub(crate) fn selection(target: &Value, roles: &BTreeSet<String>) -> Result<Valu
 
 pub(crate) fn roles_of(cx: &Ctx, l: &Layers) -> BTreeSet<String> {
     cx.json(&profile_path(cx, &l.show, &l.show_doc))
-        .map(|p| list(&p, "roles").iter().filter_map(|r| opt_text(r, "name").map(str::to_owned)).collect())
+        .map(|p| {
+            list(&p, "roles")
+                .iter()
+                .filter_map(|r| opt_text(r, "name").map(str::to_owned))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
 /// A trick preset by name, or written in place.
 pub(crate) fn preset_of(l: &Layers, tricks: &Value) -> Result<TrickPreset, String> {
     let value = match tricks {
-        Value::String(name) => l.find("tricks", name).map(|(_, e)| e).ok_or_else(|| format!("no trick preset {name:?}"))?,
+        Value::String(name) => l
+            .find("tricks", name)
+            .map(|(_, e)| e)
+            .ok_or_else(|| format!("no trick preset {name:?}"))?,
         Value::Array(chain) => json!({ "tricks": chain }),
         other => other.clone(),
     };
@@ -260,7 +333,11 @@ pub(crate) fn put_part(cue: &mut Value, spec: &Value, l: &Layers, roles: &BTreeS
     }
     if let Some(c) = spec.get("color") {
         if let Some(name) = c.as_str() {
-            let slot = l.palette().1.iter().any(|s| opt_text(s, "slot") == Some(name));
+            let slot = l
+                .palette()
+                .1
+                .iter()
+                .any(|s| opt_text(s, "slot") == Some(name));
             if !slot && l.find("colors", name).is_none() {
                 return Err(format!("no colour or palette slot {name:?}"));
             }
@@ -277,8 +354,13 @@ pub(crate) fn put_part(cue: &mut Value, spec: &Value, l: &Layers, roles: &BTreeS
         applies.push(("FocusPoint".into(), f.clone()));
     }
     if let Some(b) = opt_text(spec, "beam") {
-        let (_, beam) = l.find("beams", b).ok_or_else(|| format!("no beam preset {b:?}"))?;
-        applies.push(("Raw".into(), beam.get("values").cloned().unwrap_or_default()));
+        let (_, beam) = l
+            .find("beams", b)
+            .ok_or_else(|| format!("no beam preset {b:?}"))?;
+        applies.push((
+            "Raw".into(),
+            beam.get("values").cloned().unwrap_or_default(),
+        ));
     }
     if let Some(raw) = spec.get("raw") {
         applies.push(("Raw".into(), raw.clone()));
@@ -286,7 +368,9 @@ pub(crate) fn put_part(cue: &mut Value, spec: &Value, l: &Layers, roles: &BTreeS
     if !applies.is_empty() {
         let parts = arr(cue, "recipes")?;
         let at = parts.iter().position(|p| {
-            p.get("target") == Some(&target) && p.get("effect").is_none() && list(p, "steps").len() == 1
+            p.get("target") == Some(&target)
+                && p.get("effect").is_none()
+                && list(p, "steps").len() == 1
         });
         let at = at.unwrap_or_else(|| {
             let first_effect = parts.iter().position(|p| p.get("effect").is_some() || list(p, "steps").len() > 1);
@@ -307,7 +391,9 @@ pub(crate) fn put_part(cue: &mut Value, spec: &Value, l: &Layers, roles: &BTreeS
         }
     }
     if let Some(effect) = opt_text(spec, "effect") {
-        let (_, entry) = l.find("effects", effect).ok_or_else(|| format!("no effect {effect:?}"))?;
+        let (_, entry) = l
+            .find("effects", effect)
+            .ok_or_else(|| format!("no effect {effect:?}"))?;
         let label = opt_text(spec, "name").map_or_else(|| effect.to_owned(), str::to_owned);
         let mut params = Map::new();
         if let Some(d) = num(spec, "depth") {
@@ -321,7 +407,8 @@ pub(crate) fn put_part(cue: &mut Value, spec: &Value, l: &Layers, roles: &BTreeS
                 let mut recipe: ignition_show::Recipe =
                     serde_json::from_value(entry.get("recipe").cloned().unwrap_or_default())
                         .map_err(|e| format!("effect {effect:?}: {e}"))?;
-                recipe.target = serde_json::from_value(target.clone()).map_err(|e| format!("target: {e}"))?;
+                recipe.target =
+                    serde_json::from_value(target.clone()).map_err(|e| format!("target: {e}"))?;
                 if let Some(bars) = num(spec, "bars") {
                     recipe.timing.measure = f32_of(bars * 4.0);
                 }
@@ -332,7 +419,9 @@ pub(crate) fn put_part(cue: &mut Value, spec: &Value, l: &Layers, roles: &BTreeS
                 recipe.name = Some(label.clone());
                 recipe.note = Some(format!(
                     "effect {effect:?} with tricks {}",
-                    tricks.as_str().map_or_else(|| "written in place".to_owned(), |n| format!("{n:?}"))
+                    tricks
+                        .as_str()
+                        .map_or_else(|| "written in place".to_owned(), |n| format!("{n:?}"))
                 ));
                 serde_json::to_value(&recipe).map_err(|e| e.to_string())?
             }
@@ -355,13 +444,17 @@ pub(crate) fn put_part(cue: &mut Value, spec: &Value, l: &Layers, roles: &BTreeS
         let parts = arr(cue, "recipes")?;
         parts.retain(|p| {
             !(p.get("target") == Some(&target)
-                && (opt_text(p, "effect") == Some(effect) || opt_text(p, "name") == Some(label.as_str())))
+                && (opt_text(p, "effect") == Some(effect)
+                    || opt_text(p, "name") == Some(label.as_str())))
         });
         parts.push(part);
         did.insert("effect".into(), json!(effect));
     }
     if did.is_empty() {
-        return Err("a part sets something: dimmer, color, split, focus, beam, raw, effect or look".to_owned());
+        return Err(
+            "a part sets something: dimmer, color, split, focus, beam, raw, effect or look"
+                .to_owned(),
+        );
     }
     did.insert("target".into(), target);
     Ok(Value::Object(did))
@@ -450,7 +543,9 @@ fn song_get(cx: &Ctx, args: &Value) -> Res {
     let (palette, slots) = l.palette();
     let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
     for m in list(&doc, "markers") {
-        *kinds.entry(opt_text(m, "kind").unwrap_or("").to_owned()).or_default() += 1;
+        *kinds
+            .entry(opt_text(m, "kind").unwrap_or("").to_owned())
+            .or_default() += 1;
     }
     Ok(json!({
         "file": path, "name": doc.get("name"),
@@ -469,14 +564,25 @@ fn song_create(cx: &mut Ctx, args: &Value) -> Res {
     let title = text(args, "title")?;
     let mut l = layers(cx, args)?;
     let dir = dir_of(&l.show);
-    let stem = l.show.file_stem().and_then(|s| s.to_str()).unwrap_or("set").to_owned();
-    let rel = opt_text(args, "file").map_or_else(|| format!("../songs/{stem}/{}.json", slug(title)), str::to_owned);
+    let stem = l
+        .show
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("set")
+        .to_owned();
+    let rel = opt_text(args, "file").map_or_else(
+        || format!("../songs/{stem}/{}.json", slug(title)),
+        str::to_owned,
+    );
     let path = join(&dir, &rel);
     if cx.exists(&path) {
         return Err(format!("{} is already there", path.display()));
     }
     if !l.show_doc.is_object() || l.show_doc.get("songs").is_none() {
-        merge(&mut l.show_doc, &json!({ "version": 1, "name": stem, "profile": "../profiles/ignition.ig-profile", "venue": opt_text(args, "env").map_or_else(|| "../venues/room138-cbu".to_owned(), |e| format!("../venues/{e}")), "songs": [] }));
+        merge(
+            &mut l.show_doc,
+            &json!({ "version": 1, "name": stem, "profile": "../profiles/ignition.ig-profile", "venue": opt_text(args, "env").map_or_else(|| "../venues/room138-cbu".to_owned(), |e| format!("../venues/{e}")), "songs": [] }),
+        );
     }
     arr(&mut l.show_doc, "songs")?.push(json!({
         "set": opt_text(args, "set").unwrap_or(""), "song": title,
@@ -492,7 +598,11 @@ fn song_create(cx: &mut Ctx, args: &Value) -> Res {
 }
 
 /// Loads the song an action edits, runs `edit`, re-sorts and stages it.
-fn edit_song(cx: &mut Ctx, args: &Value, edit: impl FnOnce(&mut Value, &Layers, &BTreeSet<String>) -> Res) -> Res {
+fn edit_song(
+    cx: &mut Ctx,
+    args: &Value,
+    edit: impl FnOnce(&mut Value, &Layers, &BTreeSet<String>) -> Res,
+) -> Res {
     let l = layers(cx, args)?;
     let (path, mut doc) = l.song.clone().ok_or("`song` is required")?;
     let roles = roles_of(cx, &l);
@@ -563,7 +673,9 @@ fn cue_update(cx: &mut Ctx, args: &Value) -> Res {
             let look = opt_text(remove, "look");
             arr(cue, "recipes")?.retain(|p| {
                 let hit = target.as_ref().is_none_or(|t| p.get("target") == Some(t))
-                    && effect.is_none_or(|e| opt_text(p, "effect") == Some(e) || opt_text(p, "name") == Some(e))
+                    && effect.is_none_or(|e| {
+                        opt_text(p, "effect") == Some(e) || opt_text(p, "name") == Some(e)
+                    })
                     && look.is_none_or(|k| opt_text(p, "look") == Some(k))
                     && (target.is_some() || effect.is_some() || look.is_some());
                 !hit
@@ -604,7 +716,10 @@ fn cue_duplicate(cx: &mut Ctx, args: &Value) -> Res {
 fn pick_sections(doc: &Value, which: &Value) -> Result<Vec<Sect>, String> {
     let all = sections(doc);
     let mut out: Vec<Sect> = Vec::new();
-    let wanted: Vec<Value> = which.as_array().cloned().unwrap_or_else(|| vec![which.clone()]);
+    let wanted: Vec<Value> = which
+        .as_array()
+        .cloned()
+        .unwrap_or_else(|| vec![which.clone()]);
     for w in &wanted {
         let Some(w) = w.as_str() else {
             return Err("`section`: a name, \"*\", \"kind:chorus\", or a list".to_owned());
@@ -612,14 +727,21 @@ fn pick_sections(doc: &Value, which: &Value) -> Result<Vec<Sect>, String> {
         let hits: Vec<Sect> = if w == "*" {
             all.clone()
         } else if let Some(kind) = w.strip_prefix("kind:") {
-            all.iter().filter(|s| kind_of(&s.name) == kind).cloned().collect()
+            all.iter()
+                .filter(|s| kind_of(&s.name) == kind)
+                .cloned()
+                .collect()
         } else {
             let (name, ordinal) = match w.rsplit_once('#') {
-                Some((n, o)) if o.parse::<usize>().is_ok() => (n, Some(o.parse::<usize>().unwrap_or(1).saturating_sub(1))),
+                Some((n, o)) if o.parse::<usize>().is_ok() => {
+                    (n, Some(o.parse::<usize>().unwrap_or(1).saturating_sub(1)))
+                }
                 _ => (w, None),
             };
             all.iter()
-                .filter(|s| s.name.eq_ignore_ascii_case(name) && ordinal.is_none_or(|o| s.ordinal == o))
+                .filter(|s| {
+                    s.name.eq_ignore_ascii_case(name) && ordinal.is_none_or(|o| s.ordinal == o)
+                })
                 .cloned()
                 .collect()
         };
@@ -628,7 +750,10 @@ fn pick_sections(doc: &Value, which: &Value) -> Result<Vec<Sect>, String> {
             return Err(format!("no section {w:?}; the song has {have:?}"));
         }
         for h in hits {
-            if !out.iter().any(|s| s.name == h.name && s.ordinal == h.ordinal) {
+            if !out
+                .iter()
+                .any(|s| s.name == h.name && s.ordinal == h.ordinal)
+            {
                 out.push(h);
             }
         }
@@ -668,7 +793,11 @@ fn ensure_section_cue(doc: &mut Value, s: &Sect) -> Result<(usize, bool), String
     if let Some(i) = section_cue(doc, s) {
         return Ok((i, false));
     }
-    let name = if s.ordinal == 0 { s.name.clone() } else { format!("{} ({})", s.name, s.ordinal + 1) };
+    let name = if s.ordinal == 0 {
+        s.name.clone()
+    } else {
+        format!("{} ({})", s.name, s.ordinal + 1)
+    };
     let cue = new_cue(
         &name,
         json!({ "section": s.name, "ordinal": s.ordinal, "bars": 0, "beat": 1.0 }),
@@ -697,7 +826,16 @@ fn section_apply(cx: &mut Ctx, args: &Value) -> Res {
     })
 }
 
-const LOOK_KEYS: [&str; 8] = ["recipes", "values", "fade_secs", "block", "timing", "fan", "mib", "morph"];
+const LOOK_KEYS: [&str; 8] = [
+    "recipes",
+    "values",
+    "fade_secs",
+    "block",
+    "timing",
+    "fan",
+    "mib",
+    "morph",
+];
 
 fn section_copy(cx: &mut Ctx, args: &Value) -> Res {
     let l = layers(cx, args)?;
@@ -744,11 +882,18 @@ fn fill_sections(cx: &mut Ctx, args: &Value) -> Res {
     let l = layers(cx, args)?;
     let (path, mut doc) = l.song.clone().ok_or("`song` is required")?;
     let roles = roles_of(cx, &l);
-    let looks = args.get("looks").and_then(Value::as_object).ok_or("`looks` is required: {kind or section name: parts}")?;
+    let looks = args
+        .get("looks")
+        .and_then(Value::as_object)
+        .ok_or("`looks` is required: {kind or section name: parts}")?;
     let mut plan = Vec::new();
     for s in sections(&doc) {
         let kind = kind_of(&s.name);
-        let Some(parts) = looks.get(&s.name).or_else(|| looks.get(kind)).or_else(|| looks.get("*")) else {
+        let Some(parts) = looks
+            .get(&s.name)
+            .or_else(|| looks.get(kind))
+            .or_else(|| looks.get("*"))
+        else {
             plan.push(json!({ "section": s.name, "kind": kind, "bar": s.bar, "skipped": "no look for it" }));
             continue;
         };
@@ -777,7 +922,8 @@ fn fill_sections(cx: &mut Ctx, args: &Value) -> Res {
 }
 
 fn bump_kind(name: &str) -> Result<ignition_show::BumpKind, String> {
-    serde_json::from_value(json!(name)).map_err(|_| format!("bump {name:?}: Level, White, ColorBoost or Burst"))
+    serde_json::from_value(json!(name))
+        .map_err(|_| format!("bump {name:?}: Level, White, ColorBoost or Burst"))
 }
 
 /// Accents on hits: a trigger (a one-shot bump) at each marker of a
@@ -788,13 +934,15 @@ fn fill_hits(cx: &mut Ctx, args: &Value) -> Res {
     let (path, mut doc) = l.song.clone().ok_or("`song` is required")?;
     let roles = roles_of(cx, &l);
     let target = selection(args.get("target").ok_or("`target` is required")?, &roles)?;
-    let typed: ignition_show::Selection = serde_json::from_value(target.clone()).map_err(|e| format!("target: {e}"))?;
+    let typed: ignition_show::Selection =
+        serde_json::from_value(target.clone()).map_err(|e| format!("target: {e}"))?;
     let kind = opt_text(args, "kind");
     let band = opt_text(args, "band");
     let min = num(args, "min_strength").unwrap_or(0.0);
     let bump = opt_text(args, "bump").unwrap_or("Level");
     let depth = f32_of(num(args, "depth").unwrap_or(0.6));
-    let label = opt_text(args, "name").map_or_else(|| kind.or(band).unwrap_or("hit").to_owned(), str::to_owned);
+    let label = opt_text(args, "name")
+        .map_or_else(|| kind.or(band).unwrap_or("hit").to_owned(), str::to_owned);
     let mut points: Vec<(u32, f64)> = Vec::new();
     if let Some(hits) = opt_text(args, "hits") {
         let file = cx.json(&cx.path(hits))?;
@@ -809,7 +957,9 @@ fn fill_hits(cx: &mut Ctx, args: &Value) -> Res {
         }
     } else {
         for m in list(&doc, "markers") {
-            if kind.is_none_or(|k| opt_text(m, "kind") == Some(k)) && num(m, "strength").unwrap_or(1.0) >= min {
+            if kind.is_none_or(|k| opt_text(m, "kind") == Some(k))
+                && num(m, "strength").unwrap_or(1.0) >= min
+            {
                 if let Some(bar) = m.get("bar").and_then(whole) {
                     points.push((bar, num(m, "beat").unwrap_or(1.0)));
                 }
@@ -820,7 +970,11 @@ fn fill_hits(cx: &mut Ctx, args: &Value) -> Res {
         let picked = pick_sections(&doc, only)?;
         points.retain(|(bar, _)| {
             picked.iter().any(|s| {
-                #[allow(clippy::as_conversions, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[allow(
+                    clippy::as_conversions,
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss
+                )]
                 let end = s.bar + s.bars.ceil() as u32;
                 *bar >= s.bar && *bar < end
             })
@@ -831,7 +985,8 @@ fn fill_hits(cx: &mut Ctx, args: &Value) -> Res {
     if points.is_empty() {
         return Err("no hits: the song has no markers of that kind (IGNITION_SONG_MAP_SET puts them in) and no `hits` file was given".to_owned());
     }
-    let recipe = serde_json::to_value(ignition_show::bump::bump(typed, bump_kind(bump)?, depth)).map_err(|e| e.to_string())?;
+    let recipe = serde_json::to_value(ignition_show::bump::bump(typed, bump_kind(bump)?, depth))
+        .map_err(|e| e.to_string())?;
     let triggers = arr(&mut doc, "triggers")?;
     let before = triggers.len();
     if flag(args, "replace") {
@@ -863,7 +1018,9 @@ fn triggers(cx: &mut Ctx, args: &Value, clear: bool) -> Res {
     if clear {
         let all = arr(&mut doc, "triggers")?;
         let before = all.len();
-        all.retain(|t| !prefix.is_none_or(|p| opt_text(t, "name").is_some_and(|n| n.starts_with(p))));
+        all.retain(|t| {
+            !prefix.is_none_or(|p| opt_text(t, "name").is_some_and(|n| n.starts_with(p)))
+        });
         let removed = before - all.len();
         cx.write_json(&path, &doc)?;
         return Ok(json!({ "removed": removed }));
@@ -895,7 +1052,9 @@ fn map_set(cx: &mut Ctx, args: &Value) -> Res {
     }
     let unresolved = re_resolve(&mut doc)?;
     cx.write_json(&path, &doc)?;
-    Ok(json!({ "sections": sections_json(&doc), "markers": list(&doc, "markers").len(), "unresolved": unresolved }))
+    Ok(
+        json!({ "sections": sections_json(&doc), "markers": list(&doc, "markers").len(), "unresolved": unresolved }),
+    )
 }
 
 /// Every cue's and trigger's bar again from its `at` and the section map.
@@ -907,7 +1066,9 @@ fn re_resolve(doc: &mut Value) -> Result<Vec<Value>, String> {
             continue;
         }
         for item in arr(doc, key)? {
-            let Some(at) = item.get("at").cloned() else { continue };
+            let Some(at) = item.get("at").cloned() else {
+                continue;
+            };
             match place(&snapshot, &at) {
                 Ok((_, resolved)) => {
                     obj(item)?.insert("resolved".into(), resolved);
@@ -932,8 +1093,14 @@ fn map_import(cx: &mut Ctx, args: &Value) -> Res {
     let only = opt_text(args, "song").map(slug);
     let mut out = Vec::new();
     for entry in list(&l.show_doc, "songs") {
-        let (Some(file), Some(locator)) = (opt_text(entry, "file"), opt_text(entry, "locator")) else { continue };
-        if only.as_ref().is_some_and(|o| Some(o.clone()) != opt_text(entry, "song").map(slug)) {
+        let (Some(file), Some(locator)) = (opt_text(entry, "file"), opt_text(entry, "locator"))
+        else {
+            continue;
+        };
+        if only
+            .as_ref()
+            .is_some_and(|o| Some(o.clone()) != opt_text(entry, "song").map(slug))
+        {
             continue;
         }
         let Some(live) = set.song(locator) else {
@@ -967,7 +1134,12 @@ fn song_slots(cx: &mut Ctx, args: &Value) -> Res {
     let mut l = layers(cx, args)?;
     let (path, mut doc) = l.song.clone().ok_or("`song` is required")?;
     let title = opt_text(&doc, "name").unwrap_or("song").to_owned();
-    let existing: BTreeSet<String> = l.palette().1.iter().filter_map(|s| opt_text(s, "slot").map(str::to_owned)).collect();
+    let existing: BTreeSet<String> = l
+        .palette()
+        .1
+        .iter()
+        .filter_map(|s| opt_text(s, "slot").map(str::to_owned))
+        .collect();
     let mut weight: BTreeMap<String, usize> = BTreeMap::new();
     for key in ["cues", "triggers"] {
         for (kind, name) in names_in(&json!(list(&doc, key))) {
@@ -977,15 +1149,22 @@ fn song_slots(cx: &mut Ctx, args: &Value) -> Res {
         }
     }
     if weight.is_empty() {
-        return Ok(json!({ "song": title, "slots": {}, "note": "its cues name no literal colours" }));
+        return Ok(
+            json!({ "song": title, "slots": {}, "note": "its cues name no literal colours" }),
+        );
     }
     let mut ranked: Vec<(String, usize)> = weight.into_iter().collect();
     ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-    let (whites, colours): (Vec<_>, Vec<_>) = ranked.into_iter().partition(|(n, _)| n.contains("White"));
+    let (whites, colours): (Vec<_>, Vec<_>) =
+        ranked.into_iter().partition(|(n, _)| n.contains("White"));
     let mut slots: Map<String, Value> = Map::new();
     let mut rename: BTreeMap<String, String> = BTreeMap::new();
     for (i, (name, _)) in whites.iter().enumerate() {
-        let slot = if i == 0 { "White".to_owned() } else { format!("White {}", i + 1) };
+        let slot = if i == 0 {
+            "White".to_owned()
+        } else {
+            format!("White {}", i + 1)
+        };
         slots.insert(slot.clone(), json!(name));
         rename.insert(name.clone(), slot);
     }
@@ -1011,7 +1190,11 @@ fn song_slots(cx: &mut Ctx, args: &Value) -> Res {
                         }
                     }
                     if k == "colors" || k == "Colors" {
-                        let items = if inner.is_array() { Some(inner) } else { inner.get_mut("colors") };
+                        let items = if inner.is_array() {
+                            Some(inner)
+                        } else {
+                            inner.get_mut("colors")
+                        };
                         if let Some(items) = items.and_then(Value::as_array_mut) {
                             for c in items.iter_mut() {
                                 if let Some(to) = c.as_str().and_then(|n| rename.get(n)) {
@@ -1036,7 +1219,9 @@ fn song_slots(cx: &mut Ctx, args: &Value) -> Res {
     let lib = obj(&mut doc)?.entry("library").or_insert_with(|| json!({}));
     obj(lib)?.insert("palette".into(), json!(title));
     l.song = Some((path, doc));
-    let pool = obj(&mut l.set)?.entry("palettes").or_insert_with(|| json!({}));
+    let pool = obj(&mut l.set)?
+        .entry("palettes")
+        .or_insert_with(|| json!({}));
     obj(pool)?.insert(
         title.clone(),
         json!({ "slots": slots, "about": format!("{title} as it was programmed"), "tags": ["song"], "folder": "Songs" }),
@@ -1059,8 +1244,14 @@ fn song_bake(cx: &mut Ctx, args: &Value) -> Res {
             .iter()
             .find(|s| opt_text(s, "slot") == Some(name))
             .cloned()
-            .or_else(|| l.find("colors", name).filter(|(layer, _)| *layer != "profile").map(|(_, c)| c))?;
-        Some(json!({ "name": name, "red": rgb.get("red")?, "green": rgb.get("green")?, "blue": rgb.get("blue")? }))
+            .or_else(|| {
+                l.find("colors", name)
+                    .filter(|(layer, _)| *layer != "profile")
+                    .map(|(_, c)| c)
+            })?;
+        Some(
+            json!({ "name": name, "red": rgb.get("red")?, "green": rgb.get("green")?, "blue": rgb.get("blue")? }),
+        )
     };
     fn colours(v: &mut Value, colour: &dyn Fn(&str) -> Option<Value>, n: &mut usize) {
         match v {
@@ -1074,7 +1265,11 @@ fn song_bake(cx: &mut Ctx, args: &Value) -> Res {
                         }
                     }
                     if k == "colors" || k == "Colors" {
-                        let items = if inner.is_array() { Some(&mut *inner) } else { inner.get_mut("colors") };
+                        let items = if inner.is_array() {
+                            Some(&mut *inner)
+                        } else {
+                            inner.get_mut("colors")
+                        };
                         for c in items.and_then(Value::as_array_mut).into_iter().flatten() {
                             if let Some(to) = c.as_str().and_then(colour) {
                                 *c = to;
@@ -1098,16 +1293,28 @@ fn song_bake(cx: &mut Ctx, args: &Value) -> Res {
         let parts = std::mem::take(arr(cue, "recipes")?);
         let mut out = Vec::new();
         for part in parts {
-            if let Some((_, look)) = opt_text(&part, "look").and_then(|n| l.find("looks", n)).filter(|(layer, _)| *layer != "profile") {
+            if let Some((_, look)) = opt_text(&part, "look")
+                .and_then(|n| l.find("looks", n))
+                .filter(|(layer, _)| *layer != "profile")
+            {
                 out.extend(list(&look, "recipes").iter().cloned());
                 inlined += 1;
-            } else if let Some((_, entry)) = opt_text(&part, "effect").and_then(|n| l.find("effects", n)).filter(|(layer, _)| *layer != "profile") {
+            } else if let Some((_, entry)) = opt_text(&part, "effect")
+                .and_then(|n| l.find("effects", n))
+                .filter(|(layer, _)| *layer != "profile")
+            {
                 let mut recipe = entry.get("recipe").cloned().unwrap_or_default();
                 let map = obj(&mut recipe)?;
                 if let Some(t) = part.get("target") {
                     map.insert("target".into(), t.clone());
                 }
-                map.insert("name".into(), part.get("name").or_else(|| part.get("effect")).cloned().unwrap_or_default());
+                map.insert(
+                    "name".into(),
+                    part.get("name")
+                        .or_else(|| part.get("effect"))
+                        .cloned()
+                        .unwrap_or_default(),
+                );
                 if let Some(bars) = num(&part, "bars") {
                     let timing = map.entry("timing").or_insert_with(|| json!({}));
                     obj(timing)?.insert("measure".into(), json!(bars * 4.0));
@@ -1115,7 +1322,11 @@ fn song_bake(cx: &mut Ctx, args: &Value) -> Res {
                 // The part's depth goes with the recipe: without it a
                 // baked copy plays every library effect of the set at
                 // full depth.
-                if let Some(depth) = part.get("params").and_then(|p| p.get("depth")).or_else(|| part.get("depth")) {
+                if let Some(depth) = part
+                    .get("params")
+                    .and_then(|p| p.get("depth"))
+                    .or_else(|| part.get("depth"))
+                {
                     map.insert("depth".into(), depth.clone());
                 }
                 out.push(recipe);
@@ -1127,8 +1338,17 @@ fn song_bake(cx: &mut Ctx, args: &Value) -> Res {
         for part in &mut out {
             if let Some(apply) = part.get_mut("steps") {
                 for step in apply.as_array_mut().into_iter().flatten() {
-                    for a in step.get_mut("apply").and_then(Value::as_array_mut).into_iter().flatten() {
-                        if let Some((_, f)) = a.get("FocusPoint").and_then(Value::as_str).and_then(|n| l.find("focus", n)) {
+                    for a in step
+                        .get_mut("apply")
+                        .and_then(Value::as_array_mut)
+                        .into_iter()
+                        .flatten()
+                    {
+                        if let Some((_, f)) = a
+                            .get("FocusPoint")
+                            .and_then(Value::as_str)
+                            .and_then(|n| l.find("focus", n))
+                        {
                             *a = json!({ "FocusPoint": f.get("target") });
                         }
                     }
@@ -1147,7 +1367,9 @@ fn song_bake(cx: &mut Ctx, args: &Value) -> Res {
     }
     let to = cx.path(text(args, "to")?);
     cx.write_json(&to, &doc)?;
-    Ok(json!({ "to": to, "colours_written": coloured, "parts_written_in_place": inlined, "cues": list(&doc, "cues").len() }))
+    Ok(
+        json!({ "to": to, "colours_written": coloured, "parts_written_in_place": inlined, "cues": list(&doc, "cues").len() }),
+    )
 }
 
 /// What a set's songs refer to that is not there.
@@ -1155,22 +1377,49 @@ fn set_check(cx: &Ctx, args: &Value) -> Res {
     let base = layers(cx, args)?;
     let dir = dir_of(&base.show);
     let roles = roles_of(cx, &base);
-    let profile = cx.json(&profile_path(cx, &base.show, &base.show_doc)).unwrap_or_default();
-    let bundles: BTreeSet<String> = profile.get("bundles").and_then(Value::as_object).map(|b| b.keys().cloned().collect()).unwrap_or_default();
+    let profile = cx
+        .json(&profile_path(cx, &base.show, &base.show_doc))
+        .unwrap_or_default();
+    let bundles: BTreeSet<String> = profile
+        .get("bundles")
+        .and_then(Value::as_object)
+        .map(|b| b.keys().cloned().collect())
+        .unwrap_or_default();
     let venue = join(&dir, opt_text(&base.show_doc, "venue").unwrap_or("."));
     let groups: BTreeSet<String> = cx
         .json(&venue.join("groups.json"))
-        .map(|g| g.as_array().into_iter().flatten().filter_map(|g| opt_text(g, "label").map(str::to_owned)).collect())
+        .map(|g| {
+            g.as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|g| opt_text(g, "label").map(str::to_owned))
+                .collect()
+        })
         .unwrap_or_default();
     let binding = cx.json(&venue.join("profile.json")).unwrap_or_default();
     let palettes = cx.json(&venue.join("palettes.json")).unwrap_or_default();
-    let mut focus: BTreeSet<String> = list(&palettes, "focus").iter().filter_map(|f| opt_text(f, "name").map(str::to_owned)).collect();
-    focus.extend(binding.get("focus").and_then(Value::as_object).into_iter().flat_map(|m| m.keys().cloned()));
-    let bound: BTreeSet<String> = binding.get("groups").and_then(Value::as_object).map(|m| m.keys().cloned().collect()).unwrap_or_default();
+    let mut focus: BTreeSet<String> = list(&palettes, "focus")
+        .iter()
+        .filter_map(|f| opt_text(f, "name").map(str::to_owned))
+        .collect();
+    focus.extend(
+        binding
+            .get("focus")
+            .and_then(Value::as_object)
+            .into_iter()
+            .flat_map(|m| m.keys().cloned()),
+    );
+    let bound: BTreeSet<String> = binding
+        .get("groups")
+        .and_then(Value::as_object)
+        .map(|m| m.keys().cloned().collect())
+        .unwrap_or_default();
     let mut songs = Vec::new();
     let mut total = 0;
     for entry in list(&base.show_doc, "songs") {
-        let Some(title) = opt_text(entry, "song") else { continue };
+        let Some(title) = opt_text(entry, "song") else {
+            continue;
+        };
         let mut a = args.clone();
         if let Some(m) = a.as_object_mut() {
             m.insert("song".into(), json!(title));
@@ -1184,19 +1433,35 @@ fn set_check(cx: &Ctx, args: &Value) -> Res {
                 continue;
             }
         };
-        let Some((_, doc)) = l.song.clone() else { continue };
+        let Some((_, doc)) = l.song.clone() else {
+            continue;
+        };
         let (palette, slots) = l.palette();
-        let slots: BTreeSet<String> = slots.iter().filter_map(|s| opt_text(s, "slot").map(str::to_owned)).collect();
+        let slots: BTreeSet<String> = slots
+            .iter()
+            .filter_map(|s| opt_text(s, "slot").map(str::to_owned))
+            .collect();
         if let Some(p) = &palette {
             if l.find("palettes", p).is_none() {
                 problems.push(json!({ "what": "palette", "name": p, "why": "the song's palette is not in the library" }));
             }
         }
-        for (slot, _) in l.palette().1.iter().filter_map(|s| Some((opt_text(s, "slot")?, s.get("red")?.is_null()))).filter(|(_, missing)| *missing) {
-            problems.push(json!({ "what": "slot", "name": slot, "why": "names a colour that is not there" }));
+        for (slot, _) in l
+            .palette()
+            .1
+            .iter()
+            .filter_map(|s| Some((opt_text(s, "slot")?, s.get("red")?.is_null())))
+            .filter(|(_, missing)| *missing)
+        {
+            problems.push(
+                json!({ "what": "slot", "name": slot, "why": "names a colour that is not there" }),
+            );
         }
         let sects = sections(&doc);
-        for (key, items) in [("cue", list(&doc, "cues")), ("trigger", list(&doc, "triggers"))] {
+        for (key, items) in [
+            ("cue", list(&doc, "cues")),
+            ("trigger", list(&doc, "triggers")),
+        ] {
             for item in items {
                 let name = item.get("name").cloned().unwrap_or_default();
                 let mut seen = BTreeSet::new();
@@ -1227,7 +1492,10 @@ fn set_check(cx: &Ctx, args: &Value) -> Res {
         }
         // The same role-warning for every cue is one finding, not forty.
         let mut once = BTreeSet::new();
-        problems.retain(|p| p.get("what") != Some(&json!("role")) || once.insert(p.get("name").map(Value::to_string)));
+        problems.retain(|p| {
+            p.get("what") != Some(&json!("role"))
+                || once.insert(p.get("name").map(Value::to_string))
+        });
         total += problems.len();
         songs.push(json!({ "song": title, "palette": palette, "cues": list(&doc, "cues").len(), "problems": problems }));
     }
@@ -1239,7 +1507,10 @@ pub(crate) fn set_each(args: &Value) -> Res {
     let cx = Ctx::new(args);
     let l = layers(&cx, args)?;
     let action = text(args, "action")?;
-    let only: Option<BTreeSet<String>> = args.get("songs").and_then(Value::as_array).map(|s| s.iter().filter_map(|x| x.as_str().map(slug)).collect());
+    let only: Option<BTreeSet<String>> = args
+        .get("songs")
+        .and_then(Value::as_array)
+        .map(|s| s.iter().filter_map(|x| x.as_str().map(slug)).collect());
     let titles: Vec<String> = list(&l.show_doc, "songs")
         .iter()
         .filter(|e| e.get("lit").and_then(Value::as_bool) != Some(false) || flag(args, "unlit"))
@@ -1262,7 +1533,10 @@ pub(crate) fn set_each(args: &Value) -> Res {
         })
         .collect();
     let label = format!("{action} over {} songs", steps.len());
-    let out = super::run("IGNITION_BATCH", &json!({ "label": label, "steps": steps, "root": args.get("root") }))?;
+    let out = super::run(
+        "IGNITION_BATCH",
+        &json!({ "label": label, "steps": steps, "root": args.get("root") }),
+    )?;
     let results: Vec<Value> = titles
         .iter()
         .zip(list(&out, "results"))

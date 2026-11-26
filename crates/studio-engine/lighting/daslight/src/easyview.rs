@@ -157,7 +157,11 @@ pub fn panel(
 /// object by `ROTATION`'s Y.
 fn turn(v: [f64; 3], yaw: f64) -> [f64; 3] {
     let (s, c) = yaw.to_radians().sin_cos();
-    [v[0].mul_add(c, v[2] * s), v[1], (-v[0]).mul_add(s, v[2] * c)]
+    [
+        v[0].mul_add(c, v[2] * s),
+        v[1],
+        (-v[0]).mul_add(s, v[2] * c),
+    ]
 }
 
 fn add(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -168,7 +172,13 @@ fn add(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 /// `centre` and turned `yaw` degrees about the vertical: six panels in an
 /// `OBJECT` named for it.
 #[must_use]
-pub fn block(name: &str, centre: [f64; 3], size: [f64; 3], yaw: f64, material: Material) -> Element {
+pub fn block(
+    name: &str,
+    centre: [f64; 3],
+    size: [f64; 3],
+    yaw: f64,
+    material: Material,
+) -> Element {
     let [sx, sy, sz] = size;
     let (hx, hy, hz) = (sx / 2.0, sy / 2.0, sz / 2.0);
     let at = |v: [f64; 3]| add(centre, turn(v, yaw));
@@ -177,8 +187,18 @@ pub fn block(name: &str, centre: [f64; 3], size: [f64; 3], yaw: f64, material: M
         ("bottom", at([0.0, -hy, 0.0]), [0.0, yaw, 0.0], [sx, sz]),
         ("front", at([0.0, 0.0, -hz]), [-90.0, yaw, 0.0], [sx, sy]),
         ("back", at([0.0, 0.0, hz]), [-90.0, yaw, 0.0], [sx, sy]),
-        ("left", at([-hx, 0.0, 0.0]), [-90.0, yaw + 90.0, 0.0], [sz, sy]),
-        ("right", at([hx, 0.0, 0.0]), [-90.0, yaw + 90.0, 0.0], [sz, sy]),
+        (
+            "left",
+            at([-hx, 0.0, 0.0]),
+            [-90.0, yaw + 90.0, 0.0],
+            [sz, sy],
+        ),
+        (
+            "right",
+            at([hx, 0.0, 0.0]),
+            [-90.0, yaw + 90.0, 0.0],
+            [sz, sy],
+        ),
     ];
     let mut group = object("OBJECT", name, 0, true, [0.0; 3], [0.0; 3], [1.0; 3]);
     for (face, c, r, s) in faces {
@@ -216,7 +236,11 @@ impl Model<'_> {
         let scale: [f64; 3] = [0, 1, 2].map(|i| {
             let extent = hi.get(i).unwrap_or(&1.0) - lo.get(i).unwrap_or(&0.0);
             let want = size.get(i).copied().unwrap_or(1.0);
-            if extent.abs() <= f64::EPSILON { 1.0 } else { want / extent }
+            if extent.abs() <= f64::EPSILON {
+                1.0
+            } else {
+                want / extent
+            }
         });
         // EasyView loads a mesh centred on its bounding box (seen in
         // EasyView 2.0.3: meshes placed by their own origin sank to the
@@ -445,7 +469,13 @@ mod tests {
 
     #[test]
     fn a_block_is_six_coloured_faces_round_its_centre() {
-        let b = block("box", [0.0, 50.0, 0.0], [200.0, 100.0, 40.0], 0.0, Material::rgb(1, 2, 3, 0));
+        let b = block(
+            "box",
+            [0.0, 50.0, 0.0],
+            [200.0, 100.0, 40.0],
+            0.0,
+            Material::rgb(1, 2, 3, 0),
+        );
         let faces: Vec<&Element> = b.elements().collect();
         assert_eq!(faces.len(), 6);
         let top = faces.first().and_then(|f| f.get("POSITION"));
@@ -455,7 +485,10 @@ mod tests {
 
     #[test]
     fn a_model_fills_its_box_from_the_floor_up() {
-        let m = Model { file: "./Library/x.x", bounds: [[-25.0, 0.0, -10.0], [25.0, 50.0, 10.0]] };
+        let m = Model {
+            file: "./Library/x.x",
+            bounds: [[-25.0, 0.0, -10.0], [25.0, 50.0, 10.0]],
+        };
         let el = m.place("m", [100.0, 0.0, 0.0], [100.0, 200.0, 20.0], 0.0, None);
         assert_eq!(el.get("SCALE"), Some("2,4,1"));
         assert_eq!(el.get("POSITION"), Some("100,100,0"));

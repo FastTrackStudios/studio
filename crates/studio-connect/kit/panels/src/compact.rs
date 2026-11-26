@@ -31,21 +31,21 @@ use crate::shell::{BAR_BG, DIM, RULE, TEXT};
 pub use daw_view_kit::form::*;
 
 /// Narrower than this (and taller than wide) is a phone held upright.
-pub const NARROW: f64 = app_shell::ui::FormFactor::NARROW;
+pub const NARROW: f64 = studio_shell::ui::FormFactor::NARROW;
 /// Shorter than this (and wider than tall) is a phone on its side.
-pub const SHORT: f64 = app_shell::ui::FormFactor::SHORT;
+pub const SHORT: f64 = studio_shell::ui::FormFactor::SHORT;
 
 /// The form of a window `width` × `height` logical pixels: the shared
-/// classification ([`app_shell::ui::FormFactor::of`]).
+/// classification ([`studio_shell::ui::FormFactor::of`]).
 #[must_use]
 pub fn form_of(width: f64, height: f64) -> Form {
-    form_from_screen(&app_shell::ui::Screen::desk(width, height))
+    form_from_screen(&studio_shell::ui::Screen::desk(width, height))
 }
 
-/// The layout a [`app_shell::ui::Screen`] takes: a phone's by its
+/// The layout a [`studio_shell::ui::Screen`] takes: a phone's by its
 /// orientation, a tablet's and a desk's the wide one.
 #[must_use]
-pub fn form_from_screen(screen: &app_shell::ui::Screen) -> Form {
+pub fn form_from_screen(screen: &studio_shell::ui::Screen) -> Form {
     match (screen.phone(), screen.landscape()) {
         (false, _) => Form::Wide,
         (true, false) => Form::Portrait,
@@ -137,7 +137,7 @@ pub fn CompactShell(
     // The app's outer box: on dioxus-native the host published the screen,
     // and the box keeps clear of what of the safe area the page must keep
     // clear itself; in a page (no screen published) of the CSS insets.
-    let outer = try_use_context::<Signal<app_shell::ui::Screen>>().map_or_else(
+    let outer = try_use_context::<Signal<studio_shell::ui::Screen>>().map_or_else(
         || crate::shell::SAFE_AREA.to_owned(),
         |screen| crate::shell::safe_area_box(screen().insets),
     );
@@ -252,7 +252,7 @@ pub fn CompactShell(
         // An explicit size, not insets: Blitz gives an absolutely placed box
         // stretched by `top`/`bottom` no height, and the column collapses to
         // its content (the wide shell does the same). In the app the box is
-        // padded by the screen's insets (`app_shell::ui::form::page_insets`:
+        // padded by the screen's insets (`studio_shell::ui::form::page_insets`:
         // what Blitz has not already kept out of the viewport — today
         // nothing, as blitz-shell insets the viewport by all of winit's
         // safe area); in a page by the CSS ones (`shell::SAFE_AREA`).

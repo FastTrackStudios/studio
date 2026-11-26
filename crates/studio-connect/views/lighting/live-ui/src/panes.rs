@@ -910,7 +910,10 @@ mod tests {
     /// would look completely correct and cost a quarter of the frame.
     #[test]
     fn the_shipped_looks_have_previews() {
-        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../studio-engine/lighting");
+        let root = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../studio-engine/lighting"
+        );
         for name in ["blackout", "chorus full", "punt", "verse bed"] {
             let path = std::path::Path::new(root).join(preview_path(name));
             let bytes = std::fs::read(&path)

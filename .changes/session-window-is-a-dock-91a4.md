@@ -1,6 +1,6 @@
 ---
 "engine-host" = "minor"
-"app-shell" = "patch"
+"studio-shell" = "patch"
 "dock" = "patch"
 ---
 

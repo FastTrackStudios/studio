@@ -160,7 +160,7 @@ pub fn run() {
                     .with_ansi(false)
                     .with_writer(std::sync::Mutex::new(file))
             }))
-            .with(app_shell::log_ring::RingLayer::new())
+            .with(studio_shell::log_ring::RingLayer::new())
             // Which action each step of the song's history was made by
             // (`SESSION_HISTORY`).
             .with({
@@ -177,7 +177,7 @@ pub fn run() {
             .with(::studio_engine::telemetry::SpanRing::default())
             .with(::studio_engine::telemetry::otel("session"));
         registry.init();
-        app_shell::log_ring::install_panic_hook("Session");
+        studio_shell::log_ring::install_panic_hook("Session");
     }
 
     // `engine-host --session-engine …`: the engine with no window, as
@@ -1468,7 +1468,7 @@ fn EnginesArea() -> Element {
 #[component]
 fn SettingsPanel() -> Element {
     // The running app's (Studio's release version when Studio mounts this).
-    let version = app_shell::version::current();
+    let version = studio_shell::version::current();
     rsx! {
         div {
             style: "display: flex; flex-direction: column; align-items: flex-start; gap: 12px; \
@@ -1480,13 +1480,13 @@ fn SettingsPanel() -> Element {
 }
 
 /// Settings' update block: the release feed's answer for this build, and
-/// the signed install when one is possible (`app_shell::updates`).
+/// the signed install when one is possible (`studio_shell::updates`).
 #[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
 #[component]
 fn UpdateCheck() -> Element {
     rsx! {
-        app_shell::updates::UpdateSettings {
-            app: app_shell::updates::App::new(env!("CARGO_PKG_NAME"), app_shell::version::current()),
+        studio_shell::updates::UpdateSettings {
+            app: studio_shell::updates::App::new(env!("CARGO_PKG_NAME"), studio_shell::version::current()),
         }
     }
 }

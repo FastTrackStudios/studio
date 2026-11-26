@@ -22,12 +22,12 @@ mod setlist;
 mod song;
 mod talk;
 
-use app_shell::ui::{Insets, Screen};
 use dioxus::prelude::*;
 use lucide_dioxus::{
     AudioLines, AudioWaveform, ChevronLeft, FolderKanban, Guitar, House, ListMusic, Search, Users,
     X,
 };
+use studio_shell::ui::{Insets, Screen};
 
 use crate::model::{
     AlbumId, ArrangementId, Edit, EntryId, Library, PartId, ProjectId, SessionId, SetlistId,
@@ -248,7 +248,7 @@ pub(crate) fn open(what: Open) {
 
 /// The window as the library lays out for it: the size the app hands it
 /// ([`Viewport`]), classified by the apps' one rule
-/// ([`app_shell::ui::FormFactor::of`]), with the touch and the insets of
+/// ([`studio_shell::ui::FormFactor::of`]), with the touch and the insets of
 /// the screen the host published (none on a desk, or with no host).
 pub(crate) fn use_screen() -> Screen {
     let Viewport(size) = use_context::<Viewport>();
@@ -529,7 +529,7 @@ fn CommandButton() -> Element {
 /// Escape clears it.
 #[component]
 fn SearchField(wide: bool) -> Element {
-    let keys = app_shell::ui::use_text_focus();
+    let keys = studio_shell::ui::use_text_focus();
     let mut nav = use_nav();
     let q = (nav.query)();
     let empty = q.is_empty();

@@ -1,9 +1,9 @@
 use bevy_core_pipeline::prepass::ViewPrepassTextures;
 use bevy_render::render_resource::{
+    BindGroupLayoutEntryBuilder, TextureSampleType, TextureView,
     binding_types::{
         texture_2d, texture_2d_multisampled, texture_depth_2d, texture_depth_2d_multisampled,
     },
-    BindGroupLayoutEntryBuilder, TextureSampleType, TextureView,
 };
 
 use crate::MeshPipelineViewLayoutKey;

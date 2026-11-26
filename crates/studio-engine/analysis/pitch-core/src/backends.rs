@@ -305,8 +305,17 @@ impl PitchSynthesizer for TdOlaSynthesizer {
 
             // Nearest analysis pitch mark to `cur`.
             let mark_idx = marks.partition_point(|&m| m < cur);
-            let an_center = match (mark_idx.checked_sub(1).and_then(|i| marks.get(i)), marks.get(mark_idx)) {
-                (Some(&a), Some(&b)) => if cur.abs_diff(a) <= cur.abs_diff(b) { a } else { b },
+            let an_center = match (
+                mark_idx.checked_sub(1).and_then(|i| marks.get(i)),
+                marks.get(mark_idx),
+            ) {
+                (Some(&a), Some(&b)) => {
+                    if cur.abs_diff(a) <= cur.abs_diff(b) {
+                        a
+                    } else {
+                        b
+                    }
+                }
                 (Some(&a), None) => a,
                 (None, Some(&b)) => b,
                 (None, None) => cur,

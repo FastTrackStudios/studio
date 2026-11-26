@@ -49,7 +49,10 @@ fn song_map(document: &serde_json::Value, bpm: f64) -> SongMap {
         .into_iter()
         .flatten()
     {
-        let bars = s.get("bars").and_then(serde_json::Value::as_f64).unwrap_or(0.0);
+        let bars = s
+            .get("bars")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
         let name = s
             .get("name")
             .and_then(serde_json::Value::as_str)
@@ -76,7 +79,10 @@ fn song_map(document: &serde_json::Value, bpm: f64) -> SongMap {
 fn position_of(beats: f64) -> Bars {
     let bar = (beats / BEATS_PER_BAR).floor();
     let whole: u32 = format!("{bar:.0}").parse().unwrap_or(0);
-    Bars::new(whole.saturating_add(1), bar.mul_add(-BEATS_PER_BAR, beats) + 1.0)
+    Bars::new(
+        whole.saturating_add(1),
+        bar.mul_add(-BEATS_PER_BAR, beats) + 1.0,
+    )
 }
 
 /// Where a cue is written to fall, in beats from the top: its section's
@@ -93,18 +99,33 @@ fn written_beat(document: &serde_json::Value, name: &str) -> Option<f64> {
         .find(|c| c.get("name").and_then(serde_json::Value::as_str) == Some(name))?
         .get("at")?;
     let section = at.get("section")?.as_str()?;
-    let ordinal = at.get("ordinal").and_then(serde_json::Value::as_u64).unwrap_or(0);
+    let ordinal = at
+        .get("ordinal")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
     let ordinal = usize::try_from(ordinal).ok()?;
     let mut start = 0.0_f64;
     let mut starts = Vec::new();
     for s in sections {
-        let bars = s.get("bars").and_then(serde_json::Value::as_f64).unwrap_or(0.0);
+        let bars = s
+            .get("bars")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
         starts.push((s.get("name").and_then(serde_json::Value::as_str), start));
         start = bars.mul_add(BEATS_PER_BAR, start);
     }
-    let (_, from) = starts.into_iter().filter(|(n, _)| *n == Some(section)).nth(ordinal)?;
-    let bars = at.get("bars").and_then(serde_json::Value::as_f64).unwrap_or(0.0);
-    let beat = at.get("beat").and_then(serde_json::Value::as_f64).unwrap_or(1.0);
+    let (_, from) = starts
+        .into_iter()
+        .filter(|(n, _)| *n == Some(section))
+        .nth(ordinal)?;
+    let bars = at
+        .get("bars")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0);
+    let beat = at
+        .get("beat")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(1.0);
     Some(bars.mul_add(BEATS_PER_BAR, from) + beat - 1.0)
 }
 
@@ -114,7 +135,13 @@ fn beats_of(position: Bars) -> f64 {
 }
 
 /// One cue held from the end of its fade, and its frames.
-fn record(venue_dir: &str, cuelist: &Path, song: &SongMap, bpm: f32, cue: usize) -> anyhow::Result<Vec<Vec<u8>>> {
+fn record(
+    venue_dir: &str,
+    cuelist: &Path,
+    song: &SongMap,
+    bpm: f32,
+    cue: usize,
+) -> anyhow::Result<Vec<Vec<u8>>> {
     let venue = Venue::load(venue_dir)?;
     let mut playback = Playback::load(
         &venue,
@@ -141,7 +168,11 @@ fn record(venue_dir: &str, cuelist: &Path, song: &SongMap, bpm: f32, cue: usize)
             .run_system_once(tick_playback)
             .map_err(|e| anyhow::anyhow!("tick: {e}"))?;
         let snapshot = world.resource::<DmxRes>().0.snapshot();
-        frames.push(snapshot.get(&1).map_or_else(|| vec![0; 512], |u| u.to_vec()));
+        frames.push(
+            snapshot
+                .get(&1)
+                .map_or_else(|| vec![0; 512], |u| u.to_vec()),
+        );
     }
     Ok(frames)
 }
@@ -179,7 +210,12 @@ fn main() -> anyhow::Result<()> {
         }
         let body: Vec<String> = frames
             .iter()
-            .map(|f| format!("[{}]", f.iter().map(u8::to_string).collect::<Vec<_>>().join(",")))
+            .map(|f| {
+                format!(
+                    "[{}]",
+                    f.iter().map(u8::to_string).collect::<Vec<_>>().join(",")
+                )
+            })
             .collect();
         write!(
             json,

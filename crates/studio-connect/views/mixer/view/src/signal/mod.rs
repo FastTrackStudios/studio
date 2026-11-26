@@ -34,8 +34,8 @@ mod tests;
 use std::sync::{Arc, RwLock};
 
 use architect::action::{ActionList, ActionMeta, Effect};
-use facet::Facet;
 use daw_view::actions::meta;
+use facet::Facet;
 
 pub use chain::Chain;
 pub use source::{Edit, Fixture, ParamValue, SignalSource};

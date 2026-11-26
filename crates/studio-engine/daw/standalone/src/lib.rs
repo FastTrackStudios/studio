@@ -92,8 +92,8 @@ mod peak;
 mod peak_store;
 pub(crate) mod platform;
 pub mod plugin;
-pub mod plugin_sleep;
 mod plugin_loader;
+pub mod plugin_sleep;
 mod position_conversion;
 mod project;
 #[cfg(any(feature = "rpp-project", feature = "rpp-project-wasm"))]

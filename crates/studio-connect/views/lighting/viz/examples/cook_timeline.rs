@@ -56,7 +56,10 @@ fn bar_starts(document: &serde_json::Value) -> Vec<f64> {
         .into_iter()
         .flatten()
     {
-        let bars = s.get("bars").and_then(serde_json::Value::as_f64).unwrap_or(0.0);
+        let bars = s
+            .get("bars")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
         let whole = bars.floor();
         let mut n = 0.0_f64;
         while n < whole {
@@ -93,7 +96,10 @@ fn song_map(document: &serde_json::Value, starts: &[f64], bpm: f64) -> SongMap {
         .into_iter()
         .flatten()
     {
-        let bars = s.get("bars").and_then(serde_json::Value::as_f64).unwrap_or(0.0);
+        let bars = s
+            .get("bars")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
         sections.push(Section {
             name: s
                 .get("name")
@@ -144,8 +150,14 @@ impl Plan {
             .collect();
         anyhow::ensure!(warp.len() >= 2, "the audio plan needs two warp markers");
         Ok(Self {
-            seconds: json.get("seconds").and_then(serde_json::Value::as_f64).unwrap_or(0.0),
-            beat_offset: json.get("beat_offset").and_then(serde_json::Value::as_f64).unwrap_or(0.0),
+            seconds: json
+                .get("seconds")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0),
+            beat_offset: json
+                .get("beat_offset")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0),
             warp,
         })
     }
@@ -159,10 +171,19 @@ impl Plan {
             .find(|w| w.get(1).is_some_and(|b| seconds <= b.0))
             .or_else(|| pairs.last())
             .copied();
-        let Some([(s0, b0), (s1, b1)]) = pick.map(|w| [w.first().copied().unwrap_or_default(), w.get(1).copied().unwrap_or_default()]) else {
+        let Some([(s0, b0), (s1, b1)]) = pick.map(|w| {
+            [
+                w.first().copied().unwrap_or_default(),
+                w.get(1).copied().unwrap_or_default(),
+            ]
+        }) else {
             return self.beat_offset;
         };
-        let t = if (s1 - s0).abs() < 1e-9 { 0.0 } else { (seconds - s0) / (s1 - s0) };
+        let t = if (s1 - s0).abs() < 1e-9 {
+            0.0
+        } else {
+            (seconds - s0) / (s1 - s0)
+        };
         (b1 - b0).mul_add(t, b0) + self.beat_offset
     }
 }
@@ -206,9 +227,13 @@ fn follow(world: &mut World, at: Bars, secs: f32) {
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
-    let (Some(venue_dir), Some(song_path), Some(plan_path), Some(bpm), Some(out)) =
-        (args.get(1), args.get(2), args.get(3), args.get(4), args.get(5))
-    else {
+    let (Some(venue_dir), Some(song_path), Some(plan_path), Some(bpm), Some(out)) = (
+        args.get(1),
+        args.get(2),
+        args.get(3),
+        args.get(4),
+        args.get(5),
+    ) else {
         anyhow::bail!("usage: cook_timeline <venue dir> <song.json> <audio.json> <bpm> <out.json>");
     };
     let bpm: f32 = bpm.parse()?;
@@ -219,11 +244,20 @@ fn main() -> anyhow::Result<()> {
     let plan = Plan::read(Path::new(plan_path))?;
     let mut list: CueList = serde_json::from_str(&text)?;
     let unresolved = list.resolve_positions(&song);
-    anyhow::ensure!(unresolved.is_empty(), "cues that do not resolve: {unresolved:?}");
+    anyhow::ensure!(
+        unresolved.is_empty(),
+        "cues that do not resolve: {unresolved:?}"
+    );
     let cue_beats: Vec<(String, f64, f32)> = list
         .cues
         .iter()
-        .map(|c| (c.name.clone(), c.position().map_or(0.0, |p| beat_of(&starts, p)), c.fade_secs))
+        .map(|c| {
+            (
+                c.name.clone(),
+                c.position().map_or(0.0, |p| beat_of(&starts, p)),
+                c.fade_secs,
+            )
+        })
         .collect();
 
     let venue = Venue::load(venue_dir)?;
@@ -256,8 +290,19 @@ fn main() -> anyhow::Result<()> {
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
     {
-        let Playback { palettes, library, looks, named_tricks, .. } = &mut playback;
-        let mut pools = Pools { palettes, effects: library, looks, tricks: named_tricks };
+        let Playback {
+            palettes,
+            library,
+            looks,
+            named_tricks,
+            ..
+        } = &mut playback;
+        let mut pools = Pools {
+            palettes,
+            effects: library,
+            looks,
+            tricks: named_tricks,
+        };
         set.lay_over(&mut pools);
         own.over(&set).lay_over(&mut pools);
     }
@@ -277,7 +322,11 @@ fn main() -> anyhow::Result<()> {
     // The hits' first sight of the playhead is a locate; start it a
     // frame before the first so the opening hits fire.
     let first = plan.beat_at(0.0);
-    follow(&mut world, position(&starts, (first - 0.01).max(0.0)), secs_of(first - 0.01));
+    follow(
+        &mut world,
+        position(&starts, (first - 0.01).max(0.0)),
+        secs_of(first - 0.01),
+    );
     let mut frames: Vec<(f64, Vec<u8>)> = Vec::new();
     for k in 0..frames_n {
         let second = f64::from(k) / f64::from(FPS);
@@ -289,10 +338,18 @@ fn main() -> anyhow::Result<()> {
             .run_system_once(tick_playback)
             .map_err(|e| anyhow::anyhow!("tick: {e}"))?;
         let snapshot = world.resource::<DmxRes>().0.snapshot();
-        frames.push((beat, snapshot.get(&1).map_or_else(|| vec![0; 512], |u| u.to_vec())));
+        frames.push((
+            beat,
+            snapshot
+                .get(&1)
+                .map_or_else(|| vec![0; 512], |u| u.to_vec()),
+        ));
         if k.checked_rem(u32::from(FPS) * 10) == Some(0) {
             let mut pb = world.resource_mut::<Playback>();
-            let cue = pb.playbacks.of_class(Class::Song).map(|p| (p.current_index(), p.cues().len()));
+            let cue = pb
+                .playbacks
+                .of_class(Class::Song)
+                .map(|p| (p.current_index(), p.cues().len()));
             println!("{second:6.1} s  beat {beat:6.1}  song cue {cue:?}");
         }
     }
@@ -302,11 +359,18 @@ fn main() -> anyhow::Result<()> {
         serde_json::to_string(&song.name)?
     );
     for (i, (name, beat, fade)) in cue_beats.iter().enumerate() {
-        let next = cue_beats.get(i.saturating_add(1)).map_or(f64::INFINITY, |c| c.1);
+        let next = cue_beats
+            .get(i.saturating_add(1))
+            .map_or(f64::INFINITY, |c| c.1);
         let body: Vec<String> = frames
             .iter()
             .filter(|(b, _)| *b >= *beat && *b < next)
-            .map(|(_, f)| format!("[{}]", f.iter().map(u8::to_string).collect::<Vec<_>>().join(",")))
+            .map(|(_, f)| {
+                format!(
+                    "[{}]",
+                    f.iter().map(u8::to_string).collect::<Vec<_>>().join(",")
+                )
+            })
             .collect();
         if i > 0 {
             json.push(',');

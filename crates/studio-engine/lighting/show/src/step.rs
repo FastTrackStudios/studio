@@ -462,10 +462,10 @@ impl Timing {
         pos: &crate::tricks::UnitPos,
         masters: &SpeedMasters,
     ) -> f32 {
-        let raw = self
-            .cycles(secs, masters)
-            .mul_add(self.rate_at(pos.x, pos.count[0]), self.spread_fraction_3d(pos))
-            + self.phase_offset_deg / 360.0;
+        let raw = self.cycles(secs, masters).mul_add(
+            self.rate_at(pos.x, pos.count[0]),
+            self.spread_fraction_3d(pos),
+        ) + self.phase_offset_deg / 360.0;
         self.finish(raw)
     }
 

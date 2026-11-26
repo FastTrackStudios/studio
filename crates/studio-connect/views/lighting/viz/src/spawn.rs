@@ -1790,10 +1790,7 @@ pub fn spawn_venue(
             // point. A long, thin housing whose profile gave no strip is
             // a strip along its length.
             let housing = f.size.to_vec3();
-            if !is_strip
-                && housing.x >= 0.5
-                && housing.x >= 4.0 * housing.y.max(housing.z)
-            {
+            if !is_strip && housing.x >= 0.5 && housing.x >= 4.0 * housing.y.max(housing.z) {
                 const CELLS: usize = 8;
                 let cells: Vec<(Vec3, Quat)> = (0..CELLS)
                     .map(|i| {
@@ -2423,7 +2420,11 @@ pub fn update_beams(
             }
         }
 
-        let spills = children.iter().filter(|c| spill_q.contains(*c)).count().max(1);
+        let spills = children
+            .iter()
+            .filter(|c| spill_q.contains(*c))
+            .count()
+            .max(1);
         for child in children.iter() {
             if let Ok((mut visibility, mut light)) = spill_q.get_mut(child) {
                 if let Some(color) = state.color {

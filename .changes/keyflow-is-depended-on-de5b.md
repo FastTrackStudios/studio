@@ -4,7 +4,7 @@
 "session" = "none"
 "engine-host" = "none"
 "studio-engine" = "none"
-"session-ui" = "none"
+"daw-view-kit" = "none"
 "studio-views" = "none"
 ---
 

@@ -2,7 +2,7 @@
 "daw-extension" = "minor"
 "daw-ui" = "minor"
 "studio-engine" = "patch"
-"session-ui" = "minor"
+"daw-view-kit" = "minor"
 "studio-arrangement" = "minor"
 "studio-mixer" = "minor"
 "studio-view-link" = "minor"

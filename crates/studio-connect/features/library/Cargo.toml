@@ -9,10 +9,10 @@ description = "Studio's library: songs and their arrangements, setlists, albums,
 [features]
 # The library screens (src/ui): inline styles only, so they render on
 # Blitz, a WebView and the web alike; the app picks the renderer.
-ui = ["dep:dioxus", "dep:lucide-dioxus", "dep:futures-timer", "app-shell/ui"]
+ui = ["dep:dioxus", "dep:lucide-dioxus", "dep:futures-timer", "studio-shell/ui"]
 
 [dependencies]
-app-shell = { workspace = true }
+studio-shell = { workspace = true }
 # The process-wide keyboard switch its fields hold (`utils::keyboard`).
 utils = { workspace = true }
 uuid = { workspace = true }

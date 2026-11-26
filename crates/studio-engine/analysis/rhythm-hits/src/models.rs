@@ -48,8 +48,7 @@ impl ModelManifest {
 
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, String> {
         let p = path.as_ref();
-        let text = std::fs::read_to_string(p)
-            .map_err(|e| format!("read {}: {e}", p.display()))?;
+        let text = std::fs::read_to_string(p).map_err(|e| format!("read {}: {e}", p.display()))?;
         Self::from_json_str(&text)
     }
 
@@ -89,10 +88,7 @@ pub fn default_cache_dir() -> PathBuf {
 
 /// Resolve a model file inside `cache_dir` (or [`default_cache_dir`]),
 /// returning a clear download hint if the weight file is not cached yet.
-pub fn resolve_cached_model(
-    spec: &ModelSpec,
-    cache_dir: Option<&Path>,
-) -> Result<PathBuf, String> {
+pub fn resolve_cached_model(spec: &ModelSpec, cache_dir: Option<&Path>) -> Result<PathBuf, String> {
     let dir = cache_dir
         .map(Path::to_path_buf)
         .unwrap_or_else(default_cache_dir);

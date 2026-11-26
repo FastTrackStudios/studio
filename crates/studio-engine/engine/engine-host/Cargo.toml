@@ -69,7 +69,7 @@ cli = [
 # The app on Blitz (dioxus-native): the panels-and-views shell with our own
 # title bar — see docs/app-on-blitz.md. Desktop only for now (iOS follows);
 # without it the desktop build launches the WRY app as before.
-native = ["session-domain", "dep:dock", "dep:dioxus-native", "app-shell/native", "dep:daw-view-kit", "dep:studio-panels", "studio-panels?/engine", "dep:midi-editor", "dep:mixer-view", "dep:arrangement-view", "dep:studio-engine", "dep:winit", "dep:rfd", "dep:dirs", "dep:lucide-dioxus", "dep:serde_json"]
+native = ["session-domain", "dep:dock", "dep:dioxus-native", "studio-shell/native", "dep:daw-view-kit", "dep:studio-panels", "studio-panels?/engine", "dep:midi-editor", "dep:mixer-view", "dep:arrangement-view", "dep:studio-engine", "dep:winit", "dep:rfd", "dep:dirs", "dep:lucide-dioxus", "dep:serde_json"]
 # signal's rigs in the session engine: the bass rig, the kit's sampled
 # voices (daw-view-kit's `signal`; NAM's C++ and the sampler build with it).
 signal = ["native", "daw-view-kit/signal", "studio-panels/signal", "mixer-view/signal", "arrangement-view/signal"]
@@ -134,7 +134,7 @@ tts = ["engine-domain/tts"]
 # the transport moves; on iOS, Now Playing and the remote commands).
 futures-timer = { workspace = true }
 utils.workspace = true
-app-shell = { workspace = true, features = ["ui"] }
+studio-shell = { workspace = true, features = ["ui"] }
 # The window as a dock of panels laid out by screensets (native/dock.rs,
 # docs/design/docking.md).
 dock = { workspace = true, optional = true, features = ["host"] }

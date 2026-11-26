@@ -1,5 +1,5 @@
 ---
-"session-ui" = "none"
+"daw-view-kit" = "none"
 "engine-host" = "none"
 "dynamic-template" = "none"
 ---

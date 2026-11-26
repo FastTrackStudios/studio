@@ -1,6 +1,6 @@
 ---
 "studio-engine" = "patch"
-"session-ui" = "patch"
+"daw-view-kit" = "patch"
 "studio-arrangement" = "patch"
 "studio-mixer" = "patch"
 "studio-view-link" = "patch"

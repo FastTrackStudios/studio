@@ -45,7 +45,8 @@ pub struct Example {
 }
 
 fn main() {
-    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/studio-core/frame/frame/examples/surfaces");
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../crates/studio-core/frame/frame/examples/surfaces");
     let mut bare: Option<PathBuf> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {

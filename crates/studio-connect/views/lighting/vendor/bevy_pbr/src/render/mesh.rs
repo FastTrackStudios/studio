@@ -2,15 +2,15 @@ use crate::contact_shadows::ContactShadows;
 use crate::{resources::prepare_atmosphere_buffers, skin::skin_uniforms_from_world};
 use alloc::sync::Arc;
 use bevy_asset::uuid::Uuid;
-use bevy_asset::{embedded_asset, load_embedded_asset, AssetId, AssetIndex, AssetServer};
+use bevy_asset::{AssetId, AssetIndex, AssetServer, embedded_asset, load_embedded_asset};
 use bevy_camera::visibility::NoCpuCulling;
 use bevy_camera::{
+    Camera, Projection,
     primitives::Aabb,
     visibility::{NoFrustumCulling, RenderLayers, ViewVisibility, VisibilityRange},
-    Camera, Projection,
 };
 use bevy_core_pipeline::{
-    core_3d::{AlphaMask3d, Opaque3d, Transparent3d, CORE_3D_DEPTH_FORMAT},
+    core_3d::{AlphaMask3d, CORE_3D_DEPTH_FORMAT, Opaque3d, Transparent3d},
     deferred::{AlphaMask3dDeferred, Opaque3dDeferred},
     oit::prepare_oit_buffers,
     prepass::MotionVectorPrepass,
@@ -23,7 +23,7 @@ use bevy_ecs::{
     prelude::*,
     query::{QueryData, ROQueryItem},
     relationship::RelationshipSourceCollection,
-    system::{lifetimeless::*, SystemParamItem},
+    system::{SystemParamItem, lifetimeless::*},
 };
 use bevy_image::TextureFormatPixelInfo;
 use bevy_light::{
@@ -32,11 +32,11 @@ use bevy_light::{
 };
 use bevy_math::{Affine3, Affine3Ext, Rect, UVec2, Vec3, Vec4};
 use bevy_mesh::{
-    skinning::SkinnedMesh, BaseMeshPipelineKey, Mesh, Mesh3d, MeshAttributeCompressionFlags,
-    MeshTag, MeshVertexBufferLayoutRef, VertexAttributeDescriptor,
+    BaseMeshPipelineKey, Mesh, Mesh3d, MeshAttributeCompressionFlags, MeshTag,
+    MeshVertexBufferLayoutRef, VertexAttributeDescriptor, skinning::SkinnedMesh,
 };
 use bevy_platform::collections::HashSet;
-use bevy_platform::collections::{hash_map::Entry, HashMap};
+use bevy_platform::collections::{HashMap, hash_map::Entry};
 use bevy_render::batching::gpu_preprocessing::{
     BufferDataInput, PreviousInstanceInputUniformBuffer,
 };
@@ -44,21 +44,23 @@ use bevy_render::impl_atomic_pod;
 use bevy_render::material_bind_groups::{
     MaterialBindGroupIndex, MaterialBindGroupSlot, MaterialBindingId, RenderMaterialBindings,
 };
+use bevy_render::mesh::MeshMetadataFallbackBuffer;
 use bevy_render::mesh::allocator::{MeshSlabId, MeshSlabs};
 use bevy_render::mesh::morph::{
     MorphTargetImage, MorphTargetsResource, RenderMorphTargetAllocator,
 };
-use bevy_render::mesh::MeshMetadataFallbackBuffer;
 use bevy_render::{
+    Extract,
     batching::{
+        GetBatchData, GetFullBatchData, NoAutomaticBatching,
         gpu_preprocessing::{
             self, GpuPreprocessingSupport, IndirectBatchSet, IndirectParametersBuffers,
             IndirectParametersIndexed, IndirectParametersMetadata, IndirectParametersNonIndexed,
             InstanceInputUniformBuffer, UntypedPhaseIndirectParametersBuffers,
         },
-        no_gpu_preprocessing, GetBatchData, GetFullBatchData, NoAutomaticBatching,
+        no_gpu_preprocessing,
     },
-    mesh::{allocator::MeshAllocator, RenderMesh, RenderMeshBufferInfo},
+    mesh::{RenderMesh, RenderMeshBufferInfo, allocator::MeshAllocator},
     render_asset::RenderAssets,
     render_phase::{
         BinnedRenderPhasePlugin, InputUniformIndex, PhaseItem, PhaseItemExtraIndex, RenderCommand,
@@ -69,11 +71,10 @@ use bevy_render::{
     sync_world::MainEntityHashSet,
     texture::{DefaultImageSampler, GpuImage},
     view::{self, NoIndirectDrawing, RenderVisibilityRanges, RetainedViewEntity},
-    Extract,
 };
-use bevy_shader::{load_shader_library, Shader, ShaderDefVal, ShaderSettings};
+use bevy_shader::{Shader, ShaderDefVal, ShaderSettings, load_shader_library};
 use bevy_transform::components::GlobalTransform;
-use bevy_utils::{default, Parallel, TypeIdHashMap};
+use bevy_utils::{Parallel, TypeIdHashMap, default};
 use core::any::TypeId;
 use core::iter;
 use core::mem::size_of;
@@ -88,8 +89,8 @@ use tracing::{error, warn};
 use crate::{
     render::{
         morph::{
-            extract_morphs, no_automatic_morph_batching, write_morph_buffers, MorphIndices,
-            MorphUniforms,
+            MorphIndices, MorphUniforms, extract_morphs, no_automatic_morph_batching,
+            write_morph_buffers,
         },
         skin::no_automatic_skin_batching,
     },
@@ -98,16 +99,16 @@ use crate::{
 use bevy_core_pipeline::oit::OrderIndependentTransparencySettings;
 use bevy_core_pipeline::prepass::{DeferredPrepass, DepthPrepass, NormalPrepass};
 use bevy_core_pipeline::tonemapping::{DebandDither, Tonemapping};
+use bevy_render::RenderSystems::PrepareAssets;
 use bevy_render::camera::{
     DirtySpecializations, DirtyWireframeSpecializations, ExtractedCamera, TemporalJitter,
 };
 use bevy_render::prelude::Msaa;
 use bevy_render::sync_world::{MainEntity, MainEntityHashMap};
 use bevy_render::view::{
-    texture_format_from_code, texture_format_to_code, ExtractedView,
-    RenderShadowMapVisibleEntities, RenderVisibleEntities,
+    ExtractedView, RenderShadowMapVisibleEntities, RenderVisibleEntities, texture_format_from_code,
+    texture_format_to_code,
 };
-use bevy_render::RenderSystems::PrepareAssets;
 use bevy_tasks::ComputeTaskPool;
 
 use bytemuck::{Pod, Zeroable};
@@ -4188,8 +4189,8 @@ fn prepare_mesh_bind_groups_for_phase(
 
                 _ => {
                     error!(
-                    "Mismatched render morph target allocator and mesh morph target bind groups"
-                );
+                        "Mismatched render morph target allocator and mesh morph target bind groups"
+                    );
                 }
             }
         }

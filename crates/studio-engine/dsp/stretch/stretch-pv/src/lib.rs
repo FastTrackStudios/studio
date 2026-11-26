@@ -57,7 +57,12 @@ unsafe extern "C" fn seek(
     }
     let st = unsafe { &mut *(handle.cast::<pv::Stretcher>()) };
     let mut src = AbiSource(source);
-    st.seek(source_frame, ratio, pv::semitones(pitch_semitones), &mut src);
+    st.seek(
+        source_frame,
+        ratio,
+        pv::semitones(pitch_semitones),
+        &mut src,
+    );
 }
 
 unsafe extern "C" fn render(

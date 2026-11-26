@@ -755,7 +755,7 @@ impl<D: Tracks + Routing + Items> DawTarget<D> {
     ///
     /// A backend call failed.
     pub fn mute_triggers(&mut self) -> eyre::Result<Vec<String>> {
-        use daw_proto::{RouteRef, routing::SendMode};
+        use daw_proto::{routing::SendMode, RouteRef};
         let muted = self.mute_where(super::is_trigger)?;
         for track in Tracks::all(&self.daw, self.project.clone()) {
             if !super::is_trigger(&track.name) {
@@ -1420,7 +1420,7 @@ impl<D: Tracks + Routing + Items> DawTarget<D> {
     /// A pre-FX send from `trigger` onto `keyed`'s channels 3/4: its
     /// sidechain, which keys the gate on it.
     fn key_from(&self, trigger: &str, keyed: &str) -> eyre::Result<()> {
-        use daw_proto::{RouteRef, routing::SendMode};
+        use daw_proto::{routing::SendMode, RouteRef};
         let source = TrackRef::Guid(trigger.to_owned());
         let Some(index) = Routing::add_send(
             &self.daw,

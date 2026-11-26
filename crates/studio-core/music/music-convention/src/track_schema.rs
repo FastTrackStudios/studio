@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use monarchy::{FieldName, Group, Parser};
 
 use crate::item_metadata::{ItemMetadata, ItemMetadataField};
-use crate::{default_config, MusicConventionConfig};
+use crate::{MusicConventionConfig, default_config};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrackDimension {

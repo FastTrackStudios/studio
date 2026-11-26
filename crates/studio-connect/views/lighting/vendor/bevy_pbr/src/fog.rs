@@ -1,9 +1,9 @@
 use bevy_camera::Camera;
 use bevy_color::{Color, ColorToComponents, LinearRgba};
 use bevy_ecs::prelude::*;
-use bevy_math::{ops, Vec3};
-use bevy_reflect::{std_traits::ReflectDefault, Reflect};
-use bevy_render::{extract_component::ExtractComponent, RenderApp};
+use bevy_math::{Vec3, ops};
+use bevy_reflect::{Reflect, std_traits::ReflectDefault};
+use bevy_render::{RenderApp, extract_component::ExtractComponent};
 
 use crate::ViewFogUniformOffset;
 

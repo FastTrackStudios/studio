@@ -148,10 +148,7 @@ pub fn parse_comped_rpp(rpp_path: &Path) -> Result<CompedDrumSession, String> {
             } else if let Some(rest) = t.strip_prefix("ISBUS ") {
                 let parts: Vec<&str> = rest.split_whitespace().collect();
                 if parts.len() >= 2 {
-                    isbus = (
-                        parts[0].parse().unwrap_or(0),
-                        parts[1].parse().unwrap_or(0),
-                    );
+                    isbus = (parts[0].parse().unwrap_or(0), parts[1].parse().unwrap_or(0));
                 }
             } else if let Some(rest) = t.strip_prefix("LANESOLO ") {
                 lane_solo = rest
@@ -219,7 +216,9 @@ pub fn parse_comped_rpp(rpp_path: &Path) -> Result<CompedDrumSession, String> {
                     }
                 }
 
-                if !muted && len > 0.0 && lane_is_active(&lane_solo, lane)
+                if !muted
+                    && len > 0.0
+                    && lane_is_active(&lane_solo, lane)
                     && let Some(rel) = file_rel
                 {
                     let p = PathBuf::from(&rel);
@@ -352,12 +351,17 @@ pub fn render_track_channels(
         let mut reader = open(&item.file)?;
         let spec = reader.spec();
         if spec.sample_rate != rate || usize::from(spec.channels) != channels {
-            return Err(format!("inconsistent source format in {}", item.file.display()));
+            return Err(format!(
+                "inconsistent source format in {}",
+                item.file.display()
+            ));
         }
         let start = samples(item.position).min(frames);
         let count = samples(item.length).min(frames - start);
         let offset = samples(item.soffs);
-        let available = (reader.duration() as usize).saturating_sub(offset).min(count);
+        let available = (reader.duration() as usize)
+            .saturating_sub(offset)
+            .min(count);
         if available == 0 {
             continue;
         }
@@ -365,17 +369,30 @@ pub fn render_track_channels(
         let scale = (1_u64 << spec.bits_per_sample.saturating_sub(1)) as f32;
         let input: Box<dyn Iterator<Item = Result<f32, hound::Error>>> = match spec.sample_format {
             hound::SampleFormat::Float => Box::new(reader.samples::<f32>()),
-            hound::SampleFormat::Int => Box::new(reader.samples::<i32>().map(move |s| s.map(|x| x as f32 / scale))),
+            hound::SampleFormat::Int => Box::new(
+                reader
+                    .samples::<i32>()
+                    .map(move |s| s.map(|x| x as f32 / scale)),
+            ),
         };
         let fade_in = samples(item.fade_in);
         let fade_out = samples(item.fade_out);
         for (index, value) in input.take(available * channels).enumerate() {
             let frame = index / channels;
-            let fade = |distance: usize, length: usize| (distance as f32 / length.max(1) as f32).min(1.0);
-            let gain_in = if fade_in == 0 { 1.0 } else { fade(frame, fade_in) };
-            let gain_out = if fade_out == 0 { 1.0 } else { fade(available - 1 - frame, fade_out) };
-            audio[start * channels + index] += value.map_err(|e| e.to_string())?
-                * item.vol as f32 * gain_in * gain_out;
+            let fade =
+                |distance: usize, length: usize| (distance as f32 / length.max(1) as f32).min(1.0);
+            let gain_in = if fade_in == 0 {
+                1.0
+            } else {
+                fade(frame, fade_in)
+            };
+            let gain_out = if fade_out == 0 {
+                1.0
+            } else {
+                fade(available - 1 - frame, fade_out)
+            };
+            audio[start * channels + index] +=
+                value.map_err(|e| e.to_string())? * item.vol as f32 * gain_in * gain_out;
         }
     }
     Ok((audio, channels))
@@ -389,9 +406,7 @@ pub fn render_comped_kit(session: &CompedDrumSession) -> Result<RenderedKit, Str
     for track in session.tracks.values() {
         for item in &track.items {
             max_end = max_end.max(item.position + item.length);
-            if !probed_sr
-                && let Ok(r) = hound::WavReader::open(&item.file)
-            {
+            if !probed_sr && let Ok(r) = hound::WavReader::open(&item.file) {
                 sample_rate = f64::from(r.spec().sample_rate);
                 probed_sr = true;
             }
@@ -458,7 +473,11 @@ pub fn render_comped_kit(session: &CompedDrumSession) -> Result<RenderedKit, Str
     }
     if weight_sum > 0.0 {
         let peak = bus.iter().fold(0.0_f32, |m, s| m.max(s.abs()));
-        let norm = if peak > 0.95 { 0.95 / peak } else { 1.0 / weight_sum.max(1.0) };
+        let norm = if peak > 0.95 {
+            0.95 / peak
+        } else {
+            1.0 / weight_sum.max(1.0)
+        };
         for s in &mut bus {
             *s *= norm;
         }

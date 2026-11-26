@@ -113,24 +113,35 @@ async fn a_real_session_shows() {
 
 #[test]
 fn meters_of_a_turn() {
-    let chart = parse_chart("Turn\n#C 60bpm 4/4\n\nCount 1\n\nIN 3\nC\n!T3/4 F\n!T4/4 G\n").unwrap();
+    let chart =
+        parse_chart("Turn\n#C 60bpm 4/4\n\nCount 1\n\nIN 3\nC\n!T3/4 F\n!T4/4 G\n").unwrap();
     for s in &chart.sections {
         for m in s.measures() {
             println!("{:?} {:?}", s.section.section_type, m.time_signature);
         }
     }
-    println!("initial {:?} final {:?}", chart.initial_time_signature, chart.time_signature);
+    println!(
+        "initial {:?} final {:?}",
+        chart.initial_time_signature, chart.time_signature
+    );
 }
 
 #[test]
 fn sections_of_a_real_chart() {
-    let Ok(path) = std::env::var("KF_CHART") else { return };
+    let Ok(path) = std::env::var("KF_CHART") else {
+        return;
+    };
     let chart = parse_chart(&std::fs::read_to_string(&path).unwrap()).unwrap();
     let typed = TypedChart::of(&chart);
     for (name, from, to) in typed.sections() {
         println!("SECTION {name:?} {from} {to}");
     }
     for s in &chart.sections {
-        println!("PARSED {:?} count {:?} measures {}", s.section.section_type, s.section.measure_count, s.measures().len());
+        println!(
+            "PARSED {:?} count {:?} measures {}",
+            s.section.section_type,
+            s.section.measure_count,
+            s.measures().len()
+        );
     }
 }

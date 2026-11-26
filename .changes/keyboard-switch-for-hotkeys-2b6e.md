@@ -1,6 +1,6 @@
 ---
-"app-shell" = "minor"
-"session-ui" = "patch"
+"studio-shell" = "minor"
+"daw-view-kit" = "patch"
 "dock" = "none"
 "library" = "patch"
 "engine-host" = "patch"

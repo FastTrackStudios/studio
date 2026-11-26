@@ -28,9 +28,5 @@ pub fn f64_to_index(x: f64) -> usize {
 
 #[inline]
 pub fn trunc_to_i64(x: f64) -> i64 {
-    if !x.is_finite() {
-        0
-    } else {
-        x.trunc() as i64
-    }
+    if !x.is_finite() { 0 } else { x.trunc() as i64 }
 }

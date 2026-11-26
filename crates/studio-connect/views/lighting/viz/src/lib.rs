@@ -36,7 +36,6 @@ pub mod embedded;
 pub mod environment;
 pub mod fixture_library;
 pub mod fixture_profile;
-pub mod venue_watch;
 pub mod gdtf_assets;
 pub mod gdtf_geometry;
 pub mod gdtf_import;
@@ -61,6 +60,7 @@ pub mod solari;
 pub mod spawn;
 pub mod venue;
 pub mod venue_layer;
+pub mod venue_watch;
 pub mod video;
 pub mod view;
 

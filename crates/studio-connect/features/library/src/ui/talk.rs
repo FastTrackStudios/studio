@@ -12,7 +12,7 @@ use crate::model::{Anchor, Edit};
 /// what is inside it), oldest first, then the box.
 #[component]
 pub(crate) fn Conversation(about: Anchor, #[props(default)] exact: bool) -> Element {
-    let keys = app_shell::ui::use_text_focus();
+    let keys = studio_shell::ui::use_text_focus();
     let lib = use_library();
     let l = lib.read();
     let me = l.me.clone();

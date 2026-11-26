@@ -102,7 +102,8 @@ impl Materials {
                     .filter_map(|m| {
                         let name = m.get("name")?.as_str()?.to_owned();
                         let c = m.get("base_color_linear")?.as_array()?;
-                        let rgb = [0, 1, 2].map(|i| c.get(i).and_then(Value::as_f64).unwrap_or(0.5));
+                        let rgb =
+                            [0, 1, 2].map(|i| c.get(i).and_then(Value::as_f64).unwrap_or(0.5));
                         let rough = m.get("roughness").and_then(Value::as_f64).unwrap_or(0.5);
                         // Rough is matte; EasyView's specular runs 0..100.
                         let gloss = ((1.0 - rough.clamp(0.0, 1.0)) * 100.0).round();
@@ -170,10 +171,25 @@ fn shell(env: &Value, mats: &Materials) -> Vec<Element> {
     let floor = mats.get("Floor Wood");
     // The floor's colour comes from a procedural plank texture over white;
     // the photo puts it at a fifth of the wall's brightness.
-    let floor = Material { color: Material::linear([0.30, 0.17, 0.08], 0).color, ..floor };
+    let floor = Material {
+        color: Material::linear([0.30, 0.17, 0.08], 0).color,
+        ..floor
+    };
     let mut out = vec![
-        panel("Floor", [0.0, 0.0, 0.0], [0.0; 3], [width * 100.0, depth * 100.0], floor),
-        panel("Wall - Band", [0.0, h / 2.0, half_d], [-90.0, 0.0, 0.0], [width * 100.0, h], wall),
+        panel(
+            "Floor",
+            [0.0, 0.0, 0.0],
+            [0.0; 3],
+            [width * 100.0, depth * 100.0],
+            floor,
+        ),
+        panel(
+            "Wall - Band",
+            [0.0, h / 2.0, half_d],
+            [-90.0, 0.0, 0.0],
+            [width * 100.0, h],
+            wall,
+        ),
         panel(
             "Wall - House Back",
             [0.0, h / 2.0, -half_d],
@@ -203,7 +219,13 @@ fn shell(env: &Value, mats: &Materials) -> Vec<Element> {
     let end = X_CORRIDOR_END * 100.0;
     let (c_len, c_wid) = (-half_w - end, corridor_in + half_d);
     let c_mid = [end + c_len / 2.0, corridor_in - c_wid / 2.0];
-    out.push(panel("Corridor - Floor", [c_mid[0], 0.0, c_mid[1]], [0.0; 3], [c_len, c_wid], floor));
+    out.push(panel(
+        "Corridor - Floor",
+        [c_mid[0], 0.0, c_mid[1]],
+        [0.0; 3],
+        [c_len, c_wid],
+        floor,
+    ));
     out.push(panel(
         "Corridor - Ceiling",
         [c_mid[0], h, c_mid[1]],
@@ -265,12 +287,18 @@ fn shell(env: &Value, mats: &Materials) -> Vec<Element> {
 fn ceiling(env: &Value, mats: &Materials) -> Vec<Element> {
     let width = num(env, "/measured/width_m");
     let depth = num(env, "/measured/depth_m");
-    let (h, top) = (num(env, "/measured/soffit_m") * 100.0, num(env, "/measured/apex_m") * 100.0);
+    let (h, top) = (
+        num(env, "/measured/soffit_m") * 100.0,
+        num(env, "/measured/apex_m") * 100.0,
+    );
     let (half_w, half_d) = (width * 50.0, depth * 50.0);
     let mut out = Vec::new();
     let soffit_mat = mats.get("Soffit Paint");
     let (sr, sl) = (X_SOFFIT_SR * 100.0, X_SOFFIT_SL * 100.0);
-    for (name, x0, x1) in [("Soffit - Stage Right", -half_w, sr), ("Soffit - Stage Left", sl, half_w)] {
+    for (name, x0, x1) in [
+        ("Soffit - Stage Right", -half_w, sr),
+        ("Soffit - Stage Left", sl, half_w),
+    ] {
         out.push(panel(
             name,
             [f64::midpoint(x0, x1), h, 0.0],
@@ -300,7 +328,10 @@ fn ceiling(env: &Value, mats: &Materials) -> Vec<Element> {
             tile,
         ));
     }
-    for (name, edge) in [("Ceiling - Stage Right Side", sr), ("Ceiling - Stage Left Side", sl)] {
+    for (name, edge) in [
+        ("Ceiling - Stage Right Side", sr),
+        ("Ceiling - Stage Left Side", sl),
+    ] {
         let run = (apex_x - edge).abs();
         let tilt = rise.atan2(run).to_degrees();
         let sign = if edge < apex_x { 1.0 } else { -1.0 };
@@ -352,7 +383,11 @@ pub fn scenery(venue: &Path) -> Result<Vec<Element>, Error> {
     let mut out = shell(&env, &mats);
 
     // The stands: tower columns, the trees' poles and T-bars.
-    for c in read(&venue.join("room.json"))?.as_array().into_iter().flatten() {
+    for c in read(&venue.join("room.json"))?
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
         let name = c.get("name").and_then(Value::as_str).unwrap_or_default();
         if !name.starts_with("Column") {
             continue;
@@ -373,7 +408,9 @@ pub fn scenery(venue: &Path) -> Result<Vec<Element>, Error> {
         // Doors stand in their wall's plane; set them just proud of it,
         // into the room (the corridor's end door: into the corridor).
         let at = match name.as_str() {
-            n if n.starts_with("Door") && pos[0] <= X_CORRIDOR_END + 0.01 => [at[0] + 5.0, at[1], at[2]],
+            n if n.starts_with("Door") && pos[0] <= X_CORRIDOR_END + 0.01 => {
+                [at[0] + 5.0, at[1], at[2]]
+            }
             n if n.starts_with("Door") => [at[0], at[1], at[2] + 5.0],
             _ => at,
         };
@@ -391,7 +428,11 @@ pub fn scenery(venue: &Path) -> Result<Vec<Element>, Error> {
     }
 
     // The band and its instruments.
-    for p in read(&venue.join("props.json"))?.as_array().into_iter().flatten() {
+    for p in read(&venue.join("props.json"))?
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
         let name = p.get("name").and_then(Value::as_str).unwrap_or_default();
         let (at, s, turn) = (
             ev(xyz(p, "position")),
@@ -407,7 +448,13 @@ pub fn scenery(venue: &Path) -> Result<Vec<Element>, Error> {
         } else if name.starts_with("Mic") {
             MIC
         } else {
-            out.push(block(name, [at[0], at[1] + s[1] / 2.0, at[2]], s, turn, mats.get("Frame Black")));
+            out.push(block(
+                name,
+                [at[0], at[1] + s[1] / 2.0, at[2]],
+                s,
+                turn,
+                mats.get("Frame Black"),
+            ));
             continue;
         };
         out.push(model.place(name, at, s, turn, None));

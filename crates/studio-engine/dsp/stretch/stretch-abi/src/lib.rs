@@ -41,7 +41,15 @@ impl StretchSource {
     #[inline]
     pub unsafe fn read_frames(&self, start_frame: i64, left: &mut [f32], right: &mut [f32]) {
         let n = left.len().min(right.len());
-        unsafe { (self.read)(self.ctx, start_frame, left.as_mut_ptr(), right.as_mut_ptr(), n) };
+        unsafe {
+            (self.read)(
+                self.ctx,
+                start_frame,
+                left.as_mut_ptr(),
+                right.as_mut_ptr(),
+                n,
+            )
+        };
     }
 }
 
@@ -186,8 +194,8 @@ pub mod host {
             let path = path.as_ref().to_path_buf();
             let lib = unsafe { libloading::Library::new(&path) }
                 .map_err(|e| format!("failed to load {}: {e}", path.display()))?;
-            let get_vtable: libloading::Symbol<'_, VTableFn> =
-                unsafe { lib.get(VTABLE_SYMBOL) }.map_err(|e| {
+            let get_vtable: libloading::Symbol<'_, VTableFn> = unsafe { lib.get(VTABLE_SYMBOL) }
+                .map_err(|e| {
                     format!("{} missing daw_stretch_vtable symbol: {e}", path.display())
                 })?;
             let ptr = unsafe { get_vtable() };
@@ -316,9 +324,13 @@ pub mod host {
         ///
         /// # Safety
         /// Same as [`LoadedPlugin::load`].
-        pub unsafe fn register(&mut self, path: impl AsRef<Path>) -> Result<Arc<LoadedPlugin>, String> {
+        pub unsafe fn register(
+            &mut self,
+            path: impl AsRef<Path>,
+        ) -> Result<Arc<LoadedPlugin>, String> {
             let plugin = unsafe { LoadedPlugin::load(path)? };
-            self.plugins.retain(|p| p.metadata().id != plugin.metadata().id);
+            self.plugins
+                .retain(|p| p.metadata().id != plugin.metadata().id);
             self.plugins.push(Arc::clone(&plugin));
             Ok(plugin)
         }

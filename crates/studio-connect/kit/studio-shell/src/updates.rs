@@ -100,7 +100,7 @@ pub enum InstallBlock {
 
 impl App {
     /// The app built as this crate: `App::new(env!("CARGO_PKG_NAME"),
-    /// app_shell::version::current())`.
+    /// studio_shell::version::current())`.
     #[must_use]
     pub const fn new(name: &'static str, version: &'static str) -> Self {
         Self { name, version }

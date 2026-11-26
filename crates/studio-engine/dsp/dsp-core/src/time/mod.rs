@@ -518,4 +518,3 @@ mod tests {
         assert_eq!(TimeMode::from_param(0.51), TimeMode::Synced);
     }
 }
-

@@ -135,7 +135,7 @@ fn ask(title: &str, description: String, _buttons: &[&str]) -> Option<String> {
 /// Open `url` in the browser (a sign-in's approval page).
 fn open_url(url: &str) {
     #[cfg(target_os = "ios")]
-    app_shell::ios_scene::open_url(url);
+    studio_shell::ios_scene::open_url(url);
     #[cfg(not(target_os = "ios"))]
     {
         let opener = if cfg!(target_os = "macos") {
@@ -155,7 +155,7 @@ fn open_url(url: &str) {
 /// phone, where typing a link is the hard way).
 fn pasted() -> Option<String> {
     #[cfg(target_os = "ios")]
-    return app_shell::ios_scene::pasted();
+    return studio_shell::ios_scene::pasted();
     #[cfg(not(target_os = "ios"))]
     None
 }
@@ -367,7 +367,7 @@ pub fn prepare_hosted() -> Prepared {
 /// draws the app. A host that provides [`handoff::Host`] gets Back.
 ///
 /// The host draws the window: its attributes are the host's, and on iOS
-/// the host registers the scene delegate (`app_shell::ios_scene`). Quitting
+/// the host registers the scene delegate (`studio_shell::ios_scene`). Quitting
 /// at a failed attach quits the process, as it does Session's own.
 #[component]
 pub fn Embedded() -> Element {
@@ -423,14 +423,14 @@ fn run(setlist: Option<studio_engine::setlist::Setlist>, open: Option<PathBuf>) 
     // iOS 27 stops an app that has not adopted scenes: ours is registered
     // before UIKit starts, for Info.plist to name.
     #[cfg(target_os = "ios")]
-    app_shell::ios_scene::register(app_shell::ios_scene::Opening::AsHeld);
+    studio_shell::ios_scene::register(studio_shell::ios_scene::Opening::AsHeld);
     let attributes = window_attributes();
     let contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>> = vec![
         Box::new(move || Box::new(setlist.clone()) as Box<dyn Any>),
         Box::new(move || Box::new(start::OpenFirst(open.clone())) as Box<dyn Any>),
     ];
     // Text fields hold the keyboard switch: hotkeys stand aside while typing.
-    app_shell::ui::keyboard::follow_text_fields();
+    studio_shell::ui::keyboard::follow_text_fields();
     dioxus_native::launch_cfg(start::App, contexts, vec![Box::new(attributes)]);
 }
 

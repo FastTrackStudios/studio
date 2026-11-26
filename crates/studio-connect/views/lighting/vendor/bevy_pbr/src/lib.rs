@@ -60,7 +60,7 @@ pub use atmosphere::*;
 use bevy_light::{
     AmbientLight, DirectionalLight, PointLight, RectLight, ShadowFilteringMethod, SpotLight,
 };
-use bevy_shader::{load_shader_library, ShaderRef};
+use bevy_shader::{ShaderRef, load_shader_library};
 pub use cluster::*;
 pub use decal::clustered::ClusteredDecalPlugin;
 pub use extended_material::*;
@@ -105,6 +105,8 @@ use bevy_ecs::prelude::*;
 use bevy_image::{Image, ImageSampler};
 use bevy_material::AlphaMode;
 use bevy_render::{
+    ExtractSchedule, GpuResourceAppExt, Render, RenderApp, RenderDebugFlags, RenderStartup,
+    RenderSystems,
     camera::sort_cameras,
     extract_resource::ExtractResourcePlugin,
     render_resource::{
@@ -112,8 +114,6 @@ use bevy_render::{
         TextureUsages, TextureViewDescriptor, TextureViewDimension,
     },
     sync_component::SyncComponentPlugin,
-    ExtractSchedule, GpuResourceAppExt, Render, RenderApp, RenderDebugFlags, RenderStartup,
-    RenderSystems,
 };
 
 use std::path::PathBuf;

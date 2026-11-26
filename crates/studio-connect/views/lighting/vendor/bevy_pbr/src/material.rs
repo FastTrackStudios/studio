@@ -17,40 +17,41 @@ use bevy_ecs::system::SystemParam;
 use bevy_ecs::{
     prelude::*,
     system::{
-        lifetimeless::{SRes, SResMut},
         SystemParamItem, SystemState,
+        lifetimeless::{SRes, SResMut},
     },
 };
 use bevy_material::{
+    MaterialProperties, OpaqueRendererMethod, RenderPhaseType,
     key::{ErasedMaterialKey, ErasedMaterialPipelineKey, ErasedMeshPipelineKey},
     labels::{DrawFunctionLabel, InternedShaderLabel, ShaderLabel},
-    MaterialProperties, OpaqueRendererMethod, RenderPhaseType,
 };
 use bevy_math::{Affine3, Affine3Ext as _};
 use bevy_mesh::{
-    mark_3d_meshes_as_changed_if_their_assets_changed, Mesh3d, MeshVertexBufferLayoutRef,
+    Mesh3d, MeshVertexBufferLayoutRef, mark_3d_meshes_as_changed_if_their_assets_changed,
 };
 use bevy_platform::collections::hash_map::Entry;
 use bevy_platform::collections::{HashMap, HashSet};
 use bevy_platform::hash::FixedHasher;
-use bevy_reflect::std_traits::ReflectDefault;
 use bevy_reflect::Reflect;
+use bevy_reflect::std_traits::ReflectDefault;
+use bevy_render::GpuResourceAppExt;
+use bevy_render::RenderStartup;
 use bevy_render::batching::gpu_preprocessing::BatchedInstanceBuffers;
 use bevy_render::camera::{DirtySpecializationSystems, DirtySpecializations, PendingQueues};
 use bevy_render::erased_render_asset::{
     ErasedRenderAsset, ErasedRenderAssetPlugin, ErasedRenderAssets, PrepareAssetError,
 };
 use bevy_render::material_bind_groups::{
-    material_uses_bindless_resources, FallbackBuffer, MaterialBindGroupAllocators,
-    MaterialBindingId, RenderMaterialBindings,
+    FallbackBuffer, MaterialBindGroupAllocators, MaterialBindingId, RenderMaterialBindings,
+    material_uses_bindless_resources,
 };
-use bevy_render::render_asset::{prepare_assets, RenderAssets};
+use bevy_render::render_asset::{RenderAssets, prepare_assets};
 use bevy_render::storage::GpuShaderBuffer;
 use bevy_render::sync_world::MainEntityHashSet;
 use bevy_render::view::RenderVisibleEntities;
-use bevy_render::GpuResourceAppExt;
-use bevy_render::RenderStartup;
 use bevy_render::{
+    Extract,
     batching::gpu_preprocessing::GpuPreprocessingSupport,
     extract_resource::ExtractResource,
     mesh::RenderMesh,
@@ -59,7 +60,6 @@ use bevy_render::{
     renderer::RenderDevice,
     sync_world::MainEntity,
     view::{ExtractedView, Msaa, RenderVisibilityRanges, RetainedViewEntity},
-    Extract,
 };
 use bevy_render::{mesh::allocator::MeshAllocator, sync_world::MainEntityHashMap};
 use bevy_shader::{Shader, ShaderDefVal};
@@ -1865,8 +1865,8 @@ mod tests {
     use bevy_math::Vec3;
     use bevy_mesh::{Mesh, Mesh3d};
     use bevy_transform::{
-        components::{GlobalTransform, Transform},
         TransformPlugin, TransformSystems,
+        components::{GlobalTransform, Transform},
     };
 
     use super::check_entities_needing_specialization;
@@ -1939,11 +1939,12 @@ mod tests {
         assert!(queued.contains(&direct));
         assert!(queued.contains(&moved));
         assert!(!queued.contains(&stationary));
-        assert!(app
-            .world()
-            .resource::<EntitiesNeedingSpecialization<StandardMaterial>>()
-            .removed
-            .is_empty());
+        assert!(
+            app.world()
+                .resource::<EntitiesNeedingSpecialization<StandardMaterial>>()
+                .removed
+                .is_empty()
+        );
 
         app.update();
         assert!(listed(&app).is_empty());

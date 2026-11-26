@@ -742,7 +742,11 @@ static OUTPUT_SCALE: std::sync::atomic::AtomicU32 =
 /// one par at full white, a lux meter on its axis at 1 m; nominal is its
 /// peak candela (`peak_candela`), the scale is the reading over that.
 pub fn set_output_scale(scale: f32) {
-    let scale = if scale.is_finite() { scale.clamp(0.0, 4.0) } else { 1.0 };
+    let scale = if scale.is_finite() {
+        scale.clamp(0.0, 4.0)
+    } else {
+        1.0
+    };
     OUTPUT_SCALE.store(scale.to_bits(), std::sync::atomic::Ordering::Relaxed);
 }
 

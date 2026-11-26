@@ -16,9 +16,12 @@ use ignition_daslight::{Error, Scene, Showfile};
 
 fn main() -> Result<(), Error> {
     let args: Vec<String> = std::env::args().collect();
-    let (Some(input), Some(output), Some(fixture), Some(bank)) = (args.get(1), args.get(2), args.get(3), args.get(4))
+    let (Some(input), Some(output), Some(fixture), Some(bank)) =
+        (args.get(1), args.get(2), args.get(3), args.get(4))
     else {
-        return Err(Error::Patch("usage: channel_test <in.dvc> <out.dvc> <fixture name> <bank name>".to_owned()));
+        return Err(Error::Patch(
+            "usage: channel_test <in.dvc> <out.dvc> <fixture name> <bank name>".to_owned(),
+        ));
     };
     let mut show = Showfile::open(Path::new(input))?;
     let patch = show.patch()?;
@@ -27,7 +30,9 @@ fn main() -> Result<(), Error> {
         .iter()
         .find(|f| &f.name == fixture)
         .ok_or_else(|| Error::Patch(format!("no fixture named {fixture}")))?;
-    let profile = patch.profile(&f.profile).ok_or_else(|| Error::Patch(format!("{fixture} has no profile")))?;
+    let profile = patch
+        .profile(&f.profile)
+        .ok_or_else(|| Error::Patch(format!("{fixture} has no profile")))?;
     let count = channels(profile).len();
     let mut scenes = Vec::new();
     let mut add = |name: String, lit: Option<(usize, u8)>, all: u8| {
@@ -50,6 +55,9 @@ fn main() -> Result<(), Error> {
     add("ALL 255".to_owned(), None, 255);
     show.add_bank(bank, "#ff40a0ff", &scenes, &patch)?;
     show.save(Path::new(output))?;
-    println!("{bank}: {} buttons on {fixture} ({count} channels) -> {output}", scenes.len());
+    println!(
+        "{bank}: {} buttons on {fixture} ({count} channels) -> {output}",
+        scenes.len()
+    );
     Ok(())
 }

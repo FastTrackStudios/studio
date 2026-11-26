@@ -134,7 +134,12 @@ impl SuperScene {
     /// The timeline's length: the end of its last block, in ms.
     #[must_use]
     pub fn length(&self) -> u32 {
-        self.tracks.iter().flatten().map(|b| b.end).max().unwrap_or(0)
+        self.tracks
+            .iter()
+            .flatten()
+            .map(|b| b.end)
+            .max()
+            .unwrap_or(0)
     }
 
     /// The timeline rack (`RACK TYPE="1"`); `key` names it for stable
@@ -237,7 +242,9 @@ mod tests {
             .map(|(seconds, beat)| WarpMarker { seconds, beat })
             .to_vec(),
         )
-        .unwrap_or_else(|| WarpMap { markers: Vec::new() })
+        .unwrap_or_else(|| WarpMap {
+            markers: Vec::new(),
+        })
     }
 
     fn close(a: f64, b: f64) -> bool {
@@ -294,9 +301,7 @@ mod tests {
                 }],
                 vec![Block {
                     name: "01 Verse".into(),
-                    content: Content::Scene {
-                        uid: "abc".into(),
-                    },
+                    content: Content::Scene { uid: "abc".into() },
                     start: 12_000,
                     end: 24_000,
                     fade_in: 755,
@@ -323,14 +328,23 @@ mod tests {
         assert_eq!(cue.get("SCENEUUID"), Some("abc"));
         assert_eq!(cue.get("FADEIN"), Some("755"));
         assert_eq!(cue.get("CONFORM_TO_TEMPO"), Some("0"));
-        assert!(cue.to_xml().ends_with("<DASTLSUBLINES DASTLNB=\"0\"/></BLOCK>"));
+        assert!(
+            cue.to_xml()
+                .ends_with("<DASTLSUBLINES DASTLNB=\"0\"/></BLOCK>")
+        );
 
         // As a scene: no values, the timeline its only rack.
         let el = show.scene("SHOWS").to_element("SHOWS", &Patch::default());
         let el = el.unwrap_or_default();
         assert_eq!(el.find("FIXTUREDATAS").and_then(|f| f.get("NB")), Some("0"));
-        let racks: Vec<&Element> = el.find("RACKS").map(|r| r.elements().collect()).unwrap_or_default();
-        assert_eq!(racks.iter().map(|r| r.get("TYPE")).collect::<Vec<_>>(), [Some("1")]);
+        let racks: Vec<&Element> = el
+            .find("RACKS")
+            .map(|r| r.elements().collect())
+            .unwrap_or_default();
+        assert_eq!(
+            racks.iter().map(|r| r.get("TYPE")).collect::<Vec<_>>(),
+            [Some("1")]
+        );
     }
 
     #[test]

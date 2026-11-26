@@ -65,7 +65,7 @@ keyflow = { workspace = true, features = ["text", "engraver"] }
 # The shared performer screen (the iPad's Performance view, `performer`):
 # its frame, panels and registry, the playback and rig traits; the form
 # factor (`compact::form_of`).
-app-shell = { workspace = true, features = ["ui"] }
+studio-shell = { workspace = true, features = ["ui"] }
 architect-input = { workspace = true }
 anyrender = { workspace = true }
 # The Patch List view (`patch_list`): the album's plan and the room's

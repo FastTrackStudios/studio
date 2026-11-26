@@ -13,7 +13,7 @@
 //!   navigator as the setlist, the chart, and the dock with Session's
 //!   `TransportButtons` over the shared nudge row;
 //! - the rig, when there is one: a `RigClient` the host provides
-//!   (`app_shell::ui::provide_rig`). Without one (no Signal ever paired)
+//!   (`studio_shell::ui::provide_rig`). Without one (no Signal ever paired)
 //!   the transport spans the dock and the app bar offers **Pair a rig**;
 //!   the live peer link to Signal comes with the connect-anywhere work
 //!   (C3, C7).
@@ -25,9 +25,9 @@
 
 use dioxus::prelude::*;
 
-use app_shell::ui::performer::{PerformerBodies, SESSION_SCOPE, performer_registry};
-use app_shell::ui::playback::{PlaybackModel, PlaybackView, SectionView, SongView};
-use app_shell::ui::{
+use studio_shell::ui::performer::{PerformerBodies, SESSION_SCOPE, performer_registry};
+use studio_shell::ui::playback::{PlaybackModel, PlaybackView, SectionView, SongView};
+use studio_shell::ui::{
     NowBand, PerformDock, PerformerScreen, RigCrumb, SyncPill, TransportNudgeRow, provide_playback,
     rig_half, use_panel_registry,
 };
@@ -38,7 +38,7 @@ use crate::song_model::StudioSession;
 
 /// The performer view's fill round the screen and under the system's
 /// insets: the desk (`#0c0c0f`), not the bars' `#17181b`.
-pub const DESK: &str = app_shell::tokens::DESK;
+pub const DESK: &str = studio_shell::tokens::DESK;
 
 /// Whether a window gets the performer view for Performance: a finger on
 /// a screen with room for the wide layout (the 11-inch iPad either way up
@@ -351,7 +351,7 @@ mod tests {
     #[test]
     fn session_registers_through_the_shared_registry_function() {
         let reg = performer_registry(BODIES);
-        for (id, region) in app_shell::ui::performer::ids::ALL {
+        for (id, region) in studio_shell::ui::performer::ids::ALL {
             assert_eq!(reg.get(id).map(|p| p.region), Some(region), "{id}");
         }
     }
