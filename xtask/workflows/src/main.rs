@@ -29,6 +29,7 @@ mod release_dry_run;
 mod release_queue;
 mod steps;
 mod sums;
+mod web;
 
 use anyhow::{Context, Result, bail};
 use model::Workflow;
@@ -50,6 +51,7 @@ const WORKFLOWS: &[(&str, Build)] = &[
     ("cache-devshell", cache_devshell::workflow),
     ("bump-architect", bump_architect::workflow),
     ("desktop", desktop::workflow),
+    ("web", web::workflow),
     ("release", release::workflow),
     ("release-queue", release_queue::workflow),
     ("release-dry-run", release_dry_run::workflow),

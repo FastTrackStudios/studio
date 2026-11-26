@@ -54,6 +54,10 @@ engine ACTION="run": _engine-build
 web *ARGS:
     cd apps/studio && dx serve --platform web --features web {{ARGS}}
 
+# The release's web bundle, for the root of fasttrackstudio.app: target/web/studio-web-<version>.tar.gz (scripts/web/bundle.sh)
+web-bundle:
+    bash scripts/web/bundle.sh
+
 # Starts nothing: `devenv up` runs OpenObserve and the collector (or attaches to the ones already running).
 # Metrics, logs and traces from the app and the engine: is the local stack up, and where to look
 telemetry:

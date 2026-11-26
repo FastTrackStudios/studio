@@ -12,9 +12,12 @@
 #   just release [<sha>]  --> tag studio-vYY.M.MICRO on main's newest commit
 #       whose `CI passed` is green (or on <sha>)
 #                                              The TAG ships, and only the
-#                                              tag: the desktop installers
-#                                              and the one GitHub Release.
-#                                              This repo deploys nothing.
+#                                              tag: the desktop installers,
+#                                              the web bundle and the one
+#                                              GitHub Release. This repo
+#                                              deploys nothing live: the
+#                                              VPS takes the web bundle by
+#                                              tag (FastTrackStudios/infra).
 #
 #   hotfix, when main can't ship: release/<latest tag> (from the tag)
 #       <-- PR of `cherry-pick -x` of fixes already on main; once that
