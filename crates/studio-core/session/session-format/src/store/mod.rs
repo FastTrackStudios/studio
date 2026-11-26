@@ -73,6 +73,14 @@ const LEVEL: i32 = 9;
 /// of that, for a somewhat larger file.
 const SNAPSHOT_LEVEL: i32 = 3;
 
+/// A branch's updates past its snapshot are imported one by one, not as a
+/// batch, when there are at most this many and they hold at most
+/// [`ONE_BY_ONE_MAX_BYTES`] ([`Store::load`] says why). A first guess:
+/// `just test-unbreakable` times it.
+const ONE_BY_ONE_MAX_UPDATES: usize = 16;
+/// See [`ONE_BY_ONE_MAX_UPDATES`].
+const ONE_BY_ONE_MAX_BYTES: usize = 1 << 20;
+
 /// A branch's snapshot taken ([`Store::take_snapshot`]), not packed yet.
 #[derive(Debug)]
 pub struct Snapshot {
@@ -256,8 +264,10 @@ fn now() -> i64 {
 fn import(doc: &loro::LoroDoc, packed: &[u8]) -> StoreResult<()> {
     let bytes = tracing::info_span!("store.unpack", store.packed_bytes = packed.len())
         .in_scope(|| zstd::decode_all(packed))?;
-    doc.import(&bytes)
-        .map_err(|e| StoreError::Loro(e.to_string()))?;
+    tracing::info_span!("store.import", store.snapshot_bytes = bytes.len()).in_scope(|| {
+        doc.import(&bytes)
+            .map_err(|e| StoreError::Loro(e.to_string()))
+    })?;
     Ok(())
 }
 
@@ -735,6 +745,10 @@ impl Store {
     /// No such branch, the database refused the read, or the history
     /// would not import.
     pub fn load(&self, branch: &str) -> StoreResult<loro::LoroDoc> {
+        // Where the doc starts: its own snapshot, its parent forked, or
+        // nothing (every update replayed).
+        let span = tracing::info_span!("store.load", store.from = tracing::field::Empty);
+        let _in = span.enter();
         let (parent, base): (Option<String>, Option<Vec<u8>>) = run(async {
             let mut rows = self
                 .conn
@@ -773,12 +787,14 @@ impl Store {
         drop(read);
         let (doc, upto) = match (snapshot, parent, base) {
             (Some((upto, packed)), _, _) => {
+                span.record("store.from", "snapshot");
                 let doc = loro::LoroDoc::new();
                 let _span = tracing::info_span!("store.import_snapshot").entered();
                 import(&doc, &packed)?;
                 (doc, upto)
             }
             (None, Some(parent), Some(base)) => {
+                span.record("store.from", "fork");
                 let from = self.load(&parent)?;
                 let at =
                     loro::Frontiers::decode(&base).map_err(|e| StoreError::Loro(e.to_string()))?;
@@ -788,8 +804,18 @@ impl Store {
                     0,
                 )
             }
-            _ => (loro::LoroDoc::new(), 0),
+            _ => {
+                span.record("store.from", "empty");
+                (loro::LoroDoc::new(), 0)
+            }
         };
+        let read = tracing::info_span!(
+            "store.read_updates",
+            store.upto = upto,
+            store.updates = tracing::field::Empty,
+            store.packed_bytes = tracing::field::Empty,
+        )
+        .entered();
         let updates: Vec<Vec<u8>> = run(async {
             let mut rows = self
                 .conn
@@ -804,16 +830,48 @@ impl Store {
             }
             StoreResult::Ok(out)
         })?;
+        read.record("store.updates", updates.len());
+        read.record(
+            "store.packed_bytes",
+            updates.iter().map(Vec::len).sum::<usize>(),
+        );
+        drop(read);
         // All at once: imported one by one, each update had the doc's
         // whole state worked out again — 377 of them, 17 s to open a song.
         // A batch decodes them all and works the state out once.
-        let bytes = updates
-            .iter()
-            .map(|packed| zstd::decode_all(packed.as_slice()))
-            .collect::<Result<Vec<Vec<u8>>, _>>()?;
+        let bytes = tracing::info_span!("store.unpack_updates", store.updates = updates.len())
+            .in_scope(|| {
+                updates
+                    .iter()
+                    .map(|packed| zstd::decode_all(packed.as_slice()))
+                    .collect::<Result<Vec<Vec<u8>>, _>>()
+            })?;
         if !bytes.is_empty() {
-            doc.import_batch(&bytes)
-                .map_err(|e| StoreError::Loro(e.to_string()))?;
+            let total: usize = bytes.iter().map(Vec::len).sum();
+            // How: a batch imports the history alone and then works the
+            // whole state out at once (Loro's closing checkout), which costs
+            // what the state is, however little the updates hold: 72 s for
+            // two updates of 206 bytes on Unbreakable's 1.47 GB snapshot. One
+            // by one, each import applies its own ops to the state, which
+            // costs what they are, but a long run pays that again and again
+            // (377 of them, 17 s). So a few small ones go one by one.
+            let one_by_one = bytes.len() <= ONE_BY_ONE_MAX_UPDATES && total <= ONE_BY_ONE_MAX_BYTES;
+            let span = tracing::info_span!(
+                "store.import_updates",
+                store.updates = bytes.len(),
+                store.bytes = total,
+                store.how = if one_by_one { "one_by_one" } else { "batch" },
+            );
+            let _in = span.enter();
+            if one_by_one {
+                for update in &bytes {
+                    doc.import(update)
+                        .map_err(|e| StoreError::Loro(e.to_string()))?;
+                }
+            } else {
+                doc.import_batch(&bytes)
+                    .map_err(|e| StoreError::Loro(e.to_string()))?;
+            }
         }
         Ok(doc)
     }
