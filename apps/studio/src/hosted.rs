@@ -431,6 +431,40 @@ pub fn use_engine_actions() {
     });
 }
 
+/// The engine's actions that render offline on copies of the song's
+/// plugins. Called by a model or the CLI, each carries `"_origin":
+/// "agent"` to the engine, which then renders it in its render worker, so
+/// a plugin that crashes there never takes the person's song down
+/// (`studio_engine::render_worker::policy::RENDERS`).
+const RENDERS: &[&str] = &[
+    "LISTEN",
+    "LISTEN_BLOCK",
+    "LISTEN_AB",
+    "LISTEN_RENDER",
+    "MIX_MEASURE",
+    "MIX_RENDER",
+];
+
+/// Whether `caller` is a model, the CLI or a script: a principal (Studio's
+/// MCP door), or an agent's invocation (its control socket).
+fn from_agent(caller: &architect::action::ActionCaller) -> bool {
+    caller.principal().is_some()
+        || caller
+            .invocation()
+            .is_some_and(|i| i.source == architect::action::InvocationSource::Agent)
+}
+
+/// `args` (an object or nothing) saying it is an agent's call.
+fn mark_agent(args: &mut serde_json::Value) {
+    if args.is_null() {
+        *args = serde_json::json!({});
+    }
+    if let Some(map) = args.as_object_mut() {
+        map.entry("_origin")
+            .or_insert_with(|| serde_json::Value::from("agent"));
+    }
+}
+
 /// Registers each of `actions` (as `DAW_ACTIONS` gives them) on Studio's
 /// list, forwarded through `DAW_RUN`: how many were added.
 fn forward_engine_actions(actions: &[serde_json::Value]) -> usize {
@@ -472,25 +506,30 @@ fn forward_engine_actions(actions: &[serde_json::Value]) -> usize {
             disabled_reason: None,
             checked: None,
         };
-        let handler: architect::action::AsyncHandler = std::sync::Arc::new(move |raw: &[u8]| {
-            let args: serde_json::Value = if raw.is_empty() {
-                serde_json::Value::Null
-            } else {
-                serde_json::from_slice(raw).map_err(|e| ActionError::BadArgs {
-                    id: id.clone(),
-                    message: e.to_string(),
-                    expected: None,
-                })?
-            };
-            let call = serde_json::json!({ "id": id, "args": args }).to_string();
-            let future: ActionFuture = Box::pin(async move {
-                crate::actions::list()
-                    .run_json_async("DAW_RUN", call.as_bytes())
-                    .await
-            });
-            Ok(future)
-        });
-        if list.register_forwarded(&info, handler).is_ok() {
+        let handler: architect::action::CallerAsyncHandler = std::sync::Arc::new(
+            move |caller: &architect::action::ActionCaller, raw: &[u8]| {
+                let mut args: serde_json::Value = if raw.is_empty() {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::from_slice(raw).map_err(|e| ActionError::BadArgs {
+                        id: id.clone(),
+                        message: e.to_string(),
+                        expected: None,
+                    })?
+                };
+                if from_agent(caller) && RENDERS.contains(&id.as_str()) {
+                    mark_agent(&mut args);
+                }
+                let call = serde_json::json!({ "id": id, "args": args }).to_string();
+                let future: ActionFuture = Box::pin(async move {
+                    crate::actions::list()
+                        .run_json_async("DAW_RUN", call.as_bytes())
+                        .await
+                });
+                Ok(future)
+            },
+        );
+        if list.register_forwarded_with(&info, handler).is_ok() {
             added += 1;
         }
     }

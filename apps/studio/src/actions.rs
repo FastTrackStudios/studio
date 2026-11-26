@@ -542,6 +542,17 @@ mod imp {
             door_name(),
             architect_control::Surface::new(door_name(), version, list.clone()),
         )
+        // Whatever reaches the socket is a model, the CLI or a script: never
+        // the app's own UI. Said on each call, so the engine renders such a
+        // call's audio in its render worker, apart from the person's song
+        // (`studio_engine::render_worker`).
+        .map(|c| {
+            c.with_caller(|_| {
+                architect::action::ActionCaller::app().with_invocation(
+                    architect::action::Invocation::new(architect::action::InvocationSource::Agent),
+                )
+            })
+        })
         .and_then(architect_control::server::Control::serve);
         let control = match control {
             Ok(s) => Some(s),
