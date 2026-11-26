@@ -181,3 +181,45 @@ cargo command** (`devenv shell -- …`): the `cargo` on the default PATH is
 7. **Run the real thing**: `just studio`, open a song, play, render, MCP.
    Then the force-merge into `main` (plan, phase 4).
 8. ~~TTS~~: done (`9d829b241`); see above.
+
+## Splitting studio-engine (next round, 2026-11-25)
+
+`crates/studio-engine/engine/studio-engine` is 87.5k lines in ~120 modules:
+every engine edit recompiles all of it (8.5 min measured), and it is on
+`boundaries.toml`'s allow-list. It holds almost no UI code; what breaks the
+rule is dependencies.
+
+**Step 1: no UI dependencies** (branch `engine-split/core`)
+- `engine-client` (a connect crate) in 23 files, for the UI↔engine wire
+  types (`body`, `actions`, `setlist`, `studio_engine`): move those types to
+  `studio-core/proto` (a `studio-proto` module or a new `engine-proto`
+  crate); both sides use them from there.
+- `app_shell::version` → `fts-version`; `dock::DockIntent` → proto or gone.
+- the `web` feature's browser glue (`web_engine.rs`, `dioxus/web`) → its
+  own small crate.
+- Then `just boundaries tighten`: studio-engine leaves the allow-list.
+
+**Step 1b: actions register themselves.** `actions.rs` (5.5k lines) reaches
+into 72 modules; every action is registered there. Each domain registers its
+own actions (a `register(&mut Registry)` per domain crate, collected at the
+top), so no hub depends on everything.
+
+**Step 2: engine-core** (same branch): `studio_engine`, `open`/`open_core`,
+`project_file`, `prepare`, `song`, `autosave`, `backup`, `history_marks`
+(~12k): what the rest depend on (fan-in: open 31, project_file 21).
+
+**Step 3: the domains, in parallel** (one worktree and branch each, each
+depending only on engine-core and studio-core, never on another domain):
+
+| Crate | Modules | ≈ lines |
+|---|---|---|
+| engine-listen | listen, mix_measure, render_worker, signal_offline, off_loop, audio_health | 11k |
+| engine-edit | hits, hits_midi, hit_place, drum_*, comp*, take_rank, edit_*, grow, fundamental, vocal_level | 15k |
+| engine-mix | mix_state, mix_snapshot, mix_variants, mix_chains, mix_sends, fx_actions, automation_actions, signal_kit, clap_fx, clap_host | 12k |
+| engine-project | ingest, projects, project_new, instrument_tracks, track_regions, stream_*, song_stream, show | 9k |
+| engine-collab | collab, agent, task_*, live_host | 5k |
+
+`studio-engine` keeps only the assembly (collecting the registries).
+
+**Step 4: measure.** `cargo build --timings` of the engine before and after,
+and the edit-to-run time of a change in one domain (target: seconds).
