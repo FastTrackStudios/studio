@@ -547,11 +547,24 @@ struct Kept {
     /// By point and key: a point keeps what it sounded like before and
     /// after a change, so putting a change back replays the first.
     recordings: HashMap<(Point, u64), Recorded>,
+    /// A Signal instance's block meters ([`Ask::meters`]) as a render of
+    /// one span heard them, by [`MeterKey`]: what a replay of that span
+    /// answers.
+    meters: HashMap<MeterKey, Vec<serde_json::Value>>,
     bytes: u64,
     /// Set by [`set_limit`]; else the default.
     limit: Option<u64>,
     evicted: u64,
 }
+
+/// Whose meters, over what: the instance's guid, its track's key, the
+/// span's render frames `from..to`, and whether it was rendered in one
+/// piece (chunks summarise one value each).
+type MeterKey = (String, u64, u64, u64, bool);
+
+/// At most this many meter summaries are kept (each a few hundred bytes);
+/// past it they all go, and the next listen asking for them renders.
+const MOST_METERS: usize = 4_096;
 
 /// The limit `STUDIO_LISTEN_CACHE_MB` sets, else the default, bytes.
 fn default_limit() -> u64 {
@@ -936,6 +949,13 @@ fn side_by_side<T: Send, R: Send>(items: Vec<T>, f: impl Fn(T) -> R + Sync) -> V
         .into_iter()
         .flatten()
         .collect()
+}
+
+/// The track whose chain holds live plugin `guid`.
+fn track_of<'a>(live: &'a HashMap<String, Vec<Instance>>, guid: &str) -> Option<&'a str> {
+    live.iter()
+        .find(|(_, v)| v.iter().any(|i| i.guid == guid))
+        .map(|(t, _)| t.as_str())
 }
 
 /// The live plugins on `tracks`' chains, by track, their states read (side
@@ -1493,7 +1513,7 @@ pub fn render(
             && kept
                 .holding(&master_at, (Some(mkey), need), (start, to))
                 .is_some();
-        let synthetic: HashSet<ProbeAt> = if spec.master && !master_held {
+        let mut synthetic: HashSet<ProbeAt> = if spec.master && !master_held {
             feeders
                 .iter()
                 .map(|g| ProbeAt {
@@ -1504,6 +1524,22 @@ pub fn render(
         } else {
             HashSet::new()
         };
+        // A meter not kept for this span is heard by rendering its track.
+        for guid in spec.meters {
+            let Some(track) = track_of(&live, guid) else {
+                continue;
+            };
+            let held = key(track).is_some_and(|k| {
+                kept.meters
+                    .contains_key(&(guid.clone(), k, from, to, ask.exact))
+            });
+            if !held {
+                synthetic.insert(ProbeAt {
+                    track: track.to_owned(),
+                    at: Probe::PostFader,
+                });
+            }
+        }
         points.extend(synthetic.iter().cloned());
         let plan = if ask.fresh {
             Plan {
@@ -1711,7 +1747,15 @@ pub fn render(
                 latencies,
                 master_latency: master.as_ref().map_or(0, |m| m.1),
                 master: master.map(|m| m.0),
-                meters: HashMap::new(),
+                meters: spec
+                    .meters
+                    .iter()
+                    .filter_map(|g| {
+                        let k = key(track_of(&live, g)?)?;
+                        let v = kept.meters.get(&(g.clone(), k, from, to, ask.exact))?;
+                        Some((g.clone(), v.clone()))
+                    })
+                    .collect(),
                 answered: Answered::Replayed,
             });
             continue;
@@ -1778,6 +1822,15 @@ pub fn render(
         let mut meters: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
         for (guid, v) in outs.iter().flat_map(|o| o.meters.iter().cloned()) {
             meters.entry(guid).or_default().push(v);
+        }
+        if kept.meters.len() + meters.len() > MOST_METERS {
+            kept.meters.clear();
+        }
+        for (guid, v) in &meters {
+            if let Some(k) = track_of(&live, guid).and_then(|t| p.keys.get(t).copied()) {
+                kept.meters
+                    .insert((guid.clone(), k, from, to, ask.exact), v.clone());
+            }
         }
         copied += outs.iter().map(|o| o.copied).sum::<u32>();
         reused += outs.iter().map(|o| o.reused).sum::<u32>();
@@ -2104,6 +2157,7 @@ pub fn forget() -> (u32, u32) {
             .collect(),
     );
     kept.recordings.clear();
+    kept.meters.clear();
     kept.bytes = 0;
     counts
 }
