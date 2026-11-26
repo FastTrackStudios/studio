@@ -122,6 +122,13 @@ grows.
 - One variable names it everywhere: **`STUDIO_INSTANCE`**. It is read by
   the engine (which instance it is), the UI (which engine it connects to
   first) and studio-mcp (which engine it drives).
+- **The window is always "Studio"** (owner's decision, 2026-11-25): app id
+  and title are `Studio` for every instance, so the desktop's window rules
+  (Loft/niri) apply to all of them. The instance name never reaches the OS
+  window identity; the UI shows it inside the app (the engine chip). This
+  replaces the earlier `Studio-<name>` app id, which kept agent windows out
+  of the owner's rules on purpose; an agent that must stay off the owner's
+  layout runs without a window (headless engine plus studio-mcp).
 - An instance holds:
   - `name`
   - `owner`: `{kind: human | agent, id}`, where `id` is the T3 thread id or
