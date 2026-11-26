@@ -29,16 +29,16 @@
 //! editor's lock-free rings: one mono-sum input peak per block plus a
 //! `(block_index, velocity)` entry per detected hit.
 
-use nice_plug::prelude::*;
 use nice_plug::midi::{Channel, Key, VoiceID};
+use nice_plug::prelude::*;
 use nice_plug_dioxus::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use dsp::trigger::detector::DetectAlgorithm;
-use plugin_ui::trigger::ui::params::{TriggerParams, TriggerUiState};
 use dsp::trigger::velocity::{VelocityCurve, VelocityMapper};
 use dsp::trigger::{AudioConfig, Processor, TriggerChain};
+use plugin_ui::trigger::ui::params::{TriggerParams, TriggerUiState};
 
 const PLUGIN_NAME: &str = "FTS Trigger";
 
@@ -299,13 +299,16 @@ impl Plugin for FtsTrigger {
         for slot in &mut self.pending_offs {
             if let Some(off) = *slot {
                 if off.remaining < block_len {
-                    send(context, NoteEvent::NoteOff {
-                        timing: off.remaining,
-                        voice_id: VoiceID::Wildcard,
-                        channel: Channel::Number(0),
-                        key: Key::Number(off.note),
-                        velocity: 0.0,
-                    });
+                    send(
+                        context,
+                        NoteEvent::NoteOff {
+                            timing: off.remaining,
+                            voice_id: VoiceID::Wildcard,
+                            channel: Channel::Number(0),
+                            key: Key::Number(off.note),
+                            velocity: 0.0,
+                        },
+                    );
                     *slot = None;
                 } else {
                     *slot = Some(PendingOff {
@@ -326,22 +329,28 @@ impl Plugin for FtsTrigger {
             if let Some(vel) = self.chain.detect_tick(l, r) {
                 let onset = (i as u32).saturating_sub(confirm_samples);
                 let velocity = (VelocityMapper::to_midi(vel) as f32 / 127.0).clamp(0.0, 1.0);
-                send(context, NoteEvent::NoteOn {
-                    timing: onset,
-                    voice_id: VoiceID::Wildcard,
-                    channel: Channel::Number(0),
-                    key: Key::Number(note),
-                    velocity,
-                });
-                let off_at = onset + self.note_len_samples;
-                if off_at < block_len {
-                    send(context, NoteEvent::NoteOff {
-                        timing: off_at,
+                send(
+                    context,
+                    NoteEvent::NoteOn {
+                        timing: onset,
                         voice_id: VoiceID::Wildcard,
                         channel: Channel::Number(0),
                         key: Key::Number(note),
-                        velocity: 0.0,
-                    });
+                        velocity,
+                    },
+                );
+                let off_at = onset + self.note_len_samples;
+                if off_at < block_len {
+                    send(
+                        context,
+                        NoteEvent::NoteOff {
+                            timing: off_at,
+                            voice_id: VoiceID::Wildcard,
+                            channel: Channel::Number(0),
+                            key: Key::Number(note),
+                            velocity: 0.0,
+                        },
+                    );
                 } else {
                     self.schedule_off(PendingOff {
                         remaining: off_at - block_len,

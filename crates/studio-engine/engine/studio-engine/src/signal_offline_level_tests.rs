@@ -490,4 +490,3 @@ fn a_level_block_writes_its_lanes_at_once_as_the_fxs_automation_and_they_are_voc
         after.iter().map(|l| &l.0).collect::<Vec<_>>()
     );
 }
-

@@ -2,7 +2,7 @@ use bevy_asset::Asset;
 use bevy_ecs::system::SystemParamItem;
 use bevy_material::{AlphaMode, OpaqueRendererMethod};
 use bevy_mesh::MeshVertexBufferLayoutRef;
-use bevy_reflect::{impl_type_path, Reflect};
+use bevy_reflect::{Reflect, impl_type_path};
 use bevy_render::{
     combined_bind_group as cbg,
     render_resource::{

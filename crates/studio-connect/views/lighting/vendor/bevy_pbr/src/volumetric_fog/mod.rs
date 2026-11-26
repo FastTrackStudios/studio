@@ -30,7 +30,7 @@
 //! [Henyey-Greenstein phase function]: https://www.pbr-book.org/4ed/Volume_Scattering/Phase_Functions#TheHenyeyndashGreensteinPhaseFunction
 
 use bevy_app::{App, Plugin};
-use bevy_asset::{embedded_asset, Assets, Handle};
+use bevy_asset::{Assets, Handle, embedded_asset};
 use bevy_core_pipeline::{
     core_3d::prepare_core_3d_depth_textures,
     schedule::{Core3d, Core3dSystems},
@@ -40,14 +40,14 @@ use bevy_light::FogVolume;
 use bevy_math::{Vec2, Vec3};
 use bevy_mesh::{Mesh, Meshable};
 use bevy_render::{
+    ExtractSchedule, GpuResourceAppExt, Render, RenderApp, RenderStartup, RenderSystems,
     render_resource::SpecializedRenderPipelines,
     sync_component::{SyncComponent, SyncComponentPlugin},
-    ExtractSchedule, GpuResourceAppExt, Render, RenderApp, RenderStartup, RenderSystems,
 };
 use bevy_shape::{Cuboid, Plane3d};
-use render::{volumetric_fog, VolumetricFogPipeline, VolumetricFogUniformBuffer};
+use render::{VolumetricFogPipeline, VolumetricFogUniformBuffer, volumetric_fog};
 
-use crate::{volumetric_fog::render::init_volumetric_fog_pipeline, MeshPipelineSystems};
+use crate::{MeshPipelineSystems, volumetric_fog::render::init_volumetric_fog_pipeline};
 
 pub mod render;
 

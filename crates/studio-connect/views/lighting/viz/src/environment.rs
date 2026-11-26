@@ -154,10 +154,16 @@ impl Environment {
     pub fn apply_edits(&mut self, raw: &str) -> Result<(), serde_json::Error> {
         let edits: serde_json::Value = serde_json::from_str(raw)?;
         let empty = serde_json::Map::new();
-        let objects = edits.get("objects").and_then(|o| o.as_object()).unwrap_or(&empty);
+        let objects = edits
+            .get("objects")
+            .and_then(|o| o.as_object())
+            .unwrap_or(&empty);
         for (name, edit) in objects {
             let Some(object) = self.objects.iter_mut().find(|o| &o.name == name) else {
-                tracing::warn!(object = name, "an edit names an object the room no longer has");
+                tracing::warn!(
+                    object = name,
+                    "an edit names an object the room no longer has"
+                );
                 continue;
             };
             if let Some(position) = edit.get("position") {
@@ -170,7 +176,10 @@ impl Environment {
                 object.visible = visible;
             }
         }
-        let groups = edits.get("light_groups").and_then(|g| g.as_object()).unwrap_or(&empty);
+        let groups = edits
+            .get("light_groups")
+            .and_then(|g| g.as_object())
+            .unwrap_or(&empty);
         for (name, on) in groups {
             if let Some(on) = on.as_bool() {
                 self.switch(name, on);
@@ -473,7 +482,12 @@ pub fn see_through_drapes(
             let Ok(name) = names.get(entity) else {
                 continue;
             };
-            let Some(object) = environment.0.objects.iter().find(|o| o.name == name.as_str()) else {
+            let Some(object) = environment
+                .0
+                .objects
+                .iter()
+                .find(|o| o.name == name.as_str())
+            else {
                 continue;
             };
             let (size, at) = (object.size.to_vec3(), object.position.to_vec3());

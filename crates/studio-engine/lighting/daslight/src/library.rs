@@ -97,7 +97,11 @@ pub fn rockstrip_252_28ch() -> Element {
     let mut ch = Vec::new();
     for s in 0..8_u16 {
         let n = s.saturating_add(1);
-        for (kind, colour) in [(Kind::Red, "Red"), (Kind::Green, "Green"), (Kind::Blue, "Blue")] {
+        for (kind, colour) in [
+            (Kind::Red, "Red"),
+            (Kind::Green, "Green"),
+            (Kind::Blue, "Blue"),
+        ] {
             ch.push(
                 Channel::new(kind, &format!("{n}. {colour}"))
                     .index(s)
@@ -261,7 +265,10 @@ mod tests {
         assert_eq!(channels(&solena_max_bar_24ch()).len(), 24);
         let rock = channels(&rockstrip_252_28ch());
         assert_eq!(rock.len(), 28);
-        assert_eq!(rock.get(23).map(|c| (c.kind, c.beams.clone())), Some((Kind::Blue, vec![7])));
+        assert_eq!(
+            rock.get(23).map(|c| (c.kind, c.beams.clone())),
+            Some((Kind::Blue, vec![7]))
+        );
         assert_eq!(rock.get(24).map(|c| c.kind), Some(Kind::Dimmer));
         let mover = channels(&betopper_150w_beam_12ch());
         assert_eq!(mover.len(), 12);

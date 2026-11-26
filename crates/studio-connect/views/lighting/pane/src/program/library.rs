@@ -26,7 +26,8 @@ pub(crate) fn show_path(cx: &Ctx, args: &Value) -> PathBuf {
 }
 
 pub(crate) fn dir_of(path: &Path) -> PathBuf {
-    path.parent().map_or_else(|| PathBuf::from("."), Path::to_path_buf)
+    path.parent()
+        .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
 }
 
 /// `base/rel` with `..` folded, so a file has one spelling in the history.
@@ -85,14 +86,27 @@ pub(crate) fn song_path(cx: &Ctx, args: &Value) -> Result<(PathBuf, Value), Stri
     let want = slug(given);
     for entry in list(&doc, "songs") {
         let file = opt_text(entry, "file").unwrap_or_default();
-        let stem = Path::new(file).file_stem().and_then(|s| s.to_str()).unwrap_or_default();
-        let names = [opt_text(entry, "song"), opt_text(entry, "locator"), Some(stem)];
+        let stem = Path::new(file)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default();
+        let names = [
+            opt_text(entry, "song"),
+            opt_text(entry, "locator"),
+            Some(stem),
+        ];
         if names.iter().flatten().any(|n| slug(n) == want) {
             return Ok((join(&dir_of(&show), file), entry.clone()));
         }
     }
-    let known: Vec<&str> = list(&doc, "songs").iter().filter_map(|s| opt_text(s, "song")).collect();
-    Err(format!("{}: no song {given:?}; it has {known:?}", show.display()))
+    let known: Vec<&str> = list(&doc, "songs")
+        .iter()
+        .filter_map(|s| opt_text(s, "song"))
+        .collect();
+    Err(format!(
+        "{}: no song {given:?}; it has {known:?}",
+        show.display()
+    ))
 }
 
 /// The profile as a library layer (the same shape as the set's file).
@@ -138,11 +152,18 @@ pub(crate) fn profile_layer(cx: &Ctx, path: &Path) -> Value {
         })
         .unwrap_or_default();
     out.insert("effects".into(), Value::Object(effects));
-    out.insert("looks".into(), p.get("looks").cloned().unwrap_or_else(|| json!({})));
+    out.insert(
+        "looks".into(),
+        p.get("looks").cloned().unwrap_or_else(|| json!({})),
+    );
     let tricks: Map<String, Value> = p
         .get("tricks")
         .and_then(Value::as_object)
-        .map(|t| t.iter().map(|(k, v)| (k.clone(), json!({ "tricks": v }))).collect())
+        .map(|t| {
+            t.iter()
+                .map(|(k, v)| (k.clone(), json!({ "tricks": v })))
+                .collect()
+        })
         .unwrap_or_default();
     out.insert("tricks".into(), Value::Object(tricks));
     Value::Object(out)
@@ -208,11 +229,13 @@ impl Layers {
 
     /// Every name of a kind with its top layer.
     pub(crate) fn names(&self, kind: &str) -> Vec<(String, &'static str, Value)> {
-        let mut seen: std::collections::BTreeMap<String, (&'static str, Value)> = std::collections::BTreeMap::new();
+        let mut seen: std::collections::BTreeMap<String, (&'static str, Value)> =
+            std::collections::BTreeMap::new();
         for (layer, lib) in self.stack() {
             if let Some(entries) = lib.get(kind).and_then(Value::as_object) {
                 for (name, entry) in entries {
-                    seen.entry(name.clone()).or_insert_with(|| (layer, entry.clone()));
+                    seen.entry(name.clone())
+                        .or_insert_with(|| (layer, entry.clone()));
                 }
             }
         }
@@ -237,7 +260,10 @@ impl Layers {
                 .unwrap_or_else(|| value.clone());
             json!({ "slot": slot, "is": value, "stands_in": stands_in, "red": c.get("red"), "green": c.get("green"), "blue": c.get("blue") })
         };
-        let mut resolved: Vec<Value> = slots.iter().map(|(slot, value)| rgb(slot, value, None)).collect();
+        let mut resolved: Vec<Value> = slots
+            .iter()
+            .map(|(slot, value)| rgb(slot, value, None))
+            .collect();
         // A slot another palette has and this one lacks stands in from
         // this one (`ignition_show::library::stand_in`).
         if name.is_some() {
@@ -251,7 +277,9 @@ impl Layers {
                 if slots.contains_key(&slot) {
                     continue;
                 }
-                if let Some(from) = ignition_show::library::stand_in(&slot, |s| slots.contains_key(s)) {
+                if let Some(from) =
+                    ignition_show::library::stand_in(&slot, |s| slots.contains_key(s))
+                {
                     if let Some(value) = slots.get(&from) {
                         resolved.push(rgb(&slot, value, Some(&from)));
                     }
@@ -272,7 +300,9 @@ impl Layers {
                     .ok_or_else(|| "scope `song` needs `song`".to_owned())?;
                 Ok(obj(doc)?.entry("library").or_insert_with(|| json!({})))
             }
-            other => Err(format!("scope {other:?}: `set` or `song` (the profile is read-only: duplicate its entry)")),
+            other => Err(format!(
+                "scope {other:?}: `set` or `song` (the profile is read-only: duplicate its entry)"
+            )),
         }
     }
 
@@ -294,12 +324,18 @@ impl Layers {
             let rel = self
                 .set_path
                 .strip_prefix(dir.parent().unwrap_or(&dir))
-                .map_or_else(|_| self.set_path.display().to_string(), |p| format!("../{}", p.display()));
+                .map_or_else(
+                    |_| self.set_path.display().to_string(),
+                    |p| format!("../{}", p.display()),
+                );
             obj(&mut self.show_doc)?.insert("library".into(), json!(rel));
             cx.write_json(&self.show, &self.show_doc)?;
         }
         if let Some((path, doc)) = &self.song {
-            check(&doc.get("library").cloned().unwrap_or_else(|| json!({})), "the song's library")?;
+            check(
+                &doc.get("library").cloned().unwrap_or_else(|| json!({})),
+                "the song's library",
+            )?;
             cx.write_json(path, doc)?;
         }
         Ok(())
@@ -364,7 +400,10 @@ fn do_list(cx: &Ctx, args: &Value) -> Res {
             .filter(|(name, layer, e)| {
                 only.is_none_or(|l| l == *layer)
                     && tag.is_none_or(|t| list(e, "tags").iter().any(|x| x.as_str() == Some(t)))
-                    && folder.is_none_or(|f| opt_text(e, "folder").is_some_and(|x| x == f || x.starts_with(&format!("{f}/"))))
+                    && folder.is_none_or(|f| {
+                        opt_text(e, "folder")
+                            .is_some_and(|x| x == f || x.starts_with(&format!("{f}/")))
+                    })
                     && family.is_none_or(|f| opt_text(e, "family") == Some(f))
                     && search.as_ref().is_none_or(|s| {
                         name.to_lowercase().contains(s)
@@ -410,14 +449,20 @@ fn put(cx: &mut Ctx, args: &Value, name: &str, entry: Value, replace: bool) -> R
     let shadows = layers.find(&kind, name).map(|(l, _)| l);
     let scope = opt_text(args, "scope").unwrap_or("set").to_owned();
     let target = layers.target(args)?;
-    let pool = obj(target)?.entry(kind.clone()).or_insert_with(|| json!({}));
+    let pool = obj(target)?
+        .entry(kind.clone())
+        .or_insert_with(|| json!({}));
     let pool = obj(pool)?;
     if pool.contains_key(name) && !replace {
-        return Err(format!("the {scope}'s library already has {kind} {name:?} (IGNITION_LIBRARY_UPDATE changes it)"));
+        return Err(format!(
+            "the {scope}'s library already has {kind} {name:?} (IGNITION_LIBRARY_UPDATE changes it)"
+        ));
     }
     pool.insert(name.to_owned(), entry.clone());
     layers.save(cx)?;
-    Ok(json!({ "kind": kind, "name": name, "layer": scope, "overrides": shadows.filter(|l| *l != scope), "entry": entry }))
+    Ok(
+        json!({ "kind": kind, "name": name, "layer": scope, "overrides": shadows.filter(|l| *l != scope), "entry": entry }),
+    )
 }
 
 fn do_create(cx: &mut Ctx, args: &Value) -> Res {
@@ -431,7 +476,11 @@ fn do_update(cx: &mut Ctx, args: &Value) -> Res {
     let (_, mut entry) = layers
         .find(kind, name)
         .ok_or_else(|| format!("no {kind} entry {name:?}"))?;
-    merge(&mut entry, args.get("set").ok_or("`set` is required: the keys to change")?);
+    merge(
+        &mut entry,
+        args.get("set")
+            .ok_or("`set` is required: the keys to change")?,
+    );
     put(cx, args, name, entry, true)
 }
 
@@ -456,7 +505,9 @@ fn do_delete(cx: &mut Ctx, args: &Value) -> Res {
         .and_then(Value::as_object_mut)
         .and_then(|pool| pool.remove(&name));
     if gone.is_none() {
-        return Err(format!("that layer has no {kind} entry {name:?} (the profile's are read-only)"));
+        return Err(format!(
+            "that layer has no {kind} entry {name:?} (the profile's are read-only)"
+        ));
     }
     layers.save(cx)?;
     let left = layers.find(&kind, &name).map(|(l, _)| l);
@@ -469,8 +520,12 @@ fn do_uses(cx: &Ctx, args: &Value) -> Res {
     let name = text(args, "name")?;
     let mut out = Vec::new();
     for entry in list(&layers.show_doc, "songs") {
-        let Some(file) = opt_text(entry, "file") else { continue };
-        let Ok(doc) = cx.json(&join(&dir_of(&layers.show), file)) else { continue };
+        let Some(file) = opt_text(entry, "file") else {
+            continue;
+        };
+        let Ok(doc) = cx.json(&join(&dir_of(&layers.show), file)) else {
+            continue;
+        };
         let cues: Vec<Value> = list(&doc, "cues")
             .iter()
             .filter(|cue| names_in(cue).iter().any(|(_, n)| n == name))
@@ -506,7 +561,12 @@ pub(crate) fn names_in(v: &Value) -> Vec<(&'static str, String)> {
                         _ => walk(inner, out),
                     }
                     if k == "colors" || k == "Colors" {
-                        for c in inner.as_array().into_iter().flatten().chain(list(inner, "colors")) {
+                        for c in inner
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .chain(list(inner, "colors"))
+                        {
                             if let Some(name) = c.as_str() {
                                 out.push(("colors", name.to_owned()));
                             }
@@ -526,10 +586,17 @@ pub(crate) fn names_in(v: &Value) -> Vec<(&'static str, String)> {
 /// Tags and folders in use, so a picker can offer them.
 fn do_tags(cx: &Ctx, args: &Value) -> Res {
     let layers = layers(cx, args)?;
-    let (mut tags, mut folders) = (std::collections::BTreeSet::new(), std::collections::BTreeSet::new());
+    let (mut tags, mut folders) = (
+        std::collections::BTreeSet::new(),
+        std::collections::BTreeSet::new(),
+    );
     for kind in KINDS {
         for (_, _, e) in layers.names(kind) {
-            tags.extend(list(&e, "tags").iter().filter_map(|t| t.as_str().map(str::to_owned)));
+            tags.extend(
+                list(&e, "tags")
+                    .iter()
+                    .filter_map(|t| t.as_str().map(str::to_owned)),
+            );
             folders.extend(opt_text(&e, "folder").map(str::to_owned));
         }
     }
@@ -540,9 +607,17 @@ fn do_tags(cx: &Ctx, args: &Value) -> Res {
 /// `palette` on a song gives it back the set's.
 fn do_palette_use(cx: &mut Ctx, args: &Value) -> Res {
     let mut layers = layers(cx, args)?;
-    let name = args.get("palette").and_then(Value::as_str).unwrap_or_default().to_owned();
+    let name = args
+        .get("palette")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
     if !name.is_empty() && layers.find("palettes", &name).is_none() {
-        let have: Vec<String> = layers.names("palettes").into_iter().map(|(n, _, _)| n).collect();
+        let have: Vec<String> = layers
+            .names("palettes")
+            .into_iter()
+            .map(|(n, _, _)| n)
+            .collect();
         return Err(format!("no palette {name:?}; the library has {have:?}"));
     }
     let scope = if layers.song.is_some() { "song" } else { "set" };

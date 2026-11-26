@@ -401,7 +401,11 @@ fn Room(picks: Picks) -> Element {
 /// Linked into an iPhone or iPad build: no GPU process to draw the room
 /// in (`architect_process_view` hosts one on Linux and macOS only), and
 /// Ignition's renderer is not built for iOS yet.
-#[cfg(all(feature = "pane", not(target_arch = "wasm32"), not(any(target_os = "linux", target_os = "macos"))))]
+#[cfg(all(
+    feature = "pane",
+    not(target_arch = "wasm32"),
+    not(any(target_os = "linux", target_os = "macos"))
+))]
 #[component]
 fn Room(picks: Picks) -> Element {
     let _ = picks;

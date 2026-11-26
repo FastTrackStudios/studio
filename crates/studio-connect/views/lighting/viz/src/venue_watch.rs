@@ -74,7 +74,11 @@ pub struct Watched {
 fn stamps(dir: &Path) -> Vec<Option<SystemTime>> {
     FILES
         .iter()
-        .map(|f| std::fs::metadata(dir.join(f)).and_then(|m| m.modified()).ok())
+        .map(|f| {
+            std::fs::metadata(dir.join(f))
+                .and_then(|m| m.modified())
+                .ok()
+        })
         .collect()
 }
 
@@ -94,17 +98,19 @@ pub struct Changed {
 pub fn carry(room: &mut Venue, new: &Venue) -> Changed {
     let mut changed = Changed::default();
     let same = room.fixtures.len() == new.fixtures.len()
-        && room
-            .fixtures
-            .iter()
-            .zip(&new.fixtures)
-            .all(|(a, b)| a.chan == b.chan && a.model == b.model && a.manufacturer == b.manufacturer);
+        && room.fixtures.iter().zip(&new.fixtures).all(|(a, b)| {
+            a.chan == b.chan && a.model == b.model && a.manufacturer == b.manufacturer
+        });
     if !same {
         changed.different_rig = true;
     }
     for (index, old) in room.fixtures.iter_mut().enumerate() {
         // By channel, never by index: an edit may have reordered the file.
-        let Some(now) = new.fixtures.iter().find(|f| f.chan == old.chan && f.chan.is_some()) else {
+        let Some(now) = new
+            .fixtures
+            .iter()
+            .find(|f| f.chan == old.chan && f.chan.is_some())
+        else {
             continue;
         };
         if (old.universe, old.address, old.patched) != (now.universe, now.address, now.patched)
@@ -255,20 +261,38 @@ mod tests {
     #[test]
     fn a_repatch_and_a_move_are_carried_by_channel_and_the_table_is_resolved_again() {
         let mut live = room(&format!("[{},{}]", fixture(1, 1, 0.0), fixture(2, 9, 1.0)));
-        let before = live.patch().by_chan(2).and_then(|p| p.addresses().next().copied());
+        let before = live
+            .patch()
+            .by_chan(2)
+            .and_then(|p| p.addresses().next().copied());
         // The edit: channel 2 to address 101, channel 1 a metre along; the
         // file's order swapped.
-        let edited = room(&format!("[{},{}]", fixture(1, 1, 1.0), fixture(2, 101, 1.0)));
+        let edited = room(&format!(
+            "[{},{}]",
+            fixture(1, 1, 1.0),
+            fixture(2, 101, 1.0)
+        ));
         let changed = carry(&mut live, &edited);
         assert_eq!(changed.repatched, vec![1]);
         assert_eq!(changed.moved, vec![0]);
         assert!(!changed.different_rig);
-        let after = live.patch().by_chan(2).and_then(|p| p.addresses().next().copied());
-        assert_ne!(before, after, "the next frame is encoded to the new address");
+        let after = live
+            .patch()
+            .by_chan(2)
+            .and_then(|p| p.addresses().next().copied());
+        assert_ne!(
+            before, after,
+            "the next frame is encoded to the new address"
+        );
         // The same edit again changes nothing.
         assert_eq!(carry(&mut live, &edited), Changed::default());
         // A fixture added is said, and the rest still applies.
-        let more = room(&format!("[{},{},{}]", fixture(1, 1, 1.0), fixture(2, 201, 1.0), fixture(3, 300, 0.0)));
+        let more = room(&format!(
+            "[{},{},{}]",
+            fixture(1, 1, 1.0),
+            fixture(2, 201, 1.0),
+            fixture(3, 300, 0.0)
+        ));
         let changed = carry(&mut live, &more);
         assert!(changed.different_rig);
         assert_eq!(changed.repatched, vec![1]);

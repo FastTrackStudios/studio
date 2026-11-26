@@ -28,20 +28,31 @@ use super::{Ctx, Res, arr, count_f, flag, list, merge, num, obj, opt_text, slug,
 /// `data/venues`), else the show's venue.
 pub(crate) fn env_dir(cx: &Ctx, args: &Value) -> Result<PathBuf, String> {
     if let Some(env) = opt_text(args, "env") {
-        return Ok(if env.contains('/') { cx.path(env) } else { cx.data().join("venues").join(env) });
+        return Ok(if env.contains('/') {
+            cx.path(env)
+        } else {
+            cx.data().join("venues").join(env)
+        });
     }
     let show = show_path(cx, args);
-    let doc = cx.json(&show).map_err(|e| format!("`env` is required, or a show with a venue ({e})"))?;
+    let doc = cx
+        .json(&show)
+        .map_err(|e| format!("`env` is required, or a show with a venue ({e})"))?;
     Ok(join(&dir_of(&show), text(&doc, "venue")?))
 }
 
 fn file(cx: &Ctx, dir: &Path, name: &str) -> Value {
-    cx.json_or(&dir.join(name), json!([])).unwrap_or_else(|_| json!([]))
+    cx.json_or(&dir.join(name), json!([]))
+        .unwrap_or_else(|_| json!([]))
 }
 
 fn xyz(v: Option<&Value>) -> Option<Vec3> {
     let v = v?;
-    Some(Vec3 { x: num(v, "x")?, y: num(v, "y")?, z: num(v, "z").unwrap_or(0.0) })
+    Some(Vec3 {
+        x: num(v, "x")?,
+        y: num(v, "y")?,
+        z: num(v, "z").unwrap_or(0.0),
+    })
 }
 
 fn vec_json(v: Vec3) -> Value {
@@ -51,7 +62,11 @@ fn vec_json(v: Vec3) -> Value {
 /// The hang a set of eulers (degrees, applied Z then Y then X, as the
 /// visualizer reads them) makes.
 fn quat_of(e: Vec3) -> Value {
-    let (hx, hy, hz) = (e.x.to_radians() / 2.0, e.y.to_radians() / 2.0, e.z.to_radians() / 2.0);
+    let (hx, hy, hz) = (
+        e.x.to_radians() / 2.0,
+        e.y.to_radians() / 2.0,
+        e.z.to_radians() / 2.0,
+    );
     let (sx, cx) = hx.sin_cos();
     let (sy, cy) = hy.sin_cos();
     let (sz, cz) = hz.sin_cos();
@@ -135,7 +150,10 @@ pub(crate) fn room(cx: &Ctx, args: &Value) -> Result<Room, String> {
                 }),
                 manufacturer: opt_text(f, "manufacturer").unwrap_or_default().to_owned(),
                 model: opt_text(f, "model").unwrap_or_default().to_owned(),
-                tags: list(f, "tags").iter().filter_map(|t| t.as_str().map(str::to_owned)).collect(),
+                tags: list(f, "tags")
+                    .iter()
+                    .filter_map(|t| t.as_str().map(str::to_owned))
+                    .collect(),
             })
         })
         .collect();
@@ -143,22 +161,39 @@ pub(crate) fn room(cx: &Ctx, args: &Value) -> Result<Room, String> {
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|g| Some(Group { name: opt_text(g, "label")?.to_owned(), chans: chans_of(list(g, "channels")) }))
+        .filter_map(|g| {
+            Some(Group {
+                name: opt_text(g, "label")?.to_owned(),
+                chans: chans_of(list(g, "channels")),
+            })
+        })
         .collect();
     let binding = cx
         .json(&dir.join("profile.json"))
         .ok()
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
-    Ok(Room { dir, fixtures, rig: Rig::new(infos), groups, binding })
+    Ok(Room {
+        dir,
+        fixtures,
+        rig: Rig::new(infos),
+        groups,
+        binding,
+    })
 }
 
 impl Room {
     /// The channels a target names, in its order.
     pub(crate) fn resolve(&self, target: &Value) -> Result<Vec<u32>, String> {
         let roles: BTreeSet<String> = self.binding.groups.keys().cloned().collect();
-        let sel: Selection = serde_json::from_value(selection(target, &roles)?).map_err(|e| format!("target: {e}"))?;
-        Ok(ignition_show::selection::resolve_with(&sel, &self.groups, &self.rig, &self.binding))
+        let sel: Selection = serde_json::from_value(selection(target, &roles)?)
+            .map_err(|e| format!("target: {e}"))?;
+        Ok(ignition_show::selection::resolve_with(
+            &sel,
+            &self.groups,
+            &self.rig,
+            &self.binding,
+        ))
     }
 }
 
@@ -179,7 +214,12 @@ fn env_list(cx: &Ctx, args: &Value) -> Res {
     for dir in names {
         let manifest = cx.json_or(&dir.join("venue.ig-venue"), json!({}))?;
         let fixtures = file(cx, &dir, "fixtures.json");
-        let universes: BTreeSet<u32> = fixtures.as_array().into_iter().flatten().filter_map(|f| f.get("universe").and_then(whole)).collect();
+        let universes: BTreeSet<u32> = fixtures
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|f| f.get("universe").and_then(whole))
+            .collect();
         out.push(json!({
             "env": dir.file_name().and_then(|n| n.to_str()),
             "name": manifest.get("name"), "dir": dir,
@@ -234,7 +274,13 @@ fn env_get(cx: &Ctx, args: &Value) -> Res {
     }))
 }
 
-fn piece(name: &str, position: (f64, f64, f64), size: (f64, f64, f64), turn: f64, kind: &str) -> Value {
+fn piece(
+    name: &str,
+    position: (f64, f64, f64),
+    size: (f64, f64, f64),
+    turn: f64,
+    kind: &str,
+) -> Value {
     json!({
         "name": name, "kind": kind,
         "position": { "x": position.0, "y": position.1, "z": position.2 },
@@ -250,7 +296,10 @@ fn env_create(cx: &mut Ctx, args: &Value) -> Res {
     let name = text(args, "name")?;
     let dir = cx.data().join("venues").join(slug(name));
     if cx.exists(&dir.join("venue.ig-venue")) || dir.join("fixtures.json").is_file() {
-        return Err(format!("{} is already an environment (IGNITION_ENV_DUPLICATE copies one)", dir.display()));
+        return Err(format!(
+            "{} is already an environment (IGNITION_ENV_DUPLICATE copies one)",
+            dir.display()
+        ));
     }
     let width = num(args, "width").ok_or("`width` (metres) is required")?;
     let depth = num(args, "depth").ok_or("`depth` (metres) is required")?;
@@ -258,41 +307,101 @@ fn env_create(cx: &mut Ctx, args: &Value) -> Res {
     let upstage = num(args, "upstage").unwrap_or(depth * 0.2);
     let house = upstage - depth;
     let mut pieces = vec![
-        piece("Floor", (0.0, upstage - depth / 2.0, 0.0), (width, depth, 0.0), 0.0, "floor"),
-        piece("Wall - Upstage", (0.0, upstage, 0.0), (width, 0.0, height), 0.0, "wall"),
-        piece("Wall - House Back", (0.0, house, 0.0), (width, 0.0, height), -180.0, "wall"),
-        piece("Wall - Stage Left", (width / 2.0, upstage - depth / 2.0, 0.0), (depth, 0.0, height), -90.0, "wall"),
-        piece("Wall - Stage Right", (-width / 2.0, upstage - depth / 2.0, 0.0), (depth, 0.0, height), 90.0, "wall"),
+        piece(
+            "Floor",
+            (0.0, upstage - depth / 2.0, 0.0),
+            (width, depth, 0.0),
+            0.0,
+            "floor",
+        ),
+        piece(
+            "Wall - Upstage",
+            (0.0, upstage, 0.0),
+            (width, 0.0, height),
+            0.0,
+            "wall",
+        ),
+        piece(
+            "Wall - House Back",
+            (0.0, house, 0.0),
+            (width, 0.0, height),
+            -180.0,
+            "wall",
+        ),
+        piece(
+            "Wall - Stage Left",
+            (width / 2.0, upstage - depth / 2.0, 0.0),
+            (depth, 0.0, height),
+            -90.0,
+            "wall",
+        ),
+        piece(
+            "Wall - Stage Right",
+            (-width / 2.0, upstage - depth / 2.0, 0.0),
+            (depth, 0.0, height),
+            90.0,
+            "wall",
+        ),
     ];
     let mut props = Vec::new();
     if let Some(stage) = args.get("stage") {
-        let (w, d, h) = (num(stage, "width").unwrap_or(width * 0.6), num(stage, "depth").unwrap_or(3.0), num(stage, "height").unwrap_or(0.3));
-        props.push(piece("Stage", (0.0, num(stage, "y").unwrap_or(0.0), 0.0), (w, d, h), 0.0, "riser"));
+        let (w, d, h) = (
+            num(stage, "width").unwrap_or(width * 0.6),
+            num(stage, "depth").unwrap_or(3.0),
+            num(stage, "height").unwrap_or(0.3),
+        );
+        props.push(piece(
+            "Stage",
+            (0.0, num(stage, "y").unwrap_or(0.0), 0.0),
+            (w, d, h),
+            0.0,
+            "riser",
+        ));
     }
     if let Some(aud) = args.get("audience") {
         let d = num(aud, "depth").unwrap_or((depth - upstage - 2.0).max(1.0));
         let front = num(aud, "front").unwrap_or(-2.0);
-        pieces.push(piece("Audience", (0.0, front - d / 2.0, 0.01), (num(aud, "width").unwrap_or(width * 0.8), d, 0.0), 0.0, "audience"));
+        pieces.push(piece(
+            "Audience",
+            (0.0, front - d / 2.0, 0.01),
+            (num(aud, "width").unwrap_or(width * 0.8), d, 0.0),
+            0.0,
+            "audience",
+        ));
     }
     for t in list(args, "truss") {
         let label = opt_text(t, "name").unwrap_or("Truss");
         props.push(piece(
             &format!("Truss - {label}"),
-            (num(t, "x").unwrap_or(0.0), num(t, "y").unwrap_or(0.0), num(t, "z").unwrap_or(height - 0.5)),
+            (
+                num(t, "x").unwrap_or(0.0),
+                num(t, "y").unwrap_or(0.0),
+                num(t, "z").unwrap_or(height - 0.5),
+            ),
             (num(t, "width").unwrap_or(width * 0.6), 0.3, 0.3),
             num(t, "turn").unwrap_or(0.0),
             "truss",
         ));
     }
     let focus = [
-        ("Vocal Centre", 0.0, -0.9, 1.55), ("Stage Wide", 0.0, 0.0, 1.2), ("Upstage Centre", 0.0, upstage * 0.5, 1.55),
-        ("Drums", 0.0, upstage * 0.5, 1.1), ("Band Wall", 0.0, upstage, height * 0.5),
-        ("Audience Front", 0.0, -3.0, 1.2), ("Audience Back", 0.0, house + 1.0, 1.2),
+        ("Vocal Centre", 0.0, -0.9, 1.55),
+        ("Stage Wide", 0.0, 0.0, 1.2),
+        ("Upstage Centre", 0.0, upstage * 0.5, 1.55),
+        ("Drums", 0.0, upstage * 0.5, 1.1),
+        ("Band Wall", 0.0, upstage, height * 0.5),
+        ("Audience Front", 0.0, -3.0, 1.2),
+        ("Audience Back", 0.0, house + 1.0, 1.2),
     ];
-    let points: Vec<Value> = focus.iter().map(|(n, x, y, z)| json!({ "name": n, "target": { "x": x, "y": y, "z": z } })).collect();
+    let points: Vec<Value> = focus
+        .iter()
+        .map(|(n, x, y, z)| json!({ "name": n, "target": { "x": x, "y": y, "z": z } }))
+        .collect();
     let title = opt_text(args, "title").unwrap_or(name);
     let files: [(&str, Value); 9] = [
-        ("venue.ig-venue", json!({ "version": 1, "name": title, "profile": "Ignition", "dmx": { "universes": { "1": { "sacn": { "priority": 100 }, "artnet": { "net": 0, "subnet": 0, "universe": 0 } } } } })),
+        (
+            "venue.ig-venue",
+            json!({ "version": 1, "name": title, "profile": "Ignition", "dmx": { "universes": { "1": { "sacn": { "priority": 100 }, "artnet": { "net": 0, "subnet": 0, "universe": 0 } } } } }),
+        ),
         ("room.json", json!(pieces)),
         ("props.json", json!(props)),
         ("screens.json", json!([])),
@@ -300,9 +409,12 @@ fn env_create(cx: &mut Ctx, args: &Value) -> Res {
         ("groups.json", json!([])),
         ("people.json", json!([])),
         ("palettes.json", json!({ "colors": [], "focus": points })),
-        ("profile.json", json!({ "profile": "Ignition", "groups": {}, "focus": {
+        (
+            "profile.json",
+            json!({ "profile": "Ignition", "groups": {}, "focus": {
             "Vocal": "Vocal Centre", "Stage": "Stage Wide", "Band": "Upstage Centre", "Drums": "Drums",
-            "Back Wall": "Band Wall", "Audience": "Audience Front", "House": "Audience Back" }, "canvases": {} })),
+            "Back Wall": "Band Wall", "Audience": "Audience Front", "House": "Audience Back" }, "canvases": {} }),
+        ),
     ];
     for (file, value) in &files {
         cx.write_json(&dir.join(file), value)?;
@@ -323,9 +435,14 @@ fn env_duplicate(cx: &mut Ctx, args: &Value) -> Res {
     }
     let mut copied = Vec::new();
     let mut skipped = Vec::new();
-    for entry in std::fs::read_dir(&from).map_err(|e| format!("{}: {e}", from.display()))?.flatten() {
+    for entry in std::fs::read_dir(&from)
+        .map_err(|e| format!("{}: {e}", from.display()))?
+        .flatten()
+    {
         let path = entry.path();
-        let Some(file_name) = path.file_name().and_then(|n| n.to_str()).map(str::to_owned) else { continue };
+        let Some(file_name) = path.file_name().and_then(|n| n.to_str()).map(str::to_owned) else {
+            continue;
+        };
         if !path.is_file() {
             skipped.push(file_name);
             continue;
@@ -334,7 +451,10 @@ fn env_duplicate(cx: &mut Ctx, args: &Value) -> Res {
             Ok(mut text) => {
                 if file_name == "venue.ig-venue" {
                     if let Ok(mut v) = serde_json::from_str::<Value>(&text) {
-                        obj(&mut v)?.insert("name".into(), json!(opt_text(args, "title").unwrap_or(name)));
+                        obj(&mut v)?.insert(
+                            "name".into(),
+                            json!(opt_text(args, "title").unwrap_or(name)),
+                        );
                         text = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
                     }
                 }
@@ -358,7 +478,9 @@ fn env_use(cx: &mut Ctx, args: &Value) -> Res {
     let was = doc.get("venue").cloned();
     obj(&mut doc)?.insert("venue".into(), json!(format!("../venues/{env}")));
     cx.write_json(&show, &doc)?;
-    Ok(json!({ "show": show, "env": env, "was": was, "note": "a running renderer takes it when it starts again" }))
+    Ok(
+        json!({ "show": show, "env": env, "was": was, "note": "a running renderer takes it when it starts again" }),
+    )
 }
 
 fn piece_file(args: &Value) -> Result<&'static str, String> {
@@ -366,7 +488,9 @@ fn piece_file(args: &Value) -> Result<&'static str, String> {
         "room" => Ok("room.json"),
         "props" | "prop" => Ok("props.json"),
         "screens" | "screen" => Ok("screens.json"),
-        other => Err(format!("`in` {other:?}: room, props, screens, or environment (a measured room's objects)")),
+        other => Err(format!(
+            "`in` {other:?}: room, props, screens, or environment (a measured room's objects)"
+        )),
     }
 }
 
@@ -390,13 +514,17 @@ fn measured_room(cx: &Ctx, dir: &Path) -> Result<(Value, Value), String> {
         .map_err(|_| "this environment has no measured model (environment.json)".to_owned())?;
     let edits = cx.json_or(&dir.join(EDITS), json!({}))?;
     for o in arr(&mut doc, "objects")? {
-        if let Some(edit) = opt_text(o, "name").and_then(|n| edits.get("objects").and_then(|e| e.get(n))) {
+        if let Some(edit) =
+            opt_text(o, "name").and_then(|n| edits.get("objects").and_then(|e| e.get(n)))
+        {
             let edit = edit.clone();
             merge(o, &edit);
         }
     }
     for g in arr(&mut doc, "light_groups")? {
-        if let Some(on) = opt_text(g, "name").and_then(|n| edits.get("light_groups").and_then(|e| e.get(n))) {
+        if let Some(on) =
+            opt_text(g, "name").and_then(|n| edits.get("light_groups").and_then(|e| e.get(n)))
+        {
             let on = on.clone();
             obj(g)?.insert("on".into(), on);
         }
@@ -413,13 +541,21 @@ fn object_set(cx: &mut Ctx, args: &Value) -> Res {
     let name = text(args, "name")?;
     let (doc, mut edits) = measured_room(cx, &dir)?;
     let objects = list(&doc, "objects");
-    let slot = objects.iter().find(|o| opt_text(o, "name") == Some(name)).ok_or_else(|| {
-        let names: Vec<&str> = objects.iter().filter_map(|o| opt_text(o, "name")).collect();
-        format!("the model has no object {name:?}; it has {names:?}")
-    })?;
-    let moves = args.get("position").is_some() || args.get("eulers").is_some() || args.get("move").is_some();
-    if moves && slot.get("movable").and_then(Value::as_bool) == Some(false) && !flag(args, "force") {
-        return Err(format!("{name:?} is part of the room and does not move (`force: true` moves it anyway)"));
+    let slot = objects
+        .iter()
+        .find(|o| opt_text(o, "name") == Some(name))
+        .ok_or_else(|| {
+            let names: Vec<&str> = objects.iter().filter_map(|o| opt_text(o, "name")).collect();
+            format!("the model has no object {name:?}; it has {names:?}")
+        })?;
+    let moves = args.get("position").is_some()
+        || args.get("eulers").is_some()
+        || args.get("move").is_some();
+    if moves && slot.get("movable").and_then(Value::as_bool) == Some(false) && !flag(args, "force")
+    {
+        return Err(format!(
+            "{name:?} is part of the room and does not move (`force: true` moves it anyway)"
+        ));
     }
     let mut set = Map::new();
     for key in ["position", "eulers", "visible"] {
@@ -428,12 +564,18 @@ fn object_set(cx: &mut Ctx, args: &Value) -> Res {
         }
     }
     if let Some(by) = args.get("move") {
-        let at = xyz(set.get("position").or_else(|| slot.get("position"))).unwrap_or(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+        let at = xyz(set.get("position").or_else(|| slot.get("position"))).unwrap_or(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
         set.insert("position".into(), json!({ "x": at.x + num(by, "x").unwrap_or(0.0), "y": at.y + num(by, "y").unwrap_or(0.0), "z": at.z + num(by, "z").unwrap_or(0.0) }));
     }
     let mut now = slot.clone();
     merge(&mut now, &Value::Object(set.clone()));
-    let pool = obj(&mut edits)?.entry("objects").or_insert_with(|| json!({}));
+    let pool = obj(&mut edits)?
+        .entry("objects")
+        .or_insert_with(|| json!({}));
     let entry = obj(pool)?.entry(name).or_insert_with(|| json!({}));
     if flag(args, "reset") {
         obj(pool)?.remove(name);
@@ -441,7 +583,9 @@ fn object_set(cx: &mut Ctx, args: &Value) -> Res {
         merge(entry, &Value::Object(set));
     }
     cx.write_json(&dir.join(EDITS), &edits)?;
-    Ok(json!({ "object": now, "note": "only eulers.z turns an object; `reset: true` drops this object's edits" }))
+    Ok(
+        json!({ "object": now, "note": "only eulers.z turns an object; `reset: true` drops this object's edits" }),
+    )
 }
 
 /// The room's own lights (the house lights, not the rig): the groups and
@@ -450,12 +594,20 @@ fn env_lights(cx: &mut Ctx, args: &Value) -> Res {
     let dir = env_dir(cx, args)?;
     let (mut doc, mut edits) = measured_room(cx, &dir)?;
     if let Some(group) = opt_text(args, "group") {
-        let on = args.get("on").and_then(Value::as_bool).ok_or("`on` (true or false) is required with `group`")?;
-        let names: Vec<String> = list(&doc, "light_groups").iter().filter_map(|g| opt_text(g, "name").map(str::to_owned)).collect();
+        let on = args
+            .get("on")
+            .and_then(Value::as_bool)
+            .ok_or("`on` (true or false) is required with `group`")?;
+        let names: Vec<String> = list(&doc, "light_groups")
+            .iter()
+            .filter_map(|g| opt_text(g, "name").map(str::to_owned))
+            .collect();
         if !names.iter().any(|n| n == group) {
             return Err(format!("no light group {group:?}; the room has {names:?}"));
         }
-        let pool = obj(&mut edits)?.entry("light_groups").or_insert_with(|| json!({}));
+        let pool = obj(&mut edits)?
+            .entry("light_groups")
+            .or_insert_with(|| json!({}));
         obj(pool)?.insert(group.into(), json!(on));
         cx.write_json(&dir.join(EDITS), &edits)?;
         for g in arr(&mut doc, "light_groups")? {
@@ -496,7 +648,9 @@ fn env_look(cx: &mut Ctx, args: &Value) -> Res {
     }
     let now = look.clone();
     cx.write_json(&path, &doc)?;
-    Ok(json!({ "look": now, "defaults": { "haze": 0.8, "exposure": 0.0, "output": 1.0, "ambient": 0.15 } }))
+    Ok(
+        json!({ "look": now, "defaults": { "haze": 0.8, "exposure": 0.0, "output": 1.0, "ambient": 0.15 } }),
+    )
 }
 
 fn piece_set(cx: &mut Ctx, args: &Value) -> Res {
@@ -518,7 +672,10 @@ fn piece_set(cx: &mut Ctx, args: &Value) -> Res {
     if made {
         items.push(json!({ "name": name, "position": { "x": 0, "y": 0, "z": 0 }, "eulers": { "x": 0, "y": 0, "z": 0 }, "size": { "x": 1, "y": 1, "z": 1 } }));
     }
-    let slot = items.iter_mut().find(|p| opt_text(p, "name") == Some(name)).ok_or("no such piece")?;
+    let slot = items
+        .iter_mut()
+        .find(|p| opt_text(p, "name") == Some(name))
+        .ok_or("no such piece")?;
     merge(slot, &set);
     let now = slot.clone();
     cx.write_json(&path, &all)?;
@@ -545,8 +702,15 @@ fn piece_remove(cx: &mut Ctx, args: &Value) -> Res {
 // ---------------------------------------------------------------------
 
 fn head(p: &Value) -> Vec3 {
-    let at = xyz(p.get("position")).unwrap_or(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
-    Vec3 { z: num(p, "height").unwrap_or(1.75).mul_add(0.93, at.z), ..at }
+    let at = xyz(p.get("position")).unwrap_or(Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    });
+    Vec3 {
+        z: num(p, "height").unwrap_or(1.75).mul_add(0.93, at.z),
+        ..at
+    }
 }
 
 /// People as the room shows and aims at them: a prop each (`Person -
@@ -556,7 +720,17 @@ fn sync_people(cx: &mut Ctx, dir: &Path, people: &[Value]) -> Result<(), String>
     let props_path = dir.join("props.json");
     let mut props = cx.json_or(&props_path, json!([]))?;
     let items = props.as_array_mut().ok_or("props.json is not a list")?;
-    items.retain(|p| !(p.get("person").is_some() || opt_text(p, "name").is_some_and(|n| people.iter().any(|x| opt_text(x, "name").map(|x| format!("Person - {x}")).as_deref() == Some(n)))));
+    items.retain(|p| {
+        !(p.get("person").is_some()
+            || opt_text(p, "name").is_some_and(|n| {
+                people.iter().any(|x| {
+                    opt_text(x, "name")
+                        .map(|x| format!("Person - {x}"))
+                        .as_deref()
+                        == Some(n)
+                })
+            }))
+    });
     for p in people {
         let name = opt_text(p, "name").unwrap_or("?");
         let h = num(p, "height").unwrap_or(1.75);
@@ -594,7 +768,10 @@ fn person_set(cx: &mut Ctx, args: &Value) -> Res {
         if !items.iter().any(|p| opt_text(p, "name") == Some(name)) {
             items.push(json!({ "name": name, "position": { "x": 0.0, "y": 0.0, "z": 0.0 }, "facing_deg": 0.0, "height": 1.75, "stand_in": false }));
         }
-        let slot = items.iter_mut().find(|p| opt_text(p, "name") == Some(name)).ok_or("no such person")?;
+        let slot = items
+            .iter_mut()
+            .find(|p| opt_text(p, "name") == Some(name))
+            .ok_or("no such person")?;
         let mut set = Map::new();
         for key in ["label", "position", "facing_deg", "height", "stand_in"] {
             if let Some(v) = g.get(key) {
@@ -603,8 +780,16 @@ fn person_set(cx: &mut Ctx, args: &Value) -> Res {
         }
         merge(slot, &Value::Object(set));
         if let Some(by) = g.get("move") {
-            let at = xyz(slot.get("position")).unwrap_or(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
-            let moved = Vec3 { x: at.x + num(by, "x").unwrap_or(0.0), y: at.y + num(by, "y").unwrap_or(0.0), z: at.z + num(by, "z").unwrap_or(0.0) };
+            let at = xyz(slot.get("position")).unwrap_or(Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            });
+            let moved = Vec3 {
+                x: at.x + num(by, "x").unwrap_or(0.0),
+                y: at.y + num(by, "y").unwrap_or(0.0),
+                z: at.z + num(by, "z").unwrap_or(0.0),
+            };
             obj(slot)?.insert("position".into(), vec_json(moved));
         }
         out.push(slot.clone());
@@ -637,7 +822,8 @@ fn person_remove(cx: &mut Ctx, args: &Value) -> Res {
     let pal_path = dir.join("palettes.json");
     let mut pal = cx.json_or(&pal_path, json!({}))?;
     if pal.get("focus").is_some() {
-        arr(&mut pal, "focus")?.retain(|f| !(opt_text(f, "name") == Some(name) && f.get("person").is_some()));
+        arr(&mut pal, "focus")?
+            .retain(|f| !(opt_text(f, "name") == Some(name) && f.get("person").is_some()));
         cx.write_json(&pal_path, &pal)?;
     }
     sync_people(cx, &dir, &people)?;
@@ -647,11 +833,24 @@ fn person_remove(cx: &mut Ctx, args: &Value) -> Res {
 /// Where everyone stands for a song and section: the people, with that
 /// song's blocking laid over (the section's over the song's `*`).
 fn standing(cx: &Ctx, dir: &Path, song: Option<&str>, section: Option<&str>) -> Vec<Value> {
-    let mut people = file(cx, dir, "people.json").as_array().cloned().unwrap_or_default();
-    let blocking = cx.json_or(&dir.join("blocking.json"), json!({})).unwrap_or_default();
-    let Some(song) = song.map(slug) else { return people };
+    let mut people = file(cx, dir, "people.json")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let blocking = cx
+        .json_or(&dir.join("blocking.json"), json!({}))
+        .unwrap_or_default();
+    let Some(song) = song.map(slug) else {
+        return people;
+    };
     for key in [Some("*"), section].into_iter().flatten() {
-        let Some(positions) = blocking.get(&song).and_then(|s| s.get(key)).and_then(Value::as_object) else { continue };
+        let Some(positions) = blocking
+            .get(&song)
+            .and_then(|s| s.get(key))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
         for p in &mut people {
             if let Some(over) = opt_text(p, "name").and_then(|n| positions.get(n)) {
                 let mut at = p.get("position").cloned().unwrap_or_else(|| json!({}));
@@ -659,7 +858,10 @@ fn standing(cx: &Ctx, dir: &Path, song: Option<&str>, section: Option<&str>) -> 
                 if let Some(z) = over.get("z") {
                     merge(&mut at, &json!({ "z": z }));
                 }
-                merge(p, &json!({ "position": at, "from": format!("{song}/{key}") }));
+                merge(
+                    p,
+                    &json!({ "position": at, "from": format!("{song}/{key}") }),
+                );
                 if let Some(f) = over.get("facing_deg") {
                     merge(p, &json!({ "facing_deg": f }));
                 }
@@ -672,7 +874,15 @@ fn standing(cx: &Ctx, dir: &Path, song: Option<&str>, section: Option<&str>) -> 
 fn people_list(cx: &Ctx, args: &Value) -> Res {
     let dir = env_dir(cx, args)?;
     let people = standing(cx, &dir, opt_text(args, "song"), opt_text(args, "section"));
-    let rows: Vec<Value> = people.iter().map(|p| { let at = vec_json(head(p)); let mut p = p.clone(); merge(&mut p, &json!({ "head": at })); p }).collect();
+    let rows: Vec<Value> = people
+        .iter()
+        .map(|p| {
+            let at = vec_json(head(p));
+            let mut p = p.clone();
+            merge(&mut p, &json!({ "head": at }));
+            p
+        })
+        .collect();
     Ok(json!({ "people": rows, "blocking": cx.json_or(&dir.join("blocking.json"), json!({}))? }))
 }
 
@@ -685,19 +895,37 @@ fn blocking_set(cx: &mut Ctx, args: &Value) -> Res {
     let section = opt_text(args, "section").unwrap_or("*");
     let path = dir.join("blocking.json");
     let mut all = cx.json_or(&path, json!({}))?;
-    let known: BTreeSet<String> = file(cx, &dir, "people.json").as_array().into_iter().flatten().filter_map(|p| opt_text(p, "name").map(str::to_owned)).collect();
+    let known: BTreeSet<String> = file(cx, &dir, "people.json")
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|p| opt_text(p, "name").map(str::to_owned))
+        .collect();
     if let Some(positions) = args.get("positions").and_then(Value::as_object) {
         if let Some(stranger) = positions.keys().find(|n| !known.contains(*n)) {
-            return Err(format!("no person {stranger:?} in this environment; it has {known:?}"));
+            return Err(format!(
+                "no person {stranger:?} in this environment; it has {known:?}"
+            ));
         }
-        let s = obj(&mut all)?.entry(song.clone()).or_insert_with(|| json!({}));
+        let s = obj(&mut all)?
+            .entry(song.clone())
+            .or_insert_with(|| json!({}));
         let slot = obj(s)?.entry(section).or_insert_with(|| json!({}));
         merge(slot, &Value::Object(positions.clone()));
     }
     cx.write_json(&path, &all)?;
     let now = standing(cx, &dir, Some(&song), Some(section));
     if flag(args, "show") {
-        let plain: Vec<Value> = now.iter().map(|p| { let mut p = p.clone(); if let Some(m) = p.as_object_mut() { m.remove("from"); } p }).collect();
+        let plain: Vec<Value> = now
+            .iter()
+            .map(|p| {
+                let mut p = p.clone();
+                if let Some(m) = p.as_object_mut() {
+                    m.remove("from");
+                }
+                p
+            })
+            .collect();
         cx.write_json(&dir.join("people.json"), &json!(plain))?;
         sync_people(cx, &dir, &plain)?;
     }
@@ -717,21 +945,42 @@ fn focus_on(cx: &mut Ctx, args: &Value) -> Res {
     let section = opt_text(args, "section");
     let (point, name, by_name) = if let Some(person) = opt_text(args, "person") {
         let people = standing(cx, &r.dir, song, section);
-        let p = people.iter().find(|p| opt_text(p, "name") == Some(person)).ok_or_else(|| {
-            format!("no person {person:?}; the environment has {:?}", people.iter().filter_map(|p| opt_text(p, "name")).collect::<Vec<_>>())
-        })?;
+        let p = people
+            .iter()
+            .find(|p| opt_text(p, "name") == Some(person))
+            .ok_or_else(|| {
+                format!(
+                    "no person {person:?}; the environment has {:?}",
+                    people
+                        .iter()
+                        .filter_map(|p| opt_text(p, "name"))
+                        .collect::<Vec<_>>()
+                )
+            })?;
         // A person who moves for this section is aimed at by value; one
         // who stands where the room has them, by name (so moving them
         // later moves the light).
         (head(p), person.to_owned(), p.get("from").is_none())
     } else if let Some(focus) = opt_text(args, "focus") {
         let pal = cx.json_or(&r.dir.join("palettes.json"), json!({}))?;
-        let bound = r.binding.focus.get(focus).cloned().unwrap_or_else(|| focus.to_owned());
-        let p = list(&pal, "focus").iter().find(|f| opt_text(f, "name") == Some(bound.as_str())).and_then(|f| xyz(f.get("target")))
+        let bound = r
+            .binding
+            .focus
+            .get(focus)
+            .cloned()
+            .unwrap_or_else(|| focus.to_owned());
+        let p = list(&pal, "focus")
+            .iter()
+            .find(|f| opt_text(f, "name") == Some(bound.as_str()))
+            .and_then(|f| xyz(f.get("target")))
             .ok_or_else(|| format!("no focus point {focus:?}"))?;
         (p, focus.to_owned(), true)
     } else {
-        (xyz(args.get("point")).ok_or("`person`, `focus` or `point` {x,y,z} is required")?, "point".to_owned(), false)
+        (
+            xyz(args.get("point")).ok_or("`person`, `focus` or `point` {x,y,z} is required")?,
+            "point".to_owned(),
+            false,
+        )
     };
     let mut rows = Vec::new();
     for chan in &chans {
@@ -739,8 +988,12 @@ fn focus_on(cx: &mut Ctx, args: &Value) -> Res {
             rows.push(json!({ "chan": chan, "error": "no known position" }));
             continue;
         };
-        let (pan, tilt) = ignition_show::pan_tilt_deg_to_point(place.position, place.orientation, point);
-        let d = ((point.x - place.position.x).powi(2) + (point.y - place.position.y).powi(2) + (point.z - place.position.z).powi(2)).sqrt();
+        let (pan, tilt) =
+            ignition_show::pan_tilt_deg_to_point(place.position, place.orientation, point);
+        let d = ((point.x - place.position.x).powi(2)
+            + (point.y - place.position.y).powi(2)
+            + (point.z - place.position.z).powi(2))
+        .sqrt();
         rows.push(json!({ "chan": chan, "pan_deg": pan, "tilt_deg": tilt, "throw_m": d }));
     }
     let mut wrote = Value::Null;
@@ -751,12 +1004,17 @@ fn focus_on(cx: &mut Ctx, args: &Value) -> Res {
         let at = match (args.get("cue"), section) {
             (Some(cue), _) => cue.clone(),
             (None, Some(s)) => json!(s),
-            _ => return Err("with `song`, name the `section` or `cue` the focus goes on".to_owned()),
+            _ => {
+                return Err("with `song`, name the `section` or `cue` the focus goes on".to_owned());
+            }
         };
         let cues = arr(&mut doc, "cues")?;
         let i = cues
             .iter()
-            .position(|c| c.get("name") == Some(&at) || c.get("at").and_then(|a| a.get("section")) == Some(&at))
+            .position(|c| {
+                c.get("name") == Some(&at)
+                    || c.get("at").and_then(|a| a.get("section")) == Some(&at)
+            })
             .ok_or_else(|| format!("no cue or section {at} in the song"))?;
         let cue = cues.get_mut(i).ok_or("no such cue")?;
         let mut spec = json!({ "target": args.get("target"), "focus": if by_name { json!(name) } else { vec_json(point) } });
@@ -793,12 +1051,21 @@ fn focus_set(cx: &mut Ctx, args: &Value) -> Res {
 // ---------------------------------------------------------------------
 
 fn mode_len(mode: &Value) -> usize {
-    mode.as_array().map(Vec::len).or_else(|| mode.get("channels").and_then(Value::as_array).map(Vec::len)).unwrap_or(0)
+    mode.as_array()
+        .map(Vec::len)
+        .or_else(|| mode.get("channels").and_then(Value::as_array).map(Vec::len))
+        .unwrap_or(0)
 }
 
 fn types(cx: &Ctx) -> Vec<Value> {
     let dir = cx.data().join("fixtures");
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "json")).collect();
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "json"))
+        .collect();
     paths.sort();
     paths
         .iter()
@@ -820,7 +1087,18 @@ fn find_type(cx: &Ctx, name: &str) -> Result<Value, String> {
     let want = name.to_lowercase();
     all.iter()
         .find(|t| opt_text(t, "type").is_some_and(|n| n.to_lowercase() == want))
-        .or_else(|| all.iter().find(|t| [opt_text(t, "type"), opt_text(t, "model"), opt_text(t, "file")].iter().flatten().any(|n| n.to_lowercase().contains(&want))))
+        .or_else(|| {
+            all.iter().find(|t| {
+                [
+                    opt_text(t, "type"),
+                    opt_text(t, "model"),
+                    opt_text(t, "file"),
+                ]
+                .iter()
+                .flatten()
+                .any(|n| n.to_lowercase().contains(&want))
+            })
+        })
         .cloned()
         .ok_or_else(|| format!("no fixture type {name:?} (IGNITION_FIXTURE_TYPES lists them)"))
 }
@@ -830,10 +1108,13 @@ fn find_type(cx: &Ctx, name: &str) -> Result<Value, String> {
 fn footprint(cx: &Ctx, dir: &Path, f: &Value, all: &[Value]) -> (u32, Option<String>) {
     let ty = opt_text(f, "model").and_then(|m| {
         let m = m.to_lowercase();
-        all.iter().find(|t| opt_text(t, "type").is_some_and(|n| n.to_lowercase() == m))
+        all.iter()
+            .find(|t| opt_text(t, "type").is_some_and(|n| n.to_lowercase() == m))
     });
     if let Some(modes) = ty.and_then(|t| t.get("modes")).and_then(Value::as_object) {
-        let pick = opt_text(f, "mode").and_then(|m| modes.get_key_value(m)).or_else(|| modes.iter().next());
+        let pick = opt_text(f, "mode")
+            .and_then(|m| modes.get_key_value(m))
+            .or_else(|| modes.iter().next());
         if let Some((name, n)) = pick {
             return (whole(n).unwrap_or(1), Some(name.clone()));
         }
@@ -875,8 +1156,16 @@ fn fixture_list(cx: &Ctx, args: &Value) -> Res {
     let mut out = rows(cx, &r);
     if let Some(target) = args.get("target") {
         let chans = r.resolve(target)?;
-        out.retain(|f| f.get("chan").and_then(whole).is_some_and(|c| chans.contains(&c)));
-        out.sort_by_key(|f| chans.iter().position(|c| Some(*c) == f.get("chan").and_then(whole)));
+        out.retain(|f| {
+            f.get("chan")
+                .and_then(whole)
+                .is_some_and(|c| chans.contains(&c))
+        });
+        out.sort_by_key(|f| {
+            chans
+                .iter()
+                .position(|c| Some(*c) == f.get("chan").and_then(whole))
+        });
     }
     Ok(json!({ "count": out.len(), "fixtures": out }))
 }
@@ -884,11 +1173,22 @@ fn fixture_list(cx: &Ctx, args: &Value) -> Res {
 /// Every overlap, overrun and loose end in a patch.
 fn problems(rows: &[Value], manifest: &Value) -> Vec<Value> {
     let mut out = Vec::new();
-    let span = |f: &Value| Some((f.get("universe").and_then(whole)?, f.get("address").and_then(whole)?, f.get("last").and_then(whole)?));
-    let live: Vec<&Value> = rows.iter().filter(|f| f.get("patched") == Some(&json!(true))).collect();
+    let span = |f: &Value| {
+        Some((
+            f.get("universe").and_then(whole)?,
+            f.get("address").and_then(whole)?,
+            f.get("last").and_then(whole)?,
+        ))
+    };
+    let live: Vec<&Value> = rows
+        .iter()
+        .filter(|f| f.get("patched") == Some(&json!(true)))
+        .collect();
     for (i, a) in live.iter().enumerate() {
         let Some((ua, a0, a1)) = span(a) else {
-            out.push(json!({ "what": "unaddressed", "chan": a.get("chan"), "name": a.get("name") }));
+            out.push(
+                json!({ "what": "unaddressed", "chan": a.get("chan"), "name": a.get("name") }),
+            );
             continue;
         };
         if a0 == 0 || a1 > 512 {
@@ -902,8 +1202,14 @@ fn problems(rows: &[Value], manifest: &Value) -> Vec<Value> {
             }
         }
     }
-    let routed = manifest.get("dmx").and_then(|d| d.get("universes")).and_then(Value::as_object);
-    let used: BTreeSet<u32> = live.iter().filter_map(|f| f.get("universe").and_then(whole)).collect();
+    let routed = manifest
+        .get("dmx")
+        .and_then(|d| d.get("universes"))
+        .and_then(Value::as_object);
+    let used: BTreeSet<u32> = live
+        .iter()
+        .filter_map(|f| f.get("universe").and_then(whole))
+        .collect();
     for u in used {
         if routed.is_some_and(|r| !r.contains_key(&u.to_string())) {
             out.push(json!({ "what": "unrouted", "universe": u, "why": "fixtures are patched to it and it goes to no output (IGNITION_PATCH_ROUTE)" }));
@@ -916,7 +1222,12 @@ fn next_free(rows: &[Value], universe: u32, need: u32, from: u32) -> Option<u32>
     let mut taken: Vec<(u32, u32)> = rows
         .iter()
         .filter(|f| f.get("universe").and_then(whole) == Some(universe))
-        .filter_map(|f| Some((f.get("address").and_then(whole)?, f.get("last").and_then(whole)?)))
+        .filter_map(|f| {
+            Some((
+                f.get("address").and_then(whole)?,
+                f.get("last").and_then(whole)?,
+            ))
+        })
         .collect();
     taken.sort_unstable();
     let mut at = from.max(1);
@@ -936,32 +1247,73 @@ fn save_fixtures(cx: &mut Ctx, r: &Room) -> Result<(), String> {
 fn fixture_add(cx: &mut Ctx, args: &Value) -> Res {
     let mut r = room(cx, args)?;
     let ty = find_type(cx, text(args, "type")?)?;
-    let modes = ty.get("modes").and_then(Value::as_object).cloned().unwrap_or_default();
+    let modes = ty
+        .get("modes")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
     let mode = match opt_text(args, "mode") {
         Some(m) if modes.contains_key(m) => m.to_owned(),
-        Some(m) => return Err(format!("{:?} has no mode {m:?}; it has {:?}", ty.get("type"), modes.keys().collect::<Vec<_>>())),
-        None => modes.keys().next().cloned().ok_or("the type has no modes")?,
+        Some(m) => {
+            return Err(format!(
+                "{:?} has no mode {m:?}; it has {:?}",
+                ty.get("type"),
+                modes.keys().collect::<Vec<_>>()
+            ));
+        }
+        None => modes
+            .keys()
+            .next()
+            .cloned()
+            .ok_or("the type has no modes")?,
     };
     let need = modes.get(&mode).and_then(whole).unwrap_or(1);
     let count = args.get("count").and_then(whole).unwrap_or(1);
     let at = xyz(args.get("position")).ok_or("`position` {x,y,z} is required")?;
-    let step = xyz(args.get("step")).unwrap_or(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
-    let eulers = xyz(args.get("eulers")).unwrap_or(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+    let step = xyz(args.get("step")).unwrap_or(Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    });
+    let eulers = xyz(args.get("eulers")).unwrap_or(Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    });
     let universe = args.get("universe").and_then(whole).unwrap_or(1);
-    let base = opt_text(args, "name").or_else(|| opt_text(&ty, "type")).unwrap_or("Fixture").to_owned();
-    let mut next_chan = args.get("chan").and_then(whole).unwrap_or_else(|| r.fixtures.as_array().into_iter().flatten().filter_map(|f| f.get("chan").and_then(whole)).max().map_or(1, |m| m + 1));
+    let base = opt_text(args, "name")
+        .or_else(|| opt_text(&ty, "type"))
+        .unwrap_or("Fixture")
+        .to_owned();
+    let mut next_chan = args.get("chan").and_then(whole).unwrap_or_else(|| {
+        r.fixtures
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|f| f.get("chan").and_then(whole))
+            .max()
+            .map_or(1, |m| m + 1)
+    });
     let mut from = args.get("address").and_then(whole).unwrap_or(1);
     let size = ty.get("size_mm").cloned().unwrap_or_default();
     let mm = |key: &str, fallback: f64| num(&size, key).map_or(fallback, |v| v / 1000.0);
     let mut added = Vec::new();
     for i in 0..count {
         let current = rows(cx, &r);
-        if current.iter().any(|f| f.get("chan").and_then(whole) == Some(next_chan)) {
+        if current
+            .iter()
+            .any(|f| f.get("chan").and_then(whole) == Some(next_chan))
+        {
             return Err(format!("channel {next_chan} is taken"));
         }
-        let address = next_free(&current, universe, need, from).ok_or_else(|| format!("universe {universe} has no room for {need} more channels"))?;
+        let address = next_free(&current, universe, need, from)
+            .ok_or_else(|| format!("universe {universe} has no room for {need} more channels"))?;
         let k = f64::from(i);
-        let here = Vec3 { x: step.x.mul_add(k, at.x), y: step.y.mul_add(k, at.y), z: step.z.mul_add(k, at.z) };
+        let here = Vec3 {
+            x: step.x.mul_add(k, at.x),
+            y: step.y.mul_add(k, at.y),
+            z: step.z.mul_add(k, at.z),
+        };
         let hang = match (args.get("quat"), xyz(args.get("aim"))) {
             (Some(q), _) => q.clone(),
             (None, Some(aim)) => quat_aim(here, aim),
@@ -978,13 +1330,19 @@ fn fixture_add(cx: &mut Ctx, args: &Value) -> Res {
             "beam_angle_deg": ty.get("beam_angle_deg"),
             "universe": universe, "address": address, "global_address": (universe - 1) * 512 + address,
         });
-        r.fixtures.as_array_mut().ok_or("fixtures.json is not a list")?.push(record);
+        r.fixtures
+            .as_array_mut()
+            .ok_or("fixtures.json is not a list")?
+            .push(record);
         added.push(json!({ "chan": next_chan, "universe": universe, "address": address, "last": address + need - 1 }));
         from = address + need;
         next_chan += 1;
     }
     save_fixtures(cx, &r)?;
-    let chans: Vec<u32> = added.iter().filter_map(|a| a.get("chan").and_then(whole)).collect();
+    let chans: Vec<u32> = added
+        .iter()
+        .filter_map(|a| a.get("chan").and_then(whole))
+        .collect();
     for g in list(args, "groups") {
         if let Some(name) = g.as_str() {
             group_put(cx, &r.dir, name, &chans, true)?;
@@ -1001,7 +1359,10 @@ fn picked(r: &Room, args: &Value) -> Result<Vec<u32>, String> {
     if let Some(many) = args.get("chans").and_then(Value::as_array) {
         return Ok(many.iter().filter_map(whole).collect());
     }
-    r.resolve(args.get("target").ok_or("name the fixtures: `chan`, `chans` or `target`")?)
+    r.resolve(
+        args.get("target")
+            .ok_or("name the fixtures: `chan`, `chans` or `target`")?,
+    )
 }
 
 /// Moves, turns, renames or re-types fixtures. `position` places them,
@@ -1016,10 +1377,24 @@ fn fixture_set(cx: &mut Ctx, args: &Value) -> Res {
     };
     let all_types = types(cx);
     let mut out = Vec::new();
-    for f in r.fixtures.as_array_mut().ok_or("fixtures.json is not a list")? {
-        let Some(chan) = f.get("chan").and_then(whole).filter(|c| chans.contains(c)) else { continue };
+    for f in r
+        .fixtures
+        .as_array_mut()
+        .ok_or("fixtures.json is not a list")?
+    {
+        let Some(chan) = f.get("chan").and_then(whole).filter(|c| chans.contains(c)) else {
+            continue;
+        };
         let mut set = Map::new();
-        for key in ["name", "label", "tags", "position", "quat", "beam_angle_deg", "gel"] {
+        for key in [
+            "name",
+            "label",
+            "tags",
+            "position",
+            "quat",
+            "beam_angle_deg",
+            "gel",
+        ] {
             if let Some(v) = args.get(key) {
                 set.insert(key.into(), v.clone());
             }
@@ -1029,11 +1404,19 @@ fn fixture_set(cx: &mut Ctx, args: &Value) -> Res {
             set.insert("quat".into(), quat_of(e));
         }
         if let Some(by) = args.get("move") {
-            let at = xyz(f.get("position")).unwrap_or(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+            let at = xyz(f.get("position")).unwrap_or(Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            });
             set.insert("position".into(), json!({ "x": at.x + num(by, "x").unwrap_or(0.0), "y": at.y + num(by, "y").unwrap_or(0.0), "z": at.z + num(by, "z").unwrap_or(0.0) }));
         }
         if let Some(aim) = xyz(args.get("aim")) {
-            let from = xyz(set.get("position").or_else(|| f.get("position"))).unwrap_or(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+            let from = xyz(set.get("position").or_else(|| f.get("position"))).unwrap_or(Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            });
             set.insert("quat".into(), quat_aim(from, aim));
         }
         if let Some(ty) = &ty {
@@ -1043,9 +1426,16 @@ fn fixture_set(cx: &mut Ctx, args: &Value) -> Res {
         merge(f, &Value::Object(set));
         if let Some(mode) = opt_text(args, "mode") {
             let model = opt_text(f, "model").unwrap_or_default().to_lowercase();
-            let modes = all_types.iter().find(|t| opt_text(t, "type").is_some_and(|n| n.to_lowercase() == model)).and_then(|t| t.get("modes")).and_then(Value::as_object);
+            let modes = all_types
+                .iter()
+                .find(|t| opt_text(t, "type").is_some_and(|n| n.to_lowercase() == model))
+                .and_then(|t| t.get("modes"))
+                .and_then(Value::as_object);
             if !modes.is_some_and(|m| m.contains_key(mode)) {
-                return Err(format!("channel {chan}'s type has no mode {mode:?}; it has {:?}", modes.map(|m| m.keys().collect::<Vec<_>>())));
+                return Err(format!(
+                    "channel {chan}'s type has no mode {mode:?}; it has {:?}",
+                    modes.map(|m| m.keys().collect::<Vec<_>>())
+                ));
             }
             obj(f)?.insert("mode".into(), json!(mode));
         }
@@ -1063,22 +1453,39 @@ fn fixture_set(cx: &mut Ctx, args: &Value) -> Res {
 fn fixture_remove(cx: &mut Ctx, args: &Value) -> Res {
     let mut r = room(cx, args)?;
     let chans = picked(&r, args)?;
-    let items = r.fixtures.as_array_mut().ok_or("fixtures.json is not a list")?;
+    let items = r
+        .fixtures
+        .as_array_mut()
+        .ok_or("fixtures.json is not a list")?;
     let before = items.len();
-    items.retain(|f| !f.get("chan").and_then(whole).is_some_and(|c| chans.contains(&c)));
+    items.retain(|f| {
+        !f.get("chan")
+            .and_then(whole)
+            .is_some_and(|c| chans.contains(&c))
+    });
     let removed = before - items.len();
     save_fixtures(cx, &r)?;
     let path = r.dir.join("groups.json");
     let mut groups = cx.json_or(&path, json!([]))?;
     for g in groups.as_array_mut().into_iter().flatten() {
-        let kept: Vec<Value> = chans_of(list(g, "channels")).into_iter().filter(|c| !chans.contains(c)).map(|c| json!(c.to_string())).collect();
+        let kept: Vec<Value> = chans_of(list(g, "channels"))
+            .into_iter()
+            .filter(|c| !chans.contains(c))
+            .map(|c| json!(c.to_string()))
+            .collect();
         obj(g)?.insert("channels".into(), json!(kept));
     }
     cx.write_json(&path, &groups)?;
     Ok(json!({ "removed": removed, "chans": chans }))
 }
 
-fn group_put(cx: &mut Ctx, dir: &Path, name: &str, chans: &[u32], add: bool) -> Result<Vec<u32>, String> {
+fn group_put(
+    cx: &mut Ctx,
+    dir: &Path,
+    name: &str,
+    chans: &[u32],
+    add: bool,
+) -> Result<Vec<u32>, String> {
     let path = dir.join("groups.json");
     let mut groups = cx.json_or(&path, json!([]))?;
     let items = groups.as_array_mut().ok_or("groups.json is not a list")?;
@@ -1086,14 +1493,24 @@ fn group_put(cx: &mut Ctx, dir: &Path, name: &str, chans: &[u32], add: bool) -> 
         let id = items.len() + 1;
         items.push(json!({ "target": id.to_string(), "label": name, "channels": [] }));
     }
-    let g = items.iter_mut().find(|g| opt_text(g, "label") == Some(name)).ok_or("no such group")?;
-    let mut now = if add { chans_of(list(g, "channels")) } else { Vec::new() };
+    let g = items
+        .iter_mut()
+        .find(|g| opt_text(g, "label") == Some(name))
+        .ok_or("no such group")?;
+    let mut now = if add {
+        chans_of(list(g, "channels"))
+    } else {
+        Vec::new()
+    };
     for c in chans {
         if !now.contains(c) {
             now.push(*c);
         }
     }
-    obj(g)?.insert("channels".into(), json!(now.iter().map(u32::to_string).collect::<Vec<_>>()));
+    obj(g)?.insert(
+        "channels".into(),
+        json!(now.iter().map(u32::to_string).collect::<Vec<_>>()),
+    );
     cx.write_json(&path, &groups)?;
     Ok(now)
 }
@@ -1117,7 +1534,12 @@ fn group_set(cx: &mut Ctx, args: &Value) -> Res {
 
 fn group_list(cx: &Ctx, args: &Value) -> Res {
     let r = room(cx, args)?;
-    let roles: Map<String, Value> = r.binding.groups.iter().map(|(k, v)| (k.clone(), json!(v))).collect();
+    let roles: Map<String, Value> = r
+        .binding
+        .groups
+        .iter()
+        .map(|(k, v)| (k.clone(), json!(v)))
+        .collect();
     Ok(json!({
         "groups": r.groups.iter().map(|g| json!({ "name": g.name, "chans": g.chans })).collect::<Vec<_>>(),
         "roles": roles, "focus_roles": r.binding.focus,
@@ -1131,18 +1553,29 @@ fn role_bind(cx: &mut Ctx, args: &Value) -> Res {
     let r = room(cx, args)?;
     let role = text(args, "role")?;
     let path = r.dir.join("profile.json");
-    let mut doc = cx.json_or(&path, json!({ "profile": "Ignition", "groups": {}, "focus": {}, "canvases": {} }))?;
+    let mut doc = cx.json_or(
+        &path,
+        json!({ "profile": "Ignition", "groups": {}, "focus": {}, "canvases": {} }),
+    )?;
     if let Some(point) = args.get("focus") {
         let map = obj(&mut doc)?.entry("focus").or_insert_with(|| json!({}));
-        if point.is_null() { obj(map)?.remove(role); } else { obj(map)?.insert(role.into(), point.clone()); }
+        if point.is_null() {
+            obj(map)?.remove(role);
+        } else {
+            obj(map)?.insert(role.into(), point.clone());
+        }
     } else {
-        let to = args.get("to").ok_or("`to` (a group or a selection) or `focus` is required")?;
+        let to = args
+            .get("to")
+            .ok_or("`to` (a group or a selection) or `focus` is required")?;
         let map = obj(&mut doc)?.entry("groups").or_insert_with(|| json!({}));
         if to.is_null() {
             obj(map)?.remove(role);
         } else {
             let sel = match to.as_str() {
-                Some(group) if r.groups.iter().any(|g| g.name == group) => json!({ "Group": group }),
+                Some(group) if r.groups.iter().any(|g| g.name == group) => {
+                    json!({ "Group": group })
+                }
                 Some(group) => return Err(format!("no group {group:?} in this environment")),
                 None => to.clone(),
             };
@@ -1164,20 +1597,30 @@ fn patch_get(cx: &Ctx, args: &Value) -> Res {
     let all = rows(cx, &r);
     let mut universes: BTreeMap<u32, (u32, Vec<Value>)> = BTreeMap::new();
     for f in &all {
-        if let (Some(u), Some(n)) = (f.get("universe").and_then(whole), f.get("footprint").and_then(whole)) {
+        if let (Some(u), Some(n)) = (
+            f.get("universe").and_then(whole),
+            f.get("footprint").and_then(whole),
+        ) {
             let slot = universes.entry(u).or_default();
             slot.0 += n;
-            slot.1.push(json!([f.get("address"), f.get("last"), f.get("chan")]));
+            slot.1
+                .push(json!([f.get("address"), f.get("last"), f.get("chan")]));
         }
     }
-    let routes = manifest.get("dmx").and_then(|d| d.get("universes")).cloned().unwrap_or_else(|| json!({}));
+    let routes = manifest
+        .get("dmx")
+        .and_then(|d| d.get("universes"))
+        .cloned()
+        .unwrap_or_else(|| json!({}));
     let unis: Vec<Value> = universes
         .iter()
         .map(|(u, (used, spans))| json!({ "universe": u, "used": used, "free": 512_u32.saturating_sub(*used), "next_free": next_free(&all, *u, 1, 1), "output": routes.get(u.to_string()), "spans": spans }))
         .collect();
     let patch: Vec<Value> = all.iter().map(|f| json!({ "chan": f.get("chan"), "name": f.get("name"), "type": f.get("type"), "mode": f.get("mode"), "patched": f.get("patched"), "universe": f.get("universe"), "address": f.get("address"), "footprint": f.get("footprint"), "last": f.get("last") })).collect();
     let found = problems(&all, &manifest);
-    Ok(json!({ "ok": found.is_empty(), "patch": patch, "universes": unis, "routes": routes, "problems": found }))
+    Ok(
+        json!({ "ok": found.is_empty(), "patch": patch, "universes": unis, "routes": routes, "problems": found }),
+    )
 }
 
 /// Re-addresses fixtures: one (`chan`, `universe`, `address`) or several
@@ -1191,10 +1634,23 @@ fn patch_set(cx: &mut Ctx, args: &Value) -> Res {
     };
     let mut out = Vec::new();
     for m in &moves {
-        let chan = m.get("chan").and_then(whole).ok_or("each move names a `chan`")?;
-        let f = r.fixtures.as_array_mut().into_iter().flatten().find(|f| f.get("chan").and_then(whole) == Some(chan)).ok_or_else(|| format!("no fixture on channel {chan}"))?;
+        let chan = m
+            .get("chan")
+            .and_then(whole)
+            .ok_or("each move names a `chan`")?;
+        let f = r
+            .fixtures
+            .as_array_mut()
+            .into_iter()
+            .flatten()
+            .find(|f| f.get("chan").and_then(whole) == Some(chan))
+            .ok_or_else(|| format!("no fixture on channel {chan}"))?;
         let was = json!([f.get("universe"), f.get("address")]);
-        let universe = m.get("universe").and_then(whole).or_else(|| f.get("universe").and_then(whole)).unwrap_or(1);
+        let universe = m
+            .get("universe")
+            .and_then(whole)
+            .or_else(|| f.get("universe").and_then(whole))
+            .unwrap_or(1);
         let map = obj(f)?;
         if let Some(p) = m.get("patched").and_then(Value::as_bool) {
             map.insert("patched".into(), json!(p));
@@ -1205,15 +1661,26 @@ fn patch_set(cx: &mut Ctx, args: &Value) -> Res {
             }
             map.insert("universe".into(), json!(universe));
             map.insert("address".into(), json!(address));
-            map.insert("global_address".into(), json!((universe.max(1) - 1) * 512 + address));
+            map.insert(
+                "global_address".into(),
+                json!((universe.max(1) - 1) * 512 + address),
+            );
         }
-        out.push(json!({ "chan": chan, "was": was, "now": [map.get("universe"), map.get("address")] }));
+        out.push(
+            json!({ "chan": chan, "was": was, "now": [map.get("universe"), map.get("address")] }),
+        );
     }
     let manifest = cx.json_or(&r.dir.join("venue.ig-venue"), json!({}))?;
     let found = problems(&rows(cx, &r), &manifest);
-    let blocking: Vec<&Value> = found.iter().filter(|p| matches!(opt_text(p, "what"), Some("overlap" | "out of range"))).collect();
+    let blocking: Vec<&Value> = found
+        .iter()
+        .filter(|p| matches!(opt_text(p, "what"), Some("overlap" | "out of range")))
+        .collect();
     if !blocking.is_empty() && !flag(args, "force") {
-        return Err(format!("the patch would conflict, so nothing was changed: {}", json!(blocking)));
+        return Err(format!(
+            "the patch would conflict, so nothing was changed: {}",
+            json!(blocking)
+        ));
     }
     save_fixtures(cx, &r)?;
     // The room's patch sheet, where it keeps one, says the same.
@@ -1221,8 +1688,17 @@ fn patch_set(cx: &mut Ctx, args: &Value) -> Res {
     if cx.exists(&sheet) {
         let mut doc = cx.json(&sheet)?;
         for p in doc.as_array_mut().into_iter().flatten() {
-            if let Some(f) = r.fixtures.as_array().into_iter().flatten().find(|f| f.get("chan") == p.get("chan")) {
-                merge(p, &json!({ "universe": f.get("universe"), "address": f.get("address"), "patched": f.get("patched") }));
+            if let Some(f) = r
+                .fixtures
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|f| f.get("chan") == p.get("chan"))
+            {
+                merge(
+                    p,
+                    &json!({ "universe": f.get("universe"), "address": f.get("address"), "patched": f.get("patched") }),
+                );
             }
         }
         cx.write_json(&sheet, &doc)?;
@@ -1240,7 +1716,11 @@ fn patch_pack(cx: &mut Ctx, args: &Value) -> Res {
     let all = rows(cx, &r);
     let mut moves = Vec::new();
     for c in &chans {
-        let n = all.iter().find(|f| f.get("chan").and_then(whole) == Some(*c)).and_then(|f| f.get("footprint").and_then(whole)).unwrap_or(1);
+        let n = all
+            .iter()
+            .find(|f| f.get("chan").and_then(whole) == Some(*c))
+            .and_then(|f| f.get("footprint").and_then(whole))
+            .unwrap_or(1);
         moves.push(json!({ "chan": c, "universe": universe, "address": at }));
         at += n;
     }
@@ -1254,7 +1734,10 @@ fn patch_pack(cx: &mut Ctx, args: &Value) -> Res {
 /// protocol, `remove: true` the universe's route.
 fn patch_route(cx: &mut Ctx, args: &Value) -> Res {
     let dir = env_dir(cx, args)?;
-    let universe = args.get("universe").and_then(whole).ok_or("`universe` is required")?;
+    let universe = args
+        .get("universe")
+        .and_then(whole)
+        .ok_or("`universe` is required")?;
     let path = dir.join("venue.ig-venue");
     let mut doc = cx.json_or(&path, json!({ "version": 1, "profile": "Ignition" }))?;
     let dmx = obj(&mut doc)?.entry("dmx").or_insert_with(|| json!({}));
@@ -1263,7 +1746,9 @@ fn patch_route(cx: &mut Ctx, args: &Value) -> Res {
     if flag(args, "remove") {
         unis.remove(&universe.to_string());
     } else {
-        let slot = unis.entry(universe.to_string()).or_insert_with(|| json!({}));
+        let slot = unis
+            .entry(universe.to_string())
+            .or_insert_with(|| json!({}));
         let mut set = Map::new();
         for key in ["sacn", "artnet", "enabled", "max_hz", "keepalive_hz"] {
             if let Some(v) = args.get(key) {
@@ -1296,7 +1781,14 @@ pub(crate) fn run(cx: &mut Ctx, id: &str, args: &Value) -> Option<Res> {
         "IGNITION_FOCUS_SET" => focus_set(cx, args),
         "IGNITION_FIXTURE_TYPES" => {
             let search = opt_text(args, "search").map(str::to_lowercase);
-            let all: Vec<Value> = types(cx).into_iter().filter(|t| search.as_ref().is_none_or(|s| t.to_string().to_lowercase().contains(s))).collect();
+            let all: Vec<Value> = types(cx)
+                .into_iter()
+                .filter(|t| {
+                    search
+                        .as_ref()
+                        .is_none_or(|s| t.to_string().to_lowercase().contains(s))
+                })
+                .collect();
             Ok(json!({ "count": count_f(all.len()), "types": all }))
         }
         "IGNITION_FIXTURE_LIST" => fixture_list(cx, args),

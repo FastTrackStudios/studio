@@ -109,7 +109,11 @@ fn process_extension_stdio_rpc_detect_and_hybrid_edit() {
     let state = call(1, "RHYTHM_STATE", Json::Null);
     let detectors = state["detectors"].as_array().unwrap();
     assert!(detectors.iter().any(|d| d["id"] == "fts.hits.kit-fusion"));
-    assert!(detectors.iter().any(|d| d["id"] == "fts.hits.envelope-gate"));
+    assert!(
+        detectors
+            .iter()
+            .any(|d| d["id"] == "fts.hits.envelope-gate")
+    );
 
     // 2. Detect with kit-fusion (trigger+mic calibrated, bleed suppressed).
     let detected = call(
@@ -127,10 +131,7 @@ fn process_extension_stdio_rpc_detect_and_hybrid_edit() {
     assert_eq!(hits.len(), 5, "expected 3 kicks + 2 snares, got {hits:#?}");
 
     // 3. Move one individual snare hit by hand (1.02 -> 1.00): pure slip + crossfade.
-    let snare0_id = hits
-        .iter()
-        .find(|h| h["piece"] == "Snare")
-        .unwrap()["id"]
+    let snare0_id = hits.iter().find(|h| h["piece"] == "Snare").unwrap()["id"]
         .as_str()
         .unwrap();
     let plan = call(
@@ -160,26 +161,42 @@ fn process_extension_stdio_rpc_detect_and_hybrid_edit() {
         writer.write_sample(sample * 0.5).unwrap();
     }
     writer.finalize().unwrap();
-    let render = call(5, "RHYTHM_RENDER_PLAN", json!({
-        "plan": plan,
-        "input_wav": group_path,
-        "output_wav": render_path,
-    }));
+    let render = call(
+        5,
+        "RHYTHM_RENDER_PLAN",
+        json!({
+            "plan": plan,
+            "input_wav": group_path,
+            "output_wav": render_path,
+        }),
+    );
     assert_eq!(render["frames"], len);
     assert_eq!(render["channels"], 2);
     let mut rendered = hound::WavReader::open(render_path).unwrap();
     let samples: Vec<_> = rendered.samples::<f32>().collect::<Result<_, _>>().unwrap();
-    assert!(samples.chunks_exact(2).all(|frame| frame[0] * 0.5 == frame[1]));
-    assert!(samples[2 * 48_000..2 * 48_400].iter().any(|s| s.abs() > 0.1));
+    assert!(
+        samples
+            .chunks_exact(2)
+            .all(|frame| frame[0] * 0.5 == frame[1])
+    );
+    assert!(
+        samples[2 * 48_000..2 * 48_400]
+            .iter()
+            .any(|s| s.abs() > 0.1)
+    );
 
-    let quantized = call(6, "RHYTHM_QUANTIZE_PLAN", json!({
-        "hits": [
-            {"id":"a", "piece":"Kick", "at":0.535},
-            {"id":"b", "piece":"Snare", "at":0.541}
-        ],
-        "bpm":120, "span":[0,3],
-        "pinned_moves":[{"id":"b","target_time":0.506}]
-    }));
+    let quantized = call(
+        6,
+        "RHYTHM_QUANTIZE_PLAN",
+        json!({
+            "hits": [
+                {"id":"a", "piece":"Kick", "at":0.535},
+                {"id":"b", "piece":"Snare", "at":0.541}
+            ],
+            "bpm":120, "span":[0,3],
+            "pinned_moves":[{"id":"b","target_time":0.506}]
+        }),
+    );
     let moves = quantized["moves"].as_array().unwrap();
     assert!((moves[0]["target_time"].as_f64().unwrap() - 0.5).abs() < 1e-9);
     assert_eq!(moves[1]["target_time"], 0.506);

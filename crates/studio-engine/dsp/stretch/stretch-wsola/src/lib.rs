@@ -69,13 +69,8 @@ impl WsolaVoice {
         }
 
         let channels = [self.scratch_l.clone(), self.scratch_r.clone()];
-        let stretched = wsola::stretch_planar(
-            &channels,
-            0,
-            effective_tempo,
-            pitched_len + 2,
-            self.grain,
-        );
+        let stretched =
+            wsola::stretch_planar(&channels, 0, effective_tempo, pitched_len + 2, self.grain);
         let sl = &stretched[0];
         let sr = &stretched[1];
 

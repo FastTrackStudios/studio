@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 
 #[derive(Parser)]
-#[command(name = "fts-rhythm", about = "FastTrackStudio swappable hit-detection & rhythm-editing extension")]
+#[command(
+    name = "fts-rhythm",
+    about = "FastTrackStudio swappable hit-detection & rhythm-editing extension"
+)]
 struct Cli {
     /// No command: served to the host that started it (Studio's engine),
     /// as an Architect process extension.
@@ -54,7 +57,8 @@ fn main() {
     let Some(cmd) = cli.cmd else {
         // Started by a host (ARCHITECT_EXT_SOCKET): its extension.
         if let Err(e) =
-            architect_extensions::guest::Guest::extension_with(&rhythm_ext::Rhythm, &|_| None).serve()
+            architect_extensions::guest::Guest::extension_with(&rhythm_ext::Rhythm, &|_| None)
+                .serve()
         {
             eprintln!("fts-rhythm: {e}");
             std::process::exit(1);
@@ -93,7 +97,11 @@ fn main() {
                 tempo_bpm: None,
                 time_sig: None,
             };
-            match dispatch(&registry, "RHYTHM_DETECT", serde_json::to_value(req).unwrap()) {
+            match dispatch(
+                &registry,
+                "RHYTHM_DETECT",
+                serde_json::to_value(req).unwrap(),
+            ) {
                 Ok(out) => println!("{}", serde_json::to_string_pretty(&out).unwrap()),
                 Err(e) => {
                     eprintln!("error: {e}");

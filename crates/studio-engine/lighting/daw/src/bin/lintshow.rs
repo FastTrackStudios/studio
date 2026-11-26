@@ -59,15 +59,22 @@ fn main() -> Result<()> {
             .collect();
         std::fs::write(
             &out,
-            serde_json::to_string(&serde_json::json!({ "song": map.name, "bar_starts": starts, "sections": sections }))?,
+            serde_json::to_string(
+                &serde_json::json!({ "song": map.name, "bar_starts": starts, "sections": sections }),
+            )?,
         )?;
         eprintln!("grid: {} bars to {out}", starts.len().saturating_sub(1));
     }
 
     let raw = std::fs::read_to_string(file).with_context(|| format!("reading {file}"))?;
-    let list: CueList = serde_json::from_str(&raw).with_context(|| format!("{file} as a cue list"))?;
+    let list: CueList =
+        serde_json::from_str(&raw).with_context(|| format!("{file} as a cue list"))?;
     let profile = profile.unwrap_or_else(|| {
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../data/profiles/ignition.ig-profile").to_owned()
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../data/profiles/ignition.ig-profile"
+        )
+        .to_owned()
     });
     let splits: Vec<ignition_colour::preset::ColorSplit> = std::fs::read_to_string(&profile)
         .ok()

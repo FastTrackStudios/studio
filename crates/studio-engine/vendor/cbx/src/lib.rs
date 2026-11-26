@@ -61,8 +61,7 @@ fn detect_effective_ep(ep: ExecutionProviderArg) -> Option<&'static str> {
         ExecutionProviderArg::Coreml => {
             #[cfg(feature = "coreml")]
             {
-                                if <ort::ep::CoreML as ort::ep::ExecutionProvider>::is_available()
-                    .unwrap_or(false)
+                if <ort::ep::CoreML as ort::ep::ExecutionProvider>::is_available().unwrap_or(false)
                 {
                     return Some("coreml");
                 }
@@ -74,7 +73,7 @@ fn detect_effective_ep(ep: ExecutionProviderArg) -> Option<&'static str> {
         ExecutionProviderArg::Directml => {
             #[cfg(feature = "directml")]
             {
-                                if <ort::ep::DirectML as ort::ep::ExecutionProvider>::is_available()
+                if <ort::ep::DirectML as ort::ep::ExecutionProvider>::is_available()
                     .unwrap_or(false)
                 {
                     return Some("directml");
@@ -87,9 +86,7 @@ fn detect_effective_ep(ep: ExecutionProviderArg) -> Option<&'static str> {
         ExecutionProviderArg::Cuda => {
             #[cfg(feature = "cuda")]
             {
-                                if <ort::ep::CUDA as ort::ep::ExecutionProvider>::is_available()
-                    .unwrap_or(false)
-                {
+                if <ort::ep::CUDA as ort::ep::ExecutionProvider>::is_available().unwrap_or(false) {
                     return Some("cuda");
                 }
                 return None;
@@ -103,25 +100,19 @@ fn detect_effective_ep(ep: ExecutionProviderArg) -> Option<&'static str> {
     // Auto: prefer best EP for this platform if it's available; else CPU.
     #[cfg(all(feature = "coreml", target_os = "macos"))]
     {
-                if <ort::ep::CoreML as ort::ep::ExecutionProvider>::is_available()
-            .unwrap_or(false)
-        {
+        if <ort::ep::CoreML as ort::ep::ExecutionProvider>::is_available().unwrap_or(false) {
             return Some("coreml");
         }
     }
     #[cfg(all(feature = "cuda", target_os = "windows"))]
     {
-                if <ort::ep::CUDA as ort::ep::ExecutionProvider>::is_available()
-            .unwrap_or(false)
-        {
+        if <ort::ep::CUDA as ort::ep::ExecutionProvider>::is_available().unwrap_or(false) {
             return Some("cuda");
         }
     }
     #[cfg(all(feature = "directml", target_os = "windows"))]
     {
-                if <ort::ep::DirectML as ort::ep::ExecutionProvider>::is_available()
-            .unwrap_or(false)
-        {
+        if <ort::ep::DirectML as ort::ep::ExecutionProvider>::is_available().unwrap_or(false) {
             return Some("directml");
         }
     }

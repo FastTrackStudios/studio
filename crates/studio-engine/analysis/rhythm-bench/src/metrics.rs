@@ -307,6 +307,8 @@ mod tests {
         assert_eq!(m.fn_20ms, 2);
         // Within 50 ms: 1.005 matches 1.000 AND 2.035 matches 2.000
         assert_eq!(m.tp_50ms, 2);
-        assert!((m.median_abs_err_ms - 5.0).abs() < 1e-6 || (m.median_abs_err_ms - 35.0).abs() < 1e-6);
+        assert!(
+            (m.median_abs_err_ms - 5.0).abs() < 1e-6 || (m.median_abs_err_ms - 35.0).abs() < 1e-6
+        );
     }
 }

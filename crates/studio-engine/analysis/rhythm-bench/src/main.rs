@@ -14,8 +14,8 @@ use rhythm_hits::{DetectorInput, DetectorOutput, DetectorRegistry, PieceInput};
 use serde::{Deserialize, Serialize};
 
 use crate::metrics::{
-    ClassMetrics, SongGroundTruth, aggregate_metrics, extract_ground_truth, grouped_truth_and_preds,
-    score_class,
+    ClassMetrics, SongGroundTruth, aggregate_metrics, extract_ground_truth,
+    grouped_truth_and_preds, score_class,
 };
 use crate::rpp::{RenderedKit, parse_comped_rpp, render_comped_kit};
 
@@ -57,7 +57,10 @@ impl BenchMode {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "rhythm-bench", about = "Crescendum album drum hit benchmark harness")]
+#[command(
+    name = "rhythm-bench",
+    about = "Crescendum album drum hit benchmark harness"
+)]
 struct Cli {
     /// Path to reunited Crescendum folder containing `<song>/<song>.comped.RPP`.
     #[arg(long, default_value = DEFAULT_CORPUS)]
@@ -202,7 +205,11 @@ fn write_wav_mono(path: &Path, samples: &[f32], sr: f64) -> Result<(), String> {
         .map_err(|e| format!("finalize {}: {e}", path.display()))
 }
 
-fn export_song_stems(out_root: &Path, kit: &RenderedKit, gt: &SongGroundTruth) -> Result<(), String> {
+fn export_song_stems(
+    out_root: &Path,
+    kit: &RenderedKit,
+    gt: &SongGroundTruth,
+) -> Result<(), String> {
     let dir = out_root.join(&kit.song_name);
     std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir {}: {e}", dir.display()))?;
     for key in [
@@ -338,7 +345,10 @@ fn run() -> Result<(), String> {
     let cli = Cli::parse();
     let rpps = discover_comped_rpps(&cli.corpus, cli.song.as_deref())?;
     if rpps.is_empty() {
-        return Err(format!("no .comped.RPP files found under {}", cli.corpus.display()));
+        return Err(format!(
+            "no .comped.RPP files found under {}",
+            cli.corpus.display()
+        ));
     }
 
     if let Some(out) = &cli.quantize_out {
@@ -523,17 +533,34 @@ fn run() -> Result<(), String> {
         format!("{:?}", cli.mode).to_ascii_lowercase()
     };
 
-    println!("
-=== SUMMARY ({engine}, mode={mode_str}, {} songs, {:.1}s audio) ===", song_results.len(), total_audio_secs);
+    println!(
+        "
+=== SUMMARY ({engine}, mode={mode_str}, {} songs, {:.1}s audio) ===",
+        song_results.len(),
+        total_audio_secs
+    );
     for (cls, m) in &agg_by_class {
         println!(
             "  {:<8}: F1@20ms={:.3} (P={:.3} R={:.3}) | F1@50ms={:.3} | med_err={:.2}ms | truth={} pred={}",
-            cls, m.f1_20ms, m.precision_20ms, m.recall_20ms, m.f1_50ms, m.median_abs_err_ms, m.truth_count, m.pred_count
+            cls,
+            m.f1_20ms,
+            m.precision_20ms,
+            m.recall_20ms,
+            m.f1_50ms,
+            m.median_abs_err_ms,
+            m.truth_count,
+            m.pred_count
         );
     }
     println!(
         "  {:<8}: F1@20ms={:.3} (P={:.3} R={:.3}) | F1@50ms={:.3} | med_err={:.2}ms | CPU RTF={:.4}x",
-        "OVERALL", overall.f1_20ms, overall.precision_20ms, overall.recall_20ms, overall.f1_50ms, overall.median_abs_err_ms, cpu_rtf
+        "OVERALL",
+        overall.f1_20ms,
+        overall.precision_20ms,
+        overall.recall_20ms,
+        overall.f1_50ms,
+        overall.median_abs_err_ms,
+        cpu_rtf
     );
 
     let report = CorpusBenchmark {
@@ -557,8 +584,7 @@ fn run() -> Result<(), String> {
                 .map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
         }
         let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
-        std::fs::write(out_path, json)
-            .map_err(|e| format!("write {}: {e}", out_path.display()))?;
+        std::fs::write(out_path, json).map_err(|e| format!("write {}: {e}", out_path.display()))?;
         println!("wrote benchmark JSON: {}", out_path.display());
     }
 

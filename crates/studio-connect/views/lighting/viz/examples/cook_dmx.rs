@@ -30,7 +30,10 @@ const FPS: u16 = 10;
 const SECONDS: u16 = 24;
 
 /// One look or effect, held, and its frames.
-fn record(venue_dir: &str, start: impl Fn(&mut Playback) -> bool) -> anyhow::Result<Option<Vec<Vec<u8>>>> {
+fn record(
+    venue_dir: &str,
+    start: impl Fn(&mut Playback) -> bool,
+) -> anyhow::Result<Option<Vec<Vec<u8>>>> {
     let venue = Venue::load(venue_dir)?;
     let mut playback = Playback::load(&venue, LoadOptions::default())?;
     if !start(&mut playback) {
@@ -48,7 +51,11 @@ fn record(venue_dir: &str, start: impl Fn(&mut Playback) -> bool) -> anyhow::Res
             .run_system_once(tick_playback)
             .map_err(|e| anyhow::anyhow!("tick: {e}"))?;
         let snapshot = world.resource::<DmxRes>().0.snapshot();
-        frames.push(snapshot.get(&1).map_or_else(|| vec![0; 512], |u| u.to_vec()));
+        frames.push(
+            snapshot
+                .get(&1)
+                .map_or_else(|| vec![0; 512], |u| u.to_vec()),
+        );
     }
     Ok(Some(frames))
 }
@@ -83,9 +90,19 @@ fn main() -> anyhow::Result<()> {
             first = false;
             let body: Vec<String> = frames
                 .iter()
-                .map(|f| format!("[{}]", f.iter().map(u8::to_string).collect::<Vec<_>>().join(",")))
+                .map(|f| {
+                    format!(
+                        "[{}]",
+                        f.iter().map(u8::to_string).collect::<Vec<_>>().join(",")
+                    )
+                })
                 .collect();
-            write!(json, "{{\"kind\":\"{kind}\",\"name\":{},\"frames\":[{}]}}", serde_json::to_string(name)?, body.join(","))?;
+            write!(
+                json,
+                "{{\"kind\":\"{kind}\",\"name\":{},\"frames\":[{}]}}",
+                serde_json::to_string(name)?,
+                body.join(",")
+            )?;
             println!("{kind:6} {name}");
         }
     }

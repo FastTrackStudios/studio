@@ -668,7 +668,10 @@ fn keep_cell(map: &mut ignition_proto::ChannelMap, cell: u8) -> Vec<ignition_pro
     // The renderer writes, for cell 0, only what is *not* in this list
     // (show.rs, `scaled`): the shared copy is the fixture's own, so it
     // stays off cell 0's list, or the tower never sends its bar colour.
-    let own: Vec<bool> = counts.iter().map(|(_, n)| cell == 0 && shared(*n)).collect();
+    let own: Vec<bool> = counts
+        .iter()
+        .map(|(_, n)| cell == 0 && shared(*n))
+        .collect();
     counts
         .into_iter()
         .zip(own)
@@ -1404,10 +1407,19 @@ mod tests {
                 offset += 1;
             }
         }
-        let map = ignition_proto::ChannelMap { footprint: 29, channels, curves: std::collections::HashMap::new() };
+        let map = ignition_proto::ChannelMap {
+            footprint: 29,
+            channels,
+            curves: std::collections::HashMap::new(),
+        };
         let mut lamp = map.clone();
         keep_cell(&mut lamp, 2);
-        let red: Vec<u16> = lamp.channels.iter().filter(|(_, a)| *a == rgb(ColorChannel::Red)).map(|(o, _)| *o).collect();
+        let red: Vec<u16> = lamp
+            .channels
+            .iter()
+            .filter(|(_, a)| *a == rgb(ColorChannel::Red))
+            .map(|(o, _)| *o)
+            .collect();
         // Bar-wide red is 8; cell 1's 11; cell 2's 14.
         assert_eq!(red, vec![14]);
         let ww: Vec<u16> = lamp
@@ -1423,9 +1435,19 @@ mod tests {
         // what cell 0 leaves to its lamps.
         assert!(!lamps_own.contains(&rgb(ColorChannel::Red)));
         assert!(lamps_own.contains(&rgb(ColorChannel::White)));
-        let red: Vec<u16> = whole.channels.iter().filter(|(_, a)| *a == rgb(ColorChannel::Red)).map(|(o, _)| *o).collect();
+        let red: Vec<u16> = whole
+            .channels
+            .iter()
+            .filter(|(_, a)| *a == rgb(ColorChannel::Red))
+            .map(|(o, _)| *o)
+            .collect();
         assert_eq!(red, vec![8]);
-        assert!(whole.channels.iter().all(|(_, a)| *a != rgb(ColorChannel::White)));
+        assert!(
+            whole
+                .channels
+                .iter()
+                .all(|(_, a)| *a != rgb(ColorChannel::White))
+        );
     }
 
     #[test]

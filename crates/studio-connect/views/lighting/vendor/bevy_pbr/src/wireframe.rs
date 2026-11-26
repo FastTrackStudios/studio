@@ -1,17 +1,17 @@
 use crate::{
-    collect_meshes_for_gpu_building,
+    DrawMesh, MeshPipeline, MeshPipelineKey, MeshPipelineSystems, RenderLightmaps,
+    RenderMeshInstanceFlags, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
+    SetMeshViewBindingArrayBindGroup, ViewKeyCache, collect_meshes_for_gpu_building,
     render::{PreprocessBindGroups, PreprocessPipelines},
-    set_mesh_motion_vector_flags, DrawMesh, MeshPipeline, MeshPipelineKey, MeshPipelineSystems,
-    RenderLightmaps, RenderMeshInstanceFlags, RenderMeshInstances, SetMeshBindGroup,
-    SetMeshViewBindGroup, SetMeshViewBindingArrayBindGroup, ViewKeyCache,
+    set_mesh_motion_vector_flags,
 };
 use bevy_app::{App, Plugin, PostUpdate, Startup};
 use bevy_asset::{
-    embedded_asset, load_embedded_asset, prelude::AssetChanged, AsAssetId, Asset, AssetApp,
-    AssetEventSystems, AssetId, AssetServer, Assets, Handle, UntypedAssetId,
+    AsAssetId, Asset, AssetApp, AssetEventSystems, AssetId, AssetServer, Assets, Handle,
+    UntypedAssetId, embedded_asset, load_embedded_asset, prelude::AssetChanged,
 };
 use bevy_camera::{
-    visibility::ViewVisibility, Camera, Camera3d, MainPassResolutionOverride, Viewport,
+    Camera, Camera3d, MainPassResolutionOverride, Viewport, visibility::ViewVisibility,
 };
 use bevy_color::{Color, ColorToComponents};
 use bevy_core_pipeline::schedule::{Core3d, Core3dSystems};
@@ -19,15 +19,17 @@ use bevy_derive::{Deref, DerefMut};
 use bevy_ecs::{
     prelude::*,
     query::ROQueryItem,
-    system::{lifetimeless::SRes, SystemParamItem},
+    system::{SystemParamItem, lifetimeless::SRes},
 };
 use bevy_mesh::{Mesh, Mesh3d, MeshVertexBufferLayoutRef};
 use bevy_platform::{
     collections::{HashMap, HashSet},
     hash::FixedHasher,
 };
-use bevy_reflect::{std_traits::ReflectDefault, Reflect};
+use bevy_reflect::{Reflect, std_traits::ReflectDefault};
 use bevy_render::{
+    Extract, ExtractSchedule, GpuResourceAppExt, Render, RenderApp, RenderDebugFlags,
+    RenderStartup, RenderSystems,
     batching::gpu_preprocessing::{
         GpuPreprocessingMode, GpuPreprocessingSupport, IndirectBatchSet, IndirectParametersBuffers,
         IndirectParametersNonIndexed,
@@ -37,11 +39,11 @@ use bevy_render::{
     },
     extract_resource::{ExtractResource, ExtractResourcePlugin},
     mesh::{
-        allocator::{MeshAllocator, MeshAllocatorSettings, MeshSlabs},
         RenderMesh, RenderMeshBufferInfo,
+        allocator::{MeshAllocator, MeshAllocatorSettings, MeshSlabs},
     },
     render_asset::{
-        prepare_assets, PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssets,
+        PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssets, prepare_assets,
     },
     render_phase::{
         AddRenderCommand, BinnedPhaseItem, BinnedRenderPhasePlugin, BinnedRenderPhaseType,
@@ -56,8 +58,6 @@ use bevy_render::{
         ExtractedView, NoIndirectDrawing, RenderVisibilityRanges, RenderVisibleEntities,
         RetainedViewEntity, ViewDepthStencilTexture, ViewTarget,
     },
-    Extract, ExtractSchedule, GpuResourceAppExt, Render, RenderApp, RenderDebugFlags,
-    RenderStartup, RenderSystems,
 };
 use bevy_shader::Shader;
 use bytemuck::{Pod, Zeroable};

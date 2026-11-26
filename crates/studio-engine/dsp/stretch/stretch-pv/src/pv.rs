@@ -43,8 +43,6 @@
 //!
 //! Allocation happens in [`Stretcher::new`] only.
 
-
-
 use std::sync::Arc;
 
 use crate::num::{count_to_f32, count_to_f64, f32_to_index, f64_to_index, trunc_to_i64};

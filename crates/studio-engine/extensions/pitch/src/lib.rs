@@ -105,8 +105,8 @@ pub fn write_wav_mono(path: impl AsRef<Path>, sr: u32, samples: &[f32]) -> Resul
         bits_per_sample: 32,
         sample_format: hound::SampleFormat::Float,
     };
-    let mut writer =
-        hound::WavWriter::create(path, spec).map_err(|e| format!("create {}: {e}", path.display()))?;
+    let mut writer = hound::WavWriter::create(path, spec)
+        .map_err(|e| format!("create {}: {e}", path.display()))?;
     for &s in samples {
         writer
             .write_sample(s)
@@ -162,7 +162,9 @@ pub fn dispatch(registry: &PitchRegistry, action: &str, params: Json) -> Result<
                 None => (0.0, samples.len() as f64 / sr.max(1.0)),
             };
             let start_idx = ((start_s * sr).round() as usize).min(samples.len());
-            let end_idx = ((end_s * sr).round() as usize).min(samples.len()).max(start_idx);
+            let end_idx = ((end_s * sr).round() as usize)
+                .min(samples.len())
+                .max(start_idx);
             let rendered = synth.render_span(&samples, &req.doc, start_idx, end_idx);
             write_wav_mono(&req.out_wav, sr.round() as u32, &rendered)?;
             let desc = RenderedCacheSpan {

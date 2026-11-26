@@ -676,7 +676,9 @@ fn session_builder(cfg: &SessionConfig) -> Result<ort::session::builder::Session
         b = b.with_intra_threads(n).map_err(ort::Error::<()>::from)?;
     }
     if cfg.parallel_execution {
-        b = b.with_parallel_execution(true).map_err(ort::Error::<()>::from)?;
+        b = b
+            .with_parallel_execution(true)
+            .map_err(ort::Error::<()>::from)?;
         if let Some(n) = cfg.inter_threads {
             b = b.with_inter_threads(n).map_err(ort::Error::<()>::from)?;
         }
@@ -723,19 +725,20 @@ fn session_builder(cfg: &SessionConfig) -> Result<ort::session::builder::Session
     match requested {
         ExecutionProvider::Cpu => {
             eps.push(cpu_fallback());
-            Ok(b.with_execution_providers(eps).map_err(ort::Error::<()>::from)?)
+            Ok(b.with_execution_providers(eps)
+                .map_err(ort::Error::<()>::from)?)
         }
         ExecutionProvider::CoreML => {
             #[cfg(feature = "coreml")]
             {
-                                if !<ort::ep::CoreML as ort::ep::ExecutionProvider>::is_available()
-                    .unwrap_or(false)
+                if !<ort::ep::CoreML as ort::ep::ExecutionProvider>::is_available().unwrap_or(false)
                 {
                     bail!("CoreML EP is not available in this ONNX Runtime build");
                 }
                 eps.push(coreml_ep(cfg));
                 eps.push(cpu_fallback());
-                Ok(b.with_execution_providers(eps).map_err(ort::Error::<()>::from)?)
+                Ok(b.with_execution_providers(eps)
+                    .map_err(ort::Error::<()>::from)?)
             }
             #[cfg(not(feature = "coreml"))]
             {
@@ -747,14 +750,15 @@ fn session_builder(cfg: &SessionConfig) -> Result<ort::session::builder::Session
         ExecutionProvider::DirectML => {
             #[cfg(feature = "directml")]
             {
-                                if !<ort::ep::DirectML as ort::ep::ExecutionProvider>::is_available()
+                if !<ort::ep::DirectML as ort::ep::ExecutionProvider>::is_available()
                     .unwrap_or(false)
                 {
                     bail!("DirectML EP is not available in this ONNX Runtime build");
                 }
                 eps.push(directml_ep());
                 eps.push(cpu_fallback());
-                Ok(b.with_execution_providers(eps).map_err(ort::Error::<()>::from)?)
+                Ok(b.with_execution_providers(eps)
+                    .map_err(ort::Error::<()>::from)?)
             }
             #[cfg(not(feature = "directml"))]
             {
@@ -766,14 +770,13 @@ fn session_builder(cfg: &SessionConfig) -> Result<ort::session::builder::Session
         ExecutionProvider::Cuda => {
             #[cfg(feature = "cuda")]
             {
-                                if !<ort::ep::CUDA as ort::ep::ExecutionProvider>::is_available()
-                    .unwrap_or(false)
-                {
+                if !<ort::ep::CUDA as ort::ep::ExecutionProvider>::is_available().unwrap_or(false) {
                     bail!("CUDA EP is not available in this ONNX Runtime build");
                 }
                 eps.push(cuda_ep());
                 eps.push(cpu_fallback());
-                Ok(b.with_execution_providers(eps).map_err(ort::Error::<()>::from)?)
+                Ok(b.with_execution_providers(eps)
+                    .map_err(ort::Error::<()>::from)?)
             }
             #[cfg(not(feature = "cuda"))]
             {
@@ -785,23 +788,20 @@ fn session_builder(cfg: &SessionConfig) -> Result<ort::session::builder::Session
         ExecutionProvider::Auto => {
             #[cfg(all(feature = "coreml", target_os = "macos"))]
             {
-                                if <ort::ep::CoreML as ort::ep::ExecutionProvider>::is_available()
-                    .unwrap_or(false)
+                if <ort::ep::CoreML as ort::ep::ExecutionProvider>::is_available().unwrap_or(false)
                 {
                     eps.push(coreml_ep(cfg));
                 }
             }
             #[cfg(all(feature = "cuda", target_os = "windows"))]
             {
-                                if <ort::ep::CUDA as ort::ep::ExecutionProvider>::is_available()
-                    .unwrap_or(false)
-                {
+                if <ort::ep::CUDA as ort::ep::ExecutionProvider>::is_available().unwrap_or(false) {
                     eps.push(cuda_ep());
                 }
             }
             #[cfg(all(feature = "directml", target_os = "windows"))]
             {
-                                if <ort::ep::DirectML as ort::ep::ExecutionProvider>::is_available()
+                if <ort::ep::DirectML as ort::ep::ExecutionProvider>::is_available()
                     .unwrap_or(false)
                 {
                     eps.push(directml_ep());
@@ -809,7 +809,8 @@ fn session_builder(cfg: &SessionConfig) -> Result<ort::session::builder::Session
             }
 
             eps.push(cpu_fallback());
-            Ok(b.with_execution_providers(eps).map_err(ort::Error::<()>::from)?)
+            Ok(b.with_execution_providers(eps)
+                .map_err(ort::Error::<()>::from)?)
         }
     }
 }

@@ -30,15 +30,12 @@
 /// The render ahead: the dual-buffer engine (ASIO-Guard, anticipative FX).
 #[cfg(all(feature = "audio", not(target_arch = "wasm32")))]
 pub mod ahead;
-/// The declick around a jump of the playhead (a locate while playing).
-#[cfg(all(feature = "audio", not(target_arch = "wasm32")))]
-mod declick;
-/// Delay compensation and locates, end to end through the callback's render.
-#[cfg(all(test, feature = "audio", not(target_arch = "wasm32")))]
-mod locate_pdc_tests;
 /// Post-render aux hook (guide/click overlays) for project-mode engines.
 #[cfg(feature = "audio")]
 pub mod aux_render;
+/// The declick around a jump of the playhead (a locate while playing).
+#[cfg(all(feature = "audio", not(target_arch = "wasm32")))]
+mod declick;
 #[cfg(any(feature = "decode", feature = "audio"))]
 pub mod decoder;
 /// Native duplex engine (one realtime callback, no ring): PipeWire on
@@ -51,6 +48,9 @@ pub mod duplex_engine;
 /// How long play takes to be heard (`transport.play`'s `play.first_audio_ms`).
 #[cfg(all(feature = "audio", not(target_arch = "wasm32")))]
 pub mod first_audio;
+/// Delay compensation and locates, end to end through the callback's render.
+#[cfg(all(test, feature = "audio", not(target_arch = "wasm32")))]
+mod locate_pdc_tests;
 #[cfg(any(feature = "decode", feature = "audio"))]
 pub mod materialize;
 /// Fetching streamed media in the order it will be heard.

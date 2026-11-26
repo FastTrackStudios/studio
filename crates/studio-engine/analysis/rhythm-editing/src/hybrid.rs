@@ -206,10 +206,15 @@ pub fn plan_hybrid(
         let has_prev = idx > 0;
         let has_next = idx + 1 < pieces.len();
 
-        let contains_mode = |mode| sorted_hits.iter().any(|hit| {
-            hit.at >= src_start - 1e-6 && hit.at <= src_end + 1e-6
-                && move_map.get(hit.id.as_str()).is_some_and(|m| m.mode == mode)
-        });
+        let contains_mode = |mode| {
+            sorted_hits.iter().any(|hit| {
+                hit.at >= src_start - 1e-6
+                    && hit.at <= src_end + 1e-6
+                    && move_map
+                        .get(hit.id.as_str())
+                        .is_some_and(|m| m.mode == mode)
+            })
+        };
         let piece_forced_stretch = contains_mode(HitEditMode::Stretch);
         let piece_strategy = if contains_mode(HitEditMode::SlipOnly) {
             EditStrategy::SlipOnly
@@ -217,7 +222,9 @@ pub fn plan_hybrid(
             policy.strategy
         };
 
-        let gap_end = p.drawn_to.filter(|&to| to > p.end + policy.max_natural_gap_s);
+        let gap_end = p
+            .drawn_to
+            .filter(|&to| to > p.end + policy.max_natural_gap_s);
 
         match (gap_end, piece_strategy) {
             (Some(target_end), EditStrategy::Hybrid) => {
@@ -631,14 +638,28 @@ pub fn quantize_grouped(
         let (group, later) = hits.split_at(count.max(1));
         let relative = first.at - grid.origin_s;
         let delta = (relative / step).round() * step - relative;
-        let shift = group.iter()
-            .find_map(|hit| pins.get(hit.id.as_str()).map(|pin| pin.target_time - hit.at))
-            .unwrap_or_else(|| if delta.abs() <= grid.tolerance_s { 0.0 } else { delta * grid.strength });
+        let shift = group
+            .iter()
+            .find_map(|hit| {
+                pins.get(hit.id.as_str())
+                    .map(|pin| pin.target_time - hit.at)
+            })
+            .unwrap_or_else(|| {
+                if delta.abs() <= grid.tolerance_s {
+                    0.0
+                } else {
+                    delta * grid.strength
+                }
+            });
         for hit in group {
             if let Some(pin) = pins.get(hit.id.as_str()) {
                 moves.push((*pin).clone());
             } else if shift.abs() > 1e-6 {
-                moves.push(HitMove { id: hit.id.clone(), target_time: hit.at + shift, mode: HitEditMode::Auto });
+                moves.push(HitMove {
+                    id: hit.id.clone(),
+                    target_time: hit.at + shift,
+                    mode: HitEditMode::Auto,
+                });
             }
         }
         hits = later;

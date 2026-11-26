@@ -189,13 +189,11 @@ impl TrickPreset {
             recipe.timing.direction = direction;
         }
         if let Some(rows) = &self.grid {
-            let of = match std::mem::replace(
-                &mut recipe.target,
-                crate::Selection::Chans(Vec::new()),
-            ) {
-                crate::Selection::Layout { of, .. } => of,
-                other => Box::new(other),
-            };
+            let of =
+                match std::mem::replace(&mut recipe.target, crate::Selection::Chans(Vec::new())) {
+                    crate::Selection::Layout { of, .. } => of,
+                    other => Box::new(other),
+                };
             recipe.target = crate::Selection::Layout {
                 of,
                 rows: rows.clone(),
@@ -256,7 +254,9 @@ pub struct Library {
 /// palette has neither.
 #[must_use]
 pub fn stand_in(slot: &str, has: impl Fn(&str) -> bool) -> Option<String> {
-    let base = slot.trim_end_matches(|c: char| c.is_ascii_digit()).trim_end();
+    let base = slot
+        .trim_end_matches(|c: char| c.is_ascii_digit())
+        .trim_end();
     if base != slot && has(base) {
         return Some(base.to_owned());
     }
@@ -320,8 +320,11 @@ impl Library {
             .iter()
             .filter_map(|(slot, value)| rgb(value).map(|(r, g, b)| (slot.clone(), r, g, b)))
             .collect();
-        let every: std::collections::BTreeSet<&String> =
-            self.palettes.values().flat_map(|p| p.slots.keys()).collect();
+        let every: std::collections::BTreeSet<&String> = self
+            .palettes
+            .values()
+            .flat_map(|p| p.slots.keys())
+            .collect();
         for slot in every {
             if palette.slots.contains_key(slot) {
                 continue;

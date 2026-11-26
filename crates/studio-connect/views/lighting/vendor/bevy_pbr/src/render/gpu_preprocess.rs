@@ -9,14 +9,14 @@
 use core::num::{NonZero, NonZeroU64};
 
 use bevy_app::{App, Plugin};
-use bevy_asset::{embedded_asset, load_embedded_asset, Handle};
+use bevy_asset::{Handle, embedded_asset, load_embedded_asset};
 use bevy_core_pipeline::{
     deferred::node::late_deferred_prepass,
-    mip_generation::experimental::depth::{early_downsample_depth, ViewDepthPyramid},
+    mip_generation::experimental::depth::{ViewDepthPyramid, early_downsample_depth},
     prepass::{
-        node::{early_prepass, late_prepass},
         DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass, PreviousViewData,
         PreviousViewUniformOffset, PreviousViewUniforms,
+        node::{early_prepass, late_prepass},
     },
     schedule::{Core3d, Core3dSystems},
 };
@@ -27,7 +27,7 @@ use bevy_ecs::{
     prelude::resource_exists,
     query::{Has, Or, With, Without},
     resource::Resource,
-    schedule::{common_conditions::any_match_filter, IntoScheduleConfigs as _},
+    schedule::{IntoScheduleConfigs as _, common_conditions::any_match_filter},
     system::{Commands, Query, Res, ResMut},
     world::{FromWorld, World},
 };
@@ -35,23 +35,22 @@ use bevy_log::warn_once;
 use bevy_math::Vec4;
 use bevy_platform::collections::HashMap;
 use bevy_render::{
+    GpuResourceAppExt, Render, RenderApp, RenderSystems,
     batching::gpu_preprocessing::{
-        clear_scene_unpacking_buffers, BatchedInstanceBuffers, BinUnpackingMetadataIndex,
-        BuildIndirectParametersMetadata, GpuBinMetadata, GpuBinUnpackingMetadata,
-        GpuOcclusionCullingWorkItemBuffers, GpuPreprocessingMode, GpuPreprocessingSupport,
-        GpuUniformAllocationMetadata, IndirectBatchSet, IndirectParametersBuffers,
-        IndirectParametersBuildJob, IndirectParametersBuildJobs, IndirectParametersIndexed,
-        IndirectParametersMetadata, IndirectParametersNonIndexed,
-        LatePreprocessWorkItemIndirectParameters, PreprocessWorkItem, PreprocessWorkItemBuffers,
-        SceneUnpackingBuffers, SceneUnpackingBuffersKey, SceneUnpackingJob,
-        UniformAllocationMetadataIndex, UntypedPhaseBatchedInstanceBuffers,
-        UntypedPhaseIndirectParametersBuffers,
+        BatchedInstanceBuffers, BinUnpackingMetadataIndex, BuildIndirectParametersMetadata,
+        GpuBinMetadata, GpuBinUnpackingMetadata, GpuOcclusionCullingWorkItemBuffers,
+        GpuPreprocessingMode, GpuPreprocessingSupport, GpuUniformAllocationMetadata,
+        IndirectBatchSet, IndirectParametersBuffers, IndirectParametersBuildJob,
+        IndirectParametersBuildJobs, IndirectParametersIndexed, IndirectParametersMetadata,
+        IndirectParametersNonIndexed, LatePreprocessWorkItemIndirectParameters, PreprocessWorkItem,
+        PreprocessWorkItemBuffers, SceneUnpackingBuffers, SceneUnpackingBuffersKey,
+        SceneUnpackingJob, UniformAllocationMetadataIndex, UntypedPhaseBatchedInstanceBuffers,
+        UntypedPhaseIndirectParametersBuffers, clear_scene_unpacking_buffers,
     },
     diagnostic::RecordDiagnostics as _,
     occlusion_culling::OcclusionCulling,
     render_phase::{GpuRenderBinnedMeshInstance, UNIFORM_ALLOCATION_WORKGROUP_SIZE},
     render_resource::{
-        binding_types::{storage_buffer, storage_buffer_read_only, texture_2d, uniform_buffer},
         BindGroup, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries,
         BindingResource, Buffer, BufferBinding, BufferVec, CachedComputePipelineId,
         ComputePassDescriptor, ComputePipelineDescriptor, DynamicBindGroupLayoutEntries,
@@ -59,6 +58,7 @@ use bevy_render::{
         SparseBufferUpdateBindGroups, SparseBufferUpdateJobs, SparseBufferUpdatePipelines,
         SpecializedComputePipeline, SpecializedComputePipelines, TextureSampleType,
         UninitBufferVec,
+        binding_types::{storage_buffer, storage_buffer_read_only, texture_2d, uniform_buffer},
     },
     renderer::{RenderContext, RenderDevice, RenderQueue, ViewQuery},
     settings::WgpuFeatures,
@@ -66,12 +66,11 @@ use bevy_render::{
         ExtractedView, NoIndirectDrawing, RenderVisibilityRanges, RetainedViewEntity, ViewUniform,
         ViewUniformOffset, ViewUniforms,
     },
-    GpuResourceAppExt, Render, RenderApp, RenderSystems,
 };
 use bevy_shader::Shader;
-use bevy_utils::{default, TypeIdHashMap};
+use bevy_utils::{TypeIdHashMap, default};
 use bitflags::bitflags;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use tracing::warn;
 
 use crate::{

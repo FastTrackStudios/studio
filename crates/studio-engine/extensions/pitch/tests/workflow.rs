@@ -83,8 +83,18 @@ fn process_extension_analyze_correct_and_resynthesize() {
         "PITCH_CORRECT_SCALE",
         json!({ "doc": doc, "root_pc": 0, "mode": "major", "strength": 1.0 }),
     );
-    assert!(corrected["notes"][0]["pitch_delta_semitones"].as_f64().unwrap() < -0.2);
-    assert!(corrected["notes"][1]["pitch_delta_semitones"].as_f64().unwrap() > 0.2);
+    assert!(
+        corrected["notes"][0]["pitch_delta_semitones"]
+            .as_f64()
+            .unwrap()
+            < -0.2
+    );
+    assert!(
+        corrected["notes"][1]["pitch_delta_semitones"]
+            .as_f64()
+            .unwrap()
+            > 0.2
+    );
 
     // 4. Incrementally render to cached WAV.
     let cache = call(
@@ -102,7 +112,11 @@ fn process_extension_analyze_correct_and_resynthesize() {
     // 5. Re-analyze rendered WAV and verify notes landed on A4 (69.0) and C5 (72.0)!
     let after = call(5, "PITCH_ANALYZE", json!({ "wav": out_wav }));
     let tuned_notes = after["notes"].as_array().unwrap();
-    assert_eq!(tuned_notes.len(), 2, "expected 2 tuned notes, got {tuned_notes:#?}");
+    assert_eq!(
+        tuned_notes.len(),
+        2,
+        "expected 2 tuned notes, got {tuned_notes:#?}"
+    );
     let n0 = tuned_notes[0]["detected_midi"].as_f64().unwrap();
     let n1 = tuned_notes[1]["detected_midi"].as_f64().unwrap();
     assert!((n0 - 69.0).abs() < 0.2, "note 0 expected ~69.0, got {n0}");

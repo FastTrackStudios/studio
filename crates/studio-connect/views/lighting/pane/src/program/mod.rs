@@ -93,7 +93,9 @@ pub(crate) fn text<'a>(args: &'a Value, key: &str) -> Result<&'a str, String> {
 }
 
 pub(crate) fn opt_text<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
-    args.get(key).and_then(Value::as_str).filter(|s| !s.is_empty())
+    args.get(key)
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
 }
 
 pub(crate) fn num(args: &Value, key: &str) -> Option<f64> {
@@ -121,15 +123,17 @@ pub(crate) fn whole(v: &Value) -> Option<u32> {
     v.as_u64()
         .and_then(|n| u32::try_from(n).ok())
         .or_else(|| {
-            v.as_f64().filter(|f| *f >= 0.0 && f.fract() == 0.0).and_then(|f| {
-                #[allow(
-                    clippy::as_conversions,
-                    clippy::cast_possible_truncation,
-                    clippy::cast_sign_loss
-                )]
-                let n = f as u64;
-                u32::try_from(n).ok()
-            })
+            v.as_f64()
+                .filter(|f| *f >= 0.0 && f.fract() == 0.0)
+                .and_then(|f| {
+                    #[allow(
+                        clippy::as_conversions,
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss
+                    )]
+                    let n = f as u64;
+                    u32::try_from(n).ok()
+                })
         })
         .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
 }
@@ -150,7 +154,8 @@ pub fn slug(name: &str) -> String {
 }
 
 pub(crate) fn obj(v: &mut Value) -> Result<&mut Map<String, Value>, String> {
-    v.as_object_mut().ok_or_else(|| "expected an object".to_owned())
+    v.as_object_mut()
+        .ok_or_else(|| "expected an object".to_owned())
 }
 
 pub(crate) fn arr<'a>(v: &'a mut Value, key: &str) -> Result<&'a mut Vec<Value>, String> {
@@ -162,7 +167,9 @@ pub(crate) fn arr<'a>(v: &'a mut Value, key: &str) -> Result<&'a mut Vec<Value>,
 }
 
 pub(crate) fn list<'a>(v: &'a Value, key: &str) -> &'a [Value] {
-    v.get(key).and_then(Value::as_array).map_or(&[], Vec::as_slice)
+    v.get(key)
+        .and_then(Value::as_array)
+        .map_or(&[], Vec::as_slice)
 }
 
 /// `patch` laid over `base`, key by key; a `null` removes the key.
@@ -412,7 +419,11 @@ fn history(args: &Value) -> Res {
         n += 1;
     }
     let limit = num(args, "limit").map_or(50, |l| {
-        #[allow(clippy::as_conversions, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[allow(
+            clippy::as_conversions,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss
+        )]
         let l = l.max(1.0) as usize;
         l
     });
@@ -487,7 +498,10 @@ fn edit_end(keep: bool) -> Res {
 
 fn batch(args: &Value) -> Res {
     let label = opt_text(args, "label").unwrap_or("batch");
-    let ours = OPEN.lock().unwrap_or_else(PoisonError::into_inner).is_none();
+    let ours = OPEN
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .is_none();
     if ours {
         edit_begin(&json!({ "label": label, "root": args.get("root") }))?;
     }
@@ -504,7 +518,10 @@ fn batch(args: &Value) -> Res {
                 if ours {
                     edit_end(false)?;
                 }
-                return Err(format!("step {} ({id}): {e}; nothing of the batch was kept", i + 1));
+                return Err(format!(
+                    "step {} ({id}): {e}; nothing of the batch was kept",
+                    i + 1
+                ));
             }
         }
     }

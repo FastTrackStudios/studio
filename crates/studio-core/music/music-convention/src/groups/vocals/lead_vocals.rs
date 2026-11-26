@@ -1,7 +1,7 @@
 //! Lead vocals group definition
 
-use crate::item_metadata::prelude::*;
 use crate::item_metadata::ItemMetadataField;
+use crate::item_metadata::prelude::*;
 
 /// Lead vocals group
 ///

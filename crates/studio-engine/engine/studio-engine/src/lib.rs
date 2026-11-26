@@ -9,8 +9,6 @@
 //! engine (`window_queue::attach`, `actions::list`) and reads what it
 //! publishes. See docs/design/engine-boundary.md.
 
-#[cfg(feature = "native")]
-pub use engine_listen::audio_health;
 pub use daw_view::automation;
 pub use daw_view::changes;
 pub use daw_view::edit_state;
@@ -35,6 +33,8 @@ pub use engine_edit::comp_rank;
 pub use engine_edit::drum_group;
 #[cfg(feature = "native")]
 pub use engine_edit::grow;
+#[cfg(feature = "native")]
+pub use engine_listen::audio_health;
 #[cfg(feature = "native")]
 pub use engine_mix::automation_actions;
 #[cfg(feature = "native")]
@@ -99,9 +99,6 @@ pub use engine_core::task_account;
 #[cfg(any(feature = "native", feature = "web"))]
 pub use engine_core::task_set;
 pub use engine_edit::track_regions;
-/// A window's link to its engine: replicas and calls.
-#[cfg(feature = "native")]
-pub use engine_runtime::client::view_client;
 #[cfg(feature = "native")]
 pub use engine_listen::listen;
 #[cfg(feature = "native")]
@@ -114,6 +111,9 @@ pub use engine_mix::mix_snapshot;
 pub use engine_mix::mix_state;
 #[cfg(feature = "native")]
 pub use engine_mix::mix_variants;
+/// A window's link to its engine: replicas and calls.
+#[cfg(feature = "native")]
+pub use engine_runtime::client::view_client;
 #[cfg(all(test, feature = "native"))]
 mod mix_variants_match_tests;
 #[cfg(feature = "native")]
@@ -124,9 +124,9 @@ pub use engine_listen::render_worker;
 #[cfg(all(test, feature = "native"))]
 mod render_worker_tests;
 #[cfg(feature = "native")]
-pub use engine_mix::signal_kit;
-#[cfg(feature = "native")]
 pub use engine_listen::signal_offline;
+#[cfg(feature = "native")]
+pub use engine_mix::signal_kit;
 /// A test that reads listen, the mix and edit at once (the assembly's).
 #[cfg(all(test, feature = "native"))]
 mod signal_offline_level_tests;
@@ -216,12 +216,12 @@ pub use engine_runtime::client::drum_settings;
 pub use engine_runtime::client::gain_stage;
 #[cfg(feature = "native")]
 pub mod perf;
-#[cfg(feature = "native")]
-pub use engine_listen::perf_meter;
 /// The engine's telemetry on plain `tracing`: the span ring `PERF_RECENT`
 /// reads, OTLP export, the panic hook.
 #[cfg(feature = "native")]
 pub use engine_core::telemetry;
+#[cfg(feature = "native")]
+pub use engine_listen::perf_meter;
 pub use engine_runtime::client::plan;
 pub mod poi;
 pub use engine_core::prepare;

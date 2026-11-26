@@ -131,7 +131,12 @@ pub fn color_fx(effect: ColorEffect, cells: &[Beam]) -> Element {
     }
     let mut params = Element::new("PARAMS")
         .with("NB", rest.len().saturating_add(1))
-        .child(Element::new("PARAM").with("TYPE", 4).with("ID", 1).child(colors));
+        .child(
+            Element::new("PARAM")
+                .with("TYPE", 4)
+                .with("ID", 1)
+                .child(colors),
+        );
     for (kind, id, val) in rest {
         params.push(
             Element::new("PARAM")
@@ -188,7 +193,12 @@ pub fn move_fx(effect: MoveEffect, cells: &[Beam]) -> Element {
     }
     let params = Element::new("PARAMS")
         .with("NB", 3)
-        .child(Element::new("PARAM").with("TYPE", 5).with("ID", 1).child(list))
+        .child(
+            Element::new("PARAM")
+                .with("TYPE", 5)
+                .with("ID", 1)
+                .child(list),
+        )
         .child(
             Element::new("PARAM")
                 .with("TYPE", 1)

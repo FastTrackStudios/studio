@@ -142,7 +142,10 @@ mod tests {
 
     #[test]
     fn only_a_venue_with_a_desk_has_banks() {
-        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../studio-engine/lighting");
+        let root = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../studio-engine/lighting"
+        );
         let banks = {
             let _guard = std::env::current_dir().unwrap();
             // Paths in this module are cwd-relative like the studio's

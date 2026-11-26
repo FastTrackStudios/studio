@@ -44,23 +44,23 @@
     reason = "quaternion and axis maths read best as w, x, y, z"
 )]
 
-#[path = "support/song_show.rs"]
-mod song_show;
 #[path = "support/scenery.rs"]
 mod scenery;
+#[path = "support/song_show.rs"]
+mod song_show;
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+use ignition_daslight::cook::{self, Motion, find_cycle, lit_and_moving, motion_of};
 use ignition_daslight::easyview::{self, Placement, Room, rotation_towards};
+use ignition_daslight::fixups::Rig;
+use ignition_daslight::fx::{self, Beam, ColorEffect, MoveEffect};
 use ignition_daslight::library::{
     mini_gobo_moving_head_11ch, rockstrip_252_28ch, solena_max_bar_24ch, zq01334_33ch,
 };
-use ignition_daslight::cook::{self, Motion, find_cycle, lit_and_moving, motion_of};
-use ignition_daslight::fixups::Rig;
-use ignition_daslight::fx::{self, Beam, ColorEffect, MoveEffect};
-use ignition_daslight::profile::{self as profiles, channels, cells};
+use ignition_daslight::profile::{self as profiles, cells, channels};
 use ignition_daslight::xml::Element;
 use ignition_daslight::{Error, Fixture, Patch, Scene, Showfile};
 
@@ -191,7 +191,10 @@ fn fixture_name(lamps: &[&Record]) -> String {
     name.replace(" \u{2014} ", " - ")
 }
 
-#[allow(clippy::too_many_lines, reason = "one straight-line build of the showfile, step by step")]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one straight-line build of the showfile, step by step"
+)]
 fn main() -> Result<(), Error> {
     let mut args = std::env::args().skip(1);
     let (Some(template), Some(venue)) = (args.next(), args.next()) else {
@@ -316,7 +319,12 @@ fn main() -> Result<(), Error> {
         show.add_bank("NATIVE", "#ff00c0ff", &native_bank(&patch), &patch)?;
     }
     show.add_bank("TEST", "#ffffb300", &test_bank(&patch)?, &patch)?;
-    show.add_bank("ROCKSTRIP CHANNELS", "#ffff00ff", &rockstrip_channels(&patch), &patch)?;
+    show.add_bank(
+        "ROCKSTRIP CHANNELS",
+        "#ffff00ff",
+        &rockstrip_channels(&patch),
+        &patch,
+    )?;
     for (bank, scenes) in tower_lamp_banks(&patch) {
         show.add_bank(&bank, "#ffff8000", &scenes, &patch)?;
     }
@@ -390,7 +398,11 @@ fn front_view(kind: &Kind, x: f64, z: f64) -> (i32, i32, i32) {
     };
     // The RockStrips lie downstage of the wall bars at the same height:
     // a row below them.
-    let below = if kind.mode == "28CH" { 2.0 * CELL + 20.0 } else { 0.0 };
+    let below = if kind.mode == "28CH" {
+        2.0 * CELL + 20.0
+    } else {
+        0.0
+    };
     let px = x.mul_add(PER_METRE, -across * CELL / 2.0);
     let py = (-(z + lift)).mul_add(PER_METRE, below - CELL / 2.0);
     (units(px), units(py), angle)
@@ -480,9 +492,7 @@ fn test_values(profile: &str) -> Option<Vec<Option<u8>>> {
         "UKing/U'King 36 LED RGB 7 Channel Par.ssl2" => vec![255, 255, 255, 255, 0, 0, 0],
         // Eight cells of R, G, B, then dimmer full, strobe off, no chase,
         // dimmer mode.
-        "Rockville/Rockville Rockstrip 252 28CH.ssl2" => {
-            rainbow(8).chain([255, 0, 0, 0]).collect()
-        }
+        "Rockville/Rockville Rockstrip 252 28CH.ssl2" => rainbow(8).chain([255, 0, 0, 0]).collect(),
         "Solena/Max Bar 28 RGB 24CH.ssl2" => rainbow(8).collect(),
         // X, µX, Y, µY centred; white, open gobo; shutter open (255, as
         // the desk's own mover scenes set it); dimmer full; fastest; no
@@ -761,7 +771,11 @@ fn read_cooked(path: &Path) -> Result<(u16, Vec<Item>), Error> {
 /// never changes does nothing this rig can show (a zoom or an iris on a
 /// mover that has none).
 fn span_of(frames: &[Vec<u8>], fps: u16, look: bool) -> Option<(Vec<Vec<u8>>, cook::Cycle, bool)> {
-    let cycle = find_cycle(frames, usize::from(WARMUP_SECONDS.saturating_mul(fps)), TOLERANCE);
+    let cycle = find_cycle(
+        frames,
+        usize::from(WARMUP_SECONDS.saturating_mul(fps)),
+        TOLERANCE,
+    );
     if cycle.len == 1 && !look {
         let k = cook::settles_at(frames, TOLERANCE)?;
         let mut shot: Vec<Vec<u8>> = frames.iter().take(k.saturating_add(1)).cloned().collect();
@@ -771,7 +785,10 @@ fn span_of(frames: &[Vec<u8>], fps: u16, look: bool) -> Option<(Vec<Vec<u8>>, co
         return Some((shot, cycle, true));
     }
     let end = cycle.start.saturating_add(cycle.len);
-    let span = frames.get(cycle.start..end).map(<[Vec<u8>]>::to_vec).unwrap_or_default();
+    let span = frames
+        .get(cycle.start..end)
+        .map(<[Vec<u8>]>::to_vec)
+        .unwrap_or_default();
     Some((span, cycle, false))
 }
 
@@ -800,7 +817,9 @@ fn cooked_banks(
         let frames = rig.recoloured(frames);
         let look = kind == "look";
         let Some((frames, cycle, one_shot)) = span_of(&frames, fps, look) else {
-            skipped.push(format!("{kind} {name}: sends the same frame throughout on this venue"));
+            skipped.push(format!(
+                "{kind} {name}: sends the same frame throughout on this venue"
+            ));
             continue;
         };
         if frames.is_empty() {
@@ -907,9 +926,10 @@ fn under_effect(patch: &Patch, f: &Fixture) -> Vec<Option<u8>> {
         .iter()
         .map(|c| match c.kind {
             profiles::Kind::Dimmer => Some(255),
-            profiles::Kind::Strobe | profiles::Kind::Macro | profiles::Kind::Speed | profiles::Kind::Other => {
-                Some(0)
-            }
+            profiles::Kind::Strobe
+            | profiles::Kind::Macro
+            | profiles::Kind::Speed
+            | profiles::Kind::Other => Some(0),
             _ => None,
         })
         .collect()
@@ -965,7 +985,9 @@ fn native_bank(patch: &Patch) -> Vec<Scene> {
         fixtures
             .iter()
             .flat_map(|f| {
-                let n = patch.profile(&f.profile).map_or(1, |p| cells(p).len().max(1));
+                let n = patch
+                    .profile(&f.profile)
+                    .map_or(1, |p| cells(p).len().max(1));
                 (0..u16::try_from(n).unwrap_or(1)).map(|b| (f.uid.clone(), b))
             })
             .collect()
@@ -984,7 +1006,12 @@ fn native_bank(patch: &Patch) -> Vec<Scene> {
     let mut perlin = pars;
     perlin.extend(tower_rgb.iter().cloned());
     vec![
-        effect_scene("RAINBOW bars", patch, &bars, fx::color_fx(ColorEffect::Rainbow, &bars)),
+        effect_scene(
+            "RAINBOW bars",
+            patch,
+            &bars,
+            fx::color_fx(ColorEffect::Rainbow, &bars),
+        ),
         effect_scene(
             "KNIGHT RIDER towers",
             patch,
@@ -1003,7 +1030,17 @@ fn native_bank(patch: &Patch) -> Vec<Scene> {
             &perlin,
             fx::color_fx(ColorEffect::Perlin, &perlin),
         ),
-        effect_scene("MOVE SLOW", patch, &movers, fx::move_fx(MoveEffect::Slow, &movers)),
-        effect_scene("MOVE FAST", patch, &movers, fx::move_fx(MoveEffect::Fast, &movers)),
+        effect_scene(
+            "MOVE SLOW",
+            patch,
+            &movers,
+            fx::move_fx(MoveEffect::Slow, &movers),
+        ),
+        effect_scene(
+            "MOVE FAST",
+            patch,
+            &movers,
+            fx::move_fx(MoveEffect::Fast, &movers),
+        ),
     ]
 }

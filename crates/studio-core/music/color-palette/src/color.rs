@@ -425,12 +425,21 @@ mod reaper_native_tests {
     fn the_custom_colour_flag_is_set() {
         // Without 0x01000000 REAPER treats the track as having no custom
         // colour and ignores the value entirely.
-        assert_eq!(Color::hex(0).to_reaper_native() as u32 & 0xFF00_0000, 0x0100_0000);
+        assert_eq!(
+            Color::hex(0).to_reaper_native() as u32 & 0xFF00_0000,
+            0x0100_0000
+        );
     }
 
     #[test]
     fn a_colour_survives_a_round_trip() {
-        for hex in [0x00ef_4444, 0x0000_0000, 0x00ff_ffff, 0x0012_3456, 0x006366_f1 & 0xFF_FFFF] {
+        for hex in [
+            0x00ef_4444,
+            0x0000_0000,
+            0x00ff_ffff,
+            0x0012_3456,
+            0x006366_f1 & 0xFF_FFFF,
+        ] {
             let c = Color::hex(hex);
             assert_eq!(
                 Color::from_reaper_native(c.to_reaper_native()).to_hex_string(),

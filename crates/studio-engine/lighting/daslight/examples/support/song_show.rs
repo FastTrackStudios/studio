@@ -81,12 +81,16 @@ fn text(v: &serde_json::Value, k: &str) -> String {
 }
 
 fn number(v: &serde_json::Value, keys: &[&str]) -> Option<f64> {
-    keys.iter().find_map(|k| v.get(*k).and_then(serde_json::Value::as_f64))
+    keys.iter()
+        .find_map(|k| v.get(*k).and_then(serde_json::Value::as_f64))
 }
 
 fn read_recording(path: &Path) -> Result<(u16, String, bool, Vec<Cue>), Error> {
     let json = read_json(path)?;
-    let timeline = json.get("timeline").and_then(serde_json::Value::as_bool).unwrap_or(false);
+    let timeline = json
+        .get("timeline")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
     let fps = json
         .get("fps")
         .and_then(serde_json::Value::as_u64)
@@ -150,8 +154,17 @@ fn read_hits(path: &Path, plan: &AudioPlan) -> Result<Vec<Hit>, Error> {
     Ok(list
         .iter()
         .filter_map(|h| {
-            let seconds = number(h, &["seconds", "audio_seconds", "audio_secs", "time", "audio_time"])
-                .or_else(|| number(h, &["beat"]).map(|b| plan.seconds_at(b)))?;
+            let seconds = number(
+                h,
+                &[
+                    "seconds",
+                    "audio_seconds",
+                    "audio_secs",
+                    "time",
+                    "audio_time",
+                ],
+            )
+            .or_else(|| number(h, &["beat"]).map(|b| plan.seconds_at(b)))?;
             let kind = ["kind", "type", "name"]
                 .iter()
                 .map(|k| text(h, k))
@@ -198,9 +211,21 @@ fn ticks(v: &serde_json::Value, key: &str, default: u32) -> u32 {
 fn read_layers(json: &serde_json::Value, patch: &Patch) -> Layers {
     let bank = text(json, "bank");
     let mut scenes = Vec::new();
-    for s in json.get("scenes").and_then(serde_json::Value::as_array).into_iter().flatten() {
+    for s in json
+        .get("scenes")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
         let color = text(s, "color");
-        let mut scene = Scene::new(&text(s, "name"), if color.is_empty() { "#ffff4020" } else { &color });
+        let mut scene = Scene::new(
+            &text(s, "name"),
+            if color.is_empty() {
+                "#ffff4020"
+            } else {
+                &color
+            },
+        );
         // Layers stack: a hit must not stop the mover move under it.
         scene.release_mode = 0;
         scene.priority = 3;
@@ -215,7 +240,10 @@ fn read_layers(json: &serde_json::Value, patch: &Patch) -> Layers {
             .map(|st| ignition_daslight::Step {
                 wait: ticks(st, "wait", 25),
                 fade: ticks(st, "fade", 0),
-                fixtures: st.get("fixtures").map(|f| layer_values(f, patch)).unwrap_or_default(),
+                fixtures: st
+                    .get("fixtures")
+                    .map(|f| layer_values(f, patch))
+                    .unwrap_or_default(),
             })
             .collect();
         scenes.push(scene);
@@ -255,13 +283,20 @@ fn read_layers(json: &serde_json::Value, patch: &Patch) -> Layers {
         .flatten()
         .filter_map(|v| v.as_str().map(str::to_owned))
         .collect();
-    Layers { bank, scenes, tracks, skip }
+    Layers {
+        bank,
+        scenes,
+        tracks,
+        skip,
+    }
 }
 
 /// A cue's name as the desk shows it: no layer dot, no doubled spaces,
 /// no characters its fonts are not trusted with.
 fn desk_name(name: &str) -> String {
-    let name = name.trim_start_matches('\u{b7}').replace(['\u{b7}', '\u{2014}'], "-");
+    let name = name
+        .trim_start_matches('\u{b7}')
+        .replace(['\u{b7}', '\u{2014}'], "-");
     name.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
@@ -286,11 +321,7 @@ fn flash_values(profile: &str) -> Option<Vec<Option<u8>>> {
         // X, µX, Y, µY kept; white, open gobo, shutter open, dimmer full.
         "_varied/Mini Gobo Moving Head Light.ssl2" => [None; 4]
             .into_iter()
-            .chain(
-                [0, 0, 255, 255]
-                    .into_iter()
-                    .map(Some),
-            )
+            .chain([0, 0, 255, 255].into_iter().map(Some))
             .chain([None, Some(0), Some(0)])
             .collect(),
         _ => return None,
@@ -315,7 +346,11 @@ fn flash_scene(name: &str, patch: &Patch) -> Scene {
 /// written (a cue is the whole stage, tracked state and all).
 fn cue_scene(name: &str, cue: &Cue, fps: u16, rig: &Rig, patch: &Patch) -> (Scene, String) {
     let frames = rig.recoloured(&cue.frames);
-    let cycle = find_cycle(&frames, usize::from(WARMUP_SECONDS.saturating_mul(fps)), TOLERANCE);
+    let cycle = find_cycle(
+        &frames,
+        usize::from(WARMUP_SECONDS.saturating_mul(fps)),
+        TOLERANCE,
+    );
     let end = cycle.start.saturating_add(cycle.len.max(1));
     let span = frames.get(cycle.start..end).unwrap_or_default();
     let all: Vec<&Fixture> = patch.fixtures.iter().filter(|f| f.universe == 1).collect();
@@ -342,7 +377,14 @@ fn cue_scene(name: &str, cue: &Cue, fps: u16, rig: &Rig, patch: &Patch) -> (Scen
 /// whole (`cook_timeline`): every frame a step, runs of identical frames
 /// merged into one longer wait, no loop fitting and no fades between
 /// steps (the frames already hold every fade).
-fn timeline_scene(name: &str, cue: &Cue, fps: u16, rig: &Rig, patch: &Patch, skip: &[String]) -> (Scene, String) {
+fn timeline_scene(
+    name: &str,
+    cue: &Cue,
+    fps: u16,
+    rig: &Rig,
+    patch: &Patch,
+    skip: &[String],
+) -> (Scene, String) {
     let frames = rig.recoloured(&cue.frames);
     let all: Vec<&Fixture> = patch
         .fixtures
@@ -362,29 +404,37 @@ fn timeline_scene(name: &str, cue: &Cue, fps: u16, rig: &Rig, patch: &Patch, ski
         many => {
             scene.steps = many
                 .iter()
-                .map(|t| ignition_daslight::Step { wait: t.wait, fade: 0, fixtures: slice(&t.frame) })
+                .map(|t| ignition_daslight::Step {
+                    wait: t.wait,
+                    fade: 0,
+                    fixtures: slice(&t.frame),
+                })
                 .collect();
         }
     }
-    let kind = format!("{} steps from {} frames, as played", scene.steps.len().max(1), frames.len());
+    let kind = format!(
+        "{} steps from {} frames, as played",
+        scene.steps.len().max(1),
+        frames.len()
+    );
     (scene, kind)
 }
 
 /// `m:ss.mmm`.
 fn clock(seconds: f64) -> String {
     let ms = millis(seconds);
-    format!(
-        "{}:{:02}.{:03}",
-        ms / 60_000,
-        (ms / 1000) % 60,
-        ms % 1000
-    )
+    format!("{}:{:02}.{:03}", ms / 60_000, (ms / 1000) % 60, ms % 1000)
 }
 
 /// Hits as flash scenes, one per kind, and a timeline of short blocks
 /// per kind: one at each hit, cut short where the next hit of its kind
 /// comes sooner.
-fn hit_tracks(hits: &[Hit], bank: &str, audio_end: f64, patch: &Patch) -> (Vec<Scene>, Vec<Vec<Block>>) {
+fn hit_tracks(
+    hits: &[Hit],
+    bank: &str,
+    audio_end: f64,
+    patch: &Patch,
+) -> (Vec<Scene>, Vec<Vec<Block>>) {
     let mut by_kind: BTreeMap<String, Vec<f64>> = BTreeMap::new();
     for h in hits {
         by_kind.entry(h.kind.clone()).or_default().push(h.seconds);
@@ -399,8 +449,14 @@ fn hit_tracks(hits: &[Hit], bank: &str, audio_end: f64, patch: &Patch) -> (Vec<S
             .iter()
             .enumerate()
             .filter_map(|(i, t)| {
-                let next = times.get(i.saturating_add(1)).copied().unwrap_or(f64::INFINITY);
-                let (from, to) = (millis(*t), millis((t + HIT_SECONDS).min(next).min(audio_end)));
+                let next = times
+                    .get(i.saturating_add(1))
+                    .copied()
+                    .unwrap_or(f64::INFINITY);
+                let (from, to) = (
+                    millis(*t),
+                    millis((t + HIT_SECONDS).min(next).min(audio_end)),
+                );
                 (to > from).then(|| Block {
                     name: scene.name.clone(),
                     content: Content::Scene { uid: uid.clone() },
@@ -419,7 +475,10 @@ fn hit_tracks(hits: &[Hit], bank: &str, audio_end: f64, patch: &Patch) -> (Vec<S
 
 /// Adds the song's cue bank, its hit bank (with hits) and its Super Scene
 /// (in [`SHOWS`]) to the showfile; the report of what went where.
-#[allow(clippy::too_many_lines, reason = "one straight-line build of the song bank, its layers and the Super Scene")]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one straight-line build of the song bank, its layers and the Super Scene"
+)]
 pub fn add(
     show: &mut Showfile,
     patch: &Patch,
@@ -449,8 +508,15 @@ pub fn add(
          the audio on timeline 0, each cue's scene on timeline 1 from its audio time to the next \
          cue's, faded in over the cue's fade{}.\n\n\
          | # | Scene | Song beat | Audio | Until | Fade | Cooked |\n|---|---|---|---|---|---|---|\n",
-        audio.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
-        if hits.is_empty() { "" } else { ", hits as flash blocks on the timelines below" },
+        audio
+            .file_name()
+            .map(|n| n.to_string_lossy())
+            .unwrap_or_default(),
+        if hits.is_empty() {
+            ""
+        } else {
+            ", hits as flash blocks on the timelines below"
+        },
     );
     let mut scenes = Vec::new();
     let mut blocks = Vec::new();
@@ -489,7 +555,11 @@ pub fn add(
                 start: from,
                 end: to,
                 // A whole-song recording already holds each fade.
-                fade_in: if timeline { 0 } else { millis(cue.fade_secs).min(to.saturating_sub(from)) },
+                fade_in: if timeline {
+                    0
+                } else {
+                    millis(cue.fade_secs).min(to.saturating_sub(from))
+                },
                 fade_out: 0,
             });
         }

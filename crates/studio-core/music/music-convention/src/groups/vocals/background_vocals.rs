@@ -1,7 +1,7 @@
 //! Background vocals (BGVs) group definition
 
-use crate::item_metadata::prelude::*;
 use crate::item_metadata::ItemMetadataField;
+use crate::item_metadata::prelude::*;
 
 /// Background vocals group (BGVs)
 ///

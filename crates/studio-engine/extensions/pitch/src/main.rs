@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 
 #[derive(Parser)]
-#[command(name = "fts-pitch", about = "FastTrackStudio swappable pitch-detection & ARA-style pitch-editing extension")]
+#[command(
+    name = "fts-pitch",
+    about = "FastTrackStudio swappable pitch-detection & ARA-style pitch-editing extension"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -65,7 +68,11 @@ fn main() {
                 detector,
                 segmenter,
             };
-            match dispatch(&registry, "PITCH_ANALYZE", serde_json::to_value(req).unwrap()) {
+            match dispatch(
+                &registry,
+                "PITCH_ANALYZE",
+                serde_json::to_value(req).unwrap(),
+            ) {
                 Ok(out) => println!("{}", serde_json::to_string_pretty(&out).unwrap()),
                 Err(e) => {
                     eprintln!("error: {e}");

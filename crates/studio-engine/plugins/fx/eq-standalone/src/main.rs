@@ -34,11 +34,11 @@ mod pipewire_capture {
 
 use dioxus_native::launch_cfg;
 use dioxus_native::prelude::{dioxus_vdom, document, rsx};
-use plugin_ui::eq::ui::params::{EqUiState, FtsEqParams, NUM_BANDS, SPECTRUM_BINS};
 use nice_plug::context::gui::{GuiContext, GuiContextInner};
 use nice_plug::prelude::*;
 use nice_plug_dioxus::{ParamContext, SharedState};
 use plugin_core::prelude::Param;
+use plugin_ui::eq::ui::params::{EqUiState, FtsEqParams, NUM_BANDS, SPECTRUM_BINS};
 
 /// Compiled by `tailwindcss -i tailwind.css -o assets/tailwind.css`.
 const TAILWIND_CSS: &str = include_str!("../assets/tailwind.css");

@@ -6,8 +6,8 @@
 //! has to read its own name back ("LD-87 Vintage", "Sub-Card"), since that
 //! is what a host shows and what scripts set.
 
-use plugin_ui::mic::ui::params::MicParams;
 use nice_plug::prelude::Params;
+use plugin_ui::mic::ui::params::MicParams;
 
 /// Normalized points to probe; the ends matter as much as the middle.
 const PROBES: [f32; 7] = [0.0, 0.004, 0.25, 0.5, 0.75, 0.996, 1.0];

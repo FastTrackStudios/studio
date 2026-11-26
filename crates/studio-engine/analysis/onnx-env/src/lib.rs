@@ -31,7 +31,9 @@ impl std::error::Error for Error {}
 /// The process's environment, made on first use and shared after.
 pub fn environment() -> Result<Environment, Error> {
     static ENVIRONMENT: Mutex<Option<Environment>> = Mutex::new(None);
-    let mut held = ENVIRONMENT.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut held = ENVIRONMENT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     if let Some(environment) = &*held {
         return Ok(environment.clone());
     }
@@ -42,8 +44,12 @@ pub fn environment() -> Result<Environment, Error> {
 
 fn build(dylib: Option<String>) -> Result<Environment, Error> {
     let builder = match dylib.filter(|path| !path.trim().is_empty()) {
-        Some(path) => ort::init_from(&path).map_err(|e| Error(format!("load ONNX Runtime from {path}: {e}")))?,
+        Some(path) => ort::init_from(&path)
+            .map_err(|e| Error(format!("load ONNX Runtime from {path}: {e}")))?,
         None => ort::init(),
     };
-    builder.with_name(NAME).build().map_err(|e| Error(format!("start ONNX Runtime: {e}")))
+    builder
+        .with_name(NAME)
+        .build()
+        .map_err(|e| Error(format!("start ONNX Runtime: {e}")))
 }

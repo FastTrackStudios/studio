@@ -246,22 +246,29 @@ pub fn apply_output(dmx: &DmxUniverses, venue: &Venue, frame: &OutputFrame<'_>) 
         // all (a bar of red, green and blue triplets): each section's
         // level simply scales its own emitters.
         if fixture.map.offset_of(&Attribute::Dimmer).is_none() {
-            return (*cell == 0 || mine.contains(attr)).then(|| {
-                if emitter { value * own(chan) } else { value }
-            });
+            return (*cell == 0 || mine.contains(attr))
+                .then(|| if emitter { value * own(chan) } else { value });
         }
         let master = master_of(fixture);
         if *attr == Attribute::Dimmer {
             return Some(master);
         }
-        let writes = if *cell == 0 { !mine.contains(attr) } else { mine.contains(attr) };
+        let writes = if *cell == 0 {
+            !mine.contains(attr)
+        } else {
+            mine.contains(attr)
+        };
         if !writes {
             return None;
         }
         if !emitter {
             return Some(value);
         }
-        Some(if master > 0.0 { value * own(chan) / master } else { 0.0 })
+        Some(if master > 0.0 {
+            value * own(chan) / master
+        } else {
+            0.0
+        })
     };
     for ((chan, attr), &value) in frame.values {
         let Some(fixture) = patch.by_chan(*chan) else {
@@ -354,7 +361,11 @@ fn log_wire(patch: &crate::venue::PatchTable, bytes: &[(u16, u16, u8)]) {
         .filter_map(|(chan, fixture)| {
             let at = |attr: &Attribute| -> Option<u8> {
                 let offset = fixture.map.offset_of(attr)?;
-                let channel0 = fixture.address.start_channel.saturating_sub(1).saturating_add(offset);
+                let channel0 = fixture
+                    .address
+                    .start_channel
+                    .saturating_sub(1)
+                    .saturating_add(offset);
                 wire.get(&(fixture.address.universe, channel0)).copied()
             };
             let colour = |channel| at(&Attribute::ColorAdd { channel }).unwrap_or(0);
@@ -365,13 +376,35 @@ fn log_wire(patch: &crate::venue::PatchTable, bytes: &[(u16, u16, u8)]) {
                 colour(ignition_proto::ColorChannel::White),
             );
             let level = at(&Attribute::Dimmer);
-            let lit = level.unwrap_or(255) > 0 && (level.is_some_and(|l| l > 0) && (r | g | b | w) > 0 || level.is_none() && (r | g | b | w) > 0 || fixture.map.offset_of(&Attribute::Pan).is_some() && level.is_some_and(|l| l > 0));
-            lit.then(|| (chan, format!("{chan}:{}/{r},{g},{b},{w}", level.map_or_else(|| "-".to_owned(), |l| l.to_string()))))
+            let lit = level.unwrap_or(255) > 0
+                && (level.is_some_and(|l| l > 0) && (r | g | b | w) > 0
+                    || level.is_none() && (r | g | b | w) > 0
+                    || fixture.map.offset_of(&Attribute::Pan).is_some()
+                        && level.is_some_and(|l| l > 0));
+            lit.then(|| {
+                (
+                    chan,
+                    format!(
+                        "{chan}:{}/{r},{g},{b},{w}",
+                        level.map_or_else(|| "-".to_owned(), |l| l.to_string())
+                    ),
+                )
+            })
         })
         .collect();
     rows.sort_by_key(|(chan, _)| *chan);
-    let line = format!("{frame} {}\n", rows.into_iter().map(|(_, row)| row).collect::<Vec<_>>().join(" "));
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    let line = format!(
+        "{frame} {}\n",
+        rows.into_iter()
+            .map(|(_, row)| row)
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = std::io::Write::write_all(&mut file, line.as_bytes());
     }
 }
@@ -618,10 +651,15 @@ mod tests {
         assert!(fixture.map.offset_of(&Attribute::Dimmer).is_none());
         for (level, want) in [(1.0_f32, 1.0_f32), (0.5, 0.5), (0.0, 0.0)] {
             let dmx = DmxUniverses::new();
-            let values = HashMap::from([((25, Attribute::Dimmer), level), ((25, red.clone()), 1.0)]);
+            let values =
+                HashMap::from([((25, Attribute::Dimmer), level), ((25, red.clone()), 1.0)]);
             apply_cue_output(&dmx, &venue, &values);
             let out = dmx.resolve(&fixture.address, &fixture.map);
-            assert!((out.color[0] - want).abs() < 0.02, "level {level}: {}", out.color[0]);
+            assert!(
+                (out.color[0] - want).abs() < 0.02,
+                "level {level}: {}",
+                out.color[0]
+            );
         }
     }
 
@@ -660,8 +698,15 @@ mod tests {
             ((2, white.clone()), 1.0),
         ]);
         apply_cue_output(&dmx, &venue, &values);
-        let (a, b) = (dmx.resolve(&one.address, &one.map), dmx.resolve(&two.address, &two.map));
-        assert!((a.dimmer - 0.8).abs() < 0.01, "the higher level wins: {}", a.dimmer);
+        let (a, b) = (
+            dmx.resolve(&one.address, &one.map),
+            dmx.resolve(&two.address, &two.map),
+        );
+        assert!(
+            (a.dimmer - 0.8).abs() < 0.01,
+            "the higher level wins: {}",
+            a.dimmer
+        );
         assert!((b.dimmer - 0.8).abs() < 0.01);
     }
 

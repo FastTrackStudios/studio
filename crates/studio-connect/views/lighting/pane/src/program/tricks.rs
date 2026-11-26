@@ -45,7 +45,14 @@ fn units(cx: &Ctx, args: &Value) -> Res {
     preset.apply(&mut probe);
     let n = gu.units.0.len();
     let lerp = |v: Option<ignition_show::library::FromTo>, i: usize| {
-        v.map(|v| if n > 1 { (f64::from(v.to) - f64::from(v.from)).mul_add(count_f(i) / count_f(n - 1), f64::from(v.from)) } else { f64::from(v.from) })
+        v.map(|v| {
+            if n > 1 {
+                (f64::from(v.to) - f64::from(v.from))
+                    .mul_add(count_f(i) / count_f(n - 1), f64::from(v.from))
+            } else {
+                f64::from(v.from)
+            }
+        })
     };
     let rows: Vec<Value> = gu
         .units
@@ -79,7 +86,11 @@ fn apply(cx: &mut Ctx, args: &Value) -> Res {
     let l = layers(cx, args)?;
     let (path, mut doc) = l.song.clone().ok_or("`song` is required")?;
     let roles = roles_of(cx, &l);
-    let preset = preset_of(&l, args.get("tricks").ok_or("`tricks` is required: a preset's name, or its settings")?)?;
+    let preset = preset_of(
+        &l,
+        args.get("tricks")
+            .ok_or("`tricks` is required: a preset's name, or its settings")?,
+    )?;
     let target = match args.get("target") {
         Some(t) => Some(selection(t, &roles)?),
         None => None,
@@ -87,20 +98,34 @@ fn apply(cx: &mut Ctx, args: &Value) -> Res {
     let effect = opt_text(args, "effect");
     let cue_name = args.get("cue").ok_or("`cue` is required")?;
     let cues = arr(&mut doc, "cues")?;
-    let cue = cues.iter_mut().find(|c| c.get("name") == Some(cue_name)).ok_or_else(|| format!("no cue {cue_name}"))?;
+    let cue = cues
+        .iter_mut()
+        .find(|c| c.get("name") == Some(cue_name))
+        .ok_or_else(|| format!("no cue {cue_name}"))?;
     let mut changed = Vec::new();
     for part in arr(cue, "recipes")? {
-        let on_target = target.as_ref().is_none_or(|t| part.get("target") == Some(t));
-        let named = effect.is_none_or(|e| opt_text(part, "effect") == Some(e) || opt_text(part, "name") == Some(e));
+        let on_target = target
+            .as_ref()
+            .is_none_or(|t| part.get("target") == Some(t));
+        let named = effect.is_none_or(|e| {
+            opt_text(part, "effect") == Some(e) || opt_text(part, "name") == Some(e)
+        });
         if !(on_target && named) || part.get("look").is_some() || part.get("bundle").is_some() {
             continue;
         }
-        let label = opt_text(part, "effect").or_else(|| opt_text(part, "name")).unwrap_or("part").to_owned();
+        let label = opt_text(part, "effect")
+            .or_else(|| opt_text(part, "name"))
+            .unwrap_or("part")
+            .to_owned();
         let mut recipe: Recipe = if let Some(name) = opt_text(part, "effect") {
             // A reference becomes the effect written in place: a preset
             // spreads phase and speed, which a reference cannot carry.
-            let (_, entry) = l.find("effects", name).ok_or_else(|| format!("no effect {name:?}"))?;
-            let mut r: Recipe = serde_json::from_value(entry.get("recipe").cloned().unwrap_or_default()).map_err(|e| e.to_string())?;
+            let (_, entry) = l
+                .find("effects", name)
+                .ok_or_else(|| format!("no effect {name:?}"))?;
+            let mut r: Recipe =
+                serde_json::from_value(entry.get("recipe").cloned().unwrap_or_default())
+                    .map_err(|e| e.to_string())?;
             if let Some(t) = part.get("target") {
                 r.target = serde_json::from_value(t.clone()).map_err(|e| e.to_string())?;
             }
@@ -119,7 +144,10 @@ fn apply(cx: &mut Ctx, args: &Value) -> Res {
         changed.push(json!({ "part": label, "tricks": recipe.tricks, "phase_spread_deg": recipe.timing.phase_spread_deg, "speed": [recipe.timing.speed_from, recipe.timing.speed_to] }));
     }
     if let Some(fan) = preset.cue_fan() {
-        obj(cue)?.insert("fan".into(), serde_json::to_value(fan).map_err(|e| e.to_string())?);
+        obj(cue)?.insert(
+            "fan".into(),
+            serde_json::to_value(fan).map_err(|e| e.to_string())?,
+        );
         changed.push(json!({ "cue_fan": true }));
     }
     if changed.is_empty() {
@@ -138,7 +166,11 @@ fn attribute(what: &str) -> Result<Attribute, String> {
         "focus" => Attribute::Focus,
         "iris" => Attribute::Iris,
         "strobe" => Attribute::Strobe,
-        other => return Err(format!("`what` {other:?}: dimmer, pan, tilt, circle, zoom, focus, iris, strobe or color")),
+        other => {
+            return Err(format!(
+                "`what` {other:?}: dimmer, pan, tilt, circle, zoom, focus, iris, strobe or color"
+            ));
+        }
     })
 }
 
@@ -149,7 +181,11 @@ fn shape(name: &str) -> Result<Waveform, String> {
         "square" | "chase" | "pulse" => Waveform::Square,
         "ramp" | "ramp_up" | "saw" => Waveform::RampUp,
         "ramp_down" => Waveform::RampDown,
-        other => return Err(format!("`shape` {other:?}: sine, triangle, square, ramp or ramp_down")),
+        other => {
+            return Err(format!(
+                "`shape` {other:?}: sine, triangle, square, ramp or ramp_down"
+            ));
+        }
     })
 }
 
@@ -157,8 +193,16 @@ fn shape(name: &str) -> Result<Waveform, String> {
 /// zoom, iris, focus, strobe, color), in a `shape`, once every `beats`,
 /// `depth` either side of where it is (`base` makes it absolute), spread
 /// by `tricks` (a preset or its settings) or `spread_deg`.
-fn build(l: &super::library::Layers, roles: &std::collections::BTreeSet<String>, args: &Value) -> Result<Recipe, String> {
-    let target: Selection = serde_json::from_value(selection(args.get("target").ok_or("`target` is required")?, roles)?).map_err(|e| format!("target: {e}"))?;
+fn build(
+    l: &super::library::Layers,
+    roles: &std::collections::BTreeSet<String>,
+    args: &Value,
+) -> Result<Recipe, String> {
+    let target: Selection = serde_json::from_value(selection(
+        args.get("target").ok_or("`target` is required")?,
+        roles,
+    )?)
+    .map_err(|e| format!("target: {e}"))?;
     let what = opt_text(args, "what").unwrap_or("dimmer");
     let wave = shape(opt_text(args, "shape").unwrap_or("sine"))?;
     let depth = f32_of(num(args, "depth").unwrap_or(0.5));
@@ -169,13 +213,16 @@ fn build(l: &super::library::Layers, roles: &std::collections::BTreeSet<String>,
         "color" | "colour" => {
             let colors = list(args, "colors");
             if colors.len() < 2 {
-                return Err("a colour effect needs `colors`: two or more colour or slot names".to_owned());
+                return Err(
+                    "a colour effect needs `colors`: two or more colour or slot names".to_owned(),
+                );
             }
             let soft = !matches!(wave, Waveform::Square);
             colors
                 .iter()
                 .map(|c| {
-                    let apply: RecipeApply = serde_json::from_value(json!({ "Color": c })).map_err(|e| format!("colors: {e}"))?;
+                    let apply: RecipeApply = serde_json::from_value(json!({ "Color": c }))
+                        .map_err(|e| format!("colors: {e}"))?;
                     let mut s = Step::new(vec![apply]);
                     s.transition = if soft { 1.0 } else { 0.0 };
                     Ok(s)
@@ -185,7 +232,10 @@ fn build(l: &super::library::Layers, roles: &std::collections::BTreeSet<String>,
         "circle" => {
             // Pan and tilt a quarter cycle apart is a circle.
             let pan = Waveform::Sine.steps(&Attribute::Pan, b, depth, rel);
-            let tilt = ignition_show::step::transform::shift_phase(Waveform::Sine.steps(&Attribute::Tilt, b, depth, rel), 1);
+            let tilt = ignition_show::step::transform::shift_phase(
+                Waveform::Sine.steps(&Attribute::Tilt, b, depth, rel),
+                1,
+            );
             pan.into_iter()
                 .zip(tilt)
                 .map(|(mut p, t)| {
@@ -196,12 +246,22 @@ fn build(l: &super::library::Layers, roles: &std::collections::BTreeSet<String>,
         }
         other => wave.steps(&attribute(other)?, b, depth, rel),
     };
-    let mut recipe = Recipe { target, steps, ..Recipe::default() };
-    recipe.timing.speed = serde_json::from_value(args.get("speed").cloned().unwrap_or_else(|| json!({ "Master": "Song" }))).map_err(|e| format!("speed: {e}"))?;
+    let mut recipe = Recipe {
+        target,
+        steps,
+        ..Recipe::default()
+    };
+    recipe.timing.speed = serde_json::from_value(
+        args.get("speed")
+            .cloned()
+            .unwrap_or_else(|| json!({ "Master": "Song" })),
+    )
+    .map_err(|e| format!("speed: {e}"))?;
     recipe.timing.measure = f32_of(num(args, "beats").unwrap_or(4.0));
     recipe.timing.phase_spread_deg = f32_of(num(args, "spread_deg").unwrap_or(0.0));
     if let Some(d) = args.get("direction") {
-        recipe.timing.direction = serde_json::from_value(d.clone()).map_err(|_| "`direction`: Forward, Reverse, Bounce, Build or Negative".to_owned())?;
+        recipe.timing.direction = serde_json::from_value(d.clone())
+            .map_err(|_| "`direction`: Forward, Reverse, Bounce, Build or Negative".to_owned())?;
     }
     recipe.timing.once = flag(args, "once");
     if let Some(t) = args.get("tricks") {
@@ -244,7 +304,9 @@ fn effect_make(cx: &mut Ctx, args: &Value) -> Res {
     };
     let pool = obj(lib)?.entry("effects").or_insert_with(|| json!({}));
     if obj(pool)?.contains_key(name) && !flag(args, "replace") {
-        return Err(format!("the library already has an effect {name:?} (`replace: true` writes over it)"));
+        return Err(format!(
+            "the library already has an effect {name:?} (`replace: true` writes over it)"
+        ));
     }
     obj(pool)?.insert(name.to_owned(), entry.clone());
     l.save(cx)?;
@@ -260,8 +322,11 @@ fn preview(cx: &Ctx, args: &Value) -> Res {
     let l = layers(cx, args)?;
     let roles = roles_of(cx, &l);
     let mut recipe: Recipe = if let Some(name) = opt_text(args, "effect") {
-        let (_, entry) = l.find("effects", name).ok_or_else(|| format!("no effect {name:?}"))?;
-        serde_json::from_value(entry.get("recipe").cloned().unwrap_or_default()).map_err(|e| e.to_string())?
+        let (_, entry) = l
+            .find("effects", name)
+            .ok_or_else(|| format!("no effect {name:?}"))?;
+        serde_json::from_value(entry.get("recipe").cloned().unwrap_or_default())
+            .map_err(|e| e.to_string())?
     } else if let Some(given) = args.get("recipe") {
         serde_json::from_value(given.clone()).map_err(|e| format!("recipe: {e}"))?
     } else {
@@ -269,7 +334,8 @@ fn preview(cx: &Ctx, args: &Value) -> Res {
     };
     if let Some(t) = args.get("target") {
         let bound: std::collections::BTreeSet<String> = r.binding.groups.keys().cloned().collect();
-        recipe.target = serde_json::from_value(selection(t, &bound)?).map_err(|e| format!("target: {e}"))?;
+        recipe.target =
+            serde_json::from_value(selection(t, &bound)?).map_err(|e| format!("target: {e}"))?;
     }
     if opt_text(args, "effect").is_some() || args.get("recipe").is_some() {
         if let Some(t) = args.get("tricks") {
@@ -278,8 +344,16 @@ fn preview(cx: &Ctx, args: &Value) -> Res {
     }
     // What the show would play from: the room's palettes, the profile's
     // colours and effects, the library laid over them.
-    let mut palettes: Palettes = cx.json(&r.dir.join("palettes.json")).ok().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
-    let profile: ignition_show::Profile = cx.json(&profile_path(cx, &l.show, &l.show_doc)).ok().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+    let mut palettes: Palettes = cx
+        .json(&r.dir.join("palettes.json"))
+        .ok()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+    let profile: ignition_show::Profile = cx
+        .json(&profile_path(cx, &l.show, &l.show_doc))
+        .ok()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
     for c in &profile.colors {
         if palettes.color(&c.name).is_none() {
             palettes.colors.push(c.clone());
@@ -289,22 +363,44 @@ fn preview(cx: &Ctx, args: &Value) -> Res {
     let mut looks = profile.looks.clone();
     let mut tricks = profile.tricks.clone();
     let typed = |v: &Value| serde_json::from_value::<Library>(v.clone()).unwrap_or_default();
-    let song = l.song.as_ref().and_then(|(_, d)| d.get("library")).map(typed).unwrap_or_default();
-    song.over(&typed(&l.set)).lay_over(&mut Pools { palettes: &mut palettes, effects: &mut effects, looks: &mut looks, tricks: &mut tricks });
+    let song = l
+        .song
+        .as_ref()
+        .and_then(|(_, d)| d.get("library"))
+        .map(typed)
+        .unwrap_or_default();
+    song.over(&typed(&l.set)).lay_over(&mut Pools {
+        palettes: &mut palettes,
+        effects: &mut effects,
+        looks: &mut looks,
+        tricks: &mut tricks,
+    });
     let bpm = f32_of(num(args, "bpm").unwrap_or(120.0));
-    let speeds: ignition_show::SpeedMasters = [("Song".to_owned(), bpm), ("Tap".to_owned(), bpm)].into_iter().collect();
+    let speeds: ignition_show::SpeedMasters = [("Song".to_owned(), bpm), ("Tap".to_owned(), bpm)]
+        .into_iter()
+        .collect();
     let bundles = BTreeMap::new();
     let show = Show {
-        palettes: &palettes, speeds: &speeds, roles: &r.binding, library: &effects,
-        bundles: &bundles, looks: &looks, named_tricks: &tricks,
+        palettes: &palettes,
+        speeds: &speeds,
+        roles: &r.binding,
+        library: &effects,
+        bundles: &bundles,
+        looks: &looks,
+        named_tricks: &tricks,
         ..Show::new(&r.groups, &r.rig)
     };
-    let chans = ignition_show::selection::resolve_with(&recipe.target, &r.groups, &r.rig, &r.binding);
+    let chans =
+        ignition_show::selection::resolve_with(&recipe.target, &r.groups, &r.rig, &r.binding);
     if chans.is_empty() {
         return Err("the target names no fixtures in this environment".to_owned());
     }
     let beats = num(args, "beats_shown").unwrap_or_else(|| f64::from(recipe.timing.measure));
-    let samples = args.get("samples").and_then(whole).unwrap_or(8).clamp(1, 64);
+    let samples = args
+        .get("samples")
+        .and_then(whole)
+        .unwrap_or(8)
+        .clamp(1, 64);
     let mut frames = Vec::new();
     for i in 0..samples {
         let beat = beats * f64::from(i) / f64::from(samples);
@@ -316,7 +412,9 @@ fn preview(cx: &Ctx, args: &Value) -> Res {
                 Ok(other) => other.to_string(),
                 Err(_) => continue,
             };
-            per.entry(e.value.chan).or_default().insert(attr, (f64::from(e.value.value) * 1000.0).round() / 1000.0);
+            per.entry(e.value.chan)
+                .or_default()
+                .insert(attr, (f64::from(e.value.value) * 1000.0).round() / 1000.0);
         }
         // One row per attribute, in the selection's order: read across
         // for the picture, down for the motion.

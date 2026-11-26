@@ -1238,8 +1238,10 @@ mod tests {
         );
 
         // The shipped room ships `two`, `four` and `eight`, each whole.
-        let dir =
-            std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../studio-engine/lighting/data/venues/norco"));
+        let dir = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../studio-engine/lighting/data/venues/norco"
+        ));
         let Ok(Some(shipped)) = Cameras::load(dir) else {
             return; // repo data absent — a runner outside the checkout
         };
@@ -1608,7 +1610,11 @@ mod tests {
     #[test]
     fn the_shipped_venue_files_resolve() {
         for venue in ["norco", "riverside"] {
-            let dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../studio-engine/lighting/data/venues")).join(venue);
+            let dir = Path::new(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../../studio-engine/lighting/data/venues"
+            ))
+            .join(venue);
             let Some(cameras) = Cameras::load(&dir).unwrap() else {
                 continue;
             };
