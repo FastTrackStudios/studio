@@ -120,6 +120,8 @@ const ENVELOPES: &str = "envelopes";
 const TAKE_MARKERS: &str = "take_markers";
 const HW_OUTPUTS: &str = "hw_outputs";
 const PROJECT: &str = "project";
+/// The project's extension state, in [`PROJECT`] ([`write_ext`]).
+const EXT: &str = "ext";
 
 /// The track id the master bus's FX, sends and envelopes are kept under —
 /// the engine's own name for it.
@@ -213,7 +215,7 @@ impl SessionDoc {
         write_entities(&self.doc.get_map(MARKERS), &model.markers, marker_fields)?;
         write_entities(&self.doc.get_map(REGIONS), &model.regions, region_fields)?;
         self.write_parts(&model.tracks, &model.project)?;
-        sync_fields(&self.doc.get_map(PROJECT), &project_fields(&model.project))?;
+        write_project(&self.doc.get_map(PROJECT), &model.project)?;
         write_text(&self.doc.get_text(CHART), &model.chart)?;
         write_entities(
             &self.doc.get_map(TAKE_MARKERS),
@@ -263,7 +265,7 @@ impl SessionDoc {
             span("parts").in_scope(|| self.write_parts(&model.tracks, &model.project))?;
         }
         if before.project != model.project {
-            sync_fields(&self.doc.get_map(PROJECT), &project_fields(&model.project))?;
+            write_project(&self.doc.get_map(PROJECT), &model.project)?;
         }
         span("items").in_scope(|| {
             write_changed(
@@ -633,9 +635,72 @@ fn write_entities<T>(
         .filter(|k| !entities.contains_key(k))
         .collect();
     for key in stale {
-        root.delete(&key)?;
+        delete_entity(root, &key)?;
     }
     Ok(())
+}
+
+/// Take entity `key` out of `root`, its fields with it.
+///
+/// An entity's map is mergeable, and Loro keeps a mergeable map as a root
+/// container of its own: deleting its key hides it but keeps every field
+/// in the state and in every snapshot, for good (a song's 118 000 deleted
+/// items and 68 000 take markers were 34 MB of its snapshot). Cleared
+/// first, it keeps only its fields' tombstones (about half of what it
+/// held), and one made again at the key starts empty instead of with the
+/// old fields.
+fn delete_entity(root: &LoroMap, key: &str) -> LoroResult<()> {
+    if let Some(ValueOrContainer::Container(loro::Container::Map(map))) = root.get(key) {
+        map.clear()?;
+    }
+    root.delete(key)
+}
+
+/// Empty the entity maps deleted before [`delete_entity`] cleared them:
+/// each brought back at its key, cleared and deleted again. Their number.
+///
+/// Slow (it walks every container: ~10 s for a song of 260 000): a step
+/// a song is put through once, not part of an open.
+///
+/// # Errors
+/// When Loro refuses an edit.
+pub fn clear_deleted_entities(doc: &LoroDoc) -> LoroResult<usize> {
+    let mut cleared = 0_usize;
+    for id in doc.analyze().containers.keys() {
+        if doc.get_path_to_container(id).is_some() {
+            continue;
+        }
+        // Cleared already (by this, or by `delete_entity`).
+        match doc.get_container(id.clone()) {
+            Some(loro::Container::Map(map)) if !map.is_empty() => {}
+            _ => continue,
+        }
+        // A mergeable child of a root map (one nested deeper is left be).
+        let Some((parent, key, _)) = id.parse_mergeable() else {
+            continue;
+        };
+        let loro::ContainerID::Root { name, .. } = &parent else {
+            continue;
+        };
+        if parent.is_mergeable() {
+            continue;
+        }
+        let parent = doc.get_map(name.as_str());
+        if parent.get(&key).is_some() {
+            continue; // live again, under this key: not an orphan to clear
+        }
+        let map = parent.ensure_mergeable_map(&key)?;
+        if loro::ContainerTrait::id(&map) != *id {
+            // Not the one (a key spelled another way): leave it be.
+            parent.delete(&key)?;
+            continue;
+        }
+        map.clear()?;
+        parent.delete(&key)?;
+        cleared = cleared.saturating_add(1);
+    }
+    doc.commit();
+    Ok(cleared)
 }
 
 /// The entities of `now` that differ from `before` written, and those
@@ -659,7 +724,7 @@ fn write_changed<T: PartialEq>(
     }
     let mut gone = 0_usize;
     for guid in before.keys().filter(|k| !now.contains_key(*k)) {
-        root.delete(guid)?;
+        delete_entity(root, guid)?;
         gone = gone.saturating_add(1);
     }
     // How much of the part a step rewrote, on its span (`doc.write`).
@@ -775,13 +840,18 @@ fn root_name(id: &loro::ContainerID) -> Option<String> {
     }
 }
 
-/// A mergeable child's root map and key, from its id's name.
+/// A mergeable child's root map and its key there (unescaped: a take
+/// marker's key holds `/`), from its id: for one nested in another (an
+/// ext section), the outermost's.
 fn mergeable(id: &loro::ContainerID) -> Option<(String, String)> {
-    let loro::ContainerID::Root { name, .. } = id else {
-        return None;
-    };
-    let (root, key) = name.strip_prefix("🤝:$")?.split_once('>')?;
-    Some((root.to_owned(), key.to_owned()))
+    let (parent, key, _) = id.parse_mergeable()?;
+    if parent.is_mergeable() {
+        return mergeable(&parent);
+    }
+    match parent {
+        loro::ContainerID::Root { name, .. } => Some((name.to_string(), key)),
+        loro::ContainerID::Normal { .. } => None,
+    }
 }
 
 /// The entities of `keys` read again from `root` into `into`: those gone
@@ -1028,6 +1098,58 @@ fn sections_value(sections: &BTreeMap<String, BTreeMap<String, String>>) -> Loro
             .map(|(section, keys)| (section.clone(), string_map(keys)))
             .collect::<HashMap<String, LoroValue>>(),
     )
+}
+
+/// The project's settings, and what extensions wrote on it ([`write_ext`]).
+fn write_project(project: &LoroMap, p: &ProjectSettings) -> LoroResult<()> {
+    sync_fields(project, &project_fields(p))?;
+    write_ext(project, &p.ext)
+}
+
+/// The project's extension state (REAPER's `ProjExtState`), key by key:
+/// `ext` a map of sections, each a map of its keys, both mergeable, so an
+/// extension writing one key writes that key.
+///
+/// It was one value, the whole of it: a mix snapshot saved rewrote every
+/// snapshot (a song's: 282 MB), and every write of the project built it
+/// and compared it. That value, where a song still has it, is replaced.
+fn write_ext(
+    project: &LoroMap,
+    sections: &BTreeMap<String, BTreeMap<String, String>>,
+) -> LoroResult<()> {
+    if let Some(ValueOrContainer::Value(_)) = project.get(EXT) {
+        project.delete(EXT)?;
+    }
+    let ext = project.ensure_mergeable_map(EXT)?;
+    for (name, keys) in sections {
+        let section = ext.ensure_mergeable_map(name)?;
+        for (key, value) in keys {
+            let unchanged = matches!(
+                section.get(key),
+                Some(ValueOrContainer::Value(LoroValue::String(s))) if s.as_str() == value
+            );
+            if !unchanged {
+                section.insert(key, value.as_str())?;
+            }
+        }
+        let gone: Vec<String> = section
+            .keys()
+            .map(|k| k.to_string())
+            .filter(|k| !keys.contains_key(k))
+            .collect();
+        for key in gone {
+            section.delete(&key)?;
+        }
+    }
+    let gone: Vec<String> = ext
+        .keys()
+        .map(|k| k.to_string())
+        .filter(|k| !sections.contains_key(k))
+        .collect();
+    for name in gone {
+        delete_entity(&ext, &name)?;
+    }
+    Ok(())
 }
 
 fn read_sections(v: Option<&LoroValue>) -> BTreeMap<String, BTreeMap<String, String>> {
@@ -2054,7 +2176,6 @@ fn project_fields(p: &ProjectSettings) -> Fields {
         ("master.volume", LoroValue::Double(p.master.volume)),
         ("master.pan", LoroValue::Double(p.master.pan)),
         ("master.muted", LoroValue::Bool(p.master.muted)),
-        ("ext", sections_value(&p.ext)),
         (
             "ruler_lanes",
             LoroValue::from(
@@ -2262,3 +2383,6 @@ fn decode_tempo(s: &str) -> Vec<TempoPoint> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;
