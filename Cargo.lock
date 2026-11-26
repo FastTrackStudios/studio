@@ -6336,7 +6336,6 @@ dependencies = [
  "daw-ui",
  "dirs 6.0.0",
  "engine-domain",
- "fts-version",
  "hound",
  "libc",
  "opentelemetry-proto",

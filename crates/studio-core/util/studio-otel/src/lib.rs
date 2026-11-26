@@ -67,7 +67,7 @@ impl Endpoint {
     /// This process's: its environment, else what the build baked in.
     #[must_use]
     pub fn resolve() -> Option<Self> {
-        Self::from(
+        Self::choose(
             |var| std::env::var(var).ok(),
             Some(SHIPPED_ENDPOINT),
             Some(SHIPPED_TOKEN),
@@ -77,7 +77,7 @@ impl Endpoint {
     /// From `env` (a variable's value), else `shipped` and its `token`.
     /// Blank values count as unset.
     #[must_use]
-    pub fn from(
+    pub fn choose(
         env: impl Fn(&str) -> Option<String>,
         shipped: Option<&str>,
         token: Option<&str>,
@@ -165,7 +165,8 @@ impl Crash {
     }
 
     /// Record it: a `crash` span (status error), closed before this
-    /// returns, with the panic logged inside it.
+    /// returns, with a `panic` line logged inside it for the process's own
+    /// log (its fields are the span's).
     pub fn record(&self) {
         let span = tracing::error_span!(
             "crash",
@@ -176,12 +177,7 @@ impl Crash {
             otel.status_message = %self.message,
         );
         let _in = span.enter();
-        tracing::error!(
-            panic.thread = %self.thread,
-            panic.at = %self.at,
-            panic.what = %self.message,
-            "panic"
-        );
+        tracing::error!("panic");
     }
 }
 
@@ -203,7 +199,7 @@ mod tests {
             "OTEL_EXPORTER_OTLP_ENDPOINT",
             "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
         ] {
-            let got = Endpoint::from(
+            let got = Endpoint::choose(
                 env(&[(var, "http://127.0.0.1:4318")]),
                 Some("https://collector.example/otlp"),
                 Some("t"),
@@ -214,7 +210,7 @@ mod tests {
 
     #[test]
     fn a_release_sends_to_the_collector_it_baked_in() {
-        let got = Endpoint::from(
+        let got = Endpoint::choose(
             env(&[("OTEL_EXPORTER_OTLP_ENDPOINT", "  ")]),
             Some("https://collector.example/otlp/"),
             Some(" secret "),
@@ -226,7 +222,7 @@ mod tests {
                 token: Some("secret".into()),
             })
         );
-        let no_token = Endpoint::from(env(&[]), Some("https://c.example"), Some(""));
+        let no_token = Endpoint::choose(env(&[]), Some("https://c.example"), Some(""));
         assert_eq!(
             no_token,
             Some(Endpoint::Shipped {
@@ -238,8 +234,8 @@ mod tests {
 
     #[test]
     fn a_plain_build_sends_nothing() {
-        assert_eq!(Endpoint::from(env(&[]), None, Some("t")), None);
-        assert_eq!(Endpoint::from(env(&[]), Some(" "), None), None);
+        assert_eq!(Endpoint::choose(env(&[]), None, Some("t")), None);
+        assert_eq!(Endpoint::choose(env(&[]), Some(" "), None), None);
     }
 
     #[test]

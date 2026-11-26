@@ -221,6 +221,9 @@ fn main() {
     // SAFETY: the first statement of `main`, before any thread exists.
     unsafe {
         std::env::set_var("FTS_MCP_PRIVATE", "1");
+        // The release's version, for the engine Studio starts to report
+        // (daw-extension reads it; it cannot depend on fts-version).
+        std::env::set_var("STUDIO_APP_VERSION", fts_version::release_version());
         // One engine: the daw extension's launcher looks where Studio
         // starts its engine (`engine::engine_dir`).
         if std::env::var_os("FTS_DAW_ENGINE_DIR").is_none()

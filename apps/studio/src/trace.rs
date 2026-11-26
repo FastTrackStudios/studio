@@ -226,12 +226,6 @@ mod browser {
                 span.set("crash.thread", crash.thread.as_str());
                 span.set("crash.at", crash.at.as_str());
                 span.set("crash.message", crash.message.as_str());
-                span.set(
-                    "studio.path",
-                    web_sys::window()
-                        .and_then(|w| w.location().pathname().ok())
-                        .unwrap_or_default(),
-                );
                 span.fail(crash.message.clone());
                 let json = span.json();
                 std::mem::forget(span);
