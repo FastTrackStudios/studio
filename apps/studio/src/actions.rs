@@ -55,6 +55,14 @@ mod imp {
         crate::instance::name()
     }
 
+    /// Whether this build serves MCP. MCP is the desktop's door; on iPhone
+    /// and iPad only a run that asks (`FTS_MCP=1`: the simulator's test,
+    /// apps/studio/ios/sim-test.py) opens it, still on loopback with its
+    /// token.
+    fn mcp_here() -> bool {
+        !cfg!(target_os = "ios") || std::env::var("FTS_MCP").is_ok_and(|v| v == "1")
+    }
+
     /// One call, on its way to the UI thread.
     struct Call {
         id: &'static str,
@@ -567,7 +575,7 @@ mod imp {
         if let Ok(mut d) = DOORS.lock() {
             *d = Some(Doors { _control: control });
         }
-        if architect_mcp::discovery::disabled() {
+        if architect_mcp::discovery::disabled() || !mcp_here() {
             return;
         }
         let token = match token() {

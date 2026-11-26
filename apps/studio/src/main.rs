@@ -274,6 +274,12 @@ fn main() {
     drive_dioxus::mount::set(door::node_mount(
         &dioxus::cli_config::web_base_path().unwrap_or_default(),
     ));
+    // iOS 27 stops an app that does not adopt scenes at launch, and winit
+    // does not adopt them: the app's own delegate, named in Info.plist,
+    // registered before UIKit looks it up (the window is handed to it in
+    // `App`).
+    #[cfg(all(feature = "native", target_os = "ios"))]
+    studio_shell::ios_scene::register(studio_shell::ios_scene::Opening::AsHeld);
     // Drawn by Blitz on a desktop: the window has no system frame, the
     // shell's title bar is its frame (app-shell-native).
     #[cfg(feature = "native")]
@@ -346,6 +352,21 @@ fn LauncherApp() -> Element {
 #[component]
 fn App() -> Element {
     use_context_provider(state::AppState::new);
+    // iOS: winit's window, handed to the app's scene (studio-shell's
+    // `ios_scene`); a second window's handover is a no-op.
+    #[cfg(all(feature = "native", target_os = "ios"))]
+    {
+        let handle = dioxus::native::use_raw_window_handle();
+        use_hook(move || {
+            if let raw_window_handle::RawWindowHandle::UiKit(view) = handle {
+                studio_shell::ios_scene::window_created(view.ui_view);
+            }
+            // The engine is the app's on a phone, started with it: the
+            // extensions set up now (the linked daw extension starts the
+            // engine), not when a session first opens as on a desktop.
+            hosted::extensions();
+        });
+    }
     let title = if in_launcher_window() {
         "Launcher"
     } else {

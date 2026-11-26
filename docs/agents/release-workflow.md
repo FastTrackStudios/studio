@@ -335,10 +335,12 @@ can pass by accident.
 
 ## The iOS app: TestFlight is a release
 
-**Paused.** The iOS app was the old rig app, removed in the restructure
-(apps/desktop and apps/web); no workflow uploads to TestFlight until
-apps/desktop has an iOS target. What follows is how it worked, and how
-the `release.sh ios-*` helpers still behave for that target.
+**Paused.** The iOS app is apps/studio again (studio#703: built for the
+simulator and booted in CI, `ios` in checks.yml; `apps/studio/ios/`), but
+no workflow uploads to TestFlight yet (studio#704).
+`apps/studio/ios/deploy-testflight.sh` uploads by hand. What follows is how the upload
+worked for the old rig app, and how the `release.sh ios-*` helpers still
+behave.
 
 Studio (App Store record "Studio - by
 FastTrackStudio", `app.fasttrackstudio.studio`) is the one iOS app. Signal's and Session's own

@@ -27,8 +27,11 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }
+
 # The old pair goes to the desktop's Trash (freedesktop on Linux), never
-# deleted.
+# deleted. iOS has no Trash an app can use (src/convert.rs: `Replaced`
+# beside the song there).
+[target.'cfg(not(target_os = "ios"))'.dependencies]
 trash = "5"
 
 [dev-dependencies]

@@ -51,6 +51,32 @@ same package name.
 cd apps/studio && dx build --platform web --release --base-path studio
 ```
 
+## iPhone and iPad
+
+iOS runs no second process, so the engine is linked into the app: the
+`daw` extension, linked like the views, starts it in the app's own
+process, and Studio drives it over the in-memory link instead of loopback
+(`src/engine.rs`, `engine::Door::Here`). On a Mac with Xcode:
+
+```bash
+apps/studio/ios/build.sh sim                       # a debug .app for the simulator
+python3 -I apps/studio/ios/sim-test.py --app <it>  # Seam 3: a session opens and plays with the click
+apps/studio/ios/build.sh device                    # a release .app for a phone
+apps/studio/ios/deploy-iphone.sh                   # onto a phone on the cable
+MARKETING_VER=<x.y.z> apps/studio/ios/deploy-testflight.sh  # to TestFlight
+```
+
+The simulator test boots its own simulator, opens a song it writes into
+the app's container, and drives the engine through the app's MCP door,
+which an iOS build opens only when launched with `FTS_MCP=1`. CI runs it
+on airlock after every merge (`ios` in checks.yml).
+
+A phone starts with no environment, so it reaches a collector only when
+the build bakes one in (`STUDIO_OTLP_ENDPOINT` and `STUDIO_OTLP_TOKEN` at
+build time, studio-otel's `build.rs`, as the desktop release does). The
+simulator test points the app at a receiver of its own instead and checks
+that its spans arrive and that `--crash-test` arrives as a `crash` span.
+
 ## What a session needs
 
 - **Songs and setlists** are plain files in the Studio folder

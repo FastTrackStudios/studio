@@ -5,7 +5,8 @@ name = "studio-app"
 title = "Studio"
 
 [bundle]
-identifier = "com.fasttrackstudio.studioproto"
+# The App Store record "Studio - by FastTrackStudio" (ios/: TestFlight).
+identifier = "app.fasttrackstudio.studio"
 publisher = "FastTrackStudio"
 
 # `dx serve` (the local dev loop, :8097): Studio's calls to Drive go to

@@ -140,12 +140,25 @@ pub fn extensions() -> &'static Extensions {
         // provides `fts.session` for the song the engine has (its one
         // file), which Keyflow's chart and Ignition's cues keep their data
         // in, and leads its transport.
+        #[cfg(not(target_os = "ios"))]
         match daw_package() {
             Ok(dir) => {
                 tell(&ext.dev(dir));
                 ext.host().use_provider("fts.session", Some("daw"));
             }
             Err(e) => tracing::warn!(error = %e, "studio: the daw extension is not here"),
+        }
+        // On iPhone and iPad an app runs no second process: the extension
+        // is linked in like the views, and its `build` starts the engine in
+        // this process (`crate::engine`'s module docs).
+        #[cfg(target_os = "ios")]
+        match ext.clone().with_linked(&daw_extension::Daw) {
+            Ok(next) => {
+                ext = next;
+                tell(&ext.sync());
+                ext.host().use_provider("fts.session", Some("daw"));
+            }
+            Err(e) => tracing::warn!(error = %e, "studio: the daw extension's manifest was refused"),
         }
         // EXT_LIST, EXT_CLONE, EXT_RELOAD, EXT_LOGS, …: on MCP and the
         // socket like the app's own.
@@ -369,6 +382,7 @@ fn tell(events: &[architect_extensions::host::Event]) {
 
 /// The daw extension's package: its manifest and its program
 /// (`daw-extension`, as the engine is found), in Studio's folder.
+#[cfg(not(target_os = "ios"))]
 fn daw_package() -> Result<std::path::PathBuf, String> {
     const MANIFEST: &str =
         include_str!("../../../crates/studio-engine/extensions/daw/extension.toml");
@@ -707,14 +721,21 @@ pub fn use_engine_link() {
             if let Some(found) = crate::engine::linked()
                 && attached != Some(found.pid)
             {
-                match studio_view_link::attach_at(
-                    found.pid,
-                    found.socket.clone(),
-                    found.mcp.clone(),
-                ) {
-                    Ok(()) => attached = Some(found.pid),
-                    Err(e) => {
-                        tracing::warn!(error = %e, engine.pid = found.pid, "studio: the views could not attach to the engine");
+                match &found.door {
+                    // In this process: the daw extension linked the views to
+                    // it as it started.
+                    crate::engine::Door::Here => attached = Some(found.pid),
+                    crate::engine::Door::Mcp(mcp) => {
+                        match studio_view_link::attach_at(
+                            found.pid,
+                            found.socket.clone(),
+                            mcp.clone(),
+                        ) {
+                            Ok(()) => attached = Some(found.pid),
+                            Err(e) => {
+                                tracing::warn!(error = %e, engine.pid = found.pid, "studio: the views could not attach to the engine");
+                            }
+                        }
                     }
                 }
             }

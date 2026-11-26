@@ -105,10 +105,13 @@ do not touch.
 
 ## Studio from the studio repo (canonical checkout on the build-disk)
 
-> **Removed (2026-11-19).** The app below, the old rig app, was deleted
-> from the studio repo (apps/ now holds only apps/desktop and apps/web).
-> apps/desktop has no iOS target yet; until it does, nothing below builds.
-> Kept for that target's history.
+> **Today (2026-11-26, studio#703):** Studio's iOS app is `apps/studio`,
+> the engine linked in. `apps/studio/ios/build.sh sim|device` builds it
+> (the env dance included), `sim-test.py` boots it in a simulator of its
+> own and plays a song over its MCP door (`FTS_MCP=1`), and
+> `deploy-testflight.sh` / `deploy-iphone.sh` ship it. Bundle
+> `app.fasttrackstudio.studio`. The section below is the old rig app's,
+> deleted 2026-11-19, kept for its history.
 
 **Studio was the one iOS app** (the old rig app, then package
 `studio-desktop`, bundle `app.fasttrackstudio.studio`, App Store record

@@ -549,7 +549,10 @@ mod native {
                 ..controls
             });
         }
-        // Process views (Ignition's room) drawn in the window's panes.
+        // Process views (Ignition's room) drawn in the window's panes: a
+        // program of their own, so only where the app may start one (not
+        // iPhone or iPad).
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         use_context_provider({
             let views = architect_process_view::extension::use_process_views(hosted::host());
             move || views

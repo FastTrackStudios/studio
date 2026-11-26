@@ -51,25 +51,44 @@ pub struct Options {
 }
 
 /// Put `files` out of the way: the desktop's Trash, or `dir`.
+#[cfg(not(target_os = "ios"))]
 fn put_away(files: &[PathBuf], dir: Option<&Path>) -> Result<()> {
     match dir {
         None => trash::delete_all(files).map_err(|e| Error::Refused(format!("the Trash: {e}"))),
-        Some(dir) => {
-            std::fs::create_dir_all(dir)?;
-            for f in files {
-                let Some(name) = f.file_name() else { continue };
-                let to = dir.join(name);
-                if to.exists() {
-                    return Err(Error::Refused(format!(
-                        "{} is there already: not overwritten",
-                        to.display()
-                    )));
-                }
-                std::fs::rename(f, &to)?;
-            }
-            Ok(())
-        }
+        Some(dir) => move_into(files, dir),
     }
+}
+
+/// Put `files` out of the way: on iPhone and iPad, which have no Trash an
+/// app can use, `Replaced` in the song's own folder (where the Files app
+/// shows them), or `dir`. Never deleted.
+#[cfg(target_os = "ios")]
+fn put_away(files: &[PathBuf], dir: Option<&Path>) -> Result<()> {
+    let beside = files
+        .first()
+        .and_then(|f| f.parent())
+        .map(|p| p.join("Replaced"));
+    match dir.map(Path::to_path_buf).or(beside) {
+        Some(dir) => move_into(files, &dir),
+        None => Ok(()),
+    }
+}
+
+/// Moves `files` into `dir`, overwriting nothing.
+fn move_into(files: &[PathBuf], dir: &Path) -> Result<()> {
+    std::fs::create_dir_all(dir)?;
+    for f in files {
+        let Some(name) = f.file_name() else { continue };
+        let to = dir.join(name);
+        if to.exists() {
+            return Err(Error::Refused(format!(
+                "{} is there already: not overwritten",
+                to.display()
+            )));
+        }
+        std::fs::rename(f, &to)?;
+    }
+    Ok(())
 }
 
 /// What converting a folder did.
