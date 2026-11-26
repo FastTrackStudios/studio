@@ -68,7 +68,7 @@ _engine-build:
 
 # The whole workspace compiles, and the layout rules hold (boundaries.toml)
 check:
-    cargo check --workspace
+    cargo check --workspace {{dev_build}}
     python3 scripts/boundaries.py check
 
 # The browser builds, for wasm32: the web app, and Keyflow's chart editor as its web build takes it
@@ -88,7 +88,7 @@ test GROUP="core" *ARGS:
     pkgs=()
     while read -r p; do pkgs+=(-p "$p"); done < <(python3 scripts/boundaries.py packages "$group" --tested)
     [ "${#pkgs[@]}" -gt 0 ] || { echo "no packages in group $group" >&2; exit 1; }
-    cargo nextest run "${pkgs[@]}" --no-fail-fast "$@"
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} "${pkgs[@]}" --no-fail-fast "$@"
 
 # The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
 ci-local BASE="":

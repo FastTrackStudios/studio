@@ -68,6 +68,10 @@ just ci-local      # the PR gate on this machine, for what `cargo rail plan` say
 just ci            # what CI runs after a merge, in its order
 ```
 
+- **Tests run through nextest: `just test <group>`, never `cargo test`.**
+  nextest runs every test in its own process, in parallel across all the
+  binaries (the core group: 3,129 tests in about 25 s once built). Doctests
+  are the one thing it skips; run them on purpose with `cargo test --doc -p <crate>`.
 - **Use the recipes, not your own `cargo -p` sets.** Cargo unifies
   features per invocation, so a different package set compiles the shared
   crates another way, under another kache key. `just test <group>` always
