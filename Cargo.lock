@@ -30334,11 +30334,6 @@ version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
-name = "architect-workspace-hack"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.15.0#a3d1bdc94cdbb805c41e049994d31b26e1840c2b"
-
-[[patch.unused]]
 name = "auth-proto"
 version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"

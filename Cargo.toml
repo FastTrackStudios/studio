@@ -970,7 +970,7 @@ ignition-profile = {path = "crates/studio-engine/lighting/profile"}
 ignition-daslight = {path = "crates/studio-engine/lighting/daslight"}
 ignition-viz = {path = "crates/studio-connect/views/lighting/viz"}
 ignition-beams = {path = "crates/studio-engine/lighting/beams"}
-architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.0", features = ["otel"] }
+architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", features = ["otel"] }
 ignition-live-ui = {path = "crates/studio-connect/views/lighting/live-ui"}
 bevy = { git = "https://github.com/bevyengine/bevy", rev = "948cc8270204b46fd37353eb786144a677d0c0ce", default-features = false }
 daw-allocator = {path = "crates/studio-engine/daw/allocator"}
@@ -1740,5 +1740,4 @@ vault-live = { git = "https://www.github.com/FastTrackStudios/architect", rev = 
 vault-obsidian = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 vault-proto = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 architect-process-view = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
-architect-workspace-hack = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.0" }
 architect-telemetry = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
