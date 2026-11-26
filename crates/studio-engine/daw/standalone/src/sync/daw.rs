@@ -1074,7 +1074,16 @@ impl Standalone {
     }
 
     /// What the realtime render's snapshot takes beside the project.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// Built with the render (`audio_engine`'s features), as its callers are.
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        any(
+            feature = "audio",
+            feature = "decode",
+            feature = "clap-host",
+            feature = "vst3-host"
+        )
+    ))]
     pub(crate) fn live_hints(&self) -> crate::audio_engine::render::LiveHints {
         crate::audio_engine::render::LiveHints {
             played_live: self.played_live(),
