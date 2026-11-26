@@ -399,12 +399,29 @@ pub mod test_support {
     use daw::service::{ProjectContext, TrackRef, Tracks as _};
     use daw::standalone::Standalone;
 
-    /// A CLAP in ~/.clap that passes audio through (an EQ at its
-    /// defaults), when this machine has one; the tests skip without.
+    /// A CLAP on the search path that passes audio through (an EQ at its
+    /// defaults), when this machine has one; the tests skip without. Its
+    /// canonical path, as adding it by path names it (a linked install,
+    /// `just plugins-link`'s, resolved).
     pub fn a_clap() -> Option<std::path::PathBuf> {
         ["FTS EQ", "ZamEQ2", "DragonflyRoomReverb"]
             .iter()
             .find_map(|name| super::bundle(name))
+            .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
+    }
+
+    /// `clap` copied to `to`: a file (Linux), or a bundle's folder (macOS).
+    pub fn copy_bundle(clap: &std::path::Path, to: &std::path::Path) {
+        super::copy_bundle(clap, to).expect("a bundle");
+    }
+
+    /// `bundle` removed, a file or a folder.
+    pub fn remove_bundle(bundle: &std::path::Path) {
+        if bundle.is_dir() {
+            std::fs::remove_dir_all(bundle).expect("removed");
+        } else {
+            std::fs::remove_file(bundle).expect("removed");
+        }
     }
 
     /// Song `guid`, its tracks in folders: `Drums/Kick/Sum/In`,
