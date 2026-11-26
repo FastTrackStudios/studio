@@ -30,12 +30,12 @@ use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::Duration;
 
-use crdt::sync::PresencePeer;
 use dioxus::prelude::*;
 use ignition_core::{Class, CueList, CuePlayer, Show};
 use ignition_viz::Venue;
 use ignition_viz::playback::Playback;
 use ignition_viz::venue::VenueFiles;
+use live_doc::PresencePeer;
 use serde_json::{Value, json};
 use session::LaneId;
 use session::TempoMap;

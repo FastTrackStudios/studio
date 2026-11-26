@@ -27,7 +27,7 @@ required-features = ["extension"]
 # `cargo build --bin ignition-pane`.
 default = ["extension"]
 # The extension: its actions, settings and view, over the app's actions.
-extension = ["dep:architect-extensions", "dep:architect-extensions-dioxus", "dep:dioxus", "dep:serde_json", "dep:futures-timer", "dep:ignition-session", "dep:ignition-show", "dep:session", "dep:crdt", "dep:architect", "dep:tokio", "dep:uuid", "dep:ignition-daw"]
+extension = ["dep:architect-extensions", "dep:architect-extensions-dioxus", "dep:dioxus", "dep:serde_json", "dep:futures-timer", "dep:ignition-session", "dep:ignition-show", "dep:session", "dep:live-doc", "dep:architect", "dep:tokio", "dep:uuid", "dep:ignition-daw"]
 # Its view as the GPU pane — linked into an app built with
 # `architect-desktop/process-views` (Studio Architect). Without it (the
 # process), the view opens the room in a window.
@@ -54,7 +54,7 @@ session = { path = "../../../../studio-core/session/session", package = "session
 # A recital song's cues resolved against its Live set, and the set's tempo
 # over the song, for the session (IGNITION_SESSION_SONG).
 ignition-daw = { workspace = true, optional = true, features = ["ableton"] }
-crdt = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", optional = true, features = ["vox"] }
+live-doc = { path = "../../../../studio-core/session/live-doc", optional = true }
 architect = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", optional = true, features = ["vox", "connect"] }
 uuid = { workspace = true, optional = true }
 

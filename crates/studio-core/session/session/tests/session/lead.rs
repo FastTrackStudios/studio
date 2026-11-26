@@ -4,16 +4,16 @@
 use std::time::Duration;
 
 use architect::connect::{Endpoint, pool};
-use crdt::sync::{DocPresenceClient, PresencePeer};
+use live_doc::{DocPresenceClient, PresencePeer};
 use session::doc::transport_of;
 use session::lead::Leader;
 use session::sync::Tracker;
 use uuid::Uuid;
 
 /// This process's clock, microseconds: the one the presence clock's
-/// offset is to (`crdt::presence::clock_ms`).
+/// offset is to (`live_doc::clock_ms`).
 fn now_micros_f64() -> f64 {
-    crdt::presence::clock_ms() * 1000.0
+    live_doc::clock_ms() * 1000.0
 }
 
 #[allow(clippy::arithmetic_side_effects)] // A deadline: an instant plus seconds.
@@ -86,7 +86,7 @@ async fn a_follower_draws_where_the_leader_plays() {
 async fn a_leader_on_its_nodes_presence_is_followed() {
     use architect::LayerRouter;
     use architect::host::EngineHost;
-    use crdt::sync::{DocPresenceDispatcher, PresenceHost, doc_presence_service_descriptor};
+    use live_doc::{DocPresenceDispatcher, PresenceHost, doc_presence_service_descriptor};
 
     let doc = Uuid::new_v4();
     let port = free_port();

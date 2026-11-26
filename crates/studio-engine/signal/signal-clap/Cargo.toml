@@ -1,0 +1,43 @@
+[package]
+name = "signal-clap"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "FTS Signal as a CLAP, without its editor: signal-core wrapped as a nice-plug plugin, its signal/1 extension and state. The bundle (plugins/signal/signal) adds the editor; Studio's engine hosts it in-process"
+
+[lints]
+workspace = true
+
+[features]
+# The development build: "Signal Dev" (com.fasttrackstudio.signal.dev), a
+# plugin of its own beside a released FTS Signal.
+dev = []
+
+[dependencies]
+# Plugin framework. `nice_plug` must be a DIRECT dep: `#[derive(Params)]`
+# expands to absolute `::nice_plug::…` paths.
+nice-plug.workspace = true
+
+# The one processor (signal#26): rigs, chains, the session.
+signal-core = { workspace = true, features = ["std", "fx", "nam", "offline"] }
+# The sampler engine, as the desktop `sampler` block.
+sampler = { workspace = true }
+
+# Rig config (.styx) parsing — same stack as signal-sampler-clap's PatchConfig
+facet.workspace = true
+facet-styx.workspace = true
+
+# Observability (file logger — hosts eat stderr)
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+eyre.workspace = true
+# The CLAP state stream's JSON (`plugin::clap_state`).
+serde_json = { workspace = true }
+# FastTrackStudio's CLAP extensions: signal/1 (Studio drives Signal),
+# host-actions/1 and host-events/1 (Signal calls the host).
+daw-clap-ext = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+# The families' algorithms (SIGNAL_ALGORITHMS).
+plugin-processors = { workspace = true, features = ["std"] }

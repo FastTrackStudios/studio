@@ -8,11 +8,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use architect::{LayerRouter, LocalServer, Scope};
-use crdt::presence::{Here, PeerState, clock_ms};
-use crdt::sync::{
+use live_doc::{
     DocPresenceClient, DocPresenceDispatcher, PresenceHost, PresencePeer,
     doc_presence_service_descriptor,
 };
+use live_doc::{Here, PeerState, clock_ms};
 use session::doc::transport_of;
 use session::sync::Tracker;
 use uuid::Uuid;

@@ -8566,7 +8566,6 @@ name = "engine-collab"
 version = "26.10.3"
 dependencies = [
  "architect",
- "crdt",
  "daw",
  "daw-control",
  "daw-proto",
@@ -8578,6 +8577,7 @@ dependencies = [
  "eyre",
  "facet",
  "library-sync",
+ "live-doc",
  "live-proto",
  "serde_json",
  "task-dial",
@@ -12954,11 +12954,11 @@ dependencies = [
  "architect-process-view",
  "architect-workspace",
  "bevy",
- "crdt",
  "daw-control",
  "ignition-core",
  "ignition-daw",
  "ignition-viz",
+ "live-doc",
  "rustix 1.1.6",
  "serde",
  "serde_json",
@@ -13117,7 +13117,6 @@ dependencies = [
  "architect-extensions",
  "architect-extensions-dioxus",
  "architect-process-view",
- "crdt",
  "dioxus",
  "futures-timer",
  "ignition-core",
@@ -13126,6 +13125,7 @@ dependencies = [
  "ignition-show",
  "ignition-viz",
  "js-sys",
+ "live-doc",
  "serde_json",
  "session",
  "tokio",
@@ -14965,6 +14965,20 @@ name = "litrs"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
+
+[[package]]
+name = "live-doc"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "facet",
+ "loro",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "uuid",
+ "vox",
+]
 
 [[package]]
 name = "live-proto"
@@ -22105,6 +22119,7 @@ dependencies = [
  "crdt",
  "facet",
  "facet-json",
+ "live-doc",
  "loro",
  "tempfile",
  "thiserror 2.0.20",
@@ -22152,10 +22167,10 @@ name = "session-sync"
 version = "26.10.3"
 dependencies = [
  "architect",
- "crdt",
  "daw-transport-sync",
  "eyre",
  "futures",
+ "live-doc",
  "loro",
  "num-traits",
  "session",
@@ -22314,6 +22329,24 @@ dependencies = [
  "tokio",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "signal-clap"
+version = "26.10.3"
+dependencies = [
+ "daw-clap-ext",
+ "eyre",
+ "facet",
+ "facet-styx",
+ "nice-plug",
+ "plugin-processors",
+ "sampler",
+ "serde",
+ "serde_json",
+ "signal-core",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -22628,19 +22661,13 @@ dependencies = [
  "daw",
  "daw-clap-ext",
  "daw-proto",
- "eyre",
- "facet",
- "facet-styx",
  "hound",
  "nice-plug",
  "plugin-core",
- "plugin-processors",
- "sampler",
- "serde",
  "serde_json",
+ "signal-clap",
  "signal-core",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -24059,6 +24086,7 @@ dependencies = [
  "serde_json",
  "session",
  "session-format",
+ "signal-clap",
  "signal-effects",
  "signal-fx",
  "studio",

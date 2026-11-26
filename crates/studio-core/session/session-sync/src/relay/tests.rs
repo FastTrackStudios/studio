@@ -57,6 +57,45 @@ fn a_seeded_doc_is_the_song_and_of_its_lineage() {
     assert_eq!(missing(song_doc.loro(), live.loro()).expect("read"), None);
 }
 
+/// A song folded shallow at its open (no history before it) seeds a live
+/// doc with its snapshot: the same song, of the same lineage, and what
+/// either writes after passes across.
+#[test]
+fn a_shallow_song_seeds_a_live_doc_of_its_lineage() {
+    let (song_doc, _) = seeded();
+    let folded = SessionDoc::new();
+    folded
+        .loro()
+        .import(
+            &song_doc
+                .loro()
+                .export(loro::ExportMode::shallow_snapshot(
+                    &song_doc.loro().oplog_frontiers(),
+                ))
+                .expect("a shallow snapshot"),
+        )
+        .expect("folded");
+    assert!(folded.loro().is_shallow());
+
+    let live = SessionDoc::new();
+    live.loro()
+        .import_batch(&seed(folded.loro()).expect("a seed"))
+        .expect("seeded");
+    assert_eq!(live.read(), song_doc.read());
+    assert!(same_lineage(folded.loro(), live.loro()));
+    assert_eq!(missing(folded.loro(), live.loro()).expect("read"), None);
+
+    let mut quieter = live.read();
+    quieter.tracks[0].volume = 0.3;
+    live.write(&quieter, ORIGIN_LOCAL)
+        .expect("an edit in the set");
+    let across = missing(live.loro(), folded.loro())
+        .expect("read")
+        .expect("the set is ahead");
+    folded.loro().import_batch(&across).expect("passed across");
+    assert_eq!(folded.read().tracks[0].volume, 0.3);
+}
+
 /// A fresh replica of a seeded doc (a peer joining the set later, its
 /// version empty) gets the whole song from it, as a sync host sends it —
 /// and stays of the song's lineage.
@@ -174,7 +213,7 @@ fn a_hosted_set_holds_both_ways_while_locked() {
             set.mount(architect::LayerRouter::new()),
             architect::Scope::new(),
         );
-        let client: crdt::sync::DocSyncClient = server.establish().await.expect("a client");
+        let client: live_doc::DocSyncClient = server.establish().await.expect("a client");
         let peer = SetPeer::sync_song(doc_id, dial_fixed(client));
         until(|| peer.read() == song_doc.read()).await;
 

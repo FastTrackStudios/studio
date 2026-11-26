@@ -402,13 +402,19 @@ modules (step 4).
   extensions in; drop the extension install/copy path; Studio launches the
   engine binary from its own build (bundle) output.
 
-- **Signal compiled into the engine**, after the engine split lands: build
-  the engine with `studio-engine`'s `signal` feature (`signal-fx`), and
-  have the engine make the built-in Signal wherever a song names the
-  Signal CLAP (`Signal Dev`), so state restores directly (no CLAP
-  serialisation; `fx.load_states` was 13.7 s on Unbreakable with a stale
-  installed `Signal Dev.clap`) and the plugin is always the built
-  version. The CLAP build stays for other hosts.
+- **Signal compiled into the engine** (landed, 2026-11-26): the plugin is
+  `signal-clap` (`studio-engine/signal/signal-clap`: signal-core as a
+  nice-plug plugin, its `signal/1` extension and its state, no editor);
+  the bundle (`plugins/signal/signal`) is that plus its Dioxus editor.
+  The engine hosts it in-process through its own CLAP entry
+  (`signal_clap::entry::ENTRY`, `daw_standalone::plugin::BuiltinClap`,
+  registered in `studio_engine::install`) wherever a song names it
+  (`Signal Dev`, `FTS Signal`, a bundle's path from any machine), through
+  the same CLAP host as a bundle: nothing installed, found or loaded, and
+  always the built version. The bundle stays for other hosts. Still
+  through the CLAP state stream; restoring the state without it (a native
+  instance over signal-core, the engine's Signal calls as a Rust trait
+  instead of `signal/1`) is the next step if `fx.load_states` stays slow.
 - **Unbreakable integration test** (landed): the open/play/listen/render
   sequence on the real song, timed from the engine's spans against budgets
   that only shrink; `just test-unbreakable`. It lives in `daw-extension`'s
@@ -418,6 +424,10 @@ modules (step 4).
 - **Song open toward REAPER's ~3 s:** cache the imported store by the
   `.session`'s hash (`store.import_snapshot` 7.9 s every open), per-plugin
   spans inside `fx.load_states`, then `bridge.read_doc` (2.8 s).
-- **Render worker stale sync:** after an edit the worker renders the song
-  as it was (`the_worker_renders_what_the_engine_renders…` fails on
-  `monorepo`). Renders default to the engine (`7aac60047`) meanwhile.
+- **Render worker stale sync:** fixed (`963c7dcd7`). TRACK_SET made no
+  undo step, so its edit never reached the song's doc, which the worker
+  syncs from; it is one step now, and
+  `the_worker_renders_what_the_engine_renders…` passes. Renders still
+  default to the engine (`7aac60047`): moving them back to the worker is
+  the owner's call. Any other action that edits without an undo block has
+  the same gap.

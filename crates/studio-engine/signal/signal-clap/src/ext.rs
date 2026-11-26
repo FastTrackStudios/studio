@@ -12,7 +12,7 @@
 //!   files from disk and behaves exactly as before.
 //! - **`com.fasttrackstudio.signal-revisions/1`** (the host reads, from any
 //!   thread): the chain's `revision` and `values_revision`, so a host's
-//!   live feed calls no plugin's main thread ([`REVISIONS`]).
+//!   live feed calls no plugin's main thread ([`Vtables`]).
 //! - CLAP's **`clap.state`** (the host's): `mark_dirty` once the chain or a
 //!   value moved, from a main-thread call ([`tell_if_changed`]), so a host
 //!   saves only the instances that changed.
@@ -33,7 +33,7 @@ use signal_core::param::{Unit, ValueText};
 use signal_core::session::{PortName, SessionHit, SessionId, SessionLink};
 use signal_core::state::{BlockSpec, Instance, LaneSpec, Phase, PhaseTrim, SignalState};
 
-use crate::plugin::{FtsSignal, Shared};
+use crate::plugin::{FtsSignal, NoEditor, Shared, SignalEditor};
 use crate::slots::{self, MAX_BLOCKS, MAX_METERS, MeterKind, Table};
 
 /// What the extensions keep, beside the plugin's own shared state.
@@ -101,20 +101,45 @@ pub struct SignalRevisions {
     pub values_revision: Option<unsafe extern "C" fn(plugin: *const clap_plugin) -> u64>,
 }
 
-/// What `get_extension` answers for [`FTS_EXT_SIGNAL_REVISIONS`].
-pub static REVISIONS: SignalRevisions = SignalRevisions {
-    revision: Some(revisions_revision),
-    values_revision: Some(revisions_values),
-};
+/// The extensions' tables for the plugin with editor `E`: nice-plug's
+/// wrapper is typed, so each plugin type finds its instance its own way.
+pub struct Vtables<E: SignalEditor>(core::marker::PhantomData<E>);
 
-unsafe extern "C" fn revisions_revision(plugin: *const clap_plugin) -> u64 {
-    // SAFETY: the host's call, with the plugin it queried.
-    unsafe { shared_of(plugin) }.map_or(0, |s| s.ext.revision.load(Ordering::Acquire))
+impl<E: SignalEditor> Vtables<E> {
+    const REVISIONS: SignalRevisions = SignalRevisions {
+        revision: Some(revisions_revision::<E>),
+        values_revision: Some(revisions_values::<E>),
+    };
+
+    const HOST_EVENTS: daw_clap_ext::sys::fts_plugin_host_events =
+        daw_clap_ext::sys::fts_plugin_host_events {
+            on_event: Some(on_event::<E>),
+        };
+
+    /// What `get_extension` answers for [`FTS_EXT_SIGNAL_REVISIONS`].
+    #[must_use]
+    pub fn revisions() -> *const core::ffi::c_void {
+        let v: &'static SignalRevisions = &Self::REVISIONS;
+        std::ptr::from_ref(v).cast()
+    }
+
+    /// What `get_extension` answers for `host-events/1`.
+    #[must_use]
+    pub fn host_events() -> *const core::ffi::c_void {
+        let v: &'static daw_clap_ext::sys::fts_plugin_host_events = &Self::HOST_EVENTS;
+        std::ptr::from_ref(v).cast()
+    }
 }
 
-unsafe extern "C" fn revisions_values(plugin: *const clap_plugin) -> u64 {
+unsafe extern "C" fn revisions_revision<E: SignalEditor>(plugin: *const clap_plugin) -> u64 {
+    // SAFETY: the host's call, with the plugin it queried.
+    unsafe { shared_of::<E>(plugin) }.map_or(0, |s| s.ext.revision.load(Ordering::Acquire))
+}
+
+unsafe extern "C" fn revisions_values<E: SignalEditor>(plugin: *const clap_plugin) -> u64 {
     // SAFETY: as above.
-    unsafe { shared_of(plugin) }.map_or(0, |s| s.params.values_revision.load(Ordering::Acquire))
+    unsafe { shared_of::<E>(plugin) }
+        .map_or(0, |s| s.params.values_revision.load(Ordering::Acquire))
 }
 
 /// Tell the host its saved copy of this instance's state is stale
@@ -304,7 +329,7 @@ pub fn after_build(shared: &Shared, report: &graph::BuildReport, on_main: bool) 
     let plugin = shared.ext.plugin.load(Ordering::Acquire);
     if !plugin.is_null() {
         // SAFETY: the instance's own pointer, alive as long as it is.
-        unsafe { nice_plug::wrapper::clap::clap_request_rescan::<FtsSignal>(plugin, true, false) };
+        unsafe { (shared.rescan)(plugin, true, false) };
     }
     if !on_main {
         return;
@@ -1298,21 +1323,22 @@ impl SignalPlugin for Shared {
 }
 
 /// How the extension finds an instance's [`Shared`] from the host's
-/// pointer, and keeps the pointer for the instance's own calls.
-pub struct Lookup;
+/// pointer, and keeps the pointer for the instance's own calls. One per
+/// plugin type (editor `E`), since nice-plug's wrapper is typed.
+pub struct Lookup<E: SignalEditor = NoEditor>(core::marker::PhantomData<E>);
 
-impl SignalPluginLookup for Lookup {
+impl<E: SignalEditor> SignalPluginLookup for Lookup<E> {
     unsafe fn lookup(plugin: *const clap_plugin) -> Option<Arc<dyn SignalPlugin>> {
-        let shared = unsafe { shared_of(plugin) }?;
+        let shared = unsafe { shared_of::<E>(plugin) }?;
         Some(shared as Arc<dyn SignalPlugin>)
     }
 }
 
 /// # Safety
 ///
-/// `plugin` is nice-plug's `clap_plugin` for [`FtsSignal`].
-pub unsafe fn shared_of(plugin: *const clap_plugin) -> Option<Arc<Shared>> {
-    let state = unsafe { clap_extension_state::<FtsSignal>(plugin) }?;
+/// `plugin` is nice-plug's `clap_plugin` for [`FtsSignal<E>`].
+pub unsafe fn shared_of<E: SignalEditor>(plugin: *const clap_plugin) -> Option<Arc<Shared>> {
+    let state = unsafe { clap_extension_state::<FtsSignal<E>>(plugin) }?;
     let shared = state.downcast::<Shared>().ok()?;
     shared
         .ext
@@ -1370,13 +1396,13 @@ pub fn init(shared: &Shared, plugin: *const clap_plugin, host: *const clap_host)
 /// The host's events: the transport (`{"playing", "frame"}`) and a piece's
 /// hits (`{"frame", "velocity"}`, the host's hit markers: published to the
 /// session as notes, so gates key on them).
-pub unsafe extern "C" fn on_event(
+pub unsafe extern "C" fn on_event<E: SignalEditor>(
     plugin: *const clap_plugin,
     _subscription: u64,
     topic: *const c_char,
     event_json: *const c_char,
 ) {
-    let Some(shared) = (unsafe { shared_of(plugin) }) else {
+    let Some(shared) = (unsafe { shared_of::<E>(plugin) }) else {
         return;
     };
     let (Some(topic), Some(body)) = (cstr(topic), cstr(event_json)) else {
@@ -1491,11 +1517,6 @@ fn cstr<'a>(p: *const c_char) -> Option<&'a str> {
     unsafe { CStr::from_ptr(p) }.to_str().ok()
 }
 
-pub const HOST_EVENTS: daw_clap_ext::sys::fts_plugin_host_events =
-    daw_clap_ext::sys::fts_plugin_host_events {
-        on_event: Some(on_event),
-    };
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1509,7 +1530,7 @@ mod tests {
             signal_core::state::BlockSpec::signal("eq", "eq").phase(Phase::Tone),
             signal_core::state::BlockSpec::signal("comp", "comp").phase(Phase::Tone),
         ];
-        let shared = crate::plugin::FtsSignal::default().shared();
+        let shared = <crate::plugin::FtsSignal>::default().shared();
         let text = String::from_utf8(SignalState::new(preset).to_blob()).expect("utf-8");
         shared.load_state_text(text, false);
         let both = |shared: &Shared| {

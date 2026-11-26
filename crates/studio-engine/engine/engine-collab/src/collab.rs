@@ -712,11 +712,11 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
                 .map_err(|e| eyre::eyre!("iroh connect: {e}"))
         };
         let sync = vox_core::initiator_on(dial(&endpoint).await?)
-            .establish::<crdt::sync::DocSyncClient>()
+            .establish::<live_doc::DocSyncClient>()
             .await
             .map_err(|e| eyre::eyre!("session sync handshake: {e:?}"))?;
         let presence_client = vox_core::initiator_on(dial(&endpoint).await?)
-            .establish::<crdt::sync::DocPresenceClient>()
+            .establish::<live_doc::DocPresenceClient>()
             .await
             .map_err(|e| eyre::eyre!("session presence handshake: {e:?}"))?;
         // The host's clock is the session's: pinged from here on.
@@ -924,8 +924,8 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
     };
     // Each replica and the presence dial Task again whenever their
     // connection goes (Task restarting, a network blip) and catch up.
-    let sync: Dial<crdt::sync::DocSyncClient> = task_dial_for(&set);
-    let presence_dial: Dial<crdt::sync::DocPresenceClient> = task_dial_for(&set);
+    let sync: Dial<live_doc::DocSyncClient> = task_dial_for(&set);
+    let presence_dial: Dial<live_doc::DocPresenceClient> = task_dial_for(&set);
     // Task's clock is the session's.
     let clock = task_clock(&set, lane);
     let presence_id: Uuid = joined
@@ -1141,7 +1141,7 @@ fn task_clock(set: &TaskSet, lane: live_proto::LiveSessionsClient) -> SharedCloc
 /// a relay's side — `None` for a song the set does not have.
 fn replicate(
     ids: &HashMap<String, Uuid>,
-    sync: &Dial<crdt::sync::DocSyncClient>,
+    sync: &Dial<live_doc::DocSyncClient>,
     key: &str,
 ) -> Option<(SessionDoc, Side)> {
     ids.get(&engine_sync::slug::slugify(key))

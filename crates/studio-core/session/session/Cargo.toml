@@ -32,9 +32,9 @@ service = ["architect"]
 # hand `session::extension::answer` their JSON and the caller's id.
 extension = ["service", "dep:facet-json"]
 # The session host's transport, published (`session::lead`, native only):
-# its presence served (Architect's, which carries its clock), `lead/play`
+# its presence served (`live-doc`'s, which carries its clock), `lead/play`
 # published.
-lead = ["vox", "sync", "crdt/vox", "dep:tokio"]
+lead = ["vox", "sync", "dep:live-doc", "dep:tokio"]
 vox = ["service", "dep:architect", "architect/vox", "dep:architect-permissions", "dep:thiserror", "dep:vox"]
 
 [dependencies]
@@ -42,6 +42,7 @@ facet = { workspace = true }
 facet-json = { workspace = true, optional = true }
 loro = { workspace = true, optional = true }
 crdt = { workspace = true, optional = true }
+live-doc = { workspace = true, optional = true }
 architect = { workspace = true, optional = true }
 # A session file's document id (`session::file`): named, never made here,
 # so no `v4` (and no getrandom in a wasm build).
@@ -70,9 +71,10 @@ required-features = ["sync"]
 tempfile = "3"
 # The document tests drive Loro directly: two replicas, an undo manager.
 loro = { workspace = true }
-# tests/sync_e2e.rs: two peers through Architect's real sync path, in
-# process (DocSyncHost and PresenceHost over `LocalServer`).
-crdt = { workspace = true, features = ["vox"] }
+# tests/sync_e2e.rs: two peers through the live-set sync path, in process
+# (live-doc's hosts over `LocalServer`); `crdt::History` until undo moves.
+crdt = { workspace = true }
+live-doc = { workspace = true }
 architect = { workspace = true, features = ["vox", "local", "host", "connect"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 uuid = { workspace = true }

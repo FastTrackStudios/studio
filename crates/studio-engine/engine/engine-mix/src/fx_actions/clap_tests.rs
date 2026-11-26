@@ -8,7 +8,7 @@ use daw::service::{Effects as _, FxChainContext, FxRef, FxTarget};
 use daw::standalone::Standalone;
 
 use super::{AddArg, FxArg, ReloadArg, StateSetArg};
-use crate::clap_fx::test_support::{a_clap, drum_song};
+use crate::clap_fx::test_support::{a_clap, copy_bundle, drum_song, remove_bundle};
 
 /// The CLAP put on `Drums/Kick/Sum/In` with FX_ADD: its guid, and the
 /// track's chain.
@@ -86,24 +86,37 @@ fn a_clap_is_found_by_its_name_and_set_in_its_own_words() {
         fx: FxRef::Guid(fx_guid.clone()),
     };
     let fx = daw.get(ctx.clone(), target.clone()).expect("the FX");
-    assert_eq!(fx.name, clap.to_string_lossy(), "named by its bundle");
+    // The bundle the name finds (a linked install as linked: by name it
+    // is not resolved, as a path is).
+    let by_name = crate::clap_fx::bundle(&name).expect("found by its name");
+    assert_eq!(fx.name, by_name.to_string_lossy(), "named by its bundle");
     let params = daw.parameters(ctx.clone(), target.clone());
     // The words the plugin writes for a value other than the one it has,
-    // read back by the plugin into the same value.
+    // read back by the plugin into the same value. A continuous parameter:
+    // a stepped one (FTS EQ's "On", its "Band Shelf" choice) writes the
+    // same words a little either side of the value, and reads them back
+    // as its step.
+    let words_at = |index: u32, at: f64| {
+        daw.with_plugin_instance(&fx_guid, |p| {
+            let info = p.params().into_iter().nth(index as usize)?;
+            p.value_to_text(info.id, info.min + at * (info.max - info.min))
+        })
+        .flatten()
+    };
+    let other_than = |value: f64| if value > 0.5 { 0.2 } else { 0.8 };
     let param = params
         .iter()
         .find(|p| {
+            let at = other_than(p.value);
+            let other = words_at(p.index, at);
             crate::clap_fx::text_to_normalized(&daw, &fx_guid, p.index, &p.formatted).is_some()
+                && other.is_some()
+                && other != words_at(p.index, at - 0.05)
+                && other != words_at(p.index, at + 0.05)
         })
-        .expect("a parameter the plugin reads its own words for");
-    let other = if param.value > 0.5 { 0.2 } else { 0.8 };
-    let words = daw
-        .with_plugin_instance(&fx_guid, |p| {
-            let info = p.params().into_iter().nth(param.index as usize)?;
-            p.value_to_text(info.id, info.min + other * (info.max - info.min))
-        })
-        .flatten()
-        .expect("its words");
+        .expect("a continuous parameter the plugin reads its own words for");
+    let other = other_than(param.value);
+    let words = words_at(param.index, other).expect("its words");
     let value = super::value_for(&daw, &fx, param, &words).expect("read in its words");
     assert!(
         (value - other).abs() < 0.02,
@@ -246,14 +259,14 @@ fn a_rebuilt_clap_is_reloaded_under_its_instances_with_their_state() {
     let dir = tempfile::tempdir().expect("a folder");
     // A bundle of its own, so "rebuilding" it touches nothing else.
     let bundle = dir.path().join("Rebuilt.clap");
-    std::fs::copy(&clap, &bundle).expect("a bundle");
+    copy_bundle(&clap, &bundle);
     let daw = Standalone::new();
     let ctx = drum_song(&daw, "clap-reload");
     let (fx_guid, chain) = added(&daw, &ctx, &bundle.to_string_lossy());
     let before = daw.save_plugin_state(&fx_guid).expect("a state");
-    // Rebuilt: a new file at the same path.
-    std::fs::remove_file(&bundle).expect("removed");
-    std::fs::copy(&clap, &bundle).expect("rebuilt");
+    // Rebuilt: a new bundle at the same path.
+    remove_bundle(&bundle);
+    copy_bundle(&clap, &bundle);
     let row = super::reload(
         &daw,
         &ctx,

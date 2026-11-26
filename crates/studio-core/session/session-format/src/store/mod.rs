@@ -73,6 +73,45 @@ const LEVEL: i32 = 9;
 /// of that, for a somewhat larger file.
 const SNAPSHOT_LEVEL: i32 = 3;
 
+/// A branch's updates past its snapshot are imported one by one, not as a
+/// batch, when there are at most this many and they hold at most
+/// [`ONE_BY_ONE_MAX_BYTES`] ([`Store::load`] says why). A first guess:
+/// `just test-unbreakable` times it.
+const ONE_BY_ONE_MAX_UPDATES: usize = 16;
+/// See [`ONE_BY_ONE_MAX_UPDATES`].
+const ONE_BY_ONE_MAX_BYTES: usize = 1 << 20;
+
+/// `meta` key: the version a branch's archive holds (hex of its encoded
+/// version vector), what the next [`Store::archive`] adds from.
+const ARCHIVE_VV: &str = "archive.vv";
+/// `meta` key: the last history entry of a branch its archive covers.
+const ARCHIVE_HISTORY: &str = "archive.history";
+
+fn archive_key(key: &str, branch: &str) -> String {
+    format!("{key}.{branch}")
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        })
+}
+
+fn decode_hex(text: &str) -> Option<Vec<u8>> {
+    (text.len() % 2 == 0)
+        .then(|| {
+            (0..text.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(text.get(i..i + 2)?, 16).ok())
+                .collect()
+        })
+        .flatten()
+}
+
 /// A branch's snapshot taken ([`Store::take_snapshot`]), not packed yet.
 #[derive(Debug)]
 pub struct Snapshot {
@@ -139,6 +178,25 @@ pub const MAIN: &str = "main";
 
 /// The store's results.
 pub type StoreResult<T> = Result<T, StoreError>;
+
+/// `doc` as it was at `at`, to read: Loro's `fork_at`, which it does not do
+/// on a shallow doc ([`Store::compact_shallow`]); there, a copy checked out
+/// at `at`, which can be any version since its shallow root. The copy is
+/// detached: read it, never edit it.
+///
+/// # Errors
+///
+/// `at` is not a version of `doc` (before a shallow doc's root: its
+/// archive has it).
+pub fn fork_at(doc: &loro::LoroDoc, at: &loro::Frontiers) -> StoreResult<loro::LoroDoc> {
+    if !doc.is_shallow() {
+        return doc.fork_at(at).map_err(|e| StoreError::Loro(e.to_string()));
+    }
+    let copy = doc.fork();
+    copy.checkout(at)
+        .map_err(|e| StoreError::Loro(e.to_string()))?;
+    Ok(copy)
+}
 
 /// A blob's name: its SHA-256, lowercase hex — the same names the
 /// `.session` folder's `objects/` use, so a project moves between them
@@ -256,8 +314,10 @@ fn now() -> i64 {
 fn import(doc: &loro::LoroDoc, packed: &[u8]) -> StoreResult<()> {
     let bytes = tracing::info_span!("store.unpack", store.packed_bytes = packed.len())
         .in_scope(|| zstd::decode_all(packed))?;
-    doc.import(&bytes)
-        .map_err(|e| StoreError::Loro(e.to_string()))?;
+    tracing::info_span!("store.import", store.snapshot_bytes = bytes.len()).in_scope(|| {
+        doc.import(&bytes)
+            .map_err(|e| StoreError::Loro(e.to_string()))
+    })?;
     Ok(())
 }
 
@@ -517,7 +577,14 @@ impl Store {
             }
             self.conn.execute("COMMIT", ()).await?;
             StoreResult::Ok(())
-        })
+        })?;
+        // A branch loads by forking its parent where it forked, which Loro
+        // cannot do on a shallow doc: from a shallow song, the branch keeps
+        // a snapshot of its own (the song as it is now, where it forks).
+        if doc.is_shallow() {
+            self.compact(name, doc)?;
+        }
+        Ok(())
     }
 
     /// Forget branch `name` and what it did; the song itself cannot go.
@@ -735,6 +802,10 @@ impl Store {
     /// No such branch, the database refused the read, or the history
     /// would not import.
     pub fn load(&self, branch: &str) -> StoreResult<loro::LoroDoc> {
+        // Where the doc starts: its own snapshot, its parent forked, or
+        // nothing (every update replayed).
+        let span = tracing::info_span!("store.load", store.from = tracing::field::Empty);
+        let _in = span.enter();
         let (parent, base): (Option<String>, Option<Vec<u8>>) = run(async {
             let mut rows = self
                 .conn
@@ -773,12 +844,14 @@ impl Store {
         drop(read);
         let (doc, upto) = match (snapshot, parent, base) {
             (Some((upto, packed)), _, _) => {
+                span.record("store.from", "snapshot");
                 let doc = loro::LoroDoc::new();
                 let _span = tracing::info_span!("store.import_snapshot").entered();
                 import(&doc, &packed)?;
                 (doc, upto)
             }
             (None, Some(parent), Some(base)) => {
+                span.record("store.from", "fork");
                 let from = self.load(&parent)?;
                 let at =
                     loro::Frontiers::decode(&base).map_err(|e| StoreError::Loro(e.to_string()))?;
@@ -788,8 +861,18 @@ impl Store {
                     0,
                 )
             }
-            _ => (loro::LoroDoc::new(), 0),
+            _ => {
+                span.record("store.from", "empty");
+                (loro::LoroDoc::new(), 0)
+            }
         };
+        let read = tracing::info_span!(
+            "store.read_updates",
+            store.upto = upto,
+            store.updates = tracing::field::Empty,
+            store.packed_bytes = tracing::field::Empty,
+        )
+        .entered();
         let updates: Vec<Vec<u8>> = run(async {
             let mut rows = self
                 .conn
@@ -804,16 +887,48 @@ impl Store {
             }
             StoreResult::Ok(out)
         })?;
+        read.record("store.updates", updates.len());
+        read.record(
+            "store.packed_bytes",
+            updates.iter().map(Vec::len).sum::<usize>(),
+        );
+        drop(read);
         // All at once: imported one by one, each update had the doc's
         // whole state worked out again — 377 of them, 17 s to open a song.
         // A batch decodes them all and works the state out once.
-        let bytes = updates
-            .iter()
-            .map(|packed| zstd::decode_all(packed.as_slice()))
-            .collect::<Result<Vec<Vec<u8>>, _>>()?;
+        let bytes = tracing::info_span!("store.unpack_updates", store.updates = updates.len())
+            .in_scope(|| {
+                updates
+                    .iter()
+                    .map(|packed| zstd::decode_all(packed.as_slice()))
+                    .collect::<Result<Vec<Vec<u8>>, _>>()
+            })?;
         if !bytes.is_empty() {
-            doc.import_batch(&bytes)
-                .map_err(|e| StoreError::Loro(e.to_string()))?;
+            let total: usize = bytes.iter().map(Vec::len).sum();
+            // How: a batch imports the history alone and then works the
+            // whole state out at once (Loro's closing checkout), which costs
+            // what the state is, however little the updates hold: 72 s for
+            // two updates of 206 bytes on Unbreakable's 1.47 GB snapshot. One
+            // by one, each import applies its own ops to the state, which
+            // costs what they are, but a long run pays that again and again
+            // (377 of them, 17 s). So a few small ones go one by one.
+            let one_by_one = bytes.len() <= ONE_BY_ONE_MAX_UPDATES && total <= ONE_BY_ONE_MAX_BYTES;
+            let span = tracing::info_span!(
+                "store.import_updates",
+                store.updates = bytes.len(),
+                store.bytes = total,
+                store.how = if one_by_one { "one_by_one" } else { "batch" },
+            );
+            let _in = span.enter();
+            if one_by_one {
+                for update in &bytes {
+                    doc.import(update)
+                        .map_err(|e| StoreError::Loro(e.to_string()))?;
+                }
+            } else {
+                doc.import_batch(&bytes)
+                    .map_err(|e| StoreError::Loro(e.to_string()))?;
+            }
         }
         Ok(doc)
     }
@@ -854,6 +969,191 @@ impl Store {
         self.write_snapshot(taken.pack()?)
     }
 
+    /// Where the archive of this project file, at `file`, is: `Archive/`
+    /// beside it, `<the song's id>.history` (its name's, for a song with no
+    /// id), so the song renamed or copied in its folder still finds it. A
+    /// store as the file is, holding each branch's whole history; never
+    /// read to open the song.
+    ///
+    /// # Errors
+    ///
+    /// The database refused the read.
+    pub fn archive_path(&self, file: &std::path::Path) -> StoreResult<std::path::PathBuf> {
+        let name = match self.meta(ID_KEY)? {
+            Some(id) if !id.is_empty() => id,
+            _ => file
+                .file_stem()
+                .map_or_else(|| "song".into(), |s| s.to_string_lossy().into_owned()),
+        };
+        Ok(file
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("Archive")
+            .join(format!("{name}.history")))
+    }
+
+    /// Fold `branch` into a shallow snapshot at `root`: its state, and only
+    /// the history since `root` (the version the song was opened at, so what
+    /// was done since stays undoable and restorable here). Everything before
+    /// goes to `archive` first ([`Self::archive`]). A branch forked from this
+    /// one with no snapshot of its own gets one first, since the history it
+    /// forked from leaves this file. Loading is then a small snapshot and no
+    /// long history: Unbreakable's 1.47 GB snapshot was 173.5 MB, and opened
+    /// in 0.57 s instead of 51.5 s.
+    ///
+    /// # Errors
+    ///
+    /// The doc would not export, or either file refused the write.
+    pub fn compact_shallow(
+        &self,
+        branch: &str,
+        doc: &loro::LoroDoc,
+        root: &loro::Frontiers,
+        archive: &Store,
+    ) -> StoreResult<()> {
+        let taken = self.take_shallow(branch, doc, root, archive)?;
+        self.write_snapshot(taken.pack()?)
+    }
+
+    /// The first step of [`Self::compact_shallow`], the only one that needs
+    /// the doc still (as [`Self::take_snapshot`] is [`Self::compact`]'s): the
+    /// branch's forks given snapshots, its history archived, its shallow
+    /// snapshot taken. Pack and write it after ([`Snapshot::pack`],
+    /// [`Self::write_snapshot`]).
+    ///
+    /// # Errors
+    ///
+    /// The doc would not export, or either file refused the write.
+    pub fn take_shallow(
+        &self,
+        branch: &str,
+        doc: &loro::LoroDoc,
+        root: &loro::Frontiers,
+        archive: &Store,
+    ) -> StoreResult<Snapshot> {
+        let span = tracing::info_span!(
+            "store.take_shallow",
+            store.forks_given_snapshots = tracing::field::Empty,
+            store.snapshot_bytes = tracing::field::Empty,
+        );
+        let _in = span.enter();
+        let forks = self.forks_without_snapshot(branch)?;
+        span.record("store.forks_given_snapshots", forks.len());
+        for fork in &forks {
+            let forked = self.load(fork)?;
+            self.compact(fork, &forked)?;
+        }
+        self.archive(branch, doc, archive)?;
+        let taken = self.take_snapshot_as(branch, doc, loro::ExportMode::shallow_snapshot(root))?;
+        span.record("store.snapshot_bytes", taken.data.len());
+        Ok(taken)
+    }
+
+    /// Put into `archive` what `branch` holds that it does not yet: the
+    /// whole doc the first time (its snapshot), then the updates since.
+    /// Records what it holds, and the last history entry it covers
+    /// ([`Self::archived_through`]).
+    ///
+    /// # Errors
+    ///
+    /// The doc would not export, or either file refused the write.
+    pub fn archive(&self, branch: &str, doc: &loro::LoroDoc, archive: &Store) -> StoreResult<()> {
+        let span = tracing::info_span!(
+            "store.archive",
+            store.how = tracing::field::Empty,
+            store.bytes = tracing::field::Empty,
+        );
+        let _in = span.enter();
+        archive.ensure_branch(branch)?;
+        let held = self
+            .meta(&archive_key(ARCHIVE_VV, branch))?
+            .and_then(|hex| decode_hex(&hex))
+            .and_then(|bytes| loro::VersionVector::decode(&bytes).ok());
+        match held {
+            None => {
+                span.record("store.how", "whole");
+                archive.compact(branch, doc)?;
+            }
+            Some(vv) if vv != doc.oplog_vv() => {
+                span.record("store.how", "since");
+                let update = doc
+                    .export(loro::ExportMode::updates(&vv))
+                    .map_err(|e| StoreError::Loro(e.to_string()))?;
+                span.record("store.bytes", update.len());
+                archive.append_update(branch, "Archived", &update)?;
+            }
+            Some(_) => {
+                span.record("store.how", "nothing");
+            }
+        }
+        self.set_meta(
+            &archive_key(ARCHIVE_VV, branch),
+            &encode_hex(&doc.oplog_vv().encode()),
+        )?;
+        let last = run(async {
+            let mut rows = self
+                .conn
+                .query(
+                    "SELECT COALESCE(MAX(seq), 0) FROM history WHERE branch = ?1",
+                    (branch,),
+                )
+                .await?;
+            StoreResult::Ok(match rows.next().await? {
+                Some(row) => row.get::<i64>(0)?,
+                None => 0,
+            })
+        })?;
+        self.set_meta(&archive_key(ARCHIVE_HISTORY, branch), &last.to_string())
+    }
+
+    /// The last history entry of `branch` its archive holds (every step and
+    /// mark up to it can be restored from there), or `None` before it has
+    /// been archived.
+    ///
+    /// # Errors
+    ///
+    /// The database refused the read.
+    pub fn archived_through(&self, branch: &str) -> StoreResult<Option<i64>> {
+        Ok(self
+            .meta(&archive_key(ARCHIVE_HISTORY, branch))?
+            .and_then(|s| s.parse().ok()))
+    }
+
+    /// The branches forked from `branch` that have no snapshot of their
+    /// own: they load from its history.
+    fn forks_without_snapshot(&self, branch: &str) -> StoreResult<Vec<String>> {
+        run(async {
+            let mut rows = self
+                .conn
+                .query(
+                    "SELECT name FROM branches WHERE parent = ?1 \
+                     AND name NOT IN (SELECT branch FROM snapshots)",
+                    (branch,),
+                )
+                .await?;
+            let mut out = Vec::new();
+            while let Some(row) = rows.next().await? {
+                out.push(row.get::<String>(0)?);
+            }
+            StoreResult::Ok(out)
+        })
+    }
+
+    /// `branch` made in this file if it is not (a branch archived from
+    /// another file's), with no parent: its history is its own.
+    fn ensure_branch(&self, branch: &str) -> StoreResult<()> {
+        run(async {
+            self.conn
+                .execute(
+                    "INSERT INTO branches (name, parent, base, at) VALUES (?1, NULL, NULL, ?2) \
+                     ON CONFLICT(name) DO NOTHING",
+                    (branch, now()),
+                )
+                .await?;
+            StoreResult::Ok(())
+        })
+    }
+
     /// The first step of [`Self::compact`], the only one that needs the
     /// doc still: its snapshot, and how far the branch's updates go now —
     /// what the snapshot holds. The caller may let go of the doc after it
@@ -864,6 +1164,17 @@ impl Store {
     ///
     /// The doc would not export, or the database would not say.
     pub fn take_snapshot(&self, branch: &str, doc: &loro::LoroDoc) -> StoreResult<Snapshot> {
+        self.take_snapshot_as(branch, doc, loro::ExportMode::Snapshot)
+    }
+
+    /// [`Self::take_snapshot`], exported as `mode` (a shallow snapshot,
+    /// [`Self::compact_shallow`]).
+    fn take_snapshot_as(
+        &self,
+        branch: &str,
+        doc: &loro::LoroDoc,
+        mode: loro::ExportMode<'_>,
+    ) -> StoreResult<Snapshot> {
         let _span = tracing::info_span!("store.take_snapshot").entered();
         let upto = run(async {
             let mut rows = self
@@ -880,7 +1191,7 @@ impl Store {
             StoreResult::Ok(upto)
         })?;
         let data = doc
-            .export(loro::ExportMode::Snapshot)
+            .export(mode)
             .map_err(|e| StoreError::Loro(e.to_string()))?;
         Ok(Snapshot {
             branch: branch.to_owned(),

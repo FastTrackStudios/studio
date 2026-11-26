@@ -1,10 +1,10 @@
-//! Two peers sharing one session through Architect's real sync path.
+//! Two peers sharing one session through the real live-set sync path.
 //!
-//! What is real: each peer holds the session as an Architect document (a
-//! `crdt::CrdtDoc` of kind `fts.session`) kept in step by `crdt::SyncedDoc`
-//! against a `DocSyncHost` (`crdt::DocRegistry`), and publishes its
-//! playhead with Architect's presence (`Here::play` → `PresenceHost` →
-//! the other's `PresencePeer`), over Architect's in-process vox transport
+//! What is real: each peer holds the session as a Loro document of kind
+//! `fts.session` kept in step by `live_doc::SyncedDoc` against a
+//! `live_doc::Hosts`, and publishes its playhead with presence
+//! (`Here::play` → `PresenceHost` → the other's `PresencePeer`), over
+//! Architect's in-process vox transport
 //! (`architect::LocalServer`): the same services, codecs and drivers a
 //! networked peer runs, without the network. Extensions write through
 //! `session::service::handle`, as a host would answer them; undo is
@@ -32,12 +32,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use architect::{LayerRouter, LocalServer, Scope};
-use crdt::presence::{Here, PeerState, PlayState};
-use crdt::sync::{
-    DocPresenceClient, DocPresenceDispatcher, DocSyncClient, DocSyncDispatcher, PresencePeer,
-    SyncedDoc, doc_presence_service_descriptor, doc_sync_service_descriptor,
+use crdt::History;
+use live_doc::{
+    DocPresenceClient, DocPresenceDispatcher, DocSyncClient, DocSyncDispatcher, Here, Hosts,
+    PeerState, PlayState, PresencePeer, SyncedDoc, doc_presence_service_descriptor,
+    doc_sync_service_descriptor,
 };
-use crdt::{CrdtDoc, DocRegistry, History};
 use session::doc::{SessionDoc, transport_of};
 use session::service::{Grants, Request, handle};
 use session::sync::Tracker;
@@ -55,8 +55,8 @@ struct Peer {
 impl Peer {
     async fn join(local: &LocalServer, doc_id: Uuid, me: &str) -> Self {
         let client: DocSyncClient = local.establish().await.unwrap();
-        let mut synced = SyncedDoc::new(doc_id, CrdtDoc::ephemeral());
-        let session = SessionDoc::from_doc(synced.doc().loro().clone());
+        let mut synced = SyncedDoc::new(doc_id, loro::LoroDoc::new());
+        let session = SessionDoc::from_doc(synced.doc().clone());
         tokio::spawn(async move {
             let _ = synced.run(&client).await;
         });
@@ -95,7 +95,7 @@ impl Peer {
 
 /// The host: one sync and one presence service for every document.
 fn serve(scope: &Arc<Scope>) -> LocalServer {
-    let registry = DocRegistry::new(|_doc_id| Box::pin(async { Ok(CrdtDoc::ephemeral()) }));
+    let registry = Hosts::new(30_000);
     let router = LayerRouter::new()
         .with(
             doc_sync_service_descriptor(),

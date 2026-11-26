@@ -315,3 +315,145 @@ fn a_fold_written_after_a_later_one_changes_nothing() {
         doc.get_deep_value()
     );
 }
+
+/// The song's archive beside its file, made to hold `store`'s history.
+fn archive_of(dir: &tempfile::TempDir, store: &Store) -> Store {
+    let path = store
+        .archive_path(&dir.path().join("Song.session"))
+        .expect("its path");
+    std::fs::create_dir_all(path.parent().expect("a folder")).expect("Archive/");
+    Store::open(&path).expect("the archive")
+}
+
+/// Folded shallow at the version it was opened at, the song keeps what was
+/// done since (to undo and go back to) and loads small; what came before is
+/// in its archive, and every moment of it opens from there as it was.
+#[test]
+fn a_shallow_song_keeps_its_session_and_its_archive_the_rest() {
+    let (dir, store) = store();
+    let archive = archive_of(&dir, &store);
+    let doc = loro::LoroDoc::new();
+    let mut moments = Vec::new();
+    let mut note = |store: &Store, doc: &loro::LoroDoc| {
+        let seq = store
+            .note(
+                MAIN,
+                (MomentKind::Step, "Add", Some("ARRANGE_ADD")),
+                &doc.state_frontiers(),
+            )
+            .expect("noted");
+        moments.push((seq, doc.get_deep_value()));
+    };
+    for (guid, at) in [("k1", 1.0), ("k2", 2.0)] {
+        step(&store, MAIN, &doc, guid, at);
+        note(&store, &doc);
+    }
+    // Opened here: what follows is this session's.
+    let opened_at = doc.oplog_frontiers();
+    for (guid, at) in [("k3", 3.0), ("k4", 4.0)] {
+        step(&store, MAIN, &doc, guid, at);
+        note(&store, &doc);
+    }
+    store
+        .compact_shallow(MAIN, &doc, &opened_at, &archive)
+        .expect("folded shallow");
+    drop(store);
+
+    let reopened = Store::open(&dir.path().join("Song.session")).expect("reopened");
+    let song = reopened.load(MAIN).expect("the song");
+    assert!(song.is_shallow(), "only its session's history");
+    assert_eq!(song.get_deep_value(), doc.get_deep_value(), "as it was");
+    let through = reopened
+        .archived_through(MAIN)
+        .expect("read")
+        .expect("archived");
+    let whole = archive.load(MAIN).expect("the archive's song");
+    for (seq, value) in &moments[2..] {
+        let at = moment_at(&reopened, *seq);
+        assert_eq!(
+            session_format::store::fork_at(&song, &at)
+                .expect("this session's")
+                .get_deep_value(),
+            *value,
+            "this session's step {seq}, from the file"
+        );
+    }
+    for (seq, value) in &moments {
+        assert!(*seq <= through, "step {seq} is in the archive");
+        let at = moment_at(&reopened, *seq);
+        assert_eq!(
+            whole.fork_at(&at).expect("in the archive").get_deep_value(),
+            *value,
+            "step {seq}, from the archive"
+        );
+    }
+}
+
+/// Folded again after more work, the archive gets only what is new, and
+/// holds the song from its first edit to its last.
+#[test]
+fn archiving_again_adds_only_what_is_new() {
+    let (dir, store) = store();
+    let archive = archive_of(&dir, &store);
+    let doc = loro::LoroDoc::new();
+    step(&store, MAIN, &doc, "k1", 1.0);
+    let opened_at = doc.oplog_frontiers();
+    step(&store, MAIN, &doc, "k2", 2.0);
+    store
+        .compact_shallow(MAIN, &doc, &opened_at, &archive)
+        .expect("folded shallow");
+
+    // The song opened again (shallow), edited, folded again.
+    let song = store.load(MAIN).expect("the song");
+    let opened_at = song.oplog_frontiers();
+    step(&store, MAIN, &song, "k3", 3.0);
+    store
+        .compact_shallow(MAIN, &song, &opened_at, &archive)
+        .expect("folded again");
+
+    let whole = archive.load(MAIN).expect("the archive's song");
+    let items = whole.get_map("items");
+    for guid in ["k1", "k2", "k3"] {
+        assert!(items.get(guid).is_some(), "{guid} in the archive");
+    }
+    assert!(!whole.is_shallow(), "the whole history");
+    assert_eq!(
+        store.load(MAIN).expect("the song").get_deep_value(),
+        song.get_deep_value()
+    );
+}
+
+/// An alternative forked from the song, with no snapshot of its own, loads
+/// from the song's history: folding the song shallow gives it one first.
+#[test]
+fn an_alternative_still_opens_after_its_song_is_folded_shallow() {
+    let (dir, store) = store();
+    let archive = archive_of(&dir, &store);
+    let song = loro::LoroDoc::new();
+    step(&store, MAIN, &song, "k1", 1.0);
+    store.fork("Organized", MAIN, &song).expect("forked");
+    let opened_at = song.oplog_frontiers();
+    step(&store, MAIN, &song, "k2", 2.0);
+    store
+        .compact_shallow(MAIN, &song, &opened_at, &archive)
+        .expect("folded shallow");
+
+    let organized = store.load("Organized").expect("the alternative");
+    let items = organized.get_map("items");
+    assert!(items.get("k1").is_some(), "the song as it was at the fork");
+    assert!(items.get("k2").is_none(), "not the song's later edit");
+
+    // And one forked from the shallow song as it is now.
+    let shallow = store.load(MAIN).expect("the song, shallow");
+    store.fork("Again", MAIN, &shallow).expect("forked again");
+    let again = store.load("Again").expect("the second alternative");
+    assert_eq!(again.get_deep_value(), shallow.get_deep_value());
+}
+
+fn moment_at(store: &Store, seq: i64) -> loro::Frontiers {
+    let moment = store
+        .moment(MAIN, &MomentRef::Seq(seq))
+        .expect("read")
+        .expect("there");
+    loro::Frontiers::decode(&moment.frontiers).expect("a frontier")
+}

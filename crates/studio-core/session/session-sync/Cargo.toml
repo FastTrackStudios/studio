@@ -10,9 +10,9 @@ publish = false
 description = "The live session as one Loro document: the block every view and every device agrees on, its diff, relay and network lanes (the engine-free half of the old sync)"
 
 [features]
-# The document over architect's sync lanes (`net`): its doc and presence
-# peers on a vox connection.
-net = ["dep:crdt", "dep:uuid", "dep:futures", "dep:vox"]
+# The document over live-doc's lanes (`net`): its doc and presence peers
+# on a vox connection.
+net = ["dep:live-doc", "dep:uuid", "dep:futures", "dep:vox"]
 
 [dependencies]
 fts-session = { workspace = true }
@@ -23,7 +23,7 @@ eyre = { workspace = true }
 # doesn't build for wasm32, and the browser app links this crate.
 tokio = { version = "1.48", default-features = false, features = ["macros", "rt", "sync", "time"] }
 vox = { workspace = true, optional = true }
-crdt = { workspace = true, optional = true, features = ["vox"] }
+live-doc = { workspace = true, optional = true }
 architect = { workspace = true, features = ["local", "platform", "vox"] }
 uuid = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
