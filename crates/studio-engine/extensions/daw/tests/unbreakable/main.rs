@@ -336,14 +336,56 @@ fn say(record: &Value, run: &Run, file: Option<&PathBuf>, trend: Option<&PathBuf
             s["verdict"].as_str().unwrap_or("?")
         ));
     }
-    out.push_str("open, by span (total ms):\n");
-    for row in run.open_breakdown.iter().take(16) {
+    let ms = |row: &Value, key: &str| row[key].as_f64().unwrap_or(0.0);
+    // A row's fields (its longest instance's), on the line under it.
+    let fields = |row: &Value| {
+        row["fields"]
+            .as_object()
+            .filter(|f| !f.is_empty())
+            .map(|f| {
+                f.iter()
+                    .map(|(k, v)| {
+                        format!(
+                            "{k}={}",
+                            v.as_str().map_or_else(|| v.to_string(), str::to_owned)
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+    };
+    out.push_str("open, by span:                  total ms    self ms\n");
+    for row in run.open_breakdown.iter().take(24) {
         out.push_str(&format!(
-            "  {:<28} {:>10.1}  ×{}\n",
+            "  {:<28} {:>10.1} {:>10.1}  ×{}\n",
             row["name"].as_str().unwrap_or("?"),
-            row["total_ms"].as_f64().unwrap_or(0.0),
+            ms(row, "total_ms"),
+            ms(row, "self_ms"),
             row["count"]
         ));
+        if let Some(f) = fields(row) {
+            out.push_str(&format!("      {f}\n"));
+        }
+    }
+    // Where the trace stops saying where the open's time went: a span's
+    // own time, that no span under it accounts for. The largest are where
+    // the next spans go (or what to make faster, when they are one call).
+    let mut untraced: Vec<&Value> = run
+        .open_breakdown
+        .iter()
+        .filter(|r| ms(r, "self_ms") >= 50.0)
+        .collect();
+    untraced.sort_by(|a, b| ms(b, "self_ms").total_cmp(&ms(a, "self_ms")));
+    if !untraced.is_empty() {
+        out.push_str("open, its own time by span (self ms, ≥ 50 ms):\n");
+        for row in untraced.iter().take(16) {
+            out.push_str(&format!(
+                "  {:<28} {:>10.1}  ×{}\n",
+                row["name"].as_str().unwrap_or("?"),
+                ms(row, "self_ms"),
+                row["count"]
+            ));
+        }
     }
     for c in &run.checks {
         out.push_str(&format!(

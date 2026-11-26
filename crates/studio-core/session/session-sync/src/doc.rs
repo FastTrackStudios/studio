@@ -342,14 +342,34 @@ impl SessionDoc {
             .map(|s| decode_tempo(&s))
             .unwrap_or_default();
         let (tracks, project) = self.read_tracks_and_project();
+        // Each part on a span of its own, with how many it read: where a
+        // whole read's time goes.
+        let items = counted(
+            tracing::info_span!("read.items", read.count = tracing::field::Empty),
+            || read_entities(&self.doc.get_map(ITEMS), read_item),
+        );
+        let markers = counted(
+            tracing::info_span!("read.markers", read.count = tracing::field::Empty),
+            || read_entities(&self.doc.get_map(MARKERS), read_marker),
+        );
+        let regions = counted(
+            tracing::info_span!("read.regions", read.count = tracing::field::Empty),
+            || read_entities(&self.doc.get_map(REGIONS), read_region),
+        );
+        let take_markers = counted(
+            tracing::info_span!("read.take_markers", read.count = tracing::field::Empty),
+            || read_entities(&self.doc.get_map(TAKE_MARKERS), read_take_marker),
+        );
+        let chart =
+            tracing::info_span!("read.chart").in_scope(|| self.doc.get_text(CHART).to_string());
         SessionModel {
             tracks,
-            items: read_entities(&self.doc.get_map(ITEMS), read_item),
-            markers: read_entities(&self.doc.get_map(MARKERS), read_marker),
-            regions: read_entities(&self.doc.get_map(REGIONS), read_region),
+            items,
+            markers,
+            regions,
             tempo,
-            chart: self.doc.get_text(CHART).to_string(),
-            take_markers: read_entities(&self.doc.get_map(TAKE_MARKERS), read_take_marker),
+            chart,
+            take_markers,
             project,
         }
     }
@@ -360,12 +380,25 @@ impl SessionDoc {
         let mut tracks = self.read_tracks();
         let mut project = read_project(&map_value(&self.doc.get_map(PROJECT).get_deep_value()));
         let parts = Parts {
-            fx: read_entities(&self.doc.get_map(FX), read_fx),
-            sends: read_entities(&self.doc.get_map(SENDS), read_send),
-            hw: read_entities(&self.doc.get_map(HW_OUTPUTS), read_send),
-            envelopes: read_entities(&self.doc.get_map(ENVELOPES), read_envelope),
+            fx: counted(
+                tracing::info_span!("read.fx", read.count = tracing::field::Empty),
+                || read_entities(&self.doc.get_map(FX), read_fx),
+            ),
+            sends: counted(
+                tracing::info_span!("read.sends", read.count = tracing::field::Empty),
+                || read_entities(&self.doc.get_map(SENDS), read_send),
+            ),
+            hw: counted(
+                tracing::info_span!("read.hw_outputs", read.count = tracing::field::Empty),
+                || read_entities(&self.doc.get_map(HW_OUTPUTS), read_send),
+            ),
+            envelopes: counted(
+                tracing::info_span!("read.envelopes", read.count = tracing::field::Empty),
+                || read_entities(&self.doc.get_map(ENVELOPES), read_envelope),
+            ),
         };
-        attach_parts(&mut tracks, &mut project, &parts);
+        tracing::info_span!("read.attach_parts")
+            .in_scope(|| attach_parts(&mut tracks, &mut project, &parts));
         (tracks, project)
     }
 
@@ -769,6 +802,16 @@ fn reread<T>(
             }
         }
     }
+}
+
+/// `read` under `span`, its `read.count` how many it read.
+fn counted<T>(
+    span: tracing::Span,
+    read: impl FnOnce() -> BTreeMap<String, T>,
+) -> BTreeMap<String, T> {
+    let out = span.in_scope(read);
+    span.record("read.count", out.len());
+    out
 }
 
 fn read_entities<T>(
