@@ -108,8 +108,15 @@ fn every_venue_fixture_resolves_to_a_fixture_type() {
             if fixture.get("patched").and_then(Value::as_bool) == Some(false) {
                 continue;
             }
-            let manufacturer = string(fixture, "manufacturer");
-            let model = string(fixture, "model");
+            // What the address follows: `wired_as` when set (a bar's
+            // section, a ring patched as another fixture), else the model,
+            // as the patch resolves it (lighting viz `venue.rs`).
+            let wired_as = string(fixture, "wired_as");
+            let (manufacturer, model) = if wired_as.is_empty() {
+                (string(fixture, "manufacturer"), string(fixture, "model"))
+            } else {
+                (String::new(), wired_as)
+            };
             if model.is_empty() {
                 continue;
             }
