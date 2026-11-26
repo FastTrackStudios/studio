@@ -188,8 +188,21 @@ pub fn publish(found: &Found) -> Option<PathBuf> {
     }
 }
 
-/// Every engine that has said where it is, newest first (dead ones too:
-/// [`alive`] tells them apart).
+/// Whether this process may link to `found`: a named Studio instance
+/// (`STUDIO_INSTANCE`, a second Studio beside the person's) only to an
+/// engine whose socket is under its own runtime dir, since every engine's
+/// file is in the one shared [`dir`]. Unnamed, any engine.
+fn of_this_instance(found: &Found) -> bool {
+    if std::env::var_os("STUDIO_INSTANCE").is_none_or(|i| i.is_empty()) {
+        return true;
+    }
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|d| !d.is_empty())
+        .is_some_and(|run| found.socket.starts_with(run))
+}
+
+/// Every engine that has said where it is (and this instance may link
+/// to), newest first (dead ones too: [`alive`] tells them apart).
 #[must_use]
 pub fn found() -> Vec<Found> {
     let Some(entries) = dir().and_then(|d| std::fs::read_dir(d).ok()) else {
@@ -202,7 +215,7 @@ pub fn found() -> Vec<Found> {
         }
         let when = entry.metadata().and_then(|m| m.modified()).ok()?;
         let found: Found = serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?;
-        Some((found, when))
+        of_this_instance(&found).then_some((found, when))
     });
     newest_first(read.collect())
 }

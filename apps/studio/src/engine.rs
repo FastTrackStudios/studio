@@ -103,7 +103,21 @@ pub fn parse_found(bytes: &[u8]) -> Option<Found> {
     })
 }
 
-/// Every engine that has said where it is, newest first.
+/// Whether this instance may attach to an engine: a named instance
+/// (`STUDIO_INSTANCE`) only to one whose socket is under its own runtime
+/// dir, so a second Studio never takes the person's engine (the engines'
+/// files are shared, under the config dir). Unnamed, any engine.
+fn ours(f: &Found) -> bool {
+    if crate::instance::instance().is_none() {
+        return true;
+    }
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|d| !d.is_empty())
+        .is_some_and(|run| f.socket.starts_with(run))
+}
+
+/// Every engine that has said where it is (and this instance may use),
+/// newest first.
 fn found() -> Vec<Found> {
     let Some(entries) = engines_dir().and_then(|d| std::fs::read_dir(d).ok()) else {
         return Vec::new();
@@ -121,7 +135,7 @@ fn found() -> Vec<Found> {
         })
         .collect();
     all.sort_by(|a, b| b.1.cmp(&a.1));
-    all.into_iter().map(|(f, _)| f).collect()
+    all.into_iter().map(|(f, _)| f).filter(ours).collect()
 }
 
 fn alive(f: &Found) -> bool {

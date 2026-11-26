@@ -112,7 +112,7 @@ pub fn extensions() -> &'static Extensions {
         let installs = crate::storage::config_dir()
             .unwrap_or_else(std::env::temp_dir)
             .join("fts")
-            .join("studio-extensions");
+            .join(crate::instance::extensions_folder());
         let linked: [&dyn architect_extensions::linked::Extension; 6] = [
             &studio_arrangement::Arrangement,
             &studio_mixer::Mixer,
@@ -376,7 +376,7 @@ fn daw_package() -> Result<std::path::PathBuf, String> {
     let dir = crate::storage::config_dir()
         .ok_or("no config folder")?
         .join("fts")
-        .join("studio-extensions")
+        .join(crate::instance::extensions_folder())
         .join("dev")
         .join("daw");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

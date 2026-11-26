@@ -64,6 +64,18 @@ pub fn engine_folder() -> String {
     }
 }
 
+/// Studio's extensions folder's name under `<config>/fts`: its installs,
+/// its dev copies (the daw extension's `dev/daw`, linked to this
+/// instance's engine program) and its `STUDIO_EXT_DEV` overrides. One per
+/// instance: a second Studio must not point the person's `dev/daw` at its
+/// own engine build.
+pub fn extensions_folder() -> String {
+    match instance() {
+        Some(i) => format!("studio-extensions-{i}"),
+        None => "studio-extensions".to_owned(),
+    }
+}
+
 /// Whether the session is one window (`STUDIO_SINGLE_WINDOW=1`): the
 /// view picked fills the main window (the chart alone, the lyrics alone),
 /// and the Stage's other windows are not opened. For testing and
