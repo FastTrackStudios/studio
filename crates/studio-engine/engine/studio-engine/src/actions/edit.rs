@@ -1,148 +1,14 @@
-//! Session's Action List: everything the engine can do, in the one
-//! registry a window's keys and menus, the CLI and a model talking MCP all
-//! run.
-//!
-//! [`list`] is the list (`architect::action::ActionList`), filled on first
-//! use with the engine's actions — the transport, the set
-//! (`crate::studio_engine::set_actions`) and the session's data: its
-//! tracks, a drum's hits, a track's fader — run against the engine
-//! directly, typed in and out, so a model can read the song and change it
-//! with no window at all.
-//!
-//! A window adds its own when it attaches (`crate::window::attach`): zoom,
-//! panels, the view, the edits its arrangement makes under its own
-//! selection. Those queue for it (`crate::window_queue`), and are listed
-//! `enabled: false` while no window is attached.
-//!
-//! Every engine edit is reported as a change (`crate::engine`), so a
-//! model's `watch` follows what happens as it happens.
+//! The editing actions: drum editing (quantize, groove, place, stretch,
+//! revert, requantize, the review, the lanes, the samples), the drum
+//! level and fundamental, removing a range. They go with `engine-edit`.
 
-use architect::action::{ActionList, ActionMeta, Effect};
-use daw::service::{ProjectContext, TempoMap as _, TrackRef, Tracks};
-use facet::Facet;
+#[allow(
+    clippy::wildcard_imports,
+    reason = "split out of actions.rs: the parent's helpers and imports, as before"
+)]
+use super::*;
 
-pub use editing::drums::KitPiece;
-use editing::drums::{KIT_MERGE, Moment, moments, weights};
-use editing::quantize::shift_at;
-use editing::quantize::{
-    DOUBLE_STROKE, FURTHEST_PAST, GESTURE, NEAR_WRITTEN, ON_ITS_LINE, PLAYED_ON_A_LINE, Placed,
-    RUN_BREAK, SEAM_ROOM, SlipMove, SlipResult, TWO_STROKES, WRITTEN_FILL, anchor_of, grid_choice,
-    hold_gestures, hold_gestures_by, keeps_own_line, lock_anchored, one_stroke_a_line,
-    to_lines_either_side, uncrossed,
-};
-
-pub use engine_runtime::client::actions::*;
-
-/// The Action List, every action registered: the window's (when a window
-/// runs here) and the engine's, filled into the window's list
-/// (`engine_runtime::client::actions::list`) on first use.
-///
-/// A registration architect refuses (a duplicate id) is a bug the
-/// `the_list_registers_cleanly` test catches before it ships; a build that
-/// still has one logs it and keeps the actions registered before it,
-/// rather than taking the window down.
-pub fn list() -> &'static ActionList {
-    crate::install();
-    engine_runtime::client::actions::list()
-}
-
-/// The engine's actions, into the list: what [`crate::install`] hands the
-/// window's list to fill it with.
-pub(crate) fn fill(list: &ActionList) {
-    if let Err(error) = register_all(list) {
-        tracing::error!(%error, "the action list stopped registering");
-    }
-}
-
-/// Every action, into `list`: the window's, then the data's.
-///
-/// # Errors
-///
-/// The first registration the list refuses ([`ActionError::Duplicate`]).
-///
-/// [`ActionError::Duplicate`]: architect::action::ActionError::Duplicate
-fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    register_transport(list)?;
-    register_data(list)?;
-    crate::studio_engine::set_actions::register(list)
-}
-
-pub use crate::shared_actions::meta;
-use crate::shared_actions::{
-    FOLD, FoldArg, PHASE, PhaseArg, SELECT_TRACK, SelectTrackArg, TRACK_SET, TrackSetArg,
-};
-
-/// A time in the song, seconds from its start.
-#[derive(Facet)]
-struct AtArg {
-    at: f64,
-}
-
-/// The transport's actions: the engine's, not the window's — they run on
-/// it at once, the window or none (headless, hidden, another monitor), and
-/// a window shows what the engine does.
-fn register_transport(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    for (meta, command) in [
-        (&PLAY_STOP, crate::engine::Move::PlayStop),
-        (&PLAY_PAUSE, crate::engine::Move::PlayStop),
-    ] {
-        list.register(meta, Effect::Mutating, move |(): ()| {
-            crate::engine::transport_here(command, 0.0);
-            if crate::engine::buffering::waiting() {
-                let waiting = crate::open::current_song()
-                    .and_then(|s| crate::stream_set::readiness(&s))
-                    .map_or(0, |r| r.waiting_on);
-                return Ok(format!(
-                    "waiting: {waiting} recordings are not here yet — it plays by itself once they are (press again to call it off)"
-                ));
-            }
-            Ok(format!("{}: done", meta.display_name))
-        })?;
-    }
-    // Home is the engine's too; the window, when there is one, also takes
-    // its edit cursor home (idempotent: it asks the engine again).
-    list.register(&GO_TO_START, Effect::Mutating, |(): ()| {
-        crate::engine::transport_here(crate::engine::Move::Home, 0.0);
-        crate::window_queue::ask(crate::window_queue::Asked::GoToStart);
-        Ok(format!("{}: done", GO_TO_START.display_name))
-    })?;
-    for (meta, command) in [
-        (&STOP, crate::engine::Move::Stop),
-        (&GO_TO_END, crate::engine::Move::End),
-        (&LOOP, crate::engine::Move::ToggleLoop),
-    ] {
-        list.register(meta, Effect::Mutating, move |(): ()| {
-            crate::engine::transport_here(command, 0.0);
-            Ok(format!("{}: done", meta.display_name))
-        })?;
-    }
-    for (meta, command) in [
-        (&SEEK, crate::engine::Move::Seek),
-        (&PLAY_FROM, crate::engine::Move::PlayFrom),
-    ] {
-        list.register(meta, Effect::Mutating, move |a: AtArg| {
-            if !a.at.is_finite() || a.at < 0.0 {
-                return Err("`at` is seconds from the start, 0 or more".to_owned());
-            }
-            crate::engine::transport_here(command, a.at);
-            Ok(format!("{}: {:.3} s", meta.display_name, a.at))
-        })?;
-    }
-    Ok(())
-}
-
-static TRACKS: ActionMeta = ActionMeta {
-    category: "Session",
-    ..meta(
-        "SESSION_TRACKS",
-        "tracks",
-        "Tracks",
-        "Every track in the open song: GUID, name, its folder path, folder or not, mute, solo, fader (dB), pan, how many items, its FX, its lanes, whether it is armed and what it records from (`record_input`: none, `audio N`, midi), and for a folder whether the window shows it open (`open`; false: folded to its row). `filter` keeps the tracks whose path contains it.",
-        "Data",
-        "",
-    )
-};
-static DRUM_FUNDAMENTAL: ActionMeta = meta(
+pub(crate) static DRUM_FUNDAMENTAL: ActionMeta = meta(
     "DRUMS_FUNDAMENTAL",
     "drum_fundamental",
     "Drum fundamental",
@@ -151,118 +17,9 @@ static DRUM_FUNDAMENTAL: ActionMeta = meta(
     "",
 );
 
-/// Which tracks.
-#[derive(Facet)]
-struct TracksArg {
-    /// Keep the tracks whose folder path contains this (case aside).
-    filter: Option<String>,
-}
-
-/// A track, as the list describes it.
-#[derive(Facet)]
-struct TrackRow {
-    guid: String,
-    name: String,
-    /// The folders it is in and its name: `Drums/Drum Kit/Kick/Sum/In`.
-    path: String,
-    folder: bool,
-    muted: bool,
-    soloed: bool,
-    /// Its polarity is flipped.
-    inverted: bool,
-    volume_db: f64,
-    pan: f64,
-    items: u32,
-    fx: Vec<String>,
-    /// Its fixed lanes, when it has them, named lanes and the playing
-    /// one first — then the rest only by count.
-    lanes: Vec<LaneRow>,
-    /// Armed to record.
-    armed: bool,
-    /// What it records from: `none`, `audio 1` (an input, from 1), `midi`
-    /// or `raw N`.
-    record_input: String,
-    /// A folder: whether the window shows what is in it (`false`: folded
-    /// to its own row). None for a track.
-    open: Option<bool>,
-}
-
-/// What `input` says, as [`TrackRow::record_input`] reads.
-fn record_input_of(input: daw_proto::track::RecordInput) -> String {
-    use daw_proto::track::RecordInput;
-    match input {
-        RecordInput::None => "none".to_owned(),
-        RecordInput::Audio { channel } => format!("audio {}", channel.saturating_add(1)),
-        RecordInput::Midi { .. } => "midi".to_owned(),
-        RecordInput::Raw(raw) => format!("raw {raw}"),
-    }
-}
-
-/// Which folders the window shows open, by GUID: every track planned as
-/// the window plans its rows ([`crate::folds::apply`]), a folder open
-/// when the row after it is one of its own.
-fn open_folders(tracks: &[daw_proto::Track]) -> std::collections::HashSet<String> {
-    let by_guid: std::collections::HashMap<&str, &daw_proto::Track> =
-        tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
-    let depth = |track: &daw_proto::Track| {
-        let mut depth = 0_u32;
-        let mut at = track.parent_guid.as_deref();
-        while let Some(parent) = at.and_then(|p| by_guid.get(p)) {
-            depth = depth.saturating_add(1);
-            at = parent.parent_guid.as_deref();
-        }
-        depth
-    };
-    let rows: Vec<(daw_proto::Track, u32)> = tracks.iter().map(|t| (t.clone(), depth(t))).collect();
-    let shown = crate::folds::apply(rows);
-    shown
-        .iter()
-        .enumerate()
-        .filter(|(i, (track, _))| track.is_folder && !crate::folds::shut(&shown, *i))
-        .map(|(_, (track, _))| track.guid.clone())
-        .collect()
-}
-
-/// One fixed lane.
-#[derive(Facet)]
-struct LaneRow {
-    lane: u32,
-    name: String,
-    items: u32,
-    plays: bool,
-}
-
-/// `track`'s lanes worth listing: those named something other than their
-/// number, and those playing.
-fn lane_rows(track: &daw_proto::Track, items: &[daw_proto::Item]) -> Vec<LaneRow> {
-    (0..track.lane_count)
-        .filter_map(|lane| {
-            let name = usize::try_from(lane)
-                .ok()
-                .and_then(|i| track.lane_names.get(i))
-                .cloned()
-                .unwrap_or_default();
-            let plays = lane < 64 && track.lane_play_mask & (1_u64 << lane) != 0;
-            let numbered = name.trim().parse::<u32>().is_ok() || name.trim().is_empty();
-            (plays || !numbered).then(|| LaneRow {
-                lane,
-                items: u32::try_from(
-                    items
-                        .iter()
-                        .filter(|i| i.fixed_lane.unwrap_or(0) == lane)
-                        .count(),
-                )
-                .unwrap_or(u32::MAX),
-                name,
-                plays,
-            })
-        })
-        .collect()
-}
-
 /// Which drum.
 #[derive(Facet)]
-struct FundamentalArg {
+pub(crate) struct FundamentalArg {
     /// Its trigger: GUID, path or name.
     trigger: String,
     /// Its mics: GUIDs, paths or names.
@@ -272,418 +29,16 @@ struct FundamentalArg {
 
 #[derive(Facet, Clone, Copy)]
 #[repr(u8)]
-enum DrumRange {
+pub(crate) enum DrumRange {
     Kick,
     Snare,
     Tom,
 }
 
 /// How many hits a page holds unless asked.
-const PAGE: u32 = 200;
+pub(crate) const PAGE: u32 = 200;
 
-/// Which mode.
-#[derive(Facet)]
-struct ModeArg {
-    mode: String,
-}
-
-/// The window's in a process of its own: an action that sets what the
-/// window shows (its mode, a mode's phase), run on the engine's list, is
-/// asked of the window too — run there on the window's own list, where the
-/// shell reads it. In the window's process no window follows it, so the
-/// ask goes nowhere and nothing loops.
-pub(crate) fn also_in_the_window(id: &str, args: String) {
-    if crate::window_queue::engine_has_window() {
-        crate::window_queue::ask(crate::window_queue::Asked::Run {
-            id: id.to_owned(),
-            args,
-            ticket: 0,
-        });
-    }
-}
-
-static SECTIONS: ActionMeta = meta(
-    "SESSION_SECTIONS",
-    "sections",
-    "Sections",
-    "The song's sections (its regions), in order: name, start and end seconds, and the bars they span — what SESSION_VIEW's `section` names.",
-    "View",
-    "",
-);
-
-/// One section.
-#[derive(Facet)]
-pub struct SectionOut {
-    pub name: String,
-    pub start: f64,
-    pub end: f64,
-    pub first_bar: i32,
-    pub last_bar: i32,
-}
-
-/// The song's sections, in order.
-pub fn sections(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<SectionOut> {
-    let mut all: Vec<SectionOut> =
-        <daw::standalone::Standalone as daw::service::region::Regions>::all(daw, project.clone())
-            .into_iter()
-            // The sections lane's (a region on no lane is on it): not the
-            // song's own region, nor an edit zone on the Drums lane.
-            .filter(|r| {
-                r.lane.is_none_or(|l| {
-                    l == engine_domain::ruler_lanes::CoreLane::Sections.lane_index()
-                })
-            })
-            .map(|r| {
-                let (start, end) = (r.time_range.start_seconds(), r.time_range.end_seconds());
-                SectionOut {
-                    name: r.name,
-                    start,
-                    end,
-                    first_bar: crate::song_bars::musical(daw, &project, start + 1e-6).0,
-                    last_bar: crate::song_bars::musical(daw, &project, (end - 1e-6).max(start)).0,
-                }
-            })
-            .collect();
-    all.sort_by(|a, b| a.start.total_cmp(&b.start));
-    all
-}
-
-fn register_sections(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&SECTIONS, Effect::ReadOnly, |(): ()| {
-        let (daw, project) = song()?;
-        Ok(sections(daw, &project))
-    })?;
-    Ok(())
-}
-
-fn register_phase(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&PHASE, Effect::Mutating, |a: PhaseArg| {
-        let (mode, slug) = crate::shared_actions::pick_phase(a.mode.as_deref(), &a.phase)?;
-        engine_domain::mode_phases::choose(mode, slug);
-        also_in_the_window(
-            PHASE.id,
-            format!(r#"{{"phase":"{}","mode":"{}"}}"#, slug, mode.display_name()),
-        );
-        Ok(())
-    })?;
-    Ok(())
-}
-
-static WINDOW_TARGET: ActionMeta = meta(
-    "SESSION_WINDOW_TARGET",
-    "window_target",
-    "Which window the actions drive",
-    "With more than one window following the engine, which one its window actions (SESSION_VIEW, SESSION_ZOOM, SESSION_FRAMES, SESSION_WINDOW, SESSION_MODE…) go to: `window` by name (FTS_WINDOW_NAME, `main` by default); empty or left out: whichever takes them first. Says the windows seen and the one now named.",
-    "View",
-    "",
-);
-
-/// Which window, by name.
-#[derive(Facet)]
-struct WindowTargetArg {
-    window: Option<String>,
-}
-
-/// What [`WINDOW_TARGET`] answers.
-#[derive(Facet)]
-struct WindowTarget {
-    /// The window named now; `None`: whichever takes them first.
-    target: Option<String>,
-    /// The windows that have taken the engine's asks, newest last.
-    seen: Vec<String>,
-}
-
-fn register_window_target(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&WINDOW_TARGET, Effect::Mutating, |a: WindowTargetArg| {
-        if let Some(window) = a.window {
-            crate::window_queue::set_target(Some(window));
-        }
-        Ok(WindowTarget {
-            target: crate::window_queue::target(),
-            seen: crate::window_queue::seen_windows(),
-        })
-    })?;
-    Ok(())
-}
-
-fn register_mode(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&MODE, Effect::Mutating, |a: ModeArg| {
-        let mode = engine_domain::modes::Mode::ALL
-            .into_iter()
-            .find(|m| m.display_name().eq_ignore_ascii_case(a.mode.trim()))
-            .ok_or_else(|| {
-                let names: Vec<&str> = engine_domain::modes::Mode::ALL
-                    .iter()
-                    .map(|m| m.display_name())
-                    .collect();
-                format!("no mode {}: one of {names:?}", a.mode)
-            })?;
-        request_mode(mode);
-        also_in_the_window(MODE.id, format!(r#"{{"mode":"{}"}}"#, mode.display_name()));
-        Ok(())
-    })?;
-    Ok(())
-}
-
-pub static SCREENSET: ActionMeta = meta(
-    "SESSION_SCREENSET",
-    "screenset",
-    "Screenset",
-    "Recall a screenset — a saved layout of the window's panels — by its number or name: 1 Performance, 2 Overview, 3 Session, 4 Mix, 5 Edit, 6 Charts, 7 Signal, or one saved since.",
-    "View",
-    "",
-);
-
-pub static SCREENSET_SAVE: ActionMeta = meta(
-    "SESSION_SCREENSET_SAVE",
-    "save_screenset",
-    "Save Screenset",
-    "Keep the window's layout in the screenset on show, for this kind of screen (phone, tablet or desk, upright or sideways).",
-    "View",
-    "",
-);
-
-pub static SCREENSET_SAVE_AS: ActionMeta = meta(
-    "SESSION_SCREENSET_SAVE_AS",
-    "save_screenset_as",
-    "Save Screenset As",
-    "Keep the window's layout as a new screenset, named `name` (else numbered), and show it.",
-    "View",
-    "",
-);
-
-pub static ARRANGE: ActionMeta = meta(
-    "SESSION_ARRANGE",
-    "arrange",
-    "Arrange Panels",
-    "Turn arranging on or off: every panel shows its name and can be dragged to an edge, beside another, or onto it as a tab (holding W does the same while held).",
-    "View",
-    "",
-);
-
-pub static PANEL: ActionMeta = meta(
-    "SESSION_PANEL",
-    "panel",
-    "Show or Hide a Panel",
-    "Open a panel of `kind` where that kind lives when the window shows none, or close every one it shows: arrangement, mixer, editor, fx-row, transport, progress, chart, chart-editor, lyrics, set, setlist, browser, inspector, versions, collab, rig, switches, navigator, now, gig-chart, tones.",
-    "View",
-    "",
-);
-
-/// Which panel kind.
-#[derive(Facet)]
-struct PanelArg {
-    kind: String,
-}
-
-/// Which screenset: its number key or its name.
-#[derive(Facet)]
-struct ScreensetArg {
-    screenset: String,
-}
-
-/// A name for a new screenset, if any.
-#[derive(Facet)]
-struct SaveAsArg {
-    #[facet(default)]
-    name: Option<String>,
-}
-
-/// The dock actions' one argument.
-#[derive(Facet)]
-struct DockIntentArg {
-    intent: dock_model::DockIntent,
-}
-
-/// The action a dock intent runs and its arguments (JSON) — for the layout's
-/// intents; `None` for a screenset's or Arrange's, which run
-/// `SESSION_SCREENSET*` / `SESSION_ARRANGE` by name.
-#[must_use]
-pub fn dock_action(intent: &dock_model::DockIntent) -> Option<(&'static str, String)> {
-    let id = dock_intent_id(intent)?;
-    let arg = DockIntentArg {
-        intent: intent.clone(),
-    };
-    facet_json::to_string(&arg).ok().map(|json| (id, json))
-}
-
-/// Which dock action names `intent`.
-fn dock_intent_id(intent: &dock_model::DockIntent) -> Option<&'static str> {
-    use dock_model::DockIntent as I;
-    Some(match intent {
-        I::Move { .. } | I::Attach { .. } => PANEL_MOVE.id,
-        I::Open { .. } | I::Duplicate { .. } => PANEL_OPEN.id,
-        I::Close { .. } => PANEL_CLOSE.id,
-        I::Show { .. } => PANEL_SHOW.id,
-        I::Maximize { .. } => PANEL_MAXIMIZE.id,
-        I::Chrome { .. } => PANEL_TABS.id,
-        I::Share { .. } => DOCK_SPLIT.id,
-        I::EdgeSize { .. } | I::EdgeShown { .. } => DOCK_EDGE.id,
-        I::FloatBounds { .. } => DOCK_FLOAT.id,
-        I::Recall { .. } | I::Save | I::SaveAs { .. } | I::Arrange => return None,
-    })
-}
-
-fn register_dock(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    for meta in [
-        &PANEL_MOVE,
-        &PANEL_OPEN,
-        &PANEL_CLOSE,
-        &PANEL_SHOW,
-        &PANEL_MAXIMIZE,
-        &PANEL_TABS,
-        &DOCK_SPLIT,
-        &DOCK_EDGE,
-        &DOCK_FLOAT,
-    ] {
-        list.register(meta, Effect::Mutating, move |a: DockIntentArg| {
-            if dock_intent_id(&a.intent) != Some(meta.id) {
-                return Err(format!("{} does not take that intent", meta.id));
-            }
-            let args = facet_json::to_string(&a).map_err(|e| e.to_string())?;
-            request_dock(DockRequest::Intent(a.intent));
-            also_in_the_window(meta.id, args);
-            Ok(())
-        })?;
-    }
-    list.register(&SCREENSET, Effect::Mutating, |a: ScreensetArg| {
-        let which = a.screenset.trim().to_owned();
-        if which.is_empty() {
-            return Err("name a screenset: its number or its name".to_owned());
-        }
-        request_dock(DockRequest::Recall(which.clone()));
-        let quoted = facet_json::to_string(&which).unwrap_or_default();
-        also_in_the_window(SCREENSET.id, format!(r#"{{"screenset":{quoted}}}"#));
-        Ok(())
-    })?;
-    list.register(&SCREENSET_SAVE, Effect::Mutating, |(): ()| {
-        request_dock(DockRequest::Save);
-        also_in_the_window(SCREENSET_SAVE.id, "{}".to_owned());
-        Ok(())
-    })?;
-    list.register(&SCREENSET_SAVE_AS, Effect::Mutating, |a: SaveAsArg| {
-        let name = a
-            .name
-            .map(|n| n.trim().to_owned())
-            .filter(|n| !n.is_empty());
-        request_dock(DockRequest::SaveAs(name.clone()));
-        let args = name.map_or_else(
-            || "{}".to_owned(),
-            |n| {
-                format!(
-                    r#"{{"name":{}}}"#,
-                    facet_json::to_string(&n).unwrap_or_default()
-                )
-            },
-        );
-        also_in_the_window(SCREENSET_SAVE_AS.id, args);
-        Ok(())
-    })?;
-    list.register(&PANEL, Effect::Mutating, |a: PanelArg| {
-        let kind = a.kind.trim().to_owned();
-        if kind.is_empty() {
-            return Err("name a panel kind".to_owned());
-        }
-        let quoted = facet_json::to_string(&kind).unwrap_or_default();
-        request_dock(DockRequest::TogglePanel(kind));
-        also_in_the_window(PANEL.id, format!(r#"{{"kind":{quoted}}}"#));
-        Ok(())
-    })?;
-    list.register(&DOCKS, Effect::Mutating, |(): ()| {
-        request_dock(DockRequest::ToggleDocks);
-        also_in_the_window(DOCKS.id, "{}".to_owned());
-        Ok(())
-    })?;
-    list.register(&ARRANGE, Effect::Mutating, |(): ()| {
-        request_dock(DockRequest::Arrange);
-        also_in_the_window(ARRANGE.id, "{}".to_owned());
-        Ok(())
-    })?;
-    Ok(())
-}
-
-fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    register_mode(list)?;
-    register_dock(list)?;
-    register_window_target(list)?;
-    register_phase(list)?;
-    crate::key_change::register(list)?;
-    register_sections(list)?;
-    register_tracks(list)?;
-    register_fundamental(list)?;
-    crate::hits::register(list)?;
-    crate::drum_apply::register(list)?;
-    crate::drum_plan::register(list)?;
-    crate::hits_midi::register(list)?;
-    crate::seams::register(list)?;
-    crate::comp_keep::register(list)?;
-    crate::comp_keep::register_main(list)?;
-    crate::item_actions::register(list)?;
-    crate::arrange_actions::register(list)?;
-    crate::notes_actions::register(list)?;
-    crate::library_actions::register(list)?;
-    crate::take_rank::register(list)?;
-    register_track_set(list)?;
-    register_reference(list)?;
-    #[cfg(feature = "native")]
-    crate::fx_actions::register(list)?;
-    #[cfg(feature = "native")]
-    crate::signal_kit::register(list)?;
-    crate::clap_host::signal::register(list)?;
-    crate::signal_offline::register(list)?;
-    #[cfg(feature = "native")]
-    crate::mix_sends::register(list)?;
-    #[cfg(feature = "native")]
-    crate::render_worker::register_routed(list, crate::mix_measure::register)?;
-    #[cfg(feature = "native")]
-    crate::mix_state::register(list)?;
-    #[cfg(feature = "native")]
-    crate::render_worker::register_routed(list, crate::listen::register)?;
-    #[cfg(feature = "native")]
-    crate::render_worker::register(list)?;
-    #[cfg(feature = "native")]
-    crate::mix_snapshot::register(list)?;
-    #[cfg(feature = "native")]
-    crate::mix_variants::register(list)?;
-    crate::vocal_level::register(list)?;
-    crate::automation_actions::register(list)?;
-    #[cfg(feature = "native")]
-    crate::comp::register(list)?;
-    #[cfg(feature = "native")]
-    crate::record::register(list)?;
-    #[cfg(feature = "native")]
-    crate::render_ahead::register(list)?;
-    crate::audio_device::register(list)?;
-    #[cfg(feature = "native")]
-    register_window_controls(list)?;
-    crate::grow::register(list)?;
-    crate::project_new::register(list)?;
-    crate::instrument_tracks::register(list)?;
-    crate::timeline_actions::register(list)?;
-    crate::organize_edit::register(list)?;
-    crate::page::register(list)?;
-    crate::prepare::register(list)?;
-    crate::edit_actions::register(list)?;
-    crate::perf::register(list)?;
-    crate::audio_health::register(list)?;
-    crate::perf_meter::register(list)?;
-    crate::trigger_from_mics::register(list)?;
-    crate::safety_net::register(list)?;
-    crate::history::register(list)?;
-    crate::agent::register(list)?;
-    crate::edit_reads::register(list)?;
-    crate::backup::register(list)?;
-    crate::comp_rank::register(list)?;
-    crate::comp_song::register(list)?;
-    crate::poi::register(list)?;
-    crate::track_regions::register(list)?;
-    crate::ingest::actions::register(list)?;
-    #[cfg(feature = "signal")]
-    crate::rig_actions::register(list)?;
-    Ok(())
-}
-
-static REFERENCE_MAP: ActionMeta = meta(
+pub(crate) static REFERENCE_MAP: ActionMeta = meta(
     "DRUMS_REFERENCE_MAP",
     "drum_reference_map",
     "Drum MIDI map",
@@ -691,7 +46,8 @@ static REFERENCE_MAP: ActionMeta = meta(
     "Drums",
     "",
 );
-static REFERENCE: ActionMeta = meta(
+
+pub(crate) static REFERENCE: ActionMeta = meta(
     "DRUMS_REFERENCE",
     "drum_reference",
     "Drum MIDI notes",
@@ -699,7 +55,8 @@ static REFERENCE: ActionMeta = meta(
     "Drums",
     "",
 );
-static COMPARE: ActionMeta = meta(
+
+pub(crate) static COMPARE: ActionMeta = meta(
     "DRUMS_COMPARE",
     "drum_compare",
     "Drums against the MIDI",
@@ -710,7 +67,7 @@ static COMPARE: ActionMeta = meta(
 
 /// Which drum MIDI, and any of its map set by hand.
 #[derive(Facet)]
-struct MapArg {
+pub(crate) struct MapArg {
     /// The drum MIDI track; found by name (`DRUM MIDI`) when left out.
     track: Option<String>,
     /// Pieces set by hand to a note number each (`{"Kick": 24}`; 0 takes
@@ -722,7 +79,7 @@ struct MapArg {
 
 /// One note number's place.
 #[derive(Facet)]
-struct MapRow {
+pub(crate) struct MapRow {
     pitch: u8,
     notes: u32,
     piece: Option<String>,
@@ -732,7 +89,7 @@ struct MapRow {
 
 /// Which written notes.
 #[derive(Facet)]
-struct ReferenceArg {
+pub(crate) struct ReferenceArg {
     track: Option<String>,
     /// A piece, through the learned map.
     piece: Option<String>,
@@ -746,7 +103,7 @@ struct ReferenceArg {
 
 /// One written note.
 #[derive(Facet)]
-struct NoteRow {
+pub(crate) struct NoteRow {
     time: f64,
     bar: i32,
     beat: f64,
@@ -756,7 +113,7 @@ struct NoteRow {
 
 /// A page of written notes.
 #[derive(Facet)]
-struct NotesPage {
+pub(crate) struct NotesPage {
     total: u32,
     offset: u32,
     notes: Vec<NoteRow>,
@@ -764,7 +121,7 @@ struct NotesPage {
 
 /// Which piece to compare.
 #[derive(Facet)]
-struct CompareArg {
+pub(crate) struct CompareArg {
     /// The piece: `Kick`, `Snare`, `Tom 1`.
     piece: String,
     track: Option<String>,
@@ -778,7 +135,7 @@ struct CompareArg {
 
 /// A note held up to its hit.
 #[derive(Facet)]
-struct NoteVsHit {
+pub(crate) struct NoteVsHit {
     time: f64,
     bar: i32,
     beat: f64,
@@ -789,7 +146,7 @@ struct NoteVsHit {
 
 /// A piece against its part.
 #[derive(Facet)]
-struct CompareResult {
+pub(crate) struct CompareResult {
     piece: String,
     pitches: Vec<u8>,
     notes: u32,
@@ -806,21 +163,21 @@ struct CompareResult {
 }
 
 /// A trigger whose loudest hit is under this (dBFS) is dead.
-const DEAD_TRIGGER_DB: f64 = -45.0;
+pub(crate) const DEAD_TRIGGER_DB: f64 = -45.0;
 
 /// How far a written note and its hit may be, unless asked (seconds).
-const NOTE_WINDOW: f64 = 0.06;
+pub(crate) const NOTE_WINDOW: f64 = 0.06;
 
 /// The drum MIDI's notes, each live piece's name, trigger and hits, and
 /// the learned map.
-type Reference = (
+pub(crate) type Reference = (
     Vec<crate::drum_reference::RefNote>,
     Vec<(String, String, Vec<f64>)>,
     Vec<crate::drum_reference::Mapped>,
 );
 
 /// The kit's pieces' hits and the learned map, for the drum MIDI `track`.
-fn reference(
+pub(crate) fn reference(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     track: Option<&str>,
@@ -853,36 +210,7 @@ fn reference(
     Ok((notes, pieces, map))
 }
 
-fn register_reference(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    #[cfg(feature = "signal")]
-    register_samples(list)?;
-    #[cfg(feature = "signal")]
-    register_samples_align(list)?;
-    #[cfg(feature = "signal")]
-    register_bass_rig(list)?;
-    register_items(list)?;
-    register_lanes(list)?;
-    register_remove(list)?;
-    #[cfg(feature = "native")]
-    register_verbs(list)?;
-    #[cfg(feature = "native")]
-    register_save(list)?;
-    #[cfg(feature = "native")]
-    register_undo(list)?;
-    register_style(list)?;
-    register_drum_settings(list)?;
-    register_peaks(list)?;
-    register_reference_map(list)?;
-    register_reference_notes(list)?;
-    register_compare(list)?;
-    register_restore_midi(list)?;
-    register_copy_to_lane(list)?;
-    register_review(list)?;
-    register_level(list)?;
-    Ok(())
-}
-
-static LEVEL: ActionMeta = meta(
+pub(crate) static LEVEL: ActionMeta = meta(
     "DRUMS_LEVEL",
     "drums_level",
     "Level the drums",
@@ -893,7 +221,7 @@ static LEVEL: ActionMeta = meta(
 
 /// What to level.
 #[derive(Facet)]
-struct LevelArg {
+pub(crate) struct LevelArg {
     #[facet(default)]
     pieces: Vec<String>,
     /// How consistent, percent: 100 every stroke one level.
@@ -904,7 +232,7 @@ struct LevelArg {
     dry_run: Option<bool>,
 }
 
-fn register_level(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_level(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&LEVEL, Effect::Mutating, |a: LevelArg| {
         let (daw, project) = song()?;
         let knobs = crate::drum_level::Knobs {
@@ -923,7 +251,7 @@ fn register_level(list: &ActionList) -> Result<(), architect::action::ActionErro
     Ok(())
 }
 
-static REVIEW: ActionMeta = meta(
+pub(crate) static REVIEW: ActionMeta = meta(
     "DRUMS_REVIEW",
     "drums_review",
     "Review the drum edit against the MIDI",
@@ -934,7 +262,7 @@ static REVIEW: ActionMeta = meta(
 
 /// What to review.
 #[derive(Facet)]
-struct ReviewArg {
+pub(crate) struct ReviewArg {
     #[facet(default)]
     sections: Vec<String>,
     from: Option<f64>,
@@ -945,7 +273,7 @@ struct ReviewArg {
 
 /// One hit off its note.
 #[derive(Facet)]
-struct OffNote {
+pub(crate) struct OffNote {
     piece: String,
     /// Where it plays now, counted (`42.3a`), and its time.
     now: String,
@@ -959,7 +287,7 @@ struct OffNote {
 
 /// A span reviewed.
 #[derive(Facet)]
-struct Reviewed {
+pub(crate) struct Reviewed {
     name: String,
     hits: u32,
     /// On their own piece's note.
@@ -977,11 +305,11 @@ struct Reviewed {
 }
 
 /// How near its note a hit is on it, seconds.
-const ON_NOTE_REVIEW: f64 = 0.005;
+pub(crate) const ON_NOTE_REVIEW: f64 = 0.005;
 
 /// The times of `notes` the `map` gives piece `name` — or any piece of
 /// the kit, `None` — by time.
-fn piece_notes(
+pub(crate) fn piece_notes(
     notes: &[crate::drum_reference::RefNote],
     map: &[crate::drum_reference::Mapped],
     name: Option<&str>,
@@ -1004,7 +332,7 @@ fn piece_notes(
 }
 
 /// The time in `list` (by time) nearest `t`.
-fn nearest_of(list: &[f64], t: f64) -> Option<f64> {
+pub(crate) fn nearest_of(list: &[f64], t: f64) -> Option<f64> {
     let at = list.partition_point(|l| *l < t);
     [at.checked_sub(1), Some(at)]
         .into_iter()
@@ -1013,7 +341,7 @@ fn nearest_of(list: &[f64], t: f64) -> Option<f64> {
         .min_by(|x, y| (x - t).abs().total_cmp(&(y - t).abs()))
 }
 
-fn register_review(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_review(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REVIEW, Effect::ReadOnly, |a: ReviewArg| {
         let (daw, project) = song()?;
         let kit = kit(daw, &project);
@@ -1109,7 +437,7 @@ fn register_review(list: &ActionList) -> Result<(), architect::action::ActionErr
     Ok(())
 }
 
-static COPY_TO_LANE: ActionMeta = meta(
+pub(crate) static COPY_TO_LANE: ActionMeta = meta(
     "TRACK_COPY_TO_LANE",
     "track_copy_to_lane",
     "Copy an item to a lane",
@@ -1120,14 +448,16 @@ static COPY_TO_LANE: ActionMeta = meta(
 
 /// Which item, onto which lane.
 #[derive(Facet)]
-struct CopyToLaneArg {
+pub(crate) struct CopyToLaneArg {
     item: String,
     lane: u32,
     from: Option<f64>,
     to: Option<f64>,
 }
 
-fn register_copy_to_lane(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_copy_to_lane(
+    list: &ActionList,
+) -> Result<(), architect::action::ActionError> {
     list.register(&COPY_TO_LANE, Effect::Mutating, |a: CopyToLaneArg| {
         let (daw, project) = song()?;
         let label = "Copy an item to a lane";
@@ -1185,7 +515,7 @@ fn register_copy_to_lane(list: &ActionList) -> Result<(), architect::action::Act
     Ok(())
 }
 
-static RESTORE_MIDI: ActionMeta = meta(
+pub(crate) static RESTORE_MIDI: ActionMeta = meta(
     "TRACK_RESTORE_MIDI",
     "track_restore_midi",
     "Restore a MIDI track",
@@ -1196,12 +526,14 @@ static RESTORE_MIDI: ActionMeta = meta(
 
 /// Which MIDI track, from which file.
 #[derive(Facet)]
-struct RestoreMidiArg {
+pub(crate) struct RestoreMidiArg {
     track: String,
     from: String,
 }
 
-fn register_restore_midi(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_restore_midi(
+    list: &ActionList,
+) -> Result<(), architect::action::ActionError> {
     list.register(&RESTORE_MIDI, Effect::Mutating, |a: RestoreMidiArg| {
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
@@ -1212,52 +544,8 @@ fn register_restore_midi(list: &ActionList) -> Result<(), architect::action::Act
     Ok(())
 }
 
-static EDIT_LANES: ActionMeta = meta(
-    "DRUMS_EDIT_LANES",
-    "drums_edit_lanes",
-    "Comp and edit lanes",
-    "Set the kit up to be edited, every drum track alike: its comping lane (the comp that plays) named COMP, and a new lane EDIT holding a copy of it, playing — so edits land on EDIT and COMP stays the comp they were made from (DRUMS_PLAY_LANE to hear either). The takes and their comp areas are untouched: EDIT is added after the last lane. A track already set up is left — unless `reset`, which starts the edit over: each EDIT lane's slices dropped and its COMP copied onto it again (one undo step). `dry_run` says what it would do. Sets a mark on the song first, in its history (`Before DRUMS_EDIT_LANES <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made. `mark` (any mutating drum action takes one): a mark of that name set on the song first, a restore point SESSION_HISTORY_RESTORE `mark` goes back to; every call is a step of its own in the history, never merged with the one before.",
-    "Drums",
-    "",
-);
-static PLAY_LANE: ActionMeta = meta(
-    "DRUMS_PLAY_LANE",
-    "drums_play_lane",
-    "Play a lane",
-    "Play the kit's lane named `lane` (COMP, EDIT, or any lane's name) on every drum track at once — the edited drums against the comp they were made from.",
-    "Drums",
-    "",
-);
-
-/// Whether to only say.
-#[derive(Facet)]
-struct LanesArg {
-    /// A mark of this name set on the song first (`history_marks`).
-    mark: Option<String>,
-    dry_run: Option<bool>,
-    /// Start the edit over: each EDIT lane's slices dropped and its COMP
-    /// copied onto it again.
-    reset: Option<bool>,
-}
-
-/// What setting the lanes up did, track by track.
-#[derive(Facet)]
-struct LanesOut {
-    /// `path: comp lane → EDIT lane (n items copied)`, or why it was left.
-    tracks: Vec<String>,
-    applied: bool,
-    /// The checkpoint forked before (`safety_net`); none for a dry run.
-    checkpoint: Option<String>,
-}
-
-/// A lane to play.
-#[derive(Facet)]
-struct PlayLaneArg {
-    lane: String,
-}
-
 #[cfg(feature = "native")]
-static VERBS: ActionMeta = meta(
+pub(crate) static VERBS: ActionMeta = meta(
     "DRUMS_VERBS",
     "drums_verbs",
     "Drum verbs, in time",
@@ -1269,12 +557,12 @@ static VERBS: ActionMeta = meta(
 /// Whether to only say.
 #[cfg(feature = "native")]
 #[derive(Facet)]
-struct VerbsArg {
+pub(crate) struct VerbsArg {
     dry_run: Option<bool>,
 }
 
 #[cfg(feature = "native")]
-fn register_verbs(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_verbs(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&VERBS, Effect::Mutating, |a: VerbsArg| {
         let (daw, project) = song()?;
         let dry = a.dry_run.unwrap_or(false);
@@ -1308,7 +596,7 @@ fn register_verbs(list: &ActionList) -> Result<(), architect::action::ActionErro
 }
 
 #[cfg(feature = "native")]
-static GROUP: ActionMeta = meta(
+pub(crate) static GROUP: ActionMeta = meta(
     "DRUMS_GROUP",
     "drums_group",
     "Group the kit",
@@ -1318,7 +606,7 @@ static GROUP: ActionMeta = meta(
 );
 
 #[cfg(feature = "native")]
-static TRIGGERS: ActionMeta = meta(
+pub(crate) static TRIGGERS: ActionMeta = meta(
     "DRUMS_TRIGGERS",
     "drums_triggers",
     "Mute the triggers",
@@ -1326,446 +614,6 @@ static TRIGGERS: ActionMeta = meta(
     "Drums",
     "",
 );
-
-/// No arguments.
-#[cfg(feature = "native")]
-#[derive(Facet)]
-struct NoArg {}
-
-/// Where to save, if not the song's own `.session`. Only `to`: a
-/// misnamed argument (`dir`) would otherwise save over the song's own.
-#[cfg(feature = "native")]
-#[derive(Facet)]
-#[facet(deny_unknown_fields)]
-struct SaveArg {
-    to: Option<String>,
-}
-
-#[cfg(feature = "native")]
-static CHECK_SAVED: ActionMeta = meta(
-    "SESSION_CHECK_SAVED",
-    "session_check_saved",
-    "Check a saved song",
-    "Reopen a saved project file (`dir`: a `Song.session`, or an alternative `Song.session/Organized`) as a second song, as a reopen would, and set it beside the song open now as the project doc reads both: every track with its FX and what they hold, sends, automation, lanes and groups; every item with its take, stretch markers and notes; markers, regions and tempo. Says `the same` or what differs. The second song is closed again.",
-    "Session",
-    "",
-);
-
-/// The folder to check.
-#[cfg(feature = "native")]
-#[derive(Facet)]
-struct CheckSavedArg {
-    dir: String,
-}
-
-#[cfg(feature = "native")]
-static MARK_KINDS: ActionMeta = meta(
-    "SESSION_MARK_KINDS",
-    "session_mark_kinds",
-    "Mark the kit's kinds",
-    "Write on every track of the kit what the golden template says it is — piece, Sum, mic, trigger, sub, sample, reverb — matched by name, for a song prepared before kinds were kept on the track. The scenes (Edit mode's rows above all) read them there. One undo step. Says how many tracks were marked.",
-    "Session",
-    "",
-);
-
-static CHECKPOINT: ActionMeta = meta(
-    "SESSION_CHECKPOINT",
-    "session_checkpoint",
-    "Save a checkpoint",
-    "Save the song and fork a named alternative from it as it is now (`name`: \"Organized\", \"Mix A\") — a branch of the song's own project file (`Song.session`), sharing everything it had and keeping only what is done to it after, the way Logic keeps alternatives. The song stays open, under its own name. Open one later from the start screen's Recent or SESSION_OPEN.",
-    "Session",
-    "",
-);
-
-/// The checkpoint's name.
-#[cfg(feature = "native")]
-#[derive(Facet)]
-struct CheckpointArg {
-    name: String,
-}
-
-#[cfg(feature = "native")]
-static ALTERNATIVES: ActionMeta = meta(
-    "SESSION_ALTERNATIVES",
-    "session_alternatives",
-    "The song's alternatives",
-    "The open song's own version and its alternatives (checkpoints saved with SESSION_CHECKPOINT), the newest first: name, folder, when saved. Read-only.",
-    "Session",
-    "",
-);
-
-#[cfg(feature = "native")]
-static STREAMS: ActionMeta = meta(
-    "SESSION_STREAMS",
-    "session_streams",
-    "What is streaming",
-    "Every song streamed in from elsewhere (a Task library, a share link, another engine) and how far along it is: `state` local (every recording it plays is here, kept on disk), arriving, or streaming (nothing yet); its recordings, each with its bytes and how many have arrived, the least arrived first; where they are kept. `song` (the engine project) narrows it to one; `top` caps the recordings listed (all when left out). Read-only.",
-    "Session",
-    "",
-);
-
-#[cfg(feature = "native")]
-static STREAM_QUALITY: ActionMeta = meta(
-    "SESSION_STREAM_QUALITY",
-    "session_stream_quality",
-    "Streaming quality",
-    "What streamed songs are heard from, on this device: `proxies` (the compressed proxies only; an original is never fetched) or `full` (the proxies first, then — once every song's proxies are here — the original recordings, fetched one at a time behind everything else, each take moving to its original the next time its song is stopped). Left out, says what it is. Kept for every set.",
-    "Session",
-    "",
-);
-
-/// The quality to stream at, or nothing to ask what it is.
-#[cfg(feature = "native")]
-#[derive(Facet)]
-struct StreamQualityArg {
-    quality: Option<String>,
-}
-
-/// Which song, and how many of its recordings to list.
-#[cfg(feature = "native")]
-#[derive(Facet)]
-struct StreamsArg {
-    song: Option<String>,
-    top: Option<u32>,
-}
-
-#[cfg(feature = "native")]
-static RECENT: ActionMeta = meta(
-    "SESSION_RECENT",
-    "session_recent",
-    "Songs opened lately",
-    "The songs and setlists opened lately, the newest first: name, the version that was open (the song, or which alternative), when, and the song's alternatives. Read-only.",
-    "Session",
-    "",
-);
-
-/// Whether the open song has changes it was not saved with; `None` when
-/// that is not known.
-#[cfg(feature = "native")]
-#[must_use]
-pub(crate) fn open_song_unsaved() -> Option<bool> {
-    let (daw, ProjectContext::Project(guid)) = song().ok()? else {
-        return None;
-    };
-    crate::projects::unsaved(daw, &guid)
-}
-
-/// The open song's versions, for the top bar's Versions.
-///
-/// The song's own (`"The song"`) and its checkpoints, the newest first —
-/// each its name, when it was saved, where it is, and whether it is the
-/// one open.
-#[cfg(feature = "native")]
-#[must_use]
-pub(crate) fn open_song_versions() -> Vec<crate::projects::Version> {
-    let Ok((daw, ProjectContext::Project(guid))) = song() else {
-        return Vec::new();
-    };
-    let Some(open) = daw.read_project(&guid, |p| std::path::PathBuf::from(&p.info.path)) else {
-        return Vec::new();
-    };
-    let Ok(base) = song_base(daw, &guid) else {
-        return Vec::new();
-    };
-    let same = |a: &std::path::Path, b: &std::path::Path| {
-        std::path::absolute(a).ok() == std::path::absolute(b).ok()
-    };
-    let mut out: Vec<crate::projects::Version> = crate::projects::main_of(&base)
-        .map(|path| crate::projects::Version {
-            name: "The song".to_owned(),
-            when: String::new(),
-            open: crate::projects::alternative_name(&open).is_none(),
-            path,
-        })
-        .into_iter()
-        .collect();
-    out.extend(crate::projects::alternatives(&base).into_iter().map(|alt| {
-        crate::projects::Version {
-            open: same(&alt.path, &open),
-            name: alt.name,
-            when: crate::projects::ago(alt.saved),
-            path: alt.path,
-        }
-    }));
-    out
-}
-
-/// The open song's base ([`crate::projects::base_of`]): what its
-/// alternatives are kept beside.
-#[cfg(feature = "native")]
-fn song_base(daw: &daw::standalone::Standalone, guid: &str) -> Result<std::path::PathBuf, String> {
-    let path = daw
-        .read_project(guid, |p| p.info.path.clone())
-        .ok_or("no song open")?;
-    crate::projects::base_of(std::path::Path::new(&path))
-        .ok_or_else(|| format!("{path} is not a song's file: nowhere to keep alternatives"))
-}
-
-#[cfg(feature = "native")]
-
-static JOBS: ActionMeta = meta(
-    "SESSION_JOBS",
-    "session_jobs",
-    "Work in the background",
-    "What is being done off the window's thread right now — reading waveforms, slicing them, opening or saving a project file — each with how far along (`done` of `total`; a total of 0 is work that does not know its length). What the bottom bar shows. Empty when nothing is running. Read-only.",
-    "View",
-    "",
-);
-
-/// One job, as listed.
-#[derive(Facet)]
-struct JobRow {
-    label: String,
-    done: u64,
-    total: u64,
-}
-
-static ITEM_STYLE: ActionMeta = meta(
-    "SESSION_ITEM_STYLE",
-    "session_item_style",
-    "Item style",
-    "How items are drawn: `outlined: true` (the default) a faint body in the item's colour with the waveform standing out over it in the full colour and a line round each item; `false` the half-strength block of colour the waveform is read against.",
-    "View",
-    "",
-);
-
-/// Outlined or not.
-#[derive(Facet)]
-struct ItemStyleArg {
-    outlined: bool,
-}
-
-static STOP_BEHAVIOUR: ActionMeta = meta(
-    "SESSION_STOP_BEHAVIOUR",
-    "session_stop_behaviour",
-    "Stop behaviour",
-    "What Stop does with the cursor: `behaviour: \"return\"` (the default) puts it back where play started, `\"stay\"` leaves it where it stopped. Any other value, or an empty one, only reads the setting.",
-    "Transport",
-    "",
-);
-
-/// The stop behaviour to set, or nothing to read it.
-#[derive(Facet)]
-struct StopBehaviourArg {
-    behaviour: String,
-}
-
-fn register_style(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&STOP_BEHAVIOUR, Effect::Mutating, |a: StopBehaviourArg| {
-        if let Some(stop) = crate::play_return::Stop::from_slug(&a.behaviour) {
-            crate::play_return::set(stop);
-        }
-        Ok(crate::play_return::get().slug())
-    })?;
-    list.register(&JOBS, Effect::ReadOnly, |(): ()| {
-        Ok(crate::jobs::running()
-            .into_iter()
-            .map(
-                |crate::jobs::Running {
-                     label, done, total, ..
-                 }| JobRow {
-                    label,
-                    done: u64::try_from(done).unwrap_or(u64::MAX),
-                    total: u64::try_from(total).unwrap_or(u64::MAX),
-                },
-            )
-            .collect::<Vec<_>>())
-    })?;
-    list.register(&ITEM_STYLE, Effect::Mutating, |a: ItemStyleArg| {
-        crate::options::OUTLINED.set(a.outlined);
-        // The lanes are recorded with their bodies: read back, drawn anew.
-        crate::song_model::request_resync();
-        Ok(if a.outlined { "outlined" } else { "filled" })
-    })?;
-    Ok(())
-}
-
-static MULTITRACKS: ActionMeta = meta(
-    "SESSION_MULTITRACKS",
-    "session_multitracks",
-    "Load the multitracks",
-    "Hear every streamed song by its stems: they all come in now, and each song moves over from its stereo reference as they arrive. Says how the songs are heard (`stems`, and `referenced` while any still plays its reference).",
-    "Streaming",
-    "",
-);
-
-static GROUPING: ActionMeta = meta(
-    "SESSION_GROUPING",
-    "session_grouping",
-    "Grouping",
-    "Whether a fader, mute or solo moved on a grouped track moves its group (`on`). Says what it is now.",
-    "Mix",
-    "",
-);
-
-/// Grouping on or off.
-#[cfg(feature = "native")]
-#[derive(Facet)]
-struct GroupingArg {
-    on: bool,
-}
-
-static ACTIONS: ActionMeta = meta(
-    "SESSION_ACTIONS",
-    "session_actions",
-    "Actions a palette runs",
-    "The actions that take nothing and run at once — what a command palette offers — each its `id`, `label`, `group`, `shortcut`, `description` and whether it can run now (`enabled`). Read-only.",
-    "View",
-    "",
-);
-
-/// An action a palette runs.
-#[cfg(feature = "native")]
-#[derive(Facet)]
-pub struct PaletteRow {
-    pub id: String,
-    pub label: String,
-    pub group: String,
-    pub shortcut: String,
-    pub description: String,
-    pub enabled: bool,
-}
-
-/// The actions a palette offers, as the engine lists them
-/// (`SESSION_ACTIONS`): none when it cannot say.
-#[cfg(feature = "native")]
-#[must_use]
-pub fn palette() -> Vec<PaletteRow> {
-    run(ACTIONS.id, b"")
-        .ok()
-        .and_then(|bytes| facet_json::from_slice::<Vec<PaletteRow>>(&bytes).ok())
-        .unwrap_or_default()
-}
-
-/// What a window's controls ask of the engine: the multitracks, grouping,
-/// the song's versions and the palette's actions — so a window in another
-/// process (and MCP, and the CLI) reads and sets them where they live.
-#[cfg(feature = "native")]
-fn register_window_controls(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&MULTITRACKS, Effect::Mutating, |(): ()| {
-        crate::reference_play::load_multitracks();
-        Ok::<_, String>(crate::view::Listening {
-            stems: crate::reference_play::multitracks(),
-            referenced: crate::reference_play::any(),
-        })
-    })?;
-    list.register(&GROUPING, Effect::Mutating, |a: GroupingArg| {
-        crate::options::GROUPING.set(a.on);
-        crate::options::grouping_changed(a.on);
-        Ok::<_, String>(a.on)
-    })?;
-    list.register(&VERSIONS, Effect::ReadOnly, |(): ()| {
-        Ok::<_, String>(VersionsRead {
-            versions: open_song_versions()
-                .into_iter()
-                .map(|v| VersionRow {
-                    name: v.name,
-                    when: v.when,
-                    path: v.path.to_string_lossy().into_owned(),
-                    open: v.open,
-                })
-                .collect(),
-            unsaved: open_song_unsaved(),
-        })
-    })?;
-    list.register(&ACTIONS, Effect::ReadOnly, |(): ()| {
-        let all = crate::actions::list();
-        Ok::<_, String>(
-            all.infos()
-                .into_iter()
-                .filter(|a| a.params_schema.is_none() && !all.is_async(&a.id))
-                .map(|a| PaletteRow {
-                    label: if a.display_name.is_empty() {
-                        a.id.clone()
-                    } else {
-                        a.display_name
-                    },
-                    id: a.id,
-                    group: if a.group.is_empty() {
-                        a.category
-                    } else {
-                        a.group
-                    },
-                    shortcut: a.shortcut,
-                    description: a.description,
-                    enabled: a.enabled,
-                })
-                .collect::<Vec<_>>(),
-        )
-    })?;
-    Ok(())
-}
-
-#[cfg(feature = "native")]
-fn register_undo(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&FOLD, Effect::Mutating, |a: FoldArg| {
-        // Told by the engine which folders it changed: set here as settled.
-        if !a.folders.is_empty() {
-            for folder in &a.folders {
-                crate::folds::toggle(folder, !a.open);
-            }
-            return Ok(a.folders);
-        }
-        let (daw, project) = song()?;
-        let tracks = daw::service::Tracks::all(daw, project);
-        let guid = crate::shared_actions::resolve_in(&tracks, &a.track)?;
-        let changed = crate::shared_actions::folds_of(&tracks, &guid, a.open);
-        for (folder, _) in &changed {
-            crate::folds::toggle(folder, !a.open);
-        }
-        let (folders, opened): (Vec<String>, Vec<String>) = changed.into_iter().unzip();
-        // The folds are the window's view: run here, the window is asked
-        // too, told the folders settled so the two agree.
-        also_in_the_window(
-            FOLD.id,
-            serde_json::json!({ "track": guid, "open": a.open, "folders": folders }).to_string(),
-        );
-        Ok(opened)
-    })?;
-    list.register(&UNDO, Effect::Mutating, |_: NoArg| {
-        let (daw, project) = song()?;
-        // A song open from its file undoes through its doc: only this
-        // peer's steps, a collaborator's edits left standing.
-        if let Some(said) = undo_through_doc(daw, &project, true)? {
-            return Ok(said);
-        }
-        let label = daw::service::Projects::last_undo_label(daw, project.clone());
-        if !daw::service::Projects::undo(daw, project.clone()) {
-            stepped();
-            return Ok("nothing to undo".to_owned());
-        }
-        stepped();
-        samples_follow(daw, &project, crate::hits_midi::Mode::Follow);
-        crate::changes::announce(crate::changes::Change::Marks);
-        crate::song_model::request_resync();
-        crate::actions::list().changed("items", "undo");
-        Ok(format!(
-            "undid {}",
-            label.unwrap_or_else(|| "a step".to_owned())
-        ))
-    })?;
-    list.register(&REDO, Effect::Mutating, |_: NoArg| {
-        let (daw, project) = song()?;
-        if let Some(said) = undo_through_doc(daw, &project, false)? {
-            return Ok(said);
-        }
-        let label = daw::service::Projects::last_redo_label(daw, project.clone());
-        if !daw::service::Projects::redo(daw, project.clone()) {
-            stepped();
-            return Ok("nothing to redo".to_owned());
-        }
-        stepped();
-        samples_follow(daw, &project, crate::hits_midi::Mode::Follow);
-        crate::changes::announce(crate::changes::Change::Marks);
-        crate::song_model::request_resync();
-        crate::actions::list().changed("items", "redo");
-        Ok(format!(
-            "redid {}",
-            label.unwrap_or_else(|| "a step".to_owned())
-        ))
-    })?;
-    Ok(())
-}
 
 /// The kit's hits as MIDI (and so its samples) made to agree with the
 /// hits after an edit step (`Reconcile`: a view edited in that step is
@@ -1802,241 +650,7 @@ pub fn samples_follow(
     }
 }
 
-fn stepped() {
-    undone_there();
-    // A window in another process counts it too.
-    #[cfg(feature = "native")]
-    crate::studio_engine::view_host::changed(None, crate::view::Change::Undone);
-}
-
-/// Undo (`back`) or redo through the song's doc, when it is open from its
-/// project file: what to say, or `None` for the engine's own undo.
-#[cfg(feature = "native")]
-fn undo_through_doc(
-    daw: &daw::standalone::Standalone,
-    project: &daw::service::ProjectContext,
-    back: bool,
-) -> Result<Option<String>, String> {
-    use crate::project_file::Undone;
-    let daw::service::ProjectContext::Project(guid) = project else {
-        return Ok(None);
-    };
-    let done = if back {
-        crate::project_file::undo(daw, guid)?
-    } else {
-        crate::project_file::redo(daw, guid)?
-    };
-    let (verb, none) = if back {
-        ("undid", "nothing to undo")
-    } else {
-        ("redid", "nothing to redo")
-    };
-    Ok(match done {
-        Undone::NotOpen => None,
-        Undone::Nothing => {
-            stepped();
-            Some(none.to_owned())
-        }
-        Undone::Step(name) => {
-            stepped();
-            samples_follow(daw, project, crate::hits_midi::Mode::Follow);
-            crate::changes::announce(crate::changes::Change::Marks);
-            crate::song_model::request_resync();
-            crate::actions::list().changed("items", if back { "undo" } else { "redo" });
-            Some(format!("{verb} {name}"))
-        }
-    })
-}
-
-#[cfg(feature = "native")]
-fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&SELECT_TRACK, Effect::Mutating, |a: SelectTrackArg| {
-        let (daw, project) = song()?;
-        let guid = resolve(daw, &project, &a.track)?;
-        let at = daw::service::TrackRef::Guid(guid.clone());
-        if a.add {
-            daw::service::Tracks::set_selected(daw, project, at, true)
-        } else {
-            daw::service::Tracks::select_exclusive(daw, project, at)
-        }
-        .map_err(|e| e.to_string())?;
-        crate::actions::list().changed("tracks", &guid);
-        Ok(guid)
-    })?;
-    list.register(&MARK_KINDS, Effect::Mutating, |_: NoArg| {
-        let (daw, project) = song()?;
-        daw::service::Projects::begin_undo_block(daw, project.clone(), "Mark the kit's kinds");
-        let marked =
-            dynamic_template::apply::DawTarget::on(daw.clone(), project.clone()).mark_kit_kinds();
-        daw::service::Projects::end_undo_block(daw, project, "Mark the kit's kinds", None);
-        let marked = marked.map_err(|e| e.to_string())?;
-        crate::song_model::request_resync();
-        Ok(format!("{marked} tracks marked"))
-    })?;
-    list.register(&CHECKPOINT, Effect::Mutating, |a: CheckpointArg| {
-        let (daw, project) = song()?;
-        let ProjectContext::Project(guid) = &project else {
-            return Err("no song open".to_owned());
-        };
-        let from = std::path::PathBuf::from(
-            daw.read_project(guid, |p| p.info.path.clone())
-                .ok_or("no song open")?,
-        );
-        let file = crate::project_file::fork(daw, guid, &from, &a.name)?;
-        // The song was saved on the way: nothing unsaved now.
-        crate::projects::mark_saved(daw, guid);
-        Ok(format!(
-            "saved the song and forked {} from it in {}; the song stays open",
-            a.name.trim(),
-            file.display()
-        ))
-    })?;
-    list.register(&STREAMS, Effect::ReadOnly, |a: StreamsArg| {
-        let mut songs = crate::stream_set::report();
-        for s in &mut songs {
-            s.readiness = crate::stream_set::readiness(&s.project);
-        }
-        if let Some(song) = &a.song {
-            songs.retain(|s| &s.project == song);
-        }
-        if let Some(top) = a.top {
-            for s in &mut songs {
-                s.recordings.truncate(top as usize);
-            }
-        }
-        Ok(songs)
-    })?;
-    list.register(&STREAM_QUALITY, Effect::Mutating, |a: StreamQualityArg| {
-        use crate::stream_quality::{Quality, current, set};
-        if let Some(word) = a.quality.as_deref() {
-            let quality = Quality::parse(word)
-                .ok_or_else(|| format!("`quality`: `proxies` or `full`, not {word:?}"))?;
-            set(quality);
-        }
-        Ok(current().key().to_owned())
-    })?;
-    list.register(&ALTERNATIVES, Effect::ReadOnly, |(): ()| {
-        let (daw, project) = song()?;
-        let ProjectContext::Project(guid) = &project else {
-            return Err("no song open".to_owned());
-        };
-        let base = song_base(daw, guid)?;
-        let unsaved = match crate::projects::unsaved(daw, guid) {
-            Some(true) => " (unsaved changes)",
-            Some(false) => " (saved)",
-            None => "",
-        };
-        let mut out = vec![format!(
-            "the song{unsaved}: {}",
-            crate::projects::main_of(&base)
-                .map_or_else(|| "(not saved yet)".to_owned(), |p| p.display().to_string())
-        )];
-        out.extend(crate::projects::alternatives(&base).into_iter().map(|alt| {
-            format!(
-                "{}: {} (saved {})",
-                alt.name,
-                alt.path.display(),
-                crate::projects::ago(alt.saved)
-            )
-        }));
-        Ok(out)
-    })?;
-    list.register(&RECENT, Effect::ReadOnly, |(): ()| {
-        Ok(crate::projects::recent()
-            .into_iter()
-            .map(|r| {
-                let version = r
-                    .opened_alternative()
-                    .map_or_else(String::new, |alt| format!(" as {alt}"));
-                let alternatives: Vec<String> = crate::projects::alternatives(&r.base)
-                    .into_iter()
-                    .map(|a| a.name)
-                    .collect();
-                format!(
-                    "{}{version}, {} — {}{}",
-                    r.name(),
-                    crate::projects::ago(r.at),
-                    r.opened.display(),
-                    if alternatives.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" (alternatives: {})", alternatives.join(", "))
-                    }
-                )
-            })
-            .collect::<Vec<_>>())
-    })?;
-    list.register(&SAVE, Effect::Mutating, |a: SaveArg| {
-        let traced =
-            crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("SESSION_SAVE"));
-        let out = save(a);
-        traced.outcome(&out);
-        out
-    })?;
-    register_check_saved(list)
-}
-
-/// `SESSION_SAVE`: see its description.
-fn save(a: SaveArg) -> Result<String, String> {
-    {
-        let (daw, project) = song()?;
-        let ProjectContext::Project(guid) = &project else {
-            return Err("no song open".to_owned());
-        };
-        // A new song has no file yet: its first save names it.
-        let untitled = crate::project_new::untitled(daw, guid);
-        let dir = if let Some(to) = a.to.clone() {
-            std::path::PathBuf::from(to)
-        } else if untitled {
-            return Err(
-                "the song is untitled: save it with `to`, the file it goes in — its name becomes the song's"
-                    .to_owned(),
-            );
-        } else {
-            let from = std::path::PathBuf::from(
-                daw.read_project(guid, |p| p.info.path.clone())
-                    .ok_or("no song open")?,
-            );
-            if from.extension().is_some_and(|e| e == "session") {
-                from
-            } else {
-                from.with_extension("session")
-            }
-        };
-        let own = a.to.is_none() || untitled;
-        let stage = tracing::info_span!("save.write").entered();
-        let at = crate::session_file::save_session(daw, guid, &dir)?;
-        drop(stage);
-        if untitled {
-            crate::project_new::named(daw, guid, &dir, &at);
-        }
-        if own {
-            // The song itself, saved: nothing unsaved now. (A copy saved
-            // elsewhere leaves the song as unsaved as it was.)
-            crate::projects::mark_saved(daw, guid);
-        }
-        Ok(format!("saved to {}", at.display()))
-    }
-}
-
-/// `SESSION_CHECK_SAVED`.
-fn register_check_saved(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&CHECK_SAVED, Effect::ReadOnly, |a: CheckSavedArg| {
-        let (daw, project) = song()?;
-        let ProjectContext::Project(guid) = &project else {
-            return Err("no song open".to_owned());
-        };
-        let apart = crate::project_file::check(daw, guid, std::path::Path::new(&a.dir))?;
-        Ok(if apart.is_empty() {
-            vec!["the same".to_owned()]
-        } else {
-            apart
-        })
-    })?;
-    Ok(())
-}
-
-static REMOVE: ActionMeta = meta(
+pub(crate) static REMOVE: ActionMeta = meta(
     "DRUMS_REMOVE",
     "drums_remove",
     "Remove from the drums",
@@ -2047,13 +661,13 @@ static REMOVE: ActionMeta = meta(
 
 /// What taking it out did: the checkpoint forked first (`safety_net`).
 #[derive(Facet)]
-struct Removed {
+pub(crate) struct Removed {
     checkpoint: Option<String>,
 }
 
 /// What to take out.
 #[derive(Facet)]
-struct RemoveArg {
+pub(crate) struct RemoveArg {
     from: f64,
     to: f64,
     tracks: Option<Vec<String>>,
@@ -2061,7 +675,7 @@ struct RemoveArg {
     mark: Option<String>,
 }
 
-fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REMOVE, Effect::Destructive, |a: RemoveArg| {
         if a.to <= a.from {
             return Err("`to` must be after `from`".to_owned());
@@ -2079,7 +693,10 @@ fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionErr
 }
 
 /// `DRUMS_REMOVE`, under its span: queued for the window (not waited on).
-fn remove_range(a: RemoveArg, traced: &crate::edit_trace::Traced) -> Result<Removed, String> {
+pub(crate) fn remove_range(
+    a: RemoveArg,
+    traced: &crate::edit_trace::Traced,
+) -> Result<Removed, String> {
     {
         let (daw, project) = song()?;
         let tracks = a
@@ -2107,7 +724,7 @@ fn remove_range(a: RemoveArg, traced: &crate::edit_trace::Traced) -> Result<Remo
 }
 
 #[cfg(feature = "signal")]
-static SAMPLES: ActionMeta = meta(
+pub(crate) static SAMPLES: ActionMeta = meta(
     "DRUMS_SAMPLES",
     "drums_samples",
     "Drum samples under the kit",
@@ -2119,7 +736,7 @@ static SAMPLES: ActionMeta = meta(
 /// Which kit.
 #[cfg(feature = "signal")]
 #[derive(Facet)]
-struct SamplesArg {
+pub(crate) struct SamplesArg {
     preset: Option<String>,
     dry_run: Option<bool>,
 }
@@ -2127,7 +744,7 @@ struct SamplesArg {
 /// What it did.
 #[cfg(feature = "signal")]
 #[derive(Facet)]
-struct SamplesOut {
+pub(crate) struct SamplesOut {
     tracks: Vec<String>,
     notes: u32,
     applied: bool,
@@ -2137,43 +754,10 @@ struct SamplesOut {
 
 /// The kit samples blend in unless told otherwise.
 #[cfg(feature = "signal")]
-const DEFAULT_KIT: &str = "/run/media/AudioHaven/Signal/Libraries/Drum Kits/GGD Modern and Massive 2/Presets/Heavy Thwacky.signalpreset";
+pub(crate) const DEFAULT_KIT: &str = "/run/media/AudioHaven/Signal/Libraries/Drum Kits/GGD Modern and Massive 2/Presets/Heavy Thwacky.signalpreset";
 
 #[cfg(feature = "signal")]
-static BASS_RIG: ActionMeta = meta(
-    "BASS_RIG",
-    "bass_rig",
-    "Bass rig on the bass",
-    "signal's bass rig (FTS Bass Rig) on each track under Bass, first in its chain: a signal bass `profile` (`Metal` unless given; from Session's own copy of signal's bass library, never the live rig's) with every scene loaded — Clean, Crunch, Drive … — starting on the scene its name holds, else the profile's default. Its Scene parameter switches them and is automated like any other (`FTS Bass Rig/Scene`, by name: `\"Crunch\"`). `patches`: true gives the older fixed patches instead (Clean: the DP3X fed low; Harmonics: the DP3X as captured; Crunch: an HM2 into it). Reran, the rig there takes it again. `dry_run`.",
-    "Bass",
-    "",
-);
-
-/// Whether to only say.
-#[cfg(feature = "signal")]
-#[derive(Facet)]
-struct BassRigArg {
-    profile: Option<String>,
-    patches: Option<bool>,
-    dry_run: Option<bool>,
-}
-
-#[cfg(feature = "signal")]
-fn register_bass_rig(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&BASS_RIG, Effect::Mutating, |a: BassRigArg| {
-        let (daw, project) = song()?;
-        let setup = if a.patches.unwrap_or(false) {
-            crate::bass_rig::Setup::Patches
-        } else {
-            crate::bass_rig::Setup::Profile(a.profile.unwrap_or_else(|| "Metal".to_owned()))
-        };
-        crate::bass_rig::set_up(daw, &project, &setup, a.dry_run.unwrap_or(false))
-    })?;
-    Ok(())
-}
-
-#[cfg(feature = "signal")]
-static SAMPLES_ALIGN: ActionMeta = meta(
+pub(crate) static SAMPLES_ALIGN: ActionMeta = meta(
     "DRUMS_SAMPLES_ALIGN",
     "drums_samples_align",
     "Line the drum samples up with the close mics",
@@ -2185,7 +769,7 @@ static SAMPLES_ALIGN: ActionMeta = meta(
 /// One piece's measure.
 #[cfg(feature = "signal")]
 #[derive(Facet)]
-struct AlignedPiece {
+pub(crate) struct AlignedPiece {
     piece: String,
     sample: String,
     delay_ms: Option<f64>,
@@ -2199,7 +783,7 @@ struct AlignedPiece {
 /// What lining the samples up found, and did.
 #[cfg(feature = "signal")]
 #[derive(Facet)]
-struct AlignOut {
+pub(crate) struct AlignOut {
     pieces: Vec<AlignedPiece>,
     tracks: Vec<String>,
     applied: bool,
@@ -2208,7 +792,9 @@ struct AlignOut {
 }
 
 #[cfg(feature = "signal")]
-fn register_samples_align(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_samples_align(
+    list: &ActionList,
+) -> Result<(), architect::action::ActionError> {
     list.register(&SAMPLES_ALIGN, Effect::Mutating, |a: SamplesArg| {
         let (daw, project) = song()?;
         let preset = std::path::PathBuf::from(a.preset.as_deref().unwrap_or(DEFAULT_KIT));
@@ -2257,7 +843,7 @@ fn register_samples_align(list: &ActionList) -> Result<(), architect::action::Ac
 }
 
 #[cfg(feature = "signal")]
-fn register_samples(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_samples(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SAMPLES, Effect::Mutating, |a: SamplesArg| {
         let (daw, project) = song()?;
         let preset = std::path::PathBuf::from(a.preset.as_deref().unwrap_or(DEFAULT_KIT));
@@ -2288,149 +874,9 @@ fn register_samples(list: &ActionList) -> Result<(), architect::action::ActionEr
     Ok(())
 }
 
-static ITEMS: ActionMeta = meta(
-    "TRACK_ITEMS",
-    "track_items",
-    "A track's items",
-    "A track's items from `from` to `to` (seconds; all, unless given): each one's GUID, position, length and end, how far into its source it starts and the source's file, its lane (and whether that plays), fades — to see what an edit made: the slices, where they sit, what they play. 500 at most.",
-    "Data",
-    "",
-);
-
-/// Which items.
-#[derive(Facet)]
-struct ItemsArg {
-    track: String,
-    from: Option<f64>,
-    to: Option<f64>,
-}
-
-/// One item.
-#[derive(Facet)]
-struct ItemRow {
-    guid: String,
-    position: f64,
-    length: f64,
-    end: f64,
-    source_offset: f64,
-    /// The recording it plays: its file's name.
-    source: Option<String>,
-    lane: u32,
-    plays: bool,
-    fade_in_ms: f64,
-    fade_out_ms: f64,
-    /// Drawn out: the slowest rate its stretch markers play any of it at
-    /// (1 as recorded, 0.5 half speed — an octave down, as the engine
-    /// stretches by rate). `None`: not stretched.
-    slowest: Option<f64>,
-}
-
-/// The slowest rate between `markers`' neighbours; `None` without two.
-fn slowest_rate(markers: &[daw_proto::StretchMarker]) -> Option<f64> {
-    markers
-        .windows(2)
-        .filter_map(|pair| {
-            let (a, b) = (pair.first()?, pair.get(1)?);
-            let played = b.position - a.position;
-            (played > 1e-9).then(|| (b.source_position - a.source_position) / played)
-        })
-        .reduce(f64::min)
-}
-
-fn register_items(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&ITEMS, Effect::ReadOnly, |a: ItemsArg| {
-        let (daw, project) = song()?;
-        let guid = resolve(daw, &project, &a.track)?;
-        let track = Tracks::get(daw, project.clone(), TrackRef::Guid(guid.clone()))
-            .ok_or("the track went")?;
-        let (from, to) = (
-            a.from.unwrap_or(f64::NEG_INFINITY),
-            a.to.unwrap_or(f64::INFINITY),
-        );
-        let mut rows: Vec<ItemRow> =
-            daw::service::Items::get_items(daw, project.clone(), TrackRef::Guid(guid))
-                .into_iter()
-                .filter_map(|i| {
-                    let position = i.position.as_seconds();
-                    let end = position + i.length.as_seconds();
-                    (end >= from && position <= to).then(|| ItemRow {
-                        source: daw_proto::Takes::get_active_take(
-                            daw,
-                            project.clone(),
-                            daw_proto::ItemRef::Guid(i.guid.clone()),
-                        )
-                        .and_then(|t| t.source_file_path)
-                        .and_then(|p| {
-                            std::path::Path::new(&p)
-                                .file_name()
-                                .map(|f| f.to_string_lossy().into_owned())
-                        }),
-                        lane: i.fixed_lane.unwrap_or(0),
-                        plays: daw_view::song::project::on_playing_lane(&track, &i),
-                        guid: i.guid.clone(),
-                        position,
-                        length: i.length.as_seconds(),
-                        end,
-                        source_offset: i.start_offset.as_seconds(),
-                        fade_in_ms: i.fade_in_length.as_seconds() * 1_000.0,
-                        fade_out_ms: i.fade_out_length.as_seconds() * 1_000.0,
-                        slowest: slowest_rate(&daw_proto::StretchMarkers::get_stretch_markers(
-                            daw,
-                            project.clone(),
-                            daw_proto::ItemRef::Guid(i.guid.clone()),
-                            daw_proto::TakeRef::Active,
-                        )),
-                    })
-                })
-                .collect();
-        rows.sort_by(|a, b| a.position.total_cmp(&b.position));
-        rows.truncate(500);
-        Ok(rows)
-    })?;
-    Ok(())
-}
-
-fn register_lanes(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&EDIT_LANES, Effect::Mutating, |a: LanesArg| {
-        let span = crate::edit_trace::edit_span!("DRUMS_EDIT_LANES");
-        let mark = a.mark.clone();
-        crate::edit_trace::run_edit(span, (EDIT_LANES.id, mark.as_deref()), |traced| {
-            let (daw, project) = song()?;
-            let dry = a.dry_run.unwrap_or(false);
-            traced.record("edit.dry_run", dry);
-            let stage = tracing::info_span!("edit.checkpoint").entered();
-            let net = crate::safety_net::before(
-                EDIT_LANES.id,
-                if dry {
-                    crate::safety_net::Reach::Nothing
-                } else {
-                    crate::safety_net::Reach::Song
-                },
-            )?;
-            drop(stage);
-            let stage = crate::edit_trace::stage_span!("edit.lanes").entered();
-            let tracks = if a.reset == Some(true) {
-                crate::drum_lanes::reset_edit(daw, &project, dry)?
-            } else {
-                crate::drum_lanes::set_up(daw, &project, dry)?
-            };
-            drop(stage);
-            traced.count("edit.tracks", tracks.len());
-            Ok(LanesOut {
-                tracks,
-                applied: !dry,
-                checkpoint: net.name(),
-            })
-        })
-    })?;
-    list.register(&PLAY_LANE, Effect::Mutating, |a: PlayLaneArg| {
-        let (daw, project) = song()?;
-        crate::drum_lanes::play(daw, &project, &a.lane)
-    })?;
-    Ok(())
-}
-
-fn register_reference_map(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_reference_map(
+    list: &ActionList,
+) -> Result<(), architect::action::ActionError> {
     list.register(&REFERENCE_MAP, Effect::Mutating, |a: MapArg| {
         let traced =
             crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("DRUMS_REFERENCE_MAP"));
@@ -2462,7 +908,9 @@ fn register_reference_map(list: &ActionList) -> Result<(), architect::action::Ac
     Ok(())
 }
 
-fn register_reference_notes(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_reference_notes(
+    list: &ActionList,
+) -> Result<(), architect::action::ActionError> {
     list.register(&REFERENCE, Effect::ReadOnly, |a: ReferenceArg| {
         let (daw, project) = song()?;
         let (notes, _, map) = reference(daw, &project, a.track.as_deref())?;
@@ -2510,7 +958,7 @@ fn register_reference_notes(list: &ActionList) -> Result<(), architect::action::
     Ok(())
 }
 
-fn register_compare(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_compare(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&COMPARE, Effect::ReadOnly, |a: CompareArg| {
         let (daw, project) = song()?;
         let (notes, pieces, map) = reference(daw, &project, a.track.as_deref())?;
@@ -2602,66 +1050,9 @@ fn register_compare(list: &ActionList) -> Result<(), architect::action::ActionEr
     Ok(())
 }
 
-fn register_tracks(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&TRACKS, Effect::ReadOnly, |a: TracksArg| {
-        let (daw, project) = song()?;
-        let tracks = Tracks::all(daw, project.clone());
-        let by_guid: std::collections::HashMap<&str, &daw_proto::Track> =
-            tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
-        let filter = a.filter.map(|f| f.to_lowercase());
-        let open = open_folders(&tracks);
-        Ok(tracks
-            .iter()
-            .map(|t| (t, crate::gain_stage::path_of(t, &by_guid).join("/")))
-            .filter(|(_, path)| {
-                filter
-                    .as_deref()
-                    .is_none_or(|f| path.to_lowercase().contains(f))
-            })
-            .map(|(t, path)| {
-                let items = daw::service::Items::get_items(
-                    daw,
-                    project.clone(),
-                    TrackRef::Guid(t.guid.clone()),
-                );
-                (t, path, items)
-            })
-            .map(|(t, path, items)| TrackRow {
-                lanes: lane_rows(t, &items),
-                armed: t.armed,
-                record_input: record_input_of(t.record_input),
-                open: t.is_folder.then(|| open.contains(&t.guid)),
-                guid: t.guid.clone(),
-                name: t.name.clone(),
-                path,
-                folder: t.is_folder,
-                muted: t.muted,
-                soloed: t.soloed,
-                inverted: t.phase_inverted,
-                volume_db: 20.0 * t.volume.max(1e-9).log10(),
-                pan: t.pan,
-                items: u32::try_from(items.len()).unwrap_or(u32::MAX),
-                fx: daw::service::Effects::list(
-                    daw,
-                    project.clone(),
-                    daw::service::FxChainContext::Track(t.guid.clone()),
-                )
-                .into_iter()
-                .map(|f| {
-                    if f.enabled {
-                        f.plugin_name
-                    } else {
-                        format!("{} (bypassed)", f.plugin_name)
-                    }
-                })
-                .collect(),
-            })
-            .collect::<Vec<_>>())
-    })?;
-    Ok(())
-}
-
-fn register_fundamental(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_fundamental(
+    list: &ActionList,
+) -> Result<(), architect::action::ActionError> {
     list.register(&DRUM_FUNDAMENTAL, Effect::ReadOnly, |a: FundamentalArg| {
         let (daw, project) = song()?;
         let trigger = resolve(daw, &project, &a.trigger)?;
@@ -2682,59 +1073,7 @@ fn register_fundamental(list: &ActionList) -> Result<(), architect::action::Acti
     Ok(())
 }
 
-fn register_track_set(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&TRACK_SET, Effect::Mutating, |a: TrackSetArg| {
-        let (daw, project) = song()?;
-        let guid = resolve(daw, &project, &a.track)?;
-        let at = || TrackRef::Guid(guid.clone());
-        let failed = |e: daw_proto::DawError| e.to_string();
-        if let Some(db) = a.volume_db {
-            Tracks::set_volume(daw, project.clone(), at(), 10_f64.powf(db / 20.0))
-                .map_err(failed)?;
-        }
-        if let Some(pan) = a.pan {
-            Tracks::set_pan(daw, project.clone(), at(), pan.clamp(-1.0, 1.0)).map_err(failed)?;
-        }
-        if let Some(mute) = a.mute {
-            Tracks::set_muted(daw, project.clone(), at(), mute).map_err(failed)?;
-        }
-        if let Some(solo) = a.solo {
-            Tracks::set_soloed(daw, project.clone(), at(), solo).map_err(failed)?;
-        }
-        if let Some(monitor) = a.monitor.as_deref() {
-            let mode = crate::shared_actions::monitor_mode(monitor)?;
-            Tracks::set_input_monitor(daw, project.clone(), at(), mode).map_err(failed)?;
-        }
-        if let Some(phase) = a.phase {
-            Tracks::set_phase_inverted(daw, project.clone(), at(), phase).map_err(failed)?;
-        }
-        if let Some(name) = a.name.as_deref() {
-            Tracks::rename(daw, project, at(), name).map_err(failed)?;
-        }
-        crate::actions::list().changed("tracks", &guid);
-        Ok(())
-    })?;
-    Ok(())
-}
-
-/// The engine and the open song, as a pair — for the call sites not yet
-/// on [`crate::song::Song`], which new code takes instead.
-pub(crate) fn song() -> Result<(&'static daw::standalone::Standalone, ProjectContext), String> {
-    let song = crate::song::Song::current()?;
-    Ok((song.daw(), song.context()))
-}
-
-/// A track by its GUID, its path (`Kick/Sum/Trig`, any tail of it) or its
-/// name — refused, naming the candidates, when more than one fits.
-pub fn resolve(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    what: &str,
-) -> Result<String, String> {
-    crate::shared_actions::resolve_in(&Tracks::all(daw, project.clone()), what)
-}
-
-static EDIT_SETTINGS: ActionMeta = meta(
+pub(crate) static EDIT_SETTINGS: ActionMeta = meta(
     "DRUMS_EDIT_SETTINGS",
     "drums_edit_settings",
     "Drum edit settings",
@@ -2742,7 +1081,8 @@ static EDIT_SETTINGS: ActionMeta = meta(
     "Drums",
     "",
 );
-static EDIT_SET: ActionMeta = meta(
+
+pub(crate) static EDIT_SET: ActionMeta = meta(
     "DRUMS_EDIT_SET",
     "drums_edit_set",
     "Set drum edit settings",
@@ -2750,7 +1090,8 @@ static EDIT_SET: ActionMeta = meta(
     "Drums",
     "",
 );
-static PEAKS: ActionMeta = meta(
+
+pub(crate) static PEAKS: ActionMeta = meta(
     "AUDIO_PEAKS",
     "audio_peaks",
     "Audio peaks",
@@ -2768,7 +1109,7 @@ pub fn kit(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<K
 }
 
 /// Every beat from the bar holding `from` to the one holding `to`.
-fn beats(
+pub(crate) fn beats(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     (from, to): (f64, f64),
@@ -2799,7 +1140,7 @@ fn beats(
 }
 
 /// The fills among the kit's hits, from `from` to `to`.
-fn find_fills(
+pub(crate) fn find_fills(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     kit: &[KitPiece],
@@ -2829,14 +1170,18 @@ pub fn grid_line(
 }
 
 /// A sixteenth at `t`, seconds.
-fn sixteenth(daw: &daw::standalone::Standalone, project: &ProjectContext, t: f64) -> f64 {
+pub(crate) fn sixteenth(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    t: f64,
+) -> f64 {
     15.0 / daw.get_tempo_at(project.clone(), t).max(1.0)
 }
 
 /// Half a sixteenth at `t`, seconds: how far before a section's downbeat
 /// a hit still belongs to it — a downbeat pushed early is the section's
 /// first hit, not the last of the one before.
-fn edge(daw: &daw::standalone::Standalone, project: &ProjectContext, t: f64) -> f64 {
+pub(crate) fn edge(daw: &daw::standalone::Standalone, project: &ProjectContext, t: f64) -> f64 {
     sixteenth(daw, project, t) / 2.0
 }
 
@@ -2846,7 +1191,7 @@ fn edge(daw: &daw::standalone::Standalone, project: &ProjectContext, t: f64) -> 
 /// hits matched one to one with its own notes, the section's feel taken
 /// out first; the rest go to the nearest line —
 /// again with the feel out — when within `sure_ms` of it.
-fn targets(
+pub(crate) fn targets(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
@@ -3082,7 +1427,7 @@ fn targets(
 
 /// What the kit's own regions say of a hit's line: a figure's grid (a
 /// Grid region of a bar or less), or a fill's own (`ZONES_EDIT` `grid`).
-struct Overrides {
+pub(crate) struct Overrides {
     regions: Vec<crate::track_regions::TrackRegion>,
     zones: Vec<crate::hits::Zone>,
 }
@@ -3092,7 +1437,7 @@ struct Overrides {
 /// own, and the drum MIDI with which pitch is which piece — learned once
 /// against the kit. Read per span, a whole song's quantize read the song
 /// twenty times over.
-struct Prepared {
+pub(crate) struct Prepared {
     kit: Vec<KitPiece>,
     parts: crate::track_regions::PartGrids,
     overrides: Overrides,
@@ -3220,7 +1565,7 @@ impl Overrides {
 
 /// What the settings make of the kit: its pieces, its moments (with
 /// their targets), its fills.
-struct Detected {
+pub(crate) struct Detected {
     kit: Vec<KitPiece>,
     moments: Vec<Moment>,
     targets: Vec<(f64, Option<f64>)>,
@@ -3235,7 +1580,7 @@ struct Detected {
     placed_by: Vec<Placed>,
 }
 
-fn detect(
+pub(crate) fn detect(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
@@ -3395,24 +1740,28 @@ fn detect(
 
 /// How far from a slot's hit a written note may be and still vote for its
 /// line, beats: more than a drift the groove still places.
-const VOTE_WINDOW_BEATS: f64 = 0.25;
+pub(crate) const VOTE_WINDOW_BEATS: f64 = 0.25;
 
 /// A span's groove, with the kit's hits it was learned from.
-struct SpanGroove {
+pub(crate) struct SpanGroove {
     groove: crate::groove::Groove,
     /// Each hit as the groove placed it, and its time (seconds).
     hits: Vec<(crate::groove::Hit, f64)>,
 }
 
 /// `t` seconds as a bar and how far into it (beats from its downbeat).
-fn in_bar(daw: &daw::standalone::Standalone, project: &ProjectContext, t: f64) -> (i32, f64) {
+pub(crate) fn in_bar(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    t: f64,
+) -> (i32, f64) {
     let (bar, beat, frac) = crate::song_bars::musical(daw, project, t);
     (bar, f64::from(beat.saturating_sub(1)) + frac)
 }
 
 /// The groove of `kit` over `span` (`crate::groove`), its edit zones —
 /// the fills — left out of the learning: none with too few bars.
-fn groove_of(
+pub(crate) fn groove_of(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     (kit, triplets): (&[KitPiece], bool),
@@ -3514,7 +1863,7 @@ impl SpanGroove {
 }
 
 /// Whether the hit at `h` is in one of `fills`.
-fn in_a_fill(
+pub(crate) fn in_a_fill(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     fills: &[crate::drum_edit::Fill],
@@ -3524,7 +1873,7 @@ fn in_a_fill(
     fills.iter().any(|f| f.holds(h, beat))
 }
 
-static QUANTIZE: ActionMeta = meta(
+pub(crate) static QUANTIZE: ActionMeta = meta(
     "QUANTIZE",
     "quantize",
     "Quantize the drums",
@@ -3532,7 +1881,8 @@ static QUANTIZE: ActionMeta = meta(
     "Drums",
     "",
 );
-static ZONES_FIND: ActionMeta = meta(
+
+pub(crate) static ZONES_FIND: ActionMeta = meta(
     "ZONES_FIND",
     "zones_find",
     "Find the fills",
@@ -3541,7 +1891,7 @@ static ZONES_FIND: ActionMeta = meta(
     "",
 );
 
-static GROOVE: ActionMeta = meta(
+pub(crate) static GROOVE: ActionMeta = meta(
     "DRUMS_GROOVE",
     "drums_groove",
     "The drums' groove",
@@ -3552,7 +1902,7 @@ static GROOVE: ActionMeta = meta(
 
 /// Where to read the groove.
 #[derive(Facet)]
-struct GrooveArg {
+pub(crate) struct GrooveArg {
     #[facet(default)]
     sections: Vec<String>,
     from: Option<f64>,
@@ -3565,7 +1915,7 @@ struct GrooveArg {
 
 /// One slot of a groove.
 #[derive(Facet)]
-struct SlotOut {
+pub(crate) struct SlotOut {
     /// Counted as a drummer counts it: `1`, `2e`, `3&`, `4a`, a
     /// triplet's `2t`/`2l`; `2:3&` for the second bar of a two-bar cycle.
     at: String,
@@ -3579,14 +1929,14 @@ struct SlotOut {
 
 /// One piece's part in a groove.
 #[derive(Facet)]
-struct PieceGroove {
+pub(crate) struct PieceGroove {
     piece: String,
     slots: Vec<SlotOut>,
 }
 
 /// One bar the section departs from its groove in.
 #[derive(Facet)]
-struct Departure {
+pub(crate) struct Departure {
     bar: i32,
     /// Hits in no slot: `Snare 3.62` (the piece, the beat it plays on).
     extra: Vec<String>,
@@ -3596,7 +1946,7 @@ struct Departure {
 
 /// A section's groove.
 #[derive(Facet)]
-struct GrooveOut {
+pub(crate) struct GrooveOut {
     name: String,
     /// Bars in a cycle of it: 1, or 2.
     cycle_bars: i32,
@@ -3610,7 +1960,7 @@ struct GrooveOut {
 }
 
 /// What `DRUMS_GROOVE` says of one span.
-fn groove_out(
+pub(crate) fn groove_out(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     (kit, triplets): (&[KitPiece], bool),
@@ -3706,7 +2056,7 @@ pub struct QuantizeArg {
 
 /// How many of a span's groove and MIDI calls a brief answer keeps:
 /// `DRUMS_REVIEW` holds every hit up to the chart.
-const BRIEF_CALLS: usize = 3;
+pub(crate) const BRIEF_CALLS: usize = 3;
 
 /// One step of a quantize's plan.
 #[derive(Facet)]
@@ -3764,7 +2114,7 @@ pub struct GrooveCall {
 /// How a quantize's edit of `span` left the hits ([`crate::hits::check`]),
 /// each moved hit held up to where it was sent: its target, or as far
 /// toward it as the strength takes it.
-fn checked(
+pub(crate) fn checked(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     (settings, pairs): (&crate::drum_settings::Settings, &[(f64, Option<f64>)]),
@@ -3784,7 +2134,7 @@ fn checked(
 
 /// The groove's calls against the nearest line in `span`, as a model
 /// reads them.
-fn groove_calls(
+pub(crate) fn groove_calls(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     calls: &[(f64, f64, f64)],
@@ -3808,7 +2158,11 @@ fn groove_calls(
 }
 
 /// `t` seconds counted as a drummer counts it in its bar: `2a`.
-fn counted(daw: &daw::standalone::Standalone, project: &ProjectContext, t: f64) -> String {
+pub(crate) fn counted(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    t: f64,
+) -> String {
     let (bar, beat) = in_bar(daw, project, t + 1e-6);
     let next = crate::song_bars::time(daw, project, bar.saturating_add(1), 1, 0.0);
     let (_, last) = in_bar(daw, project, next - 1e-6);
@@ -3817,7 +2171,7 @@ fn counted(daw: &daw::standalone::Standalone, project: &ProjectContext, t: f64) 
 
 /// The stretches a quantize covers: each named section (as the SECTIONS
 /// lane has it), or the span given.
-fn quantize_spans(
+pub(crate) fn quantize_spans(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     a: &QuantizeArg,
@@ -3869,7 +2223,7 @@ pub fn spans(
 
 /// The longest an edit queued for the window is waited for, seconds: a
 /// whole song's slip (thousands of edits) included.
-const SLIP_LANDS: u64 = 30;
+pub(crate) const SLIP_LANDS: u64 = 30;
 
 /// Wait until the window has made the edit `ticket` was queued with and
 /// the engine has applied every edit of it ([`crate::engine::Edit::Done`]).
@@ -3883,7 +2237,7 @@ pub fn landed(ticket: u64) {
 /// moment holding one of its hits goes where that hit is locked to (the
 /// moment's other hits with it); any other moment has none, and is cut
 /// where it was played. Gestures held whole.
-fn locked_targets(
+pub(crate) fn locked_targets(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
@@ -3967,14 +2321,14 @@ fn locked_targets(
 // r[impl quantize.check]
 /// One step of a quantize: its settings, its spans (`(name, from, to)`)
 /// and the piece it locks, if any.
-type PlanOf<'a> = (
+pub(crate) type PlanOf<'a> = (
     crate::drum_settings::Settings,
     Vec<(String, f64, f64)>,
     Option<&'a str>,
 );
 
 /// What one span's quantize would move.
-struct Planned {
+pub(crate) struct Planned {
     /// `(hit, shift)`, microseconds: its moves, and the hits cut in place.
     cuts: Vec<(i64, i64)>,
     /// Each hit and where it is sent, strength applied in the check.
@@ -3984,7 +2338,7 @@ struct Planned {
 /// One span of a quantize: its targets, by `settings` — or `lock`ed, a
 /// double kick — what it would move, and what it says; carried out with
 /// the rest of the call's spans in one slip.
-fn quantize_span(
+pub(crate) fn quantize_span(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
@@ -4162,7 +2516,7 @@ fn quantize_span(
 /// have); whether a piece is locked, the span as judged (`lo..hi`) and its
 /// last edge (`hi..to`, the next span's hits); why a hit is held, and the
 /// zones.
-fn span_detail(
+pub(crate) fn span_detail(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
@@ -4203,7 +2557,7 @@ fn span_detail(
     })
 }
 
-static PLACE: ActionMeta = meta(
+pub(crate) static PLACE: ActionMeta = meta(
     "HITS_PLACE",
     "hits_place",
     "Place a drum hit",
@@ -4214,7 +2568,7 @@ static PLACE: ActionMeta = meta(
 
 /// Which hit, and where.
 #[derive(Facet)]
-struct PlaceArg {
+pub(crate) struct PlaceArg {
     /// A mark of this name set on the song first (`history_marks`).
     mark: Option<String>,
     id: Option<String>,
@@ -4228,9 +2582,9 @@ struct PlaceArg {
 }
 
 /// How near a line a dropped hit snaps to it, seconds.
-const PLACE_SNAP: f64 = 0.012;
+pub(crate) const PLACE_SNAP: f64 = 0.012;
 
-static STRETCH: ActionMeta = meta(
+pub(crate) static STRETCH: ActionMeta = meta(
     "HITS_STRETCH",
     "hits_stretch",
     "Stretch a drum hit into place",
@@ -4241,7 +2595,7 @@ static STRETCH: ActionMeta = meta(
 
 /// Which hit, and where.
 #[derive(Facet)]
-struct StretchArg {
+pub(crate) struct StretchArg {
     id: String,
     to: Option<f64>,
     by_ms: Option<f64>,
@@ -4249,7 +2603,7 @@ struct StretchArg {
 
 /// What a stretch did.
 #[derive(Facet)]
-struct Stretched {
+pub(crate) struct Stretched {
     /// Where the hit plays now, project seconds.
     at: f64,
     /// The slices stretched, two a mic.
@@ -4257,7 +2611,7 @@ struct Stretched {
 }
 
 /// How near its slice's attack a hit is that slice's, seconds.
-const OWN_SLICE: f64 = 0.004;
+pub(crate) const OWN_SLICE: f64 = 0.004;
 
 /// Every kit mic's two slices around the hit at `hit`, stretched to move
 /// it `by` seconds ([`crate::stretch::stretch_around`]).
@@ -4265,7 +2619,7 @@ const OWN_SLICE: f64 = 0.004;
 /// # Errors
 /// A mic not cut at this hit, with no slice before it, or past what a
 /// stretch can do.
-fn stretch_edits(
+pub(crate) fn stretch_edits(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     hit: f64,
@@ -4357,7 +2711,7 @@ fn stretch_edits(
     Ok(edits)
 }
 
-fn register_stretch(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_stretch(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&STRETCH, Effect::Mutating, |a: StretchArg| {
         let (daw, project) = song()?;
         let hit = crate::hits::playback(daw, &project)
@@ -4408,7 +2762,7 @@ fn register_stretch(list: &ActionList) -> Result<(), architect::action::ActionEr
     Ok(())
 }
 
-static REVERT: ActionMeta = meta(
+pub(crate) static REVERT: ActionMeta = meta(
     "DRUMS_REVERT",
     "drums_revert",
     "Put the drums back as played",
@@ -4433,7 +2787,7 @@ pub struct RevertArg {
 /// The kit's moments in `lo..hi` (`moments`, as they play now — the hits
 /// a quantize cuts on), each with where it was played: `(now, as
 /// recorded)`, read off the hit it starts with.
-fn as_played(
+pub(crate) fn as_played(
     moments: &[f64],
     rows: &[crate::hits::HitRow],
     (lo, hi): (f64, f64),
@@ -4471,7 +2825,7 @@ pub fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
 }
 
 /// [`revert`], under its span.
-fn revert_traced(
+pub(crate) fn revert_traced(
     a: RevertArg,
     traced: &crate::edit_trace::Traced,
 ) -> Result<Vec<QuantizeSpan>, String> {
@@ -4572,13 +2926,13 @@ fn revert_traced(
     Ok(out)
 }
 
-fn register_revert(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_revert(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REVERT, Effect::Mutating, revert)?;
     Ok(())
 }
 
 // r[impl hits.place]
-fn register_place(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_place(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&PLACE, Effect::Mutating, |a: PlaceArg| {
         let traced = crate::edit_trace::Traced::enter(crate::edit_trace::edit_span!("HITS_PLACE"));
         let out = place_traced(a, &traced);
@@ -4589,7 +2943,7 @@ fn register_place(list: &ActionList) -> Result<(), architect::action::ActionErro
 }
 
 /// `HITS_PLACE`, under its span.
-fn place_traced(
+pub(crate) fn place_traced(
     a: PlaceArg,
     traced: &crate::edit_trace::Traced,
 ) -> Result<crate::hits::Check, String> {
@@ -4677,7 +3031,7 @@ fn place_traced(
     }
 }
 
-static REQUANTIZE: ActionMeta = meta(
+pub(crate) static REQUANTIZE: ActionMeta = meta(
     "DRUMS_REQUANTIZE",
     "drums_requantize",
     "Start the drum edit over and quantize it",
@@ -4688,7 +3042,7 @@ static REQUANTIZE: ActionMeta = meta(
 
 /// How to start the drum edit over.
 #[derive(Facet)]
-struct RequantizeArg {
+pub(crate) struct RequantizeArg {
     /// A mark of this name set on the song first (`history_marks`).
     mark: Option<String>,
     keep_manual: Option<bool>,
@@ -4698,7 +3052,7 @@ struct RequantizeArg {
 
 /// What starting the drum edit over did.
 #[derive(Facet)]
-struct Requantized {
+pub(crate) struct Requantized {
     /// The spans quantized and the hits moved.
     spans: u32,
     moved: u32,
@@ -4714,9 +3068,9 @@ struct Requantized {
 
 /// Where the plan a whole-song quantize was last given is kept: on the
 /// kit's folder, with the song.
-const PLAN_KEY: &str = "fts.quantize_plan";
+pub(crate) const PLAN_KEY: &str = "fts.quantize_plan";
 
-fn register_requantize(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_requantize(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&REQUANTIZE, Effect::Mutating, |a: RequantizeArg| {
         let span = crate::edit_trace::edit_span!("DRUMS_REQUANTIZE");
         let mark = a.mark.clone();
@@ -4726,7 +3080,7 @@ fn register_requantize(list: &ActionList) -> Result<(), architect::action::Actio
 }
 
 /// `DRUMS_REQUANTIZE`: see its description.
-fn requantize(a: RequantizeArg) -> Result<Requantized, String> {
+pub(crate) fn requantize(a: RequantizeArg) -> Result<Requantized, String> {
     {
         let (daw, project) = song()?;
         let folder = crate::track_regions::kit_folder(daw, &project).ok_or("no kit")?;
@@ -4812,7 +3166,7 @@ pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
 }
 
 /// [`quantize`], under its span.
-fn quantize_traced(
+pub(crate) fn quantize_traced(
     a: QuantizeArg,
     traced: &crate::edit_trace::Traced,
 ) -> Result<Vec<QuantizeSpan>, String> {
@@ -4935,7 +3289,7 @@ fn quantize_traced(
     Ok(out)
 }
 
-fn register_quantize(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_quantize(list: &ActionList) -> Result<(), architect::action::ActionError> {
     register_requantize(list)?;
     register_place(list)?;
     register_stretch(list)?;
@@ -4963,7 +3317,9 @@ fn register_quantize(list: &ActionList) -> Result<(), architect::action::ActionE
     Ok(())
 }
 
-fn register_drum_settings(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_drum_settings(
+    list: &ActionList,
+) -> Result<(), architect::action::ActionError> {
     register_quantize(list)?;
     list.register(&EDIT_SETTINGS, Effect::ReadOnly, |(): ()| {
         Ok(crate::drum_settings::current())
@@ -4981,7 +3337,7 @@ fn register_drum_settings(list: &ActionList) -> Result<(), architect::action::Ac
 
 /// Where.
 #[derive(Facet)]
-struct SpanArg {
+pub(crate) struct SpanArg {
     from: Option<f64>,
     to: Option<f64>,
 }
@@ -4997,7 +3353,7 @@ impl SpanArg {
 
 /// Settings to keep.
 #[derive(Facet)]
-struct SetArg {
+pub(crate) struct SetArg {
     #[facet(flatten, default)]
     with: crate::drum_settings::Patch,
     /// Back to the defaults first.
@@ -5006,7 +3362,7 @@ struct SetArg {
 
 /// The moves `pairs` (hit, target) make, and — unless a dry run — the
 /// slip queued for the window.
-fn judge(
+pub(crate) fn judge(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
@@ -5084,7 +3440,7 @@ fn judge(
 /// engine — a hit moved back is the recording again, nothing drawn out
 /// unless nothing else fills a gap — or, for a kit without its recording
 /// kept on lanes, slipped where it plays by the window.
-fn apply_cuts(
+pub(crate) fn apply_cuts(
     daw: &'static daw::standalone::Standalone,
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
@@ -5141,7 +3497,7 @@ fn apply_cuts(
 
 /// The drum samples moved with `cuts` (`(hit, shift)`, microseconds):
 /// each hit's sample where its slice is going.
-fn follow_samples(
+pub(crate) fn follow_samples(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
@@ -5168,7 +3524,7 @@ fn follow_samples(
 
 /// Carry out `cuts` (`(hit, shift)`, microseconds, by hit): the window
 /// slips the kit by them, as one step, the drum samples following.
-fn slip_now(
+pub(crate) fn slip_now(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     settings: &crate::drum_settings::Settings,
@@ -5208,7 +3564,7 @@ fn slip_now(
 
 /// Which audio.
 #[derive(Facet)]
-struct PeaksArg {
+pub(crate) struct PeaksArg {
     track: String,
     from: f64,
     to: f64,
@@ -5218,14 +3574,14 @@ struct PeaksArg {
 
 /// A track's audio as peaks.
 #[derive(Facet)]
-struct PeaksResult {
+pub(crate) struct PeaksResult {
     from: f64,
     /// Seconds a point stands for.
     step: f64,
     peaks: Vec<f64>,
 }
 
-static TRACK_SAMPLES: ActionMeta = meta(
+pub(crate) static TRACK_SAMPLES: ActionMeta = meta(
     "TRACK_SAMPLES",
     "track_samples",
     "A track's samples",
@@ -5236,7 +3592,7 @@ static TRACK_SAMPLES: ActionMeta = meta(
 
 /// Which stretch of a track, read how.
 #[derive(Facet)]
-struct TrackSamplesArg {
+pub(crate) struct TrackSamplesArg {
     track: String,
     from: f64,
     to: f64,
@@ -5246,7 +3602,7 @@ struct TrackSamplesArg {
 
 /// A track's samples, interleaved.
 #[derive(Facet)]
-struct TrackSamplesOut {
+pub(crate) struct TrackSamplesOut {
     from: f64,
     rate: f64,
     channels: u32,
@@ -5254,9 +3610,9 @@ struct TrackSamplesOut {
 }
 
 /// The most values `TRACK_SAMPLES` gives.
-const MOST_SAMPLES: f64 = 96_000.0;
+pub(crate) const MOST_SAMPLES: f64 = 96_000.0;
 
-fn register_peaks(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub(crate) fn register_peaks(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&TRACK_SAMPLES, Effect::ReadOnly, |a: TrackSamplesArg| {
         use daw_proto::AudioAccessors as _;
         let (daw, project) = song()?;
@@ -5317,197 +3673,49 @@ fn register_peaks(list: &ActionList) -> Result<(), architect::action::ActionErro
     Ok(())
 }
 
-#[cfg(all(test, feature = "native"))]
-mod presses {
-    use super::list;
-    use crate::engine::Move;
-
-    /// What the window's controls run (`docs/design/actions-everywhere.md`):
-    /// each must be on the engine's list, or a press runs nothing.
-    const PRESSED: &[&str] = &[
-        "TRACK_SET",
-        "TRACK_ARM",
-        "SESSION_SELECT_TRACK",
-        "TRACK_LANE_STEP",
-        "TRACK_SHOW_LANES",
-        "SESSION_FOLD",
-        "SESSION_MODE",
-        "SESSION_PHASE",
-        "SESSION_PANEL",
-        "SESSION_ARRANGE",
-        "SESSION_GROUPING",
-        "ARRANGE_MOVE",
-        "ARRANGE_TRIM",
-        "ARRANGE_SLIP",
-        "ARRANGE_FADE",
-        "ARRANGE_SPLIT",
-        "ARRANGE_COPY",
-        "ARRANGE_DELETE",
-        "ARRANGE_MARKERS",
-        "ARRANGE_ITEM_VOLUME",
-        "ARRANGE_TAKE_VOLUME",
-        "ARRANGE_EDIT",
-        "ITEMS_SELECT",
-        "SESSION_PANEL_MOVE",
-        "SESSION_PANEL_OPEN",
-        "SESSION_PANEL_CLOSE",
-        "SESSION_PANEL_SHOW",
-        "SESSION_PANEL_MAXIMIZE",
-        "SESSION_PANEL_TABS",
-        "SESSION_DOCK_SPLIT",
-        "SESSION_DOCK_EDGE",
-        "SESSION_DOCK_FLOAT",
-        "AUTOMATION_POINTS_EDIT",
-        "AUTOMATION_ITEMS_EDIT",
-        "AUTOMATION_LANE_SET",
-        "NOTES_WRITE",
-        "SESSION_TOGETHER_LEAVE",
-        "SESSION_TOGETHER_TRANSPORT",
-        "SESSION_TOGETHER_LOCK",
-        "LIBRARY_LISTS",
-        "LIBRARY_LIST_CREATE",
-        "LIBRARY_LIST_RENAME",
-        "LIBRARY_LIST_DELETE",
-        "LIBRARY_LIST_DUPLICATE",
-        "LIBRARY_LIST_SONGS",
-        "LIBRARY_SONG_SAVE",
-        "LIBRARY_SONG_DELETE",
-        "LIBRARY_ORG",
-        "ACCOUNT_SIGN_OUT",
-    ];
-
-    #[test]
-    fn every_control_names_an_action_on_the_list() {
-        let missing: Vec<&&str> = PRESSED
-            .iter()
-            .filter(|id| list().info(id).is_none())
-            .collect();
-        assert!(missing.is_empty(), "not on the list: {missing:?}");
-    }
-
-    /// The FX view's rig blocks and racks commit through these.
-    #[test]
-    fn the_fx_views_commits_are_on_the_list() {
-        let ids: &[&str] = &[
-            "FX_SET",
-            "FX_ENABLE",
-            #[cfg(feature = "signal")]
-            "RIG_BLOCK_SET",
-            #[cfg(feature = "signal")]
-            "RIG_BLOCKS",
-        ];
-        let missing: Vec<&&str> = ids.iter().filter(|id| list().info(id).is_none()).collect();
-        assert!(missing.is_empty(), "not on the list: {missing:?}");
-    }
-
-    #[test]
-    fn every_transport_press_runs_an_action() {
-        for command in [
-            Move::PlayStop,
-            Move::Home,
-            Move::Seek,
-            Move::Stop,
-            Move::End,
-            Move::ToggleLoop,
-            Move::ToggleRecord,
-            Move::PlayFrom,
-        ] {
-            let (id, _) = super::transport_action(command, 1.5);
-            assert!(
-                list().info(id).is_some(),
-                "{command:?} runs {id}, not on the list"
-            );
-        }
-    }
-
-    #[test]
-    fn the_list_registers_cleanly() {
-        let list = list();
-        assert!(list.validate().is_ok(), "{:?}", list.validate());
-        assert!(
-            list.probe_hostile_args().is_ok(),
-            "{:?}",
-            list.probe_hostile_args()
-        );
-    }
+/// The editing domain's actions (engine-edit): drum editing, comping,
+/// the hits, the vocal leveler, growing a song.
+///
+/// # Errors
+///
+/// The first registration the list refuses.
+pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    register_fundamental(list)?;
+    crate::key_change::register(list)?;
+    crate::hits::register(list)?;
+    crate::drum_apply::register(list)?;
+    crate::drum_plan::register(list)?;
+    crate::hits_midi::register(list)?;
+    crate::seams::register(list)?;
+    crate::comp_keep::register(list)?;
+    crate::comp_keep::register_main(list)?;
+    crate::item_actions::register(list)?;
+    crate::take_rank::register(list)?;
+    #[cfg(feature = "signal")]
+    register_samples(list)?;
+    #[cfg(feature = "signal")]
+    register_samples_align(list)?;
+    register_remove(list)?;
+    #[cfg(feature = "native")]
+    register_verbs(list)?;
+    register_drum_settings(list)?;
+    register_peaks(list)?;
+    register_reference_map(list)?;
+    register_reference_notes(list)?;
+    register_compare(list)?;
+    register_restore_midi(list)?;
+    register_copy_to_lane(list)?;
+    register_review(list)?;
+    register_level(list)?;
+    crate::vocal_level::register(list)?;
+    #[cfg(feature = "native")]
+    crate::comp::register(list)?;
+    crate::grow::register(list)?;
+    crate::edit_actions::register(list)?;
+    crate::trigger_from_mics::register(list)?;
+    crate::safety_net::register(list)?;
+    crate::edit_reads::register(list)?;
+    crate::comp_rank::register(list)?;
+    crate::comp_song::register(list)?;
+    Ok(())
 }
-
-macro_rules! dock_action {
-    ($name:ident, $id:literal, $method:literal, $display:literal, $what:literal) => {
-        pub static $name: ActionMeta = meta(
-            $id,
-            $method,
-            $display,
-            concat!(
-                $what,
-                " `intent`: the dock's own words for it (`dock_model::DockIntent`, by panel, stack, split and window ids as SESSION_WINDOW gives them). The window's dock carries it out."
-            ),
-            "Dock",
-            "",
-        );
-    };
-}
-
-dock_action!(
-    PANEL_MOVE,
-    "SESSION_PANEL_MOVE",
-    "panel_move",
-    "Move a panel",
-    "Move a dock panel — a tab dropped onto a stack, an edge, the centre or a new floating window (`move`), or attached beside another (`attach`)."
-);
-dock_action!(
-    PANEL_OPEN,
-    "SESSION_PANEL_OPEN",
-    "panel_open",
-    "Open a panel",
-    "Open a new panel of a kind where the kind lives (`open`), or a copy of one beside it (`duplicate`). SESSION_PANEL toggles a kind instead."
-);
-dock_action!(
-    PANEL_CLOSE,
-    "SESSION_PANEL_CLOSE",
-    "panel_close",
-    "Close a panel",
-    "Close one dock panel (`close`)."
-);
-dock_action!(
-    PANEL_SHOW,
-    "SESSION_PANEL_SHOW",
-    "panel_show",
-    "Show a panel",
-    "Make a panel the one its stack shows (`show`): a tab pressed, a rail's button."
-);
-dock_action!(
-    PANEL_MAXIMIZE,
-    "SESSION_PANEL_MAXIMIZE",
-    "panel_maximize",
-    "Maximise a panel",
-    "A panel filling the window, or back (`maximize`): a tab double-clicked, Restore."
-);
-dock_action!(
-    PANEL_TABS,
-    "SESSION_PANEL_TABS",
-    "panel_tabs",
-    "Show a stack's tabs",
-    "Show or hide a stack's tab strip (`chrome`)."
-);
-dock_action!(
-    DOCK_SPLIT,
-    "SESSION_DOCK_SPLIT",
-    "dock_split",
-    "Set a divider",
-    "Where a divider between two panels sits (`share`): dragged and let go, or double-clicked back to halves."
-);
-dock_action!(
-    DOCK_EDGE,
-    "SESSION_DOCK_EDGE",
-    "dock_edge",
-    "Set an edge dock",
-    "An edge dock's thickness (`edge_size`), or whether it is open, collapsed to a rail or hidden (`edge_shown`)."
-);
-dock_action!(
-    DOCK_FLOAT,
-    "SESSION_DOCK_FLOAT",
-    "dock_float",
-    "Place a floating panel",
-    "Where a floating panel window is and how big (`float_bounds`): dragged or resized and let go."
-);
