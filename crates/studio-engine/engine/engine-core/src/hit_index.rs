@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use daw::service::ProjectContext;
 use daw::standalone::sync::ProjectState;
 
-use crate::hits::Played;
+use crate::kit::Played;
 use crate::song::Song;
 
 /// Every song's index, by song.
@@ -102,7 +102,7 @@ impl Index {
     ) {
         let step = tracing::info_span!("index.kit").entered();
         let has_items = |guid: &str| p.items_by_track.get(guid).is_some_and(|v| !v.is_empty());
-        let (kit, _) = crate::hits::kit_from(tracks, pieces, &has_items);
+        let (kit, _) = crate::kit::kit_from(tracks, pieces, &has_items);
         // Each piece's hits are read off its first close mic.
         let first_mics: Vec<(String, String)> = kit
             .iter()
@@ -284,7 +284,7 @@ fn item_hits(
     };
     let start = item.position.as_seconds();
     let at = |source: f64| {
-        crate::hits::stretched(stretch, source)
+        crate::kit::stretched(stretch, source)
             .map_or_else(|| start + (source - from) / rate, |t| start + t)
     };
     Some(

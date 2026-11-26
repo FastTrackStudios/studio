@@ -188,117 +188,9 @@ fn save(settings: &HitSettings) {
 
 // ── the kit ───────────────────────────────────────────────────────────
 
-/// A piece of the kit and its tracks.
-#[derive(Clone, Debug)]
-pub struct KitPiece {
-    pub name: String,
-    pub trigger: String,
-    /// Its close mics, the one detection reads first (`In`, `Top`).
-    pub mics: Vec<String>,
-}
-
-impl KitPiece {
-    /// Every track whose recordings carry the piece's hits.
-    pub fn tracks(&self) -> impl Iterator<Item = &String> {
-        self.mics.iter().chain(std::iter::once(&self.trigger))
-    }
-}
-
-/// The kit: each piece with a trigger, and the close mics that belong to
-/// no piece (hi-hat, ride) — bleed to refuse, nothing to detect.
-#[must_use]
-pub fn kit(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-) -> (Vec<KitPiece>, Vec<String>) {
-    let tracks = Tracks::all(daw, project.clone());
-    let pieces = crate::drum_reference::pieces(daw, project);
-    // Which tracks hold items: one look, not every track's items copied.
-    let filled: Option<std::collections::HashSet<String>> = match project {
-        ProjectContext::Project(guid) => daw.read_project(guid, |p| {
-            p.items_by_track
-                .iter()
-                .filter(|(_, items)| !items.is_empty())
-                .map(|(track, _)| track.clone())
-                .collect()
-        }),
-        ProjectContext::Current => None,
-    };
-    let has_items = |guid: &str| {
-        filled.as_ref().map_or_else(
-            || {
-                !daw.get_items(project.clone(), TrackRef::Guid(guid.to_owned()))
-                    .is_empty()
-            },
-            |filled| filled.contains(guid),
-        )
-    };
-    kit_from(&tracks, pieces, &has_items)
-}
-
-/// The kit of `tracks`: each of `pieces` (name, trigger track) with its
-/// close mics that hold items (`has_items`), and the hats and rides in the
-/// Drums folder no piece claims.
-#[must_use]
-pub fn kit_from(
-    tracks: &[daw_proto::Track],
-    pieces: Vec<(String, String)>,
-    has_items: &dyn Fn(&str) -> bool,
-) -> (Vec<KitPiece>, Vec<String>) {
-    let pieces: Vec<KitPiece> = pieces
-        .into_iter()
-        .filter_map(|(name, trigger)| {
-            let parent = tracks
-                .iter()
-                .find(|t| t.guid == trigger)?
-                .parent_guid
-                .clone();
-            let mut mics: Vec<&daw_proto::Track> = tracks
-                .iter()
-                .filter(|t| {
-                    let lower = t.name.trim().to_ascii_lowercase();
-                    t.parent_guid == parent
-                        && t.guid != trigger
-                        && !t.is_folder
-                        && !dynamic_template::apply::is_trigger(&t.name)
-                        && !lower.ends_with("sample")
-                        && !dynamic_template::apply::is_one_note(&t.name)
-                        && has_items(&t.guid)
-                })
-                .collect();
-            // The mic nearest the head first: what detection reads.
-            mics.sort_by_key(|t| {
-                let lower = t.name.trim().to_ascii_lowercase();
-                !(lower.starts_with("in")
-                    || lower.starts_with("top")
-                    || lower == name.to_ascii_lowercase())
-            });
-            (!mics.is_empty()).then(|| KitPiece {
-                name,
-                trigger,
-                mics: mics.into_iter().map(|t| t.guid.clone()).collect(),
-            })
-        })
-        .collect();
-    let taken: BTreeSet<&String> = pieces.iter().flat_map(KitPiece::tracks).collect();
-    let by_guid: HashMap<&str, &daw_proto::Track> =
-        tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
-    let extras = tracks
-        .iter()
-        .filter(|t| {
-            let lower = t.name.to_ascii_lowercase();
-            !t.is_folder
-                && !taken.contains(&t.guid)
-                && (lower.contains("hat") || lower.contains("ride"))
-                && crate::gain_stage::path_of(t, &by_guid)
-                    .first()
-                    .is_some_and(|p| p.trim().eq_ignore_ascii_case("drums"))
-                && has_items(&t.guid)
-        })
-        .map(|t| t.guid.clone())
-        .collect();
-    (pieces, extras)
-}
+pub use engine_core::kit::{
+    HitKey, KitPiece, Played, kit, kit_from, pass_key, playback, playback_scan, stretched,
+};
 
 /// The kit's other mics — overheads, rooms, anything recorded under the
 /// Drums folder that no piece or extra claims (`claimed`): bleed of every
@@ -1841,17 +1733,6 @@ pub fn heard_hits(
     })
 }
 
-/// The pass a hit's recording is of — what, with its id, tells it from
-/// the same id on another take recorded from the same place.
-#[must_use]
-pub fn pass_key(path: &str) -> String {
-    crate::take_colors::stamp(path).unwrap_or_else(|| path.to_owned())
-}
-
-/// One hit, told from every other: its recording's pass ([`pass_key`])
-/// and its marker id.
-pub type HitKey = (String, String);
-
 /// What an edit of a hit's note does to the hit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum HitChange {
@@ -2262,29 +2143,6 @@ pub fn explain(
 
 // ── where the hits are heard now ──────────────────────────────────────
 
-/// One hit where the song plays it now: on its piece's first mic, on the
-/// lane an edit works on (`EDIT`, else the playing lane).
-#[derive(Clone, Debug)]
-pub struct Played {
-    pub id: String,
-    /// The recording it is a hit of: a marker's id is unique within its
-    /// recording only — takes recorded from the same place share them.
-    pub source: String,
-    pub piece: String,
-    /// Project seconds, as it plays now.
-    pub time: f64,
-    pub peak_db: f64,
-    pub mark: HitMark,
-}
-
-impl Played {
-    /// What tells it from every other hit: its recording and its id.
-    #[must_use]
-    pub fn key(&self) -> (&str, &str) {
-        (&self.source, &self.id)
-    }
-}
-
 /// What the arrangement draws over the kit in Edit mode: every hit where
 /// it plays now, by piece and who placed it, and the zones that are not
 /// turned down.
@@ -2481,114 +2339,6 @@ fn stretches(
         }
     }
     out.sort_by(|a, b| a.start.total_cmp(&b.start));
-    out
-}
-
-/// Where in its take `source` plays, through `markers` (by position): `None`
-/// with fewer than two, or outside them.
-pub fn stretched(markers: &[daw_proto::StretchMarker], source: f64) -> Option<f64> {
-    markers.windows(2).find_map(|pair| {
-        let [a, b] = pair else { return None };
-        let span = b.source_position - a.source_position;
-        (source >= a.source_position && source <= b.source_position && span > 0.0).then(|| {
-            ((source - a.source_position) / span).mul_add(b.position - a.position, a.position)
-        })
-    })
-}
-
-/// Every hit of the kit where it plays now — a hit cut into two slices
-/// that both play it is here twice, one cut away is not here at all.
-#[must_use]
-pub fn playback(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<Played> {
-    // The song's index, kept up to date from the journal — when the song is
-    // this process's engine's (`daw` is the one engine a process runs).
-    if let Some(song) = crate::hit_index::song_of(project)
-        && std::ptr::eq(song.daw(), daw)
-    {
-        return crate::hit_index::playback(&song).as_ref().clone();
-    }
-    playback_scan(daw, project)
-}
-
-/// [`playback`] read item by item from the engine: every slice of the kit
-/// looked at again — what the index is checked against.
-#[must_use]
-pub fn playback_scan(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<Played> {
-    let (pieces, _) = kit(daw, project);
-    let mut out = Vec::new();
-    for piece in &pieces {
-        let Some(mic) = piece.mics.first() else {
-            continue;
-        };
-        let Some(track) = Tracks::get(daw, project.clone(), TrackRef::Guid(mic.clone())) else {
-            continue;
-        };
-        let mut by_source: HashMap<String, Vec<TakeMarker>> = HashMap::new();
-        for item in daw.get_items(project.clone(), TrackRef::Guid(mic.clone())) {
-            if item.muted || !crate::drum_edit::is_edited(&track, &item) {
-                continue;
-            }
-            let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(item.guid.clone()))
-            else {
-                continue;
-            };
-            let Some(path) = take.source_file_path.clone() else {
-                continue;
-            };
-            let rate = if take.play_rate > 0.0 {
-                take.play_rate
-            } else {
-                1.0
-            };
-            let from = take.start_offset.as_seconds();
-            let to = item.length.as_seconds().mul_add(rate, from);
-            // A slice drawn out over a gap plays less of its source than
-            // its length says: where its stretch markers say.
-            let stretch = daw_proto::StretchMarkers::get_stretch_markers(
-                daw,
-                project.clone(),
-                ItemRef::Guid(item.guid.clone()),
-                TakeRef::Active,
-            );
-            let (from, to) = match (stretch.first(), stretch.last()) {
-                (Some(first), Some(last)) if stretch.len() > 1 => {
-                    (first.source_position, last.source_position)
-                }
-                _ => (from, to),
-            };
-            let at = |source: f64| {
-                stretched(&stretch, source).map_or_else(
-                    || item.position.as_seconds() + (source - from) / rate,
-                    |t| item.position.as_seconds() + t,
-                )
-            };
-            let markers = by_source.entry(path.clone()).or_insert_with(|| {
-                daw.get_take_markers(
-                    project.clone(),
-                    ItemRef::Guid(item.guid.clone()),
-                    TakeRef::Active,
-                )
-            });
-            for m in markers.iter() {
-                let Some(h) = &m.hit else { continue };
-                if h.piece != piece.name
-                    || m.source_position_seconds < from
-                    || m.source_position_seconds >= to
-                {
-                    continue;
-                }
-                out.push(Played {
-                    id: m.id.clone(),
-                    source: path.clone(),
-                    piece: h.piece.clone(),
-                    time: at(m.source_position_seconds),
-                    peak_db: h.peak_db,
-                    mark: h.clone(),
-                });
-            }
-        }
-    }
-    out.sort_by(|a, b| a.time.total_cmp(&b.time));
     out
 }
 

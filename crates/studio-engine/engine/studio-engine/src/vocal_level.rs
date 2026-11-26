@@ -90,8 +90,9 @@ const LOUD_SHARE: f64 = 0.9;
 /// The most the makeup moves the whole track, dB.
 const MAKEUP_MAX_DB: f64 = 24.0;
 
-/// What ends a track's ext key holding one item's lanes.
-pub const LANES_KEY: &str = "FTS:level:";
+pub use engine_core::vocal_lanes::{
+    LANE_SHOWN, LANES_KEY, has_lanes, lane_shown, playing, show_lane,
+};
 
 /// The knobs a hand turns.
 #[derive(Clone, Copy, Debug)]
@@ -186,23 +187,6 @@ fn front(path: &str) -> Option<(Vec<f64>, f64)> {
         .map(|s| f64::from(*s))
         .collect();
     Some((samples, f64::from(audio.sample_rate)))
-}
-
-/// The items of `track` that play: not muted, on a lane that plays.
-pub fn playing(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    track: &daw_proto::Track,
-) -> Vec<daw_proto::Item> {
-    daw.get_items(project.clone(), TrackRef::Guid(track.guid.clone()))
-        .into_iter()
-        .filter(|i| !i.muted)
-        .filter(|i| {
-            i.fixed_lane
-                .is_none_or(|lane| lane < 64 && track.lane_play_mask & (1_u64 << lane) != 0)
-                || track.lane_play_mask == 0
-        })
-        .collect()
 }
 
 /// Every playing item of `track`, analysed over the stretch of its
@@ -344,46 +328,6 @@ fn keep(
         &format!("{}{item}", crate::leveler::ANCHOR_KEY),
         &anchor.to_text(),
     );
-}
-
-/// The track ext key that shows the leveler's lanes under a track.
-pub const LANE_SHOWN: &str = "FTS:level:lane";
-
-/// Whether `track` shows the vocal leveler's lane.
-#[must_use]
-pub fn lane_shown(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    track: &str,
-) -> bool {
-    Tracks::ext_state(daw, project.clone(), TrackRef::Guid(track.to_owned()))
-        .iter()
-        .any(|e| e.key == LANE_SHOWN && e.value == "1")
-}
-
-/// Show or hide the vocal leveler's lane under `track`.
-pub fn show_lane(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    track: &str,
-    shown: bool,
-) {
-    let _ = Tracks::set_ext_state(
-        daw,
-        project.clone(),
-        TrackRef::Guid(track.to_owned()),
-        LANE_SHOWN,
-        if shown { "1" } else { "" },
-    );
-}
-
-/// Whether any of `track`'s items has lanes kept — not the key that
-/// expands the leveler, which shares their prefix.
-#[must_use]
-pub fn has_lanes(daw: &daw::standalone::Standalone, project: &ProjectContext, track: &str) -> bool {
-    Tracks::ext_state(daw, project.clone(), TrackRef::Guid(track.to_owned()))
-        .iter()
-        .any(|e| e.key.starts_with(LANES_KEY) && e.key != LANE_SHOWN && !e.value.is_empty())
 }
 
 /// `track`'s leveler dials, as kept (as made when never turned).

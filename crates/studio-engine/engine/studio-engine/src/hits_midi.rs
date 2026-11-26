@@ -26,91 +26,12 @@ use daw_proto::{Midi as _, MidiNoteCreate, MidiTakeLocation, TakeRef};
 use facet::Facet;
 
 use crate::actions::{meta, song};
-use crate::hits::{Applied, HitChange, HitKey, NewHit, Played};
+use crate::hits::{Applied, HitChange, HitKey, NewHit};
 
 /// The track that shows the whole kit's hits.
 pub const KIT_TRACK: &str = "Drum Hits";
 
-/// The kit's note for a piece of the session's kit, by its name: General
-/// MIDI's kick and snare, the toms high to low onto the kit's rack then
-/// floor toms (`Tom 1` the smallest).
-#[must_use]
-pub fn note_for(piece: &str) -> Option<u8> {
-    let name = piece.trim().to_ascii_lowercase();
-    if name.contains("kick") {
-        return Some(36);
-    }
-    if name.contains("snare") {
-        return Some(38);
-    }
-    let tom = name.strip_prefix("tom")?.trim().parse::<u8>().ok()?;
-    [45, 47, 41, 43]
-        .get(usize::from(tom.checked_sub(1)?))
-        .copied()
-}
-
-/// A hit's velocity from its level against its piece's loudest (dB, 0
-/// the loudest): the loudest at 127, half the velocity every 12 dB down.
-#[must_use]
-pub fn velocity(relative_db: f64) -> u8 {
-    let v = (127.0 * 10_f64.powf(relative_db.min(0.0) / 40.0)).round();
-    num_traits::ToPrimitive::to_u8(&v.clamp(1.0, 127.0)).unwrap_or(1)
-}
-
-/// One hit as a note.
-#[derive(Clone, Debug, PartialEq)]
-pub struct HitNote {
-    pub key: HitKey,
-    pub piece: String,
-    pub pitch: u8,
-    /// Project seconds, where it plays.
-    pub time: f64,
-    pub velocity: u8,
-}
-
-/// A note as a view holds it: `(time, pitch, velocity)`, project seconds.
-pub type Note = (f64, u8, u8);
-
-/// Every hit that plays as a note, earliest first — each where `moved`
-/// puts it, at the velocity set by hand or else the one its level gives
-/// against its piece's loudest. A bleed nobody checked plays no note; a
-/// ghost plays its own quiet one.
-#[must_use]
-pub fn hit_notes(played: &[Played], moved: &dyn Fn(f64) -> f64) -> Vec<HitNote> {
-    let kept: Vec<(&Played, u8)> = played
-        .iter()
-        .filter(|p| !(p.mark.bleed && p.mark.origin == daw_proto::MarkOrigin::Auto))
-        .filter_map(|p| Some((p, note_for(&p.piece)?)))
-        .collect();
-    // The scale is the measured hits': one drawn by hand has no peak, and
-    // one given a velocity keeps it.
-    let mut loudest: BTreeMap<&str, f64> = BTreeMap::new();
-    for (p, _) in kept.iter().filter(|(p, _)| measured(p)) {
-        let l = loudest.entry(p.piece.as_str()).or_insert(f64::NEG_INFINITY);
-        *l = l.max(p.peak_db);
-    }
-    let mut notes: Vec<HitNote> = kept
-        .into_iter()
-        .map(|(p, pitch)| {
-            let top = loudest.get(p.piece.as_str()).copied().unwrap_or(p.peak_db);
-            HitNote {
-                key: (crate::hits::pass_key(&p.source), p.id.clone()),
-                piece: p.piece.clone(),
-                pitch,
-                time: moved(p.time),
-                velocity: p.mark.velocity.unwrap_or_else(|| velocity(p.peak_db - top)),
-            }
-        })
-        .collect();
-    notes.sort_by(|a, b| a.time.total_cmp(&b.time).then(a.pitch.cmp(&b.pitch)));
-    notes
-}
-
-/// Whether a hit's level was measured — a detector's hit, or one placed
-/// by hand where a detector read it — and it plays by it.
-fn measured(p: &Played) -> bool {
-    p.mark.velocity.is_none() && p.peak_db < 0.0
-}
+pub use engine_core::kit::{HitNote, Note, hit_notes, note_for, velocity};
 
 /// What a view shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

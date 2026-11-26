@@ -64,6 +64,20 @@ pub mod telemetry;
 // ── from engine-listen ──
 
 // ── from engine-edit ──
+/// The drum MIDI as written, mapped to the kit (engine-edit's, read by
+/// the kit).
+pub mod drum_reference;
+/// A drum's fundamental, off its own hits (the mix tunes its Fund/Sub to it).
+pub mod fundamental;
+/// Where every hit of the kit plays now, kept per song.
+#[cfg(feature = "native")]
+pub mod hit_index;
+/// The kit and its hits as the song plays them, and their notes.
+#[cfg(feature = "native")]
+pub mod kit;
+/// The vocal leveler's lanes as a track keeps them.
+#[cfg(feature = "native")]
+pub mod vocal_lanes;
 
 // ── from engine-mix ──
 

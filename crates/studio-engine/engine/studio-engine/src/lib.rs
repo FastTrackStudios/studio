@@ -140,7 +140,7 @@ pub use engine_runtime::client::drum_edit;
 #[cfg(feature = "native")]
 pub mod drum_lanes;
 pub mod drum_level;
-pub mod drum_reference;
+pub use engine_core::drum_reference;
 #[cfg(feature = "signal")]
 pub mod drum_samples;
 #[cfg(feature = "native")]
@@ -154,12 +154,12 @@ pub mod edit_actions;
 pub mod edit_reads;
 #[cfg(feature = "native")]
 pub mod edit_revert;
-#[cfg(feature = "native")]
-pub use engine_core::edit_trace;
-pub mod fundamental;
 #[cfg(any(feature = "native", feature = "web"))]
 pub use daw_view::arrange_actions;
 pub use editing::groove;
+#[cfg(feature = "native")]
+pub use engine_core::edit_trace;
+pub use engine_core::fundamental;
 #[cfg(feature = "native")]
 pub use engine_core::history_marks;
 pub use engine_runtime::client::gain_stage;
@@ -173,11 +173,11 @@ pub mod audio_window;
 pub mod comp_keep;
 #[cfg(feature = "native")]
 pub mod comp_song;
+pub use daw_view::hit_overlay;
 #[cfg(feature = "native")]
 pub use engine_core::history;
 #[cfg(feature = "native")]
-pub mod hit_index;
-pub use daw_view::hit_overlay;
+pub use engine_core::hit_index;
 #[cfg(feature = "native")]
 pub mod drum_apply;
 #[cfg(feature = "native")]
