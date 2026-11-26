@@ -969,18 +969,27 @@ impl Store {
         self.write_snapshot(taken.pack()?)
     }
 
-    /// Where the archive of the project file at `file` is: `Archive/` beside
-    /// it, `<its name>.history`. A store as the file is, holding each
-    /// branch's whole history; never read to open the song.
-    #[must_use]
-    pub fn archive_path(file: &std::path::Path) -> std::path::PathBuf {
-        let stem = file
-            .file_stem()
-            .map_or_else(|| "song".into(), |s| s.to_string_lossy().into_owned());
-        file.parent()
+    /// Where the archive of this project file, at `file`, is: `Archive/`
+    /// beside it, `<the song's id>.history` (its name's, for a song with no
+    /// id), so the song renamed or copied in its folder still finds it. A
+    /// store as the file is, holding each branch's whole history; never
+    /// read to open the song.
+    ///
+    /// # Errors
+    ///
+    /// The database refused the read.
+    pub fn archive_path(&self, file: &std::path::Path) -> StoreResult<std::path::PathBuf> {
+        let name = match self.meta(ID_KEY)? {
+            Some(id) if !id.is_empty() => id,
+            _ => file
+                .file_stem()
+                .map_or_else(|| "song".into(), |s| s.to_string_lossy().into_owned()),
+        };
+        Ok(file
+            .parent()
             .unwrap_or_else(|| std::path::Path::new("."))
             .join("Archive")
-            .join(format!("{stem}.history"))
+            .join(format!("{name}.history")))
     }
 
     /// Fold `branch` into a shallow snapshot at `root`: its state, and only
@@ -1002,8 +1011,28 @@ impl Store {
         root: &loro::Frontiers,
         archive: &Store,
     ) -> StoreResult<()> {
+        let taken = self.take_shallow(branch, doc, root, archive)?;
+        self.write_snapshot(taken.pack()?)
+    }
+
+    /// The first step of [`Self::compact_shallow`], the only one that needs
+    /// the doc still (as [`Self::take_snapshot`] is [`Self::compact`]'s): the
+    /// branch's forks given snapshots, its history archived, its shallow
+    /// snapshot taken. Pack and write it after ([`Snapshot::pack`],
+    /// [`Self::write_snapshot`]).
+    ///
+    /// # Errors
+    ///
+    /// The doc would not export, or either file refused the write.
+    pub fn take_shallow(
+        &self,
+        branch: &str,
+        doc: &loro::LoroDoc,
+        root: &loro::Frontiers,
+        archive: &Store,
+    ) -> StoreResult<Snapshot> {
         let span = tracing::info_span!(
-            "store.compact_shallow",
+            "store.take_shallow",
             store.forks_given_snapshots = tracing::field::Empty,
             store.snapshot_bytes = tracing::field::Empty,
         );
@@ -1017,7 +1046,7 @@ impl Store {
         self.archive(branch, doc, archive)?;
         let taken = self.take_snapshot_as(branch, doc, loro::ExportMode::shallow_snapshot(root))?;
         span.record("store.snapshot_bytes", taken.data.len());
-        self.write_snapshot(taken.pack()?)
+        Ok(taken)
     }
 
     /// Put into `archive` what `branch` holds that it does not yet: the

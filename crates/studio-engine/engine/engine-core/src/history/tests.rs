@@ -247,3 +247,56 @@ fn a_step_after_an_agents_is_undone_first() {
     assert_eq!(undone, Undone::Step("Agent: a".into()));
     assert_eq!(volume(&daw, "after"), Some(0.5));
 }
+
+/// Folded shallow, a song keeps its session's steps in its file and the
+/// rest in its archive (`Archive/` beside it): reopened, edited and folded
+/// again, a step from before that open is gone back to from the archive.
+#[test]
+fn a_step_from_before_the_last_open_is_gone_back_to_from_the_archive() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let daw = Standalone::new();
+    let file = dir.path().join("Song.session");
+    song_in(&daw, "archived", &file, 0.5);
+    step(&daw, "archived", 0.6);
+    let wanted = steps("archived")[0].0;
+    step(&daw, "archived", 0.7);
+    project_file::fold("archived").expect("folded");
+
+    // Reopened from its file, in its folder (its archive beside it).
+    assert!(project_file::written(project_file::WRITE_WAIT));
+    let copy = dir.path().join("Reopened.session");
+    std::fs::copy(&file, &copy).expect("the file");
+    let wal = |f: &Path| {
+        f.with_file_name(format!(
+            "{}-wal",
+            f.file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+        ))
+    };
+    if wal(&file).exists() {
+        std::fs::copy(wal(&file), wal(&copy)).expect("its log");
+    }
+    let reopened = project_file::load(&daw, "Reopened", &copy, MAIN).expect("reopened");
+    assert_eq!(volume(&daw, &reopened), Some(0.7));
+    step(&daw, &reopened, 0.8);
+    project_file::fold(&reopened).expect("folded again");
+
+    let listed = project_file::history(&reopened, (0, 50))
+        .expect("its history")
+        .0;
+    assert!(
+        listed
+            .iter()
+            .any(|(m, reachable)| m.seq == wanted && *reachable),
+        "the first step is still listed as one to go back to"
+    );
+    assert!(
+        std::fs::read_dir(dir.path().join("Archive"))
+            .expect("Archive/")
+            .flatten()
+            .any(|e| e.path().extension().is_some_and(|x| x == "history")),
+        "an archive beside the song"
+    );
+    project_file::restore(&reopened, MomentRef::Seq(wanted)).expect("gone back, from the archive");
+    assert_eq!(volume(&daw, &reopened), Some(0.6));
+}

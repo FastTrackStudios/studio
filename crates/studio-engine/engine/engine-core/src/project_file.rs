@@ -116,6 +116,12 @@ struct Open {
     synced: Option<library_sync::project_sync::SyncedBranch>,
     /// Applies what other devices send, while the song is open.
     _remote: Option<engine_sync::loro::Subscription>,
+    /// The doc's version when the song was opened: where a fold makes it
+    /// shallow ([`take_fold`]), so this session's steps stay in the file.
+    opened_at: engine_sync::loro::Frontiers,
+    /// The song's archive (`Archive/<Title>.history`), opened at its first
+    /// fold.
+    archive: Option<Arc<Mutex<Store>>>,
 }
 
 impl Open {
@@ -125,6 +131,69 @@ impl Open {
             synced.name_next(label);
         }
     }
+
+    /// The song's archive, opened (and its folder made) the first time.
+    fn archive(&mut self) -> Result<Arc<Mutex<Store>>, String> {
+        if let Some(archive) = &self.archive {
+            return Ok(Arc::clone(archive));
+        }
+        let path = with_store(&self.store, |s| {
+            s.archive_path(&self.path).map_err(|e| e.to_string())
+        })?;
+        if let Some(folder) = path.parent() {
+            std::fs::create_dir_all(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
+        }
+        let archive = Arc::new(Mutex::new(
+            Store::open(&path).map_err(|e| format!("{}: {e}", path.display()))?,
+        ));
+        self.archive = Some(Arc::clone(&archive));
+        Ok(archive)
+    }
+}
+
+/// Fold the song `guid`'s history now, as an idle fold would: shallow at the
+/// version it was opened at, what came before into its archive. What a
+/// close or an explicit save calls, and the tests.
+///
+/// # Errors
+/// The song is not open from its file, or the fold failed.
+pub fn fold(guid: &str) -> Result<(), String> {
+    written(WRITE_WAIT);
+    let guid = guid.to_owned();
+    let taken = run(async move {
+        let mut songs = open_songs().lock().await;
+        let open = songs
+            .get_mut(&guid)
+            .ok_or("the song is not open from its file")?;
+        let snapshot = take_fold(open)?;
+        open.uncompacted = 0;
+        Ok::<_, String>((Arc::clone(&open.store), snapshot))
+    })??;
+    write_snapshot_later(&taken.0, taken.1, false);
+    Ok(())
+}
+
+/// The snapshot to fold `open`'s branch into: shallow at the version the
+/// song was opened at, its history before that put in its archive first
+/// (`Store::take_shallow`), so the file opens small and fast. A song synced
+/// through its org keeps its whole history: that doc's own writer appends
+/// to it.
+fn take_fold(open: &mut Open) -> Result<session_format::store::Snapshot, String> {
+    if open.synced.is_some() {
+        let doc = open.bridge.doc();
+        return with_store(&open.store, |s| {
+            s.take_snapshot(&open.branch, doc.loro())
+                .map_err(|e| e.to_string())
+        });
+    }
+    let archive = open.archive()?;
+    let doc = open.bridge.doc();
+    with_store(&open.store, |s| {
+        with_store(&archive, |a| {
+            s.take_shallow(&open.branch, doc.loro(), &open.opened_at, a)
+                .map_err(|e| e.to_string())
+        })
+    })
 }
 
 /// The doc a song's bridge edits: the branch's synced doc when the project
@@ -266,10 +335,7 @@ fn compact_when_idle() {
                             o.uncompacted >= FOLD_AT_LEAST || (long && o.uncompacted > 0)
                         };
                         for open in songs.values_mut().filter(due) {
-                            let doc = open.bridge.doc();
-                            match with_store(&open.store, |s| {
-                                s.take_snapshot(&open.branch, doc.loro()).map_err(|e| e.to_string())
-                            }) {
+                            match take_fold(open) {
                                 Ok(snapshot) => {
                                     open.uncompacted = 0;
                                     taken.push((Arc::clone(&open.store), snapshot));
@@ -527,6 +593,7 @@ async fn begin(daw: &Standalone, guid: &str, path: &Path, branch: &str) -> Resul
     )
     .await
     .map_err(|e| e.to_string())?;
+    let opened_at = bridge.doc().loro().oplog_frontiers();
     Ok(Open {
         path: path.to_path_buf(),
         branch: branch.to_owned(),
@@ -536,6 +603,8 @@ async fn begin(daw: &Standalone, guid: &str, path: &Path, branch: &str) -> Resul
         uncompacted,
         synced,
         _remote: None,
+        opened_at,
+        archive: None,
     })
 }
 
@@ -631,10 +700,7 @@ fn append_as(open: &mut Open, label: &str, action: Option<&str>) -> Result<(), S
     // the snapshot holds beyond them is appended again and merged as the
     // same operations.
     if open.uncompacted >= COMPACT_AFTER {
-        let snapshot = with_store(&open.store, |s| {
-            s.take_snapshot(&open.branch, doc.loro())
-                .map_err(|e| e.to_string())
-        })?;
+        let snapshot = take_fold(open)?;
         open.uncompacted = 0;
         // Packed and written on a thread of its own: the edit that tipped it
         // over is recorded now, not after the fold.
@@ -1436,6 +1502,7 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
             .map_err(|e| e.to_string())?;
         let remote = Some(watch_remote(&made, bridge.doc().loro()));
         forget_undo(&made);
+        let opened_at = bridge.doc().loro().oplog_frontiers();
         open_songs().lock().await.insert(
             made,
             Open {
@@ -1447,6 +1514,8 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
                 uncompacted,
                 synced,
                 _remote: remote,
+                opened_at,
+                archive: None,
             },
         );
         Ok::<(), String>(())
@@ -1562,14 +1631,21 @@ pub fn history(guid: &str, page: (u32, u32)) -> Result<(Vec<(Moment, bool)>, u32
         let open = songs
             .get(&guid)
             .ok_or("the song is not open from its file")?;
-        let (moments, total) = with_store(&open.store, |s| {
-            s.history(&open.branch, page).map_err(|e| e.to_string())
+        let (moments, total, archived) = with_store(&open.store, |s| {
+            let (moments, total) = s.history(&open.branch, page).map_err(|e| e.to_string())?;
+            let archived = s
+                .archived_through(&open.branch)
+                .map_err(|e| e.to_string())?;
+            Ok((moments, total, archived))
         })?;
         let vv = open.bridge.doc().loro().oplog_vv();
+        // Reachable in the song's own history, or (before its shallow root)
+        // in its archive.
         let out = moments
             .into_iter()
             .map(|m| {
-                let reachable = reachable(&vv, &m.frontiers);
+                let reachable =
+                    reachable(&vv, &m.frontiers) || archived.is_some_and(|last| m.seq <= last);
                 (m, reachable)
             })
             .collect();
@@ -1709,15 +1785,34 @@ pub fn restore(guid: &str, which: MomentRef) -> Result<Moment, String> {
             }
         })?;
         let doc = open.bridge.doc().loro().clone();
-        if !reachable(&doc.oplog_vv(), &moment.frontiers) {
-            return Err(format!(
-                "{:?} is of a version no longer in the song's history (it joined a live set since): open the version kept aside then",
-                moment.label
-            ));
-        }
         let at =
             engine_sync::loro::Frontiers::decode(&moment.frontiers).map_err(|e| e.to_string())?;
-        let past = doc.fork_at(&at).map_err(|e| e.to_string())?;
+        // From the song's own history (this session's, since its shallow
+        // root), else from its archive, which holds everything before.
+        let here = reachable(&doc.oplog_vv(), &moment.frontiers)
+            .then(|| session_format::store::fork_at(&doc, &at).ok())
+            .flatten();
+        let past = match here {
+            Some(past) => past,
+            None => {
+                let archived = with_store(&open.store, |s| {
+                    s.archived_through(&open.branch).map_err(|e| e.to_string())
+                })?;
+                if !archived.is_some_and(|last| moment.seq <= last) {
+                    return Err(format!(
+                        "{:?} is of a version no longer in the song's history (it joined a live set since): open the version kept aside then",
+                        moment.label
+                    ));
+                }
+                let span = tracing::info_span!("history.from_archive");
+                let _in = span.enter();
+                let archive = open.archive()?;
+                let whole = with_store(&archive, |a| {
+                    a.load(&open.branch).map_err(|e| e.to_string())
+                })?;
+                session_format::store::fork_at(&whole, &at).map_err(|e| e.to_string())?
+            }
+        };
         let model = SessionDoc::from_loro(past).read();
         // A step of this song the recorder has not reached yet is recorded
         // first, so the going back is a step of its own after it.

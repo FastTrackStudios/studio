@@ -317,8 +317,10 @@ fn a_fold_written_after_a_later_one_changes_nothing() {
 }
 
 /// The song's archive beside its file, made to hold `store`'s history.
-fn archive_of(dir: &tempfile::TempDir) -> Store {
-    let path = Store::archive_path(&dir.path().join("Song.session"));
+fn archive_of(dir: &tempfile::TempDir, store: &Store) -> Store {
+    let path = store
+        .archive_path(&dir.path().join("Song.session"))
+        .expect("its path");
     std::fs::create_dir_all(path.parent().expect("a folder")).expect("Archive/");
     Store::open(&path).expect("the archive")
 }
@@ -329,7 +331,7 @@ fn archive_of(dir: &tempfile::TempDir) -> Store {
 #[test]
 fn a_shallow_song_keeps_its_session_and_its_archive_the_rest() {
     let (dir, store) = store();
-    let archive = archive_of(&dir);
+    let archive = archive_of(&dir, &store);
     let doc = loro::LoroDoc::new();
     let mut moments = Vec::new();
     let mut note = |store: &Store, doc: &loro::LoroDoc| {
@@ -392,7 +394,7 @@ fn a_shallow_song_keeps_its_session_and_its_archive_the_rest() {
 #[test]
 fn archiving_again_adds_only_what_is_new() {
     let (dir, store) = store();
-    let archive = archive_of(&dir);
+    let archive = archive_of(&dir, &store);
     let doc = loro::LoroDoc::new();
     step(&store, MAIN, &doc, "k1", 1.0);
     let opened_at = doc.oplog_frontiers();
@@ -426,7 +428,7 @@ fn archiving_again_adds_only_what_is_new() {
 #[test]
 fn an_alternative_still_opens_after_its_song_is_folded_shallow() {
     let (dir, store) = store();
-    let archive = archive_of(&dir);
+    let archive = archive_of(&dir, &store);
     let song = loro::LoroDoc::new();
     step(&store, MAIN, &song, "k1", 1.0);
     store.fork("Organized", MAIN, &song).expect("forked");
