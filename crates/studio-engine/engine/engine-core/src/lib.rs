@@ -65,7 +65,7 @@ pub mod telemetry;
 /// A span rendered offline and measured (MIX_MEASURE's numbers).
 #[cfg(feature = "native")]
 pub mod measure;
-/// Blocking work off the async thread that asked for it.
+/// Engine actions and blocking work off the async thread that asked for them.
 #[cfg(feature = "native")]
 pub mod off_loop;
 /// Signal's offline blocks, as another domain asks for them.
