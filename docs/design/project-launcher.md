@@ -157,7 +157,7 @@ through `extensions/daw`. All of these are built.
 | Open a song | `STUDIO_LAUNCHER_OPEN_SONG` → `DAW_RUN {id: "SESSION_SONG", args: {to}}` when the open set has it, else `DAW_OPEN {path}`; then the chart and lighting |
 | Lay the panes out | `STUDIO_LAUNCHER_ARRANGE {layout}`: Stage, Rehearse, or a saved one |
 | Save the panes as a layout | `STUDIO_LAUNCHER_LAYOUT_SAVE {name}` → `WORKSPACE_EXPORT`, kept on the device; `STUDIO_LAUNCHER_LAYOUTS` lists them |
-| Point the chart and lighting at the song | `STUDIO_LAUNCHER_FOLLOW`, on the `app:playhead.changed` hook → `KEYFLOW_SESSION_FOLLOW`, `WORKSPACE_NAVIGATE`, `IGNITION_SESSION_SONG`, `IGNITION_SESSION_ROOM` |
+| Point the chart and lighting at the song | `STUDIO_LAUNCHER_FOLLOW`, on the `app:playhead.changed` hook → `KEYFLOW_SESSION_FOLLOW`, `WORKSPACE_NAVIGATE`, `IGNITION_SESSION_SONG`, `IGNITION_SESSION_VIZ` |
 | A note on a song in a set | `STUDIO_LAUNCHER_NOTE {setlist, song, note}` → `VAULT_SET_PROPERTY` on the setlist's `notes` |
 | A rig a set is played with | `STUDIO_LAUNCHER_PART {setlist, player, rig, profile?, song?, patch?, remove?}` → the setlist's `parts` |
 | Name each song's session in its note | `STUDIO_LAUNCHER_NAME_SESSIONS {setlist}` → `VAULT_SET_PROPERTY` on each song's `session` |

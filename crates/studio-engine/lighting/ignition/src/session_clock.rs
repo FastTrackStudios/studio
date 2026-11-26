@@ -10,8 +10,8 @@
 //!
 //! The renderer is a program the app runs, not the extension: it cannot
 //! call the host's `fts.session`. The pane does that for it, as
-//! `ignition` (`IGNITION_SESSION_ROOM`: the session's song read through
-//! `fts.session`), and hands the room this clock. The transport itself is
+//! `ignition` (`IGNITION_SESSION_VIZ`: the session's song read through
+//! `fts.session`), and hands the visualizer this clock. The transport itself is
 //! presence, never the document, so this follows it directly, with the
 //! host's clock estimated as every follower of Architect's presence does
 //! (`PresencePeer::clock`: the presence driver pings the host's clock).
@@ -88,7 +88,7 @@ pub fn host_now_micros(peer: &PresencePeer) -> Option<f64> {
 
 /// How long to wait before dialling the session's host again, after
 /// `failed` dials in a row came to nothing (0: it answered, then went):
-/// a quarter second, doubling, at most five seconds, so a room restored
+/// a quarter second, doubling, at most five seconds, so a visualizer restored
 /// before its host is up follows it within seconds of it serving.
 #[must_use]
 pub fn redial_after(failed: u32) -> std::time::Duration {
@@ -140,7 +140,7 @@ impl SessionClock {
                     let pool = architect::connect::pool();
                     let endpoint = architect::connect::Endpoint::url(&url);
                     // The host may not be up yet (a window restoring the
-                    // room before the session is served), or may go and
+                    // visualizer before the session is served), or may go and
                     // come back (the engine restarting): dial until it
                     // answers, and again whenever it goes.
                     let mut failed: u32 = 0;

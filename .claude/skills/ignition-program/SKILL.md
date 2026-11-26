@@ -1,6 +1,6 @@
 ---
 name: ignition-program
-description: Edit Ignition's lighting through its programming actions (IGNITION_*) from the CLI, MCP or Luau scripts — the library (colours, palettes, effects, looks, focus points, trick presets), a song's cues and a whole set's, environments (rooms), people, fixtures, the patch, tricks (grandMA3's MAtricks). Use when asked to add, change, move, retime, re-skin, re-patch, hang, focus or script anything in a lighting show, or to write a Luau script that does.
+description: Edit Ignition's lighting through its programming actions (IGNITION_*) from the CLI, MCP or Luau scripts — the library (colours, palettes, effects, looks, focus points, trick presets), a song's cues and a whole set's, environments (venues), people, fixtures, the patch, tricks (grandMA3's MAtricks). Use when asked to add, change, move, retime, re-skin, re-patch, hang, focus or script anything in a lighting show, or to write a Luau script that does.
 ---
 
 # Program lighting with the actions

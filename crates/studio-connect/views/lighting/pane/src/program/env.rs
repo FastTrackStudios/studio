@@ -119,8 +119,8 @@ fn chans_of(entries: &[Value]) -> Vec<u32> {
     out
 }
 
-/// The room as the engine resolves selections against it.
-pub(crate) struct Room {
+/// The venue as the engine resolves selections against it.
+pub(crate) struct Venue {
     pub dir: PathBuf,
     pub fixtures: Value,
     pub rig: Rig,
@@ -128,7 +128,7 @@ pub(crate) struct Room {
     pub binding: VenueProfile,
 }
 
-pub(crate) fn room(cx: &Ctx, args: &Value) -> Result<Room, String> {
+pub(crate) fn venue(cx: &Ctx, args: &Value) -> Result<Venue, String> {
     let dir = env_dir(cx, args)?;
     let fixtures = file(cx, &dir, "fixtures.json");
     let infos = fixtures
@@ -173,7 +173,7 @@ pub(crate) fn room(cx: &Ctx, args: &Value) -> Result<Room, String> {
         .ok()
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
-    Ok(Room {
+    Ok(Venue {
         dir,
         fixtures,
         rig: Rig::new(infos),
@@ -182,7 +182,7 @@ pub(crate) fn room(cx: &Ctx, args: &Value) -> Result<Room, String> {
     })
 }
 
-impl Room {
+impl Venue {
     /// The channels a target names, in its order.
     pub(crate) fn resolve(&self, target: &Value) -> Result<Vec<u32>, String> {
         let roles: BTreeSet<String> = self.binding.groups.keys().cloned().collect();
@@ -234,11 +234,11 @@ fn env_list(cx: &Ctx, args: &Value) -> Res {
 }
 
 fn env_get(cx: &Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let palettes = cx.json_or(&r.dir.join("palettes.json"), json!({}))?;
     let manifest = cx.json_or(&r.dir.join("venue.ig-venue"), json!({}))?;
     // A measured room: what is drawn instead of `room.json`'s boxes.
-    let measured = measured_room(cx, &r.dir).ok().map(|(m, _)| {
+    let measured = measured_venue(cx, &r.dir).ok().map(|(m, _)| {
         json!({
             "name": m.get("name"), "model": m.get("model"), "dimensions": m.get("measured"),
             "light_groups": m.get("light_groups"), "lights": list(&m, "lights").len(),
@@ -420,7 +420,7 @@ fn env_create(cx: &mut Ctx, args: &Value) -> Res {
         cx.write_json(&dir.join(file), value)?;
     }
     cx.write_json(&dir.join("cameras.json"), &json!({ "presets": [
-        { "name": "Wide", "eye": [0.0, house + 0.6, 1.7], "look": [0.0, 0.0, 1.2], "fov_deg": 65.0, "about": "The whole room from the back of the house." },
+        { "name": "Wide", "eye": [0.0, house + 0.6, 1.7], "look": [0.0, 0.0, 1.2], "fov_deg": 65.0, "about": "The whole venue from the back of the house." },
         { "name": "Top", "eye": [0.0, -0.5, height * 2.2], "look": [0.0, 0.0, 0.0], "fov_deg": 60.0, "about": "From above." },
     ] }))?;
     Ok(json!({ "env": slug(name), "dir": dir, "name": title, "room": pieces, "props": props }))
@@ -489,7 +489,7 @@ fn piece_file(args: &Value) -> Result<&'static str, String> {
         "props" | "prop" => Ok("props.json"),
         "screens" | "screen" => Ok("screens.json"),
         other => Err(format!(
-            "`in` {other:?}: room, props, screens, or environment (a measured room's objects)"
+            "`in` {other:?}: room, props, screens, or environment (a measured venue's objects)"
         )),
     }
 }
@@ -508,7 +508,7 @@ const EDITS: &str = "environment.edits.json";
 
 /// A measured room as it stands: its generated document with the edits
 /// laid over it. Also the edits alone, to write back.
-fn measured_room(cx: &Ctx, dir: &Path) -> Result<(Value, Value), String> {
+fn measured_venue(cx: &Ctx, dir: &Path) -> Result<(Value, Value), String> {
     let mut doc = cx
         .json(&dir.join(MEASURED))
         .map_err(|_| "this environment has no measured model (environment.json)".to_owned())?;
@@ -539,7 +539,7 @@ fn measured_room(cx: &Ctx, dir: &Path) -> Result<(Value, Value), String> {
 fn object_set(cx: &mut Ctx, args: &Value) -> Res {
     let dir = env_dir(cx, args)?;
     let name = text(args, "name")?;
-    let (doc, mut edits) = measured_room(cx, &dir)?;
+    let (doc, mut edits) = measured_venue(cx, &dir)?;
     let objects = list(&doc, "objects");
     let slot = objects
         .iter()
@@ -554,7 +554,7 @@ fn object_set(cx: &mut Ctx, args: &Value) -> Res {
     if moves && slot.get("movable").and_then(Value::as_bool) == Some(false) && !flag(args, "force")
     {
         return Err(format!(
-            "{name:?} is part of the room and does not move (`force: true` moves it anyway)"
+            "{name:?} is part of the venue's architecture and does not move (`force: true` moves it anyway)"
         ));
     }
     let mut set = Map::new();
@@ -592,7 +592,7 @@ fn object_set(cx: &mut Ctx, args: &Value) -> Res {
 /// whether each starts on; `group` + `on` switches one (in the edits file).
 fn env_lights(cx: &mut Ctx, args: &Value) -> Res {
     let dir = env_dir(cx, args)?;
-    let (mut doc, mut edits) = measured_room(cx, &dir)?;
+    let (mut doc, mut edits) = measured_venue(cx, &dir)?;
     if let Some(group) = opt_text(args, "group") {
         let on = args
             .get("on")
@@ -603,7 +603,7 @@ fn env_lights(cx: &mut Ctx, args: &Value) -> Res {
             .filter_map(|g| opt_text(g, "name").map(str::to_owned))
             .collect();
         if !names.iter().any(|n| n == group) {
-            return Err(format!("no light group {group:?}; the room has {names:?}"));
+            return Err(format!("no light group {group:?}; the venue has {names:?}"));
         }
         let pool = obj(&mut edits)?
             .entry("light_groups")
@@ -936,7 +936,7 @@ fn blocking_set(cx: &mut Ctx, args: &Value) -> Res {
 /// each fixture needs from where it hangs, and, with `song`, the focus
 /// put on that section's (or `cue`'s) part for the target.
 fn focus_on(cx: &mut Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let chans = r.resolve(args.get("target").ok_or("`target` is required")?)?;
     if chans.is_empty() {
         return Err("the target names no fixtures in this environment".to_owned());
@@ -1129,7 +1129,7 @@ fn footprint(cx: &Ctx, dir: &Path, f: &Value, all: &[Value]) -> (u32, Option<Str
     (n, opt_text(f, "mode").map(str::to_owned))
 }
 
-fn rows(cx: &Ctx, r: &Room) -> Vec<Value> {
+fn rows(cx: &Ctx, r: &Venue) -> Vec<Value> {
     let all = types(cx);
     r.fixtures
         .as_array()
@@ -1152,7 +1152,7 @@ fn rows(cx: &Ctx, r: &Room) -> Vec<Value> {
 }
 
 fn fixture_list(cx: &Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let mut out = rows(cx, &r);
     if let Some(target) = args.get("target") {
         let chans = r.resolve(target)?;
@@ -1240,12 +1240,12 @@ fn next_free(rows: &[Value], universe: u32, need: u32, from: u32) -> Option<u32>
     (at + need - 1 <= 512).then_some(at)
 }
 
-fn save_fixtures(cx: &mut Ctx, r: &Room) -> Result<(), String> {
+fn save_fixtures(cx: &mut Ctx, r: &Venue) -> Result<(), String> {
     cx.write_json(&r.dir.join("fixtures.json"), &r.fixtures)
 }
 
 fn fixture_add(cx: &mut Ctx, args: &Value) -> Res {
-    let mut r = room(cx, args)?;
+    let mut r = venue(cx, args)?;
     let ty = find_type(cx, text(args, "type")?)?;
     let modes = ty
         .get("modes")
@@ -1352,7 +1352,7 @@ fn fixture_add(cx: &mut Ctx, args: &Value) -> Res {
 }
 
 /// The fixtures an action names: `chan`, `chans`, or a `target`.
-fn picked(r: &Room, args: &Value) -> Result<Vec<u32>, String> {
+fn picked(r: &Venue, args: &Value) -> Result<Vec<u32>, String> {
     if let Some(c) = args.get("chan").and_then(whole) {
         return Ok(vec![c]);
     }
@@ -1369,7 +1369,7 @@ fn picked(r: &Room, args: &Value) -> Result<Vec<u32>, String> {
 /// `move` shifts them, `eulers` (degrees) or `quat` re-hangs them,
 /// `mode` and `type` change what they are on the wire.
 fn fixture_set(cx: &mut Ctx, args: &Value) -> Res {
-    let mut r = room(cx, args)?;
+    let mut r = venue(cx, args)?;
     let chans = picked(&r, args)?;
     let ty = match opt_text(args, "type") {
         Some(t) => Some(find_type(cx, t)?),
@@ -1446,12 +1446,12 @@ fn fixture_set(cx: &mut Ctx, args: &Value) -> Res {
     }
     save_fixtures(cx, &r)?;
     let manifest = cx.json_or(&r.dir.join("venue.ig-venue"), json!({}))?;
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     Ok(json!({ "fixtures": out, "patch_problems": problems(&rows(cx, &r), &manifest) }))
 }
 
 fn fixture_remove(cx: &mut Ctx, args: &Value) -> Res {
-    let mut r = room(cx, args)?;
+    let mut r = venue(cx, args)?;
     let chans = picked(&r, args)?;
     let items = r
         .fixtures
@@ -1516,7 +1516,7 @@ fn group_put(
 }
 
 fn group_set(cx: &mut Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let name = text(args, "name")?;
     if flag(args, "delete") {
         let path = r.dir.join("groups.json");
@@ -1533,7 +1533,7 @@ fn group_set(cx: &mut Ctx, args: &Value) -> Res {
 }
 
 fn group_list(cx: &Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let roles: Map<String, Value> = r
         .binding
         .groups
@@ -1550,7 +1550,7 @@ fn group_list(cx: &Ctx, args: &Value) -> Res {
 /// name or a selection (`null` unbinds); `focus` binds a focus role to a
 /// focus point's name.
 fn role_bind(cx: &mut Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let role = text(args, "role")?;
     let path = r.dir.join("profile.json");
     let mut doc = cx.json_or(
@@ -1592,7 +1592,7 @@ fn role_bind(cx: &mut Ctx, args: &Value) -> Res {
 // ---------------------------------------------------------------------
 
 fn patch_get(cx: &Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let manifest = cx.json_or(&r.dir.join("venue.ig-venue"), json!({}))?;
     let all = rows(cx, &r);
     let mut universes: BTreeMap<u32, (u32, Vec<Value>)> = BTreeMap::new();
@@ -1627,7 +1627,7 @@ fn patch_get(cx: &Ctx, args: &Value) -> Res {
 /// (`moves`). An address that would overlap another fixture is refused
 /// with the overlap, unless `force`. `patched: false` parks a fixture.
 fn patch_set(cx: &mut Ctx, args: &Value) -> Res {
-    let mut r = room(cx, args)?;
+    let mut r = venue(cx, args)?;
     let moves: Vec<Value> = match args.get("moves").and_then(Value::as_array) {
         Some(m) => m.clone(),
         None => vec![args.clone()],
@@ -1709,7 +1709,7 @@ fn patch_set(cx: &mut Ctx, args: &Value) -> Res {
 /// Packs fixtures end to end from `address` in `universe`, in the
 /// target's order.
 fn patch_pack(cx: &mut Ctx, args: &Value) -> Res {
-    let r = room(cx, args)?;
+    let r = venue(cx, args)?;
     let chans = picked(&r, args)?;
     let universe = args.get("universe").and_then(whole).unwrap_or(1);
     let mut at = args.get("address").and_then(whole).unwrap_or(1);

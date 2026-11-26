@@ -30,7 +30,7 @@ default = ["extension"]
 extension = ["dep:architect-extensions", "dep:architect-extensions-dioxus", "dep:dioxus", "dep:serde_json", "dep:futures-timer", "dep:ignition-session", "dep:ignition-show", "dep:session", "dep:live-doc", "dep:architect", "dep:tokio", "dep:uuid", "dep:ignition-daw"]
 # Its view as the GPU pane — linked into an app built with
 # `architect-desktop/process-views` (Studio Architect). Without it (the
-# process), the view opens the room in a window.
+# process), the view opens the visualizer in a window.
 pane = [
     "extension",
     "dep:architect-process-view",
@@ -58,7 +58,7 @@ live-doc = { path = "../../../../studio-core/session/live-doc", optional = true 
 architect = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede", optional = true, features = ["vox", "connect"] }
 uuid = { workspace = true, optional = true }
 
-# Natively the room is the `ignition` program's GPU process view, and the
+# Natively the visualizer is the `ignition` program's GPU process view, and the
 # session's presence is followed on a thread of its own with a runtime.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # A process copy is a guest of the app (src/main.rs).
@@ -67,7 +67,7 @@ architect-extensions-dioxus = { workspace = true, optional = true, features = ["
 architect-process-view = { workspace = true, optional = true, features = ["host"] }
 tokio = { workspace = true, optional = true }
 
-# In a browser the room is Ignition's web renderer (`ignition_viz::run_web`,
+# In a browser the visualizer is Ignition's web renderer (`ignition_viz::run_web`,
 # Bevy on WebGPU) in a canvas of the view's, and the session's presence is
 # followed on the page's own tasks (`architect::platform`).
 [target.'cfg(target_arch = "wasm32")'.dependencies]

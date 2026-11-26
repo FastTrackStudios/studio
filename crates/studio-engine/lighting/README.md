@@ -49,14 +49,14 @@ Lighting is a Studio extension, not an app of its own: `pane/`
 default (its `lighting` feature). Studio starts and stops its renderer
 (the `ignition` program) itself; nobody runs it by hand.
 
-- **Lighting: show the room** (⌘K, `IGNITION_SHOW_OPEN`) — the pane: the
-  room in 3D, following Studio's playback. It is an Architect process
+- **Lighting: show the visualizer** (⌘K, `IGNITION_SHOW_OPEN`) — the pane: the
+  show in 3D, following Studio's playback. It is an Architect process
   view (architect#641): Studio runs `ignition --process-view`, which
   renders on its own GPU device and sends frames over shared memory (Bevy
   is on wgpu 29, the app on 30). Drag to orbit, right- or Shift-drag to
-  move, the wheel to come closer, `1`–`9` for the room's camera presets.
+  move, the wheel to come closer, `1`–`9` for the venue's camera presets.
 - **Lighting: pop out to a display** (`IGNITION_POP_OUT {display?}`) — the
-  room borderless fullscreen on a display (a projector, the stage
+  visualizer borderless fullscreen on a display (a projector, the stage
   monitor; `display` an index, none: Studio's), same show, camera and
   clock; Studio owns that process. **Lighting: pop back in**
   (`IGNITION_POP_IN`) closes it.
@@ -104,7 +104,7 @@ Two gaps in Architect it works around or names:
 - **No GPU process view in a process extension's pane.** A process copy's
   view is a remote Dioxus document (`ExtensionView` draws web views,
   pages, linked components or remote documents), so while a development
-  copy runs its pane shows what it would run and pops the room out to a
+  copy runs its pane shows what it would run and pops the visualizer out to a
   display. A `process` view kind (`kind = "process"`, the program in the
   package, drawn by the app's `ProcessViewPane` whichever copy runs) would
   close it.
@@ -126,7 +126,7 @@ itself — Studio would publish the playhead to it), and the show and venue
 data in the package. Feasible; not built.
 
 The window's Wayland app id (X11 WM_CLASS) is `dev.fts.ignition`, its
-title "Ignition — visualizer" — for a window rule on a popped-out room.
+title "Ignition — visualizer" — for a window rule on a popped-out visualizer.
 
 ## JT's Senior Recital — the show
 

@@ -1340,7 +1340,7 @@
  {
   "id": "IGNITION_SET_CHECK",
   "name": "Lighting: check the set",
-  "about": "What the set's songs refer to that is not there: colours, slots, palettes, effects, looks, bundles, splits, tricks, focus points, roles (and roles the room binds nothing to), groups, sections.",
+  "about": "What the set's songs refer to that is not there: colours, slots, palettes, effects, looks, bundles, splits, tricks, focus points, roles (and roles the venue binds nothing to), groups, sections.",
   "effect": "read_only",
   "args": {
    "root": {
@@ -1374,7 +1374,7 @@
  {
   "id": "IGNITION_ENV_GET",
   "name": "Lighting: an environment",
-  "about": "One environment: its room (floor, walls, audience), props (truss, risers, people), screens, people, groups, role bindings, focus points and where its universes go; and, for a measured room (environment.json), its dimensions, every object of its model (kind, position, turn, shown, movable) and its own light groups.",
+  "about": "One environment: its shell (`room`: floor, walls, audience), props (truss, risers, people), screens, people, groups, role bindings, focus points and where its universes go; and, for a measured venue (environment.json), its dimensions, every object of its model (kind, position, turn, shown, movable) and its own light groups.",
   "effect": "read_only",
   "args": {
    "root": {
@@ -1395,7 +1395,7 @@
  {
   "id": "IGNITION_ENV_CREATE",
   "name": "Lighting: make an environment",
-  "about": "A room from its dimensions (metres): a floor and four walls, and when asked a stage riser, an audience area and trusses. Empty of fixtures; seven focus points and the Wide and Top cameras come with it.",
+  "about": "A venue from its dimensions (metres): a floor and four walls, and when asked a stage riser, an audience area and trusses. Empty of fixtures; seven focus points and the Wide and Top cameras come with it.",
   "effect": "mutating",
   "args": {
    "root": {
@@ -1501,8 +1501,8 @@
  },
  {
   "id": "IGNITION_ENV_PIECE_SET",
-  "name": "Lighting: add or change a piece of the room",
-  "about": "Adds or changes a piece by name: a wall, the floor, the audience area (`in: room`), a truss, a riser or any prop (`in: props`), a screen (`in: screens`). Position is its centre on the floor, size {x across, y deep, z tall}, eulers degrees. `in: environment` moves, turns (eulers.z), shows or hides an object of a measured room's model (`visible`, `move`); the architecture moves only with `force`.",
+  "name": "Lighting: add or change a piece of the venue",
+  "about": "Adds or changes a piece by name: a wall, the floor, the audience area (`in: room`), a truss, a riser or any prop (`in: props`), a screen (`in: screens`). Position is its centre on the floor, size {x across, y deep, z tall}, eulers degrees. `in: environment` moves, turns (eulers.z), shows or hides an object of a measured venue's model (`visible`, `move`); the architecture moves only with `force`.",
   "effect": "mutating",
   "args": {
    "root": {
@@ -1523,7 +1523,7 @@
    },
    "in": {
     "type": "string",
-    "about": "room (default), props, screens, or environment (a measured room's objects)."
+    "about": "room (default: the floor, walls and audience), props, screens, or environment (a measured venue's objects)."
    },
    "visible": {
     "type": "boolean",
@@ -1564,7 +1564,7 @@
  },
  {
   "id": "IGNITION_ENV_PIECE_REMOVE",
-  "name": "Lighting: remove a piece of the room",
+  "name": "Lighting: remove a piece of the venue",
   "about": "Removes a piece by name.",
   "effect": "destructive",
   "args": {
@@ -1586,7 +1586,7 @@
    },
    "in": {
     "type": "string",
-    "about": "room (default), props or screens."
+    "about": "room (default: the floor, walls and audience), props or screens."
    }
   },
   "required": [
@@ -1595,8 +1595,8 @@
  },
  {
   "id": "IGNITION_ENV_LIGHTS",
-  "name": "Lighting: the room's own lights",
-  "about": "A measured room's own lights (the house lights, not the rig): its groups, how many lights each has and whether each starts on. With `group` and `on`, switches one.",
+  "name": "Lighting: the venue's own lights",
+  "about": "A measured venue's own lights (the house lights, not the rig): its groups, how many lights each has and whether each starts on. With `group` and `on`, switches one.",
   "effect": "mutating",
   "args": {
    "root": {
@@ -1624,8 +1624,8 @@
  },
  {
   "id": "IGNITION_ENV_LOOK",
-  "name": "Lighting: how the room looks to the camera",
-  "about": "The air and the camera of an environment: `haze` (0 a clear room, 1 normally hazed; a room with no hazer is near 0, and then beams do not show in the air) `exposure` (stops on the stage exposure; 0 as calibrated) and `output` (what the rig delivers of its nominal flux, 1 as labelled: budget LED fixtures deliver less, and a lux reading sets it). The renderer and the stills read them. With neither, answers what is set.",
+  "name": "Lighting: how the venue looks to the camera",
+  "about": "The air and the camera of an environment: `haze` (0 clear air, 1 normally hazed; a venue with no hazer is near 0, and then beams do not show in the air) `exposure` (stops on the stage exposure; 0 as calibrated) and `output` (what the rig delivers of its nominal flux, 1 as labelled: budget LED fixtures deliver less, and a lux reading sets it). The renderer and the stills read them. With neither, answers what is set.",
   "effect": "mutating",
   "args": {
    "root": {
@@ -1767,7 +1767,7 @@
  {
   "id": "IGNITION_BLOCKING_SET",
   "name": "Lighting: save positions for a song or section",
-  "about": "Saves where people stand for a song (`section` *, the default) or one section: {name: {x, y, z?, facing_deg?}}. `show: true` also moves the room's people there.",
+  "about": "Saves where people stand for a song (`section` *, the default) or one section: {name: {x, y, z?, facing_deg?}}. `show: true` also moves the venue's people there.",
   "effect": "mutating",
   "args": {
    "root": {
@@ -1776,7 +1776,7 @@
    },
    "show": {
     "type": "boolean",
-    "about": "Move the room's people there too."
+    "about": "Move the venue's people there too."
    },
    "env": {
     "type": "string",
@@ -1857,7 +1857,7 @@
  {
   "id": "IGNITION_FOCUS_SET",
   "name": "Lighting: add, move or remove a focus point",
-  "about": "Adds or moves a named point of the room (a position palette entry every show there shares); `remove: true` deletes it.",
+  "about": "Adds or moves a named point of the venue (a position palette entry every show there shares); `remove: true` deletes it.",
   "effect": "mutating",
   "args": {
    "root": {
@@ -2184,7 +2184,7 @@
  {
   "id": "IGNITION_ROLE_BIND",
   "name": "Lighting: bind a role",
-  "about": "Says which fixtures of this room play a role of the profile: `to` a group or a selection (null unbinds); `focus` binds a focus role to a focus point.",
+  "about": "Says which fixtures of this venue play a role of the profile: `to` a group or a selection (null unbinds); `focus` binds a focus role to a focus point.",
   "effect": "mutating",
   "args": {
    "root": {

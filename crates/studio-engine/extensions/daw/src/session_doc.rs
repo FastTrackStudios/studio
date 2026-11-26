@@ -24,7 +24,7 @@
 //!   clock and joins as `lead`; every move of the engine's transport is
 //!   published there as `lead/play` (`publish`), the same moves the app's
 //!   playhead deck gets. Keyflow's chart, Ignition's room and its cue list
-//!   follow it (`KEYFLOW_SESSION_FOLLOW`, `IGNITION_SESSION_ROOM`, from
+//!   follow it (`KEYFLOW_SESSION_FOLLOW`, `IGNITION_SESSION_VIZ`, from
 //!   `DAW_STATE`'s `session`).
 
 use std::path::{Path, PathBuf};
