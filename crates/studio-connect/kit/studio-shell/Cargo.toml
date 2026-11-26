@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "What every FTS app shares around its UI: the in-memory log ring (with the crash log and the flight log), the update check (architect::release), and (feature ui) the studio shell: frame, regions, saved layout, panel registry"
+description = "What every FTS app shares around its UI: the in-memory log ring (with the crash log and the flight log), desktop Studio updating itself (signed releases, architect::release), and (feature ui) the studio shell: frame, regions, saved layout, panel registry"
 
 [features]
 # The shared studio shell (src/ui): ShellFrame, ShellState, PanelRegistry.
@@ -45,11 +45,16 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 # The flight recorder's folder (crash log, flight log): native only.
 dirs = { workspace = true }
 
-# The update check and install (`updates`): architect's signed self-update
-# against the studio repo's GitHub Releases. Desktop only: the web build is
-# its deployment and iOS updates through the App Store.
+# Desktop Studio updating itself (`updates`): the studio repo's GitHub
+# Releases, verified by architect's signed self-update (minisign over
+# SHA256SUMS), the .dmg's bundle or the AppImage put in place. Desktop only:
+# the web build is its deployment and iOS updates through TestFlight.
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
 architect = { workspace = true, features = ["release"] }
+# The release list (pre-releases count, which architect's own pick skips).
+reqwest = { workspace = true }
+# The macOS bundle's copy beside the installed one, and the mount point.
+tempfile = { workspace = true }
 # The check runs on its own small runtime (reqwest needs tokio), whatever
 # executor the app's UI is on.
 tokio = { workspace = true }
@@ -66,10 +71,15 @@ objc2-foundation = { workspace = true, features = ["default", "NSArray", "NSSet"
 dioxus-test.workspace = true
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dev-dependencies]
-# tests/updates.rs: a fake releases feed on 127.0.0.1.
+# tests/updates.rs: a fake releases feed on 127.0.0.1, signed by a test
+# minisign key (Ed25519 over a BLAKE2b-512 prehash, the BLAKE2b written in
+# the test so no new package enters the lock).
 axum = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+ed25519-dalek = "3"
+base64 = { workspace = true }
+sha2 = "0.10"
 # ui::layout's tests: the saved layout's round trip through the prefs format.
 facet-styx = { workspace = true }
 

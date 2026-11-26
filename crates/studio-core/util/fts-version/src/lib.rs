@@ -21,3 +21,9 @@ pub const RELEASE_VERSION: &str = env!("FTS_APP_VERSION");
 pub const fn release_version() -> &'static str {
     RELEASE_VERSION
 }
+
+/// Whether this binary was built as a release (`FTS_RELEASE_VERSION` set).
+///
+/// A development build reports the committed workspace version and
+/// never replaces itself with a release (desktop Studio's self-update).
+pub const RELEASED: bool = matches!(env!("FTS_APP_RELEASED").as_bytes(), b"1");

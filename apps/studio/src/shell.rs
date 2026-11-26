@@ -190,8 +190,19 @@ pub fn Root() -> Element {
         if main {
             PlayerHost {}
             crate::actions::ActionHost {}
+            UpdateNotice {}
         }
     }
+}
+
+/// The desktop's update check and its notice (`self_update`); nothing
+/// elsewhere.
+#[component]
+fn UpdateNotice() -> Element {
+    #[cfg(all(feature = "native", not(target_os = "ios")))]
+    return rsx! { crate::self_update::UpdateNotice {} };
+    #[cfg(not(all(feature = "native", not(target_os = "ios"))))]
+    rsx! {}
 }
 
 #[component]

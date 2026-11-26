@@ -29,6 +29,9 @@ mod pieces;
 mod playback;
 #[cfg(feature = "web")]
 mod player;
+// Desktop Studio updating itself: macOS and Linux (iOS: TestFlight).
+#[cfg(all(feature = "native", not(target_os = "ios")))]
+mod self_update;
 mod storage;
 // The views' theme packs, switched while the app runs (`THEME_*`).
 #[cfg(feature = "native")]

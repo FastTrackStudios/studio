@@ -19,6 +19,34 @@ cargo test -p studio-app -p session-sync
 Never `-p app-shell`: features/app/shell (the older apps' shell) has the
 same package name.
 
+## Updating itself (2026-11-26)
+
+Desktop Studio (macOS and Linux) updates itself from its releases
+(`studio-v*` tags, pre-releases included while it is in alpha;
+`src/self_update.rs`, the work in `studio_shell::updates`). A little after
+launch, and every six hours after, it looks for a newer release. If it finds
+one it downloads that release's `.dmg` or AppImage and installs it in the
+background, then says, as a toast, that the new version runs from the next
+launch. It installs only what proves itself:
+
+- the release's `SHA256SUMS.minisig` verifies against the org key compiled
+  into Studio, with the trusted comment `studio <tag> SHA256SUMS`;
+- the download's sha256 is the one those sums list;
+- on macOS, the `.dmg`'s `Studio.app` passes `codesign --verify --strict`,
+  is signed by the running bundle's team, and answers `--version` with the
+  release's version.
+
+On macOS the installed `Studio.app` is swapped for the new one, wherever it
+is. On Linux the AppImage it runs from gets the new version's name, and the
+`studio` link and desktop entry that `scripts/install.sh` made move to it.
+Until the final rename, a failure leaves the installed copy as it was.
+
+A development build (no `FTS_RELEASE_VERSION` when built) never checks in
+the background, and one not installed from a release only checks.
+`STUDIO_NO_AUTO_UPDATE=1` keeps an installed Studio to checking.
+`STUDIO_UPDATE` (`{"install": true}` to install now) does the same on the
+Action List.
+
 ## The window (2026-11-22)
 
 The window is [app-shell](https://github.com/FastTrackStudios/app-shell)
