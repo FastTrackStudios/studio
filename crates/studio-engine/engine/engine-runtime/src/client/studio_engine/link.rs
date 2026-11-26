@@ -200,7 +200,7 @@ fn of_this_instance(found: &Found) -> bool {
 /// Whether `socket` is under this process's `XDG_RUNTIME_DIR` (true when
 /// there is none).
 #[must_use]
-pub fn under_own_runtime_dir(socket: &std::path::Path) -> bool {
+pub fn under_own_runtime_dir(socket: &Path) -> bool {
     std::env::var_os("XDG_RUNTIME_DIR")
         .filter(|d| !d.is_empty())
         .is_none_or(|run| socket.starts_with(run))
