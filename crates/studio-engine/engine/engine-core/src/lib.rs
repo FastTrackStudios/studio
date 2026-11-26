@@ -30,6 +30,8 @@ pub mod audio_device;
 pub mod autosave;
 #[cfg(feature = "native")]
 pub mod backup;
+/// Where the song's chart is at a time (`SESSION_CHART_AT`).
+pub mod chart_at;
 #[cfg(feature = "native")]
 pub mod edit_trace;
 #[cfg(feature = "native")]

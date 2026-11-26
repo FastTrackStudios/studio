@@ -1,0 +1,44 @@
+# A multitrack session as a band brings one in: stems and a click, three
+# sections as regions, no chart. 120 bpm, 2 s bars, 16 s.
+about = "multitracks with a click"
+sections = ["Intro", "Verse 1", "Chorus 1"]
+
+[[media]]
+file = "Media/click.wav"
+kind = "click"
+bpm = 120
+seconds = 16
+
+[[media]]
+file = "Media/bass.wav"
+kind = "tone"
+hz = 55
+db = -12
+seconds = 16
+
+[[media]]
+file = "Media/keys.wav"
+kind = "tone"
+hz = 440
+db = -18
+seconds = 16
+
+[[listen]]
+track = "Bass"
+from = "Verse 1"
+to = "Verse 1 end"
+lufs_min = -24
+lufs_max = -10
+
+# No chart: the bars and sections are the markers'.
+[[chart]]
+at = 1.0
+source = "markers"
+bar = 1
+section = "Intro"
+
+[[chart]]
+at = 13.0
+source = "markers"
+bar = 7
+section = "Chorus 1"

@@ -392,7 +392,13 @@ fn path_to_open(a: OpenArg) -> Result<std::path::PathBuf, String> {
             .ok_or_else(|| format!("no version {name:?} of this song (SESSION_ALTERNATIVES)"))?,
         (None, None) => return Err("`name` (a version of this song) or `path`".to_owned()),
     };
-    if path.exists() {
+    // An alternative (`Song.session/Live`) is a branch inside its file,
+    // as a setlist line names it, not a path on the disk.
+    #[cfg(feature = "native")]
+    let branch = crate::project_file::file_and_branch(&path).is_some();
+    #[cfg(not(feature = "native"))]
+    let branch = false;
+    if path.exists() || branch {
         Ok(path)
     } else {
         Err(format!("{} is not there", path.display()))

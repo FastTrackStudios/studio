@@ -24,3 +24,12 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 filter = 'package(daw-extension) & binary(unbreakable) & test(/^(unbreakable|synthetic_song)/)'
 slow-timeout = { period = "120s", terminate-after = 15 }
 threads-required = "num-test-threads"
+
+# The fixture sessions (daw-extension's tests/fixtures, `just
+# test-fixtures`): each starts an engine of its own and plays it in real
+# time, so each takes two of the test threads, with room to open on a
+# busy runner.
+[[profile.default.overrides]]
+filter = 'package(daw-extension) & binary(fixtures)'
+slow-timeout = { period = "60s", terminate-after = 5 }
+threads-required = 2

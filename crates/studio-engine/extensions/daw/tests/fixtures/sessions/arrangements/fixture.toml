@@ -1,0 +1,42 @@
+# A song with two arrangements, as the engine keeps them: branches of its
+# project file (`arrangements.session/Big Chorus`), which a setlist line
+# names. The song itself is Intro, Verse 1, Chorus 1; "Big Chorus" turns
+# its verse into a second chorus (`[[arrangement]]`, made over MCP when
+# the test runs, since a `.session` is not text). 120 bpm, 2 s bars.
+about = "a song with two arrangements"
+# The song's own sections, in order.
+sections = ["Intro", "Verse 1", "Chorus 1"]
+
+[[media]]
+file = "Media/click.wav"
+kind = "click"
+bpm = 120
+seconds = 16
+
+[[media]]
+file = "Media/bass.wav"
+kind = "tone"
+hz = 55
+db = -12
+seconds = 16
+
+[[media]]
+file = "Media/keys.wav"
+kind = "tone"
+hz = 440
+db = -18
+seconds = 16
+
+[[arrangement]]
+name = "Big Chorus"
+# SECTION_INSERT's arguments, run in the branch, then saved.
+insert = { kind = "chorus", from = "Verse 1", to = "Verse 1 end" }
+# Its sections, in order, as SECTION_INSERT names them after the
+# insert (the short names, the two choruses lettered).
+sections = ["IN", "CH A", "CH B"]
+
+[[chart]]
+at = 6.0
+source = "markers"
+bar = 4
+section = "Verse 1"

@@ -1,0 +1,15 @@
+# A session with only markers: no recordings, no chart. 90 bpm in 3/4,
+# 2 s bars: Verse 1 is bars 1-4, Bridge bars 5-6.
+about = "a session with only markers"
+
+[[chart]]
+at = 3.0
+source = "markers"
+bar = 2
+section = "Verse 1"
+
+[[chart]]
+at = 10.5
+source = "markers"
+bar = 6
+section = "Bridge"

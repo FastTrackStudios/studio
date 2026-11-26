@@ -206,11 +206,142 @@ pub(crate) static SECTIONS: ActionMeta = meta(
 /// Moved down into the core (`fx_actions::moment` reads them).
 pub use engine_core::moment::{SectionOut, sections};
 
+pub(crate) static CHART_AT: ActionMeta = meta(
+    "SESSION_CHART_AT",
+    "chart_at",
+    "Where the chart is",
+    "Where the current song's chart is at `at` seconds (left out: the playhead), as a chart following the playhead shows it: the `bar` as played (1 the first after the count-in; a repeat's second pass is the next bars along), the `written` bar it plays and its `pass`, its `section`, and the bar's `start` and `end`. From the song's Keyflow chart (the `.kf` beside it: `source` chart); a song with none counts its bars and names its sections from its markers (`source` markers, no `written` or `pass`). No `bar` in a count-in or past the end. Read-only.",
+    "View",
+    "",
+);
+
+/// When, seconds; left out, the playhead.
+#[derive(Facet)]
+pub(crate) struct ChartAtArg {
+    at: Option<f64>,
+}
+
+/// Where the chart is, as `SESSION_CHART_AT` says it.
+#[derive(Facet)]
+pub(crate) struct ChartAtOut {
+    at: f64,
+    source: String,
+    bar: Option<u32>,
+    written: Option<u32>,
+    pass: Option<u32>,
+    section: Option<String>,
+    start: Option<f64>,
+    end: Option<f64>,
+}
+
+/// Where the open song's chart is at `at` (the playhead when `None`): the
+/// reads first (the song, the playhead, its chart file), then the answer
+/// from the chart or from the markers.
+fn chart_at(at: Option<f64>) -> Result<ChartAtOut, String> {
+    let (daw, project) = song()?;
+    let at = match at {
+        Some(at) => at,
+        None => playhead().ok_or("the song has no playhead")?,
+    };
+    let guid = engine_core::moment::project_guid(&project)?;
+    let chart = daw
+        .read_project(&guid, |p| p.info.path.clone())
+        .and_then(|path| chart_beside(std::path::Path::new(&path)));
+    let sections = sections(daw, &project);
+    match chart {
+        Some(file) => {
+            let text =
+                std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+            Ok(from_chart(
+                at,
+                engine_core::chart_at::chart_bar(&text, at)?,
+                &sections,
+            ))
+        }
+        None => {
+            let bar = crate::song_bars::musical(daw, &project, at).0;
+            let span = (
+                crate::song_bars::time(daw, &project, bar, 1, 0.0),
+                crate::song_bars::time(daw, &project, bar.saturating_add(1), 1, 0.0),
+            );
+            Ok(from_markers(at, bar, span, &sections))
+        }
+    }
+}
+
+/// The current song's playhead, seconds.
+fn playhead() -> Option<f64> {
+    let song = crate::open::current_song()?;
+    crate::stream_set::transport_of(&song).map(|(position, _)| position)
+}
+
+/// The song's Keyflow chart: the one `.kf` beside its file.
+fn chart_beside(song: &std::path::Path) -> Option<std::path::PathBuf> {
+    use crate::folder::Folder as _;
+    crate::folder::Disk.only_with_extension(song.parent()?, "kf")
+}
+
+/// The section of `sections` that `at` lies in.
+fn section_at(sections: &[SectionOut], at: f64) -> Option<&SectionOut> {
+    sections.iter().find(|s| s.start <= at && at < s.end)
+}
+
+/// The answer from the chart's bar at `at`, its section named as the song
+/// names it: its region there (`Verse 1`), the chart's own name (`Verse`)
+/// where it has none.
+fn from_chart(
+    at: f64,
+    bar: Option<engine_core::chart_at::ChartBar>,
+    sections: &[SectionOut],
+) -> ChartAtOut {
+    let Some(bar) = bar else {
+        return ChartAtOut {
+            at,
+            source: "chart".to_owned(),
+            bar: None,
+            written: None,
+            pass: None,
+            section: None,
+            start: None,
+            end: None,
+        };
+    };
+    let region = section_at(sections, f64::midpoint(bar.start, bar.end)).map(|s| s.name.clone());
+    ChartAtOut {
+        at,
+        source: "chart".to_owned(),
+        bar: Some(bar.bar),
+        written: Some(bar.written),
+        pass: Some(bar.pass),
+        section: Some(region.unwrap_or(bar.section)),
+        start: Some(bar.start),
+        end: Some(bar.end),
+    }
+}
+
+/// The answer from the markers, for a song with no chart: `bar` the one the
+/// tempo map counts at `at` (`span` its start and end), the section the
+/// regions name; nothing past the last section.
+fn from_markers(at: f64, bar: i32, span: (f64, f64), sections: &[SectionOut]) -> ChartAtOut {
+    let inside = at < sections.iter().map(|s| s.end).fold(0.0, f64::max);
+    ChartAtOut {
+        at,
+        source: "markers".to_owned(),
+        bar: u32::try_from(bar).ok().filter(|b| inside && *b > 0),
+        written: None,
+        pass: None,
+        section: section_at(sections, at).map(|s| s.name.clone()),
+        start: inside.then_some(span.0),
+        end: inside.then_some(span.1),
+    }
+}
+
 pub(crate) fn register_sections(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SECTIONS, Effect::ReadOnly, |(): ()| {
         let (daw, project) = song()?;
         Ok(sections(daw, &project))
     })?;
+    list.register(&CHART_AT, Effect::ReadOnly, |a: ChartAtArg| chart_at(a.at))?;
     Ok(())
 }
 

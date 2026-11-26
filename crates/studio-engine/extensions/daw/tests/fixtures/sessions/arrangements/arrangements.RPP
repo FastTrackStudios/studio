@@ -1,0 +1,43 @@
+<REAPER_PROJECT 0.1 "7.0/fixture" 1700000000
+  SAMPLERATE 48000 0 0
+  TEMPO 120 4 4 0
+  MARKER 1 0 "Intro" 1 0 1 B {00000000-0000-0000-0000-000000000501} 0
+  MARKER 1 4 "" 1
+  MARKER 2 4 "Verse 1" 1 0 1 B {00000000-0000-0000-0000-000000000502} 0
+  MARKER 2 12 "" 1
+  MARKER 3 12 "Chorus 1" 1 0 1 B {00000000-0000-0000-0000-000000000503} 0
+  MARKER 3 16 "" 1
+  <TRACK
+    NAME "Click"
+    <ITEM
+      POSITION 0
+      LENGTH 16
+      NAME click.wav
+      <SOURCE WAVE
+        FILE "Media/click.wav"
+      >
+    >
+  >
+  <TRACK
+    NAME "Bass"
+    <ITEM
+      POSITION 0
+      LENGTH 16
+      NAME bass.wav
+      <SOURCE WAVE
+        FILE "Media/bass.wav"
+      >
+    >
+  >
+  <TRACK
+    NAME "Keys"
+    <ITEM
+      POSITION 0
+      LENGTH 16
+      NAME keys.wav
+      <SOURCE WAVE
+        FILE "Media/keys.wav"
+      >
+    >
+  >
+>
