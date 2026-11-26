@@ -6334,6 +6334,7 @@ dependencies = [
  "daw",
  "daw-proto",
  "daw-ui",
+ "dawfile-reaper",
  "dirs 6.0.0",
  "engine-domain",
  "hound",

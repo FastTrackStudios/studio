@@ -337,6 +337,13 @@ fn render_button_checks(answer: &Value, whole: f64, out: &mut Run) {
             "the Render button renders the whole song ({whole} s) as a 48 kHz 32-bit stereo WAV"
         ),
     );
+    let lufs = answer["lufs"].as_f64();
+    out.check(
+        "render_button_heard",
+        lufs.is_some_and(|l| l.is_finite() && l > -60.0),
+        json!(lufs),
+        "the Render button's WAV is the mix, not silence (integrated loudness above -60 LUFS)",
+    );
     let _ = std::fs::remove_file(&file);
     if let Some(dir) = file.parent() {
         let _ = std::fs::remove_dir(dir);
@@ -344,26 +351,27 @@ fn render_button_checks(answer: &Value, whole: f64, out: &mut Run) {
 }
 
 /// The Export button's project (`MIX_EXPORT {}`): a REAPER project beside
-/// the song, every track of it in the file, never the song's own file.
-/// Removed once read.
+/// the song that a REAPER project reader parses (dawfile-reaper, as the
+/// engine opens an RPP), every track of it in the file, never the song's
+/// own file. Removed once read.
 fn export_checks(answer: &Value, out: &mut Run) {
     let file = PathBuf::from(answer["file"].as_str().unwrap_or_default());
     let text = std::fs::read_to_string(&file).unwrap_or_default();
-    let tracks = text
-        .lines()
-        .filter(|l| l.trim_start().starts_with("<TRACK"))
-        .count();
+    let parsed = dawfile_reaper::parse_project_text(&text);
+    let tracks = parsed.as_ref().map_or(0, |p| p.tracks.len());
     let said = answer["tracks"].as_u64().unwrap_or(0);
     out.check(
         "export_rpp",
         text.trim_start().starts_with("<REAPER_PROJECT")
+            && parsed.is_ok()
             && tracks > 0
             && u64::try_from(tracks).is_ok_and(|t| t == said)
             && file.extension().is_some_and(|e| e == "RPP")
             && file
                 .file_stem()
                 .is_some_and(|s| s.to_string_lossy().ends_with("(Studio)")),
-        json!({"file": file.display().to_string(), "tracks_in_file": tracks, "answer": answer}),
+        json!({"file": file.display().to_string(), "tracks_in_file": tracks,
+               "parse": parsed.as_ref().err().map(ToString::to_string), "answer": answer}),
         "the Export button writes a REAPER project of every track beside the song",
     );
     let _ = std::fs::remove_file(&file);

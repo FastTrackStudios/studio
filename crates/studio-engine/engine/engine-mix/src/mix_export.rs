@@ -291,10 +291,19 @@ pub fn register(
         &EXPORT,
         architect::action::Effect::ReadOnly,
         |a: ExportArg| {
-            let _s = tracing::info_span!("MIX_EXPORT").entered();
+            let span = tracing::info_span!(
+                "MIX_EXPORT",
+                export.named = a.name.is_some(),
+                export.tracks = tracing::field::Empty,
+                export.chained = tracing::field::Empty,
+            );
+            let _in = span.enter();
             let (daw, project) = crate::actions::song()?;
             let guid = crate::moment::project_guid(&project)?;
-            export(daw, &guid, a.name.as_deref()).map_err(|e| format!("{e:#}"))
+            let out = export(daw, &guid, a.name.as_deref()).map_err(|e| format!("{e:#}"))?;
+            span.record("export.tracks", out.tracks);
+            span.record("export.chained", out.chained.len());
+            Ok(out)
         },
     )?;
     Ok(())
