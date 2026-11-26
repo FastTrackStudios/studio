@@ -437,7 +437,7 @@ pub fn moment(
     } else {
         t.to_owned()
     };
-    crate::fx_actions::moment(daw, project, &spelled)
+    crate::moment::moment(daw, project, &spelled)
 }
 
 #[cfg(feature = "native")]

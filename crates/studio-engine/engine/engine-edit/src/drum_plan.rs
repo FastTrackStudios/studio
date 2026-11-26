@@ -116,7 +116,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             let _s = tracing::info_span!("DRUMS_PLAN.provider", plan.hits = request.hits.len())
                 .entered();
             let t = web_time::Instant::now();
-            let p = crate::algorithms::plan(&request)?;
+            let p = crate::mix_calls::plan(&request)?;
             tracing::info!(
                 plan.provider_ms = t.elapsed().as_secs_f64() * 1000.0,
                 plan.targets = p.targets.len(),
@@ -202,7 +202,7 @@ fn build_request(
     project: &ProjectContext,
     a: &PlanArg,
 ) -> Result<PlanRequest, String> {
-    let sections: Vec<Section> = crate::actions::sections(daw, project)
+    let sections: Vec<Section> = crate::moment::sections(daw, project)
         .into_iter()
         .map(|s| Section {
             name: s.name,
@@ -413,7 +413,7 @@ fn bars_over(
         span.1
     } else {
         // The song's end: the last section's, else ten minutes.
-        crate::actions::sections(daw, project)
+        crate::moment::sections(daw, project)
             .last()
             .map_or(600.0, |s| s.end)
     };

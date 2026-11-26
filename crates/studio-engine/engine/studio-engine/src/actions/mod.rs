@@ -18,22 +18,11 @@
 //! model's `watch` follows what happens as it happens.
 use architect::action::{ActionList, ActionMeta, Effect};
 
-use daw::service::{ProjectContext, TempoMap as _, TrackRef, Tracks};
+use daw::service::{ProjectContext, TrackRef, Tracks};
 
 use facet::Facet;
 
 pub use editing::drums::KitPiece;
-
-use editing::drums::{KIT_MERGE, Moment, moments, weights};
-
-use editing::quantize::shift_at;
-
-use editing::quantize::{
-    DOUBLE_STROKE, FURTHEST_PAST, GESTURE, NEAR_WRITTEN, ON_ITS_LINE, PLAYED_ON_A_LINE, Placed,
-    RUN_BREAK, SEAM_ROOM, SlipMove, SlipResult, TWO_STROKES, WRITTEN_FILL, anchor_of, grid_choice,
-    hold_gestures, hold_gestures_by, keeps_own_line, lock_anchored, one_stroke_a_line,
-    to_lines_either_side, uncrossed,
-};
 
 pub use engine_runtime::client::actions::*;
 
@@ -72,7 +61,6 @@ fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError>
     // Each domain: its crate's `register`, and what is still here until
     // its modules move (then the second line goes, with `actions/<domain>.rs`).
     engine_edit::register(list)?;
-    edit::register(list)?;
     engine_mix::register(list)?;
     engine_listen::register(list)?;
     listen::register(list)?;
@@ -87,14 +75,15 @@ fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError>
 // own modules register theirs (`crate::hits::register`, …) from these.
 mod base;
 mod collab;
-mod edit;
 mod listen;
 mod project;
 #[allow(
     unused_imports,
     reason = "the domains' items, under the paths they had in actions.rs"
 )]
-pub use self::{base::*, edit::*};
+pub use self::base::*;
+/// The edit domain's, from engine-edit.
+pub use engine_edit::actions::edit::*;
 
 pub use crate::shared_actions::meta;
 /// The open song and a track in it, as every action reads them: the core's.
@@ -104,20 +93,8 @@ use crate::shared_actions::{
     FOLD, FoldArg, PHASE, PhaseArg, SELECT_TRACK, SelectTrackArg, TRACK_SET, TrackSetArg,
 };
 
-/// The window's in a process of its own: an action that sets what the
-/// window shows (its mode, a mode's phase), run on the engine's list, is
-/// asked of the window too — run there on the window's own list, where the
-/// shell reads it. In the window's process no window follows it, so the
-/// ask goes nowhere and nothing loops.
-pub(crate) fn also_in_the_window(id: &str, args: String) {
-    if crate::window_queue::engine_has_window() {
-        crate::window_queue::ask(crate::window_queue::Asked::Run {
-            id: id.to_owned(),
-            args,
-            ticket: 0,
-        });
-    }
-}
+/// An action run here asked of the window too: the core's.
+pub(crate) use engine_core::lane_actions::also_in_the_window;
 
 /// No arguments.
 #[cfg(feature = "native")]

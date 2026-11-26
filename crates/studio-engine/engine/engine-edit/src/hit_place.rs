@@ -335,7 +335,7 @@ pub fn plan(
         .first()
         .map_or_else(Vec::new, |lanes| takes_of(&lanes.comp));
     provider.record("edit.takes", takes.len());
-    let answer = crate::algorithms::place(&daw_edit::PlaceRequest {
+    let answer = crate::mix_calls::place(&daw_edit::PlaceRequest {
         hits: placed.clone(),
         span,
         cut,

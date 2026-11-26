@@ -2,11 +2,23 @@
 //! revert, requantize, the review, the lanes, the samples), the drum
 //! level and fundamental, removing a range. They go with `engine-edit`.
 
-#[allow(
-    clippy::wildcard_imports,
-    reason = "split out of actions.rs: the parent's helpers and imports, as before"
-)]
-use super::*;
+use architect::action::{ActionList, ActionMeta, Effect};
+use daw::service::{ProjectContext, TempoMap as _, TrackRef, Tracks};
+use editing::drums::{KIT_MERGE, Moment, moments, weights};
+use editing::quantize::shift_at;
+use editing::quantize::{
+    DOUBLE_STROKE, FURTHEST_PAST, GESTURE, NEAR_WRITTEN, ON_ITS_LINE, PLAYED_ON_A_LINE, Placed,
+    RUN_BREAK, SEAM_ROOM, SlipMove, SlipResult, TWO_STROKES, WRITTEN_FILL, anchor_of, grid_choice,
+    hold_gestures, hold_gestures_by, keeps_own_line, lock_anchored, one_stroke_a_line,
+    to_lines_either_side, uncrossed,
+};
+use facet::Facet;
+
+use super::{KitPiece, meta, resolve, song};
+
+/// No arguments.
+#[derive(Facet)]
+struct NoArg {}
 
 pub(crate) static DRUM_FUNDAMENTAL: ActionMeta = meta(
     "DRUMS_FUNDAMENTAL",
@@ -566,8 +578,7 @@ pub(crate) fn register_verbs(list: &ActionList) -> Result<(), architect::action:
     list.register(&VERBS, Effect::Mutating, |a: VerbsArg| {
         let (daw, project) = song()?;
         let dry = a.dry_run.unwrap_or(false);
-        let said =
-            crate::mix_chains::drum_returns(daw, &project, dry).map_err(|e| e.to_string())?;
+        let said = crate::mix_calls::drum_returns(daw, &project, dry).map_err(|e| e.to_string())?;
         if !dry {
             crate::song_model::request_resync();
             crate::actions::list().changed("drums.verbs", "the drum verbs were set");
@@ -3111,7 +3122,7 @@ pub(crate) fn requantize(a: RequantizeArg) -> Result<Requantized, String> {
             Vec::new()
         };
         crate::drum_lanes::reset_edit(daw, &project, false)?;
-        let said = self::list()
+        let said = super::list()
             .run_json(
                 QUANTIZE.id,
                 format!(r#"{{"brief":true,"plan":{plan}}}"#).as_bytes(),
@@ -3129,7 +3140,7 @@ pub(crate) fn requantize(a: RequantizeArg) -> Result<Requantized, String> {
         let mut placed_back = 0_u32;
         for (id, to) in keep {
             let args = format!(r#"{{"id":"{id}","to":{to},"snap":false}}"#);
-            if self::list().run_json(PLACE.id, args.as_bytes()).is_ok() {
+            if super::list().run_json(PLACE.id, args.as_bytes()).is_ok() {
                 placed_back = placed_back.saturating_add(1);
             }
         }
@@ -3679,7 +3690,7 @@ pub(crate) fn register_peaks(list: &ActionList) -> Result<(), architect::action:
 /// # Errors
 ///
 /// The first registration the list refuses.
-pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     register_fundamental(list)?;
     crate::key_change::register(list)?;
     crate::hits::register(list)?;

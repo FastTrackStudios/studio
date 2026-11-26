@@ -576,7 +576,7 @@ fn by_section(
                 .map(|(_, db)| *db),
         )
     };
-    crate::actions::sections(daw, project)
+    crate::moment::sections(daw, project)
         .iter()
         .filter_map(|r| {
             Some(SectionLevel {
@@ -723,13 +723,13 @@ pub fn level(
 
 /// Level `track` with the `level` block of the Signal FX on it: `None`
 /// when it has no Signal FX (the take envelopes do it then).
-pub(crate) fn level_with_signal(
+pub fn level_with_signal(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     track: &daw_proto::Track,
     knobs: &Knobs,
 ) -> Option<Result<Leveled, String>> {
-    let chain = crate::clap_host::signal::chain(daw, project, &track.guid, None).ok()?;
+    let chain = crate::mix_calls::signal_chain(daw, project, &track.guid, None).ok()?;
     let has_level = chain["chain"]["phases"]
         .as_array()
         .into_iter()
@@ -737,7 +737,7 @@ pub(crate) fn level_with_signal(
         .flat_map(|p| p["blocks"].as_array().cloned().unwrap_or_default())
         .any(|b| b["kind"] == "level");
     let run = |action: &str, args: serde_json::Value| {
-        crate::clap_host::signal::run(daw, project, (&track.guid, None), action, &args.to_string())
+        crate::mix_calls::signal_run(daw, project, (&track.guid, None), action, &args.to_string())
     };
     if !has_level {
         if let Err(e) = run(

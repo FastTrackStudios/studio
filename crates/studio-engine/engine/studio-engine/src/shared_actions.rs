@@ -199,53 +199,9 @@ pub fn pick_phase(
     Ok((mode, found.slug))
 }
 
-/// Which track's lanes.
-#[derive(Facet)]
-pub struct ShowArg {
-    /// Left out: the selected track (what a key means).
-    #[facet(default)]
-    pub track: Option<String>,
-    pub show: Option<bool>,
-    /// The tracks to open or shut, as the engine settled them: what it
-    /// tells the window, which has no song of its own to look them up in
-    /// when it drives an engine in another process.
-    pub tracks: Option<Vec<String>>,
-}
-
-/// Whether they show.
-#[derive(Facet)]
-pub struct ShowOut {
-    pub shown: bool,
-    /// The tracks it opened or shut, the row's own first.
-    pub tracks: Vec<String>,
-}
-
-/// `TRACK_SHOW_LANES`'s work over a song's tracks (`all`): every lane of
-/// `guid` shown (`show`; toggled when `None`) — on a folder, its row's and
-/// those of every track under it with lanes. Whether they show now, and
-/// the tracks it opened or shut, the row's own first.
-///
-/// # Errors
-/// No such track, or one lane and no track under it with more.
-pub fn show_lanes(
-    all: &[daw_proto::Track],
-    guid: &str,
-    show: Option<bool>,
-) -> Result<(bool, Vec<String>), String> {
-    let track = all
-        .iter()
-        .find(|t| t.guid == guid)
-        .ok_or("the track went")?;
-    let tracks = crate::lanes::opened_with_folders(all, track, &crate::lanes::shown_on(all, track));
-    if tracks.is_empty() {
-        return Err(format!(
-            "{} has one lane, and no track under it has more",
-            track.name
-        ));
-    }
-    let shown = crate::lanes::set_expanded(&tracks, show);
-    Ok((shown, tracks))
-}
+/// `TRACK_SHOW_LANES`'s arguments and its work: the core's (engine-edit's
+/// comp registers it).
+pub use engine_core::lane_actions::{ShowArg, ShowOut, show_lanes};
 
 /// A track by GUID, path or name, among `tracks`: the core's.
 pub use engine_core::actions::resolve_in;

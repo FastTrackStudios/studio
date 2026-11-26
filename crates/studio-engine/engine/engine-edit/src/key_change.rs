@@ -129,11 +129,11 @@ pub fn register(list: &ActionList) -> Result<(), ActionError> {
             }
 
             // The chart, shared with collaborators through the session doc.
-            let chart = crate::collab::chart_context()
+            let chart = crate::collab_calls::chart_context()
                 .map(|(doc, _, _)| doc.read().chart)
                 .filter(|text| !text.trim().is_empty())
                 .map(|text| transpose_chart(&text, &to))
-                .inspect(|moved| crate::collab::local_chart(moved))
+                .inspect(|moved| crate::collab_calls::local_chart(moved))
                 .is_some();
             Ok((items, tracks, chart))
         })();

@@ -278,7 +278,7 @@ pub fn export_list(daw: &daw::standalone::Standalone, project: &ProjectContext) 
         })
         .collect();
     hits.sort_by(|a, b| a.to.total_cmp(&b.to));
-    let sections = crate::actions::sections(daw, project)
+    let sections = crate::moment::sections(daw, project)
         .into_iter()
         .map(|s| ListSection {
             name: s.name,

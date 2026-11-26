@@ -48,7 +48,7 @@ pub struct Comped {
 #[must_use]
 pub fn phrases(song: &Song, (from, to): (f64, f64), bars: f64) -> Vec<(f64, f64)> {
     let bars = bars.max(1.0);
-    crate::actions::sections(song.daw(), &song.context())
+    crate::moment::sections(song.daw(), &song.context())
         .into_iter()
         .filter(|s| s.end > from && s.start < to)
         .flat_map(|s| {
@@ -657,7 +657,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
 /// The stretches a call names: its spans, its `from`/`to`, its sections —
 /// else the whole song (every section).
 fn stretches(song: &Song, a: &BestArg) -> Vec<(f64, f64)> {
-    let sections = crate::actions::sections(song.daw(), &song.context());
+    let sections = crate::moment::sections(song.daw(), &song.context());
     let mut out: Vec<(f64, f64)> = a.spans.iter().map(|s| (s.from, s.to)).collect();
     if let (Some(from), Some(to)) = (a.from, a.to) {
         out.push((from.min(to), from.max(to)));

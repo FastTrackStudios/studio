@@ -15,13 +15,49 @@ description = "Editing a song's data: the hits and their MIDI, placing them, dru
 [dependencies]
 engine-core = { workspace = true }
 architect = { workspace = true, features = ["action-list"] }
+daw = { workspace = true }
+daw-proto = { workspace = true }
+daw-view = { workspace = true }
+daw-edit = { workspace = true }
+daw-standalone = { workspace = true, features = ["bootstrap", "rpp-project-wasm"] }
+engine-runtime = { workspace = true }
+engine-domain = { workspace = true }
+editing = { workspace = true }
+dsp = { workspace = true, features = ["level"] }
+facet = { workspace = true }
+facet-json = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+num-traits = { workspace = true }
+tracing = { workspace = true }
+web-time = { workspace = true }
+# The golden template's kit, placed onto the song (`actions::edit`).
+dynamic-template = { workspace = true }
+# Drum hit detection (`hits`).
+rhythm-hits = { workspace = true, optional = true }
+# A detection's cache key (`hits`).
+blake3 = { workspace = true, optional = true }
+# Where the hit detector's settings are kept (`hits`).
+dirs = { workspace = true, optional = true }
+# A drum bench's stamp (`drum_bench`).
+chrono = { workspace = true, optional = true }
+# A trigger's clicks written as a WAV (`trigger_from_mics`).
+fts-sample = { workspace = true, optional = true, features = ["engine-core"] }
+# A detection run's id (`hits`).
+uuid = { workspace = true, optional = true }
+# The kit's samples on signal's rigs (`drum_samples`).
+signal-fx = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+fts-sample = { workspace = true, features = ["engine-native"] }
 
 [features]
 default = ["native"]
 # studio-engine's features, forwarded (its `native`, `signal`, `web`,
 # `show` turn these on): gate the modules here as they were gated there.
-native = ["engine-core/native"]
-signal = ["native", "engine-core/signal"]
+native = ["engine-core/native", "engine-runtime/native", "daw-view/native", "daw-view/local", "architect/host", "daw/standalone-rpp", "daw/standalone-bootstrap", "dynamic-template/reaper", "dep:rhythm-hits", "dep:blake3", "dep:dirs", "dep:chrono", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:uuid"]
+signal = ["native", "engine-core/signal", "dep:signal-fx", "engine-runtime/signal"]
 web = ["engine-core/web"]
 show = ["native", "engine-core/show"]
 

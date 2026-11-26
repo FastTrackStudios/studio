@@ -14,10 +14,11 @@
 //! On the engine, so the window's swipe, the Action List and a test are
 //! one path ([`SWIPE_COMP`]); the window reads the song back after.
 
-pub use crate::shared_actions::{SHOW_LANES, show_lanes};
-use crate::shared_actions::{ShowArg, ShowOut};
+pub use crate::lane_actions::show_lanes;
+use crate::lane_actions::{ShowArg, ShowOut};
 use daw::service::{ItemRef, Items as _, ProjectContext, TakeRef, Takes as _, TrackRef, Tracks};
 use daw_proto::primitives::{Duration, PositionInSeconds};
+pub use engine_runtime::client::comp::SHOW_LANES;
 use facet::Facet;
 
 pub use engine_runtime::client::comp::*;
@@ -618,7 +619,7 @@ pub fn register(
         // The lanes a row shows are the window's: run in the engine, the
         // window is asked too, told the state settled here so the two
         // agree whichever ran it first.
-        crate::actions::also_in_the_window(
+        crate::lane_actions::also_in_the_window(
             SHOW_LANES.id,
             serde_json::json!({ "track": guid, "show": shown, "tracks": tracks }).to_string(),
         );

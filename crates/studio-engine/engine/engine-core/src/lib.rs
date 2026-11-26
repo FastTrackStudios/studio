@@ -73,6 +73,9 @@ pub mod off_loop;
 pub mod signal_offline;
 
 // ── from engine-edit ──
+/// A stretch of an audio file read straight off the disk.
+#[cfg(feature = "native")]
+pub mod audio_window;
 /// The drum MIDI as written, mapped to the kit (engine-edit's, read by
 /// the kit).
 pub mod drum_reference;
@@ -84,6 +87,9 @@ pub mod hit_index;
 /// The kit and its hits as the song plays them, and their notes.
 #[cfg(feature = "native")]
 pub mod kit;
+/// `TRACK_SHOW_LANES`'s work, and an action asked of the window too.
+#[cfg(any(feature = "native", feature = "web"))]
+pub mod lane_actions;
 /// The vocal leveler's lanes as a track keeps them.
 #[cfg(feature = "native")]
 pub mod vocal_lanes;
