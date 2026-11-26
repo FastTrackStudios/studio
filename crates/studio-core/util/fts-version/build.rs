@@ -13,6 +13,8 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=FTS_RELEASE_VERSION");
     let committed = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
+    let stamped = std::env::var("FTS_RELEASE_VERSION").is_ok_and(|v| !v.trim().is_empty());
+    let released = if stamped { "1" } else { "0" };
     let version = match std::env::var("FTS_RELEASE_VERSION") {
         Ok(v) if !v.trim().is_empty() => {
             let v = v.trim();
@@ -26,6 +28,7 @@ fn main() {
         _ => committed,
     };
     println!("cargo:rustc-env=FTS_APP_VERSION={version}");
+    println!("cargo:rustc-env=FTS_APP_RELEASED={released}");
 }
 
 /// Three dot-separated runs of ASCII digits.

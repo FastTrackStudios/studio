@@ -501,6 +501,9 @@ mod imp {
             // The views' theme packs, and the one chosen last shown again.
             crate::themes::install_actions(&list);
             crate::themes::restore();
+            // Desktop Studio's update: check, or install now.
+            #[cfg(not(target_os = "ios"))]
+            crate::self_update::install_actions(&list);
             let scripting = architect_scripting::actions::Scripting::new(
                 list.clone(),
                 architect_scripting::Library::new(architect_scripting::MemoryStore::default()),

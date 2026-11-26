@@ -173,6 +173,11 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["time"] }
+
+# Desktop Studio updating itself from its signed releases (src/self_update.rs):
+# macOS and Linux; iOS updates through TestFlight, the web is its deploy.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
+studio-shell.workspace = true
 opentelemetry = { version = "0.30", optional = true }
 tracing-opentelemetry = { version = "0.31", optional = true }
 

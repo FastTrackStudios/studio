@@ -4,8 +4,9 @@
 //! - [`log_ring`]: every `tracing` event and panic into a bounded ring the
 //!   app's Logs view shows, a crash log a panic's trace survives in, and
 //!   the flight log a run that ends without warning leaves behind.
-//! - `updates` (desktop only): the update check and signed install
-//!   against the studio repo's GitHub Releases, on `architect::release`.
+//! - `updates` (desktop only): Studio updating itself from the studio
+//!   repo's signed GitHub Releases (the `.dmg`'s bundle, the `AppImage`),
+//!   verified by `architect::release`.
 //! - `ios_scene` (iOS only): the UIScene lifecycle iOS 27 requires, with
 //!   the one scene delegate every app's `Info.plist` names.
 //! - `ui` (feature `ui`): the shared studio shell — the frame with its
