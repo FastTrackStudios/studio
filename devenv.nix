@@ -108,7 +108,7 @@ in
 {
   packages = with pkgs; [
     cargo-watch
-    # The local stack's web app (scripts/local-stack.sh `run web`).
+    # Serves a built web app's folder as it is (a release's web build).
     static-web-server
     cargo-nextest
     bacon
@@ -266,62 +266,17 @@ in
     pkgs.xwininfo     # the window geometry daw::test::VirtualDisplay reads
   ];
 
-  # `devenv up`: the local stack (docs/local-stack.md). Architect is the
-  # server, Studio is the client:
-  #
-  #   mock-oauth  the sign-in's stand-in for GitHub/Google    (Architect's)
-  #   auth        the auth server, the issuer                  (Architect's)
-  #   architect   THE SERVER: plain `architect-desktop serve`  (Architect's;
-  #               no Studio code), holding the demo vault (Merry & Bright,
-  #               JT's Recital) and a share link per set
-  #   web         studio-web under `dx serve` (rebuilt on a save), behind the front
-  #               that puts it and the server on one origin (/app/)
-  #   desktop     Studio's desktop app under `dx serve` (rebuilt on a save), a
-  #               client of the server; it starts its engine itself
-  #
-  # Each is `scripts/local-stack.sh run <name>`; ports in local-stack.toml
-  # (local-stack.local.env moves them), state in .devenv/state/local-stack.
-  # The just recipes (`just dev`, `just demo`) choose what is local first.
-  # Each process builds first in its own log, then serves; it is ready only
-  # once it really answers (web: dx serves studio-web's built module;
-  # desktop: the window's control socket), so a green dot means up. Run it
-  # detached (`devenv up -d`) and watch it with `devenv processes attach`.
-  # Every process exports to the telemetry module's collector, so Teley
-  # (:8787, and its MCP) has the stack's traces and logs.
-  processes = let
-    stack = "${config.devenv.root}/scripts/local-stack.sh";
-    probe = name: { exec = "${stack} ready ${name}"; period = 2; };
-    otel = config.fleet.telemetry.processEnv;
-  in {
-    mock-oauth = {
-      exec = "exec ${stack} run mock-oauth";
-      ready = probe "mock-oauth";
-      env = otel;
-    };
-    auth = {
-      exec = "exec ${stack} run auth";
-      after = [ "devenv:processes:mock-oauth" ];
-      ready = probe "auth";
-      env = otel;
-    };
-    architect = {
-      exec = "exec ${stack} run architect";
-      after = [ "devenv:processes:auth" ];
-      ready = probe "architect";
-      env = otel;
-    };
-    web = {
-      exec = "exec ${stack} run web";
-      after = [ "devenv:processes:auth" ];
-      ready = probe "web";
-      env = otel;
-    };
-    desktop = {
-      exec = "exec ${stack} run desktop";
-      after = [ "devenv:processes:auth" ];
-      ready = probe "desktop";
-      env = otel;
-    };
+  # `devenv up`: the engine, headless (`just engine`: `daw-extension
+  # --engine`, built first), exporting to the telemetry module's collector,
+  # which devenv-fleet's `telemetry` import runs beside it (otelcol on
+  # :4318, and its viewer). The window is `just studio`, under dx serve, in a
+  # terminal of its own: it starts or joins an engine itself. The old local
+  # stack (Architect's server, auth, the web app; scripts/local-stack.sh)
+  # went with the monorepo. Run it detached (`devenv up -d`) and watch it
+  # with `devenv processes attach`.
+  processes.engine = {
+    exec = "exec just engine";
+    env = config.fleet.telemetry.processEnv;
   };
 
   # Claude Code: devenv writes .mcp.json from this (git-ignored: it names
@@ -348,7 +303,8 @@ in
 
   fleet.banner = ''
     FastTrackStudio dev shell
-      cargo check --workspace
-      cargo run -p studio-desktop --bin studio   (THE app, Studio: apps/desktop)
+      just studio   the desktop app (apps/studio), with its engine
+      just engine   the engine alone, headless
+      just check    cargo check --workspace + the layout rules
   '';
 }
