@@ -1423,7 +1423,7 @@ impl SampleCache {
             }
             let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
             if done <= 8 || done == total || done.is_multiple_of(32) {
-                self.publish_loaded_snapshot();
+                self.try_publish_loaded_snapshot();
             }
             if total >= 100 && (done == total || done.is_multiple_of(250)) {
                 tracing::info!("signal-sampler: preloaded {done}/{total} samples");
@@ -1514,7 +1514,7 @@ impl SampleCache {
             // online during preload (publish clones the map — batch it).
             let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
             if done <= 8 || done == total || done.is_multiple_of(64) {
-                self.publish_loaded_snapshot();
+                self.try_publish_loaded_snapshot();
             }
         });
         self.publish_loaded_snapshot();
@@ -1627,6 +1627,19 @@ impl SampleCache {
         }
         if publish {
             self.publish_loaded_snapshot();
+        }
+    }
+
+    /// A preload's snapshot along the way, so voices come online while it
+    /// runs: skipped when another thread holds the map (a sample going in,
+    /// or another publish), never waited for — every preload's workers
+    /// queued here behind one clone of the whole map at a time, and every
+    /// other preload in the process behind them on the rayon pool. The
+    /// preload's last publish ([`publish_loaded_snapshot`]) always waits,
+    /// so the snapshot ends whole.
+    fn try_publish_loaded_snapshot(&self) {
+        if let Ok(loaded) = self.inner.loaded.try_write() {
+            self.inner.loaded_snapshot.store(Arc::new(loaded.clone()));
         }
     }
 
