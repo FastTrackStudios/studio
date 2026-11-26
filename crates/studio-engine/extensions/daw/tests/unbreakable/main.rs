@@ -22,7 +22,8 @@
 //!   names another file, `off` skips it). `#[ignore]`d so `just test
 //!   engine` does not spend minutes on it; `just test-unbreakable` runs it.
 //! - **`synthetic_song_runs_the_same_sequence`**: a few seconds of
-//!   generated drums, the same sequence, everywhere CI runs.
+//!   generated drums, the same sequence, everywhere CI runs — with the
+//!   window's Render button's whole-song render besides.
 
 mod budgets;
 mod engine;
@@ -101,6 +102,9 @@ fn unbreakable() {
         listen: ("CH 1".into(), "CH 1 end".into()),
         change: Change::SignalEq,
         render: ("IN".into(), "OUT end".into()),
+        // A second whole-song render is a minute more: the synthetic song
+        // runs the Render button's.
+        whole_song_s: None,
         setup: Vec::new(),
         run_dir: dir.clone(),
     };
@@ -144,6 +148,7 @@ fn synthetic_song_runs_the_same_sequence() {
         listen: ("CH 1".into(), "CH 1 end".into()),
         change: Change::Pan,
         render: ("IN".into(), "OUT end".into()),
+        whole_song_s: Some(song::SYNTH_SECONDS),
         setup,
         run_dir: dir,
     };

@@ -50,7 +50,7 @@ static RENDER: ActionMeta = meta(
     "MIX_RENDER",
     "mix_render",
     "Render the mix to a file",
-    "Render `from`..`to` (as MIX_MEASURE) offline through the whole mix — what MIX_MEASURE measures — to the WAV `to_file` (48 kHz, 32-bit float, stereo): the master, or with `tracks` (paths, names or GUIDs) a solo of those (as the solo buttons would: a folder brings its children, each heard through its folders). `bypass_signal: true` renders it with every Signal instance bypassed (the raw drums). Touches neither playback nor the song. Says the file, its length, its loudness and peak, and the time taken. Rendered as MIX_MEASURE renders (unchanged tracks played back from earlier renders; `exact: false` in chunks side by side; `full: true` the whole song afresh).",
+    "Render `from`..`to` (as MIX_MEASURE; default: the song's start to where its last item ends) offline through the whole mix — what MIX_MEASURE measures — to the WAV `to_file` (48 kHz, 32-bit float, stereo; default: `Renders/<song>.wav` beside the file the song was opened from, a `.session` folder's beside the folder — the window's Render button renders so): the master, or with `tracks` (paths, names or GUIDs) a solo of those (as the solo buttons would: a folder brings its children, each heard through its folders). `bypass_signal: true` renders it with every Signal instance bypassed (the raw drums). Touches neither playback nor the song. Says the file, its length, its loudness and peak, and the time taken. Rendered as MIX_MEASURE renders (unchanged tracks played back from earlier renders; `exact: false` in chunks side by side; `full: true` the whole song afresh).",
     "Mix",
     "",
 );
@@ -72,11 +72,11 @@ struct MeasureArg {
 /// What to render.
 #[derive(Facet)]
 struct RenderArg {
-    from: String,
-    to: String,
+    from: Option<String>,
+    to: Option<String>,
     tracks: Option<Vec<String>>,
     solo: Option<Vec<String>>,
-    to_file: String,
+    to_file: Option<String>,
     bypass_signal: Option<bool>,
     exact: Option<bool>,
     full: Option<bool>,
@@ -794,7 +794,24 @@ fn render(daw: &Standalone, project: &ProjectContext, a: &RenderArg) -> Result<R
     let _in = span.enter();
     let began = web_time::Instant::now();
     let guid = crate::moment::project_guid(project)?;
-    let (from, to) = span_of(daw, project, &a.from, &a.to)?;
+    let from = match a.from.as_deref() {
+        Some(at) => crate::moment::moment(daw, project, at)?,
+        None => 0.0,
+    };
+    let to = match a.to.as_deref() {
+        Some(at) => crate::moment::moment(daw, project, at)?,
+        None => song_end(daw, project),
+    };
+    if to <= from {
+        return Err(format!(
+            "nothing to render: {from:.3}s to {to:.3}s (the song's items end at {:.3}s)",
+            song_end(daw, project)
+        ));
+    }
+    let file = match a.to_file.as_deref() {
+        Some(file) => PathBuf::from(file),
+        None => default_render_file(daw, &guid)?,
+    };
     let names: Vec<&String> = a.tracks.iter().chain(a.solo.iter()).flatten().collect();
     let solo: Option<HashSet<String>> = if names.is_empty() {
         None
@@ -837,7 +854,6 @@ fn render(daw: &Standalone, project: &ProjectContext, a: &RenderArg) -> Result<R
         )?;
         (r, cost)
     };
-    let file = PathBuf::from(&a.to_file);
     if let Some(dir) = file.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
@@ -865,6 +881,75 @@ fn render(daw: &Standalone, project: &ProjectContext, a: &RenderArg) -> Result<R
     span.record("mix.latency", out.latency);
     span.record("mix.ms", out.ms);
     Ok(out)
+}
+
+/// Where the song's last item ends, seconds: the end of a whole-song
+/// render.
+fn song_end(daw: &Standalone, project: &ProjectContext) -> f64 {
+    use daw::service::Items as _;
+    daw.get_all_items(project.clone())
+        .iter()
+        .map(|item| item.position.as_seconds() + item.length.as_seconds())
+        .fold(0.0, f64::max)
+}
+
+/// Where a render given no `to_file` goes: `Renders/<song>.wav` beside
+/// the song's file (`mix_export::beside`, where MIX_EXPORT writes).
+fn default_render_file(daw: &Standalone, guid: &str) -> Result<PathBuf, String> {
+    use daw::service::Projects as _;
+    let dir =
+        engine_mix::mix_export::beside(daw, guid).map_err(|e| format!("{e:#}; give `to_file`"))?;
+    let name = daw
+        .info(ProjectContext::Project(guid.to_owned()))
+        .map_err(|e| e.to_string())?
+        .name;
+    let name: String = name
+        .trim()
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':') {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let name = if name.is_empty() {
+        "Mix".to_owned()
+    } else {
+        name
+    };
+    Ok(dir.join("Renders").join(format!("{name}.wav")))
+}
+
+/// `args` of action `id` with MIX_RENDER's default `to_file` filled in
+/// from the song open here, for a render another process (the render
+/// worker) makes on its copy of the song: as given otherwise.
+pub(crate) fn with_default_file(id: &str, args: &[u8]) -> Vec<u8> {
+    let given = || args.to_vec();
+    if id != "MIX_RENDER" {
+        return given();
+    }
+    let mut map = match serde_json::from_slice::<serde_json::Value>(args) {
+        Ok(serde_json::Value::Object(map)) => map,
+        Ok(serde_json::Value::Null) => serde_json::Map::new(),
+        _ if args.iter().all(u8::is_ascii_whitespace) => serde_json::Map::new(),
+        _ => return given(),
+    };
+    if map.get("to_file").is_some_and(|f| !f.is_null()) {
+        return given();
+    }
+    let Some(file) = song().ok().and_then(|(daw, project)| {
+        let guid = crate::moment::project_guid(&project).ok()?;
+        default_render_file(daw, &guid).ok()
+    }) else {
+        return given();
+    };
+    map.insert(
+        "to_file".to_owned(),
+        serde_json::Value::from(file.display().to_string()),
+    );
+    serde_json::to_vec(&serde_json::Value::Object(map)).unwrap_or_else(|_| given())
 }
 
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {

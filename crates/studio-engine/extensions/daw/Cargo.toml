@@ -57,6 +57,8 @@ engine-domain = { workspace = true }
 # tests/unbreakable: the engine binary driven as a person or agent drives
 # it (its MCP door), its spans received over OTLP, timed against budgets.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# The Unbreakable run reads the exported RPP as a REAPER project.
+dawfile-reaper = { workspace = true }
 dirs = { workspace = true }
 hound = { workspace = true }
 opentelemetry-proto = { workspace = true }

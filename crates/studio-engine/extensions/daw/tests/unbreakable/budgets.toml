@@ -47,6 +47,9 @@ first_audio = 1000
 first_listen = 5000
 listen_ab = 5000
 render = 20000
+# The window's buttons: the whole song rendered, the project exported.
+render_button = 20000
+export = 5000
 
 [synthetic.expect]
 # Generated audio, so these hold anywhere: a change here is a change in

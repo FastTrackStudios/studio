@@ -13,6 +13,11 @@
 //!    back (a fader's pan where the song has no Signal), then a `LISTEN`
 //!    that must be answered from the cache: the mix is as it was.
 //! 5. **render**: `MIX_RENDER` from `IN` to `OUT end` into a WAV.
+//! 6. **the window's buttons**, called as the mixer's and arrangement's
+//!    Render and Export buttons call them (with nothing given):
+//!    `MIX_RENDER {}` (**render_button**: the whole song, beside it; only
+//!    where the plan says how long the song is) and `MIX_EXPORT {}`
+//!    (**export**: a REAPER project beside the song).
 //!
 //! The checks on results come back beside the timings.
 
@@ -54,6 +59,9 @@ pub struct Plan {
     pub change: Change,
     /// The span rendered.
     pub render: (String, String),
+    /// How long the whole song is, seconds, when the Render button's
+    /// whole-song render is cheap enough to run (`None`: not run).
+    pub whole_song_s: Option<f64>,
     /// Actions run after the open, before anything is timed.
     pub setup: Vec<(String, Value)>,
     /// Where the render goes.
@@ -279,8 +287,94 @@ fn steps(
     render_checks(&answer, &file, &sections, plan, expect, out);
     answers.push(answer.clone());
     out.steps.push(step.with(json!({"answer": answer})));
+
+    // ── the window's buttons ──
+    if let Some(whole) = plan.whole_song_s {
+        let (answer, step) = timed(engine, spans, "render_button", "MIX_RENDER", &json!({}))?;
+        render_button_checks(&answer, whole, out);
+        answers.push(answer.clone());
+        out.steps.push(step.with(json!({"answer": answer})));
+    }
+    let (answer, step) = timed(engine, spans, "export", "MIX_EXPORT", &json!({}))?;
+    export_checks(&answer, out);
+    out.steps.push(step.with(json!({"answer": answer})));
     plugin_check(engine, &answers, out);
     Ok(())
+}
+
+/// The Render button's render (`MIX_RENDER {}`): the whole song, `whole`
+/// seconds, in a WAV under `Renders/` beside the song. The file is
+/// removed once read, so a copy of the song stays as it was.
+fn render_button_checks(answer: &Value, whole: f64, out: &mut Run) {
+    let file = PathBuf::from(answer["file"].as_str().unwrap_or_default());
+    let beside = file
+        .parent()
+        .and_then(Path::file_name)
+        .is_some_and(|d| d == "Renders");
+    out.check(
+        "render_button_file",
+        beside,
+        json!(file.display().to_string()),
+        "the Render button's WAV goes in Renders/ beside the song",
+    );
+    let wav = hound::WavReader::open(&file).map(|r| {
+        let spec = r.spec();
+        (
+            f64::from(r.duration()) / f64::from(spec.sample_rate),
+            spec.sample_rate,
+            spec.bits_per_sample,
+            spec.channels,
+        )
+    });
+    let ok = wav.as_ref().is_ok_and(|(s, rate, bits, ch)| {
+        (s - whole).abs() < 0.05 && *rate == 48_000 && *bits == 32 && *ch == 2
+    });
+    out.check(
+        "render_button_length",
+        ok,
+        json!({"expected_s": whole, "file": format!("{wav:?}"), "answer": answer["seconds"]}),
+        format!(
+            "the Render button renders the whole song ({whole} s) as a 48 kHz 32-bit stereo WAV"
+        ),
+    );
+    let lufs = answer["lufs"].as_f64();
+    out.check(
+        "render_button_heard",
+        lufs.is_some_and(|l| l.is_finite() && l > -60.0),
+        json!(lufs),
+        "the Render button's WAV is the mix, not silence (integrated loudness above -60 LUFS)",
+    );
+    let _ = std::fs::remove_file(&file);
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::remove_dir(dir);
+    }
+}
+
+/// The Export button's project (`MIX_EXPORT {}`): a REAPER project beside
+/// the song that a REAPER project reader parses (dawfile-reaper, as the
+/// engine opens an RPP), every track of it in the file, never the song's
+/// own file. Removed once read.
+fn export_checks(answer: &Value, out: &mut Run) {
+    let file = PathBuf::from(answer["file"].as_str().unwrap_or_default());
+    let text = std::fs::read_to_string(&file).unwrap_or_default();
+    let parsed = dawfile_reaper::parse_project_text(&text);
+    let tracks = parsed.as_ref().map_or(0, |p| p.tracks.len());
+    let said = answer["tracks"].as_u64().unwrap_or(0);
+    out.check(
+        "export_rpp",
+        text.trim_start().starts_with("<REAPER_PROJECT")
+            && parsed.is_ok()
+            && tracks > 0
+            && u64::try_from(tracks).is_ok_and(|t| t == said)
+            && file.extension().is_some_and(|e| e == "RPP")
+            && file
+                .file_stem()
+                .is_some_and(|s| s.to_string_lossy().ends_with("(Studio)")),
+        json!({"file": file.display().to_string(), "tracks_in_file": tracks,
+               "parse": parsed.as_ref().err().map(ToString::to_string), "answer": answer}),
+        "the Export button writes a REAPER project of every track beside the song",
+    );
+    let _ = std::fs::remove_file(&file);
 }
 
 /// Until the set is open, every song of it: its `SESSION_SONGS` rows.

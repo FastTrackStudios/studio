@@ -160,10 +160,13 @@ fn route(caller: &ActionCaller, id: &str, raw: &[u8]) -> Result<Vec<u8>, ActionE
             return local().run_json_with(caller, id, &routed.args);
         }
     };
+    // The worker's copy of the song is opened from no file of the
+    // person's: where a render goes by default is said here.
+    let args = crate::mix_measure::with_default_file(id, &routed.args);
     client::global()
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .run(&song, id, &routed.args)
+        .run(&song, id, &args)
         .map_err(|f| ActionError::Failed {
             id: id.to_owned(),
             message: f.message(),
