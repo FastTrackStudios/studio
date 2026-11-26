@@ -3,7 +3,7 @@
 //! owner's collector. Spans are kept in memory, in arrival order, for the
 //! steps to wait on and the report to break down.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead as _, BufReader, Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Condvar, Mutex};
@@ -236,28 +236,97 @@ fn json(value: AnyValue) -> Value {
 }
 
 /// Where the time of one unit of work went: every span of `root`'s trace
-/// that lies under it, by name — how many, their total and the longest,
-/// longest total first.
+/// that lies under it, by name — how many, their total, the longest, and
+/// their self time (what no span under them accounts for: where the trace
+/// stops saying where the time went), longest total first.
 #[must_use]
 pub fn breakdown(spans: &[Span], root: &Span) -> Vec<Value> {
     let under: Vec<&Span> = spans
         .iter()
         .filter(|s| s.trace == root.trace && is_under(spans, s, root))
         .collect();
-    let mut by_name: BTreeMap<&str, (usize, f64, f64)> = BTreeMap::new();
-    for span in under {
+    let mut children: HashMap<&[u8], Vec<&Span>> = HashMap::new();
+    for span in &under {
+        children
+            .entry(span.parent.as_slice())
+            .or_default()
+            .push(span);
+    }
+    let mut by_name: BTreeMap<&str, (usize, f64, f64, f64, Option<&Span>)> = BTreeMap::new();
+    for span in &under {
+        let own = children
+            .get(span.id.as_slice())
+            .map_or(&[][..], Vec::as_slice);
         let row = by_name.entry(span.name.as_str()).or_default();
         row.0 += 1;
         row.1 += span.ms();
-        row.2 = row.2.max(span.ms());
+        if span.ms() >= row.2 {
+            row.2 = span.ms();
+            row.4 = Some(span);
+        }
+        row.3 += self_ns(span, own) as f64 / 1e6;
     }
-    let mut rows: Vec<(&str, (usize, f64, f64))> = by_name.into_iter().collect();
+    let mut rows: Vec<_> = by_name.into_iter().collect();
     rows.sort_by(|a, b| b.1.1.total_cmp(&a.1.1));
     rows.into_iter()
-        .map(|(name, (count, total, max))| {
-            serde_json::json!({"name": name, "count": count, "total_ms": round(total), "max_ms": round(max)})
+        .map(|(name, (count, total, max, own, longest))| {
+            serde_json::json!({
+                "name": name,
+                "count": count,
+                "total_ms": round(total),
+                "max_ms": round(max),
+                "self_ms": round(own),
+                "fields": longest.map(fields_of).unwrap_or_default(),
+            })
         })
         .collect()
+}
+
+/// What a span says about its work (`store.updates`, `fx.count`, …): its
+/// fields, without the exporter's own (where in the code, which thread,
+/// busy and idle time).
+fn fields_of(span: &Span) -> serde_json::Map<String, Value> {
+    span.attrs
+        .iter()
+        .filter(|(k, _)| {
+            !(k.starts_with("code.")
+                || k.starts_with("thread.")
+                || k.starts_with("otel.")
+                || k.as_str() == "busy_ns"
+                || k.as_str() == "idle_ns"
+                || k.as_str() == "target")
+        })
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
+}
+
+/// The part of `span` none of its `children` covers (their union, clipped
+/// to it: children running at once count once).
+fn self_ns(span: &Span, children: &[&Span]) -> u64 {
+    let mut parts: Vec<(u64, u64)> = children
+        .iter()
+        .map(|c| (c.start_ns.max(span.start_ns), c.end_ns.min(span.end_ns)))
+        .filter(|(from, to)| to > from)
+        .collect();
+    parts.sort_unstable();
+    let mut covered = 0;
+    let mut run: Option<(u64, u64)> = None;
+    for (from, to) in parts {
+        run = match run {
+            Some((start, end)) if from <= end => Some((start, end.max(to))),
+            Some((start, end)) => {
+                covered += end - start;
+                Some((from, to))
+            }
+            None => Some((from, to)),
+        };
+    }
+    if let Some((start, end)) = run {
+        covered += end - start;
+    }
+    span.end_ns
+        .saturating_sub(span.start_ns)
+        .saturating_sub(covered)
 }
 
 /// Whether `span` is `root` or below it.
@@ -367,7 +436,30 @@ mod tests {
         assert_eq!(rows[1]["count"], 2);
         assert_eq!(rows[1]["total_ms"], 5.0);
         assert_eq!(rows[1]["max_ms"], 4.0);
+        // 9 ms, of which its two children cover 1–6 ms: 4 ms are its own.
+        assert_eq!(rows[0]["self_ms"], 4.0);
+        assert_eq!(rows[1]["self_ms"], 5.0);
         assert_eq!(root_of(&spans, open).name, "set.open");
+    }
+
+    #[test]
+    fn children_at_once_cover_their_parent_once() {
+        let spans = decode(&request(vec![
+            span("song.open", 1, 0, 0, 10_000_000),
+            span("fx.load", 2, 1, 1_000_000, 6_000_000),
+            span("fx.load", 3, 1, 4_000_000, 8_000_000),
+            span("past.its.end", 4, 1, 9_000_000, 12_000_000),
+        ]))
+        .unwrap();
+        let open = spans.iter().find(|s| s.name == "song.open").unwrap();
+        let rows = breakdown(&spans, open);
+        let own = |name: &str| {
+            rows.iter()
+                .find(|r| r["name"] == name)
+                .and_then(|r| r["self_ms"].as_f64())
+        };
+        // Covered 1–8 and 9–10 of its 10 ms.
+        assert_eq!(own("song.open"), Some(2.0));
     }
 
     #[test]
