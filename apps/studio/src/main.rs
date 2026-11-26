@@ -248,8 +248,8 @@ fn main() {
         popout,
         app_shell_native::Config {
             title: instance::title(),
-            // What the window manager's rules match (Loft's: `^Studio$`);
-            // a second instance's is its own, so no rule places it.
+            // What the window manager's rules match (Loft's: `^Studio$`):
+            // "Studio" for every instance.
             app_id: Some(instance::app_id()),
             size: (1440.0, 900.0),
             system_decorations: false,

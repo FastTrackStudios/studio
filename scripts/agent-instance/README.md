@@ -3,7 +3,8 @@
 `STUDIO_INSTANCE=<name>` runs a Studio beside the person's own without either
 seeing the other:
 
-- the window's app id is `Studio-<name>`, so no `^Studio$` window rule moves it;
+- the window stays "Studio" (app id and title), so the desktop's window rules
+  apply to it as to the person's;
 - its doors are `~/.config/fts/studio-<name>-mcp.json` and
   `$XDG_RUNTIME_DIR/app-shell/studio-<name>.sock`;
 - its engine lives in `studio-app-engine-<name>`.

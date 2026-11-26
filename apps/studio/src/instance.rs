@@ -3,10 +3,14 @@
 //! a door or a window rule.
 //!
 //! Unset or empty, everything is as it always was: the doors are
-//! `studio-mcp.json` and `studio.sock`, the window's app id `Studio`, the
-//! engine folder `studio-app-engine`. Set to `agent`, they are
-//! `studio-agent-mcp.json`, `studio-agent.sock`, app id `Studio-agent`
-//! (which no `^Studio$` window rule matches) and `studio-app-engine-agent`.
+//! `studio-mcp.json` and `studio.sock`, the engine folder
+//! `studio-app-engine`. Set to `agent`, they are `studio-agent-mcp.json`,
+//! `studio-agent.sock` and `studio-app-engine-agent`.
+//!
+//! The window is "Studio" for every instance, app id and title alike: the
+//! desktop's window rules (Loft/niri, matching `^Studio$`) apply to each
+//! one. The instance shows inside the app, never in the OS window's
+//! identity.
 
 use std::sync::OnceLock;
 
@@ -37,22 +41,18 @@ pub fn name() -> &'static str {
     })
 }
 
-/// The window's app id: what window rules match.
+/// The window's app id: what window rules match. "Studio" for every
+/// instance, so the desktop's rules place each one.
 #[cfg(feature = "native")]
 pub fn app_id() -> String {
-    match instance() {
-        Some(i) => format!("Studio-{i}"),
-        None => "Studio".to_owned(),
-    }
+    "Studio".to_owned()
 }
 
-/// The window's title.
+/// The window's title: "Studio" for every instance (window rules match it
+/// too).
 #[cfg(feature = "native")]
 pub fn title() -> String {
-    match instance() {
-        Some(i) => format!("Studio ({i})"),
-        None => "Studio".to_owned(),
-    }
+    "Studio".to_owned()
 }
 
 /// The engine folder's name under `<runtime dir>/fts`: one engine per
