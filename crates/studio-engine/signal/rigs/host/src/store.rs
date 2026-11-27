@@ -28,6 +28,61 @@ pub fn libraries_dir() -> PathBuf {
         .map_or_else(|| signal_config_dir().join("libraries"), PathBuf::from)
 }
 
+/// Rig homes held in memory, by each file's path: where a page, which has
+/// no disk, keeps the home it streamed in (its `.styx` files, from the rig
+/// store the desktop uses). The page installs them before a rig reads its
+/// home. Read first in a browser ([`StyxDir::read`], the guitar rig's
+/// profile reads). Natively it is never read and a home is its folder.
+pub mod memory {
+    use std::collections::BTreeMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::{OnceLock, RwLock};
+
+    fn files() -> &'static RwLock<BTreeMap<PathBuf, String>> {
+        static FILES: OnceLock<RwLock<BTreeMap<PathBuf, String>>> = OnceLock::new();
+        FILES.get_or_init(RwLock::default)
+    }
+
+    /// Keep `text` as the file at `path`, replacing what was there.
+    pub fn install(path: impl Into<PathBuf>, text: impl Into<String>) {
+        files()
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(path.into(), text.into());
+    }
+
+    /// The file at `path`, when one is held.
+    #[must_use]
+    pub fn read(path: &Path) -> Option<String> {
+        files()
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(path)
+            .cloned()
+    }
+
+    /// The names of the files held directly in `dir`.
+    #[must_use]
+    pub fn names_in(dir: &Path) -> Vec<String> {
+        files()
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .keys()
+            .filter(|p| p.parent() == Some(dir))
+            .filter_map(|p| p.file_name()?.to_str().map(str::to_owned))
+            .collect()
+    }
+
+    /// How many files are held.
+    #[must_use]
+    pub fn len() -> usize {
+        files()
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
+    }
+}
+
 /// A directory of styx files, one persisted struct per file.
 #[derive(Clone, Debug)]
 pub struct StyxDir {
@@ -123,6 +178,9 @@ impl StyxDir {
             };
         }
         let path = self.dir.join(file);
+        #[cfg(target_arch = "wasm32")]
+        let text = memory::read(&path)?;
+        #[cfg(not(target_arch = "wasm32"))]
         let text = std::fs::read_to_string(&path).ok()?;
         match facet_styx::from_str::<T>(&text) {
             Ok(v) => Some(v),

@@ -34,6 +34,9 @@ pub mod open_core;
 pub mod reference;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod reference_play;
+/// A page's rigs fed from the rig store (signal's, in a browser).
+#[cfg(all(feature = "signal", feature = "web"))]
+pub mod rig_files;
 pub mod section_colors;
 pub mod song_stream;
 pub mod source;

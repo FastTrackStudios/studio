@@ -141,10 +141,14 @@ fn read_book<T: for<'a> Facet<'a>>(path: &Path) -> Option<Read<T>> {
             BookRead::Bad(e) => Read::Bad(e),
         })
     }
+    // A page's home is the one it streamed in (`signal_rig_host::store::memory`).
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = path;
-        None
+        let text = signal_rig_host::store::memory::read(path)?;
+        Some(match parse::<T>(&text) {
+            Ok(v) => Read::Ok(v),
+            Err(e) => Read::Bad(e),
+        })
     }
 }
 

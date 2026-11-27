@@ -264,6 +264,8 @@ pub mod web_actions;
 #[cfg(feature = "web")]
 pub use engine_runtime::web_audio;
 #[cfg(feature = "web")]
+pub use engine_runtime::rig_files;
+#[cfg(feature = "web")]
 pub mod web_engine;
 pub use daw_view::window_queue;
 pub use editing::written;

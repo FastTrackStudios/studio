@@ -78,12 +78,14 @@ impl BassRig {
         }
     }
 
-    /// The stages the state names, loaded: drive, amp, cab.
+    /// The stages the state names, loaded: drive, amp, cab. Each from the
+    /// bytes installed for it ([`crate::files`]: a page's, streamed from the
+    /// rig store), else (a desktop) from its file.
     fn load(&self, block: u32) -> Vec<Box<dyn PluginInstance>> {
         let mut stages: Vec<Box<dyn PluginInstance>> = Vec::new();
         let block_frames = usize::try_from(block).unwrap_or(4_096);
         for model in [&self.state.drive, &self.state.amp].into_iter().flatten() {
-            match NamProcessor::load(model, self.sample_rate, block_frames) {
+            match load_nam(model, self.sample_rate, block_frames) {
                 Ok(nam) => stages.push(Box::new(nam)),
                 Err(why) => {
                     tracing::warn!(rig.model = %model.display(), why, "bass rig: a capture would not load");
@@ -91,7 +93,7 @@ impl BassRig {
             }
         }
         if let Some(cab) = &self.state.cab {
-            match Convolver::load(cab) {
+            match load_ir(cab) {
                 Ok(mut ir) => match ir.prepare(self.sample_rate, block) {
                     Ok(()) => stages.push(Box::new(ir)),
                     Err(why) => {
@@ -105,6 +107,48 @@ impl BassRig {
         }
         stages
     }
+}
+
+/// The files a patch plays, by their keys ([`crate::files::located`]).
+#[must_use]
+pub fn files_of(state: &BassState) -> Vec<String> {
+    [&state.drive, &state.amp, &state.cab]
+        .into_iter()
+        .flatten()
+        .map(|p| key(p))
+        .collect()
+}
+
+fn key(path: &std::path::Path) -> String {
+    crate::files::located(
+        &path.to_string_lossy(),
+        guitar::instrument::Instrument::Bass,
+    )
+}
+
+/// A capture, from its installed bytes, else its file.
+fn load_nam(
+    path: &std::path::Path,
+    sample_rate: f64,
+    block_frames: usize,
+) -> Result<NamProcessor, String> {
+    let key = key(path);
+    if let Some(bytes) = crate::files::bytes(&key) {
+        return NamProcessor::from_bytes(&bytes, key, sample_rate, block_frames);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    return NamProcessor::load(path, sample_rate, block_frames);
+    #[cfg(target_arch = "wasm32")]
+    Err(format!("{key} has not arrived from the rig store"))
+}
+
+/// An IR, from its installed bytes, else its file.
+fn load_ir(path: &std::path::Path) -> Result<Convolver, String> {
+    let key = key(path);
+    if let Some(bytes) = crate::files::bytes(&key) {
+        return Convolver::from_bytes(&bytes, &key);
+    }
+    Convolver::load(path)
 }
 
 fn db(value: f64) -> f32 {

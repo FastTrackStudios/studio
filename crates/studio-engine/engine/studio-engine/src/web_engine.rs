@@ -120,6 +120,39 @@ impl PartialEq for HostedSong {
     }
 }
 
+thread_local! {
+    /// The rig store the page's rigs read from ([`use_rig_store`]), until
+    /// it is opened; then `None`.
+    static RIG_STORE: std::cell::RefCell<Option<Arc<dyn crate::song_stream::SongSource>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Where the page's signal rigs get their captures, IRs and homes: the rig
+/// store the desktop's rigs come from ([`crate::rig_files`]), read as a
+/// folder. Before [`open`] (or [`add_song`]): it is opened beside the
+/// first song, so the homes are in before a song's rigs read them. With
+/// none, a rig plays as a straight wire.
+pub fn use_rig_store(store: Arc<dyn crate::song_stream::SongSource>) {
+    RIG_STORE.with(|s| *s.borrow_mut() = Some(store));
+}
+
+/// The rig store, opened once (its listing and homes), if one was given.
+async fn open_rig_store() {
+    let Some(store) = RIG_STORE.with(|s| s.borrow_mut().take()) else {
+        return;
+    };
+    if let Err(e) = crate::rig_files::open(store).await {
+        tracing::warn!(error = %e, "web: the rig store did not open; the rigs play as straight wires");
+    }
+}
+
+/// The files the song just opened's rigs wait for, streamed in behind it
+/// (a rig prepared later asks then: the page pokes the feed,
+/// [`crate::rig_files::poke`]).
+fn feed_rigs() {
+    crate::rig_files::poke();
+}
+
 impl std::fmt::Debug for HostedSong {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HostedSong")
@@ -662,7 +695,8 @@ pub async fn open_with(
             None => HashMap::new(),
         }
     };
-    let (fetched, library) = futures_util::future::join(song, samples).await;
+    let (fetched, library, ()) =
+        futures_util::future::join3(song, samples, open_rig_store()).await;
     let fetched = fetched?;
     let fetched_ms = ms();
     progress(Progress::Opening {
@@ -719,6 +753,7 @@ pub async fn open_with(
     });
     crate::web_audio::install(standalone.clone(), &project);
     switch_song(&project);
+    feed_rigs();
     tracing::info!(
         song.title = %first_title,
         set.songs = rest.len() + 1,
@@ -793,6 +828,7 @@ pub async fn open_with(
                         }
                     });
                     songs_opened += 1;
+                    feed_rigs();
                     Arrival::Song(song)
                 }
                 Err(e) => {
@@ -836,7 +872,12 @@ pub async fn add_song(song: HostedSong) -> eyre::Result<crate::setlist::Song> {
         folder: None,
         from: Origin::Hosted(song.source),
     };
-    let fetched = crate::retry::until_ok(Some(6), || fetch_song(&want), |_| {}).await?;
+    let (fetched, ()) = futures_util::future::join(
+        crate::retry::until_ok(Some(6), || fetch_song(&want), |_| {}),
+        open_rig_store(),
+    )
+    .await;
+    let fetched = fetched?;
     let (song, kept) = in_slices(async {
         let loaded = open_fetched(&standalone, want.title.clone(), fetched).await?;
         read_back(loaded).await
@@ -849,6 +890,7 @@ pub async fn add_song(song: HostedSong) -> eyre::Result<crate::setlist::Song> {
             web.order.push(project.clone());
         }
     });
+    feed_rigs();
     tracing::info!(song.title = %song.name, "web: a hosted song opened");
     Ok(song)
 }

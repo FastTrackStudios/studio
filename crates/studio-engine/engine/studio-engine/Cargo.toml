@@ -221,8 +221,9 @@ show = ["engine-listen/show", "engine-edit/show", "engine-mix/show", "engine-pro
 # (`engine_runtime::web_audio`) and its shared half (`engine_runtime::client`
 # for a page), with the first-party FX built in as on a desktop
 # (`engine-runtime/builtin`). No Dioxus: the page's UI is studio-panels'
-# `web_host`.
-web = ["engine-listen/web", "engine-edit/web", "engine-mix/web", "engine-project/web", "engine-collab/web", "engine-core/web", "daw-view/web", "daw-view/standalone", "engine-runtime/web", "engine-runtime/builtin", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "daw-standalone/stream-ogg", "dep:fts-sample", "dep:futures-util", "dep:reqwest", "daw/standalone-session-file", "engine-domain/net", "dep:architect", "dep:uuid", "dep:daw-transport-sync", "daw-standalone/reapeaks", "dep:session-format", "session-format/read", "vox"]
+# `web_host`. signal's bass rig runs there too, its files streamed from
+# the rig store (`engine-runtime/signal`, `rig_files`).
+web = ["engine-runtime/signal", "engine-listen/web", "engine-edit/web", "engine-mix/web", "engine-project/web", "engine-collab/web", "engine-core/web", "daw-view/web", "daw-view/standalone", "engine-runtime/web", "engine-runtime/builtin", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "daw-standalone/stream-ogg", "dep:fts-sample", "dep:futures-util", "dep:reqwest", "daw/standalone-session-file", "engine-domain/net", "dep:architect", "dep:uuid", "dep:daw-transport-sync", "daw-standalone/reapeaks", "dep:session-format", "session-format/read", "vox"]
 # The `#[]` suites, which need a REAPER to talk to. Behind a
 # feature so an ordinary `cargo nextest run --workspace` does not try to
 # reach one that is not running — `just reaper-test` turns it on, via

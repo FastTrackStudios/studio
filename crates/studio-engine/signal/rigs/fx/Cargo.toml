@@ -13,6 +13,8 @@ daw-standalone = { workspace = true }
 daw-proto = { workspace = true }
 sampler = { workspace = true }
 guitar = { workspace = true }
+# A rig home a page streamed in, held in memory (`files::install_text`).
+signal-rig-host = { workspace = true }
 dirs = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -809,14 +809,18 @@ fn profile_files(dir: &std::path::Path) -> Vec<String> {
             .filter(|n| !n.contains('/'))
             .collect();
     }
-    std::fs::read_dir(dir)
+    // A page's home is the one it streamed in.
+    #[cfg(target_arch = "wasm32")]
+    let names = signal_rig_host::store::memory::names_in(dir);
+    #[cfg(not(target_arch = "wasm32"))]
+    let names: Vec<String> = std::fs::read_dir(dir)
         .map(|rd| {
             rd.filter_map(Result::ok)
                 .filter_map(|e| e.file_name().into_string().ok())
-                .filter(|n| n.ends_with(".styx"))
                 .collect()
         })
-        .unwrap_or_default()
+        .unwrap_or_default();
+    names.into_iter().filter(|n| n.ends_with(".styx")).collect()
 }
 
 /// The shipped profiles a library has been given, by name, one a line in

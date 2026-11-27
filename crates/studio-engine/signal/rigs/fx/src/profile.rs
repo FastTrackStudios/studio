@@ -51,6 +51,10 @@ pub struct Library {
 /// overrides — a test's own folder).
 #[must_use]
 pub fn library_dir() -> PathBuf {
+    // A page's: the bass home it streams from the rig store.
+    if cfg!(target_arch = "wasm32") {
+        return crate::files::home(guitar::instrument::Instrument::Bass);
+    }
     if let Some(dir) = std::env::var_os("FTS_BASS_RIG_DIR").filter(|d| !d.is_empty()) {
         return PathBuf::from(dir);
     }
@@ -124,6 +128,45 @@ fn resolved(path: &str, dir: &Path) -> String {
     }
 }
 
+/// A block of a scene, its capture, IR and plugin found in the library —
+/// in a page, by their keys in the rig store ([`crate::files::located`]).
+fn located_block(block: &RigBlock, dir: &Path) -> RigBlock {
+    let bass = guitar::instrument::Instrument::Bass;
+    let mut b = block.clone();
+    b.nam = crate::files::located(&resolved(&b.nam, dir), bass);
+    b.ir = crate::files::located(&resolved(&b.ir, dir), bass);
+    b.plugin = resolved(&b.plugin, dir);
+    b
+}
+
+/// Every capture and IR the profile called `name` plays, across its
+/// scenes, as each block names it: what a page fetches before the profile
+/// can sound.
+#[must_use]
+pub fn files_of(name: &str) -> Vec<String> {
+    let Some(found) = profile(name) else {
+        return Vec::new();
+    };
+    let dir = &library().dir;
+    let mut files: Vec<String> = found
+        .patches
+        .iter()
+        .flat_map(|patch| patch.chain.iter())
+        .filter(|b| b.has_backend() && !b.bypassed)
+        .map(|b| located_block(b, dir))
+        .flat_map(|b| {
+            let (is_nam, is_ir) = (b.is_nam(), b.is_cab_ir());
+            let nam = is_nam.then_some(b.nam);
+            let ir = is_ir.then_some(b.ir);
+            nam.into_iter().chain(ir)
+        })
+        .filter(|f| !f.is_empty())
+        .collect();
+    files.sort();
+    files.dedup();
+    files
+}
+
 /// One scene, built: its blocks in order and its trims (linear).
 pub struct Chain {
     pub name: String,
@@ -148,13 +191,7 @@ impl Chain {
             .chain
             .iter()
             .filter(|b| b.has_backend() && !b.bypassed)
-            .map(|b| {
-                let mut b = b.clone();
-                b.nam = resolved(&b.nam, dir);
-                b.ir = resolved(&b.ir, dir);
-                b.plugin = resolved(&b.plugin, dir);
-                b
-            })
+            .map(|b| located_block(b, dir))
             .collect();
         let ids: Vec<String> = (0..blocks.len())
             .map(|i| format!("{}#{i}", patch.name))
