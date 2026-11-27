@@ -63,6 +63,9 @@ skip = [
     "daw-perf-test",
     "daw-reaper-dioxus-ext-test",
     "session-reaper-xtask",
+    # vendor/wasm-streams-0.4: a re-export of crates.io's wasm-streams 0.5,
+    # with no tests; `-p wasm-streams` names both and cargo refuses it.
+    "wasm-streams",
 ]
 
 # ── Allow-list ─────────────────────────────────────────────────────────────
