@@ -43,6 +43,10 @@ const TICK: Duration = Duration::from_millis(33);
 /// The room this engine is in, if any.
 static ACTIVE: Mutex<Option<Active>> = Mutex::new(None);
 
+/// Held across a whole lead, join or leave, so two at once cannot both
+/// leave the room before and both take its place after.
+static TURN: Mutex<()> = Mutex::new(());
+
 struct Active {
     room: Room,
     name: String,
@@ -153,11 +157,13 @@ fn leave() {
         return;
     };
     let _ = active.stop.send(true);
-    if matches!(active.role, Role::Leader { .. })
-        && let Ok(rooms) = rooms()
-        && let Err(e) = rooms.set_live(&active.room.id, None)
-    {
-        tracing::warn!(room.error = %e, "room: could not say the room is no longer live");
+    if let Role::Leader { host, .. } = &active.role {
+        host.close();
+        if let Ok(rooms) = rooms()
+            && let Err(e) = rooms.set_live(&active.room.id, None)
+        {
+            tracing::warn!(room.error = %e, "room: could not say the room is no longer live");
+        }
     }
     let endpoint = active.endpoint;
     if let Some(runtime) = crate::open::runtime() {
@@ -166,13 +172,24 @@ fn leave() {
     tracing::info!(room.id = %active.room.id, "room: left");
 }
 
-/// Lead `link`'s room as `name`.
-fn lead(link: &str, name: String) -> Result<Value, String> {
+/// Lead `link`'s room as `name`. A room another device leads is refused
+/// unless `take`: a room has one leader.
+fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
+    let _turn = lock(&TURN);
     let rooms = rooms()?;
     let room = rooms.find(link).map_err(|e| e.to_string())?;
-    leave();
     let key = architect::iroh_link::load_or_create_secret_key(&key_file(&room.id)?)
         .map_err(|e| format!("the room's key: {e}"))?;
+    if let Some(live) = &room.live
+        && live.endpoint != key.public().to_string()
+        && !take
+    {
+        return Err(format!(
+            "{} leads {} now: ROOM_LEAD with take to lead it instead",
+            live.leader, room.name
+        ));
+    }
+    leave();
     let id = room.id.clone();
     let me = format!("leader-{}", short(&key.public().to_string()));
     let (host, presence, endpoint) = on_runtime({
@@ -184,7 +201,9 @@ fn lead(link: &str, name: String) -> Result<Value, String> {
             let host = RoomHost::new(&id);
             let router = host.mount(architect::LayerRouter::new());
             let serving = endpoint.clone();
-            tokio::spawn(async move { architect::iroh_link::serve_router(&serving, router).await });
+            architect::platform::spawn(async move {
+                architect::iroh_link::serve_router(&serving, router).await;
+            });
             let presence = host
                 .own_presence(&me, &name)
                 .await
@@ -240,7 +259,7 @@ async fn publish_transport(
             prev = Some(entry);
         }
         tokio::select! {
-            () = tokio::time::sleep(TICK) => {}
+            () = architect::platform::sleep(TICK) => {}
             _ = stopped.wait_for(|s| *s) => return,
         }
     }
@@ -266,28 +285,38 @@ fn load(path: &str) -> Result<Value, String> {
     let rooms = rooms()?;
     let loaded = Loaded::of_path(&path, rooms.studio_root());
     host.doc().load(&loaded).map_err(|e| e.to_string())?;
-    tracing::info!(room.loaded = %loaded.path, "room: loaded");
+    tracing::info!(room.loaded = %loaded.title, room.kind = loaded.kind.as_str(), "room: loaded");
     Ok(json!({ "loaded": loaded_json(&loaded) }))
 }
 
-/// Join `link`'s room as `name`, and follow its leader.
-fn join(link: &str, name: String) -> Result<Value, String> {
-    let rooms = rooms()?;
-    let room = rooms.find(link).map_err(|e| e.to_string())?;
-    let live = room
-        .live
-        .clone()
-        .ok_or_else(|| format!("{} is not live: nobody leads it now", room.name))?;
+/// Where to dial the leader `live` says: its endpoint at its addresses.
+fn leader_addr(live: &Live) -> Result<iroh::EndpointAddr, String> {
     let leader: iroh::EndpointId = live
         .endpoint
         .parse()
         .map_err(|e| format!("the leader's endpoint: {e}"))?;
     let mut addr = iroh::EndpointAddr::new(leader);
     for a in &live.addrs {
-        if let Ok(socket) = a.parse() {
-            addr = addr.with_ip_addr(socket);
+        match a.parse() {
+            Ok(socket) => addr = addr.with_ip_addr(socket),
+            Err(e) => {
+                tracing::debug!(room.error = %e, "room: an address of the leader's that is none");
+            }
         }
     }
+    Ok(addr)
+}
+
+/// Join `link`'s room as `name`, and follow its leader.
+fn join(link: &str, name: String) -> Result<Value, String> {
+    let _turn = lock(&TURN);
+    let rooms = rooms()?;
+    let room = rooms.find(link).map_err(|e| e.to_string())?;
+    let live = room
+        .live
+        .clone()
+        .ok_or_else(|| format!("{} is not live: nobody leads it now", room.name))?;
+    let joined_at = leader_addr(&live)?;
     leave();
     let endpoint = on_runtime(async move {
         architect::iroh_link::bind_endpoint(iroh::SecretKey::generate())
@@ -296,8 +325,17 @@ fn join(link: &str, name: String) -> Result<Value, String> {
     })?;
     let me = format!("member-{}", short(&endpoint.id().to_string()));
     let dialing = endpoint.clone();
+    let (finding, id) = (rooms.clone(), room.id.clone());
     let attach: Attach = Arc::new(move || {
-        let (endpoint, addr) = (dialing.clone(), addr.clone());
+        // Where the leader is now, each time: a leader back after a restart
+        // is at new addresses (its endpoint is the same).
+        let addr = finding
+            .find(id.as_str())
+            .ok()
+            .and_then(|r| r.live)
+            .and_then(|live| leader_addr(&live).ok())
+            .unwrap_or_else(|| joined_at.clone());
+        let endpoint = dialing.clone();
         Box::pin(async move {
             let dial = async || {
                 architect::iroh_link::connect(&endpoint, addr.clone())
@@ -359,7 +397,7 @@ async fn follow(
             let open = crate::assembly::get().map(|a| a.open_path);
             match open.map(|open| open(loaded.resolve(studio_root.as_deref()))) {
                 Some(Ok(())) => {
-                    tracing::info!(room.loaded = %loaded.path, room.load = load, "room: opening what the leader loaded");
+                    tracing::info!(room.loaded = %loaded.title, room.load = load, "room: opening what the leader loaded");
                     {
                         let mut seen = lock(&seen);
                         seen.opened = Some(load);
@@ -372,6 +410,17 @@ async fn follow(
                 // Another open under way: tried again next tick.
                 Some(Err(e)) => lock(&seen).error = Some(e),
                 None => lock(&seen).error = Some("no engine installed".to_owned()),
+            }
+        }
+        // An open that failed (what the leader loaded is not on this
+        // device, say) is said, not followed into silence.
+        if let crate::studio_engine::set::Opening::Failed(why) =
+            crate::studio_engine::set::view().opening
+        {
+            let mut seen = lock(&seen);
+            if seen.opened.is_some() && seen.error.as_deref() != Some(why.as_str()) {
+                tracing::warn!(room.error = %why, "room: what the leader loaded did not open here");
+                seen.error = Some(why);
             }
         }
         let presence = peer.presence();
@@ -387,7 +436,7 @@ async fn follow(
             }
         }
         tokio::select! {
-            () = tokio::time::sleep(TICK) => {}
+            () = architect::platform::sleep(TICK) => {}
             _ = stopped.wait_for(|s| *s) => return,
         }
     }
@@ -494,7 +543,7 @@ static LEAD: ActionMeta = crate::actions::meta(
     "ROOM_LEAD",
     "room_lead",
     "Lead a room",
-    "Lead room `room` (its link or id) as `name` (left out: Leader): this engine hosts it, and its file says where its leader is, so anyone with the link can ROOM_JOIN. Then ROOM_LOAD what everyone plays; this engine's transport is the room's.",
+    "Lead room `room` (its link or id) as `name` (left out: Leader): this engine hosts it, and its file says where its leader is, so anyone with the link can ROOM_JOIN. A room has one leader: one another device leads is refused unless `take` (true: lead it instead, e.g. after that device went away without leaving). Then ROOM_LOAD what everyone plays; this engine's transport is the room's.",
     "Room",
     "",
 );
@@ -512,7 +561,7 @@ static JOIN: ActionMeta = crate::actions::meta(
     "ROOM_JOIN",
     "room_join",
     "Join a room",
-    "Join room `link` (`https://fasttrackstudio.app/join/<id>`, or the id) as `name` (left out: Guest), and follow its leader: what they load opens here, and the transport plays, stops, jumps and changes song with theirs. Joined once; the leader loading something else needs no rejoin. ROOM says how it goes.",
+    "Join room `link` (`https://fasttrackstudio.app/join/<id>`, or the id) as `name` (left out: Member), and follow its leader: what they load opens here, and the transport plays, stops, jumps and changes song with theirs. Joined once; the leader loading something else needs no rejoin. ROOM says how it goes.",
     "Room",
     "",
 );
@@ -550,6 +599,7 @@ struct ListArg {
 struct LeadArg {
     room: String,
     name: Option<String>,
+    take: Option<bool>,
 }
 
 #[derive(Facet)]
@@ -600,18 +650,23 @@ pub fn register(list: &ActionList) -> Result<(), ActionError> {
         Ok(raw(&Value::Array(listed)))
     })?;
     list.register_with(&LEAD, Effect::Mutating, |_: &ActionCaller, a: LeadArg| {
-        Ok(raw(&lead(&a.room, named(a.name, "Leader"))?))
+        Ok(raw(&lead(
+            &a.room,
+            named(a.name, "Leader"),
+            a.take.unwrap_or(false),
+        )?))
     })?;
     list.register_with(&LOAD, Effect::Mutating, |_: &ActionCaller, a: LoadArg| {
         Ok(raw(&load(&a.path)?))
     })?;
     list.register_with(&JOIN, Effect::Mutating, |_: &ActionCaller, a: JoinArg| {
-        Ok(raw(&join(&a.link, named(a.name, "Guest"))?))
+        Ok(raw(&join(&a.link, named(a.name, "Member"))?))
     })?;
     list.register_with(&STATUS, Effect::ReadOnly, |_: &ActionCaller, (): ()| {
         Ok(raw(&status()))
     })?;
     list.register(&LEAVE, Effect::Mutating, |(): ()| {
+        let _turn = lock(&TURN);
         leave();
         Ok("left the room".to_owned())
     })?;

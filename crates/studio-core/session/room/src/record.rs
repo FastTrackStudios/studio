@@ -236,11 +236,12 @@ impl Rooms {
         }
     }
 
-    /// Every room in the folder, by id.
+    /// Every room in the folder, by id. A file that is not a room's (a
+    /// name no room has, or unreadable) is passed over, and said.
     ///
     /// # Errors
     ///
-    /// The folder or a room's file cannot be read.
+    /// The folder cannot be read.
     pub fn list(&self) -> Result<Vec<Room>, Error> {
         let entries = match std::fs::read_dir(&self.dir) {
             Ok(entries) => entries,
@@ -258,7 +259,12 @@ impl Rooms {
             if path.extension().is_some_and(|e| e == "room")
                 && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
             {
-                rooms.push(self.find(stem)?);
+                match self.find(stem) {
+                    Ok(room) => rooms.push(room),
+                    Err(e) => {
+                        tracing::warn!(room.error = %e, "room: not a room's file; passed over")
+                    }
+                }
             }
         }
         rooms.sort_by(|a, b| a.id.cmp(&b.id));

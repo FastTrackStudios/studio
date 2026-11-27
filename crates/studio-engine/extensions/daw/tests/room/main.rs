@@ -12,7 +12,7 @@
 //! first setlist; the member joins by the room's link once and is checked
 //! to follow the leader's setlist, song and playhead; then the leader
 //! loads the second setlist and the member is checked to move to it on
-//! the same connection. Its checks go to
+//! the same connection, and then to a lone session. Its checks go to
 //! `target/<triple>/<profile>/room/room.json`.
 
 #[path = "../fixtures/check.rs"]
@@ -55,6 +55,8 @@ use mcp::Mcp;
 /// fixture sessions.
 const FIRST: &[&str] = &["multitrack-click", "markers-only"];
 const SECOND: &[&str] = &["chart-repeats", "multitrack-click"];
+/// The lone session the leader loads last.
+const LONE: &str = "markers-only";
 
 /// How long a member has to follow what the leader did.
 const FOLLOW_WAIT: Duration = Duration::from_secs(20);
@@ -148,7 +150,13 @@ fn run(mcp: &Mcp, checks: &mut Checks, name: &str, id: &str, args: &Value) -> Op
     }
 }
 
-fn room(leader: &Engine, member: &Engine, first: &Path, second: &Path, checks: &mut Checks) {
+fn room(
+    leader: &Engine,
+    member: &Engine,
+    studio: &Path,
+    (first, second): (&Path, &Path),
+    checks: &mut Checks,
+) {
     let (l, m) = (&leader.mcp, &member.mcp);
 
     // The organization's room, made once: one link.
@@ -315,12 +323,44 @@ fn room(leader: &Engine, member: &Engine, first: &Path, second: &Path, checks: &
         ok,
         format!("leader {leader_second}, member {got}"),
     );
+
+    // Then a lone session.
+    let lone = studio.join("sessions").join(LONE);
+    let args = json!({"path": lone.display().to_string()});
+    if run(l, checks, "loads a session", "ROOM_LOAD", &args).is_none() {
+        return;
+    }
+    let (ok, leader_lone) = until(
+        FOLLOW_WAIT,
+        || open_titles(l),
+        |v| v.as_array().is_some_and(|a| a.len() == 1),
+    );
+    checks.add("leader opens a lone session", ok, format!("{leader_lone}"));
+    let (ok, got) = until(FOLLOW_WAIT, || open_titles(m), |v| *v == leader_lone);
+    checks.add(
+        "member moves to the lone session",
+        ok,
+        format!("leader {leader_lone}, member {got}"),
+    );
+    match check::play_from(l, 0.5) {
+        Ok(()) => {
+            let (ok, got) = until(
+                FOLLOW_WAIT,
+                || m.run("SESSION_TRANSPORT", &json!({})),
+                |v| v["playing"] == json!(true),
+            );
+            checks.add("member plays the lone session", ok, format!("{got}"));
+            let _ = check::stop(l);
+        }
+        Err(e) => checks.failed("member plays the lone session", e),
+    }
+
     let after = m.run("ROOM", &json!({})).unwrap_or_default();
     checks.add(
         "without reconnecting",
         before["attaches"] == json!(1)
             && after["attaches"] == json!(1)
-            && after["load"] == json!(2),
+            && after["load"] == json!(3),
         format!(
             "attaches {} then {}, load {}",
             before["attaches"], after["attaches"], after["load"]
@@ -330,7 +370,7 @@ fn room(leader: &Engine, member: &Engine, first: &Path, second: &Path, checks: &
 
 /// The leader and a member in one room.
 #[test]
-fn a_member_follows_the_leader_through_two_setlists() {
+fn a_member_follows_the_leader_through_each_load() {
     let studio = report::profile_dir()
         .join("room")
         .join("runs")
@@ -348,7 +388,7 @@ fn a_member_follows_the_leader_through_two_setlists() {
     };
     let (mut leader, mut member) = (start("leader"), start("member"));
     let mut checks = Checks::default();
-    room(&leader, &member, &first, &second, &mut checks);
+    room(&leader, &member, &studio, (&first, &second), &mut checks);
 
     let tails = format!(
         "--- the leader's last lines ---\n{}\n--- the member's last lines ---\n{}",

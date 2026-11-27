@@ -82,3 +82,14 @@ fn a_link_to_no_room_is_refused() {
     assert!(rooms.create("  ", "rockstars").is_err());
     assert!(rooms.create("Adult Jam", "").is_err());
 }
+
+#[test]
+fn a_file_that_is_no_room_leaves_the_others_listed() {
+    let dir = tempfile::tempdir().unwrap();
+    let rooms = Rooms::at(dir.path());
+    let made = rooms.create("Adult Jam", "rockstars").unwrap();
+    std::fs::write(dir.path().join("Not A Room.room"), "{").unwrap();
+    std::fs::write(dir.path().join("broken-123456.room"), "{").unwrap();
+    let listed: Vec<_> = rooms.list().unwrap().into_iter().map(|r| r.id).collect();
+    assert_eq!(listed, vec![made.id]);
+}

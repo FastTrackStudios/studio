@@ -3,8 +3,9 @@
 //! The leader hosts the room ([`RoomHost`]): live-doc's `DocSync` (the
 //! room's doc, what is loaded) and `DocPresence` (who is here, the
 //! transport, and the leader's clock, which the transport is stamped in),
-//! both under the room's id. A member ([`RoomPeer`]) attaches once, both
-//! calls held open on that one attachment, and follows everything the
+//! both under the room's id. A member ([`RoomPeer`]) attaches once (the
+//! doc's call and the presence's held open, two streams to the leader),
+//! and follows everything the
 //! leader does through it: another setlist loaded is a change to the doc,
 //! never a new connection. Only a lost connection attaches again
 //! ([`RoomPeer::attaches`] counts them).
@@ -76,6 +77,8 @@ pub struct RoomHost {
     id: uuid::Uuid,
     hosts: Hosts,
     doc: RoomDoc,
+    /// Ends the leader's own presence task ([`Self::close`]).
+    stop: Arc<tokio::sync::watch::Sender<bool>>,
 }
 
 impl RoomHost {
@@ -84,11 +87,13 @@ impl RoomHost {
     pub fn new(id: &RoomId) -> Self {
         let hosts = Hosts::new(PRESENCE_TIMEOUT_MS);
         let doc = RoomDoc::new();
-        let _ = hosts.add(id.doc_id(), doc.loro().clone());
+        // The doc's host stays in `hosts`, which the dispatchers serve.
+        let _host = hosts.add(id.doc_id(), doc.loro().clone());
         Self {
             id: id.doc_id(),
             hosts,
             doc,
+            stop: Arc::new(tokio::sync::watch::channel(false).0),
         }
     }
 
@@ -96,6 +101,12 @@ impl RoomHost {
     #[must_use]
     pub const fn doc(&self) -> &RoomDoc {
         &self.doc
+    }
+
+    /// Stop hosting: the leader's own presence ends. What serves the room
+    /// (the caller's endpoint) is the caller's to close.
+    pub fn close(&self) {
+        let _ = self.stop.send(true);
     }
 
     /// Members attached now.
@@ -133,10 +144,16 @@ impl RoomHost {
         let client: DocPresenceClient = server.establish().await?;
         let (peer, mut driver) = PresencePeer::new(self.id, PRESENCE_TIMEOUT_MS);
         peer.set(&here_key(me), here(name));
+        let mut stopped = self.stop.subscribe();
         architect::platform::spawn(async move {
             let _server = server;
-            if let Err(e) = driver.run(&client).await {
-                tracing::warn!(room.error = %e, "room: the leader's own presence ended");
+            tokio::select! {
+                res = driver.run(&client) => {
+                    if let Err(e) = res {
+                        tracing::warn!(room.error = %e, "room: the leader's own presence ended");
+                    }
+                }
+                _ = stopped.wait_for(|s| *s) => {}
             }
         });
         Ok(peer)
