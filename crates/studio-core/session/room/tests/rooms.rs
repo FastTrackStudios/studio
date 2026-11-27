@@ -93,3 +93,18 @@ fn a_file_that_is_no_room_leaves_the_others_listed() {
     let listed: Vec<_> = rooms.list().unwrap().into_iter().map(|r| r.id).collect();
     assert_eq!(listed, vec![made.id]);
 }
+
+#[test]
+fn the_link_in_the_apps_scheme_is_the_same_room() {
+    // What a phone is opened with: the room's link in Studio's own scheme.
+    let dir = tempfile::tempdir().unwrap();
+    let rooms = Rooms::at(dir.path());
+    let made = rooms.create("Adult Jam", "rockstars").unwrap();
+    let in_app = format!("{}{}", room::APP_JOIN_BASE, made.id);
+    assert_eq!(in_app, format!("fasttrackstudio://join/{}", made.id));
+    assert_eq!(room::parse_link(&in_app).unwrap(), made.id);
+    assert_eq!(rooms.find(&format!("{in_app}/")).unwrap(), made);
+    // Anything else in that scheme names no room.
+    assert!(room::parse_link("fasttrackstudio://set/adult-jam").is_err());
+    assert!(room::parse_link("fasttrackstudio://join/").is_err());
+}

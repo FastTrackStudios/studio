@@ -46,6 +46,8 @@ mod trace;
 mod chart_sync;
 #[cfg_attr(not(feature = "web"), allow(dead_code))]
 mod reference;
+#[cfg(feature = "native")]
+mod room_link;
 mod session;
 mod session_file;
 // The session's Stage: its three windows' layout (natively).
@@ -244,6 +246,15 @@ fn main() {
         {
             std::env::set_var("FTS_MCP_PORT", port.to_string());
         }
+        // On iPhone and iPad the engine is this process: it keeps and
+        // finds rooms in the app's own Studio folder, beside the setlists
+        // a room loads, not in a Drive mount a phone does not have.
+        #[cfg(target_os = "ios")]
+        if std::env::var_os(room::record::ROOMS_DIR_ENV).is_none()
+            && let Some(dir) = room_link::rooms_dir(storage::home().as_deref())
+        {
+            std::env::set_var(room::record::ROOMS_DIR_ENV, dir);
+        }
     }
     // The Editor: what the arrangement picks opens there, and a key
     // sequence it has half typed keeps its keys from the panes.
@@ -264,6 +275,10 @@ fn main() {
         if std::env::args().nth(1).as_deref() == Some("--crash-test") {
             telemetry::crash_test();
         }
+        // `--join <link>`: into that room as soon as the engine is up.
+        if let Some(link) = room_link::link_in(&std::env::args().collect::<Vec<_>>()) {
+            room_link::join(link);
+        }
     }
     // Warnings and up: Loro's encoder logs every block at info.
     #[cfg(not(feature = "native"))]
@@ -282,7 +297,13 @@ fn main() {
     // registered before UIKit looks it up (the window is handed to it in
     // `App`).
     #[cfg(all(feature = "native", target_os = "ios"))]
-    studio_shell::ios_scene::register(studio_shell::ios_scene::Opening::AsHeld);
+    {
+        // A room's link the app is opened with (`fasttrackstudio://join/…`,
+        // the URL type ios/build.sh declares) joins that room: before the
+        // delegate is registered, so the link it was launched by is seen.
+        studio_shell::ios_scene::on_link(room_link::opened);
+        studio_shell::ios_scene::register(studio_shell::ios_scene::Opening::AsHeld);
+    }
     // Drawn by Blitz on a desktop: the window has no system frame, the
     // shell's title bar is its frame (app-shell-native).
     #[cfg(feature = "native")]

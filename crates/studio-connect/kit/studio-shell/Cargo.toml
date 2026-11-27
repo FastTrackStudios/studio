@@ -62,7 +62,7 @@ tokio = { workspace = true }
 # The UIScene lifecycle (`ios_scene`): the objc2 winit itself is built on.
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = { workspace = true }
-objc2-ui-kit = { workspace = true, features = ["UIApplication", "UIResponder", "UIScene", "UISceneOptions", "UISceneSession", "UIWindowScene", "UIWindow", "UIView", "UIViewController", "UIScreen", "UIPasteboard", "UIOrientation", "block2"] }
+objc2-ui-kit = { workspace = true, features = ["UIApplication", "UIResponder", "UIScene", "UISceneOptions", "UIOpenURLContext", "UISceneSession", "UIWindowScene", "UIWindow", "UIView", "UIViewController", "UIScreen", "UIPasteboard", "UIOrientation", "block2"] }
 objc2-foundation = { workspace = true, features = ["default", "NSArray", "NSSet", "NSDictionary", "NSString", "NSURL"] }
 
 [dev-dependencies]

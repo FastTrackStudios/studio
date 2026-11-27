@@ -113,6 +113,9 @@ architect-views = { workspace = true, optional = true }
 architect-process-view = { workspace = true, optional = true, features = ["extension"] }
 # Waveform peaks (the sidecar format; no producers in the app).
 drive-sidecars.workspace = true
+# A room's link (`room_link`): what it names, and the Rooms folder the
+# engine linked into a phone's app keeps rooms in.
+room = { workspace = true, optional = true }
 # Drive's agent on this computer: any Drive file as a real local path,
 # warmed ahead of a set (desktop builds; docs/app-files.md in Drive).
 drive-local = { workspace = true, optional = true }
@@ -168,6 +171,7 @@ native = [
     "dep:architect-settings",
     "dep:architect-views",
     "dep:architect-process-view",
+    "dep:room",
     # On iPhone and iPad: the engine linked into the app (no second
     # process there; src/engine.rs). A no-op on every other target.
     "dep:daw-extension",

@@ -19,6 +19,11 @@ use serde::{Deserialize, Serialize};
 /// Where a room's link points.
 pub const JOIN_BASE: &str = "https://fasttrackstudio.app/join/";
 
+/// The same link in the app's own scheme: what opens Studio on a phone or
+/// tablet straight into the room (`fasttrackstudio://join/<room>`, the URL
+/// type the iOS build declares), where no browser stands in between.
+pub const APP_JOIN_BASE: &str = "fasttrackstudio://join/";
+
 /// A room's id: lower-case letters, digits and dashes, made once.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -100,8 +105,8 @@ pub fn link_of(id: &RoomId) -> String {
     format!("{JOIN_BASE}{id}")
 }
 
-/// The room a link names: the whole link, the link without its scheme, or
-/// the bare id.
+/// The room a link names: the whole link, the link without its scheme, the
+/// link in the app's scheme ([`APP_JOIN_BASE`]), or the bare id.
 ///
 /// # Errors
 ///
@@ -112,7 +117,10 @@ pub fn parse_link(link: &str) -> Result<RoomId, Error> {
         .strip_prefix("https://")
         .or_else(|| link.strip_prefix("http://"))
         .unwrap_or(link);
-    let id = match rest.strip_prefix("fasttrackstudio.app/join/") {
+    let id = match rest
+        .strip_prefix("fasttrackstudio.app/join/")
+        .or_else(|| link.strip_prefix(APP_JOIN_BASE))
+    {
         Some(id) => id.trim_end_matches('/'),
         None if rest.contains('/') => return Err(Error::NotALink(link.to_owned())),
         None => rest,
