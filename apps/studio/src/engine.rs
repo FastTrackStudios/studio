@@ -1128,6 +1128,29 @@ pub fn new_session(args: Value) -> Result<Value, String> {
     made
 }
 
+/// Joins the room `link` names in the engine (`ROOM_JOIN`, as `name`), so
+/// it follows that room's leader from now on: what they load opens here
+/// and the transport keeps to theirs. Links to the engine first (or starts
+/// it), as playing does. The engine's answer (`link`, `role`). Blocks:
+/// call it off the UI thread.
+pub fn join_room(link: &str, name: &str) -> Result<Value, String> {
+    let mut span = Span::root("studio.room.join");
+    let found = match linked() {
+        Some(f) => f,
+        None => choose(Mode::from_env(), &mut span)?,
+    };
+    span.set("engine.pid", found.pid);
+    let joined = run(&found, "ROOM_JOIN", json!({ "link": link, "name": name }));
+    match &joined {
+        Ok(_) => span.set("room.outcome", "joined"),
+        Err(e) => {
+            span.set("room.outcome", "failed");
+            span.fail(e.clone());
+        }
+    }
+    joined
+}
+
 /// Waits until the open the engine began at `began` is done.
 fn settle(found: &Found, began: Instant) -> Result<(), String> {
     let mut seen_opening = false;

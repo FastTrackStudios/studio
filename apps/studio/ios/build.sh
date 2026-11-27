@@ -85,6 +85,16 @@ set_key NSLocalNetworkUsageDescription string "Studio finds the others in your r
 # drops the peers' UDP silently instead of asking.
 /usr/libexec/PlistBuddy -c "Delete :NSBonjourServices" "$plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :NSBonjourServices array" -c "Add :NSBonjourServices:0 string _fts._tcp" "$plist"
+# A room's link in the app's own scheme (fasttrackstudio://join/<room>)
+# opens Studio and joins the room (studio-shell's ios_scene::on_link).
+/usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" "$plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy \
+    -c "Add :CFBundleURLTypes array" \
+    -c "Add :CFBundleURLTypes:0 dict" \
+    -c "Add :CFBundleURLTypes:0:CFBundleURLName string app.fasttrackstudio.studio" \
+    -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" \
+    -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string fasttrackstudio" \
+    "$plist"
 # No crypto beyond the system's: no export-compliance documents.
 set_key ITSAppUsesNonExemptEncryption bool false
 # Sessions and setlists in the Files app (Documents).

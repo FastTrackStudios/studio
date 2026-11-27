@@ -31,5 +31,5 @@ pub mod state;
 #[cfg(all(feature = "net", not(target_arch = "wasm32")))]
 pub mod net;
 
-pub use record::{Error, Live, Room, RoomId, Rooms, link_of, parse_link};
+pub use record::{APP_JOIN_BASE, Error, Live, Room, RoomId, Rooms, link_of, parse_link};
 pub use state::{Kind, Loaded, RoomDoc};

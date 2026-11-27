@@ -637,11 +637,15 @@ jobs:
         persist-credentials: false
     - name: devenv CLI
       uses: ./.github/actions/devenv
-    - name: 'iOS: the app for the simulator; a session opens and plays with the click'
+    - name: 'iOS: the app for the simulator; a session opens and plays with the click; it joins a room and follows its leader'
       run: |
         app="$(bash apps/studio/ios/build.sh sim | tail -1)"
         python3 -I apps/studio/ios/sim-test.py --app "$app" \
           --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out"
+        bash scripts/dev-shell.sh -c 'cargo build -p daw-extension'
+        python3 -I apps/studio/ios/sim-room-test.py --app "$app" \
+          --engine "${CARGO_TARGET_DIR:-target}/debug/daw-extension" \
+          --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out/room"
     - name: Keep the app's output on failure
       if: ${{ failure() }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
