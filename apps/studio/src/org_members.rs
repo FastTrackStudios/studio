@@ -419,7 +419,7 @@ pub async fn join(
 }
 
 #[cfg(feature = "drive")]
-pub use here::{invite_here, join_here, joined, members_here, remove_here};
+pub use here::{invite_here, join_here, joined, members_here, orgs_here, remove_here};
 
 /// The app's side: the issuer its Drive names, and its own sign-in,
 /// refreshed once when the issuer no longer takes it.
@@ -476,6 +476,13 @@ mod here {
             }
             other => other,
         }
+    }
+
+    /// Every org the person is in at the issuer, with its name: the
+    /// names Studio shows (the node's `/orgs` carries slugs only).
+    pub async fn orgs_here() -> Result<Vec<Org>, Refused> {
+        signed_in(async |issuer: &str, token: &str| super::orgs(&DriveFetch, issuer, token).await)
+            .await
     }
 
     /// `slug`'s people, and the person's own standing there.

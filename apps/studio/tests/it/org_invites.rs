@@ -16,8 +16,9 @@
 //! - `STUDIO_ORG_INVITE`: Ada, the owner, invites Bob by email, then makes
 //!   a link anyone may follow;
 //! - `STUDIO_ORG_JOIN`: Bob joins with the link, and his Studio goes into
-//!   the org (starting again) and offers its setlist; the email
-//!   invitation, pasted after, says he is in already;
+//!   the org (starting again) and offers its setlist, each org on Home
+//!   named as the account server names it; the email invitation, pasted
+//!   after, says he is in already;
 //! - a member does not invite;
 //! - `STUDIO_ORG_MEMBERS`: both accounts, as either sees it;
 //! - `STUDIO_ORG_REMOVE`: Bob's access ends (his Studio is told he is not
@@ -39,6 +40,11 @@ const SET_NAME: &str = "Sunday";
 /// A member row as STUDIO_ORG_MEMBERS answers it.
 fn row(a: Account, role: &str) -> Value {
     json!({ "account": a.id, "name": a.name, "email": a.email, "role": role })
+}
+
+/// What Home (STUDIO_FIRST_RUN) calls `org`.
+fn name_on<'a>(home: &'a Value, org: &str) -> Option<&'a str> {
+    home["orgs"].as_array()?.iter().find(|o| o["org"] == org)?["name"].as_str()
 }
 
 /// A member as the stand-in keeps it: account id and role.
@@ -156,6 +162,18 @@ fn an_owner_invites_a_second_account_joins_by_link_and_the_owner_removes_it() {
         },
     );
     assert_eq!(home["here"], ORG, "{home}");
+    // Named as the account server names them, after the restart too (his
+    // own org's slug in words would be "Bobs Band").
+    let home = until(
+        Duration::from_secs(30),
+        "Bob's Home to name his orgs",
+        || {
+            bob.run("STUDIO_FIRST_RUN", &json!({}))
+                .ok()
+                .filter(|f| name_on(f, BOB_ORG) == Some("Bob's Band"))
+        },
+    );
+    assert_eq!(name_on(&home, ORG), Some("Adult Jam"), "{home}");
 
     // The email invitation, pasted once he is in: in already.
     let again = bob.run("STUDIO_ORG_JOIN", &json!({ "link": email_link }));

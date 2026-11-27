@@ -13,8 +13,11 @@
 //!   slug from the name, the account its owner;
 //! - Studio started again in it (going into another org restarts a
 //!   desktop Studio), and `STUDIO_ORGS` listing it;
-//! - `STUDIO_FIRST_RUN`: Home's organizations name it;
-//! - `STUDIO_ORG_CREATE` with a slug already taken: refused, nothing made.
+//! - `STUDIO_FIRST_RUN`: Home's organizations name it as it was typed
+//!   (the name the account server keeps, read again after the restart);
+//! - `STUDIO_ORG_CREATE` with a slug already taken: refused, nothing made;
+//! - `STUDIO_ORG_SWITCH` back to the account's other org: answered before
+//!   Studio starts again in it, and the new org still named as typed.
 //!
 //! It opens a window, so it needs a desktop session: `just test-org-create`
 //! builds Studio and runs it; ignored otherwise.
@@ -29,9 +32,6 @@ use super::first_run::{Made, ORG, WHO, signed_in, until};
 
 const NAME: &str = "Night Owls, Choir!";
 const SLUG: &str = "night-owls-choir";
-/// What Home calls it once Studio has started again: the issuer's org
-/// list carries slugs only, so a name given here is the slug in words.
-const SHOWN: &str = "Night Owls Choir";
 
 #[test]
 #[ignore = "opens Studio's window (a desktop session): `just test-org-create`"]
@@ -90,7 +90,7 @@ fn a_signed_in_account_creates_an_org_owns_it_and_studio_is_in_it() {
         .as_array()
         .and_then(|o| o.iter().find(|o| o["org"] == SLUG))
         .expect("the new org on Home");
-    assert_eq!(shown["name"], SHOWN, "{home}");
+    assert_eq!(shown["name"], NAME, "the typed name, kept: {home}");
     assert_eq!(home["here"], SLUG, "{home}");
 
     // A slug some org has already: refused, nothing made, Studio stays.
@@ -103,6 +103,32 @@ fn a_signed_in_account_creates_an_org_owns_it_and_studio_is_in_it() {
     assert_eq!(stand.made().len(), 1, "nothing more made");
     let after = mcp.run("STUDIO_ORGS", &json!({})).expect("STUDIO_ORGS");
     assert_eq!(after["here"], SLUG, "{after}");
+
+    // Back to the other org: answered first, then started again in it.
+    let switched = mcp
+        .run("STUDIO_ORG_SWITCH", &json!({ "org": ORG }))
+        .expect("STUDIO_ORG_SWITCH answers before Studio starts again");
+    assert_eq!(switched["here"], ORG, "{switched}");
+    let mcp = studio.door_after_restart(&mcp, Duration::from_secs(120));
+    let orgs = until(Duration::from_secs(30), "Studio to be in its org", || {
+        mcp.run("STUDIO_ORGS", &json!({}))
+            .ok()
+            .filter(|o| o["here"] == ORG)
+    });
+    assert!(
+        orgs["orgs"]
+            .as_array()
+            .is_some_and(|o| o.contains(&json!(SLUG))),
+        "{orgs}"
+    );
+    let home = until(Duration::from_secs(60), "Home to name the new org", || {
+        mcp.run("STUDIO_FIRST_RUN", &json!({})).ok().filter(|f| {
+            f["orgs"]
+                .as_array()
+                .is_some_and(|o| o.iter().any(|o| o["org"] == SLUG && o["name"] == NAME))
+        })
+    });
+    assert_eq!(home["here"], ORG, "{home}");
 
     studio.stop();
     // Every create carried the app's own sign-in (the stand-in refuses
