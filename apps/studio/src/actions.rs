@@ -185,7 +185,7 @@ mod imp {
         "STUDIO_ORG_JOIN",
         "Join an organization",
         "Orgs",
-        "Joins the organization an invitation `link` (from STUDIO_ORG_INVITE, or the email) invites into, as the account signed in here. Studio is then in it, and STUDIO_ORGS lists it. Answers its `org` and the `role` given."
+        "Joins the organization an invitation `link` (from STUDIO_ORG_INVITE, or the email) invites into, as the account signed in here. STUDIO_ORGS lists it, and Studio goes into it just after answering (on desktop it starts again in it, as after STUDIO_SIGN_IN). Answers its `org` and the `role` given."
     );
     meta!(
         ORG_REMOVE,
@@ -862,15 +862,18 @@ mod imp {
             .await
             .map_err(|e| e.to_string())?;
         crate::org_create::joined(app, &made);
-        // Once this answer is on its way: going into another org starts
-        // a desktop Studio again (Drive's reload), and an answer sent
-        // after that never arrives.
-        let org = made.org.clone();
+        switch_after_answer(app, made.org.clone());
+        Ok(json!({ "org": made.org, "name": made.name, "role": made.role }))
+    }
+
+    /// Studio into `org` once the answer that says so is on its way:
+    /// going into another org starts a desktop Studio again (Drive's
+    /// reload), and an answer sent after that never arrives.
+    fn switch_after_answer(app: crate::state::AppState, org: String) {
         spawn(async move {
             architect::platform::sleep(std::time::Duration::from_millis(750)).await;
             app.switch_org(&org);
         });
-        Ok(json!({ "org": made.org, "name": made.name, "role": made.role }))
     }
 
     /// STUDIO_ORG_MEMBERS, _INVITE, _JOIN and _REMOVE: an org's people,
@@ -912,6 +915,7 @@ mod imp {
                 let a: OrgJoinArgs = args(raw)?;
                 let joined = m::join_here(&a.link).await.map_err(refused)?;
                 m::joined(app, &joined);
+                switch_after_answer(app, joined.slug.clone());
                 Ok(json!({ "org": joined.slug, "role": joined.role }))
             }
             "STUDIO_ORG_REMOVE" => {
