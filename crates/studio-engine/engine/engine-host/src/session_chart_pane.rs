@@ -28,8 +28,9 @@
 //! Playhead model: the cursor rides `ACTIVE_INDICES.song_progress` (the
 //! ~10 Hz cursor stream that flows on every backend) mapped onto the chart's
 //! own timeline — `chart seconds = count_in + progress × song duration`,
-//! resolved through the layout's per-beat `time_start/time_end` table
-//! (`ChartCursor::compute_at_time`), which honors mid-chart meter changes.
+//! resolved through the chart's bars as played (`bar_times`: repeats and
+//! endings, tempo and meter changes), with x from the layout's beat slots
+//! (`ChartCursor::compute_at_played_time`).
 //! The demo songs' sections are generated FROM these charts, so chart time
 //! and project time agree by construction. (`TransportUpdate`'s musical
 //! position would be finer-grained, but that stream does not currently
@@ -48,6 +49,7 @@ use keyflow::engraver::layout::chart::{
     Breakpoint, ChartLayoutConfig, ChartLayoutEngine, ChartLayoutResult,
 };
 use keyflow::engraver::style::MStyle;
+use keyflow::text::bar_times::{BarClock, BarTime, bar_times};
 use studio_ui::{ACTIVE_INDICES, SETLIST_STRUCTURE, SONG_CHARTS};
 
 /// Layout width in points. Fixed (tablet/desktop breakpoint); the SVG scales
@@ -59,8 +61,18 @@ const LAYOUT_WIDTH_PT: f64 = 640.0;
 struct Pane {
     engine: ChartLayoutEngine,
     font_bundle: ChartFontBundle,
-    /// (key, layout, static svg, content width pt, content height pt)
-    layout: Option<(u64, ChartLayoutResult, String, f64, f64)>,
+    /// The cached chart: its key, layout, static SVG and content size.
+    layout: Option<Laid>,
+}
+
+struct Laid {
+    key: u64,
+    layout: ChartLayoutResult,
+    /// The chart's bars as played, on the layout's own clock.
+    bars: Vec<BarTime>,
+    svg: String,
+    width_pt: f64,
+    height_pt: f64,
 }
 
 thread_local! {
@@ -102,9 +114,9 @@ impl Pane {
     /// Returns `(svg, width_pt, height_pt)` on success.
     fn ensure(&mut self, text: &str) -> Option<(String, f64, f64)> {
         let key = text_key(text);
-        if let Some((cached_key, _, svg, w, h)) = &self.layout {
-            if *cached_key == key {
-                return Some((svg.clone(), *w, *h));
+        if let Some(laid) = &self.layout {
+            if laid.key == key {
+                return Some((laid.svg.clone(), laid.width_pt, laid.height_pt));
             }
         }
 
@@ -124,6 +136,13 @@ impl Pane {
             width: LAYOUT_WIDTH_PT,
         };
         let layout = self.engine.layout_chart_with_config(&chart, &mode, &config);
+        // Bar 1 where the layout put it (the count-in's beats come before).
+        let downbeat = layout
+            .beat_positions
+            .iter()
+            .find(|b| b.absolute_tick >= 0)
+            .map_or(0.0, |b| b.time_start);
+        let bars = bar_times(&chart, BarClock::at(downbeat));
 
         let (w, h) = (
             layout.total_width.max(LAYOUT_WIDTH_PT),
@@ -141,20 +160,24 @@ impl Pane {
             }
         }
 
-        self.layout = Some((key, layout, svg.clone(), w, h));
+        self.layout = Some(Laid {
+            key,
+            layout,
+            bars,
+            svg: svg.clone(),
+            width_pt: w,
+            height_pt: h,
+        });
         Some((svg, w, h))
     }
 
     /// Playhead (seconds on the chart's own timeline, count-in at 0) →
     /// cursor state against the cached layout.
     fn cursor_state_at_time(&self, key: u64, chart_seconds: f64) -> Option<CursorState> {
-        let (cached_key, layout, ..) = self.layout.as_ref()?;
-        if *cached_key != key {
-            return None;
-        }
+        let laid = self.layout.as_ref().filter(|laid| laid.key == key)?;
         // The shared playback look — the native chart panel draws the same.
         let cursor = ChartCursor::new(CursorConfig::playback());
-        cursor.compute_at_time(layout, chart_seconds)
+        cursor.compute_at_played_time(&laid.layout, &laid.bars, chart_seconds)
     }
 }
 
