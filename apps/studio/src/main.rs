@@ -22,6 +22,8 @@ mod icons;
 mod instance;
 mod keys;
 mod live_sync;
+#[cfg(any(feature = "drive", test))]
+mod org_create;
 mod orgs;
 mod pages;
 mod pieces;

@@ -39,6 +39,72 @@ pub fn PersonMark(person: Person, #[props(default = 36)] size: u32) -> Element {
     }
 }
 
+// ── a new org ───────────────────────────────────────────────────────────
+
+/// Create an organization: a name, and Create. It is made at the account
+/// server, the account signed in here its owner, and Studio goes into it
+/// (`done` then runs: a sheet closes). What STUDIO_ORG_CREATE does.
+#[component]
+pub fn NewOrg(#[props(default)] done: Option<EventHandler<()>>) -> Element {
+    #[cfg(feature = "drive")]
+    {
+        let app = use_app();
+        let mut name = use_signal(String::new);
+        let mut busy = use_signal(|| false);
+        let mut said = use_signal(|| None::<String>);
+        let make = move |_| {
+            if busy() {
+                return;
+            }
+            busy.set(true);
+            said.set(None);
+            let typed = name();
+            spawn(async move {
+                match crate::org_create::create_here(&typed, None).await {
+                    Ok(made) => {
+                        crate::org_create::joined(app, &made);
+                        name.set(String::new());
+                        if let Some(done) = done {
+                            done.call(());
+                        }
+                    }
+                    Err(why) => said.set(Some(format!("Not created: {why}."))),
+                }
+                busy.set(false);
+            });
+        };
+        rsx! {
+            div { class: "addrow",
+                input {
+                    class: "edtitle",
+                    placeholder: "New organization: its name",
+                    aria_label: "New organization's name",
+                    value: "{name}",
+                    oninput: move |e| name.set(e.value()),
+                }
+                button {
+                    class: "primary",
+                    disabled: busy() || name().trim().is_empty(),
+                    onclick: make,
+                    if busy() {
+                        "Creating…"
+                    } else {
+                        "Create"
+                    }
+                }
+            }
+            if let Some(s) = said() {
+                div { class: "s1", role: "alert", "{s}" }
+            }
+        }
+    }
+    #[cfg(not(feature = "drive"))]
+    {
+        let _ = done;
+        rsx! {}
+    }
+}
+
 // ── All orgs ────────────────────────────────────────────────────────────
 
 #[component]
@@ -58,6 +124,7 @@ pub fn AllOrgs() -> Element {
                         OrgCard { key: "{o}", here: o == here, org: o }
                     }
                 }
+                NewOrg {}
             }
         }
     }
@@ -102,11 +169,19 @@ fn OrgCard(org: String, here: bool) -> Element {
             div { class: "orgstats",
                 span {
                     b { "{songs.len()}" }
-                    if songs.len() == 1 { " song" } else { " songs" }
+                    if songs.len() == 1 {
+                        " song"
+                    } else {
+                        " songs"
+                    }
                 }
                 span {
                     b { "{people.len()}" }
-                    if people.len() == 1 { " person" } else { " people" }
+                    if people.len() == 1 {
+                        " person"
+                    } else {
+                        " people"
+                    }
                 }
                 span {
                     b { "{out}" }
@@ -120,7 +195,12 @@ fn OrgCard(org: String, here: bool) -> Element {
                 div { class: "sharerow",
                     span { class: "s1", "Shares with" }
                     for o in to {
-                        span { key: "{o}", class: "orgtag", style: "--h:{orgs::org_hue(&o)}", "{orgs::org_name(&o)}" }
+                        span {
+                            key: "{o}",
+                            class: "orgtag",
+                            style: "--h:{orgs::org_hue(&o)}",
+                            "{orgs::org_name(&o)}"
+                        }
                     }
                 }
             }
@@ -128,7 +208,12 @@ fn OrgCard(org: String, here: bool) -> Element {
                 div { class: "sharerow",
                     span { class: "s1", "Gets songs from" }
                     for o in from {
-                        span { key: "{o}", class: "orgtag", style: "--h:{orgs::org_hue(&o)}", "{orgs::org_name(&o)}" }
+                        span {
+                            key: "{o}",
+                            class: "orgtag",
+                            style: "--h:{orgs::org_hue(&o)}",
+                            "{orgs::org_name(&o)}"
+                        }
                     }
                 }
             }
@@ -170,7 +255,11 @@ pub fn People() -> Element {
             Bar {
                 title: "People",
                 tools: rsx! {
-                    Tool { label: "Add someone", icon: I::Plus, onclick: move |_| app.open(Sheet::Person(String::new())) }
+                    Tool {
+                        label: "Add someone",
+                        icon: I::Plus,
+                        onclick: move |_| app.open(Sheet::Person(String::new())),
+                    }
                 },
             }
             div { class: "body",
@@ -206,7 +295,12 @@ pub fn People() -> Element {
                 }
                 div { class: "list people",
                     for p in people {
-                        PersonRow { key: "{p.id}", me: me.as_deref() == Some(p.id.as_str()), groups: groups.clone(), person: p }
+                        PersonRow {
+                            key: "{p.id}",
+                            me: me.as_deref() == Some(p.id.as_str()),
+                            groups: groups.clone(),
+                            person: p,
+                        }
                     }
                 }
                 label { class: "newsong",
@@ -331,7 +425,10 @@ pub fn PersonSheet(id: String) -> Element {
     let put_name = put.clone();
     let mine = !who.is_empty() && p.account.as_deref() == Some(who.as_str());
     rsx! {
-        div { class: "bsheet person-sheet", role: "dialog", aria_label: "Person",
+        div {
+            class: "bsheet person-sheet",
+            role: "dialog",
+            aria_label: "Person",
             div { class: "phead",
                 PersonMark { person: p.clone(), size: 48 }
                 input {
@@ -393,12 +490,14 @@ pub fn PersonSheet(id: String) -> Element {
                                     button {
                                         class: "tagchip",
                                         aria_pressed: "{inside}",
-                                        onclick: move |_| put_in(&|x: &mut Person| {
-                                            toggle(&mut x.groups, &gi);
-                                            if !x.groups.contains(&gi) {
-                                                x.leads.retain(|l| l != &gi);
-                                            }
-                                        }),
+                                        onclick: move |_| put_in(
+                                            &|x: &mut Person| {
+                                                toggle(&mut x.groups, &gi);
+                                                if !x.groups.contains(&gi) {
+                                                    x.leads.retain(|l| l != &gi);
+                                                }
+                                            },
+                                        ),
                                         "{g.name}"
                                     }
                                     if inside {
@@ -539,8 +638,13 @@ pub fn OrgSettings() -> Element {
                             let v = e.value();
                             s2(&|s: &mut Settings| s.arrangement = v.clone());
                         },
-                        for (a , _) in data::ARRS {
-                            option { key: "{a}", value: "{a}", selected: st.arrangement == a, "{a}" }
+                        for (a, _) in data::ARRS {
+                            option {
+                                key: "{a}",
+                                value: "{a}",
+                                selected: st.arrangement == a,
+                                "{a}"
+                            }
                         }
                     }
                 }
@@ -559,7 +663,10 @@ pub fn OrgSettings() -> Element {
                 div { class: "list",
                     for g in groups {
                         {
-                            let leads: Vec<String> = orgs::leaders(&team.loro(), &g.id).into_iter().map(|p| p.name).collect();
+                            let leads: Vec<String> = orgs::leaders(&team.loro(), &g.id)
+                                .into_iter()
+                                .map(|p| p.name)
+                                .collect();
                             let n = team.people().iter().filter(|p| p.groups.contains(&g.id)).count();
                             rsx! {
                                 div { key: "{g.id}", class: "tagrowx",
@@ -585,11 +692,14 @@ pub fn OrgSettings() -> Element {
                         onkeydown: move |e: KeyboardEvent| {
                             let n = new_group().trim().to_string();
                             if e.key().to_string() == "Enter" && !n.is_empty() {
-                                team2.put_group(&Group {
-                                    id: session_sync::slug::slugify(&n),
-                                    name: n,
-                                    kind: "band".into(),
-                                });
+                                team2
+                                    .put_group(
+                                        &Group {
+                                            id: session_sync::slug::slugify(&n),
+                                            name: n,
+                                            kind: "band".into(),
+                                        },
+                                    );
                                 new_group.set(String::new());
                             }
                         },
@@ -640,7 +750,9 @@ pub fn OrgSongSheet(owner: String, id: String) -> Element {
                 b { "{e.title} at {team.name()}" }
             }
             if !own {
-                div { class: "s1", "Shared by {orgs::org_name(&owner)}: its form and chart are theirs; the key, arrangement and leader here are {team.name()}'s." }
+                div { class: "s1",
+                    "Shared by {orgs::org_name(&owner)}: its form and chart are theirs; the key, arrangement and leader here are {team.name()}'s."
+                }
             }
             div { class: "songh", "Key here" }
             div { class: "chips keys",
@@ -665,7 +777,7 @@ pub fn OrgSongSheet(owner: String, id: String) -> Element {
             }
             div { class: "songh", "Arrangement here" }
             div { class: "chips",
-                for (a , _) in data::ARRS {
+                for (a, _) in data::ARRS {
                     {
                         let pa = pa.clone();
                         rsx! {
@@ -674,12 +786,14 @@ pub fn OrgSongSheet(owner: String, id: String) -> Element {
                                 class: "tagchip",
                                 aria_pressed: "{arr == a}",
                                 onclick: move |_| {
-                                    pa(&|u: &mut orgs::Use| {
-                                        u.arrangement = Some(a.to_string());
-                                        if !u.arrangements.iter().any(|x| x == a) {
-                                            u.arrangements.push(a.to_string());
-                                        }
-                                    })
+                                    pa(
+                                        &|u: &mut orgs::Use| {
+                                            u.arrangement = Some(a.to_string());
+                                            if !u.arrangements.iter().any(|x| x == a) {
+                                                u.arrangements.push(a.to_string());
+                                            }
+                                        },
+                                    )
                                 },
                                 "{a}"
                             }
@@ -730,7 +844,9 @@ pub fn OrgSongSheet(owner: String, id: String) -> Element {
                         }
                     }
                 }
-                div { class: "s1", "A shared song stays {team.name()}'s: the other org sees it, opens its session, and keeps its own key and arrangement." }
+                div { class: "s1",
+                    "A shared song stays {team.name()}'s: the other org sees it, opens its session, and keeps its own key and arrangement."
+                }
             }
         }
     }

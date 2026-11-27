@@ -136,6 +136,13 @@ mod imp {
         "Puts Studio in org `org` (one of STUDIO_ORGS' `orgs`): its sets, library and team."
     );
     meta!(
+        ORG_CREATE,
+        "STUDIO_ORG_CREATE",
+        "Create an organization",
+        "Orgs",
+        "Creates an organization at the account server, as the account signed in here, which becomes its owner: `name`, and `slug` (its id in links and documents; from the name when left out). Studio is then in it, and STUDIO_ORGS lists it. Answers its `org` (the slug), `name` and the account's `role` (owner)."
+    );
+    meta!(
         SETLIST_FILES,
         "STUDIO_SETLIST_FILES",
         "Setlist files in Drive",
@@ -359,6 +366,12 @@ mod imp {
         org: String,
     }
     #[derive(Facet)]
+    struct OrgCreateArgs {
+        name: String,
+        #[facet(default)]
+        slug: Option<String>,
+    }
+    #[derive(Facet)]
     struct FileArgs {
         space: String,
         location: String,
@@ -481,6 +494,7 @@ mod imp {
             forward::<()>(&list, &ROUTE, R, false);
             forward::<()>(&list, &ORGS, R, false);
             forward::<OrgArgs>(&list, &ORG_SWITCH, M, true);
+            forward::<OrgCreateArgs>(&list, &ORG_CREATE, M, true);
             forward::<()>(&list, &SETLIST_FILES, R, false);
             forward::<FileArgs>(&list, &SETLIST_FILE_OPEN, M, true);
             forward::<()>(&list, &NOW_PLAYING, R, false);
@@ -640,6 +654,13 @@ mod imp {
                     return;
                 };
                 while let Some(call) = calls.next().await {
+                    // Asks the account server: answered when it has.
+                    if call.id == ORG_CREATE.id {
+                        spawn(async move {
+                            let _ = call.answer.send(create_org(app, &call.args).await);
+                        });
+                        continue;
+                    }
                     let Some((route, index, library)) = held.borrow().clone() else {
                         let _ = call.answer.send(Err("the app is starting".into()));
                         continue;
@@ -650,6 +671,16 @@ mod imp {
             }
         });
         rsx! {}
+    }
+
+    /// STUDIO_ORG_CREATE: the org made at the issuer, then Studio in it.
+    async fn create_org(app: crate::state::AppState, raw: &[u8]) -> Result<Value, String> {
+        let a: OrgCreateArgs = args(raw)?;
+        let made = crate::org_create::create_here(&a.name, a.slug.as_deref())
+            .await
+            .map_err(|e| e.to_string())?;
+        crate::org_create::joined(app, &made);
+        Ok(json!({ "org": made.org, "name": made.name, "role": made.role }))
     }
 
     fn args<T: Facet<'static>>(bytes: &[u8]) -> Result<T, String> {
