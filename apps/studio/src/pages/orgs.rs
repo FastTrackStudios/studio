@@ -221,15 +221,15 @@ pub fn Members(org: String) -> Element {
         let mut invite_link = invite.clone();
         let remove = {
             let org = org.clone();
-            move |user: String| {
-                if confirm().as_deref() != Some(user.as_str()) {
-                    confirm.set(Some(user));
+            move |account: String| {
+                if confirm().as_deref() != Some(account.as_str()) {
+                    confirm.set(Some(account));
                     return;
                 }
                 confirm.set(None);
                 let org = org.clone();
                 spawn(async move {
-                    match m::remove_here(&org, &user).await {
+                    match m::remove_here(&org, &account).await {
                         Ok(()) => {
                             app.say("Removed");
                             tick += 1;
@@ -251,12 +251,12 @@ pub fn Members(org: String) -> Element {
                         div { class: "sfgroup",
                             for p in people {
                                 {
-                                    let user = p.user.clone();
-                                    let asking = confirm().as_deref() == Some(p.user.as_str());
+                                    let account = p.account.clone();
+                                    let asking = confirm().as_deref() == Some(p.account.as_str());
                                     let mut remove = remove.clone();
                                     let sub = p.email.clone().filter(|e| p.name.as_deref().is_some_and(|n| !n.trim().is_empty()) && !e.is_empty());
                                     rsx! {
-                                        div { key: "{p.user}", class: "sfrow",
+                                        div { key: "{p.account}", class: "sfrow",
                                             span { class: "mid",
                                                 span { class: "t1", "{p.label()}" }
                                                 if let Some(e) = sub {
@@ -264,11 +264,11 @@ pub fn Members(org: String) -> Element {
                                                 }
                                             }
                                             span { class: "sfchip", "{p.role}" }
-                                            if manage && p.role != "owner" {
+                                            if manage && !m::has_role(&p.role, "owner") {
                                                 button {
                                                     class: if asking { "secondary danger" } else { "rb danger" },
                                                     aria_label: "Remove {p.label()}",
-                                                    onclick: move |_| remove(user.clone()),
+                                                    onclick: move |_| remove(account.clone()),
                                                     if asking { "Remove?" } else { Icon { name: I::Trash, size: 15 } }
                                                 }
                                             }

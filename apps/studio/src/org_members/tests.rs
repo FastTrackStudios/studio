@@ -50,6 +50,8 @@ fn an_owner_or_admin_manages_a_member_does_not() {
     assert!(manages("owner"));
     assert!(manages("member, admin"));
     assert!(!manages("member"));
+    assert!(has_role("admin,owner", "owner"));
+    assert!(!has_role("co-owner", "owner"));
 }
 
 // ── the issuer ──────────────────────────────────────────────────────────
@@ -174,7 +176,7 @@ async fn app_token(auth: &Auth, session: &str, client_id: &str) -> String {
 fn ids(people: &[Member]) -> Vec<(String, String)> {
     let mut v: Vec<_> = people
         .iter()
-        .map(|m| (m.user.clone(), m.role.clone()))
+        .map(|m| (m.account.clone(), m.role.clone()))
         .collect();
     v.sort();
     v
@@ -242,7 +244,7 @@ async fn an_owner_invites_people_join_with_any_account_and_the_owner_removes_one
     want.sort();
     assert_eq!(ids(&everyone), want);
     assert_eq!(everyone[0].label(), "Ada", "the owner is listed first");
-    let grace_row = everyone.iter().find(|m| m.user == grace_id).unwrap();
+    let grace_row = everyone.iter().find(|m| m.account == grace_id).unwrap();
     assert_eq!(grace_row.email.as_deref(), Some("grace@other.example"));
 
     // A member neither invites nor removes.
@@ -272,7 +274,7 @@ async fn an_owner_invites_people_join_with_any_account_and_the_owner_removes_one
         Err(Refused::NotIn("days-to-praise".into()))
     );
     let left = members(&Http, &url, &owner, &here).await.expect("members");
-    assert!(left.iter().all(|m| m.user != linus_id));
+    assert!(left.iter().all(|m| m.account != linus_id));
 
     // The last owner stays.
     assert_eq!(
@@ -302,6 +304,14 @@ async fn an_invitation_accepted_or_made_up_does_not_admit_anyone() {
         join(&Http, &url, &linus, &link).await,
         Err(Refused::LinkGone),
         "an accepted invitation let a second person in"
+    );
+    // Accepting again, once in, says so rather than that it is gone.
+    let again = invite_email(&Http, &url, &owner, &here, "grace@example.com")
+        .await
+        .unwrap();
+    assert_eq!(
+        join(&Http, &url, &grace, &link_of(&again.link).unwrap()).await,
+        Err(Refused::AlreadyIn)
     );
     // The issuer answers a made-up link as it answers a bad sign-in (the
     // app tells them apart by refreshing first).

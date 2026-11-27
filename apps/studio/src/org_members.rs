@@ -41,16 +41,19 @@ impl Org {
 
 /// Whether a role at the issuer invites and removes people.
 pub fn manages(role: &str) -> bool {
-    role.split(',')
-        .map(str::trim)
-        .any(|r| r == "owner" || r == "admin")
+    has_role(role, "owner") || has_role(role, "admin")
+}
+
+/// Whether an issuer role (one, or several joined by `,`) includes `which`.
+pub fn has_role(role: &str, which: &str) -> bool {
+    role.split(',').map(str::trim).any(|r| r == which)
 }
 
 /// Someone in an org, as the issuer lists them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Member {
-    /// Their account at the issuer.
-    pub user: String,
+    /// Their account at the issuer (its id).
+    pub account: String,
     pub name: Option<String>,
     pub email: Option<String>,
     /// `owner`, `admin` or `member`.
@@ -101,6 +104,10 @@ pub enum Refused {
     LinkGone,
     /// An org must keep an owner: the last one is not removed.
     LastOwner,
+    /// Already in the org this invitation is for.
+    AlreadyIn,
+    /// The account to remove is not in the org (any more).
+    NotAMember,
     /// The issuer could not be reached, or said something else.
     Issuer(String),
 }
@@ -114,6 +121,8 @@ impl std::fmt::Display for Refused {
             Refused::NotALink => write!(f, "that is not an invitation link"),
             Refused::LinkGone => write!(f, "that invitation no longer works"),
             Refused::LastOwner => write!(f, "an organization keeps at least one owner"),
+            Refused::AlreadyIn => write!(f, "you are already in that organization"),
+            Refused::NotAMember => write!(f, "they are not in it any more"),
             Refused::Issuer(why) => write!(f, "the account server: {why}"),
         }
     }
@@ -160,8 +169,10 @@ async fn call(
         403 => Err(Refused::NotAllowed),
         _ => {
             let message = why(status, &v);
-            if message.contains("owner") {
+            if message.contains("last organization owner") {
                 Err(Refused::LastOwner)
+            } else if message.contains("member already exists") {
+                Err(Refused::AlreadyIn)
             } else {
                 Err(Refused::Issuer(message))
             }
@@ -226,7 +237,7 @@ pub async fn members(
             a.iter()
                 .filter_map(|m| {
                     Some(Member {
-                        user: m["user"]["id"].as_str()?.to_string(),
+                        account: m["user"]["id"].as_str()?.to_string(),
                         name: m["user"]["name"].as_str().map(str::to_string),
                         email: m["user"]["email"].as_str().map(str::to_string),
                         role: m["member"]["role"].as_str()?.to_string(),
@@ -308,21 +319,23 @@ pub async fn invite_link(
     })
 }
 
-/// Take `user` out of `org`: their access to it ends (an owner or an
-/// admin removes; the last owner stays).
+/// Take the account `account` out of `org`: its access to it ends (an
+/// owner or an admin removes; the last owner stays). A 401 here may be
+/// the account's not being a member as well as the sign-in (the issuer
+/// answers both as bad credentials).
 pub async fn remove(
     fetch: &impl Fetch,
     issuer: &str,
     token: &str,
     org: &Org,
-    user: &str,
+    account: &str,
 ) -> Result<(), Refused> {
     call(
         fetch,
         issuer,
         token,
         "remove-member",
-        serde_json::json!({ "organization_id": org.id, "user_id": user }),
+        serde_json::json!({ "organization_id": org.id, "user_id": account }),
     )
     .await
     .map(|_| ())
@@ -485,13 +498,19 @@ mod here {
         .await
     }
 
-    /// Take `user` out of `slug`.
-    pub async fn remove_here(slug: &str, user: &str) -> Result<(), Refused> {
-        signed_in(async |issuer: &str, token: &str| {
+    /// Take the account `account` out of `slug`.
+    pub async fn remove_here(slug: &str, account: &str) -> Result<(), Refused> {
+        // A refusal a fresh sign-in did not cure is the account's not
+        // being in it.
+        match signed_in(async |issuer: &str, token: &str| {
             let org = super::org(&DriveFetch, issuer, token, slug).await?;
-            super::remove(&DriveFetch, issuer, token, &org, user).await
+            super::remove(&DriveFetch, issuer, token, &org, account).await
         })
         .await
+        {
+            Err(Refused::SignIn) if auth::token().is_some() => Err(Refused::NotAMember),
+            other => other,
+        }
     }
 
     /// An org joined, one of this person's now: listed (the switcher, All

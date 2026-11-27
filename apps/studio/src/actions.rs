@@ -171,14 +171,14 @@ mod imp {
         "STUDIO_ORG_MEMBERS",
         "An organization's members",
         "Orgs",
-        "Who is in org `org` (one of STUDIO_ORGS'; the org Studio is in when left out), from the account server, by account: each one's `user` (account id), `name`, `email` and `role` (owner, admin or member). Also the asker's own `role` there and whether they `manage` it (invite and remove)."
+        "Who is in organization `org` (one of STUDIO_ORGS'; the one Studio is in when left out), from the account server, by account: each one's `account` (its id there), `name`, `email` and `role` (owner, admin or member). Also the asker's own `role` there and whether they `manage` it (invite and remove)."
     );
     meta!(
         ORG_INVITE,
         "STUDIO_ORG_INVITE",
         "Invite someone",
         "Orgs",
-        "Invites someone into org `org` (the org Studio is in when left out) as a member: to `email` when given, else by a link anyone who has it may follow. Answers the `link` to send them; whoever opens it accepts with any account (or pastes it into STUDIO_ORG_JOIN). Only an owner or an admin invites."
+        "Invites someone into organization `org` (the one Studio is in when left out) as a member: to `email` when given, else by a link anyone who has it may follow. Answers the `link` to send them; whoever opens it accepts with any account (or pastes it into STUDIO_ORG_JOIN). Only an owner or an admin invites."
     );
     meta!(
         ORG_JOIN,
@@ -192,7 +192,7 @@ mod imp {
         "STUDIO_ORG_REMOVE",
         "Remove a member",
         "Orgs",
-        "Removes the member whose account is `user` (from STUDIO_ORG_MEMBERS) from org `org` (the org Studio is in when left out): their access to it ends. Only an owner or an admin removes; the last owner stays."
+        "Removes the member whose `account` is given (from STUDIO_ORG_MEMBERS) from organization `org` (the one Studio is in when left out): their access to it ends. Only an owner or an admin removes; the last owner stays."
     );
     meta!(
         SETLIST_FILES,
@@ -443,7 +443,7 @@ mod imp {
     struct OrgRemoveArgs {
         #[facet(default)]
         org: Option<String>,
-        user: String,
+        account: String,
     }
     #[derive(Facet)]
     struct FileArgs {
@@ -888,7 +888,7 @@ mod imp {
                     "role": org.role,
                     "manage": org.manages(),
                     "members": people.iter().map(|p| json!({
-                        "user": p.user, "name": p.name, "email": p.email, "role": p.role,
+                        "account": p.account, "name": p.name, "email": p.email, "role": p.role,
                     })).collect::<Vec<_>>(),
                 }))
             }
@@ -909,8 +909,8 @@ mod imp {
             "STUDIO_ORG_REMOVE" => {
                 let a: OrgRemoveArgs = args(raw)?;
                 let slug = here(a.org);
-                m::remove_here(&slug, &a.user).await.map_err(refused)?;
-                Ok(json!({ "org": slug, "removed": a.user }))
+                m::remove_here(&slug, &a.account).await.map_err(refused)?;
+                Ok(json!({ "org": slug, "removed": a.account }))
             }
             _ => Err(format!("{id} is not an org's people action")),
         }
