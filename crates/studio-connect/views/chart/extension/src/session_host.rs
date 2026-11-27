@@ -278,20 +278,25 @@ async fn follow(args: Json) -> Result<Json, String> {
         crate::set_session_title(&id.to_string(), title);
     }
     join_presence(&url, id, "chart").await?;
-    // A chart written in Keyflow's language beside the song (a `.kf` at
-    // `chart_path`), imported as Keyflow's typed items when the session
-    // holds none yet. The session's own structure is what the chart
-    // draws either way.
+    // The chart the session keeps written in Keyflow's language (its
+    // `keyflow/chart` text: a song charted before the chart was typed, or
+    // one the engine imported from a `.kf` on open), else a `.kf` beside
+    // the song (`chart_path`): typed in as Keyflow's items when the session
+    // holds none yet, so the pane draws the real chart, not its bare
+    // sections. The session's own structure is what the chart draws either
+    // way.
     // One that cannot be typed in (it does not read, or does not fit the
     // session's own structure) is said, not a failure: the session is
     // followed all the same, and shows the chart generated from its
     // markers (studio#693).
-    let (seeded, seed_error) = match args.get("chart_path").and_then(Json::as_str) {
-        Some(path) => match seed_chart(&id.to_string(), path).await {
-            Ok(seeded) => (seeded, None),
-            Err(e) => (false, Some(e)),
-        },
-        None => (false, None),
+    let (seeded, seed_error) = match seed_chart(
+        &id.to_string(),
+        args.get("chart_path").and_then(Json::as_str),
+    )
+    .await
+    {
+        Ok(seeded) => (seeded, None),
+        Err(e) => (false, Some(e)),
     };
     // A pane on this session opened before (a window restoring its
     // layout) read it with nobody to answer: it reads again now.
@@ -305,22 +310,51 @@ async fn follow(args: Json) -> Result<Json, String> {
     }))
 }
 
-/// Imports the chart at `chart_path` (Keyflow's language) into session
-/// `doc` as typed items, if the session holds none yet: `true` when
-/// imported.
-async fn seed_chart(doc: &str, chart_path: &str) -> Result<bool, String> {
-    let source = chart_source(&json!({ "chart_path": chart_path }))?;
+/// Types session `doc`'s chart in as Keyflow's items, if the session
+/// holds none yet ([`seed_source`]: its written chart, else the `.kf` at
+/// `chart_path`): `true` when typed.
+async fn seed_chart(doc: &str, chart_path: Option<&str>) -> Result<bool, String> {
     let handle = crate::handle()?;
     let pane = format!("session:{doc}");
-    let held = crate::held_of(&handle, &keyflow_session::ChartSource::of_pane_state(&pane))
+    let at = keyflow_session::ChartSource::of_pane_state(&pane);
+    let held = crate::held_of(&handle, &at)
         .await?
         .ok_or("a session has a timeline")?;
     if held.is_typed() {
         return Ok(false);
     }
+    let written = match at.read_call().map_err(|e| e.to_string())? {
+        Some(call) => {
+            keyflow_session::ChartSource::chart_of(&crate::ask_session(&handle, &call).await?)
+                .map_err(|e| e.to_string())?
+        }
+        None => String::new(),
+    };
+    let Some(source) = seed_source(&written, chart_path)? else {
+        return Ok(false);
+    };
     crate::typed_session::retype(&handle, &pane, &source, true).await?;
     crate::reload(Some(&pane));
     Ok(true)
+}
+
+/// What an untyped session's chart is typed from: the chart it keeps
+/// written (`written`, its `keyflow/chart` text), which is the song's
+/// chart once it is in the session; else the `.kf` at `chart_path`, for a
+/// song whose chart has not moved in; else nothing.
+///
+/// # Errors
+///
+/// The `.kf` would not read, or is not a chart.
+fn seed_source(written: &str, chart_path: Option<&str>) -> Result<Option<String>, String> {
+    if !written.trim().is_empty() {
+        return Ok(Some(written.to_owned()));
+    }
+    let Some(path) = chart_path else {
+        return Ok(None);
+    };
+    let source = chart_source(&json!({ "chart_path": path }))?;
+    Ok((!source.trim().is_empty()).then_some(source))
 }
 
 /// Makes bar `bar` of session `id` (held here) the song's bar 1: where
@@ -553,7 +587,7 @@ pub fn build(ext: &mut Builder) {
 
 #[cfg(test)]
 mod tests {
-    use super::{chart_source, open, redial_after, set_bar_one};
+    use super::{chart_source, open, redial_after, seed_source, set_bar_one};
 
     #[test]
     fn a_followed_host_is_dialled_again_soon_then_every_few_seconds() {
@@ -709,6 +743,61 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn an_untyped_session_is_typed_from_its_written_chart_before_any_kf() {
+        let dir = tempfile::tempdir().unwrap();
+        let kf = dir.path().join("Song.kf");
+        std::fs::write(&kf, "Verse: G D\n").unwrap();
+        let kf = kf.display().to_string();
+        assert_eq!(
+            seed_source("Verse: C G\n", Some(&kf)).unwrap().as_deref(),
+            Some("Verse: C G\n"),
+            "the session's own chart, not the .kf"
+        );
+        assert_eq!(
+            seed_source("", Some(&kf)).unwrap().as_deref(),
+            Some("Verse: G D\n"),
+            "a song whose chart has not moved in"
+        );
+        assert_eq!(seed_source(" \n", None).unwrap(), None);
+    }
+
+    /// A JT's Senior Recital song as its session keeps it: the chart as
+    /// `keyflow/chart` text, never typed. Followed, it is typed in, and the
+    /// pane draws its chords, not a bare section outline.
+    #[test]
+    fn a_session_keeping_only_chart_text_shows_the_real_chart_once_followed() {
+        use keyflow_session::typed::Held;
+        let dir = tempfile::tempdir().unwrap();
+        let text = "Verse 1: Bb Bb Eb Bb\nChorus: F Bb Eb Bb\n";
+        let chart =
+            keyflow_session::ChartSession::create(&dir.path().join("Fire.session"), text).unwrap();
+        let before = Held::of_doc(chart.session());
+        assert!(!before.is_typed());
+        assert!(
+            !before.shown_source("Fire").contains("Eb"),
+            "untyped, the pane has only the session's outline"
+        );
+
+        let written = keyflow_session::written_chart(chart.session());
+        let source = seed_source(&written, None).unwrap().unwrap();
+        let at = keyflow_session::ChartSource::Session {
+            doc: chart.id().to_string(),
+        };
+        let provider = keyflow_session::Provider::default();
+        provider.open(&chart);
+        for call in crate::typed_session::retype_calls(&at, &before, &source).unwrap() {
+            provider
+                .answer(call.method, &call.args, Some(keyflow_session::EXTENSION))
+                .unwrap();
+        }
+
+        let after = Held::of_doc(chart.session());
+        assert!(after.is_typed());
+        let shown = after.shown_source("Fire");
+        assert!(shown.contains("Eb") && shown.contains('F'), "{shown}");
     }
 
     #[test]

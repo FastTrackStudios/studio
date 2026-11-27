@@ -342,6 +342,11 @@ mic-models-install:
     elif [ -e "$dest" ]; then echo "$dest exists and is not a mic-models checkout; leaving it alone" >&2; exit 1
     else mkdir -p "$(dirname "$dest")"; git clone git@github.com:FastTrackStudios/mic-models.git "$dest"; fi
 
+# Bring a setlist's songs' .kf charts into their sessions (dry run; --apply writes): import-charts --setlist S --songs DIR [--map TSV] [--search DIR]... [--apply]
+[positional-arguments]
+import-charts *ARGS:
+    cargo run -q -p chart-import -- "$@"
+
 # Regenerate the golden session (crates/studio-engine/adapters/dynamic-template/fixtures/golden); a test fails while it is stale
 daw-template:
     cargo run -p dynamic-template --bin golden-session -- crates/studio-engine/adapters/dynamic-template/fixtures/golden

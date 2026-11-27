@@ -1221,7 +1221,7 @@ params = '{"type":"object","properties":{"id":{"type":"string"},"bind":{"type":"
 [[actions]]
 id = "KEYFLOW_SESSION_FOLLOW"
 name = "Session: follow"
-description = "Follows session `id` hosted elsewhere (the DAW engine's, another app's) at `url` (`ws://host:port/vox`): its transport and its host's clock, so the chart on `session:<id>` draws where it plays. Holds no copy and provides nothing: the chart is read and written through the host's fts.session. The chart draws the session itself: its regions as sections with their bars, its tempo map, its markers, Keyflow's typed items in them, so a song nobody has charted shows its road map. `title` heads it. With `chart_path` (a .kf), that chart is imported as typed items when the session holds none yet."
+description = "Follows session `id` hosted elsewhere (the DAW engine's, another app's) at `url` (`ws://host:port/vox`): its transport and its host's clock, so the chart on `session:<id>` draws where it plays. Holds no copy and provides nothing: the chart is read and written through the host's fts.session. The chart draws the session itself: its regions as sections with their bars, its tempo map, its markers, Keyflow's typed items in them, so a song nobody has charted shows its road map. `title` heads it. A session with no typed items yet gets them from the chart it keeps written (its keyflow/chart text), else from `chart_path` (a .kf beside the song), so the pane draws the real chart."
 group = "Session"
 effect = "mutating"
 params = '{"type":"object","properties":{"url":{"type":"string"},"id":{"type":"string"},"title":{"type":"string"},"chart_path":{"type":"string"}},"required":["url","id"]}'

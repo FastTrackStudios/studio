@@ -29,6 +29,7 @@
 //!   that reads or edits it. The chart view's one change to be in a
 //!   session: read through [`ChartSource`] instead of `read_document`.
 
+pub mod import;
 pub mod shown;
 pub mod typed;
 
@@ -59,6 +60,8 @@ pub enum Error {
     Doc(String),
     #[error("the session service: {0}")]
     Service(String),
+    #[error("the chart: {0}")]
+    Chart(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

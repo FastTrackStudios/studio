@@ -25,6 +25,9 @@ uuid = { workspace = true }
 architect = { workspace = true, features = ["vox", "local"] }
 tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread", "time"] }
 tempfile = { workspace = true }
+# A song's one file, opened as the engine opens it, for the import tests.
+song-file = { workspace = true }
+loro = { workspace = true }
 
 [lints]
 workspace = true
