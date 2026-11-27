@@ -262,6 +262,8 @@ pub use engine_edit::trigger_from_mics;
 #[cfg(all(feature = "web", not(feature = "native")))]
 pub mod web_actions;
 #[cfg(feature = "web")]
+pub use engine_runtime::rig_files;
+#[cfg(feature = "web")]
 pub use engine_runtime::web_audio;
 #[cfg(feature = "web")]
 pub mod web_engine;

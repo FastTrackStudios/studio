@@ -20,6 +20,20 @@
   >
   <TRACK
     NAME "Bass"
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <CLAP "FTS Bass Rig" "FTS Bass Rig" ""
+        AAAAAAAAAAAAAAAAAAAAAHsiYW1wIjoiL1VzZXJzL3NvbWVvbmUvTGlicmFyeS9BcHBsaWNhdGlvbiBTdXBwb3J0L2Z0cy9iYXNzLXJpZy9tb2RlbHMvVGVzdCBMU1RN
+        Lm5hbSIsImNhYiI6Ii9Vc2Vycy9zb21lb25lL0xpYnJhcnkvQXBwbGljYXRpb24gU3VwcG9ydC9mdHMvYmFzcy1yaWcvbW9kZWxzL1Rlc3QgQ2FiLndhdiIsImlucHV0
+        X2RiIjowLjAsIm91dHB1dF9kYiI6MC4wfQ==
+      >
+      FLOATPOS 0 0 0 0
+      FXID {00000000-0000-0000-0000-000000000201}
+      WAK 0 0
+    >
     <ITEM
       POSITION 0
       LENGTH 16

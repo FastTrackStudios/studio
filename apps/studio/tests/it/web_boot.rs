@@ -16,6 +16,14 @@
 //! off what the panel says it shows (`data-hosted-*`) and the canvases its
 //! widgets draw in, with the song playing on under them.
 //!
+//! The bass track plays through signal's bass rig (`FTS Bass Rig`), saved
+//! as a desktop saves it: its capture and cab named by a desktop's paths.
+//! The page streams them from a stand-in for the rig store
+//! (`tests/it/web_boot/rig-store`: a Drive location laid out as the desktop's
+//! `rig-library/`, here a folder at a link, `&rigs=`), and the test checks
+//! they came from there, the rig was built with them and put out sound, and
+//! a second load read them from the page's cache instead.
+//!
 //! It needs the web build (`STUDIO_WEB_DIST`, its `public` folder) and a
 //! W3C WebDriver (`WEBDRIVER`: chromedriver or geckodriver, started here;
 //! `CHROME_BIN` names the browser chromedriver drives). `just test-web-boot`
@@ -32,6 +40,12 @@ use serde_json::{Value, json};
 /// The page's crash reports (`src/trace.rs` posts a `crash` span to its
 /// node, here this test's server): what a failure quotes.
 static CRASHES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// The rig store's files the page asked the server for (its listing aside).
+static RIG_GETS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Where the rig store is served, under the sessions.
+const RIG_STORE: &str = "rig-store";
 
 /// The fixture's rate and length.
 const RATE: u32 = 48_000;
@@ -51,11 +65,15 @@ fn the_web_build_opens_and_plays_a_fixture_session() {
     );
     let sessions = tempfile::tempdir().expect("a folder for the session");
     stage_session(&sessions.path().join("multitrack-click"));
+    stage_rig_store(&sessions.path().join(RIG_STORE));
     let site = Server::start(dist, sessions.path().to_path_buf());
 
     let driver = Driver::start();
     let session = driver.new_session();
-    let page = format!("{}/?session=/sessions/multitrack-click", site.origin);
+    let page = format!(
+        "{}/?session=/sessions/multitrack-click&rigs=/sessions/{RIG_STORE}",
+        site.origin
+    );
     session.navigate(&page);
 
     // The session open in the page's engine.
@@ -87,6 +105,23 @@ fn the_web_build_opens_and_plays_a_fixture_session() {
         "true",
         "the transport stopped"
     );
+
+    // The bass rig: its capture and cab streamed in from the rig store, the
+    // rig built with them, and its output heard.
+    session.wait_for(Duration::from_secs(30), "the bass rig to sound", |s| {
+        let heard: f32 = s.state("data-rig-heard").parse().unwrap_or(0.0);
+        (s.state("data-rig-wanted") == "0" && s.state("data-rig-waiting") == "0" && heard > 1e-4)
+            .then_some(())
+    });
+    let fetched: usize = session.state("data-rig-fetched").parse().unwrap_or(0);
+    assert!(
+        fetched >= 3,
+        "the capture, the cab and the home's file come from the rig store; fetched {fetched}"
+    );
+    let home: usize = session.state("data-rig-home").parse().unwrap_or(0);
+    assert!(home >= 1, "the rig home's file was not installed");
+    let asked = RIG_GETS.load(std::sync::atomic::Ordering::Relaxed);
+    assert!(asked >= 3, "the page asked the rig store for {asked} files");
 
     // Into the session: its arrangement, drawn over the page's engine,
     // with the song's three tracks and their items.
@@ -125,6 +160,95 @@ fn the_web_build_opens_and_plays_a_fixture_session() {
         "the song to play on under the mixer",
         |s| (s.state("data-at").parse::<f64>().unwrap_or(0.0) > before + 0.5).then_some(()),
     );
+
+    // Loaded again and played (a rig asks for its files as it is prepared,
+    // at its first block): the rig's files from the page's cache, none
+    // fetched.
+    session.navigate(&page);
+    session.wait_for(Duration::from_secs(90), "the session to open again", |s| {
+        (s.state("data-state") == "ready").then_some(())
+    });
+    session.click("button.npb[aria-label='Play']");
+    session.wait_for(
+        Duration::from_secs(90),
+        "the rig's files from the cache",
+        |s| {
+            let cached: usize = s.state("data-rig-cached").parse().unwrap_or(0);
+            (s.state("data-state") == "ready"
+                && s.state("data-rig-wanted") == "0"
+                && s.state("data-rig-waiting") == "0"
+                && cached >= 3)
+                .then_some(())
+        },
+    );
+    assert_eq!(
+        session.state("data-rig-fetched"),
+        "0",
+        "a second load fetched rig files the page had cached"
+    );
+    assert_eq!(
+        RIG_GETS.load(std::sync::atomic::Ordering::Relaxed),
+        asked,
+        "a second load asked the rig store again"
+    );
+}
+
+/// The stand-in rig store staged into `dir`: the fixture's files, a cab IR
+/// made here, and the `files.json` a folder at a link is listed by.
+fn stage_rig_store(dir: &Path) {
+    let here = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/web_boot/rig-store");
+    copy_dir(&here, dir);
+    std::fs::write(dir.join("bass/models/Test Cab.wav"), cab_ir()).expect("the cab IR is written");
+    let mut files = Vec::new();
+    list(dir, dir, &mut files);
+    std::fs::write(
+        dir.join("files.json"),
+        serde_json::to_vec(&files).expect("the listing"),
+    )
+    .expect("the listing is written");
+}
+
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("the folder");
+    for entry in std::fs::read_dir(from)
+        .expect("the fixture lists")
+        .flatten()
+    {
+        let path = entry.path();
+        if path.is_dir() {
+            copy_dir(&path, &to.join(entry.file_name()));
+        } else {
+            std::fs::copy(&path, to.join(entry.file_name())).expect("the fixture's file");
+        }
+    }
+}
+
+/// A cab IR: 16-bit mono WAV at the fixture's rate, a short decaying pulse.
+fn cab_ir() -> Vec<u8> {
+    let samples: Vec<i16> = (0..256_i32)
+        .map(|i| {
+            let level = 0.8 * (-f64::from(i) / 24.0).exp();
+            (level * f64::from(i16::MAX)).round() as i16
+        })
+        .collect();
+    let data = u32::try_from(samples.len() * 2).expect("a short IR");
+    let mut wav = Vec::with_capacity(44 + samples.len() * 2);
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(36 + data).to_le_bytes());
+    wav.extend_from_slice(b"WAVEfmt ");
+    wav.extend_from_slice(&16_u32.to_le_bytes());
+    wav.extend_from_slice(&1_u16.to_le_bytes()); // PCM
+    wav.extend_from_slice(&1_u16.to_le_bytes()); // mono
+    wav.extend_from_slice(&RATE.to_le_bytes());
+    wav.extend_from_slice(&(RATE * 2).to_le_bytes());
+    wav.extend_from_slice(&2_u16.to_le_bytes());
+    wav.extend_from_slice(&16_u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data.to_le_bytes());
+    for s in samples {
+        wav.extend_from_slice(&s.to_le_bytes());
+    }
+    wav
 }
 
 /// What a hosted panel (`studio_panels::web_host::HostedView`) says it
@@ -669,6 +793,12 @@ fn serve(stream: TcpStream, dist: &Path, sessions: &Path) -> std::io::Result<()>
         return out.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
     }
     let path = percent_decode(target.split('?').next().unwrap_or("/"));
+    if path
+        .strip_prefix(&format!("/sessions/{RIG_STORE}/"))
+        .is_some_and(|rest| rest != "files.json")
+    {
+        RIG_GETS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
     let file = match path.strip_prefix("/sessions/") {
         Some(rest) => sessions.join(rest),
         None => {
@@ -855,12 +985,12 @@ impl Session<'_> {
     fn navigate(&self, url: &str) {
         // Every uncaught error the page has, with its stack, kept for a
         // failure to quote (chromedriver's CDP door; best effort).
-        let catch = "window.__bootErrors = []; \
+        let catch = "if (!window.__bootErrors) { window.__bootErrors = []; \
             const keep = x => window.__bootErrors.push(String((x && x.stack) || x)); \
             addEventListener('error', e => keep(e.error || e.message)); \
             addEventListener('unhandledrejection', e => keep(e.reason)); \
             const error = console.error; \
-            console.error = (...a) => { keep(a.map(String).join(' ')); error(...a); };";
+            console.error = (...a) => { keep(a.map(String).join(' ')); error(...a); }; }";
         let _ = http(
             &self.driver.base,
             "POST",
@@ -1094,11 +1224,19 @@ impl Session<'_> {
             }
             if began.elapsed() > within {
                 panic!(
-                    "waited {within:?} for {what}; the page's engine says state={} why={} at={} loud={}; the page: {}",
+                    "waited {within:?} for {what}; the page's engine says state={} why={} at={} loud={}; its rigs: store={} home={} fetched={} cached={} missing={} wanted={} waiting={} heard={}; the page: {}",
                     self.state("data-state"),
                     self.state("data-why"),
                     self.state("data-at"),
                     self.state("data-loud-frames"),
+                    self.state("data-rig-store"),
+                    self.state("data-rig-home"),
+                    self.state("data-rig-fetched"),
+                    self.state("data-rig-cached"),
+                    self.state("data-rig-missing"),
+                    self.state("data-rig-wanted"),
+                    self.state("data-rig-waiting"),
+                    self.state("data-rig-heard"),
                     self.page(),
                 );
             }

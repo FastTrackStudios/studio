@@ -21,10 +21,18 @@
 //! opens joins the hosted set, the song on screen is the one they show,
 //! and a song picked in them is picked here.
 //!
+//! A song's signal rigs (the bass rig: its NAM captures, cab IRs and home)
+//! stream in from the **rig store** ([`rig_store`]), the store the
+//! desktop's rigs come from: the [`RIG_LIBRARY`] folder at the root of the
+//! session's Drive location, read through the node with this person's
+//! sign-in, or a folder at a link (`?rigs=<url>`). Nothing is bundled
+//! into the web build; the page caches what it fetched
+//! (`studio_engine::rig_files`).
+//!
 //! What the engine is doing is written to a hidden element (`#studio-engine`,
-//! [`STATE_ID`]): its state, the song's playhead and what the worklet has
-//! put out — what the browser boot test (`apps/studio/tests/it/web_boot.rs`)
-//! reads.
+//! [`STATE_ID`]): its state, the song's playhead, what the worklet has put
+//! out, and its rigs' files — what the browser boot test
+//! (`apps/studio/tests/it/web_boot.rs`) reads.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -43,6 +51,10 @@ use crate::state::{Place, use_app};
 /// The location of a session folder at a link (`?session=`): its `folder`
 /// is the folder's URL.
 pub const LINK: &str = "studio-link";
+
+/// The rig store's folder at the root of a session's Drive location: laid
+/// out as the desktop's `rig-library/` (`bass/models/…`, `bass/*.styx`).
+pub const RIG_LIBRARY: &str = "Rig Library";
 
 /// The hidden element the engine's state is written to.
 pub const STATE_ID: &str = "studio-engine";
@@ -279,6 +291,8 @@ pub fn EnginePlayer() -> Element {
     let opened = use_hook(|| Rc::new(RefCell::new(HashMap::<String, (String, f64)>::new())));
     // Whether the page's engine has been made (`web_engine::open`, once).
     let started = use_hook(|| Rc::new(std::cell::Cell::new(false)));
+    // The rig stores handed to the engine (one a Drive location).
+    let rigs_from = use_hook(|| Rc::new(RefCell::new(HashSet::<String>::new())));
 
     // A session at a link (`?session=<url>`), opened as the page loads.
     use_hook(move || {
@@ -333,7 +347,7 @@ pub fn EnginePlayer() -> Element {
     let place = (app.np)().and_then(|n| n.place().cloned());
     let owned = play.read().owns(place.as_ref());
     {
-        let (opened, started) = (opened.clone(), started.clone());
+        let (opened, started, rigs_from) = (opened.clone(), started.clone(), rigs_from.clone());
         use_effect(use_reactive!(|place, owned| {
             let Some(place) = place.filter(|_| owned) else {
                 return;
@@ -353,7 +367,7 @@ pub fn EnginePlayer() -> Element {
                 up.set(Up::Ready { project, len });
                 return;
             }
-            let (opened, started) = (opened.clone(), started.clone());
+            let (opened, started, rigs_from) = (opened.clone(), started.clone(), rigs_from.clone());
             spawn(async move {
                 let title = place
                     .folder
@@ -370,6 +384,12 @@ pub fn EnginePlayer() -> Element {
                     title,
                     source: Arc::new(SessionFolder::new(place.clone())),
                 };
+                // Its rigs' store, opened beside it the first time.
+                if let Some(store) = rig_store(&place)
+                    && rigs_from.borrow_mut().insert(key(&store))
+                {
+                    web_engine::use_rig_store(Arc::new(SessionFolder::new(store)));
+                }
                 // Each song the engine opens is one the session's views can
                 // show (`web_host`'s hosted set).
                 let opening = if started.replace(true) {
@@ -467,6 +487,8 @@ pub fn EnginePlayer() -> Element {
             crate::state::sleep_ms(100).await;
             let state = up.peek().clone();
             write_state(&state);
+            // A rig prepared as it first plays asks for its files then.
+            studio_engine::rig_files::poke();
             let Up::Ready { len, .. } = state else {
                 continue;
             };
@@ -527,6 +549,7 @@ fn write_state(up: &Up) {
     };
     let (at, playing) = web_engine::position();
     let probe = studio_engine::web_audio::probe();
+    let rigs = studio_engine::rig_files::status();
     for (name, value) in [
         ("data-state", state.to_owned()),
         ("data-why", why),
@@ -535,6 +558,17 @@ fn write_state(up: &Up) {
         ("data-loud-frames", probe.loud_frames.to_string()),
         ("data-dry-frames", probe.dry_frames.to_string()),
         ("data-peak-ever", format!("{:.4}", probe.peak_ever)),
+        // The rigs' files: the store open, what came from it and from the
+        // page's cache, what it lacked, what is still wanted, the rigs
+        // waiting, and how loud the rigs on streamed files have played.
+        ("data-rig-store", rigs.store.to_string()),
+        ("data-rig-home", rigs.rigs.home_files.to_string()),
+        ("data-rig-fetched", rigs.counts.fetched.to_string()),
+        ("data-rig-cached", rigs.counts.cached.to_string()),
+        ("data-rig-missing", rigs.counts.missing.to_string()),
+        ("data-rig-wanted", rigs.rigs.wanted.to_string()),
+        ("data-rig-waiting", rigs.rigs.waiting.to_string()),
+        ("data-rig-heard", format!("{:.4}", rigs.rigs.heard)),
     ] {
         let _ = el.set_attribute(name, &value);
     }
@@ -542,12 +576,34 @@ fn write_state(up: &Up) {
 
 /// The session folder the page's address names (`?session=<url>`).
 fn session_in_address() -> Option<Place> {
+    linked_in_address("session")
+}
+
+/// A folder at a link the page's address names (`?<name>=<url>`).
+fn linked_in_address(name: &str) -> Option<Place> {
     let params = web_sys::UrlSearchParams::new_with_str(ADDRESS.get()?).ok()?;
-    let folder = params.get("session").filter(|s| !s.is_empty())?;
+    let folder = params.get(name).filter(|s| !s.is_empty())?;
     Some(Place {
         space: String::new(),
         location: LINK.to_owned(),
         folder,
+        chart: None::<Hit>,
+        arrangement: None,
+    })
+}
+
+/// The rig store the session at `session` plays its rigs from: a folder
+/// at a link (`?rigs=<url>`), else [`RIG_LIBRARY`] at the root of the
+/// session's Drive location (read with this person's sign-in). A session
+/// at a link with no `?rigs=` has none: its rigs play as straight wires.
+fn rig_store(session: &Place) -> Option<Place> {
+    if let Some(linked) = linked_in_address("rigs") {
+        return Some(linked);
+    }
+    (session.location != LINK).then(|| Place {
+        space: session.space.clone(),
+        location: session.location.clone(),
+        folder: RIG_LIBRARY.to_owned(),
         chart: None::<Hit>,
         arrangement: None,
     })

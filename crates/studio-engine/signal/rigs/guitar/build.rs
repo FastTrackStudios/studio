@@ -64,8 +64,24 @@ fn embedded(files: &[PathBuf], out_dir: &Path, table: &str) -> Vec<(String, Stri
 
 /// One shipped library's tables, named `<prefix>_MODELS`, `_FROZEN`,
 /// `_PROFILES` (empty when the directory is not there): the profiles from
-/// `root`, the captures and frozen Cores from `captures`.
-fn tables(src: &mut String, root: &Path, captures: &Path, out_dir: &Path, prefix: &str) {
+/// `root`, the captures and frozen Cores from `captures` — none of them
+/// when `with_captures` is false (a browser build: a page streams a rig's
+/// captures from the rig store, never carries them).
+fn tables(
+    src: &mut String,
+    root: &Path,
+    captures: &Path,
+    out_dir: &Path,
+    prefix: &str,
+    with_captures: bool,
+) {
+    let listed_captures = |dir: &Path, exts: &[&str]| {
+        if with_captures {
+            listed(dir, exts)
+        } else {
+            Vec::new()
+        }
+    };
     // Only the ones that exist: cargo counts a missing rerun-if-changed path
     // as changed, so the bass's absent `frozen/` re-ran this script — and
     // recompiled guitar and everything above it — on every cargo call. The
@@ -93,14 +109,14 @@ fn tables(src: &mut String, root: &Path, captures: &Path, out_dir: &Path, prefix
     };
     let models = format!("{prefix}_MODELS");
     let models_list = embedded(
-        &listed(&captures.join("models"), &["nam", "wav"]),
+        &listed_captures(&captures.join("models"), &["nam", "wav"]),
         out_dir,
         &models,
     );
     bytes(src, &models, &models_list);
     let frozen = format!("{prefix}_FROZEN");
     let frozen_list = embedded(
-        &listed(&captures.join("frozen"), &["nam"]),
+        &listed_captures(&captures.join("frozen"), &["nam"]),
         out_dir,
         &frozen,
     );
@@ -142,8 +158,10 @@ fn main() {
     // and a build that says so (`SIGNAL_RIG_NO_CAPTURES`: signal-web's
     // pre-render server, which only renders pages).
     println!("cargo:rerun-if-env-changed=SIGNAL_RIG_NO_CAPTURES");
-    let ships_a_rig = std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("wasm32")
-        && std::env::var_os("SIGNAL_RIG_NO_CAPTURES").is_none();
+    // A browser build carries no captures at all: the page streams the
+    // ones a rig plays from the rig store (studio#759).
+    let in_a_browser = std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("wasm32");
+    let ships_a_rig = !in_a_browser && std::env::var_os("SIGNAL_RIG_NO_CAPTURES").is_none();
     if ships_a_rig && std::env::var("PROFILE").as_deref() == Ok("release") {
         for dir in [guitar.join("models"), bass.join("models")] {
             assert!(
@@ -164,6 +182,7 @@ fn main() {
         &guitar,
         &out_dir,
         "DEFAULT",
+        !in_a_browser,
     );
     tables(
         &mut src,
@@ -171,6 +190,7 @@ fn main() {
         &bass,
         &out_dir,
         "BASS",
+        !in_a_browser,
     );
     std::fs::write(out_dir.join("default_files.rs"), src).unwrap();
 }

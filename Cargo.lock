@@ -22761,6 +22761,7 @@ dependencies = [
  "sampler",
  "serde",
  "serde_json",
+ "signal-rig-host",
  "tracing",
 ]
 

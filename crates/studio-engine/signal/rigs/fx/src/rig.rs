@@ -66,6 +66,82 @@ pub struct Rig {
     sample_rate: f64,
     block_size: u32,
     prepared: bool,
+    /// In a page: the chain made again once its files have arrived from the
+    /// rig store ([`crate::files`]), for the next block to take.
+    arriving: Option<std::sync::Arc<crate::files::Slot<Built>>>,
+    /// Whether it plays files a page streamed in (it says how loud,
+    /// [`crate::files::status`]).
+    streamed: bool,
+}
+
+/// What a rig plays, built: a patch's chain, or a profile's scenes.
+#[derive(Default)]
+pub struct Built {
+    patch: Option<BassRig>,
+    profile: Option<ProfileRig>,
+    /// The profile and scene it was built on (a profile's name as the
+    /// library spells it).
+    named: Option<(String, Option<String>)>,
+}
+
+/// The scene `state` names among its profile's, else the profile's default.
+fn scene_in(state: &RigState) -> usize {
+    let Some(found) = profile::profile(state.profile.as_deref().unwrap_or("")) else {
+        return 0;
+    };
+    state
+        .scene
+        .as_deref()
+        .and_then(|n| {
+            found
+                .patches
+                .iter()
+                .position(|s| s.name.eq_ignore_ascii_case(n))
+        })
+        .unwrap_or(found.default_patch)
+}
+
+/// What `state` says, built at `sample_rate` for blocks of `block_size`.
+/// Heavy (captures loaded, IRs read): never on the audio thread.
+fn built(state: &RigState, sample_rate: f64, block_size: u32) -> Result<Built, PluginError> {
+    if state.is_patch() {
+        let mut rig = BassRig::new(sample_rate);
+        let bytes = serde_json::to_vec(&serde_json::json!({
+            "amp": state.amp,
+            "drive": state.drive,
+            "cab": state.cab,
+        }))
+        .map_err(|e| PluginError::LoadFailed(e.to_string()))?;
+        rig.load_state(&bytes)?;
+        rig.prepare(sample_rate, block_size)?;
+        return Ok(Built {
+            patch: Some(rig),
+            ..Built::default()
+        });
+    }
+    let name = state.profile.clone().unwrap_or_default();
+    let profile = ProfileRig::build(&name, scene_in(state), sample_rate, block_size);
+    let named = profile
+        .as_ref()
+        .map(|rig| (rig.profile.clone(), rig.scenes().get(rig.scene()).cloned()));
+    Ok(Built {
+        profile,
+        named,
+        ..Built::default()
+    })
+}
+
+/// The files `state` plays, by their keys.
+fn files_of(state: &RigState) -> Vec<String> {
+    if state.is_patch() {
+        return crate::bass::files_of(&crate::bass::BassState {
+            amp: state.amp.clone(),
+            drive: state.drive.clone(),
+            cab: state.cab.clone(),
+            ..crate::bass::BassState::default()
+        });
+    }
+    profile::files_of(state.profile.as_deref().unwrap_or(""))
 }
 
 fn gain(db: f64) -> f32 {
@@ -90,6 +166,8 @@ impl Rig {
             sample_rate,
             block_size: 0,
             prepared: false,
+            arriving: None,
+            streamed: false,
         }
     }
 
@@ -127,33 +205,74 @@ impl Rig {
     }
 
     /// Build what the state says, at the size last prepared for — on the
-    /// caller's thread, never the audio's.
+    /// caller's thread, never the audio's. In a page, with what has
+    /// arrived from the rig store, and the rest waited for.
     fn build(&mut self) -> Result<(), PluginError> {
-        if self.state.is_patch() {
-            let mut rig = BassRig::new(self.sample_rate);
-            let bytes = serde_json::to_vec(&serde_json::json!({
-                "amp": self.state.amp,
-                "drive": self.state.drive,
-                "cab": self.state.cab,
-            }))
-            .map_err(|e| PluginError::LoadFailed(e.to_string()))?;
-            rig.load_state(&bytes)?;
-            rig.prepare(self.sample_rate, self.block_size)?;
-            self.patch = Some(rig);
-            self.profile = None;
-        } else {
-            let name = self.state.profile.clone().unwrap_or_default();
-            // What the state says, not the rig being replaced.
-            self.profile = None;
-            let scene = self.scene_index();
-            self.profile = ProfileRig::build(&name, scene, self.sample_rate, self.block_size);
-            if let Some(rig) = &self.profile {
-                self.state.profile = Some(rig.profile.clone());
-                self.state.scene = rig.scenes().get(rig.scene()).cloned();
-            }
-            self.patch = None;
-        }
+        let built = built(&self.state, self.sample_rate, self.block_size)?;
+        self.adopt(built);
+        self.wait_for_files();
         Ok(())
+    }
+
+    /// Play `built`, handing back what played before.
+    fn adopt(&mut self, mut built: Built) -> Built {
+        std::mem::swap(&mut self.patch, &mut built.patch);
+        std::mem::swap(&mut self.profile, &mut built.profile);
+        if let Some((profile, scene)) = built.named.take() {
+            self.state.profile = Some(profile);
+            self.state.scene = scene;
+        }
+        built
+    }
+
+    /// In a page: wait for the files the state plays that have not arrived,
+    /// to be built again with them ([`crate::files::wait`]). On a desktop
+    /// every file is on disk and nothing waits.
+    fn wait_for_files(&mut self) {
+        self.arriving = None;
+        if cfg!(not(target_arch = "wasm32")) {
+            return;
+        }
+        let files = files_of(&self.state);
+        let missing: Vec<String> = files
+            .iter()
+            .filter(|k| crate::files::bytes(k).is_none())
+            .cloned()
+            .collect();
+        self.streamed = !files.is_empty() && missing.is_empty();
+        if missing.is_empty() {
+            return;
+        }
+        let (state, rate, block) = (self.state.clone(), self.sample_rate, self.block_size);
+        tracing::info!(
+            rig.files = missing.len(),
+            "bass rig: waiting for its files from the rig store"
+        );
+        self.arriving = Some(crate::files::wait(missing, move || {
+            built(&state, rate, block).unwrap_or_else(|e| {
+                tracing::warn!(why = %e, "bass rig: built again, it would not load");
+                Built::default()
+            })
+        }));
+    }
+
+    /// At a block's start: the chain its files arrived for, taken (the one
+    /// it replaces handed back to be dropped off this thread).
+    fn take_arrived(&mut self) {
+        // A count taken, not a copy: the slot list holds it too, so
+        // letting go of it here frees nothing.
+        let Some(slot) = self.arriving.clone() else {
+            return;
+        };
+        let Some(built) = slot.take() else { return };
+        // A built profile names itself as the state does already: nothing
+        // to keep from `named`, and no string made here.
+        let mut built = built;
+        built.named = None;
+        let old = self.adopt(built);
+        slot.retire(old);
+        self.arriving = None;
+        self.streamed = true;
     }
 }
 
@@ -270,6 +389,7 @@ impl PluginInstance for Rig {
         out_r: &mut [f32],
         events: &PluginEvents<'_>,
     ) -> Result<(), PluginError> {
+        self.take_arrived();
         for &(id, value) in events.params {
             match id {
                 INPUT => self.state.input_db = value.clamp(-TRIM_DB, TRIM_DB),
@@ -283,16 +403,15 @@ impl PluginInstance for Rig {
                 _ => {}
             }
         }
-        if let Some(rig) = &mut self.profile {
-            return rig.process(
+        let played = if let Some(rig) = &mut self.profile {
+            rig.process(
                 (in_l, in_r),
                 (out_l, out_r),
                 (gain(self.state.input_db), gain(self.state.output_db)),
-            );
-        }
-        if let Some(rig) = &mut self.patch {
+            )
+        } else if let Some(rig) = &mut self.patch {
             let trims = [(INPUT, self.state.input_db), (OUTPUT, self.state.output_db)];
-            return rig.process_block(
+            rig.process_block(
                 in_l,
                 in_r,
                 out_l,
@@ -301,11 +420,20 @@ impl PluginInstance for Rig {
                     params: &trims,
                     ..PluginEvents::EMPTY
                 },
-            );
+            )
+        } else {
+            out_l.copy_from_slice(in_l);
+            out_r.copy_from_slice(in_r);
+            Ok(())
+        };
+        if self.streamed {
+            let peak = out_l
+                .iter()
+                .chain(out_r.iter())
+                .fold(0.0_f32, |m, s| m.max(s.abs()));
+            crate::files::note_heard(peak);
         }
-        out_l.copy_from_slice(in_l);
-        out_r.copy_from_slice(in_r);
-        Ok(())
+        played
     }
 
     fn load_state(&mut self, state: &[u8]) -> Result<(), PluginError> {
