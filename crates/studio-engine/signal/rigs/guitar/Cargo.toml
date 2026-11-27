@@ -63,7 +63,7 @@ signal-rig-host = { workspace = true, features = ["book"] }
 # feature `mcp`.
 architect-mcp = { workspace = true, features = ["http"], optional = true }
 audio = { workspace = true, features = ["io"] }
-# The workspace tokio is `full`; on wasm only sync/macros/io-util/rt/time
+# Natively all of tokio (`full`); on wasm only sync/macros/io-util/rt/time
 # exist (mio has no wasm backend), so the browser remote gets its own line.
 tokio = { workspace = true, features = ["full", "rt"] }
 tracing = { workspace = true }

@@ -214,6 +214,10 @@ fn main() {
     // window, engine, audio or log starts. The release's smoke test reads
     // it headless (scripts/desktop/linux-smoke.sh expects `studio X.Y.Z`),
     // and it is how a user tells which Studio they have.
+    // In a browser, a panic before the app renders (its crash span's hook)
+    // is said on the console, not lost to `unreachable`.
+    #[cfg(feature = "web")]
+    console_error_panic_hook::set_once();
     if std::env::args().nth(1).as_deref() == Some("--version") {
         use std::io::Write as _;
         let _ = writeln!(

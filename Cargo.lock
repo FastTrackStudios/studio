@@ -16798,7 +16798,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 [[package]]
 name = "nice-log"
 version = "0.3.1"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#874bd1fd7e4c3df8eede5ba50ba77e368fafdc17"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#c399a13021850fcd8523818cf8aa6d8de64dbbc4"
 dependencies = [
  "tracing-appender",
  "windows 0.62.2",
@@ -16807,7 +16807,7 @@ dependencies = [
 [[package]]
 name = "nice-plug"
 version = "0.4.2"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#874bd1fd7e4c3df8eede5ba50ba77e368fafdc17"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#c399a13021850fcd8523818cf8aa6d8de64dbbc4"
 dependencies = [
  "anyhow",
  "anymap3",
@@ -16838,7 +16838,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-core"
 version = "0.4.2"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#874bd1fd7e4c3df8eede5ba50ba77e368fafdc17"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#c399a13021850fcd8523818cf8aa6d8de64dbbc4"
 dependencies = [
  "atomic_float",
  "atomic_refcell",
@@ -16858,7 +16858,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-derive"
 version = "0.1.2"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#874bd1fd7e4c3df8eede5ba50ba77e368fafdc17"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#c399a13021850fcd8523818cf8aa6d8de64dbbc4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -16868,7 +16868,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-dioxus"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#874bd1fd7e4c3df8eede5ba50ba77e368fafdc17"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#c399a13021850fcd8523818cf8aa6d8de64dbbc4"
 dependencies = [
  "anyrender",
  "anyrender_vello",
@@ -16901,7 +16901,7 @@ dependencies = [
 [[package]]
 name = "nice-plug-xtask"
 version = "0.1.1"
-source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#874bd1fd7e4c3df8eede5ba50ba77e368fafdc17"
+source = "git+https://github.com/FastTrackStudios/nice-plug.git?branch=fts-baseview-03#c399a13021850fcd8523818cf8aa6d8de64dbbc4"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -24170,6 +24170,7 @@ dependencies = [
  "auth",
  "auth-proto",
  "axum",
+ "console_error_panic_hook",
  "daw-extension",
  "daw-theme",
  "daw-view-kit",
@@ -24185,6 +24186,7 @@ dependencies = [
  "eyre",
  "facet",
  "facet-json",
+ "fts-sample",
  "fts-version",
  "futures-channel",
  "futures-util",
@@ -24215,6 +24217,7 @@ dependencies = [
  "studio-panels",
  "studio-shell",
  "studio-view-link",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-opentelemetry",
