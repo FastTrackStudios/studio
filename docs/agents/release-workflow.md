@@ -35,8 +35,8 @@ In short:
   the root of fasttrackstudio.app) and the one GitHub Release.
   **Production is the latest `v*` tag.** This repo deploys nothing live:
   the infra repo takes the web bundle by tag and serves it from the VPS
-  (apps/studio/docs/web-deploy.md). There is no image, and no TestFlight build until apps/desktop
-  has an iOS target (the old rig app that built it is gone). The REAPER integration suites are not in CI; check them
+  (apps/studio/docs/web-deploy.md). There is no image. The tag also
+  uploads the iPhone and iPad app to TestFlight (below). The REAPER integration suites are not in CI; check them
   locally (`just reaper-test`, `just reaper daw-test`).
 
 ```
@@ -335,39 +335,51 @@ can pass by accident.
 
 ## The iOS app: TestFlight is a release
 
-**Paused.** The iOS app is apps/studio again (studio#703: built for the
-simulator and booted in CI, `ios` in checks.yml; `apps/studio/ios/`), but
-no workflow uploads to TestFlight yet (studio#704).
-`apps/studio/ios/deploy-testflight.sh` uploads by hand. What follows is how the upload
-worked for the old rig app, and how the `release.sh ios-*` helpers still
-behave.
-
-Studio (App Store record "Studio - by
-FastTrackStudio", `app.fasttrackstudio.studio`) is the one iOS app. Signal's and Session's own
+Studio (App Store record "Studio - by FastTrackStudio",
+`app.fasttrackstudio.studio`) is the one iOS app: apps/studio, the engine
+linked in (studio#703; `apps/studio/ios/`). Signal's and Session's own
 records (`app.fasttrackstudio.signal`, `.session`) get no new builds.
 
 - **TestFlight uploads only from the release tag**, never on a push, a PR
-  or a fork. The tag starts `studio-ios`.
+  or a fork. The tag starts `desktop`, whose `testflight`, `testers` and
+  `record` jobs (xtask/workflows/src/testflight.rs) run beside the
+  installers, from the same `resolve`.
 - **Marketing version (CFBundleShortVersionString) = the tag's version**
-  (`v26.10.4` → `26.10.4`), stamped into the checkout and handed to
-  `deploy-testflight.sh` as `MARKETING_VER`. The build number (CFBundleVersion) is the unix time
-  of the upload.
-- **One GitHub Release** per tag (title `studio 26.10.4`, the notes from
-  the change files). After the upload the workflow writes its marketing
-  version, build number and run URL into the Release notes; a re-run
-  editing at the same time re-reads and retries.
-- `studio-ios` refuses a tag that is not `^v[0-9]+\.[0-9]+\.[0-9]+$`, a
-  stamped release version that differs, a commit on neither
-  `main` nor `release/v*`, or a red `CI passed`. `workflow_dispatch` with
-  `dry_run` stops after those checks.
+  (`studio-v26.12.0` → `26.12.0`), stamped into the checkout and handed to
+  `deploy-testflight.sh` as `MARKETING_VER`. The build number
+  (CFBundleVersion) is the unix time of the build.
+- `testflight` (airlock, `studio-release-mac`): `build.sh device`, signed
+  with the Apple Distribution identity in `fts-build.keychain`, the App
+  Store profile minted through the API, uploaded with the App Store
+  Connect key in `~/.appstoreconnect`. No GitHub secret is involved.
+- `testers` (airlock): `testflight-testers.rb` waits for Apple's
+  processing, writes the build's What to Test (the version and the
+  Release's link), and hands it to the testers. The **internal** group
+  (App Store Connect team members) has access to every build and is
+  notified at once. The **external** `Testers` group (the public link) gets
+  the build added and submitted for Beta App Review; its testers can
+  install once Apple approves. If App Store Connect refuses the external
+  step (for example, the app's Beta App Review contact is empty: TestFlight
+  > Test Information), the job warns and passes, and re-running only
+  `testers` finishes it.
+- `record` (hosted): the marketing version, build number and run URL go
+  into the Release notes; a re-run editing at the same time re-reads and
+  retries.
+- `resolve` refuses a tag that is not `^studio-v[0-9]+\.[0-9]+\.[0-9]+$`, a
+  stamped release version that differs, a commit on neither `main` nor
+  `release/*`, or a red `CI passed`. `workflow_dispatch` with mode
+  `validate` stops there; mode `build-only` builds and signs any commit on
+  main or release/*, and App Store Connect validates the IPA
+  (`UPLOAD=0 deploy-testflight.sh`) without an upload.
 
 Patchbay's iOS app ships from its own repo (FastTrackStudios/patchbay),
 not from this tag.
 
-Verify a release: App Store Connect's build for each bundle id has the
-Release's version and the build number written in its notes
-(`ruby features/engine/host/ios/testflight-status.rb app.fasttrackstudio.<app>`
-on airlock).
+Verify a release: the Release's TestFlight block names the build, and
+`DRY_RUN=1 ruby apps/studio/ios/testflight-testers.rb
+app.fasttrackstudio.studio <build> <version>` on airlock (after `source
+~/.appstoreconnect/config.env`) reports its state and its groups without
+changing anything.
 
 ## Hotfix
 

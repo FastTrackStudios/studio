@@ -90,7 +90,7 @@
 #                                          green commit on main or release/*?
 #   scripts/release.sh publish [TAG]      CI: the GitHub Release for the tag
 #   scripts/release.sh ios-resolve APP TAG
-#                                         CI (studio-ios, desktop, after
+#                                         CI (desktop, after
 #                                          stamp): refuse a tag that is not
 #                                          studio-vX.Y.Z, whose stamped release
 #                                          version differs, or that is not on
@@ -209,15 +209,14 @@ next_version() {
 }
 
 # ── the iOS app (Studio) ────────────────────────────────────────────────
-# Studio, with its `<app>-ios` workflow. The old rig app that built it is
-# gone and apps/studio has no iOS release job yet, so no workflow uploads one
-# today; these helpers stay for that target (Patchbay's iOS app ships from
-# its own repo). Signal's and Session's own App Store records get no new builds. Each is built from the one `studio-v<version>` tag:
-# its marketing version is the tag's (deploy-testflight.sh writes
-# MARKETING_VER into the Info.plist) and Studio reports it in-app through
-# fts-version (FTS_RELEASE_VERSION, which `stamp` exported). The tag guard
-# and the TestFlight gate prove the checkout was stamped with the tag's
-# version.
+# Studio for iPhone and iPad (apps/studio/ios), uploaded to TestFlight from
+# the one `studio-v<version>` tag by the desktop workflow's `testflight`
+# job (xtask/workflows/src/testflight.rs). Signal's and Session's own App
+# Store records get no new builds. Its marketing version is the tag's
+# (deploy-testflight.sh writes MARKETING_VER into the Info.plist) and Studio
+# reports it in-app through fts-version (FTS_RELEASE_VERSION, which `stamp`
+# exported). The tag guard and ios-resolve prove the checkout was stamped
+# with the tag's version.
 IOS_APPS="studio"
 
 ios_check() {
@@ -752,7 +751,7 @@ tf_app_line() { # <body> <app>
 }
 
 tf_pending_line() { # <app>
-    echo "- $(ios_title "$1") (\`$(ios_bundle_id "$1")\`): pending — \`$1-ios\` builds this tag and writes its build number here"
+    echo "- $(ios_title "$1") (\`$(ios_bundle_id "$1")\`): pending — the desktop workflow's \`testflight\` job builds this tag and writes its build number here"
 }
 
 # The whole block: this app's line is <newline> (when given), every other
@@ -775,7 +774,7 @@ tf_render() { # <tag> <version> <body> [<app> <newline>]
 
 
 
-# CI, on the tag (and from the iOS and desktop workflows, and by hand). The
+# CI, on the tag (and from the desktop workflow, and by hand). The
 # tag already exists (`release` pushed it); this attaches the GitHub
 # Release: the notes from the change files added since the previous tag,
 # moved git deps and the TestFlight block. Idempotent. With no argument the
@@ -893,7 +892,7 @@ release_dedupe() { # <tag>
 cmd_publish() { publish_release "$@"; }
 
 
-# CI, first job of desktop.yml (and an <app>-ios.yml), in a checkout of the tag
+# CI, first job of desktop.yml, in a checkout of the tag
 # that `stamp` has recorded the tag's version in. TestFlight ships exactly
 # the tag: refuse a tag that is not studio-vX.Y.Z, a checkout whose stamped
 # release version is not the tag's, a commit that is on neither main nor a
@@ -943,7 +942,7 @@ ios_record_line() { # <app> <build> <run-url> <prior line>
     echo "$line"
 }
 
-# CI, last job of <app>-ios.yml: write what was uploaded into the release
+# CI, desktop.yml's `record` job: write what was uploaded into the release
 # notes, so the GitHub Release and the TestFlight build name each other.
 # More than one run can record into the SAME Release at about the same time
 # (a re-run beside the first), and `gh release edit` replaces the whole

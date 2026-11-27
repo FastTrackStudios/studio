@@ -368,6 +368,163 @@ jobs:
           # shellcheck disable=SC2016 # the backticks are markdown, for jq's output
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | "- `\(.name)` (\(.size) bytes, `\(.digest)`)"'
         } >> "$GITHUB_STEP_SUMMARY"
+  testflight:
+    name: iOS to TestFlight
+    needs: resolve
+    if: ${{ inputs.mode != 'validate' }}
+    runs-on:
+    - self-hosted
+    - macos
+    - studio-release-mac
+    timeout-minutes: 180
+    outputs:
+      build_no: ${{ steps.build_no.outputs.build_no }}
+    steps:
+    - name: Preflight — build volume mounted, space free
+      run: |
+        if [ ! -d /Volumes/build-disk ]; then
+          echo "ERROR: /Volumes/build-disk is not mounted on this runner." >&2
+          exit 1
+        fi
+        df -h /Volumes/build-disk | tail -1
+        avail_kb="$(df -k /Volumes/build-disk | awk 'NR==2 {print $4}')"
+        if [ "$avail_kb" -lt $((50 * 1024 * 1024)) ]; then
+          echo "ERROR: under 50 GB free on /Volumes/build-disk: sweep target/ before building" >&2
+          exit 1
+        fi
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ needs.resolve.outputs.sha }}
+        clean: false
+    - name: Stamp the release version from the tag
+      if: ${{ env.MODE != 'build-only' }}
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
+    - name: Rig captures (rig-models) linked into the tree
+      run: |
+        set -euo pipefail
+        src=/Volumes/build-disk/development/rig-models
+        url=https://github.com/FastTrackStudios/rig-models.git
+        if [ -d "$src/.git" ]; then
+          before="$(git -C "$src" rev-parse --short HEAD)"
+          git -C "$src" fetch --quiet origin \
+            || { echo "::error::could not fetch rig-models into $src; not building with stale captures"; exit 1; }
+          git -C "$src" merge --ff-only --quiet origin/main \
+            || { echo "::error::$src cannot fast-forward to origin/main (local commits or changes?); not building with stale captures"; exit 1; }
+          echo "rig-models $before -> $(git -C "$src" rev-parse --short HEAD)"
+        else
+          git clone --quiet "$url" "$src" \
+            || { echo "::error::could not clone $url into $src"; exit 1; }
+          echo "rig-models cloned at $(git -C "$src" rev-parse --short HEAD)"
+        fi
+        if [ ! -d "$src/guitar" ] || [ ! -d "$src/bass" ]; then echo "::error::no rig-models clone at $src"; exit 1; fi
+        while read -r repo from to; do
+          [[ -z $repo || $repo == \#* || $repo != rig-models ]] && continue
+          to="${to:-$from}"
+          n="$(find -L "$src/$from" -type f \( -name '*.nam' -o -name '*.wav' \) | wc -l | tr -d ' ')"
+          [ "$n" -gt 0 ] || { echo "::error::$src/$from holds no captures"; exit 1; }
+          mkdir -p "$(dirname "$to")"
+          if [ -d "$to" ] && [ ! -L "$to" ]; then rmdir "$to"; fi
+          ln -sfn "$src/$from" "$to"
+          echo "linked $to -> $src/$from ($n captures)"
+        done < assets.txt
+        echo "rig-models at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    - name: Build number
+      id: build_no
+      env:
+        VERSION: ${{ needs.resolve.outputs.version }}
+      run: |
+        build_no="$(date +%s)"
+        echo "build_no=$build_no" >> "$GITHUB_OUTPUT"
+        echo "Studio $TAG: marketing version $VERSION, build $build_no"
+    - name: devenv CLI
+      uses: ./.github/actions/devenv
+    - name: Build, sign for the App Store, upload
+      env:
+        KEYCHAIN: fts-build.keychain
+        KEYCHAIN_PW: fts-build
+        MARKETING_VER: ${{ needs.resolve.outputs.version }}
+        BUILD_NO: ${{ steps.build_no.outputs.build_no }}
+        STUDIO_OTLP_ENDPOINT: ${{ vars.TASK_OTLP_ENDPOINT }}
+        STUDIO_OTLP_TOKEN: ${{ secrets.TASK_OTLP_TOKEN }}
+      run: |
+        set -euo pipefail
+        export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+        if [ "$MODE" = build-only ]; then export UPLOAD=0; fi
+        bash apps/studio/ios/deploy-testflight.sh
+    - name: Summary
+      if: always()
+      env:
+        BUNDLE: app.fasttrackstudio.studio
+        VERSION: ${{ needs.resolve.outputs.version }}
+        BUILD_NO: ${{ steps.build_no.outputs.build_no }}
+        RESULT: ${{ job.status }}
+      run: |
+        {
+          echo "### iOS TestFlight: $TAG"
+          if [ "$MODE" = build-only ]; then what="signed and validated, not uploaded"; else what="uploaded"; fi
+          echo "\`$BUNDLE\` marketing version \`$VERSION\`, build \`$BUILD_NO\`: $what, $RESULT."
+        } >> "$GITHUB_STEP_SUMMARY"
+  testers:
+    name: TestFlight testers
+    needs:
+    - resolve
+    - testflight
+    if: ${{ inputs.mode != 'validate' && inputs.mode != 'build-only' && needs.testflight.result == 'success' }}
+    runs-on:
+    - self-hosted
+    - macos
+    - studio-release-mac
+    timeout-minutes: 75
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ needs.resolve.outputs.sha }}
+        clean: false
+        persist-credentials: false
+    - name: Processed, then to the internal and external testers
+      env:
+        BUNDLE: app.fasttrackstudio.studio
+        VERSION: ${{ needs.resolve.outputs.version }}
+        BUILD_NO: ${{ needs.testflight.outputs.build_no }}
+        WAIT_MIN: '60'
+      run: |
+        set -euo pipefail
+        set -a
+        # shellcheck disable=SC1091
+        source "$HOME/.appstoreconnect/config.env"
+        set +a
+        ruby apps/studio/ios/testflight-testers.rb "$BUNDLE" "$BUILD_NO" "$VERSION" \
+          "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG"
+  record:
+    name: Record the TestFlight build on the Release
+    needs:
+    - resolve
+    - testflight
+    if: ${{ inputs.mode != 'validate' && inputs.mode != 'build-only' && needs.testflight.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ needs.resolve.outputs.sha }}
+    - name: Marketing version and build number into the release notes
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ needs.resolve.outputs.version }}
+        BUILD_NO: ${{ needs.testflight.outputs.build_no }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        bash scripts/release.sh ios-record studio "$TAG" "$VERSION" "$BUILD_NO" "$RUN_URL"
   sums:
     name: SHA256SUMS (signed)
     needs: publish
