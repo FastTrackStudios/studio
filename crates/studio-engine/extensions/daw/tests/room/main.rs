@@ -14,7 +14,18 @@
 //! loads the second setlist and the member is checked to move to it on
 //! the same connection, and then to a lone session. Its checks go to
 //! `target/<triple>/<profile>/room/room.json`.
+//!
+//! **Speed (studio#717):** the join, and each load the member follows, is
+//! timed and held to its budget in `../fixtures/speed.toml`; a time over
+//! it fails the test, and the times go in the record's `times`, which CI
+//! reports.
 
+#[path = "../unbreakable/budgets.rs"]
+#[allow(
+    dead_code,
+    reason = "shared with tests/unbreakable, which uses all of it"
+)]
+mod budgets;
 #[path = "../fixtures/check.rs"]
 #[allow(dead_code, reason = "shared with tests/fixtures, which uses all of it")]
 mod check;
@@ -41,6 +52,8 @@ mod otlp;
     reason = "shared with tests/unbreakable, which uses all of it"
 )]
 mod report;
+#[path = "../fixtures/speed.rs"]
+mod speed;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -50,6 +63,7 @@ use serde_json::{Value, json};
 use check::Checks;
 use engine::Engine;
 use mcp::Mcp;
+use speed::Times;
 
 /// The two setlists the leader loads, one after the other, by their
 /// fixture sessions.
@@ -156,6 +170,7 @@ fn room(
     studio: &Path,
     (first, second): (&Path, &Path),
     checks: &mut Checks,
+    times: &mut Times,
 ) {
     let (l, m) = (&leader.mcp, &member.mcp);
 
@@ -223,6 +238,7 @@ fn room(
     );
 
     // The member joins once, by the link alone.
+    let began = Instant::now();
     if run(
         m,
         checks,
@@ -240,6 +256,10 @@ fn room(
         ok,
         format!("leader {leader_first}, member {got}"),
     );
+    if ok {
+        let what = "joined by the link, the setlist open";
+        times.judge(checks, "join time", "join", what, began.elapsed());
+    }
     let (ok, got) = until(
         FOLLOW_WAIT,
         || l.run("ROOM", &json!({})),
@@ -296,6 +316,7 @@ fn room(
     // Mid-rehearsal, another setlist: the member moves, on the same
     // connection.
     let before = m.run("ROOM", &json!({})).unwrap_or_default();
+    let began = Instant::now();
     if run(
         l,
         checks,
@@ -323,10 +344,16 @@ fn room(
         ok,
         format!("leader {leader_second}, member {got}"),
     );
+    if ok {
+        let what = "the second setlist open on the member";
+        let took = began.elapsed();
+        times.judge(checks, "follow time (setlist)", "follow_load", what, took);
+    }
 
     // Then a lone session.
     let lone = studio.join("sessions").join(LONE);
     let args = json!({"path": lone.display().to_string()});
+    let began = Instant::now();
     if run(l, checks, "loads a session", "ROOM_LOAD", &args).is_none() {
         return;
     }
@@ -342,6 +369,11 @@ fn room(
         ok,
         format!("leader {leader_lone}, member {got}"),
     );
+    if ok {
+        let what = "the lone session open on the member";
+        let took = began.elapsed();
+        times.judge(checks, "follow time (session)", "follow_load", what, took);
+    }
     match check::play_from(l, 0.5) {
         Ok(()) => {
             let (ok, got) = until(
@@ -388,7 +420,15 @@ fn a_member_follows_the_leader_through_each_load() {
     };
     let (mut leader, mut member) = (start("leader"), start("member"));
     let mut checks = Checks::default();
-    room(&leader, &member, &studio, (&first, &second), &mut checks);
+    let mut times = Times::new("join");
+    room(
+        &leader,
+        &member,
+        &studio,
+        (&first, &second),
+        &mut checks,
+        &mut times,
+    );
 
     let tails = format!(
         "--- the leader's last lines ---\n{}\n--- the member's last lines ---\n{}",
@@ -402,6 +442,7 @@ fn a_member_follows_the_leader_through_each_load() {
         "commit": report::commit(),
         "ok": checks.ok(),
         "checks": checks.json(),
+        "times": times.json(),
     });
     let dir = report::profile_dir().join("room");
     let _ = std::fs::write(dir.join("room.json"), format!("{record:#}\n"));
