@@ -1393,6 +1393,14 @@ span.aglogo { overflow: hidden; display: block; }
 .sessnum { width: 24px; color: var(--ink-3); font-size: 13px; }
 .sesst { flex: 1 1 0px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .sesslen { color: var(--ink-2); font-size: 13px; }
+/* In a browser: the session's views as tabs over the stage, and the
+   arrangement or the mixer filling it (the page's engine's panels, each
+   widget in its own canvas: nothing to scroll here). */
+.sesstabs { display: flex; gap: 4px; flex: none; padding: 0 0 8px; overflow-x: auto; }
+.sesstab { flex: none; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.sesstab[aria-current="page"] { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+.sessview.panes { overflow: hidden; }
+.sesspane { position: relative; flex: 1 1 0px; min-height: 0; border-radius: 8px; overflow: hidden; }
 
 .sbbadge { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 11.5px; color: var(--ink-2); padding: 0 4px; }
 .sbbadge i { width: 7px; height: 7px; border-radius: 4px; background: #52525b; }

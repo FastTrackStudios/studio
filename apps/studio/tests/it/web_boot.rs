@@ -10,6 +10,11 @@
 //! presses Play as a person would (a browser starts audio only on a
 //! gesture), and reads what the page's engine says (`#studio-engine`): the
 //! session open, its playhead moving, and the worklet putting out sound.
+//! Then it goes into the session as a person would (the top bar's Session
+//! button) and opens its Arrangement and Mixer: each the desktop's panel
+//! over the page's engine (`studio_panels::web_host::HostedView`), read
+//! off what the panel says it shows (`data-hosted-*`) and the canvases its
+//! widgets draw in, with the song playing on under them.
 //!
 //! It needs the web build (`STUDIO_WEB_DIST`, its `public` folder) and a
 //! W3C WebDriver (`WEBDRIVER`: chromedriver or geckodriver, started here;
@@ -82,6 +87,55 @@ fn the_web_build_opens_and_plays_a_fixture_session() {
         "true",
         "the transport stopped"
     );
+
+    // Into the session: its arrangement, drawn over the page's engine,
+    // with the song's three tracks and their items.
+    session.click("button.tbchart");
+    let arrangement = session.wait_for(
+        Duration::from_secs(30),
+        "the arrangement over the page's engine",
+        |s| {
+            s.hosted("arrangement")
+                .filter(|h| h.tracks >= 3 && h.canvases > 0)
+        },
+    );
+    assert!(
+        arrangement.items >= 3,
+        "the arrangement shows {} items of the song's three recordings",
+        arrangement.items
+    );
+
+    // Its mixer: every strip of the same song, in the same engine.
+    session.click("button.sesstab[data-view='mixer']");
+    let mixer = session.wait_for(
+        Duration::from_secs(30),
+        "the mixer over the page's engine",
+        |s| s.hosted("mixer").filter(|h| h.canvases > 0),
+    );
+    assert_eq!(
+        mixer.project, arrangement.project,
+        "the mixer shows another song than the arrangement"
+    );
+    assert_eq!(mixer.tracks, arrangement.tracks);
+
+    // The views are over the engine that plays: it plays on under them.
+    let before: f64 = session.state("data-at").parse().unwrap_or(0.0);
+    session.wait_for(
+        Duration::from_secs(10),
+        "the song to play on under the mixer",
+        |s| (s.state("data-at").parse::<f64>().unwrap_or(0.0) > before + 0.5).then_some(()),
+    );
+}
+
+/// What a hosted panel (`studio_panels::web_host::HostedView`) says it
+/// shows, off its `data-hosted-*` attributes.
+#[derive(Debug)]
+struct Hosted {
+    project: String,
+    tracks: u64,
+    items: u64,
+    /// The canvases its widgets draw in.
+    canvases: u64,
 }
 
 /// The fixture has sections (Intro, Verse 1, Chorus 1) and no `.kf`: its
@@ -504,6 +558,29 @@ impl Session<'_> {
                .map(b => [parseFloat(b.getAttribute('data-at')), parseInt(b.getAttribute('data-bar'))]));",
         );
         serde_json::from_str(&listed).unwrap_or_default()
+    }
+
+    /// The hosted panel showing `which` (`arrangement`, `mixer`), once it
+    /// is open on a song.
+    fn hosted(&self, which: &str) -> Option<Hosted> {
+        let script = "const e = document.querySelector(`[data-hosted='${arguments[0]}']`); \
+                      if (!e) return null; \
+                      return { project: e.getAttribute('data-hosted-project') || '', \
+                               tracks: Number(e.getAttribute('data-hosted-tracks') || 0), \
+                               items: Number(e.getAttribute('data-hosted-items') || 0), \
+                               canvases: e.querySelectorAll('canvas').length };";
+        let v = self.call(
+            "POST",
+            "/execute/sync",
+            Some(&json!({ "script": script, "args": [which] })),
+        );
+        let project = v.get("project")?.as_str()?.to_owned();
+        (!project.is_empty()).then(|| Hosted {
+            project,
+            tracks: v["tracks"].as_u64().unwrap_or(0),
+            items: v["items"].as_u64().unwrap_or(0),
+            canvases: v["canvases"].as_u64().unwrap_or(0),
+        })
     }
 
     /// What the page shows and what went wrong in it, for a failure.
