@@ -36,7 +36,7 @@ pub enum View {
     Mixer,
     Fx,
     Setup,
-    /// Ignition's room: the show's lighting, following the song.
+    /// Ignition's visualizer: the show's lighting, following the song.
     Lighting,
 }
 
@@ -549,7 +549,7 @@ mod native {
                 ..controls
             });
         }
-        // Process views (Ignition's room) drawn in the window's panes: a
+        // Process views (Ignition's visualizer) drawn in the window's panes: a
         // program of their own, so only where the app may start one (not
         // iPhone or iPad).
         #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -580,7 +580,7 @@ mod native {
         use_context_provider(studio_panels::lyrics_panel::LyricsChoice::new);
         use_context_provider(|| studio_panels::shell::Back(Callback::new(move |()| leave(app))));
         use_engine_setlist();
-        // Keyflow's chart and Ignition's room follow the engine's song.
+        // Keyflow's chart and Ignition's visualizer follow the engine's song.
         hosted::use_engine_actions();
         let followed = hosted::use_follow_session(ui, layout);
         // The mixer beside the arrangement or under it as the main window

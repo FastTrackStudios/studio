@@ -92,7 +92,7 @@ pub fn extensions() -> &'static Extensions {
         // never to whichever engine answers first.
         studio_view_link::attach_by_host();
         let host = Host::new(crate::actions::list(), SharedSections::new(Registry::new()));
-        // Views another program draws (Ignition's room), and process
+        // Views another program draws (Ignition's visualizer), and process
         // extensions (the engine's `daw`), run by a runner of their own.
         let mut kinds = host.view_kinds();
         if let Err(e) = kinds.register(architect_views::KindSpec::process()) {
@@ -552,10 +552,13 @@ fn forward_engine_actions(actions: &[serde_json::Value]) -> usize {
     added
 }
 
-/// Keyflow's chart and Ignition's room follow the song the engine has:
+/// Keyflow's chart and Ignition's lighting follow the song the engine has:
 /// told again (`KEYFLOW_SESSION_FOLLOW`, `IGNITION_SESSION_VIZ`) as the
 /// engine goes to another song, and the chart's pane moved to its
-/// session. The signal is the session followed now.
+/// session. The signal is the session followed now. In a room the engine
+/// opens what the leader loads and goes to their song, so the chart and
+/// the lighting follow the room's session through this same loop.
+/// (`SESSION_FOLLOWED` answers the same session on the engine's MCP.)
 pub fn use_follow_session(ui: ExtensionUi, layout: Signal<Workspace>) -> Signal<Option<Followed>> {
     let mut followed = use_signal(|| None::<Followed>);
     use_future(move || async move {

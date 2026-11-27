@@ -86,7 +86,7 @@ studio-mixer = { workspace = true, optional = true }
 studio-lyrics = { workspace = true, optional = true }
 studio-navigator = { workspace = true, optional = true }
 # Keyflow's chart view (the live editor and its note-input toolbar, on the
-# song's chart in its one file) and Ignition's room, the real extensions.
+# song's chart in its one file) and Ignition's visualizer, the real extensions.
 keyflow-extension = { workspace = true, optional = true }
 ignition-pane = { workspace = true, optional = true }
 studio-view-link = { workspace = true, optional = true }

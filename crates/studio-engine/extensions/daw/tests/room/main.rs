@@ -12,8 +12,11 @@
 //! first setlist; the member joins by the room's link once and is checked
 //! to follow the leader's setlist, song and playhead; then the leader
 //! loads the second setlist and the member is checked to move to it on
-//! the same connection, and then to a lone session. Its checks go to
-//! `target/<triple>/<profile>/room/room.json`.
+//! the same connection, and then to a lone session. Through each of those
+//! the member's lighting is checked to follow the room's session
+//! (studio#720): the session it follows (`SESSION_FOLLOWED`, what the app
+//! points Ignition's visualizer at) is the leader's, led from the member's
+//! own engine. Its checks go to `target/<triple>/<profile>/room/room.json`.
 //!
 //! **Speed (studio#717):** the join, and each load the member follows, is
 //! timed and held to its budget in `../fixtures/speed.toml`; a time over
@@ -153,6 +156,41 @@ fn current(mcp: &Mcp) -> Result<Value, String> {
         .map_or(Value::Null, |r| r["number"].clone()))
 }
 
+/// The session an engine's chart and lighting follow
+/// (`SESSION_FOLLOWED`): its file's name, and whether its transport is
+/// led from that engine (a `url`, the lighting's clock).
+fn followed(mcp: &Mcp) -> Result<Value, String> {
+    let session = mcp.run("SESSION_FOLLOWED", &json!({}))?;
+    let file = session["path"]
+        .as_str()
+        .and_then(|p| Path::new(p).file_name())
+        .map(|n| n.to_string_lossy().into_owned());
+    let led = session["url"].as_str().is_some_and(|u| !u.is_empty());
+    Ok(json!({ "file": file, "led": led }))
+}
+
+/// The leader's session goes from `before` to another, and the member's
+/// lighting follows it there: check `name`. The leader's, for the next.
+fn lighting_follows(
+    (l, m): (&Mcp, &Mcp),
+    before: &Value,
+    checks: &mut Checks,
+    name: &str,
+) -> Value {
+    let (moved, leader) = until(
+        FOLLOW_WAIT,
+        || followed(l),
+        |v| v["file"].is_string() && v["led"] == json!(true) && v != before,
+    );
+    let (ok, member) = until(FOLLOW_WAIT, || followed(m), |v| moved && *v == leader);
+    checks.add(
+        name,
+        moved && ok,
+        format!("leader {leader}, member {member}"),
+    );
+    leader
+}
+
 /// Run `id` and note it; an error fails the check `name`.
 fn run(mcp: &Mcp, checks: &mut Checks, name: &str, id: &str, args: &Value) -> Option<Value> {
     match mcp.run(id, args) {
@@ -260,6 +298,12 @@ fn room(
         let what = "joined by the link, the setlist open";
         times.judge(checks, "join time", "join", what, began.elapsed());
     }
+    let lit = lighting_follows(
+        (l, m),
+        &Value::Null,
+        checks,
+        "member's lighting follows the session",
+    );
     let (ok, got) = until(
         FOLLOW_WAIT,
         || l.run("ROOM", &json!({})),
@@ -279,6 +323,7 @@ fn room(
         ok,
         format!("member on song {got}"),
     );
+    let lit = lighting_follows((l, m), &lit, checks, "member's lighting follows the song");
 
     // The leader plays: the member plays at the leader's playhead.
     if let Err(e) = check::play_from(l, 1.0) {
@@ -349,6 +394,12 @@ fn room(
         let took = began.elapsed();
         times.judge(checks, "follow time (setlist)", "follow_load", what, took);
     }
+    let lit = lighting_follows(
+        (l, m),
+        &lit,
+        checks,
+        "member's lighting moves to the second setlist",
+    );
 
     // Then a lone session.
     let lone = studio.join("sessions").join(LONE);
@@ -374,6 +425,12 @@ fn room(
         let took = began.elapsed();
         times.judge(checks, "follow time (session)", "follow_load", what, took);
     }
+    lighting_follows(
+        (l, m),
+        &lit,
+        checks,
+        "member's lighting moves to the lone session",
+    );
     match check::play_from(l, 0.5) {
         Ok(()) => {
             let (ok, got) = until(
