@@ -80,7 +80,10 @@ fn open_branch(
         Store::open(path).map_err(|e| format!("{}: {e}", path.display()))?,
     ));
     let doc = with_store(&store, |s| s.load(branch).map_err(|e| e.to_string()))?;
-    with_store(&store, |s| tidy(s, branch, &doc))?;
+    with_store(&store, |s| {
+        tidy(s, branch, &doc);
+        Ok(())
+    })?;
     let uncompacted = with_store(&store, |s| {
         s.steps(branch)
             .map(|steps| steps.len())
@@ -109,18 +112,42 @@ fn tidied_key(branch: &str) -> String {
 /// Written to the file as one step, then marked done. On Unbreakable:
 /// 186 090 maps cleared and 280 MB of states made 8 MB; its shallow
 /// snapshot 173.5 MB to about 80 MB.
-fn tidy(store: &Store, branch: &str, doc: &engine_sync::loro::LoroDoc) -> Result<(), String> {
+///
+/// A new or empty branch is only marked: it has nothing to take out. A
+/// tidy that fails says so on its span and the song opens as it is; the
+/// next open tries again.
+fn tidy(store: &Store, branch: &str, doc: &engine_sync::loro::LoroDoc) {
     let key = tidied_key(branch);
-    if store.meta(&key).map_err(|e| e.to_string())?.is_some() {
-        return Ok(());
+    if matches!(store.meta(&key), Ok(Some(_))) {
+        return;
     }
     let span = tracing::info_span!(
         "project_file.tidy",
         tidy.cleared = tracing::field::Empty,
         tidy.states = tracing::field::Empty,
         tidy.bytes = tracing::field::Empty,
+        tidy.error = tracing::field::Empty,
     );
     let _in = span.enter();
+    let tidied = if doc.oplog_vv().is_empty() {
+        Ok(())
+    } else {
+        tidy_doc(store, branch, doc, &span)
+    };
+    if let Err(e) = tidied.and_then(|()| store.set_meta(&key, "1").map_err(|e| e.to_string())) {
+        span.record("tidy.error", e.as_str());
+        tracing::warn!("the song could not be tidied; it opens as it is");
+    }
+}
+
+/// [`tidy`]'s work on a song with something in it: taken out, and written
+/// to the file as one step when anything changed.
+fn tidy_doc(
+    store: &Store,
+    branch: &str,
+    doc: &engine_sync::loro::LoroDoc,
+    span: &tracing::Span,
+) -> Result<(), String> {
     let before = doc.oplog_vv();
     let cleared = engine_sync::doc::clear_deleted_entities(doc).map_err(|e| e.to_string())?;
     let song = SessionDoc::from_loro(doc.clone());
@@ -128,7 +155,6 @@ fn tidy(store: &Store, branch: &str, doc: &engine_sync::loro::LoroDoc) -> Result
     let states = crate::mix_states::compact(&mut model.project.ext);
     song.write(&model, engine_sync::ORIGIN_LOCAL)
         .map_err(|e| e.to_string())?;
-    doc.commit();
     span.record("tidy.cleared", cleared);
     span.record("tidy.states", states);
     if doc.oplog_vv() != before {
@@ -140,7 +166,7 @@ fn tidy(store: &Store, branch: &str, doc: &engine_sync::loro::LoroDoc) -> Result
             .append_update(branch, "Tidy the song", &update)
             .map_err(|e| e.to_string())?;
     }
-    store.set_meta(&key, "1").map_err(|e| e.to_string())
+    Ok(())
 }
 
 /// `work` on the store, its lock held for that call only.
