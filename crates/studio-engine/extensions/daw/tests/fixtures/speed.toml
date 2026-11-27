@@ -1,0 +1,41 @@
+# How long opening a session and joining a room may take (studio#717,
+# Alpha 1's speed requirement, studio#689). The fixture test
+# (tests/fixtures) times each open; the room test (tests/room) times the
+# join and each load the member follows. A time over its budget plus
+# `margin` of it (and never less than `min_margin_ms` over) fails the test.
+# The rules are `../unbreakable/budgets.rs`'s, as for the Unbreakable
+# budgets.
+#
+# Each time is the wall clock over the engine's MCP door: from the call to
+# the first reading where every song is open, read every 100 ms. So it is
+# what a person waits for, give or take a poll.
+#
+# The optimization work sets the targets (the real song's open is held in
+# ../unbreakable/budgets.toml). These fixtures are a few KB of generated
+# audio, so their budgets are loose on purpose, for a busy CI runner, and
+# tight enough to catch an open or a join that has got slow: tighten them
+# from the times CI reports. They ask for no tightening on their own.
+
+margin = 0.25
+min_margin_ms = 50
+hint_below = 0
+
+# Opening each fixture session, and the fixture setlist (its five places,
+# every song open), in an engine of its own (tests/fixtures).
+[open.budget_ms]
+arrangements = 5000
+chart-repeats = 5000
+markers-only = 5000
+multitrack-click = 5000
+same-name = 5000
+setlist = 10000
+
+# A room with a leader and a member (tests/room).
+#
+# - `join`: from the member's ROOM_JOIN, by the link alone, to the member
+#   having the leader's setlist open.
+# - `follow_load`: from the leader's ROOM_LOAD of another setlist, or of a
+#   lone session, to the member having it open too (each load is judged).
+[join.budget_ms]
+join = 10000
+follow_load = 10000

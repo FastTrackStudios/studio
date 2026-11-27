@@ -182,6 +182,42 @@ fi
 cargo nextest run -p daw-extension --test fixtures --test room --no-fail-fast
 "#;
 
+/// The open and join times (studio#717) the fixture and room tests wrote
+/// this run, as a table in the job's summary: each record under the
+/// target dir's `fixtures/` and `room/` whose commit is this run's. The
+/// tests fail on a time over its budget; this only reports them.
+const SPEED: &str = r###"python3 - <<'PY' || echo "::warning::the open and join times could not be read"
+import glob, json, os
+target = os.environ.get("CARGO_TARGET_DIR") or "target"
+sha = os.environ["GITHUB_SHA"][:12]
+rows = []
+# <target>/<profile>/ or <target>/<triple>/<profile>/: report::profile_dir.
+found = [g for up in ("*", "*/*") for g in (glob.glob(f"{target}/{up}/fixtures/*.json")
+                                            + glob.glob(f"{target}/{up}/room/room.json"))]
+for f in sorted(found):
+    try:
+        record = json.load(open(f))
+    except (OSError, ValueError):
+        continue
+    if (record.get("commit") or {}).get("sha") != sha:
+        continue
+    test = record.get("fixture") or record.get("test") or os.path.basename(f)
+    for t in record.get("times") or []:
+        rows.append((t["measure"], test, t["what"], t["ms"], t.get("budget_ms"), t["verdict"]))
+out = ["## Session open and room join", ""]
+if rows:
+    out += ["| measure | test | what | ms | budget ms | |", "|---|---|---|--:|--:|---|"]
+    out += [f"| {m} | {t} | {w} | {ms:.0f} | {'-' if b is None else f'{b:.0f}'} | {v} |"
+            for m, t, w, ms, b, v in sorted(rows)]
+else:
+    out.append(f"No times from this commit ({sha}) under {target}: the tests did not run, or failed before timing.")
+text = "\n".join(out) + "\n"
+print(text)
+with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+    s.write(text)
+PY
+"###;
+
 /// The crates the PR reaches, compiled and tested: one job, one target dir
 /// (the deps build once; the tests reuse the check's metadata). Each step
 /// runs even when one before it failed, so one run reports the check AND the
@@ -234,6 +270,12 @@ fn affected() -> Result<Job> {
                 .cond(&format!("${{{{ {RAN} }}}}"))
                 .env("TEST_PACKAGES", "${{ steps.plan.outputs.test_packages }}")
                 .env("TESTS_RAN", "${{ steps.plan.outputs.tests }}"),
+        )
+        // What they timed, reported (studio#717): the times ran above,
+        // in the affected tests or the step before.
+        .step(
+            Step::run("Session open and room join times", &in_shell(SPEED))
+                .cond(&format!("${{{{ {RAN} }}}}")),
         )
         .step(
             Step::run("wasm check (just check-web)", &in_shell("just check-web\n"))

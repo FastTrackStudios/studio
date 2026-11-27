@@ -206,6 +206,41 @@ jobs:
         fi
         cargo nextest run -p daw-extension --test fixtures --test room --no-fail-fast
         EOF
+    - name: Session open and room join times
+      if: ${{ !cancelled() && steps.plan.outcome == 'success' }}
+      run: |
+        devenv shell -- bash -euo pipefail -s <<'EOF'
+        python3 - <<'PY' || echo "::warning::the open and join times could not be read"
+        import glob, json, os
+        target = os.environ.get("CARGO_TARGET_DIR") or "target"
+        sha = os.environ["GITHUB_SHA"][:12]
+        rows = []
+        # <target>/<profile>/ or <target>/<triple>/<profile>/: report::profile_dir.
+        found = [g for up in ("*", "*/*") for g in (glob.glob(f"{target}/{up}/fixtures/*.json")
+                                                    + glob.glob(f"{target}/{up}/room/room.json"))]
+        for f in sorted(found):
+            try:
+                record = json.load(open(f))
+            except (OSError, ValueError):
+                continue
+            if (record.get("commit") or {}).get("sha") != sha:
+                continue
+            test = record.get("fixture") or record.get("test") or os.path.basename(f)
+            for t in record.get("times") or []:
+                rows.append((t["measure"], test, t["what"], t["ms"], t.get("budget_ms"), t["verdict"]))
+        out = ["## Session open and room join", ""]
+        if rows:
+            out += ["| measure | test | what | ms | budget ms | |", "|---|---|---|--:|--:|---|"]
+            out += [f"| {m} | {t} | {w} | {ms:.0f} | {'-' if b is None else f'{b:.0f}'} | {v} |"
+                    for m, t, w, ms, b, v in sorted(rows)]
+        else:
+            out.append(f"No times from this commit ({sha}) under {target}: the tests did not run, or failed before timing.")
+        text = "\n".join(out) + "\n"
+        print(text)
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+            s.write(text)
+        PY
+        EOF
     - name: wasm check (just check-web)
       if: ${{ !cancelled() && steps.plan.outcome == 'success' && steps.plan.outputs.wasm == 'true' }}
       run: |

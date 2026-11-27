@@ -15,12 +15,22 @@
 //! fail per session; each writes its checks to
 //! `target/<triple>/<profile>/fixtures/<name>.json`.
 //!
+//! **Speed (studio#717):** each open is timed and held to its budget in
+//! `speed.toml` (`speed.rs`); a time over it fails the test, and the
+//! times go in the record's `times`, which CI reports.
+//!
 //! **Adding a fixture:** a folder in `sessions/` with a song file (an
 //! `.RPP` or a `.session`), a `.kf` chart beside it if it has one, and a
 //! `fixture.toml` saying what recordings to generate and what to check
 //! (`fixture.rs`); then its line in `sessions!` below. Recordings are
 //! generated, never committed.
 
+#[path = "../unbreakable/budgets.rs"]
+#[allow(
+    dead_code,
+    reason = "shared with tests/unbreakable, which uses all of it"
+)]
+mod budgets;
 mod check;
 mod drums;
 #[path = "../unbreakable/engine.rs"]
@@ -45,15 +55,17 @@ mod otlp;
     reason = "shared with tests/unbreakable, which uses all of it"
 )]
 mod report;
+mod speed;
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
 use check::Checks;
 use engine::Engine;
 use fixture::Fixture;
+use speed::Times;
 
 fn engine_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_daw-extension"))
@@ -80,7 +92,18 @@ fn engine(name: &str) -> (Engine, otlp::Receiver) {
 }
 
 /// Write `name`'s record, say its checks, and fail if one failed.
-fn finish(name: &str, about: &str, mut engine: Engine, checks: &Checks) {
+fn finish(name: &str, about: &str, engine: Engine, checks: &Checks) {
+    finish_timed(name, about, engine, checks, None);
+}
+
+/// [`finish`], with the times the run took (its record's `times`).
+fn finish_timed(
+    name: &str,
+    about: &str,
+    mut engine: Engine,
+    checks: &Checks,
+    times: Option<&Times>,
+) {
     let tail = engine.tail(60);
     engine.stop();
     let record = json!({
@@ -89,6 +112,7 @@ fn finish(name: &str, about: &str, mut engine: Engine, checks: &Checks) {
         "commit": report::commit(),
         "ok": checks.ok(),
         "checks": checks.json(),
+        "times": times.map_or_else(|| json!([]), Times::json),
     });
     let dir = report::profile_dir().join("fixtures");
     let file = dir.join(format!("{name}.json"));
@@ -132,9 +156,12 @@ fn play_session(name: &str) {
         .unwrap_or_else(|e| panic!("staging {name}: {e}"));
     let (engine, _spans) = engine(name);
     let mut checks = Checks::default();
+    let mut times = Times::new("open");
+    let began = Instant::now();
     match check::open(&engine, &song) {
         Ok(songs) => {
             checks.add("opens", true, format!("{} open", songs[0]["title"]));
+            times.judge(&mut checks, "open time", name, "opened", began.elapsed());
             check::session(&engine, &fixture, &mut checks);
             if let Err(why) = check::arrangements(&engine, &fixture, &song, &mut checks) {
                 checks.failed("arrangements", why);
@@ -142,7 +169,7 @@ fn play_session(name: &str) {
         }
         Err(why) => checks.failed("opens", why),
     }
-    finish(name, &fixture.about, engine, &checks);
+    finish_timed(name, &fixture.about, engine, &checks, Some(&times));
 }
 
 /// One test per fixture session: nextest's pass or fail is the
@@ -211,16 +238,18 @@ fn setlist_moves_from_session_to_session() {
     let places = setlist_places(&fixture::root().join(setlist));
     let (engine, _spans) = engine("setlist");
     let mut checks = Checks::default();
+    let mut times = Times::new("open");
     if let Err(why) = stage_setlist(&engine, &run, setlist, &places, &mut checks)
-        .and_then(|staged| walk_setlist(&engine, &staged, &places, &mut checks))
+        .and_then(|staged| walk_setlist(&engine, &staged, &places, &mut checks, &mut times))
     {
         checks.failed("setlist", why);
     }
-    finish(
+    finish_timed(
         "setlist",
         "a setlist moves from session to session",
         engine,
         &checks,
+        Some(&times),
     );
 }
 
@@ -310,10 +339,19 @@ fn walk_setlist(
     setlist: &Path,
     places: &[Place],
     checks: &mut Checks,
+    times: &mut Times,
 ) -> Result<(), String> {
     let mcp = &engine.mcp;
     let count = places.len();
+    let began = Instant::now();
     let songs = check::open(engine, setlist)?;
+    times.judge(
+        checks,
+        "open time",
+        "setlist",
+        &format!("{} songs open", songs.len()),
+        began.elapsed(),
+    );
     checks.add(
         "opens",
         songs.len() == count,
@@ -356,7 +394,7 @@ fn walk_setlist(
         .ok_or("song 1 has no sections")?;
     let from = (end - 1.0).max(0.0);
     check::play_from(mcp, from)?;
-    let began = std::time::Instant::now();
+    let began = Instant::now();
     let mut now = current(mcp)?;
     while now["number"] != json!(2) && began.elapsed() < Duration::from_secs(10) {
         std::thread::sleep(Duration::from_millis(100));
