@@ -24,6 +24,13 @@
 //! they came from there, the rig was built with them and put out sound, and
 //! a second load read them from the page's cache instead.
 //!
+//! The kick track plays its MIDI through signal's kit voice (`FTS Kit Mic`,
+//! its close mic only), its preset named by a desktop's path. The kit's
+//! preset and engine are text in the stand-in store (`drums/Test Kit`); its
+//! `.signalpack` is made here, a close and a room recording of one hit. The
+//! test checks the kit was heard, and that the page read the pack by range:
+//! its header, its index and the close mic's samples, never the room's.
+//!
 //! It needs the web build (`STUDIO_WEB_DIST`, its `public` folder) and a
 //! W3C WebDriver (`WEBDRIVER`: chromedriver or geckodriver, started here;
 //! `CHROME_BIN` names the browser chromedriver drives). `just test-web-boot`
@@ -46,6 +53,12 @@ static RIG_GETS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize
 
 /// Where the rig store is served, under the sessions.
 const RIG_STORE: &str = "rig-store";
+
+/// The spans (start, end inclusive) of the kit's pack the page was served.
+static PACK_SPANS: std::sync::Mutex<Vec<(u64, u64)>> = std::sync::Mutex::new(Vec::new());
+
+/// The kit's pack in the store.
+const KIT_PACK: &str = "drums/Test Kit/Packs/Kick.signalpack";
 
 /// The fixture's rate and length.
 const RATE: u32 = 48_000;
@@ -120,6 +133,31 @@ fn the_web_build_opens_and_plays_a_fixture_session() {
     );
     let home: usize = session.state("data-rig-home").parse().unwrap_or(0);
     assert!(home >= 1, "the rig home's file was not installed");
+
+    // The kit voice: its preset and engine from the store, its pack read by
+    // range, and the kick heard.
+    session.wait_for(Duration::from_secs(30), "the kit voice to sound", |s| {
+        let heard: f32 = s.state("data-rig-kit-heard").parse().unwrap_or(0.0);
+        (s.state("data-rig-wanted") == "0" && heard > 1e-4).then_some(())
+    });
+    let (pack_len, room) = (kit_pack().0.len() as u64, kit_pack().1);
+    let spans = PACK_SPANS.lock().map(|s| s.clone()).unwrap_or_default();
+    let served: u64 = spans.iter().map(|(a, b)| b - a + 1).sum();
+    assert!(
+        spans.len() >= 3,
+        "the pack's header, index and close samples, each by range; served {spans:?}"
+    );
+    assert!(
+        served < pack_len,
+        "the page read the whole pack ({served} of {pack_len} bytes): {spans:?}"
+    );
+    assert!(
+        !spans
+            .iter()
+            .any(|&(a, b)| a < room.0 + room.1 && b >= room.0),
+        "the room mic's samples, which the kit does not play, were fetched: {spans:?}"
+    );
+
     let asked = RIG_GETS.load(std::sync::atomic::Ordering::Relaxed);
     assert!(asked >= 3, "the page asked the rig store for {asked} files");
 
@@ -199,6 +237,9 @@ fn stage_rig_store(dir: &Path) {
     let here = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/web_boot/rig-store");
     copy_dir(&here, dir);
     std::fs::write(dir.join("bass/models/Test Cab.wav"), cab_ir()).expect("the cab IR is written");
+    let pack = dir.join(KIT_PACK);
+    std::fs::create_dir_all(pack.parent().expect("the packs' folder")).expect("the packs' folder");
+    std::fs::write(&pack, kit_pack().0).expect("the kit's pack is written");
     let mut files = Vec::new();
     list(dir, dir, &mut files);
     std::fs::write(
@@ -221,6 +262,56 @@ fn copy_dir(from: &Path, to: &Path) {
             std::fs::copy(&path, to.join(entry.file_name())).expect("the fixture's file");
         }
     }
+}
+
+/// The kit's `.signalpack`: raw 16-bit mono PCM (kind 7), one kick hit
+/// recorded on a close mic (a short decaying pulse) and a room (a long
+/// one), its library spec in its index. With the room's span in it.
+fn kit_pack() -> (Vec<u8>, (u64, u64)) {
+    let spec = r#"name "Test Kick"
+sections ( { id main, label Main, lowest_note "C-1", highest_note "G9" } )
+mics ( { id Close, label Close, kind close } { id Room, label Room, kind room } )
+articulations ( { id hit, label Hit, kind @Short, rr 1 } )
+zones (
+    { file "close.wav", key_min 36, key_max 36, root_key 36, vel_min 0, vel_max 127, articulation hit, mic Close }
+    { file "room.wav", key_min 36, key_max 36, root_key 36, vel_min 0, vel_max 127, articulation hit, mic Room }
+)
+"#;
+    let hit = |frames: usize, decay: f64| -> Vec<u8> {
+        (0..frames)
+            .flat_map(|i| {
+                let level = 0.8 * (-(i as f64) / decay).exp();
+                ((level * f64::from(i16::MAX)).round() as i16).to_le_bytes()
+            })
+            .collect()
+    };
+    let (close, room) = (hit(4_800, 600.0), hit(RATE as usize, 12_000.0));
+    let mut pack = vec![0_u8; 64];
+    let close_at = (pack.len() as u64, close.len() as u64);
+    pack.extend_from_slice(&close);
+    let room_at = (pack.len() as u64, room.len() as u64);
+    pack.extend_from_slice(&room);
+    let index_at = pack.len() as u64;
+    let index = format!(
+        "# signalpack-index-v1\n# spec_format\tstyx\n# spec_begin\n{spec}# spec_end\n\
+         close.wav\t{}\t{}\t1\t{RATE}\t4800\t4800\n\
+         room.wav\t{}\t{}\t1\t{RATE}\t{RATE}\t{RATE}\n",
+        close_at.0, close_at.1, room_at.0, room_at.1
+    );
+    pack.extend_from_slice(index.as_bytes());
+    // The header: magic, version 1, kind 7 (PCM i16), the body at 64, the
+    // index's span, two entries.
+    let mut header = Vec::with_capacity(64);
+    header.extend_from_slice(b"SIGPACK\0");
+    header.extend_from_slice(&1_u32.to_le_bytes());
+    header.extend_from_slice(&7_u32.to_le_bytes());
+    header.extend_from_slice(&64_u64.to_le_bytes());
+    header.extend_from_slice(&index_at.to_le_bytes());
+    header.extend_from_slice(&(index.len() as u64).to_le_bytes());
+    header.extend_from_slice(&2_u64.to_le_bytes());
+    header.resize(64, 0);
+    pack[..64].copy_from_slice(&header);
+    (pack, room_at)
 }
 
 /// A cab IR: 16-bit mono WAV at the fixture's rate, a short decaying pulse.
@@ -830,13 +921,25 @@ fn serve(stream: TcpStream, dist: &Path, sessions: &Path) -> std::io::Result<()>
     let (status, body, extra) = match range {
         Some((start, end)) if start < len => {
             let end = end.unwrap_or(len - 1).min(len - 1);
+            if path.ends_with(KIT_PACK)
+                && let Ok(mut spans) = PACK_SPANS.lock()
+            {
+                spans.push((start, end));
+            }
             (
                 "206 Partial Content",
                 &bytes[start as usize..=end as usize],
                 format!("Content-Range: bytes {start}-{end}/{len}\r\n"),
             )
         }
-        _ => ("200 OK", &bytes[..], String::new()),
+        _ => {
+            if path.ends_with(KIT_PACK)
+                && let Ok(mut spans) = PACK_SPANS.lock()
+            {
+                spans.push((0, len.saturating_sub(1)));
+            }
+            ("200 OK", &bytes[..], String::new())
+        }
     };
     write!(
         out,

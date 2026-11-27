@@ -1,0 +1,5 @@
+// signal-preset v1
+name "Test Kit"
+description "The boot test's kit: one kick, a close mic and a room."
+engines ( { id kick, engine "../Engines/Kick.signalengine" } )
+note_routing ( { note 36, targets ( kick ) } )

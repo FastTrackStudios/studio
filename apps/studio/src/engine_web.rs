@@ -560,7 +560,8 @@ fn write_state(up: &Up) {
         ("data-peak-ever", format!("{:.4}", probe.peak_ever)),
         // The rigs' files: the store open, what came from it and from the
         // page's cache, what it lacked, what is still wanted, the rigs
-        // waiting, and how loud the rigs on streamed files have played.
+        // waiting, and how loud the rigs (and kit voices) on streamed files
+        // have played.
         ("data-rig-store", rigs.store.to_string()),
         ("data-rig-home", rigs.rigs.home_files.to_string()),
         ("data-rig-fetched", rigs.counts.fetched.to_string()),
@@ -569,6 +570,7 @@ fn write_state(up: &Up) {
         ("data-rig-wanted", rigs.rigs.wanted.to_string()),
         ("data-rig-waiting", rigs.rigs.waiting.to_string()),
         ("data-rig-heard", format!("{:.4}", rigs.rigs.heard)),
+        ("data-rig-kit-heard", format!("{:.4}", rigs.rigs.kit_heard)),
     ] {
         let _ = el.set_attribute(name, &value);
     }

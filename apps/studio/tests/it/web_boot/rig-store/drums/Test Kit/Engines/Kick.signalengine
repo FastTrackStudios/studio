@@ -1,0 +1,4 @@
+// signal-engine v1
+name "Test Kick"
+engine_type "Kick"
+block { pack "../Packs/Kick.signalpack" }

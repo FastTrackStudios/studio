@@ -23,14 +23,14 @@
 //! preset, which pieces and mics. That is what a session saves, and what
 //! prepare writes when it builds the rig.
 //!
-//! **In a browser** the bass rig runs in the page's engine, its captures,
-//! IRs and home streamed in from the rig store ([`files`]). The kit voice
-//! and the whole guitar rig are the desktop's for now: the one reads its
-//! packs from disk, the other runs signal's rig service.
+//! **In a browser** the bass rig and the kit voice run in the page's
+//! engine, their files streamed in from the rig store ([`files`]): the bass
+//! rig's captures, IRs and home, the kit's preset, engines and the samples
+//! it plays, read out of their packs by range. The whole guitar rig is the
+//! desktop's for now: it runs signal's rig service.
 
 pub mod bass;
 pub mod files;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod kit;
 pub mod profile;
 pub mod rig;
@@ -54,11 +54,11 @@ pub const SIGNAL_RIG: &str = "FTS Signal Rig";
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SignalFx;
 
-/// The FX this build runs: in a browser, the bass rig only.
+/// The FX this build runs: in a browser, the bass rig and the kit voice.
 #[cfg(not(target_arch = "wasm32"))]
 const RUNS: [&str; 3] = [BASS_RIG, KIT_MIC, SIGNAL_RIG];
 #[cfg(target_arch = "wasm32")]
-const RUNS: [&str; 1] = [BASS_RIG];
+const RUNS: [&str; 2] = [BASS_RIG, KIT_MIC];
 
 impl SignalFx {
     fn bare(name: &str) -> Option<&'static str> {
@@ -81,7 +81,6 @@ impl FxFactory for SignalFx {
     fn create(&self, name_or_ident: &str, sample_rate: f64) -> Option<Box<dyn PluginInstance>> {
         match Self::bare(name_or_ident)? {
             BASS_RIG => Some(Box::new(rig::Rig::new(sample_rate))),
-            #[cfg(not(target_arch = "wasm32"))]
             KIT_MIC => Some(Box::new(kit::KitMic::new(sample_rate))),
             #[cfg(not(target_arch = "wasm32"))]
             SIGNAL_RIG => Some(Box::new(signal_rig::SignalRig::new(sample_rate))),

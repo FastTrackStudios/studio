@@ -16,10 +16,11 @@
 //! - Each file is kept in the page's Cache Storage (`fts-rigs`, by its path
 //!   and size), so the next load reads it from there.
 //!
-//! A capture (`.nam`, JSON) and an IR (`.wav`) are read whole, through the
-//! source's range read. The formats a page could read in part (a
-//! `.signalpack`'s samples) belong to the kit voice, which is the
-//! desktop's for now.
+//! A capture (`.nam`, JSON), an IR (`.wav`), a kit's preset and engines
+//! are read whole, through the source's range read. A `.signalpack` is
+//! read in part: a rig wants spans of it ([`signal_fx::files::range_key`]:
+//! its header, its index, the samples it plays), and each span is fetched
+//! by range and cached on its own.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -123,7 +124,7 @@ pub async fn open(source: Arc<dyn SongSource>) -> eyre::Result<usize> {
         .map(|(path, size)| {
             let (store, cache) = (Rc::clone(&store), cache.clone());
             async move {
-                let bytes = read(&store, cache.as_ref(), &path, size).await;
+                let bytes = read(&store, cache.as_ref(), &path, (0, size), size).await;
                 (path, bytes)
             }
         })
@@ -177,10 +178,10 @@ pub async fn feed() -> usize {
             .map(|key| {
                 let (store, cache) = (Rc::clone(&store), cache.clone());
                 async move {
-                    let found = files::store_path(&key)
-                        .and_then(|p| store.sizes.get(p).map(|size| (p.to_owned(), *size)));
-                    let bytes = match found {
-                        Some((path, size)) => read(&store, cache.as_ref(), &path, size).await,
+                    let bytes = match span_in(&store, &key) {
+                        Some((path, span, size)) => {
+                            read(&store, cache.as_ref(), &path, span, size).await
+                        }
                         None => Err(format!("the rig store has no {key}")),
                     };
                     (key, bytes)
@@ -213,15 +214,27 @@ pub async fn feed() -> usize {
     came
 }
 
-/// `path` (`size` bytes) from the store: kept in the page's cache, else
-/// fetched whole and kept.
+/// Where `key` is in the store: its file's path, the span of it the key
+/// names (the whole file, for a key that names none) and the file's size.
+/// `None` for a file the store lacks or a span past its end.
+fn span_in(store: &Store, key: &str) -> Option<(String, (u64, u64), u64)> {
+    let (whole, span) = files::range_of(key);
+    let path = files::store_path(whole)?;
+    let size = *store.sizes.get(path)?;
+    let span = span.unwrap_or((0, size));
+    (span.0.checked_add(span.1)? <= size).then(|| (path.to_owned(), span, size))
+}
+
+/// `span` (start, length) of `path` (`size` bytes) from the store: kept in
+/// the page's cache, else fetched by range and kept.
 async fn read(
     store: &Store,
     cache: Option<&web_sys::Cache>,
     path: &str,
+    (start, len): (u64, u64),
     size: u64,
 ) -> Result<Vec<u8>, String> {
-    let key = cache_key(&store.source.label(), path, size);
+    let key = cache_key(&store.source.label(), path, size, (start, len));
     if let Some(bytes) = match cache {
         Some(cache) => cache_get(cache, &key).await,
         None => None,
@@ -229,7 +242,10 @@ async fn read(
         COUNTS.with(|c| c.borrow_mut().cached += 1);
         return Ok(bytes);
     }
-    let bytes = store.source.read(path.to_owned(), 0..size).await?;
+    let bytes = store
+        .source
+        .read(path.to_owned(), start..start + len)
+        .await?;
     COUNTS.with(|c| c.borrow_mut().fetched += 1);
     if let Some(cache) = cache {
         cache_put(cache, &key, &bytes).await;
@@ -237,13 +253,19 @@ async fn read(
     Ok(bytes)
 }
 
-/// Where `path` of the store `label` is kept, at `size` bytes: a file
-/// that changes size is fetched again.
-fn cache_key(label: &str, path: &str, size: u64) -> String {
+/// Where `span` of `path` of the store `label` is kept, at `size` bytes: a
+/// file that changes size is fetched again. A whole file keeps the key it
+/// always had.
+fn cache_key(label: &str, path: &str, size: u64, (start, len): (u64, u64)) -> String {
     let escape = |s: &str| String::from(js_sys::encode_uri_component(s));
     let path = path.split('/').map(escape).collect::<Vec<_>>().join("/");
+    let span = if (start, len) == (0, size) {
+        String::new()
+    } else {
+        format!("&span={start}+{len}")
+    };
     format!(
-        "https://fts-cache.invalid/rigs/{}/{path}?size={size}",
+        "https://fts-cache.invalid/rigs/{}/{path}?size={size}{span}",
         escape(label)
     )
 }
