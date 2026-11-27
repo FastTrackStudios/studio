@@ -1,11 +1,13 @@
 //! What the app remembers while it runs: one context of signals, provided
 //! at the root and read wherever it is needed.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use dioxus::prelude::*;
 
-use crate::data::{self, Song, Version};
+use crate::day::Day;
+use crate::look;
+use crate::song::Song;
 
 /// A set, in the org that owns it.
 #[derive(Clone, PartialEq, Debug, Default)]
@@ -69,8 +71,6 @@ pub enum Sheet {
     Filters,
     /// The org switcher.
     Orgs,
-    /// A track's or a record's status ("rec:cr" or a track title).
-    Status(String),
     /// A person in the org (their id; empty: a new one).
     Person(String),
     /// How the org plays a song: its owner and id.
@@ -83,8 +83,6 @@ pub enum Menu {
     SetMenu,
     Series,
     Occ,
-    Project,
-    Mine,
 }
 
 /// Studio's engine, as the window last heard of it (native playback goes
@@ -194,8 +192,8 @@ impl NowPlaying {
         self.places.get(self.i).and_then(Option::as_ref)
     }
 
-    /// Seconds into the song (its length from the built-in list until its
-    /// audio has said).
+    /// Seconds into the song (its length as known until its audio has
+    /// said; four minutes when nothing says).
     pub fn secs(&self) -> (f64, f64) {
         let len = if self.dur > 0.0 {
             self.dur
@@ -224,11 +222,11 @@ impl NowPlaying {
     }
 }
 
-/// What the filters look at in a song, from the built-in list or the library.
+/// What the filters look at in a song of the library.
 pub struct Facts<'a> {
     pub title: &'a str,
     pub artist: Option<&'a str>,
-    /// Its key, as one of [`data::FIFTHS`] when it is one.
+    /// Its key, as one of [`look::FIFTHS`] when it is one.
     pub key: Option<&'a str>,
     pub tempo: Option<u32>,
     pub tags: &'a [&'a str],
@@ -240,35 +238,21 @@ pub struct Facts<'a> {
 #[derive(Clone, Default, PartialEq, Debug)]
 pub struct Filters {
     pub q: String,
-    pub tags: HashSet<&'static str>,
+    pub tags: HashSet<String>,
     pub keys: HashSet<&'static str>,
     pub energy: HashSet<u8>,
     pub tempo: HashSet<&'static str>,
     pub ready: HashSet<char>,
-    pub rested: bool,
 }
 
 impl Filters {
-    pub fn matches(&self, x: &data::LibSong) -> bool {
-        let s = &x.song;
-        self.admits(&Facts {
-            title: s.title,
-            artist: s.artist,
-            key: data::key_of(s),
-            tempo: s.tempo,
-            tags: &x.tags,
-            energy: x.energy,
-            ready: s.ready,
-        })
-    }
-
     /// Whether a song with these facts passes every filter.
     pub fn admits(&self, f: &Facts) -> bool {
         let hay = format!("{} {}", f.title, f.artist.unwrap_or("")).to_lowercase();
         if !self.q.is_empty() && !hay.contains(&self.q.to_lowercase()) {
             return false;
         }
-        if self.tags.iter().any(|t| !f.tags.contains(t)) {
+        if self.tags.iter().any(|t| !f.tags.contains(&t.as_str())) {
             return false;
         }
         if !self.keys.is_empty() && !self.keys.contains(f.key.unwrap_or("?")) {
@@ -279,7 +263,7 @@ impl Filters {
         }
         if !self.tempo.is_empty() {
             let t = f.tempo.unwrap_or(0);
-            let ok = data::TEMPI.iter().any(|(n, lo, hi)| {
+            let ok = look::TEMPI.iter().any(|(n, lo, hi)| {
                 self.tempo.contains(n) && f.tempo.is_some() && t >= *lo && t < *hi
             });
             if !ok {
@@ -287,9 +271,6 @@ impl Filters {
             }
         }
         if self.ready.iter().any(|k| !f.ready.contains(*k)) {
-            return false;
-        }
-        if self.rested && data::weeks_since(f.title) < 4.0 {
             return false;
         }
         true
@@ -309,7 +290,7 @@ impl Filters {
             c.push(("energy", format!("Energy {}", e.join(", "))));
         }
         if !self.tempo.is_empty() {
-            let t: Vec<_> = data::TEMPI
+            let t: Vec<_> = look::TEMPI
                 .iter()
                 .filter(|x| self.tempo.contains(x.0))
                 .map(|x| x.0)
@@ -317,15 +298,12 @@ impl Filters {
             c.push(("tempo", t.join(", ")));
         }
         if !self.ready.is_empty() {
-            let r: Vec<_> = data::READY
+            let r: Vec<_> = look::READY
                 .iter()
                 .filter(|x| self.ready.contains(&x.0))
                 .map(|x| x.1.to_lowercase())
                 .collect();
             c.push(("ready", format!("Has {}", r.join(", "))));
-        }
-        if self.rested {
-            c.push(("rested", "Not played in 4 weeks".into()));
         }
         c
     }
@@ -336,13 +314,11 @@ impl Filters {
             "energy" => self.energy.clear(),
             "tempo" => self.tempo.clear(),
             "ready" => self.ready.clear(),
-            "rested" => self.rested = false,
             _ => {
                 self.keys.clear();
                 self.energy.clear();
                 self.tempo.clear();
                 self.ready.clear();
-                self.rested = false;
             }
         }
     }
@@ -354,21 +330,12 @@ pub struct Booking {
     pub set: SetRef,
     /// The set's title and date, to say what is booked.
     pub title: String,
-    pub date: Option<data::Day>,
+    pub date: Option<Day>,
     /// Days from today.
     pub day: usize,
     pub time: &'static str,
-    pub room: &'static str,
-}
-
-/// Reviewing a track: which version, where the playhead is.
-#[derive(Clone, PartialEq, Debug, Default)]
-pub struct Review {
-    pub title: String,
-    pub v: Option<usize>,
-    pub pos: f64,
-    pub playing: bool,
-    pub draft: String,
+    /// Where: the set's place or the org's room, else what is typed.
+    pub room: String,
 }
 
 /// A set's chart and lyrics: the song, section and bar playing.
@@ -407,10 +374,10 @@ pub struct AppState {
     /// Who is signed in (their account at the issuer), when anyone is.
     pub who: Signal<String>,
     pub every_q: Signal<String>,
-    pub review: Signal<Review>,
-    pub versions: Signal<HashMap<&'static str, Vec<Version>>>,
-    pub stages: Signal<HashMap<String, usize>>,
     pub live: Signal<Live>,
+    /// The form of the song Chart and Lyrics show: each section's name
+    /// and bars, from its session (empty: none known, nothing to step).
+    pub live_form: Signal<Vec<(String, usize)>>,
     /// The set whose chart and lyrics `live` follows, and its songs.
     pub live_set: Signal<SetRef>,
     pub live_list: Signal<Vec<LiveSong>>,
@@ -421,6 +388,9 @@ pub struct AppState {
     /// The setlist files in the org's Drive (`.setlist`), once found:
     /// the Setlists page and the sidebar's count read them.
     pub drive_sets: Signal<Option<Vec<crate::files::Hit>>>,
+    /// The records (`# kind: studio` files) in Studio's home and Drive,
+    /// once read: the Records page, Home and the sidebar's count.
+    pub records: Signal<Option<Vec<crate::records::Record>>>,
     /// The engine, natively; and whether its transport drives Now
     /// Playing (else the timer does).
     pub engine: Signal<EngineStatus>,
@@ -437,21 +407,13 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        let cya = data::occ("cya_2026-11-19")
-            .map(|o| o.songs.clone())
-            .unwrap_or_default();
         Self {
             sheet: Signal::new(None),
             menu: Signal::new(None),
             toast: Signal::new(None),
-            // A browser plays real songs: an empty list until a set is
-            // played (an empty one, not none: the shell goes blank
-            // without its accessory at the start).
-            np: Signal::new(Some(if cfg!(feature = "drive") {
-                NowPlaying::new(Vec::new(), String::new(), 0, false)
-            } else {
-                NowPlaying::new(cya, "CYA · Thu Nov 19".into(), 0, false)
-            })),
+            // Nothing until a set is played (an empty list, not none: the
+            // shell goes blank without its accessory at the start).
+            np: Signal::new(Some(NowPlaying::new(Vec::new(), String::new(), 0, false))),
             seek: Signal::new(None),
             booking: Signal::new(None),
             filters: Signal::new(Filters::default()),
@@ -469,22 +431,21 @@ impl AppState {
             }),
             who: Signal::new(String::new()),
             every_q: Signal::new(String::new()),
-            review: Signal::new(Review::default()),
-            versions: Signal::new(data::all_versions()),
-            stages: Signal::new(HashMap::new()),
             live: Signal::new(Live {
                 song: 0,
-                sec: 1,
-                bar: 3,
+                sec: 0,
+                bar: 0,
                 playing: false,
                 click: false,
                 looping: false,
             }),
+            live_form: Signal::new(Vec::new()),
             live_set: Signal::new(SetRef::default()),
             live_list: Signal::new(Vec::new()),
             picked: Signal::new(None),
             sync: crate::live_sync::Sync::new(),
             drive_sets: Signal::new(None),
+            records: Signal::new(None),
             engine: Signal::new(EngineStatus::Off),
             engine_drives: Signal::new(false),
             shown_set: Signal::new(None),
@@ -511,8 +472,8 @@ impl AppState {
             self.picked.set(None);
             self.live.with_mut(|l| {
                 l.song = 0;
-                l.sec = 1;
-                l.bar = 3;
+                l.sec = 0;
+                l.bar = 0;
             });
         }
     }
@@ -534,18 +495,9 @@ impl AppState {
         self.sheet.set(None);
     }
 
-    /// Play a set's songs in order, from `first` (or its first song): the
-    /// library's songs of those titles.
+    /// Play a set's songs in order, from `first` (or its first song).
     pub fn play_titles(self, titles: &[String], from: String, first: Option<&str>) {
-        let list: Vec<Song> = titles
-            .iter()
-            .filter_map(|t| {
-                data::LIB
-                    .iter()
-                    .find(|l| l.song.title == t.as_str())
-                    .map(|l| l.song)
-            })
-            .collect();
+        let list: Vec<Song> = titles.iter().map(|t| crate::song::song_named(t)).collect();
         if let Some(start) = first.or(list.first().map(|s| s.title)).map(str::to_string) {
             self.play(list, from, &start);
         }
@@ -580,20 +532,26 @@ impl AppState {
     }
 
     /// Move a playing chart on by a bar: through the section (again, when
-    /// looping), then the next section and the next song.
+    /// looping), then the next section and the next song. A song whose
+    /// form is not known has no bars to step through.
     pub fn step_bar(self) {
         let mut live = self.live;
         let n = self.live_list.peek().len();
+        let form = self.live_form.peek().clone();
+        if form.is_empty() {
+            return;
+        }
         live.with_mut(|l| {
+            l.sec = l.sec.min(form.len() - 1);
             l.bar += 1;
-            if l.bar < data::BARS[l.sec] {
+            if l.bar < form[l.sec].1 {
                 return;
             }
             l.bar = 0;
             if l.looping {
                 return;
             }
-            if l.sec + 1 < data::SECS.len() {
+            if l.sec + 1 < form.len() {
                 l.sec += 1;
             } else if l.song + 1 < n {
                 l.song += 1;
@@ -614,37 +572,6 @@ impl AppState {
             .unwrap_or(120)
             .max(40);
         240_000 / tempo as u64
-    }
-
-    /// A track's stage, after any change.
-    pub fn stage_of(&self, t: &data::Track) -> usize {
-        self.stages.read().get(t.title).copied().unwrap_or(t.stage)
-    }
-
-    /// A record's status, after any change.
-    pub fn status_of(&self, a: &data::Album) -> usize {
-        self.stages
-            .read()
-            .get(&format!("rec:{}", a.id))
-            .copied()
-            .unwrap_or(a.status)
-    }
-
-    /// Open comments on a track: its versions' and its chart's and lyrics'.
-    pub fn open_on(&self, title: &str) -> usize {
-        let audio = self.versions.read().get(title).map_or(0, |vs| {
-            vs.iter()
-                .map(|v| v.comments.iter().filter(|c| c.open).count())
-                .sum()
-        });
-        audio + data::other_open(title)
-    }
-
-    pub fn latest(&self, title: &str) -> Option<Version> {
-        self.versions
-            .read()
-            .get(title)
-            .and_then(|v| v.last().cloned())
     }
 }
 

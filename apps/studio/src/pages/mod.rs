@@ -17,7 +17,6 @@ pub mod song;
 use dioxus::prelude::*;
 
 use crate::Route;
-use crate::data;
 use crate::icons::{I, Icon};
 use crate::pieces::{DayTile, Progress};
 use crate::setlist::{Face, Info};
@@ -45,7 +44,6 @@ pub fn FaceRow(
     let here = (use_app().here)();
     let owner = owner.unwrap_or_else(|| here.clone());
     let route = set_route(&owner, &face.id, &here);
-    let logo = data::logo(&face.series).or_else(|| data::art(&face.id));
     rsx! {
         button {
             class: "ag",
@@ -59,12 +57,8 @@ pub fn FaceRow(
                     Icon { name: I::Layers, size: 18 }
                 }
             }
-            if let Some(l) = logo {
-                img { class: "aglogo", src: l, alt: "" }
-            } else {
-                span { class: "aglogo",
-                    crate::pieces::Cover { title: face.title.clone(), size: 36, hue: face.hue }
-                }
+            span { class: "aglogo",
+                crate::pieces::Cover { title: face.title.clone(), size: 36, hue: face.hue }
             }
             span { class: "mid",
                 span { class: "t1", "{face.title}" }
@@ -149,7 +143,8 @@ pub fn BookButton() -> Element {
     }
 }
 
-/// Book a rehearsal for a given set: the day before it, at seven.
+/// Book a rehearsal for a given set: the day before it, at seven, where
+/// the set is played.
 pub fn book_for(app: crate::state::AppState, set: &SetRef, info: &Info) {
     let mut b = app.booking;
     let date = info.day();
@@ -159,51 +154,7 @@ pub fn book_for(app: crate::state::AppState, set: &SetRef, info: &Info) {
         date,
         day: date.map_or(1, |d| (d.from_today() - 1).max(0) as usize),
         time: "7:00 PM",
-        room: if info.place.is_empty() {
-            "Room 210"
-        } else {
-            leak_room(&info.place)
-        },
+        room: info.place.clone(),
     }));
     app.open(Sheet::Book);
-}
-
-/// The rooms the booking sheet offers are fixed strings; a set's own
-/// place is kept to one of them when it is one.
-fn leak_room(place: &str) -> &'static str {
-    [
-        "Room 210",
-        "Chapel",
-        "Worship Center",
-        "The Loft",
-        "Studio A",
-        "Recital Hall",
-    ]
-    .into_iter()
-    .find(|r| *r == place)
-    .unwrap_or("Room 210")
-}
-
-/// The org switcher's button.
-#[component]
-pub fn OrgPill() -> Element {
-    let app = use_app();
-    let org = (app.org)();
-    rsx! {
-        button {
-            class: "orgpill",
-            aria_label: "Organization",
-            onclick: move |_| app.open(Sheet::Orgs),
-            if let Some(o) = org {
-                span { class: "omark", style: "--h:{crate::orgs::org_hue(&o)}",
-                    "{crate::orgs::org_name(&o).chars().next().unwrap_or('?')}"
-                }
-                "{crate::orgs::org_name(&o)}"
-            } else {
-                Icon { name: I::Layers, size: 16 }
-                "All orgs"
-            }
-            Icon { name: I::Updown, size: 14 }
-        }
-    }
 }

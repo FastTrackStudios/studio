@@ -55,10 +55,10 @@ use room::{Kind, Loaded, Lobby, Opens, Room, RoomId};
 use session_sync::transport::{Command, LocalTransport, TransportSync};
 use studio_engine::web_engine;
 
-use crate::data::{self, Song};
 use crate::files::Hit;
 use crate::files_live::web;
 use crate::room_paths;
+use crate::song::{Song, song_named};
 use crate::state::{AppState, NowPlaying, Place, Source, use_app};
 
 /// The room the page is to be in: set by the link's page when its person
@@ -325,14 +325,14 @@ async fn songs_of(
                 .flat_map(|act| act.songs.iter())
                 .filter_map(|line| room_paths::song_of_line(&path, line))
                 .map(|folder| {
-                    let song = data::song_named(&room_paths::name_of(&folder));
+                    let song = song_named(&room_paths::name_of(&folder));
                     (song, home.place(folder))
                 })
                 .collect())
         }
         (Kind::Session, _) => {
             let folder = room_paths::song_folder(&path);
-            let song = data::song_named(&room_paths::name_of(&folder));
+            let song = song_named(&room_paths::name_of(&folder));
             Ok(vec![(song, home.place(folder))])
         }
     }

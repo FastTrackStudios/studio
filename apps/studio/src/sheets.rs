@@ -1,18 +1,18 @@
 //! What opens over the page: the ⋯ menus from its bar, and the sheets —
 //! open anything, the player, a song's key and arrangement in a set, More,
-//! booking a rehearsal, the library's filters, the org, a status.
+//! booking a rehearsal, the library's filters, the org.
 
 use dioxus::prelude::*;
 
 use crate::Route;
-use crate::data::{self, FIFTHS, Song, dur};
 use crate::icons::{I, Icon};
+use crate::look::{self, FIFTHS, dur};
 use crate::pieces::{Energy, KeyC, SongArt};
+use crate::song::Song;
 use crate::state::{AppState, Menu, SetRef, Sheet, use_app};
 
 /// A row of a menu.
 enum Row {
-    Head(&'static str),
     Div,
     /// Label, icon, note, what it says when tapped, red.
     Item(String, I, String, String, bool),
@@ -23,7 +23,7 @@ fn item(label: impl Into<String>, icon: I) -> Row {
     Row::Item(l.clone(), icon, String::new(), l, false)
 }
 
-fn menu_rows(app: AppState, m: Menu, mine: Vec<(String, String, String)>) -> Vec<Row> {
+fn menu_rows(app: AppState, m: Menu) -> Vec<Row> {
     let _ = app;
     match m {
         Menu::SetMenu => vec![
@@ -54,38 +54,6 @@ fn menu_rows(app: AppState, m: Menu, mine: Vec<(String, String, String)>) -> Vec
             item("Share with another org", I::Share),
             item("Print or export", I::Printer),
         ],
-        Menu::Project => vec![
-            item("Open in Session", I::Open),
-            item("Rehearse", I::Mic),
-            item("Pin to the sidebar", I::Pin),
-            Row::Div,
-            item("Share…", I::Share),
-            item("Show in the vault", I::Folder),
-            Row::Div,
-            Row::Item(
-                "Remove from recent".into(),
-                I::Trash,
-                String::new(),
-                "Remove from recent".into(),
-                true,
-            ),
-        ],
-        Menu::Mine => {
-            let mut v = vec![Row::Head("Open in your rig")];
-            for (title, when, rig) in mine {
-                let icon = data::rig(&rig).map_or(I::Rig, |r| r.icon);
-                v.push(Row::Item(
-                    title.clone(),
-                    icon,
-                    format!("{when} · {rig}"),
-                    format!("Opened {title}, {when} in the {rig} rig"),
-                    false,
-                ));
-            }
-            v.push(Row::Div);
-            v.push(item("Tuner", I::Tuner));
-            v
-        }
     }
 }
 
@@ -95,21 +63,9 @@ pub fn MenuView() -> Element {
     let app = use_app();
     let mut menu = app.menu;
     let route = use_route::<Route>();
-    let index = crate::sets::use_index();
-    let me = crate::team::use_me();
     let here = (app.here)();
     let Some(m) = menu() else { return rsx! {} };
-    let mine: Vec<(String, String, String)> = my_sets(&index.faces(), me.as_deref())
-        .into_iter()
-        .map(|f| {
-            (
-                f.title.clone(),
-                f.day().map(|d| d.when()).unwrap_or_default(),
-                "Guitar".to_string(),
-            )
-        })
-        .collect();
-    let rows = menu_rows(app, m, mine);
+    let rows = menu_rows(app, m);
     let set_here = route.set_id().map(|id| match &route {
         Route::OrgSet { owner, .. } => SetRef::new(owner, id),
         _ => SetRef::new(&here, id),
@@ -119,9 +75,6 @@ pub fn MenuView() -> Element {
         div { class: "menu",
             for (k , row) in rows.into_iter().enumerate() {
                 match row {
-                    Row::Head(h) => rsx! {
-                        div { key: "{k}", class: "mh", "{h}" }
-                    },
                     Row::Div => rsx! {
                         div { key: "{k}", class: "md" }
                     },
@@ -233,9 +186,6 @@ pub fn SheetBody(sheet: Sheet) -> Element {
         Sheet::Orgs => rsx! {
             OrgSheet {}
         },
-        Sheet::Status(target) => rsx! {
-            StatusSheet { target }
-        },
         Sheet::Person(id) => rsx! {
             crate::pages::orgs::PersonSheet { id }
         },
@@ -274,7 +224,8 @@ struct Hit {
 
 fn palette_items(
     faces: &[crate::setlist::Face],
-    series: &[crate::setlist::Series],
+    files: &[crate::files::Hit],
+    records: &[crate::records::Record],
     songs: &[crate::songs::Entry],
 ) -> Vec<Hit> {
     let mut v = Vec::new();
@@ -298,21 +249,25 @@ fn palette_items(
             icon: I::Setlist,
         });
     }
-    for sr in series {
+    for h in files {
         v.push(Hit {
-            t: sr.name.clone(),
-            k: "Weekly",
-            open: Some(Route::Series { id: sr.id.clone() }),
+            t: crate::setfile::name_of(&h.name),
+            k: "Setlist",
+            open: Some(Route::DriveSet {
+                space: h.space.clone(),
+                location: h.location.clone(),
+                path: h.path.split('/').map(str::to_string).collect(),
+            }),
             says: String::new(),
             key: None,
-            icon: I::Calendar,
+            icon: I::Setlist,
         });
     }
-    for a in data::ALBUMS.iter() {
+    for r in records {
         v.push(Hit {
-            t: a.title.into(),
-            k: "Album",
-            open: Some(Route::Album { id: a.id.into() }),
+            t: r.title.clone(),
+            k: "Record",
+            open: Some(Route::Album { id: r.id.clone() }),
             says: String::new(),
             key: None,
             icon: I::Disc,
@@ -324,26 +279,11 @@ fn palette_items(
             k: "Song",
             open: Some(Route::SongPage { id: s.id.clone() }),
             says: String::new(),
-            key: Some(s.key.as_deref().and_then(data::norm_key).unwrap_or("?")),
+            key: Some(s.key.as_deref().and_then(look::norm_key).unwrap_or("?")),
             icon: I::Audio,
         });
     }
-    for r in data::RIGS.iter() {
-        v.push(Hit {
-            t: format!("{} rig", r.name),
-            k: "Rig",
-            open: Some(Route::Signal {}),
-            says: String::new(),
-            key: None,
-            icon: I::Rig,
-        });
-    }
-    for a in [
-        "New session",
-        "Scan for projects",
-        "Tuner",
-        "Audio settings",
-    ] {
+    for a in ["New session"] {
         v.push(Hit {
             t: a.into(),
             k: "Action",
@@ -363,7 +303,14 @@ fn Palette() -> Element {
     let mut q = use_signal(String::new);
     let index = crate::sets::use_index();
     let lib = crate::songs::use_library();
-    let all = palette_items(&index.faces(), &index.series(), &lib.entries());
+    let here = (app.here)();
+    let files: Vec<crate::files::Hit> = (app.drive_sets)()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|h| h.space == here)
+        .collect();
+    let records = crate::pages::records::of_org(&(app.records)().unwrap_or_default(), Some(&here));
+    let all = palette_items(&index.faces(), &files, &records, &lib.entries());
     let needle = q().trim().to_lowercase();
     let list: Vec<Hit> = if needle.is_empty() {
         all.iter().take(6).cloned().collect()
@@ -379,7 +326,7 @@ fn Palette() -> Element {
             label { class: "field",
                 Icon { name: I::Search, size: 18 }
                 input {
-                    placeholder: "Projects, songs, rigs, actions",
+                    placeholder: "Setlists, records, songs, actions",
                     aria_label: "Open anything",
                     value: "{q}",
                     onmounted: move |e| async move {
@@ -416,7 +363,7 @@ fn Palette() -> Element {
                         if let Some(k) = h.key {
                             span {
                                 class: if k == "?" { "tile nokey" } else { "tile key" },
-                                style: "--h:{data::hue(k).unwrap_or(0)}",
+                                style: "--h:{look::hue(k).unwrap_or(0)}",
                                 "{k}"
                             }
                         } else {
@@ -596,11 +543,8 @@ fn MoreSheet() -> Element {
                 b { "More for this set" }
             }
             for (l , i , view) in [
-                ("Arrangement", I::Branch, Some(crate::session::View::Arrangement)),
-                ("Mixer", I::Sliders, Some(crate::session::View::Mixer)),
-                ("Lighting visualizer", I::Bulb, None),
-                ("Lighting cue list", I::Cues, None),
-                ("Notes", I::Message, None),
+                ("Arrangement", I::Branch, crate::session::View::Arrangement),
+                ("Mixer", I::Sliders, crate::session::View::Mixer),
             ]
             {
                 button {
@@ -611,10 +555,6 @@ fn MoreSheet() -> Element {
                         // The arrangement and the mixer are the session's:
                         // into it, the set playing (from its top if nothing
                         // is yet).
-                        let Some(view) = view else {
-                            app.say(l);
-                            return;
-                        };
                         if !app.np.peek().as_ref().is_some_and(|n| n.song().is_some()) {
                             let titles: Vec<String> = app
                                 .live_list
@@ -640,7 +580,8 @@ fn FilterSheet() -> Element {
     let app = use_app();
     let mut filters = app.filters;
     let f = filters();
-    let n = data::LIB.iter().filter(|x| f.matches(x)).count();
+    let lib = crate::songs::use_library();
+    let n = lib.entries().iter().filter(|x| x.admitted(&f)).count();
     let s = if n == 1 { "" } else { "s" };
     rsx! {
         BSheet { label: "Filter songs",
@@ -654,7 +595,7 @@ fn FilterSheet() -> Element {
                     button {
                         key: "{k}",
                         class: "fopt",
-                        style: "--h:{data::hue(k).unwrap_or(0)}",
+                        style: "--h:{look::hue(k).unwrap_or(0)}",
                         aria_pressed: "{f.keys.contains(k)}",
                         onclick: move |_| filters.with_mut(|f| if !f.keys.remove(k) { f.keys.insert(k); }),
                         "{k}"
@@ -681,7 +622,7 @@ fn FilterSheet() -> Element {
             }
             div { class: "fsec", "Tempo" }
             div { class: "seg",
-                for (nm , lo , hi) in data::TEMPI {
+                for (nm , lo , hi) in look::TEMPI {
                     {
                         let range = if hi > 900 {
                             format!("{lo}+")
@@ -705,7 +646,7 @@ fn FilterSheet() -> Element {
             }
             div { class: "fsec", "Has" }
             div { class: "seg",
-                for (k , nm) in data::READY {
+                for (k , nm) in look::READY {
                     button {
                         key: "{k}",
                         class: "fopt",
@@ -713,15 +654,6 @@ fn FilterSheet() -> Element {
                         onclick: move |_| filters.with_mut(|f| if !f.ready.remove(&k) { f.ready.insert(k); }),
                         "{nm}"
                     }
-                }
-            }
-            div { class: "fsec", "Rotation" }
-            div { class: "seg",
-                button {
-                    class: "fopt",
-                    aria_pressed: "{f.rested}",
-                    onclick: move |_| filters.with_mut(|f| f.rested = !f.rested),
-                    "Not played in 4 weeks"
                 }
             }
             button { class: "primary wide", onclick: move |_| app.close(), "Show {n} song{s}" }
@@ -789,63 +721,4 @@ fn OrgSheet() -> Element {
             crate::pages::orgs::JoinOrg { done: move |()| app.close() }
         }
     }
-}
-
-/// Change a track's status, or a record's ("rec:cr").
-#[component]
-fn StatusSheet(target: String) -> Element {
-    let app = use_app();
-    let (name, cur) = if let Some(a) = target.strip_prefix("rec:").and_then(data::album) {
-        (a.title, app.status_of(a))
-    } else if let Some(t) = data::track(&target) {
-        (t.title, app.stage_of(t))
-    } else {
-        return rsx! {};
-    };
-    rsx! {
-        BSheet { label: "Status",
-            div { class: "bhead",
-                b { "{name}" }
-            }
-            for (k , (nm , h)) in data::STAGES.iter().enumerate() {
-                button {
-                    key: "{nm}",
-                    class: "mi big",
-                    onclick: {
-                        let target = target.clone();
-                        move |_| {
-                            let mut st = app.stages;
-                            st.with_mut(|m| m.insert(target.clone(), k));
-                            app.close();
-                        }
-                    },
-                    span {
-                        class: "sdot",
-                        style: "--h:{h.unwrap_or(0)}",
-                        "data-none": "{h.is_none()}",
-                    }
-                    "{nm}"
-                    if k == cur {
-                        span { class: "ck",
-                            Icon { name: I::Check, size: 17, w: 2.2 }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Your sets from today on, soonest first: the ones whose band you are in.
-pub fn my_sets(faces: &[crate::setlist::Face], me: Option<&str>) -> Vec<crate::setlist::Face> {
-    let Some(me) = me else {
-        return Vec::new();
-    };
-    let mut v: Vec<crate::setlist::Face> = faces
-        .iter()
-        .filter(|f| f.upcoming() && f.band.iter().any(|b| b == me))
-        .cloned()
-        .collect();
-    v.sort_by(|a, b| a.date.cmp(&b.date));
-    v
 }

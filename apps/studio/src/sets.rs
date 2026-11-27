@@ -81,12 +81,10 @@ pub struct SetDoc {
 }
 
 /// A set's document, brought up to its version once its node has answered
-/// (stamped with its org and id first: the step reads them), and the
-/// prototype's live keys carried onto it once.
+/// (stamped with its org and id first: the step reads them).
 pub fn use_set(org: &str, id: &str) -> SetDoc {
     let b = backing::use_backing(orgs::qualified(org, &setlist::setlist_doc(id)));
-    let legacy = backing::use_backing(orgs::qualified(org, &setlist::legacy_doc(id)));
-    let ready = b.ready() && legacy.ready();
+    let ready = b.ready();
     {
         let (b, org, id) = (b.clone(), org.to_string(), id.to_string());
         use_effect(use_reactive!(|ready| {
@@ -99,16 +97,6 @@ pub fn use_set(org: &str, id: &str) -> SetDoc {
                     setlist::stamp_set(d, &org, &id);
                     drive_spine::schema::upgrade(d, setlist::SETLIST_STEPS)
                 });
-            }
-            if setlist::builtin_home(&id) == Some(org.as_str())
-                && !legacy.peek().get_map("songs").is_empty()
-                && !matches!(
-                    b.peek().get_map("meta").get("legacy"),
-                    Some(loro::ValueOrContainer::Value(loro::LoroValue::Bool(true)))
-                )
-            {
-                let old = legacy.peek();
-                b.edit(|d| setlist::import_legacy(d, &old));
             }
         }));
     }

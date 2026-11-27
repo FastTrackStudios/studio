@@ -153,14 +153,14 @@ pub fn org_name(slug: &str) -> String {
         Some(k) => k.name.to_string(),
         None => slug
             .split('-')
-            .map(crate::data::cap)
+            .map(crate::look::cap)
             .collect::<Vec<_>>()
             .join(" "),
     }
 }
 
 pub fn org_hue(slug: &str) -> u32 {
-    known(slug).map_or_else(|| crate::data::str_hue(slug), |k| k.hue)
+    known(slug).map_or_else(|| crate::look::str_hue(slug), |k| k.hue)
 }
 
 #[cfg_attr(not(feature = "drive"), allow(dead_code))]
@@ -497,179 +497,63 @@ pub fn person_id(doc: &LoroDoc, name: &str) -> String {
         .expect("a free id")
 }
 
-/// An org's first team: who the prototype already had, by the kind of org.
-fn seed_team(doc: &LoroDoc) {
-    let org = stamped_org(doc);
-    let kind = known(&org).map(|k| k.kind);
-    let g = |id: &str, name: &str, kind: &str| Group {
-        id: id.into(),
-        name: name.into(),
-        kind: kind.into(),
-    };
-    let p = |name: &str, hue: u32, role: Role, parts: &[&str], groups: &[&str], leads: &[&str]| {
-        Person {
-            id: session_sync::slug::slugify(name),
-            name: name.into(),
-            account: None,
-            hue,
-            role,
-            parts: parts.iter().map(|x| x.to_string()).collect(),
-            groups: groups.iter().map(|x| x.to_string()).collect(),
-            leads: leads.iter().map(|x| x.to_string()).collect(),
+/// The people, groups and rooms the prototype made up for an org's team
+/// (version 1 seeded them, none with an account).
+const SEEDED_PEOPLE: [&str; 9] = [
+    "cody-wright",
+    "jake",
+    "mia",
+    "sam",
+    "riley",
+    "jordan",
+    "ava",
+    "liam",
+    "dr-hale",
+];
+const SEEDED_GROUPS: [&str; 4] = ["worship", "youth", "recital", "christmas"];
+const SEEDED_ROOMS: [&str; 3] = ["Worship Center", "Studio A", "Recital Hall"];
+
+/// The org document's version 1 seeded the prototype's made-up team; it
+/// seeds nothing now: an org's people are the ones added to it.
+fn seed_team(_: &LoroDoc) {}
+
+/// Version 2: the made-up team version 1 seeded taken out again (each
+/// seeded person not linked to an account, a seeded group nobody left is
+/// in, a seeded room). Everyone and everything added since stays.
+fn team_v2(doc: &LoroDoc) {
+    for p in people(doc) {
+        if SEEDED_PEOPLE.contains(&p.id.as_str()) && p.account.is_none() {
+            let _ = remove_person(doc, &p.id);
         }
-    };
-    let (groups, people, settings): (Vec<Group>, Vec<Person>, Settings) = match kind {
-        Some(Kind::Church) if org == "crossroads-church" => (
-            vec![
-                g("worship", "Worship team", "worship team"),
-                g("youth", "Youth band", "band"),
-            ],
-            vec![
-                p(
-                    "Cody Wright",
-                    30,
-                    Role::Leader,
-                    &["Electric guitar", "Tracks"],
-                    &["worship", "youth"],
-                    &["youth"],
-                ),
-                p(
-                    "Jake",
-                    200,
-                    Role::Leader,
-                    &["Lead vocals", "Acoustic guitar"],
-                    &["worship", "youth"],
-                    &["worship"],
-                ),
-                p(
-                    "Mia",
-                    320,
-                    Role::Member,
-                    &["Vocals", "Keys"],
-                    &["worship", "youth"],
-                    &[],
-                ),
-                p(
-                    "Sam",
-                    140,
-                    Role::Member,
-                    &["Drums"],
-                    &["worship", "youth"],
-                    &[],
-                ),
-                p(
-                    "Riley",
-                    260,
-                    Role::Tech,
-                    &["Sound", "Lights"],
-                    &["worship"],
-                    &[],
-                ),
-            ],
-            Settings {
-                name: String::new(),
-                arrangement: "Normal".into(),
-                room: "Worship Center".into(),
-            },
-        ),
-        Some(Kind::Church) => (
-            vec![g("worship", "Worship team", "worship team")],
-            vec![p(
-                "Cody Wright",
-                30,
-                Role::Leader,
-                &["Electric guitar", "Vocals"],
-                &["worship"],
-                &["worship"],
-            )],
-            Settings {
-                arrangement: "Normal".into(),
-                ..Settings::default()
-            },
-        ),
-        Some(Kind::Lessons) => (
-            vec![g("recital", "Recital band", "students")],
-            vec![
-                p(
-                    "Cody Wright",
-                    30,
-                    Role::Teacher,
-                    &["Electric guitar", "Bass"],
-                    &["recital"],
-                    &["recital"],
-                ),
-                p(
-                    "Jordan",
-                    15,
-                    Role::Student,
-                    &["Electric guitar", "Lead vocals"],
-                    &["recital"],
-                    &[],
-                ),
-                p("Ava", 300, Role::Student, &["Drums"], &["recital"], &[]),
-                p("Liam", 180, Role::Student, &["Bass"], &["recital"], &[]),
-            ],
-            Settings {
-                arrangement: "Normal".into(),
-                room: "Studio A".into(),
-                ..Settings::default()
-            },
-        ),
-        Some(Kind::School) => (
-            vec![g("christmas", "Christmas band", "band")],
-            vec![
-                p(
-                    "Cody Wright",
-                    30,
-                    Role::Member,
-                    &["Electric guitar"],
-                    &["christmas"],
-                    &[],
-                ),
-                p(
-                    "Dr. Hale",
-                    90,
-                    Role::Leader,
-                    &["Keys"],
-                    &["christmas"],
-                    &["christmas"],
-                ),
-            ],
-            Settings {
-                arrangement: "Normal".into(),
-                room: "Recital Hall".into(),
-                ..Settings::default()
-            },
-        ),
-        _ => (
-            Vec::new(),
-            vec![p(
-                "Cody Wright",
-                30,
-                Role::Leader,
-                &["Electric guitar", "Bass", "Keys"],
-                &[],
-                &[],
-            )],
-            Settings {
-                arrangement: "Normal".into(),
-                ..Settings::default()
-            },
-        ),
-    };
-    if doc.get_map("people").is_empty() {
-        for x in &groups {
-            let _ = put_group(doc, x);
+    }
+    let left = people(doc);
+    let groups = doc.get_map("groups");
+    for g in groups_of(doc) {
+        let used = left
+            .iter()
+            .any(|p| p.groups.contains(&g) || p.leads.contains(&g));
+        if SEEDED_GROUPS.contains(&g.as_str()) && !used {
+            let _ = groups.delete(&g);
         }
-        for x in &people {
-            let _ = put_person(doc, x);
-        }
-        let _ = put_settings(doc, &settings);
+    }
+    let mut st = settings(doc);
+    if SEEDED_ROOMS.contains(&st.room.as_str()) {
+        st.room.clear();
+        let _ = put_settings(doc, &st);
     }
 }
 
-/// The org document's shape versions: version 1 is the seeded team.
-pub const ORG_STEPS: &[drive_spine::schema::Step] = &[seed_team];
+/// The ids of the org's groups.
+fn groups_of(doc: &LoroDoc) -> Vec<String> {
+    doc.get_map("groups")
+        .keys()
+        .map(|k| k.to_string())
+        .collect()
+}
+
+/// The org document's shape versions: version 1 seeded the prototype's
+/// team (nothing now), version 2 takes it out again.
+pub const ORG_STEPS: &[drive_spine::schema::Step] = &[seed_team, team_v2];
 
 // ── how an org plays a song ─────────────────────────────────────────────
 
@@ -865,80 +749,114 @@ pub fn owners_sharing(to: &str, shared: &[(String, String)]) -> Vec<String> {
 
 // ── the library's versions ──────────────────────────────────────────────
 
-/// Which org a built-in song belongs to, by its tags: the Christmas show
-/// is CBU's, the recital Rockstars of Tomorrow's, the worship rotation
-/// Crossroads Church's.
-pub fn home_of(tags: &[String]) -> Option<&'static str> {
-    let has = |t: &str| tags.iter().any(|x| x == t);
-    if has("christmas") {
-        Some("cbu")
-    } else if has("recital") || has("originals") || has("covers") {
-        Some("rockstars-of-tomorrow")
-    } else if has("worship") || has("contemporary") || has("hymns") {
-        Some("crossroads-church")
-    } else {
-        None
-    }
+/// The songs the prototype made up for every library (version 1 seeded
+/// them by their titles' slugs, with made-up keys, tempi and tags).
+const PROTOTYPE_SONGS: [&str; 40] = [
+    "DTLA Cinematic Intro",
+    "Drive To LA",
+    "For You",
+    "Heart Isn't Ready",
+    "No One Knows",
+    "Hey!",
+    "Sleeptalker",
+    "Figure It Out",
+    "Seven Nation Army",
+    "Sad But True",
+    "Out Of The Black",
+    "She's American",
+    "WORST PART OF YOU",
+    "Fire",
+    "Not Too Much Longer (Live)",
+    "Know Me (Extended)",
+    "All I Want for Christmas Is You",
+    "Feliz Navidad",
+    "Joy to the World (Unspeakable Joy)",
+    "Last Christmas",
+    "Rockin' Around the Christmas Tree",
+    "Silent Night",
+    "Sleigh Ride",
+    "This Christmas",
+    "What Christmas Means",
+    "Goodness of God",
+    "Gratitude",
+    "Build My Life",
+    "Way Maker",
+    "Firm Foundation (He Won't)",
+    "Holy Forever",
+    "Praise",
+    "Trust in God",
+    "Jireh",
+    "Living Hope",
+    "This Is Amazing Grace",
+    "See A Victory",
+    "King of Kings",
+    "Graves Into Gardens",
+    "Same God",
+];
+
+/// Whether a library song is one the prototype seeded: its id is the
+/// slug of one of [`PROTOTYPE_SONGS`] and its title that title (a song
+/// someone added has an id of its own, `songs::new_id`).
+fn seeded_song(id: &str, title: &str) -> bool {
+    PROTOTYPE_SONGS
+        .iter()
+        .any(|t| *t == title && session_sync::slug::slugify(t) == id)
 }
 
-/// What each home org shares to start with.
-fn first_shares(org: &str, e: &Entry) -> Vec<&'static str> {
-    let has = |t: &str| e.tags.iter().any(|x| x == t);
-    match org {
-        // The hymns go to the other worship team.
-        "crossroads-church" if has("hymns") => vec!["days-to-praise"],
-        // The Christmas show's carols and worship songs go to the church.
-        "cbu" if has("hymns") || has("worship") => vec!["crossroads-church"],
-        // The students' originals go to the teacher's own org.
-        "rockstars-of-tomorrow" if has("originals") => vec!["codywright"],
-        _ => Vec::new(),
-    }
-}
+/// Version 1 seeded every library with the prototype's songs, and version
+/// 2 moved each to its "home" org; neither does anything now.
+fn library_v2(_: &LoroDoc) {}
 
-/// Version 2: a library is one org's. Every org's library was seeded
-/// with every built-in song; each built-in song now lives in its home
-/// org only (its key here, when this org had changed it, kept as this
-/// org's use of the home's song). Songs people added stay where they
-/// are. The home orgs start sharing a few songs.
-pub fn library_v2(lib: &LoroDoc) {
-    let org = stamped_org(lib);
-    let builtin: Vec<Entry> = crate::data::LIB.iter().map(Entry::from_lib).collect();
+/// Version 3: the prototype's seeded songs taken out of the library, with
+/// this org's uses of them (in any org). Songs people added stay.
+pub fn library_v3(lib: &LoroDoc) {
+    let mut gone: Vec<String> = Vec::new();
     for e in songs::entries(lib) {
-        let Some(seed) = builtin.iter().find(|b| b.id == e.id) else {
-            continue;
-        };
-        match home_of(&seed.tags) {
-            Some(home) if home != org => {
-                if e.key.is_some() && e.key != seed.key {
-                    let mut u = use_of(lib, home, &e.id);
-                    u.key = e.key.clone();
-                    let _ = put_use(lib, home, &e.id, &u);
-                }
-                let _ = lib.get_map("songs").delete(&e.id);
-            }
-            Some(home) => {
-                for to in first_shares(home, &e) {
-                    let _ = share_song(lib, &e.id, to, true);
-                }
-            }
-            None => {}
+        if seeded_song(&e.id, &e.title) {
+            let _ = lib.get_map("songs").delete(&e.id);
+            gone.push(e.id);
+        }
+    }
+    let seeded: Vec<String> = PROTOTYPE_SONGS
+        .iter()
+        .map(|t| session_sync::slug::slugify(t))
+        .collect();
+    let uses = lib.get_map("uses");
+    for k in uses.keys().map(|k| k.to_string()).collect::<Vec<_>>() {
+        let id = k.rsplit_once('/').map_or(k.as_str(), |(_, id)| id);
+        if seeded.iter().any(|s| s == id) || gone.iter().any(|g| g == id) {
+            let _ = uses.delete(&k);
         }
     }
 }
 
-/// The library's shape versions (`drive_spine::schema`): 1, the built-in
-/// songs; 2, one org's songs, their sharing and the org's uses.
-pub const LIBRARY_STEPS: &[drive_spine::schema::Step] = &[songs::seed_library, library_v2];
+/// The library's shape versions (`drive_spine::schema`): 1 and 2 once
+/// seeded and moved the prototype's songs (nothing now), 3 takes them out.
+pub const LIBRARY_STEPS: &[drive_spine::schema::Step] =
+    &[songs::seed_library, library_v2, library_v3];
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use drive_spine::schema;
 
-    fn lib_v1(org: &str) -> LoroDoc {
+    /// A library with two songs of its own (fixtures, this test's).
+    fn lib(org: &str) -> LoroDoc {
         let d = LoroDoc::new();
         stamp_org(&d, org);
-        schema::upgrade(&d, &LIBRARY_STEPS[..1]);
+        schema::upgrade(&d, LIBRARY_STEPS);
+        for (id, title, key) in [("s-one", "Song One", "G"), ("s-two", "Song Two", "A")] {
+            songs::put_entry(
+                &d,
+                &Entry {
+                    id: id.into(),
+                    title: title.into(),
+                    key: Some(key.into()),
+                    ..Entry::default()
+                },
+            )
+            .unwrap();
+        }
         d
     }
 
@@ -955,26 +873,62 @@ mod tests {
     }
 
     #[test]
-    fn a_church_starts_with_its_worship_team() {
+    fn a_new_org_starts_with_no_made_up_team() {
         let d = LoroDoc::new();
         stamp_org(&d, "crossroads-church");
         schema::upgrade(&d, ORG_STEPS);
-        let ps = people(&d);
-        assert!(ps.len() >= 4);
-        // Leaders first.
-        assert!(ps[0].leading());
-        let worship: Vec<String> = leaders(&d, "worship").into_iter().map(|p| p.name).collect();
-        assert_eq!(worship, vec!["Jake"]);
-        let drums: Vec<String> = playing(&d, "Drums", Some("worship"))
-            .into_iter()
-            .map(|p| p.name)
-            .collect();
-        assert_eq!(drums, vec!["Sam"]);
-        assert_eq!(settings(&d).room, "Worship Center");
-        // Seeding again changes nothing.
-        let before = people(&d);
-        seed_team(&d);
-        assert_eq!(people(&d), before);
+        assert!(people(&d).is_empty());
+        assert!(groups(&d).is_empty());
+        assert_eq!(settings(&d).room, "");
+    }
+
+    #[test]
+    fn version_2_takes_the_seeded_team_out_and_keeps_the_org_s_own() {
+        let d = LoroDoc::new();
+        stamp_org(&d, "crossroads-church");
+        let _ = d.get_map("meta").insert("version", 1);
+        let person = |id: &str, account: Option<&str>, groups: &[&str]| Person {
+            id: id.into(),
+            name: id.into(),
+            account: account.map(str::to_string),
+            groups: groups.iter().map(|g| g.to_string()).collect(),
+            ..Person::default()
+        };
+        put_person(&d, &person("jake", None, &["worship"])).unwrap();
+        put_person(&d, &person("sam", None, &["youth"])).unwrap();
+        put_person(
+            &d,
+            &person("cody-wright", Some("me@example.com"), &["worship"]),
+        )
+        .unwrap();
+        put_person(&d, &person("ana-ruiz", None, &[])).unwrap();
+        for g in ["worship", "youth"] {
+            put_group(
+                &d,
+                &Group {
+                    id: g.into(),
+                    name: g.into(),
+                    kind: "band".into(),
+                },
+            )
+            .unwrap();
+        }
+        put_settings(
+            &d,
+            &Settings {
+                room: "Worship Center".into(),
+                ..Settings::default()
+            },
+        )
+        .unwrap();
+        schema::upgrade(&d, ORG_STEPS);
+        let ids: Vec<String> = people(&d).into_iter().map(|p| p.id).collect();
+        assert_eq!(ids.len(), 2, "{ids:?}");
+        assert!(ids.contains(&"cody-wright".to_string()) && ids.contains(&"ana-ruiz".to_string()));
+        // `worship` still has someone in it; `youth` had only the made-up Sam.
+        let gs: Vec<String> = groups(&d).into_iter().map(|g| g.id).collect();
+        assert_eq!(gs, vec!["worship"]);
+        assert_eq!(settings(&d).room, "");
     }
 
     #[test]
@@ -1015,90 +969,55 @@ mod tests {
     }
 
     #[test]
-    fn upgrade_to_v2_keeps_each_song_in_its_home_org() {
-        // Crossroads: keeps the worship songs, loses the recital's and the Christmas show's.
-        let d = lib_v1("crossroads-church");
-        let all = songs::entries(&d).len();
-        assert!(all > 20);
-        assert_eq!(
-            schema::upgrade(&d, LIBRARY_STEPS),
-            schema::Upgraded::From(1)
-        );
-        let kept = songs::entries(&d);
-        assert!(!kept.is_empty() && kept.len() < all);
-        assert!(
-            kept.iter()
-                .all(|e| home_of(&e.tags) == Some("crossroads-church"))
-        );
-        // A hymn is shared with Days to Praise from the start.
-        let hymns = shared_with(&d, "days-to-praise");
-        assert!(!hymns.is_empty());
-        assert!(hymns.iter().all(|e| e.tags.iter().any(|t| t == "hymns")));
-        assert_eq!(share_targets(&d), vec!["days-to-praise"]);
-    }
+    fn a_new_library_is_empty_and_version_3_takes_the_prototype_s_songs_out() {
+        let d = LoroDoc::new();
+        stamp_org(&d, "crossroads-church");
+        schema::upgrade(&d, LIBRARY_STEPS);
+        assert!(songs::entries(&d).is_empty());
 
-    #[test]
-    fn every_home_org_starts_sharing_something() {
-        for (org, to) in [
-            ("crossroads-church", "days-to-praise"),
-            ("cbu", "crossroads-church"),
-            ("rockstars-of-tomorrow", "codywright"),
-        ] {
-            let d = lib_v1(org);
-            schema::upgrade(&d, LIBRARY_STEPS);
-            assert!(
-                !shared_with(&d, to).is_empty(),
-                "{org} shares nothing with {to}"
-            );
-        }
-    }
-
-    #[test]
-    fn upgrade_keeps_added_songs_and_a_changed_key() {
-        let d = lib_v1("codywright");
-        // Someone added a song, and moved a worship song's key.
-        let mine = Entry {
-            id: "my-song".into(),
-            title: "My Song".into(),
+        // A library version 1 seeded: its made-up songs go, the ones
+        // added (with ids of their own) stay, and so do their uses.
+        let old = LoroDoc::new();
+        stamp_org(&old, "crossroads-church");
+        let _ = old.get_map("meta").insert("version", 2);
+        let seeded = Entry {
+            id: "build-my-life".into(),
+            title: "Build My Life".into(),
             ..Entry::default()
         };
-        songs::put_entry(&d, &mine).unwrap();
-        let mut moved = songs::entries(&d)
-            .into_iter()
-            .find(|e| home_of(&e.tags) == Some("crossroads-church"))
-            .unwrap();
-        let old_key = moved.key.clone();
-        moved.key = Some(
-            if old_key.as_deref() == Some("A") {
-                "B"
-            } else {
-                "A"
-            }
-            .into(),
-        );
-        songs::put_entry(&d, &moved).unwrap();
-
-        schema::upgrade(&d, LIBRARY_STEPS);
-        let left = songs::entries(&d);
-        assert_eq!(left.len(), 1);
-        assert_eq!(left[0].id, "my-song");
-        // The key this org played it in is kept, as its use of the church's song.
-        assert_eq!(use_of(&d, "crossroads-church", &moved.id).key, moved.key);
-        // Running it again does nothing.
+        let added = Entry {
+            id: "a1b2".into(),
+            title: "Holy Forever".into(),
+            ..Entry::default()
+        };
+        songs::put_entry(&old, &seeded).unwrap();
+        songs::put_entry(&old, &added).unwrap();
+        let key = |k: &str| Use {
+            key: Some(k.into()),
+            ..Use::default()
+        };
+        put_use(&old, "crossroads-church", "build-my-life", &key("A")).unwrap();
+        put_use(&old, "crossroads-church", "a1b2", &key("B")).unwrap();
         assert_eq!(
-            schema::upgrade(&d, LIBRARY_STEPS),
-            schema::Upgraded::Current
+            schema::upgrade(&old, LIBRARY_STEPS),
+            schema::Upgraded::From(2)
+        );
+        let left: Vec<String> = songs::entries(&old).into_iter().map(|e| e.id).collect();
+        assert_eq!(left, vec!["a1b2"]);
+        assert_eq!(
+            use_of(&old, "crossroads-church", "build-my-life"),
+            Use::default()
+        );
+        assert_eq!(
+            use_of(&old, "crossroads-church", "a1b2").key.as_deref(),
+            Some("B")
         );
     }
 
     #[test]
     fn a_song_shared_with_another_org() {
-        let lib = lib_v1("rockstars-of-tomorrow");
-        schema::upgrade(&lib, LIBRARY_STEPS);
-        let song = songs::entries(&lib)
-            .into_iter()
-            .find(|e| !e.tags.iter().any(|t| t == "originals"))
-            .unwrap();
+        let lib = lib("rockstars-of-tomorrow");
+        let song = songs::entries(&lib).into_iter().next().unwrap();
         share_song(&lib, &song.id, "cbu", true).unwrap();
         assert!(shared_with(&lib, "cbu").iter().any(|e| e.id == song.id));
 
@@ -1162,8 +1081,7 @@ mod tests {
 
     #[test]
     fn two_orgs_share_at_once_and_both_land() {
-        let a = lib_v1("crossroads-church");
-        schema::upgrade(&a, LIBRARY_STEPS);
+        let a = lib("crossroads-church");
         let b = LoroDoc::new();
         b.import(&a.export(loro::ExportMode::Snapshot).unwrap())
             .unwrap();

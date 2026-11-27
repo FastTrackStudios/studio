@@ -4,7 +4,6 @@
 
 use dioxus::prelude::*;
 
-use crate::data;
 use crate::pages::set::use_ctx;
 use crate::setlist::ItemKind;
 
@@ -18,8 +17,8 @@ pub fn PrintSet(owner: String, id: String) -> Element {
     let when = info.day().map(|d| {
         format!(
             "{}, {} {} {}",
-            data::DAY[d.weekday()],
-            data::MONTH[d.month0()],
+            crate::day::DAY[d.weekday()],
+            crate::day::MONTH[d.month0()],
             d.mday(),
             d.year()
         )

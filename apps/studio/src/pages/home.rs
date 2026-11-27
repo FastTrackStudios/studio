@@ -1,126 +1,213 @@
-//! Home: what needs you now, the live side and the studio side.
+//! Home: the real work of the org Studio is in (the one the sidebar's
+//! switcher picked): its setlists, its records and the songs changed
+//! most recently. Each says how to add the real thing when there is none
+//! yet. Home lists no orgs: switching is the switcher's.
 
 use dioxus::prelude::*;
 
-use super::{BookButton, FaceRow, OrgPill, RehRow, progress_of};
+use super::{FaceRow, progress_of};
 use crate::Route;
-use crate::data::{self, DAY, MONTH, TODAY};
+use crate::day::{DAY, MONTH, today};
+use crate::files::Hit;
 use crate::icons::{I, Icon};
-use crate::pieces::{Art, Bar, Page};
-use crate::setlist::{Face, Rehearsal};
+use crate::pieces::{Bar, Page};
+use crate::records::Record;
+use crate::setlist::Face;
 use crate::state::use_app;
 
-/// A row of the week: a set or a rehearsal.
-#[derive(Clone, PartialEq)]
-enum Agenda {
-    Set(Face),
-    Reh(Face, Rehearsal),
+/// What Home shows of an org: its sets (the index's, soonest first, then
+/// undated), its setlist files and its records. Pure, for the tests.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct OrgWork {
+    pub sets: Vec<Face>,
+    pub files: Vec<Hit>,
+    pub records: Vec<Record>,
+}
+
+impl OrgWork {
+    /// The work of `org`, from what Studio has found.
+    pub fn of(org: &str, faces: &[Face], files: &[Hit], records: &[Record]) -> OrgWork {
+        let mut sets: Vec<Face> = faces
+            .iter()
+            .filter(|f| f.kind != crate::setlist::Kind::Template)
+            .cloned()
+            .collect();
+        sets.sort_by(|a, b| match (a.upcoming(), b.upcoming()) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.date.cmp(&b.date),
+        });
+        let mut files: Vec<Hit> = files.iter().filter(|h| h.space == org).cloned().collect();
+        // A set of the index's that has its own file is listed once.
+        files.retain(|h| {
+            let name = crate::setfile::name_of(&h.name);
+            !sets.iter().any(|f| f.title == name)
+        });
+        OrgWork {
+            sets,
+            files,
+            records: super::records::of_org(records, Some(org)),
+        }
+    }
+
+    pub fn setlists(&self) -> usize {
+        self.sets.len() + self.files.len()
+    }
+}
+
+/// A song folder in Studio's home (`Songs/<Title - Artist>/`), as Home
+/// lists it: most recently changed first.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecentSong {
+    pub title: String,
+    pub artist: Option<String>,
+    /// The folder's path on this computer.
+    pub folder: String,
+    /// When it last changed, in ms since 1970.
+    pub mtime: i64,
+}
+
+/// The `limit` song folders in `<home>/Songs/` changed most recently.
+pub fn recent_songs(limit: usize) -> Vec<RecentSong> {
+    if cfg!(target_arch = "wasm32") {
+        return Vec::new();
+    }
+    let mut v: Vec<RecentSong> = crate::files_live::disk::list("", "Songs")
+        .into_iter()
+        .filter(|h| h.dir && !h.name.starts_with('.'))
+        .map(|h| {
+            let (title, artist) = match h.name.split_once(" - ") {
+                Some((t, a)) => (t.trim().to_string(), Some(a.trim().to_string())),
+                None => (h.name.clone(), None),
+            };
+            RecentSong {
+                title,
+                artist,
+                folder: crate::storage::resolve(&h.path)
+                    .map_or(h.path.clone(), |p| p.to_string_lossy().into_owned()),
+                mtime: h.mtime,
+            }
+        })
+        .collect();
+    v.sort_by(|a, b| b.mtime.cmp(&a.mtime).then(a.title.cmp(&b.title)));
+    v.truncate(limit);
+    v
 }
 
 #[component]
 pub fn Home() -> Element {
     let app = use_app();
     let index = crate::sets::use_index();
-    let me = crate::team::use_me();
-    let faces = index.faces();
-    let mine = crate::sheets::my_sets(&faces, me.as_deref());
-    let next = mine.first().cloned();
-    let mut seen = vec![next.as_ref().map(|n| n.series.clone())];
-    let mut week: Vec<(data::Day, Agenda)> = Vec::new();
-    for f in mine.iter().skip(1) {
-        let Some(d) = f.day() else { continue };
-        let key = Some(f.series.clone()).filter(|s| !s.is_empty());
-        if d.from_today() < 8 && (key.is_none() || !seen.contains(&key)) {
-            seen.push(key);
-            week.push((d, Agenda::Set(f.clone())));
-        }
-    }
-    for f in &faces {
-        for r in &f.rehearsals {
-            if let Some(d) = crate::setlist::parse_day(&r.date)
-                && (0..8).contains(&d.from_today())
-            {
-                week.push((d, Agenda::Reh(f.clone(), r.clone())));
-            }
-        }
-    }
-    week.sort_by_key(|w| w.0);
-    week.truncate(3);
-
-    let review: Vec<&'static data::Track> = data::STUDIO
-        .iter()
-        .filter(|x| {
-            let when = app.latest(x.title).map(|v| v.when).unwrap_or_default();
-            app.open_on(x.title) > 0 || when.ends_with('h') || when == "Yesterday"
-        })
-        .take(3)
-        .collect();
-
-    let date = format!(
-        "{}, {} {}",
-        DAY[TODAY.weekday()],
-        MONTH[TODAY.month0()],
-        TODAY.mday()
+    let here = (app.here)();
+    let org = (app.org)().unwrap_or_else(|| here.clone());
+    // The index is the org Studio is in's; another org's sets are its own.
+    let faces = if org == here {
+        index.faces()
+    } else {
+        Vec::new()
+    };
+    let files = (app.drive_sets)();
+    let records = (app.records)();
+    let work = OrgWork::of(
+        &org,
+        &faces,
+        &files.clone().unwrap_or_default(),
+        &records.clone().unwrap_or_default(),
     );
+    let recent = use_signal(|| recent_songs(6));
+    let name = crate::orgs::org_name(&org);
+    let t = today();
+    let date = format!("{}, {} {}", DAY[t.weekday()], MONTH[t.month0()], t.mday());
+    let no_org = cfg!(feature = "drive") && (app.orgs)().is_empty();
 
     rsx! {
         Page {
-            Bar { title: "Home", tools: rsx! {
-                OrgPill {}
-            } }
+            Bar { title: "Home" }
             div { class: "body",
                 div { class: "hdate", "{date}" }
-                YourOrgs {}
-                if let Some(f) = next {
-                    NextUp { face: f }
-                }
-                if !week.is_empty() {
-                    div { class: "dayhead dh2",
-                        span { "This week" }
-                        BookButton {}
+                if no_org {
+                    div { class: "dayhead", "Welcome to Studio" }
+                    p { class: "lede",
+                        "You are not in an organization yet. Make one for your band, church or school, or ask its owner to invite you."
                     }
-                    div { class: "agenda",
-                        for (_ , a) in week {
-                            match a {
-                                Agenda::Set(f) => rsx! {
-                                    FaceRow { key: "{f.id}", face: f.clone(), state: progress_of(&f) }
-                                },
-                                Agenda::Reh(f, r) => rsx! {
-                                    RehRow { key: "reh{f.id}{r.date}{r.time}", face: f, r }
-                                },
+                    NewOrgHere {}
+                } else {
+                    div { class: "dayhead dh2",
+                        span { "Setlists" }
+                        button {
+                            class: "seeall",
+                            onclick: move |_| {
+                                navigator().push(Route::Setlists {});
+                            },
+                            "All "
+                            Icon { name: I::ChevRight, size: 14 }
+                        }
+                    }
+                    if files.is_none() && work.setlists() == 0 {
+                        p { class: "empty", "Looking for {name}'s setlists…" }
+                    } else if work.setlists() == 0 {
+                        div { class: "empty", role: "status",
+                            p { "{name} has no setlists yet." }
+                            p {
+                                "Put a "
+                                code { ".setlist" }
+                                " file in Studio's home under "
+                                code { "Setlists/" }
+                                ", or make one on the Setlists page."
+                            }
+                        }
+                    } else {
+                        div { class: "agenda",
+                            for f in work.sets.clone() {
+                                FaceRow { key: "{f.id}", face: f.clone(), owner: org.clone(), state: progress_of(&f) }
+                            }
+                            for h in work.files.clone() {
+                                FileRow { key: "{h.location}/{h.path}", file: h }
                             }
                         }
                     }
-                }
-                if !review.is_empty() {
                     div { class: "dayhead dh2",
-                        span { "To review" }
+                        span { "Records" }
                         button {
                             class: "seeall",
                             onclick: move |_| {
                                 navigator().push(Route::Records {});
                             },
-                            "Records "
+                            "All "
                             Icon { name: I::ChevRight, size: 14 }
                         }
                     }
-                    div { class: "agenda",
-                        for x in review {
-                            ReviewRow { key: "{x.idx}", idx: x.idx }
+                    if records.is_none() {
+                        p { class: "empty", "Looking for records…" }
+                    } else if work.records.is_empty() {
+                        super::records::NoRecords {}
+                    } else {
+                        div { class: "lgrid2",
+                            for r in work.records.clone() {
+                                super::records::RecordTile { key: "{r.id}", record: r }
+                            }
                         }
                     }
-                }
-                div { class: "dayhead", "Jump back in" }
-                div { class: "shelf",
-                    for (open , title , kind) in [
-                        ("jt", "JT's Senior Recital", "Setlist"),
-                        ("cr", "Crescendum", "Album"),
-                        ("t:Fire", "Fire", "Single"),
-                        ("mb", "Merry & Bright", "Setlist"),
-                        ("png", "PNG Worship", "Album"),
-                    ]
-                    {
-                        ShelfItem { key: "{open}", open, title, kind }
+                    if !cfg!(target_arch = "wasm32") {
+                        div { class: "dayhead", "Recent songs" }
+                        if recent().is_empty() {
+                            div { class: "empty", role: "status",
+                                p { "No songs in Studio's home yet." }
+                                p {
+                                    "Each song is a folder, "
+                                    code { "Songs/<Title - Artist>/" }
+                                    ", holding its "
+                                    code { ".session" }
+                                    "."
+                                }
+                            }
+                        } else {
+                            div { class: "agenda",
+                                for s in recent() {
+                                    RecentRow { key: "{s.folder}", song: s }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -128,260 +215,120 @@ pub fn Home() -> Element {
     }
 }
 
-/// The first run's way in (studio#699): each org this person is in, with
-/// its setlists one tap from open; in none, a new one (or the invitation
-/// someone sent). Only with Drive, whose orgs are the account's.
-#[cfg(feature = "drive")]
+/// Make the first org, when Drive says this account is in none.
 #[component]
-fn YourOrgs() -> Element {
-    use crate::first_run::{self, Step};
-    let app = use_app();
-    let index = crate::sets::use_index();
-    let files = (app.drive_sets)().unwrap_or_default();
-    let (step, listed) = first_run::on_home(&(app.orgs)(), &(app.here)(), &index.faces(), &files);
-    match step {
-        Step::NoOrganization => rsx! {
-            div { class: "dayhead", "Welcome to Studio" }
-            p { class: "lede",
-                "You are not in an organization yet. Make one for your band, church or school, or ask its owner to invite you."
-            }
-            crate::pages::orgs::NewOrg {}
-        },
-        Step::NoSetlist | Step::Ready => rsx! {
-            div { class: "dayhead", "Your organizations" }
-            for o in listed {
-                OrgSetlists { key: "{o.org}", org: o }
-            }
-        },
-    }
-}
-
-#[cfg(not(feature = "drive"))]
-#[component]
-fn YourOrgs() -> Element {
+fn NewOrgHere() -> Element {
+    #[cfg(feature = "drive")]
+    return rsx! { crate::pages::orgs::NewOrg {} };
+    #[cfg(not(feature = "drive"))]
     rsx! {}
 }
 
-/// One organization and its setlists, each opening where it is kept.
-#[cfg(feature = "drive")]
+/// A setlist file, opening where it is kept.
 #[component]
-fn OrgSetlists(org: crate::first_run::OrgSetlists) -> Element {
-    let name = crate::orgs::org_name(&org.org);
-    let none = org.setlists.is_empty();
-    let count = org.setlists.len();
-    rsx! {
-        div { class: "agenda",
-            div { class: "ag",
-                crate::pages::orgs::OrgMark { org: org.org.clone(), size: 28 }
-                span { class: "mid",
-                    span { class: "t1", "{name}" }
-                    span { class: "s1",
-                        match count {
-                            0 => "No setlists yet".to_string(),
-                            1 => "1 setlist".to_string(),
-                            n => format!("{n} setlists"),
-                        }
-                    }
-                }
-            }
-            for s in org.setlists {
-                button {
-                    key: "{s.open}",
-                    class: "ag",
-                    onclick: {
-                        let to = s.open.clone();
-                        move |_| {
-                            navigator().push(to.clone());
-                        }
-                    },
-                    span { class: "cal tpl",
-                        Icon { name: I::Setlist, size: 18 }
-                    }
-                    span { class: "mid",
-                        span { class: "t1", "{s.title}" }
-                    }
-                    span { class: "chev",
-                        Icon { name: I::ChevRight, size: 16 }
-                    }
-                }
-            }
-            if none {
-                button {
-                    class: "ag",
-                    onclick: move |_| {
-                        navigator().push(Route::Setlists {});
-                    },
-                    span { class: "mid",
-                        span { class: "t1", "Make a setlist" }
-                    }
-                    span { class: "chev",
-                        Icon { name: I::ChevRight, size: 16 }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Tonight's set (or the next one you play), its room, call and rig.
-#[component]
-fn NextUp(face: Face) -> Element {
-    let Some(d) = face.day() else {
-        return rsx! {};
+fn FileRow(file: Hit) -> Element {
+    let title = crate::setfile::name_of(&file.name);
+    let to = Route::DriveSet {
+        space: file.space.clone(),
+        location: file.location.clone(),
+        path: file.path.split('/').map(str::to_string).collect(),
     };
-    let kicker = if d.from_today() == 0 {
-        "Tonight".to_string()
-    } else {
-        DAY[d.weekday()].to_string()
-    };
-    let kicker = if face.starts.is_empty() {
-        kicker
-    } else {
-        format!("{kicker} · {}", face.starts)
-    };
-    let here = (use_app().here)();
-    let org = crate::orgs::org_name(&here);
-    let loaded = data::loaded_rig();
-    let id = face.id.clone();
-    rsx! {
-        button {
-            class: "nextup hn",
-            style: "--h:{face.hue}",
-            onclick: move |_| {
-                navigator().push(Route::SetPage { id: id.clone() });
-            },
-            span { class: "nutop",
-                if let Some(l) = data::logo(&face.series) {
-                    img { class: "nulogo", src: l, alt: "" }
-                } else {
-                    crate::pieces::Cover { title: face.title.clone(), size: 64, hue: face.hue }
-                }
-                span { class: "mid",
-                    span { class: "nuk", "{kicker}" }
-                    span { class: "nut", "{face.title}" }
-                    span { class: "nus", "{org} · {face.songs} songs" }
-                }
-            }
-            span { class: "nuwhere",
-                span { class: "nw",
-                    Icon { name: I::Mappin, size: 13, w: 2.0 }
-                    span {
-                        b { "{face.place}" }
-                    }
-                }
-                span { class: "nw call",
-                    Icon { name: I::Clock, size: 13, w: 2.0 }
-                    span {
-                        small { "Call" }
-                        b { "{face.call}" }
-                    }
-                }
-                if let Some(r) = loaded {
-                    span { class: "nw rigc", style: "--h:{r.hue}",
-                        Icon { name: r.icon, size: 13, w: 2.0 }
-                        span {
-                            b { "{r.name}" }
-                            small { "loaded" }
-                        }
-                    }
-                }
-                span { class: "nuready", {progress_of(&face)} }
-            }
-        }
-    }
-}
-
-/// A track waiting on you: its latest version and what is open on it.
-#[component]
-fn ReviewRow(idx: usize) -> Element {
-    let app = use_app();
-    let x = &data::STUDIO[idx];
-    let v = app.latest(x.title);
-    let n = app.open_on(x.title);
     rsx! {
         button {
             class: "ag",
             onclick: move |_| {
-                navigator().push(Route::TrackPage { idx });
+                navigator().push(to.clone());
             },
-            TrackCover { idx, size: 40 }
+            span { class: "cal tpl",
+                Icon { name: I::Setlist, size: 18 }
+            }
             span { class: "mid",
-                span { class: "t1", "{x.title}" }
-                if let Some(v) = v {
-                    span { class: "s1", "{v.what} v{v.v} · {v.who} · {v.when}" }
-                }
+                span { class: "t1", "{title}" }
+                span { class: "s1", "Setlist file" }
             }
-            if n > 0 {
-                span { class: "bubble",
-                    Icon { name: I::Message, size: 13, w: 2.0 }
-                    "{n}"
-                }
-            } else {
-                span { class: "newv", "New" }
+            span { class: "chev",
+                Icon { name: I::ChevRight, size: 16 }
             }
         }
     }
 }
 
-/// A track's art: its own, else its record's, else a generated one.
+/// A song folder changed recently: it opens as a session of its own.
 #[component]
-pub fn TrackCover(idx: usize, size: u32) -> Element {
-    let x = &data::STUDIO[idx];
-    rsx! {
-        if let Some(a) = x.art() {
-            img {
-                class: "tcov",
-                src: a,
-                alt: "",
-                style: "width:{size}px;height:{size}px",
-            }
-        } else {
-            crate::pieces::Cover { title: x.cover_title(), size, hue: x.cover_hue() }
-        }
-    }
-}
-
-#[component]
-fn ShelfItem(open: &'static str, title: &'static str, kind: &'static str) -> Element {
-    // A set Drive has as a setlist file opens that file, not the sample.
+fn RecentRow(song: RecentSong) -> Element {
     let app = use_app();
-    let file = (kind == "Setlist")
-        .then(|| {
-            (app.drive_sets)()
-                .unwrap_or_default()
-                .into_iter()
-                .find(|h| crate::reference::fit(&crate::setfile::name_of(&h.name), title).is_some())
-        })
-        .flatten();
-    let hue = data::album(open)
-        .map(|a| a.hue)
-        .or_else(|| open.strip_prefix("t:").and_then(data::track).map(|t| t.hue))
-        .unwrap_or(150);
-    let img = data::art(open);
-    let cover_title = data::album(open).map_or(title, |a| a.title);
+    let when = crate::day::Day((song.mtime / 86_400_000) as i32).when();
+    let line = match &song.artist {
+        Some(a) => format!("{a} · changed {}", when.to_lowercase()),
+        None => format!("Changed {}", when.to_lowercase()),
+    };
+    let hue = crate::look::str_hue(song.artist.as_deref().unwrap_or(&song.title));
     rsx! {
         button {
-            class: "shelfi",
+            class: "ag",
             onclick: move |_| {
-                match &file {
-                    Some(h) => {
-                        navigator()
-                            .push(Route::DriveSet {
-                                space: h.space.clone(),
-                                location: h.location.clone(),
-                                path: h.path.split('/').map(str::to_string).collect(),
-                            });
-                    }
-                    None => {
-                        navigator().push(Route::open(open));
-                    }
-                }
+                let place = crate::state::Place {
+                    space: (app.here)(),
+                    location: crate::files::DISK.into(),
+                    folder: song.folder.clone(),
+                    chart: None,
+                    arrangement: None,
+                };
+                crate::session::enter(
+                    app,
+                    vec![(crate::song::song_named(&song.title), place)],
+                    song.title.clone(),
+                    0,
+                    false,
+                    Some(Route::Home {}),
+                    crate::session::View::Arrangement,
+                );
             },
-            span { class: "sc",
-                Art { img, title: cover_title, hue }
+            span { class: "aglogo",
+                crate::pieces::Cover { title: song.title.clone(), size: 36, hue }
             }
-            span { class: "t1", "{title}" }
-            span { class: "s1", "{kind}" }
+            span { class: "mid",
+                span { class: "t1", "{song.title}" }
+                span { class: "s1", "{line}" }
+            }
+            span { class: "chev",
+                Icon { name: I::ChevRight, size: 16 }
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file(space: &str, name: &str) -> Hit {
+        Hit {
+            space: space.into(),
+            location: crate::files::DISK.into(),
+            path: format!("Setlists/{name}"),
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn home_shows_only_the_org_s_own_work() {
+        let files = [
+            file("codywright", "JT's Senior Recital.setlist"),
+            file("crossroads-church", "Days to Praise.setlist"),
+        ];
+        let w = OrgWork::of("codywright", &[], &files, &[]);
+        assert_eq!(w.files.len(), 1);
+        assert_eq!(w.files[0].name, "JT's Senior Recital.setlist");
+        let w = OrgWork::of("crossroads-church", &[], &files, &[]);
+        assert_eq!(w.files[0].name, "Days to Praise.setlist");
+    }
+
+    #[test]
+    fn an_empty_home_has_nothing_made_up() {
+        let w = OrgWork::of("adult-jam", &[], &[], &[]);
+        assert_eq!(w, OrgWork::default());
+        assert_eq!(w.setlists(), 0);
     }
 }

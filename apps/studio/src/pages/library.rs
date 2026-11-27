@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use dioxus::prelude::*;
 
 use crate::Route;
-use crate::data::{self, TAGS, cap};
 use crate::icons::{I, Icon};
+use crate::look::{self, cap};
 use crate::pieces::{Bar, Cover, Energy, KeyC, Page, Tool};
 use crate::songs::Entry;
 use crate::state::{Sheet, use_app};
@@ -31,7 +31,7 @@ fn Mosaic(list: Vec<Entry>) -> Element {
             }
             for k in 0..gaps {
                 span { key: "g{k}", class: "sart",
-                    Cover { title: format!("{n}-{k}"), size: 44, hue: data::str_hue(&format!("{n}-{k}")) }
+                    Cover { title: format!("{n}-{k}"), size: 44, hue: look::str_hue(&format!("{n}-{k}")) }
                 }
             }
         }
@@ -67,9 +67,6 @@ pub fn LibraryHome() -> Element {
             Bar {
                 back: Route::Setlists {},
                 title: "Library",
-                tools: rsx! {
-                    crate::pages::OrgPill {}
-                },
             }
             div { class: "body",
                 p { class: "lede", "{name}'s songs, and the songs other orgs share with it." }
@@ -173,7 +170,7 @@ fn SongRow(entry: Entry, owner: String, here: String, u: crate::orgs::Use) -> El
         .flatten()
         .collect();
     let key_here = crate::orgs::key_here(&u, &x);
-    let key = key_here.as_deref().and_then(data::norm_key);
+    let key = key_here.as_deref().and_then(look::norm_key);
     let moved = u.key.is_some();
     let own = owner == here;
     let (id, o) = (x.id.clone(), owner.clone());
@@ -228,10 +225,13 @@ fn OwnSongs(tag: String) -> Element {
     let here = (app.here)();
     let all_songs = lib.entries();
     let tags = tags_of(&all_songs);
-    let base: Option<&'static str> = TAGS.iter().map(|t| t.0).find(|t| *t == tag);
+    let base: Option<String> = tags.iter().map(|t| t.0.clone()).find(|t| *t == tag);
 
     // Opening a tag starts its filters from that tag alone.
-    use_hook(move || filters.with_mut(|f| f.tags = base.into_iter().collect()));
+    {
+        let base = base.clone();
+        use_hook(move || filters.with_mut(|f| f.tags = base.into_iter().collect()));
+    }
 
     let f = filters();
     let list: Vec<crate::songs::Entry> = all_songs
@@ -241,7 +241,7 @@ fn OwnSongs(tag: String) -> Element {
         .collect();
     let within = all_songs
         .iter()
-        .filter(|x| base.is_none_or(|t| x.tags.iter().any(|y| y == t)))
+        .filter(|x| base.as_ref().is_none_or(|t| x.tags.iter().any(|y| y == t)))
         .count();
     let chips = f.chips();
     let n_filters = chips.len();
@@ -250,7 +250,7 @@ fn OwnSongs(tag: String) -> Element {
     } else {
         format!("{} of {within} songs", list.len())
     };
-    let title = base.map_or("All songs".to_string(), cap);
+    let title = base.as_deref().map_or("All songs".to_string(), cap);
     rsx! {
         Page {
             Bar {
@@ -278,20 +278,23 @@ fn OwnSongs(tag: String) -> Element {
                 }
                 div { class: "tagrow",
                     span { class: "narrow", "Narrow" }
-                    for (t , _) in TAGS.iter().filter(|t| Some(t.0) != base).filter(|t| tags.iter().any(|x| x.0 == t.0)) {
+                    for (t , _) in tags.iter().filter(|t| Some(&t.0) != base.as_ref()).cloned() {
                         button {
                             key: "{t}",
                             class: "tagchip",
-                            aria_pressed: "{f.tags.contains(t)}",
-                            onclick: move |_| {
-                                filters
-                                    .with_mut(|f| {
-                                        if !f.tags.remove(t) {
-                                            f.tags.insert(t);
-                                        }
-                                    })
+                            aria_pressed: "{f.tags.contains(&t)}",
+                            onclick: {
+                                let t = t.clone();
+                                move |_| {
+                                    filters
+                                        .with_mut(|f| {
+                                            if !f.tags.remove(&t) {
+                                                f.tags.insert(t.clone());
+                                            }
+                                        })
+                                }
                             },
-                            "{cap(t)}"
+                            "{cap(&t)}"
                         }
                     }
                 }
@@ -346,25 +349,20 @@ fn OwnSongs(tag: String) -> Element {
     }
 }
 
-/// A library song's art: JT's cover on his own songs, a generated one otherwise.
+/// A library song's art: a cover generated from its title and artist.
 #[component]
 fn EntryArt(title: String, artist: Option<String>) -> Element {
-    let own = artist.as_deref().is_some_and(|a| data::OWN.contains(&a));
-    let hue = data::str_hue(artist.as_deref().unwrap_or(&title));
+    let hue = look::str_hue(artist.as_deref().unwrap_or(&title));
     rsx! {
         span { class: "sart",
-            if own {
-                img { src: data::JT_COVER, alt: "" }
-            } else {
-                Cover { title, size: 44, hue }
-            }
+            Cover { title, size: 44, hue }
         }
     }
 }
 
 /// A new song: its title, then its session opens.
 #[component]
-fn NewSong(lib: crate::songs::Library, tag: Option<&'static str>) -> Element {
+fn NewSong(lib: crate::songs::Library, tag: Option<String>) -> Element {
     let mut title = use_signal(String::new);
     rsx! {
         label { class: "newsong",
@@ -385,7 +383,7 @@ fn NewSong(lib: crate::songs::Library, tag: Option<&'static str>) -> Element {
                                 artist: None,
                                 key: None,
                                 tempo: Some(120),
-                                tags: tag.map(|t| vec![t.to_string()]).unwrap_or_default(),
+                                tags: tag.clone().map(|t| vec![t]).unwrap_or_default(),
                                 energy: 3,
                                 ready: String::new(),
                                 shared_with: Vec::new(),

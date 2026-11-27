@@ -202,6 +202,13 @@ mod imp {
         "The `.setlist` files Drive has in the orgs this person is in, each with the `space`, `location` and `path` STUDIO_SETLIST_FILE_OPEN takes. Empty until the app reaches Drive."
     );
     meta!(
+        RECORDS,
+        "STUDIO_RECORDS",
+        "Records",
+        "Records",
+        "The records (albums: setlist files with `# kind: studio`) in Studio's home and in Drive, each with its `id` (its page is `/records/<id>`), `title`, `org`, the file's `space`, `location` and `path`, and its `tracks` in album order: each one's `title` and `state` (`session`, `no-session`: `= Title`, or `missing`: its folder is not on this computer). Empty until the files are read."
+    );
+    meta!(
         SETLIST_FILE_OPEN,
         "STUDIO_SETLIST_FILE_OPEN",
         "Open a setlist file",
@@ -659,6 +666,7 @@ mod imp {
             forward::<OrgJoinArgs>(&list, &ORG_JOIN, M, true);
             forward::<OrgRemoveArgs>(&list, &ORG_REMOVE, Effect::Destructive, true);
             forward::<()>(&list, &SETLIST_FILES, R, false);
+            forward::<()>(&list, &RECORDS, R, false);
             forward::<FileArgs>(&list, &SETLIST_FILE_OPEN, M, true);
             forward::<()>(&list, &NOW_PLAYING, R, false);
             forward::<PlaybackArgs>(&list, &PLAYBACK, M, true);
@@ -1010,6 +1018,21 @@ mod imp {
                             "name": crate::setfile::name_of(&h.name),
                             "space": h.space, "location": h.location, "path": h.path,
                             "location_name": h.location_name, "device_name": h.device_name,
+                        })
+                    })
+                    .collect(),
+            )),
+            "STUDIO_RECORDS" => Ok(Value::Array(
+                (app.records)()
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|r| {
+                        json!({
+                            "id": r.id, "title": r.title, "org": r.org,
+                            "space": r.file.space, "location": r.file.location, "path": r.file.path,
+                            "tracks": r.tracks.iter().map(|t| json!({
+                                "title": t.title, "state": t.state.slug(),
+                            })).collect::<Vec<_>>(),
                         })
                     })
                     .collect(),

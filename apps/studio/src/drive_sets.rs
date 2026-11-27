@@ -11,10 +11,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::data::{self, Song};
 use crate::files::{self, Hit};
 use crate::files_live::{disk, web};
 use crate::setfile;
+use crate::song::{Song, song_named};
 use crate::state::Place;
 
 thread_local! {
@@ -80,9 +80,10 @@ pub fn on_disk(here: &str) -> Vec<Hit> {
 
 /// A setlist file on disk as listed: in the org its text names, else in
 /// `here`; none for a file Studio writes for one of its own sets
-/// (`crate::set_files`), which is listed as itself, not again as a file.
+/// (`crate::set_files`), which is listed as itself, not again as a file,
+/// and none for a record's (`# kind: studio`, `crate::records`).
 fn listed(mut h: Hit, text: &str, here: &str) -> Option<Hit> {
-    if crate::set_files::set_id(text).is_some() {
+    if crate::set_files::set_id(text).is_some() || crate::records::is_record(text) {
         return None;
     }
     h.space = setfile::org_of(text, here);
@@ -118,6 +119,26 @@ pub async fn files_in(spaces: &[String]) -> Vec<Hit> {
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
+}
+
+/// Drive's setlist files, each read once and split into the sets and the
+/// records (`# kind: studio`, `crate::records`): a file not read is a set.
+pub async fn sets_and_records(
+    found: Vec<Hit>,
+    here: &str,
+) -> (Vec<Hit>, Vec<crate::records::Record>) {
+    let span = crate::trace::Span::root("studio.records.find");
+    let texts = futures_util::future::join_all(found.iter().map(|h| {
+        let span = &span;
+        async move {
+            match web::bytes_in(Some(span), "GET", &web::file_url(h), None).await {
+                Ok((200 | 206, b)) => Some(String::from_utf8_lossy(&b).into_owned()),
+                _ => None,
+            }
+        }
+    }))
+    .await;
+    crate::records::split_drive(&found, &texts, here)
 }
 
 /// Every chart in these spaces.
@@ -259,7 +280,7 @@ impl FileSet {
         self.acts
             .iter()
             .flat_map(|a| a.songs.iter())
-            .map(|s| (data::song_named(&s.title), s.place.clone()))
+            .map(|s| (song_named(&s.title), s.place.clone()))
             .collect()
     }
 }
@@ -500,5 +521,11 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn a_record_s_file_is_not_listed_as_a_setlist() {
+        let h = hit("Setlists/Crescendum.setlist");
+        assert_eq!(listed(h, "# kind: studio\n= Intro\n", "codywright"), None);
     }
 }

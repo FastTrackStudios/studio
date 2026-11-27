@@ -8,8 +8,8 @@
 use dioxus::prelude::*;
 
 use crate::Route;
-use crate::data;
 use crate::icons::{I, Icon};
+use crate::look;
 use crate::orgs;
 use crate::pieces::{Bar, Cal, Hair, Hero, Joined, Page, Tool};
 use crate::setlist::{self, Entry, ItemKind, Played};
@@ -72,7 +72,7 @@ impl Ctx {
         {
             return p.name;
         }
-        data::cap(id)
+        look::cap(id)
     }
 
     /// The set's ref.
@@ -172,7 +172,7 @@ fn SetView(owner: String, id: String) -> Element {
             .filter_map(|e| e.length)
             .sum::<u32>();
     let missing = info.size.saturating_sub(songs.len());
-    let img = data::logo(&info.series).or_else(|| data::art(&info.id));
+    let img: Option<Asset> = None;
     let picked = (app.picked)().filter(|p| entries.iter().any(|e| &e.id == p));
     let tools = {
         let (a1, a2, a3) = (at.clone(), at.clone(), at.clone());
@@ -298,7 +298,7 @@ fn SetView(owner: String, id: String) -> Element {
                     facts: rsx! {
                         span { class: "when2",
                             if let Some(d) = when {
-                                Cal { top: data::MON[d.month0()], big: d.mday().to_string() }
+                                Cal { top: crate::day::MON[d.month0()], big: d.mday().to_string() }
                             }
                             if !info.place.is_empty() || !info.call.is_empty() {
                                 span { class: "loc",
@@ -339,7 +339,7 @@ fn SetView(owner: String, id: String) -> Element {
                         span { class: "hcount",
                             "{songs.len()} songs"
                             if total > 0 {
-                                " · {data::dur(f64::from(total))}"
+                                " · {look::dur(f64::from(total))}"
                             }
                         }
                         if !songs.is_empty() {
@@ -591,7 +591,7 @@ fn EntryRow(
                 span { class: "s1",
                     "{k.label()}"
                     if let Some(l) = entry.length {
-                        " · {data::dur(f64::from(l))}"
+                        " · {look::dur(f64::from(l))}"
                     }
                 }
             }
@@ -664,7 +664,7 @@ pub fn KeyChip(
         crate::keys::Played::Moved { label, semitones } => (label.text(), semitones),
         _ => (cur.clone(), 0),
     };
-    let h = data::hue(&cur).unwrap_or(0);
+    let h = look::hue(&cur).unwrap_or(0);
     let said = if d != 0 {
         format!(
             "Key {shown}, {} {} from {}",
@@ -771,7 +771,7 @@ fn BandCard(ctx: Ctx) -> Element {
                     span { key: "{s.person}", class: "seat",
                         span {
                             class: "pmark",
-                            style: "--h:{data::str_hue(&s.name)};width:26px;height:26px;font-size:11px",
+                            style: "--h:{look::str_hue(&s.name)};width:26px;height:26px;font-size:11px",
                             "{initials(&s.name)}"
                         }
                         span { class: "mid",
@@ -902,7 +902,7 @@ pub fn EntryEditor(ctx: Ctx, entry: String) -> Element {
         }
     };
     let arrangements: Vec<String> = {
-        let mut v: Vec<String> = data::ARRS.iter().map(|a| a.0.to_string()).collect();
+        let mut v: Vec<String> = vec![look::AS_RECORDED.to_string()];
         if let (Some(lib), Some(r)) = (&ctx.lib, &e.song) {
             for a in lib.use_of(&r.owner, &r.id).arrangements {
                 if !v.contains(&a) {
@@ -980,15 +980,15 @@ pub fn EntryEditor(ctx: Ctx, entry: String) -> Element {
                     }
                 }
                 div { class: "keypick small",
-                    for k in data::FIFTHS {
+                    for k in look::FIFTHS {
                         {
-                            let on = p.key.as_deref().and_then(data::norm_key) == Some(k);
+                            let on = p.key.as_deref().and_then(look::norm_key) == Some(k);
                             let e2 = e2.clone();
                             rsx! {
                                 button {
                                     key: "{k}",
                                     class: if on { "kp on" } else { "kp" },
-                                    style: "--h:{data::hue(k).unwrap_or(0)}",
+                                    style: "--h:{look::hue(k).unwrap_or(0)}",
                                     onclick: move |_| e2(&|x| x.over.key = Some(k.to_string())),
                                     b { "{k}" }
                                 }

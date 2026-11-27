@@ -34,7 +34,6 @@ mod web {
 
     use super::*;
     use crate::Route;
-    use crate::data;
     use crate::state::{Live, SetRef, Sheet, use_app};
 
     /// Drive, as the app reaches it: the spine, the open set's document,
@@ -307,7 +306,7 @@ mod web {
                 let n = |k: &str| l.get(k).and_then(Value::as_u64).map(|v| v as usize);
                 let live = Live {
                     song: n("song")?,
-                    sec: n("sec")?.min(data::SECS.len() - 1),
+                    sec: n("sec")?,
                     bar: n("bar")?,
                     playing: l.get("playing").and_then(Value::as_bool)?,
                     click: false,

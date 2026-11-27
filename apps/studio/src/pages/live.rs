@@ -1,25 +1,27 @@
 //! Live: a set's chart and lyrics, a song at a time. The song on show is
-//! the one playing: one line names it, the progress bars sit under it, the
-//! page fills the rest, and the transport at the foot moves through it.
+//! the one playing: one line names it, the progress bars (its form, when
+//! its session gave one) sit under it, and the transport at the foot
+//! moves through it. A song's chart and lyrics are its session's: they
+//! show in the session's Chart view.
 
 use dioxus::prelude::*;
 
 use crate::Route;
-use crate::data::{self, BARS, SECS};
 use crate::icons::{I, Icon};
+use crate::look;
 use crate::state::use_app;
 
 #[component]
 pub fn Chart(id: String) -> Element {
     rsx! {
-        SheetView { id, what: "Chart", says: "The chart page (keyflow) fills this page, as wide as the phone" }
+        SheetView { id, what: "Chart", says: "A song's chart is in its session: open the set's session and its Chart view." }
     }
 }
 
 #[component]
 pub fn Lyrics(id: String) -> Element {
     rsx! {
-        SheetView { id, what: "Lyrics", says: "The lyrics page fills this page, as wide as the phone" }
+        SheetView { id, what: "Lyrics", says: "A song's lyrics are in its session: open the set's session and its Chart view." }
     }
 }
 
@@ -60,7 +62,7 @@ fn SongHead(id: String) -> Element {
     };
     let k = x.key.clone();
     let d = match (&x.own_key, &k) {
-        (Some(o), Some(k)) if o != k => data::steps(o, k),
+        (Some(o), Some(k)) if o != k => look::steps(o, k),
         _ => 0,
     };
     let sign = if d > 0 { "+" } else { "−" };
@@ -74,8 +76,8 @@ fn SongHead(id: String) -> Element {
         Route::set(&id)
     };
     let n = songs.len();
-    let cur = SECS[l.sec];
-    let nbars = BARS[l.sec];
+    let form = (app.live_form)();
+    let here_sec = form.get(l.sec).cloned();
     rsx! {
         div { class: "nowline",
             button {
@@ -99,42 +101,44 @@ fn SongHead(id: String) -> Element {
                 }
             }
         }
-        div { class: "prog", aria_label: "Song progress",
-            for (k , n) in SECS.iter().enumerate() {
-                {
-                    let fill = if k < l.sec {
-                        100.0
-                    } else if k == l.sec {
-                        (l.bar as f64 + 0.5) / BARS[k] as f64 * 100.0
-                    } else {
-                        0.0
-                    };
-                    rsx! {
-                        span {
-                            key: "{k}",
-                            class: if k == l.sec { "pseg now" } else { "pseg" },
-                            style: "flex:{BARS[k]};--h:{data::sec_hue(n)}",
-                            i { style: "width:{fill}%" }
-                            b { "{data::sec_short(n)}" }
+        if let Some((cur , nbars)) = here_sec {
+            div { class: "prog", aria_label: "Song progress",
+                for (k , (name , bars)) in form.iter().enumerate() {
+                    {
+                        let fill = if k < l.sec {
+                            100.0
+                        } else if k == l.sec {
+                            (l.bar as f64 + 0.5) / (*bars).max(1) as f64 * 100.0
+                        } else {
+                            0.0
+                        };
+                        rsx! {
+                            span {
+                                key: "{k}",
+                                class: if k == l.sec { "pseg now" } else { "pseg" },
+                                style: "flex:{bars};--h:{crate::songs::section_hue(name)}",
+                                i { style: "width:{fill}%" }
+                                b { "{crate::songs::short(name)}" }
+                            }
                         }
                     }
                 }
             }
-        }
-        div {
-            class: "secbar",
-            aria_label: "{cur}, bar {l.bar + 1} of {nbars}",
-            style: "--h:{data::sec_hue(cur)}",
-            span { class: "sname", "{cur}" }
-            span { class: "pbars",
-                for k in 0..nbars {
-                    span {
-                        key: "{k}",
-                        class: if k < l.bar { "pbar played" } else if k == l.bar { "pbar now" } else { "pbar" },
+            div {
+                class: "secbar",
+                aria_label: "{cur}, bar {l.bar + 1} of {nbars}",
+                style: "--h:{crate::songs::section_hue(&cur)}",
+                span { class: "sname", "{cur}" }
+                span { class: "pbars",
+                    for k in 0..nbars {
+                        span {
+                            key: "{k}",
+                            class: if k < l.bar { "pbar played" } else if k == l.bar { "pbar now" } else { "pbar" },
+                        }
                     }
                 }
+                span { class: "scount", "{l.bar + 1}/{nbars}" }
             }
-            span { class: "scount", "{l.bar + 1}/{nbars}" }
         }
     }
 }

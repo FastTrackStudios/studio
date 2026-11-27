@@ -27,7 +27,7 @@ use dioxus::prelude::*;
 use app_shell::ui::{AppShell, TopBar};
 
 use crate::Route;
-use crate::data::Song;
+use crate::song::Song;
 use crate::state::{AppState, Place, use_app};
 
 /// The session's views, as the old bottom bar had them.

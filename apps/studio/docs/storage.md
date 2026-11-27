@@ -194,6 +194,16 @@ Setlists/
                        only for the songs that need one
 ```
 
+## Projects/ and records
+
+A record (an album, an EP, a single) is a setlist file of kind studio:
+`# kind: studio` among its first lines, one line a track in album order.
+Its file belongs in `Projects/<Name>/<Name>.setlist`, beside the
+production work; Studio also reads one kept in `Setlists/`, and lists it
+under Records, never as a setlist. A track is a session's id, `= Title`
+for a song with no session yet, or (until the song's folder is in Drive)
+an older line holding its folder's path.
+
 ## Signal/
 
 The generic guitar rig and everything it plays with: NAM captures and
