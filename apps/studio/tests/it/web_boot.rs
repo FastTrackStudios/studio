@@ -69,7 +69,7 @@ static PACK_SPANS: std::sync::Mutex<Vec<(u64, u64)>> = std::sync::Mutex::new(Vec
 const KIT_PACK: &str = "drums/Test Kit/Packs/Kick.signalpack";
 
 /// The fixture's rate and length.
-const RATE: u32 = 48_000;
+pub(super) const RATE: u32 = 48_000;
 const SECONDS: f32 = 16.0;
 
 #[test]
@@ -992,7 +992,7 @@ fn stage_session(dir: &Path) {
     .expect("the listing is written");
 }
 
-fn list(root: &Path, dir: &Path, out: &mut Vec<Value>) {
+pub(super) fn list(root: &Path, dir: &Path, out: &mut Vec<Value>) {
     for entry in std::fs::read_dir(dir).expect("the folder lists").flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -1005,7 +1005,7 @@ fn list(root: &Path, dir: &Path, out: &mut Vec<Value>) {
 }
 
 /// A sine at `hz`, `db` dBFS, for the length of the song.
-fn tone(hz: f32, db: f32) -> Vec<f32> {
+pub(super) fn tone(hz: f32, db: f32) -> Vec<f32> {
     let gain = 10f32.powf(db / 20.0);
     (0..frames())
         .map(|i| gain * (std::f32::consts::TAU * hz * i as f32 / RATE as f32).sin())
@@ -1013,7 +1013,7 @@ fn tone(hz: f32, db: f32) -> Vec<f32> {
 }
 
 /// A click on every beat at `bpm`: 20 ms of a decaying 1 kHz tick.
-fn click(bpm: f32) -> Vec<f32> {
+pub(super) fn click(bpm: f32) -> Vec<f32> {
     let beat = (RATE as f32 * 60.0 / bpm) as usize;
     let tick = RATE as usize / 50;
     (0..frames())
@@ -1045,15 +1045,15 @@ fn free_port() -> u16 {
 /// (the network off), every connection is closed unanswered.
 ///
 /// [`cut`]: Server::cut
-struct Server {
-    origin: String,
+pub(super) struct Server {
+    pub(super) origin: String,
     cut: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Connections refused since it was cut: the page asked the network.
     refused: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl Server {
-    fn start(dist: PathBuf, sessions: PathBuf) -> Self {
+    pub(super) fn start(dist: PathBuf, sessions: PathBuf) -> Self {
         Self::start_as(dist, sessions, false)
     }
 
@@ -1317,14 +1317,14 @@ fn percent_decode(path: &str) -> String {
 }
 
 /// A W3C WebDriver started here, stopped when dropped.
-struct Driver {
+pub(super) struct Driver {
     child: Child,
     base: String,
     gecko: bool,
 }
 
 impl Driver {
-    fn start() -> Self {
+    pub(super) fn start() -> Self {
         let program = std::env::var("WEBDRIVER").unwrap_or_else(|_| "chromedriver".into());
         let port = free_port();
         let gecko = program.contains("geckodriver");
@@ -1355,7 +1355,7 @@ impl Driver {
         driver
     }
 
-    fn new_session(&self) -> Session<'_> {
+    pub(super) fn new_session(&self) -> Session<'_> {
         self.new_session_at(None)
     }
 
@@ -1411,7 +1411,7 @@ impl Drop for Driver {
     }
 }
 
-struct Session<'a> {
+pub(super) struct Session<'a> {
     driver: &'a Driver,
     id: String,
 }
@@ -1427,7 +1427,7 @@ impl Session<'_> {
         answer["value"].clone()
     }
 
-    fn navigate(&self, url: &str) {
+    pub(super) fn navigate(&self, url: &str) {
         // Every uncaught error the page has, with its stack, kept for a
         // failure to quote (chromedriver's CDP door; best effort).
         let catch = "if (!window.__bootErrors) { window.__bootErrors = []; \
@@ -1448,7 +1448,7 @@ impl Session<'_> {
     }
 
     /// An attribute of the page's engine state element (`#studio-engine`).
-    fn state(&self, attribute: &str) -> String {
+    pub(super) fn state(&self, attribute: &str) -> String {
         let script = "const e = document.getElementById('studio-engine'); \
                       return e ? (e.getAttribute(arguments[0]) || '') : '';";
         self.call(
@@ -1467,7 +1467,7 @@ impl Session<'_> {
     }
 
     /// What `script` returns given `args`, as text.
-    fn script_with(&self, script: &str, args: Value) -> String {
+    pub(super) fn script_with(&self, script: &str, args: Value) -> String {
         self.call(
             "POST",
             "/execute/sync",
@@ -1590,7 +1590,7 @@ impl Session<'_> {
     }
 
     /// What the page shows and what went wrong in it, for a failure.
-    fn page(&self) -> String {
+    pub(super) fn page(&self) -> String {
         let script = "return JSON.stringify({ url: location.href, title: document.title, \
                       text: (document.body ? document.body.innerText : '').slice(0, 400), \
                       errors: (window.__bootErrors || []).slice(0, 8) });";
@@ -1640,7 +1640,7 @@ impl Session<'_> {
     }
 
     /// Wait for `css` to be there, then click it.
-    fn click(&self, css: &str) {
+    pub(super) fn click(&self, css: &str) {
         let found = self.find(css);
         self.call("POST", &format!("/element/{found}/click"), Some(&json!({})));
     }
@@ -1667,7 +1667,12 @@ impl Session<'_> {
     }
 
     /// Poll `ready` until it says something, at most `within`.
-    fn wait_for<T>(&self, within: Duration, what: &str, ready: impl Fn(&Self) -> Option<T>) -> T {
+    pub(super) fn wait_for<T>(
+        &self,
+        within: Duration,
+        what: &str,
+        ready: impl Fn(&Self) -> Option<T>,
+    ) -> T {
         let began = Instant::now();
         loop {
             if let Some(done) = ready(self) {
@@ -1709,7 +1714,12 @@ impl Drop for Session<'_> {
 }
 
 /// One JSON request to the driver on loopback.
-fn http(host: &str, method: &str, path: &str, body: Option<&Value>) -> Result<Value, String> {
+pub(super) fn http(
+    host: &str,
+    method: &str,
+    path: &str,
+    body: Option<&Value>,
+) -> Result<Value, String> {
     let mut stream = TcpStream::connect(host).map_err(|e| e.to_string())?;
     stream
         .set_read_timeout(Some(Duration::from_secs(120)))

@@ -62,6 +62,12 @@ mod chart_generated;
 mod reference;
 #[cfg(feature = "native")]
 mod room_link;
+// Where what a room loaded is, read by path (a browser's member).
+#[cfg_attr(not(feature = "web"), allow(dead_code))]
+mod room_paths;
+// A browser in a room: the page joins it and follows its leader (web).
+#[cfg(feature = "web")]
+mod room_web;
 mod session;
 mod session_file;
 // The session's Stage: its three windows' layout (natively).

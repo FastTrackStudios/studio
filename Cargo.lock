@@ -21186,6 +21186,7 @@ name = "room"
 version = "26.10.3"
 dependencies = [
  "architect",
+ "architect-permissions",
  "eyre",
  "live-doc",
  "loro",
@@ -21197,6 +21198,8 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "vox",
+ "vox-core",
 ]
 
 [[package]]

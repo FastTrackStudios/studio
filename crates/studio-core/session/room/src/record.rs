@@ -77,6 +77,78 @@ pub struct Live {
     /// Its addresses (`ip:port`), dialled directly: the room works on a
     /// local network with no internet.
     pub addrs: Vec<String>,
+    /// Its home relays (`https://…`): what a browser dials it through (a
+    /// page has no direct path to a device), and any member whose direct
+    /// paths are all closed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relays: Vec<String>,
+    /// What the leader admits its members by ([`Pass`]): made new each
+    /// time it leads the room.
+    #[serde(default, skip_serializing_if = "Pass::is_empty")]
+    pub pass: Pass,
+}
+
+/// What a room's leader admits its members by.
+///
+/// The leader makes one each time it leads the room and writes it in the
+/// room's file, in its organization's Rooms folder. Only the
+/// organization's people can read that folder: on a device through Drive,
+/// in a browser through the node with their sign-in. A member presents
+/// the pass on every call to the leader, and the leader's gate refuses a
+/// call without it (`gate`). Knowing the link, or the leader's endpoint,
+/// is not enough to join.
+///
+/// The leader leading again (another device, or after a restart) makes a
+/// new one, so someone who left the organization holds a pass that opens
+/// nothing after that. A pass is a credential: it is never logged (its
+/// `Debug` hides it).
+#[derive(Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Pass(String);
+
+impl Pass {
+    /// A new pass: 244 random bits, as hex.
+    #[must_use]
+    pub fn mint() -> Self {
+        let (a, b) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        Self(format!("{}{}", a.simple(), b.simple()))
+    }
+
+    /// No pass: a room's file from before passes, or not live.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// The pass as it is presented, for the call that presents it.
+    #[must_use]
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+
+    /// Whether `presented` is this pass. No pass matches nothing, and the
+    /// comparison takes as long whichever byte differs.
+    #[must_use]
+    pub fn matches(&self, presented: &str) -> bool {
+        let (ours, theirs) = (self.0.as_bytes(), presented.as_bytes());
+        if ours.is_empty() || ours.len() != theirs.len() {
+            return false;
+        }
+        ours.iter()
+            .zip(theirs)
+            .fold(0u8, |differ, (a, b)| differ | (a ^ b))
+            == 0
+    }
+}
+
+impl std::fmt::Debug for Pass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_empty() {
+            f.write_str("Pass(none)")
+        } else {
+            f.write_str("Pass(…)")
+        }
+    }
 }
 
 /// One room.

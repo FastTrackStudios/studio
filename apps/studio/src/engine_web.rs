@@ -392,7 +392,7 @@ fn encode_path(path: &str) -> String {
 
 /// A URL the page's own origin is the root of, made absolute: Drive's
 /// helpers would take a bare `/path` for the node's.
-fn absolute(url: &str) -> String {
+pub(crate) fn absolute(url: &str) -> String {
     if !url.starts_with('/') {
         return url.to_owned();
     }
@@ -403,7 +403,10 @@ fn absolute(url: &str) -> String {
 }
 
 /// A plain GET (no sign-in sent): the bytes `range` when given.
-async fn plain(url: &str, range: Option<std::ops::Range<u64>>) -> Result<(u16, Vec<u8>), String> {
+pub(crate) async fn plain(
+    url: &str,
+    range: Option<std::ops::Range<u64>>,
+) -> Result<(u16, Vec<u8>), String> {
     let wanted = range.map(|r| format!("bytes={}-{}", r.start, r.end.saturating_sub(1)));
     let headers: Vec<(&str, &str)> = wanted.iter().map(|w| ("range", w.as_str())).collect();
     drive_dioxus::env::http_bytes("GET", url, &headers, None)
@@ -761,7 +764,7 @@ fn session_in_address() -> Option<Place> {
 }
 
 /// A folder at a link the page's address names (`?<name>=<url>`).
-fn linked_in_address(name: &str) -> Option<Place> {
+pub(crate) fn linked_in_address(name: &str) -> Option<Place> {
     let params = web_sys::UrlSearchParams::new_with_str(ADDRESS.get()?).ok()?;
     let folder = params.get(name).filter(|s| !s.is_empty())?;
     Some(Place {

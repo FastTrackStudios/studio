@@ -925,6 +925,9 @@ fn PlayerHost() -> Element {
         rsx! {
             crate::engine_web::EnginePlayer {}
             crate::player::Player {}
+            // A room the page is in: it lasts while its person moves
+            // between pages.
+            crate::room_web::RoomMember {}
         }
     }
     // Natively: no player yet (the engine will play); the sets and their

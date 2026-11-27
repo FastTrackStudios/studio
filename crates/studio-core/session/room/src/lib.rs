@@ -22,7 +22,11 @@
 //!   `TransportSync`, as a live session playing together does.
 //! - `net` (feature `net`): the room over vox. The leader hosts the doc
 //!   and presence ([`net::RoomHost`]); a member holds one connection to
-//!   them ([`net::RoomPeer`]) for as long as it is in the room.
+//!   them ([`net::RoomPeer`]) for as long as it is in the room, from a
+//!   desktop's engine or a browser's page alike ([`net::attach_to`]).
+//! - `gate` (feature `net`, on a device): the leader's door ([`gate::Door`]), which
+//!   admits a call only when it presents the room's [`Pass`]: knowing the
+//!   link, or the leader's endpoint, is not enough to join.
 //!
 //! Engine-free: the engine's half (opening what is loaded, moving the
 //! transport) is engine-collab's `room`.
@@ -31,8 +35,11 @@ pub mod lead;
 pub mod record;
 pub mod state;
 
+// The leader's door: serving is a device's (a page never leads a room).
 #[cfg(all(feature = "net", not(target_arch = "wasm32")))]
+pub mod gate;
+#[cfg(feature = "net")]
 pub mod net;
 
-pub use record::{APP_JOIN_BASE, Error, Live, Room, RoomId, Rooms, link_of, parse_link};
+pub use record::{APP_JOIN_BASE, Error, Live, Pass, Room, RoomId, Rooms, link_of, parse_link};
 pub use state::{Kind, Loaded, RoomDoc, Share};

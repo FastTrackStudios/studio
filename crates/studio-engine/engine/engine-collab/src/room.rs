@@ -6,13 +6,21 @@
 //!   (`https://fasttrackstudio.app/join/<room>`) never changes.
 //! - **Leading.** `ROOM_LEAD` hosts the room over iroh, on an endpoint
 //!   whose key this device keeps per room (`<data>/fasttrackstudio/rooms/`),
-//!   and says in the room's file where to reach it. `ROOM_LOAD` opens a
+//!   and says in the room's file where to reach it: its addresses, its
+//!   relays (what a browser dials it through) and a new pass
+//!   ([`room::Pass`]). `ROOM_LOAD` opens a
 //!   setlist or a lone session here and loads it into the room's doc. A
 //!   task of the room's writes this engine's transport into the room's
 //!   presence whenever it starts, stops, changes song or jumps
 //!   (`room::lead::entry`).
+//! - **The door.** The room is open to the internet, so the leader serves
+//!   it behind a permissions gate ([`room::gate::Door`], studio#362): a
+//!   call is admitted only when it presents the room's pass, which only
+//!   the organization's people can read in its Rooms folder. The live set
+//!   the room edits together is behind the same door. `ROOM` says how many
+//!   calls it refused (`refused`).
 //! - **Following.** `ROOM_JOIN` finds the room by its link, dials its
-//!   leader once, and follows: each load the doc gains is opened here
+//!   leader once (presenting the pass), and follows: each load the doc gains is opened here
 //!   (through the engine's `open_path`, as `SESSION_OPEN` would), and the
 //!   transport is kept on the leader's with session-sync's
 //!   `TransportSync`, the song by its number in the set. The leader
@@ -50,8 +58,9 @@ use architect::action::{ActionCaller, ActionError, ActionList, ActionMeta, Effec
 use architect::iroh_link::iroh;
 use engine_sync::transport as session_transport;
 use facet::Facet;
-use room::net::{Attach, RoomHost, RoomPeer};
-use room::{Live, Loaded, Room, RoomId, Rooms, Share};
+use room::gate::Door;
+use room::net::{Find, RoomHost, RoomPeer};
+use room::{Live, Loaded, Pass, Room, RoomId, Rooms, Share};
 use serde_json::{Value, json};
 use session_transport::{KEY, LocalTransport, SharedTransport, TransportSync};
 
@@ -120,6 +129,8 @@ enum Role {
     Leader {
         host: RoomHost,
         presence: live_doc::PresencePeer,
+        /// The room's door: how many calls it refused.
+        door: Door,
     },
     Member {
         peer: Arc<RoomPeer>,
@@ -301,15 +312,25 @@ fn addrs_of(endpoint: &iroh::Endpoint) -> Vec<String> {
     crate::collab::reachable_at(endpoint)
 }
 
-/// [`addrs_of`] once the endpoint has read its own addresses on this
-/// machine's networks, or [`ADDRS_WAIT`] has passed: what a member on
-/// the local network dials with nothing to look the leader up in.
-async fn settled_addrs(endpoint: &iroh::Endpoint) -> Vec<String> {
+/// [`addrs_of`] and the endpoint's relays, once it has read its own
+/// addresses on this machine's networks and reached its home relay, or
+/// [`ADDRS_WAIT`] has passed: what a member on the local network dials
+/// with nothing to look the leader up in, and what a browser dials it
+/// through (with no internet, there is no relay to wait for).
+async fn settled_addrs(endpoint: &iroh::Endpoint) -> (Vec<String>, Vec<String>) {
     let began = architect::platform::now();
-    while endpoint.addr().ip_addrs().next().is_none() && began.elapsed() < ADDRS_WAIT {
+    while (endpoint.addr().ip_addrs().next().is_none()
+        || endpoint.addr().relay_urls().next().is_none())
+        && began.elapsed() < ADDRS_WAIT
+    {
         architect::platform::sleep(Duration::from_millis(20)).await;
     }
-    addrs_of(endpoint)
+    let relays = endpoint
+        .addr()
+        .relay_urls()
+        .map(ToString::to_string)
+        .collect();
+    (addrs_of(endpoint), relays)
 }
 
 /// Leave the room this engine is in: a leader's room stops being live.
@@ -354,16 +375,18 @@ fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
     leave();
     let id = room.id.clone();
     let me = format!("leader-{}", short(&key.public().to_string()));
-    let (host, presence, endpoint, addrs) = on_runtime({
-        let (me, name) = (me.clone(), name.clone());
+    // A new pass each time this device leads: whoever has left the
+    // organization since holds one that opens nothing.
+    let pass = Pass::mint();
+    let door = Door::for_room(&id, &pass);
+    let (host, presence, endpoint, (addrs, relays)) = on_runtime({
+        let (me, name, door) = (me.clone(), name.clone(), door.clone());
         async move {
             let endpoint = bind(key).await?;
             let host = RoomHost::new(&id);
             let router = host.mount(architect::LayerRouter::new());
             let serving = endpoint.clone();
-            architect::platform::spawn(async move {
-                architect::iroh_link::serve_router(&serving, router).await;
-            });
+            architect::platform::spawn(async move { door.serve(&serving, router).await });
             let presence = host
                 .own_presence(&me, &name)
                 .await
@@ -372,11 +395,13 @@ fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
             Ok((host, presence, endpoint, addrs))
         }
     })?;
-    tracing::debug!(room.addrs = ?addrs, "room: the leader's addresses");
+    tracing::debug!(room.addrs = ?addrs, room.relays = ?relays, "room: the leader's addresses");
     let live = Live {
         leader: name.clone(),
         endpoint: endpoint.id().to_string(),
         addrs,
+        relays,
+        pass: pass.clone(),
     };
     let room = rooms
         .set_live(&room.id, Some(live))
@@ -389,6 +414,7 @@ fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
             host: host.clone(),
             presence: presence.clone(),
             room: room.id.clone(),
+            pass,
             me,
             name: name.clone(),
         },
@@ -400,7 +426,11 @@ fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
     *lock(&ACTIVE) = Some(Active {
         room,
         name,
-        role: Role::Leader { host, presence },
+        role: Role::Leader {
+            host,
+            presence,
+            door,
+        },
         seen,
         stop,
         endpoint,
@@ -413,6 +443,8 @@ struct Leading {
     host: RoomHost,
     presence: live_doc::PresencePeer,
     room: RoomId,
+    /// The room's pass: the live set it edits together opens with it too.
+    pass: Pass,
     me: String,
     name: String,
 }
@@ -429,6 +461,7 @@ async fn lead_task(
         host,
         presence,
         room,
+        pass,
         me,
         name,
     } = leading;
@@ -449,6 +482,7 @@ async fn lead_task(
             let set = crate::collab::RoomSet {
                 set: room_set_name(&room, load),
                 projects,
+                door: Some((room.clone(), pass.clone())),
             };
             let (host, name) = (host.clone(), name.clone());
             edit_in_background(&seen, load, &stopped, move || {
@@ -505,24 +539,6 @@ fn load(path: &str) -> Result<Value, String> {
     Ok(json!({ "loaded": loaded_json(&loaded) }))
 }
 
-/// Where to dial the leader `live` says: its endpoint at its addresses.
-fn leader_addr(live: &Live) -> Result<iroh::EndpointAddr, String> {
-    let leader: iroh::EndpointId = live
-        .endpoint
-        .parse()
-        .map_err(|e| format!("the leader's endpoint: {e}"))?;
-    let mut addr = iroh::EndpointAddr::new(leader);
-    for a in &live.addrs {
-        match a.parse() {
-            Ok(socket) => addr = addr.with_ip_addr(socket),
-            Err(e) => {
-                tracing::debug!(room.error = %e, "room: an address of the leader's that is none");
-            }
-        }
-    }
-    Ok(addr)
-}
-
 /// Join `link`'s room as `name`, and follow its leader.
 fn join(link: &str, name: String) -> Result<Value, String> {
     let _turn = lock(&TURN);
@@ -532,39 +548,18 @@ fn join(link: &str, name: String) -> Result<Value, String> {
         .live
         .clone()
         .ok_or_else(|| format!("{} is not live: nobody leads it now", room.name))?;
-    let joined_at = leader_addr(&live)?;
+    room::net::leader_addr(&live)?;
     leave();
     let endpoint = on_runtime(bind(iroh::SecretKey::generate()))?;
     let me = format!("member-{}", short(&endpoint.id().to_string()));
-    let dialing = endpoint.clone();
     let (finding, id) = (rooms.clone(), room.id.clone());
-    let attach: Attach = Arc::new(move || {
-        // Where the leader is now, each time: a leader back after a restart
-        // is at new addresses (its endpoint is the same).
-        let addr = finding
-            .find(id.as_str())
-            .ok()
-            .and_then(|r| r.live)
-            .and_then(|live| leader_addr(&live).ok())
-            .unwrap_or_else(|| joined_at.clone());
-        let endpoint = dialing.clone();
-        Box::pin(async move {
-            let dial = async || {
-                architect::iroh_link::connect(&endpoint, addr.clone())
-                    .await
-                    .map_err(|e| eyre::eyre!("iroh connect: {e}"))
-            };
-            let sync = vox_core::initiator_on(dial().await?)
-                .establish::<live_doc::DocSyncClient>()
-                .await
-                .map_err(|e| eyre::eyre!("the room's doc: {e:?}"))?;
-            let presence = vox_core::initiator_on(dial().await?)
-                .establish::<live_doc::DocPresenceClient>()
-                .await
-                .map_err(|e| eyre::eyre!("the room's presence: {e:?}"))?;
-            Ok((sync, presence))
-        })
+    // Where the leader is now, each time: a leader back after a restart is
+    // at new addresses, with a new pass (its endpoint is the same).
+    let find: Find = Arc::new(move || {
+        let found = finding.find(id.as_str()).ok().and_then(|r| r.live);
+        Box::pin(async move { found })
     });
+    let attach = room::net::attach_to(endpoint.clone(), live, find);
     let runtime = crate::open::runtime().ok_or("the engine is not up")?;
     let peer = {
         let _entered = runtime.enter();
@@ -576,6 +571,7 @@ fn join(link: &str, name: String) -> Result<Value, String> {
         Following {
             peer: Arc::clone(&peer),
             room: room.id.clone(),
+            rooms: rooms.clone(),
             me,
             name: name.clone(),
             studio_root: rooms.studio_root().map(Path::to_path_buf),
@@ -600,6 +596,9 @@ fn join(link: &str, name: String) -> Result<Value, String> {
 struct Following {
     peer: Arc<RoomPeer>,
     room: RoomId,
+    /// Where the room's pass is read again for the live set: the leader's
+    /// latest.
+    rooms: Rooms,
     me: String,
     name: String,
     studio_root: Option<PathBuf>,
@@ -616,6 +615,7 @@ async fn follow(
     let Following {
         peer,
         room,
+        rooms,
         me,
         name,
         studio_root,
@@ -635,6 +635,7 @@ async fn follow(
             match open.map(|open| open(loaded.resolve(studio_root.as_deref()))) {
                 Some(Ok(())) => {
                     tracing::info!(room.loaded = %loaded.title, room.load = load, "room: opening what the leader loaded");
+                    peer.opened(load);
                     {
                         let mut seen = lock(&seen);
                         seen.opened = Some(load);
@@ -669,9 +670,16 @@ async fn follow(
             && lock(&seen).edits_due(share.load)
             && let Some(projects) = settled_songs()
         {
+            let pass = rooms
+                .find(room.as_str())
+                .ok()
+                .and_then(|r| r.live)
+                .map(|live| live.pass)
+                .unwrap_or_default();
             let set = crate::collab::RoomSet {
                 set: room_set_name(&room, share.load),
                 projects,
+                door: Some((room.clone(), pass)),
             };
             let name = name.clone();
             edit_in_background(&seen, share.load, &stopped, move || {
@@ -748,9 +756,15 @@ fn status() -> Value {
     let (edits, editing) = (seen.edits, seen.editing);
     drop(seen);
     let (role, doc, presence) = match &active.role {
-        Role::Leader { host, presence } => ("leader", host.doc().clone(), presence.clone()),
+        Role::Leader { host, presence, .. } => ("leader", host.doc().clone(), presence.clone()),
         Role::Member { peer } => ("member", peer.doc().clone(), peer.presence()),
     };
+    // A member's attachment refused or lost says so, when nothing else
+    // has gone wrong since.
+    let error = error.or_else(|| match &active.role {
+        Role::Member { peer } => peer.last_error(),
+        Role::Leader { .. } => None,
+    });
     let loaded = doc.loaded();
     let mut out = json!({
         "room": room_json(&active.room),
@@ -760,6 +774,10 @@ fn status() -> Value {
         "load": loaded.as_ref().map(|(_, n)| n),
         "people": room::net::people(&presence),
         "agents": room::net::agents(&presence),
+        "here": room::net::here_now(&presence)
+            .into_iter()
+            .map(|p| json!({ "name": p.name, "agent": p.agent, "opened": p.opened }))
+            .collect::<Vec<_>>(),
         "edits": edits,
         "editing": editing.is_some(),
         "transport": transport.as_ref().map(|t| json!({
@@ -770,7 +788,10 @@ fn status() -> Value {
         "error": error,
     });
     let more = match &active.role {
-        Role::Leader { host, .. } => vec![("members", json!(host.members()))],
+        Role::Leader { host, door, .. } => vec![
+            ("members", json!(host.members())),
+            ("refused", json!(door.refused())),
+        ],
         Role::Member { peer } => vec![
             ("attaches", json!(peer.attaches())),
             ("opened", json!(opened)),
@@ -809,7 +830,7 @@ static LEAD: ActionMeta = crate::actions::meta(
     "ROOM_LEAD",
     "room_lead",
     "Lead a room",
-    "Lead room `room` (its link or id) as `name` (left out: Leader): this engine hosts it, and its file says where its leader is, so anyone with the link can ROOM_JOIN. A room has one leader: one another device leads is refused unless `take` (true: lead it instead, e.g. after that device went away without leaving). Then ROOM_LOAD what everyone plays; this engine's transport is the room's.",
+    "Lead room `room` (its link or id) as `name` (left out: Leader): this engine hosts it behind its door, and its file says where its leader is and the pass the door opens to (new each time), so the organization's people can ROOM_JOIN by the link, from a desktop, a phone or a browser. A room has one leader: one another device leads is refused unless `take` (true: lead it instead, e.g. after that device went away without leaving). Then ROOM_LOAD what everyone plays; this engine's transport is the room's.",
     "Room",
     "",
 );
@@ -836,7 +857,7 @@ static STATUS: ActionMeta = crate::actions::meta(
     "ROOM",
     "room",
     "The room",
-    "The room this engine is in: `room` (id, name, org, link; null when in none), `role` (leader or member), `name`, `loaded` (kind, path, title) and `load` (which load it is), `people` (everyone here, by name, agents working through anyone's MCP included), `agents` (the agents among them), `edits` (the load whose set this engine edits together with the room: everyone's edits to it reach everyone; null until it is shared and joined) and `editing` (a share or join under way), `transport` (the leader's: playing, position, song number), `error`. A leader's `members` (attached now); a member's `attaches` (how many times it connected to the leader: 1 unless a connection was lost) and `opened` (the load it opened). Read-only.",
+    "The room this engine is in: `room` (id, name, org, link; null when in none), `role` (leader or member), `name`, `loaded` (kind, path, title) and `load` (which load it is), `people` (everyone here, by name, agents working through anyone's MCP included), `agents` (the agents among them), `here` (each one: `name`, `agent`, and `opened`, the load a member has opened, so a leader sees each member follow, a browser's or a phone's too), `edits` (the load whose set this engine edits together with the room: everyone's edits to it reach everyone; null until it is shared and joined) and `editing` (a share or join under way), `transport` (the leader's: playing, position, song number), `error`. A leader's `members` (attached now) and `refused` (calls its door turned away: any without the room's pass, which only the organization's people can read); a member's `attaches` (how many times it connected to the leader: 1 unless a connection was lost) and `opened` (the load it opened). Read-only.",
     "Room",
     "",
 );
