@@ -10,6 +10,13 @@
 //! change made elsewhere shows) and writes the window's routing edits
 //! (`Edit::SetRouteVolume` …) through the engine's [`Applier`], each
 //! predicted into what it reads so a slider does not wait on the engine.
+//! On a desktop and an iPad each change to a route between two tracks is
+//! committed as the engine's send actions (`SEND_SET`, `SEND_REMOVE`,
+//! `SEND_ADD`) — a slider's as it is let go, inside its gesture's undo
+//! step — on the racks' worker ([`crate::tone::Shared::send_edits`]), in
+//! order with the live edits before it. A hardware output has no action,
+//! and a page's Action List carries none of them: there the window's own
+//! edits are the change.
 //!
 //! A receive is editable here because it is the send feeding it: turning
 //! one down turns the other down. Adding a hardware output is not offered:
@@ -247,6 +254,71 @@ fn add_send(from: &str, to: &str) -> Edit {
     }
 }
 
+/// The two tracks of a route between tracks, as the send actions name them
+/// (`from`, `to`), and which of the sends between them it is (`index`,
+/// from 0); `None` for a hardware output, which has no action.
+#[must_use]
+pub fn ends(wiring: &Wiring, mine: &str, at: At) -> Option<(String, String, u32)> {
+    let route = wiring.at(at)?;
+    let far = crate::routes::partner(route, mine)?;
+    let (from, to) = match at.kind {
+        RouteType::Send => (mine, far),
+        RouteType::Receive => (far, mine),
+        RouteType::HardwareOutput => return None,
+    };
+    let before = wiring
+        .list(at.kind)
+        .iter()
+        .take_while(|r| r.index != at.index)
+        .filter(|r| crate::routes::partner(r, mine) == Some(far))
+        .count();
+    Some((
+        from.to_owned(),
+        to.to_owned(),
+        u32::try_from(before).unwrap_or(0),
+    ))
+}
+
+/// A tap as `SEND_SET` takes it.
+#[must_use]
+pub const fn tap_slug(mode: SendMode) -> &'static str {
+    match mode {
+        SendMode::PostFader => "post-fader",
+        SendMode::PostFx => "pre-fader",
+        SendMode::PreFx => "pre-fx",
+    }
+}
+
+/// The send action `id` on the route `at` of `mine`, with `fields`: what a
+/// desktop's or an iPad's panel commits. `None` for a hardware output, and
+/// in a page, whose Action List has no send actions.
+fn send_action(
+    wiring: Option<&Wiring>,
+    mine: &str,
+    at: At,
+    id: &str,
+    fields: serde_json::Value,
+) -> Option<Edit> {
+    if !cfg!(feature = "native") {
+        return None;
+    }
+    let (from, to, index) = ends(wiring?, mine, at)?;
+    let mut args = serde_json::json!({ "from": from, "to": to, "index": index });
+    if let (Some(args), serde_json::Value::Object(fields)) = (args.as_object_mut(), fields) {
+        args.extend(fields);
+    }
+    Some(Edit::Run(id.to_owned(), args.to_string()))
+}
+
+/// A level as `SEND_SET` takes it: silence as far down as it goes.
+fn level_db(gain: f64) -> f64 {
+    if gain <= 0.0 {
+        -150.0
+    } else {
+        20.0 * gain.log10()
+    }
+}
+
 /// A position as the slider takes it.
 #[allow(
     clippy::cast_possible_truncation,
@@ -288,28 +360,29 @@ impl Outbox {
 pub fn RoutingCloseup(track: String) -> Element {
     let routes = use_hook(Routes::default);
     let outbox = use_hook(Outbox::default);
-    let applier = use_hook(|| std::rc::Rc::new(crate::engine::Applier::start()));
+    // The racks' worker: what this panel makes goes in order with theirs.
+    let shared = std::rc::Rc::clone(&use_context::<crate::closeup::Closeups>().tone);
     let mut pending = use_signal(std::collections::HashMap::<String, web_time::Instant>::new);
     let mut tick = use_signal(|| 0_u64);
     // Closed with edits still queued (a typed level's end among them):
     // sent, so no undo step is left open.
     {
-        let (outbox, applier) = (outbox.clone(), std::rc::Rc::clone(&applier));
-        use_drop(move || send_all(&outbox, &applier));
+        let (outbox, shared) = (outbox.clone(), std::rc::Rc::clone(&shared));
+        use_drop(move || send_all(&outbox, &shared));
     }
     {
         let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.clone());
-        let applier = std::rc::Rc::clone(&applier);
+        let shared = std::rc::Rc::clone(&shared);
         use_future(move || {
             let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.clone());
-            let applier = std::rc::Rc::clone(&applier);
+            let shared = std::rc::Rc::clone(&shared);
             async move {
                 routes.fetch(vec![track.clone()]);
                 routes.fetch_tracks();
                 let mut read_at = web_time::Instant::now();
                 loop {
                     crate::pause(TICK).await;
-                    send_all(&outbox, &applier);
+                    send_all(&outbox, &shared);
                     if read_at.elapsed() >= REREAD && !outbox.recent() {
                         routes.reread(vec![track.clone()]);
                         routes.fetch_tracks();
@@ -414,13 +487,11 @@ pub fn RoutingCloseup(track: String) -> Element {
     }
 }
 
-/// Send what the panel's controls made, in order.
-fn send_all(outbox: &Outbox, applier: &Option<crate::engine::Applier>) {
+/// Send what the panel's controls made, in order, on the racks' worker.
+fn send_all(outbox: &Outbox, shared: &crate::tone::Shared) {
     let edits = outbox.take();
-    if let Some(applier) = applier {
-        for edit in edits {
-            applier.send(edit);
-        }
+    if !edits.is_empty() {
+        shared.send_edits(edits);
     }
 }
 
@@ -462,8 +533,13 @@ fn RouteRow(
     let mute = {
         let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.clone());
         move |_| {
+            let wiring = routes.get(&track);
+            let fields = serde_json::json!({ "mute": !muted });
+            outbox.push(
+                send_action(wiring.as_ref(), &track, at, "SEND_SET", fields)
+                    .unwrap_or_else(|| Edit::SetRouteMute(track.clone(), at, !muted)),
+            );
             routes.predict(&track, at, |r| r.muted = !muted);
-            outbox.push(Edit::SetRouteMute(track.clone(), at, !muted));
             tick += 1;
         }
     };
@@ -471,15 +547,25 @@ fn RouteRow(
         let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.clone());
         move |_| {
             let next = next_tap(mode);
+            let wiring = routes.get(&track);
+            let fields = serde_json::json!({ "tap": tap_slug(next) });
+            outbox.push(
+                send_action(wiring.as_ref(), &track, at, "SEND_SET", fields)
+                    .unwrap_or_else(|| Edit::SetSendMode(track.clone(), at.index, next)),
+            );
             routes.predict(&track, at, |r| r.send_mode = next);
-            outbox.push(Edit::SetSendMode(track.clone(), at.index, next));
             tick += 1;
         }
     };
     let remove = {
         let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.clone());
         move |_| {
-            outbox.push(Edit::RemoveRoute(track.clone(), at));
+            let wiring = routes.get(&track);
+            let fields = serde_json::json!({});
+            outbox.push(
+                send_action(wiring.as_ref(), &track, at, "SEND_REMOVE", fields)
+                    .unwrap_or_else(|| Edit::RemoveRoute(track.clone(), at)),
+            );
             // Every route after it renumbers: shown so now, and the next
             // read settles both ends.
             routes.predict_removed(&track, at);
@@ -536,9 +622,23 @@ fn handle(routes: &Routes, outbox: &Outbox, track: &str, at: At, which: Slider) 
         let outbox = outbox.clone();
         move || outbox.push(Edit::BeginUndo(STEP.to_owned()))
     };
+    // Let go: on a desktop the value it ended at committed as SEND_SET,
+    // inside the gesture's step, then the step closed.
     let end = {
-        let outbox = outbox.clone();
-        move || outbox.push(Edit::EndUndo(STEP.to_owned()))
+        let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.to_owned());
+        move || {
+            let wiring = routes.get(&track);
+            let fields = wiring.as_ref().and_then(|w| w.at(at)).map(|r| match which {
+                Slider::Level => serde_json::json!({ "level_db": level_db(r.volume) }),
+                Slider::Pan => serde_json::json!({ "pan": r.pan.clamp(-1.0, 1.0) }),
+            });
+            if let Some(commit) =
+                fields.and_then(|f| send_action(wiring.as_ref(), &track, at, "SEND_SET", f))
+            {
+                outbox.push(commit);
+            }
+            outbox.push(Edit::EndUndo(STEP.to_owned()));
+        }
     };
     let set = {
         let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.to_owned());
@@ -672,6 +772,41 @@ mod tests {
             name: name.to_owned(),
             parent: parent.map(str::to_owned),
         }
+    }
+
+    #[test]
+    fn a_route_between_tracks_is_named_by_its_two_ends_for_the_send_actions() {
+        let wiring = Wiring {
+            sends: vec![
+                route(RouteType::Send, 0, "a", Some("b")),
+                route(RouteType::Send, 1, "a", Some("c")),
+                route(RouteType::Send, 2, "a", Some("b")),
+            ],
+            receives: vec![route(RouteType::Receive, 0, "v", Some("a"))],
+            hardware: vec![route(RouteType::HardwareOutput, 0, "a", None)],
+            ..Wiring::default()
+        };
+        let send = |i| At::new(RouteType::Send, i);
+        assert_eq!(
+            ends(&wiring, "a", send(0)),
+            Some(("a".into(), "b".into(), 0))
+        );
+        assert_eq!(
+            ends(&wiring, "a", send(2)),
+            Some(("a".into(), "b".into(), 1)),
+            "the second to b"
+        );
+        assert_eq!(
+            ends(&wiring, "a", At::new(RouteType::Receive, 0)),
+            Some(("v".into(), "a".into(), 0)),
+            "a receive is the send feeding it"
+        );
+        assert_eq!(
+            ends(&wiring, "a", At::new(RouteType::HardwareOutput, 0)),
+            None
+        );
+        assert_eq!(tap_slug(next_tap(SendMode::PostFader)), "pre-fader");
+        assert!(level_db(0.0) < -100.0);
     }
 
     #[test]

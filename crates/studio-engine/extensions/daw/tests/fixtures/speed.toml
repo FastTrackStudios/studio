@@ -32,14 +32,18 @@ hint_below = 0
 # and 1.25× the contended one, and a time fails only past 1.25× its
 # budget. The real song's open target (7 s) is held by `just
 # test-unbreakable` (../unbreakable/budgets.toml): CI has no copy of it.
+#
+# drum-kit and the setlist went back to 10 s after CI run 46075930089
+# (main at a15cd9b76): drum-kit opened in 7900 ms on a runner at a load
+# average of 60–70, past the 6250 ms limit of the 5 s budget #797 set.
 [open.budget_ms]
 arrangements = 2000
 chart-repeats = 2000
-drum-kit = 5000
+drum-kit = 10000
 markers-only = 2000
 multitrack-click = 2000
 same-name = 2000
-setlist = 5000
+setlist = 10000
 
 # A room with a leader and a member (tests/room).
 #
