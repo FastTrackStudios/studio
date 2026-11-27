@@ -55,7 +55,9 @@ app-shell-native = { git = "https://github.com/FastTrackStudios/app-shell", rev 
 # arrangement, the mixer's window and the engine are the real extensions
 # (extensions/*), hosted here.
 app-shell-extensions = { git = "https://github.com/FastTrackStudios/app-shell", rev = "46a0d04a9bde95deac00745fa996313c874e9be8", optional = true }
-serde_json = { version = "1", optional = true }
+# Every build: the New session sheet (src/new_session.rs) builds its
+# SESSION_NEW arguments with it.
+serde_json = "1"
 js-sys = { version = "0.3", optional = true }
 # The browser's fetch, for bytes (waveforms, uploads).
 web-sys = { version = "0.3", optional = true, features = ["Window", "Request", "RequestInit", "Response", "Headers", "Blob", "BlobPropertyBag", "Url", "Performance", "Location"] }
@@ -119,7 +121,7 @@ drive-local = { workspace = true, optional = true }
 default = []
 # Drive's code (the live sets, setlist files, songs' files), in every
 # build that has a renderer.
-drive = ["dep:drive-dioxus", "dep:drive-client", "dep:serde_json", "dep:tracing"]
+drive = ["dep:drive-dioxus", "dep:drive-client", "dep:tracing"]
 web = ["dioxus/web", "drive", "dep:js-sys", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
 desktop = ["dioxus/desktop", "local"]
 # The same app drawn by Blitz (the GPU renderer Signal's panes and the
@@ -144,7 +146,6 @@ native = [
     "dep:architect-scripting",
     "dep:facet",
     "dep:facet-json",
-    "dep:serde_json",
     "dep:futures-channel",
     "dep:tracing",
     "dep:studio-arrangement",

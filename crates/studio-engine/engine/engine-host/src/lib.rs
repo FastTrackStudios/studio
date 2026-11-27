@@ -1474,29 +1474,12 @@ fn SettingsPanel() -> Element {
             style: "display: flex; flex-direction: column; align-items: flex-start; gap: 12px; \
                     padding: 12px; font-size: 12px;",
             span { style: "color: #a1a1aa;", "Session v{version}" }
-            UpdateCheck {}
         }
     }
 }
 
-/// Settings' update block: the release feed's answer for this build, and
-/// the signed install when one is possible (`studio_shell::updates`).
-#[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
-#[component]
-fn UpdateCheck() -> Element {
-    rsx! {
-        studio_shell::updates::UpdateSettings {
-            app: studio_shell::updates::App::new(env!("CARGO_PKG_NAME"), studio_shell::version::current()),
-        }
-    }
-}
-
-/// Web/mobile build: the deployment updates itself — nothing to check.
-#[cfg(any(target_arch = "wasm32", target_os = "ios"))]
-#[component]
-fn UpdateCheck() -> Element {
-    rsx! {}
-}
+// Updates: Studio installs them itself, in the background
+// (apps/studio/src/self_update.rs); Settings has no update block.
 
 /// The comprehensive Tailwind sheet — built by `just tailwind` from
 /// `input.css`, which scans every UI crate (app src, daw-view-kit,
