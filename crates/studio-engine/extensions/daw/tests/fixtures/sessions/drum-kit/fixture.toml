@@ -1,0 +1,82 @@
+# A short drum multitrack, made for mixing over MCP (studio#696): a kick
+# and a snare, each with two close mics and a trigger, and an overhead.
+# Every mic hears the other drum too (bleed), the kick's Out mic is late
+# and turned over against its In, the snare's Bottom turned over against
+# its Top, and the drummer hits unevenly. 120 bpm, 2 s bars, 16 s.
+about = "a drum multitrack to mix: close mics, an overhead, triggers"
+sections = ["Groove", "Groove 2"]
+
+[[piece]]
+name = "kick"
+hz = 55
+decay_ms = 110
+noise = 0.0
+bpm = 120
+beats = [1, 3]
+bars = 8
+levels_db = [0, -5, -2, -7, -1, -6, -3, -4]
+
+[[piece]]
+name = "snare"
+hz = 190
+decay_ms = 100
+noise = 0.5
+bpm = 120
+beats = [2, 4]
+bars = 8
+levels_db = [0, -4, -1, -6, -2, -5, 0, -3]
+
+[[media]]
+file = "Media/click.wav"
+kind = "click"
+bpm = 120
+seconds = 16
+
+[[media]]
+file = "Media/kick-in.wav"
+kind = "drum"
+seconds = 16
+voices = [{ piece = "kick", db = -6 }, { piece = "snare", db = -24, delay_ms = 1.0 }]
+
+[[media]]
+file = "Media/kick-out.wav"
+kind = "drum"
+seconds = 16
+voices = [{ piece = "kick", db = -8, delay_ms = 2.5, invert = true }, { piece = "snare", db = -30, delay_ms = 2.0 }]
+
+[[media]]
+file = "Media/kick-trig.wav"
+kind = "trigger"
+piece = "kick"
+seconds = 16
+
+[[media]]
+file = "Media/snare-top.wav"
+kind = "drum"
+seconds = 16
+voices = [{ piece = "snare", db = -6 }, { piece = "kick", db = -24, delay_ms = 1.0 }]
+
+[[media]]
+file = "Media/snare-bottom.wav"
+kind = "drum"
+seconds = 16
+voices = [{ piece = "snare", db = -9, delay_ms = 0.2, invert = true }, { piece = "kick", db = -28, delay_ms = 1.2 }]
+
+[[media]]
+file = "Media/snare-trig.wav"
+kind = "trigger"
+piece = "snare"
+seconds = 16
+
+[[media]]
+file = "Media/oh.wav"
+kind = "drum"
+seconds = 16
+voices = [{ piece = "kick", db = -20, delay_ms = 4.0 }, { piece = "snare", db = -14, delay_ms = 3.0 }]
+
+[[listen]]
+track = "Drums"
+from = "Groove"
+to = "Groove end"
+lufs_min = -30
+lufs_max = -6

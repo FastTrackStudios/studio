@@ -170,7 +170,7 @@ fn a_new_session_from_a_folder_of_stems() {
     let mcp = &engine.mcp;
     let mut checks = Checks::default();
     let mut steps = || -> Result<(), String> {
-        fixture::generate(&folder, &stems())?;
+        fixture::generate(&folder, &stems(), &[])?;
         make(
             &engine,
             &json!({"from": folder.display().to_string(), "tempo": 120}),
@@ -313,6 +313,7 @@ fn a_new_session_from_a_reaper_project() {
         fixture::generate(
             &dir,
             &[tone("Media/piano.wav", 262.0), tone("Media/vox.wav", 330.0)],
+            &[],
         )?;
         make(&engine, &json!({"from": rpp.display().to_string()}))?;
         waltz_holds(mcp, "made", &mut checks)?;

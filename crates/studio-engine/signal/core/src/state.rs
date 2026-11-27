@@ -476,6 +476,43 @@ impl SignalState {
 }
 
 impl Preset {
+    /// The piece a block keyed by `key` follows, as the host's placed hits
+    /// (`PlannedHits`) and the session's name it: the lane of the preset
+    /// called `key` (its index), or, for a key no lane of the preset runs
+    /// (a trigger on a track of its own: a gate on the kick's folder keyed
+    /// by `Drums/Kick/Sum/Trig`), a number after the lanes, the keys
+    /// counted in the order they first appear. `None`: no lane and no
+    /// block's key.
+    #[must_use]
+    pub fn key_piece(&self, key: &str) -> Option<u16> {
+        let at = match self.lanes.iter().position(|l| l.name == key) {
+            Some(lane) => lane,
+            None => self
+                .lanes
+                .len()
+                .checked_add(self.outside_keys().iter().position(|k| *k == key)?)?,
+        };
+        u16::try_from(at).ok()
+    }
+
+    /// The keys of the preset's blocks that name no lane of it, each once,
+    /// in the order they first appear: tracks whose hits the host places.
+    #[must_use]
+    pub fn outside_keys(&self) -> Vec<&str> {
+        let mut out: Vec<&str> = Vec::new();
+        for key in self
+            .lanes
+            .iter()
+            .flat_map(|l| &l.blocks)
+            .filter_map(|b| b.key.as_deref())
+        {
+            if !out.contains(&key) && !self.lanes.iter().any(|l| l.name == key) {
+                out.push(key);
+            }
+        }
+        out
+    }
+
     /// Stereo in, stereo out, nothing in between.
     #[must_use]
     pub fn passthrough() -> Self {

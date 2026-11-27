@@ -1488,10 +1488,14 @@ pub unsafe extern "C" fn on_event<E: SignalEditor>(
     }
 }
 
-/// The lanes of `preset` a `hits:<piece>` event places hits for, by
-/// index (the graph's id of a remote key's piece): the piece's trigger
-/// lanes, and any lane of the piece a block keys on (a trigger track
-/// played by notes, with no detector of its own).
+/// The pieces of `preset` a `hits:<piece>` event places hits for, by the
+/// graph's id of a remote key's piece ([`Preset::key_piece`]): the
+/// piece's trigger lanes, any lane of the piece a block keys on (a trigger
+/// track played by notes, with no detector of its own), and any key of
+/// the piece no lane runs (a gate on the piece's folder keyed by its
+/// trigger track).
+///
+/// [`Preset::key_piece`]: signal_core::state::Preset::key_piece
 #[must_use]
 pub fn planned_pieces(preset: &signal_core::state::Preset, piece: &str) -> Vec<u16> {
     let keyed = |name: &str| {
@@ -1500,12 +1504,18 @@ pub fn planned_pieces(preset: &signal_core::state::Preset, piece: &str) -> Vec<u
             .iter()
             .any(|l| l.blocks.iter().any(|b| b.key.as_deref() == Some(name)))
     };
-    preset
+    let lanes = preset
         .lanes
         .iter()
-        .enumerate()
-        .filter(|(_, l)| piece_of(&l.name) == piece && (l.trigger.is_some() || keyed(&l.name)))
-        .filter_map(|(i, _)| u16::try_from(i).ok())
+        .filter(|l| piece_of(&l.name) == piece && (l.trigger.is_some() || keyed(&l.name)))
+        .map(|l| l.name.as_str());
+    let outside = preset
+        .outside_keys()
+        .into_iter()
+        .filter(|k| piece_of(k) == piece);
+    lanes
+        .chain(outside)
+        .filter_map(|name| preset.key_piece(name))
         .collect()
 }
 
@@ -1593,6 +1603,20 @@ mod tests {
         preset.lanes[at].trigger = None;
         assert_eq!(planned_pieces(&preset, "Drums/Toms/Tom 4"), want);
         assert!(planned_pieces(&preset, "Drums/Toms/Tom 9").is_empty());
+    }
+
+    #[test]
+    fn placed_hits_reach_a_key_no_lane_of_the_preset_runs() {
+        let mut preset = signal_core::state::Preset::passthrough();
+        preset.lanes[0].blocks = vec![
+            signal_core::state::BlockSpec::signal("gate", "gate")
+                .phase(Phase::Rescue)
+                .key("Drums/Kick/Sum/Trig"),
+        ];
+        // The one lane is 0; the key outside it is the piece after it.
+        assert_eq!(planned_pieces(&preset, "Drums/Kick"), vec![1]);
+        assert_eq!(preset.key_piece("Drums/Kick/Sum/Trig"), Some(1));
+        assert!(planned_pieces(&preset, "Drums/Snare").is_empty());
     }
 
     #[test]

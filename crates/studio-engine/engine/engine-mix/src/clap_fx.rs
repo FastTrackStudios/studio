@@ -361,6 +361,57 @@ pub fn add(
     Ok(fx_guid)
 }
 
+/// Put the CLAP compiled into this engine that `name` names (Signal) on
+/// `chain` at `index`, made from its entry with nothing found on disk.
+///
+/// Named in the chain as its bundle (`Signal Dev.clap`), as a song's Signal is
+/// named by its bundle's path: what a save writes, what a reopen here or
+/// on another machine finds again, and what everything that looks for a
+/// Signal instance by its bundle (`signal_kit::is_signal_bundle`)
+/// recognises. Its FX GUID.
+///
+/// # Errors
+///
+/// It could not be added, or its plugin did not start.
+pub fn add_builtin(
+    daw: &Standalone,
+    project: &ProjectContext,
+    chain: &FxChainContext,
+    name: &str,
+    index: u32,
+) -> Result<String, String> {
+    let bundle = if Path::new(name)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("clap"))
+    {
+        name.to_owned()
+    } else {
+        format!("{name}.clap")
+    };
+    let fx_guid = Effects::add_at(
+        daw,
+        project.clone(),
+        daw_proto::fx::AddFxAtRequest {
+            context: chain.clone(),
+            name: bundle,
+            index,
+        },
+    )
+    .ok_or_else(|| format!("{name} could not be added"))?;
+    if daw.with_plugin_instance(&fx_guid, |_| ()).is_none() {
+        let _ = Effects::remove(
+            daw,
+            project.clone(),
+            FxTarget {
+                context: chain.clone(),
+                fx: FxRef::Guid(fx_guid),
+            },
+        );
+        return Err(format!("{name}, built into the engine, would not start"));
+    }
+    Ok(fx_guid)
+}
+
 #[cfg(test)]
 mod tests {
     use super::bundle_in;
