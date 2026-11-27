@@ -79,9 +79,8 @@ impl session::file::PartStore for Parts {
     }
 
     fn append(&self, id: uuid::Uuid, update: &[u8]) -> Result<(), String> {
-        let mut parts = self.0.lock().unwrap();
-        let doc = parts.entry(id).or_default();
-        doc.import(update).map(|_| ()).map_err(|e| e.to_string())
+        let imported = self.0.lock().unwrap().entry(id).or_default().import(update);
+        imported.map(|_| ()).map_err(|e| e.to_string())
     }
 
     fn compact(&self, id: uuid::Uuid, snapshot: &[u8]) -> Result<(), String> {

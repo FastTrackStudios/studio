@@ -179,10 +179,11 @@ enum Write {
     Fold(Vec<u8>, mpsc::Sender<std::result::Result<(), String>>),
 }
 
-/// Keeps updates that reach the session from elsewhere (a sync joiner's
-/// imports fire no commit): written to its file like its own edits. It
-/// does not keep the file open: once the session is let go, what it is
-/// handed is not written.
+/// Keeps updates that reach the session from elsewhere in its file.
+///
+/// A sync joiner's imports fire no commit, so they are handed here and
+/// written like the session's own edits. It does not keep the file open:
+/// once the session is let go, what it is handed is not written.
 #[derive(Clone)]
 pub struct Keeper(std::sync::Weak<mpsc::Sender<Write>>);
 

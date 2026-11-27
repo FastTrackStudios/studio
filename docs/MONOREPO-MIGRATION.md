@@ -82,7 +82,7 @@ Everything left from the old Session app has been removed or renamed
   |---|---|---|
   | `proto` (setlist, song and mode services; the action traits) | `studio-proto` (`studio-core/proto/studio-proto`) | core |
   | `sync`: `align`, `crop`, `diff`, `doc`, `hold`, `model`, `slug`, `transport`, `drift`, `relay`, `net`, `clock`; `presence` | `session-sync` (`net` and `clock` behind feature `net`; presence is the primitive's). Its old copies of the same files are gone. | core |
-  | `library` (+ `publish`), `project_sync` | `library-sync` (`studio-core/session/library-sync`, features `publish`, `project-sync`) | core |
+  | `library` (+ `publish`) | `library-sync` (`studio-core/session/library-sync`, feature `publish`; `project_sync` removed in #728) | core |
   | `sync`: `bridge`, `direct`, `engine`, `whole` | `engine-sync` (`studio-engine/engine/engine-sync`; re-exports `session-sync`) | engine |
   | `setlist`, `song`, `keyflow`, `guide` (+ `tts`), `key`, `key_actions`, `key_change`, `modes`, `mode_phases`, `playback`, `routing`, `track_manager`, `guitar_grow`, `comping`, `count_in`, `reference`, `review`, `cache`, `event_bus`, `color`, `lyrics`, `load_selection`, `vault_sync`, `SessionServices` / `daw_services` / `register_all_actions` | `engine-domain` (`studio-engine/engine/engine-domain`; re-exports `studio-proto` as `proto` and `engine-sync` as `sync`) | engine |
   | `ui` (components, layouts, signals, shell), `open_link`, `strip_width` | `studio-ui` (`studio-connect/kit/studio-ui`, features `web`, `desktop`, `chart-editor`) | connect |

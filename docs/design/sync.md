@@ -42,10 +42,10 @@ app, not the document.
 ## On a device
 
 - **A project** is its `.session` store (`session-format/src/store`): the
-  doc's updates, snapshots, branches and blobs in one Turso file. It is
-  the device's replica: the store implements `crdt::Persistence`, so a
-  save is an `append_update` and a fold is a `compact`. Each branch is
-  its own doc; its id is kept in the store's `meta` (`doc:<branch>`).
+  doc's updates, snapshots, branches and blobs in one Turso file. The
+  session's document is a part of it (`PartReplica`), written by the
+  session file's own writer (`session::file`): every commit appended as
+  it is made, a save a fold.
 - **A rig's library** is a *book* (`signal_rig_host::book`): one Loro doc
   in `<library dir>.session` beside the styx directory it replaces —
   presets, patches, profiles, songs, setlists, setup, each old file an
@@ -64,13 +64,17 @@ app, not the document.
   audio, chart PDFs move by file sync (the blobs layer); a doc holds how
   they are used (`models/Fender Clean.nam` in a preset) and, in the
   book's asset index, what each one is by content: BLAKE3 hash and size.
-- **The browser** keeps its replicas in IndexedDB (`crdt`'s `indexeddb`).
+- **The browser** joins a desktop's live doc (`live-doc`); it keeps no
+  replica of its own yet.
 
 Edits go into the local replica first, always. Sync is a background loop
 that never blocks an edit; offline, `SyncedDoc` buffers the updates and
 catches up by version vector when a connection comes back.
 
 ## Through Task
+
+> Studio's side of this is removed (#728): see the note under
+> "Projects".
 
 A schema-agnostic doc space, `crdt::docs` in architect (beside `crdt`'s
 persistence backends, its `DocRegistry` and its peer lane), so a device and
@@ -141,6 +145,13 @@ foreground app holds the engine and never waits for it; nothing of it
 runs on the audio thread.
 
 ## Projects
+
+> **Removed (#728).** Studio no longer syncs a project file through its
+> org on Task: the org's doc driver (`crdt::docs`, `library-sync`'s
+> `project_sync`, `fts-account`'s `sync`, `studio share`) is gone with
+> architect's `crdt`. Song files sync as files, through Drive; a live set
+> shares a song live through `live-doc`. What follows is the design as it
+> was, kept for the record.
 
 A project syncs the way a rig's book does, with three differences: it
 belongs to an org that is often not the person's own, it is open in the
