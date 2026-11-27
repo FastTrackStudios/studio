@@ -23,7 +23,9 @@ What it does, in order:
 4. The room's link is opened on the simulator, in the app's scheme
    (`simctl openurl ... fasttrackstudio://join/<room>`): the link opens
    Studio and Studio joins. Nothing on the phone is told to join any
-   other way.
+   other way. iOS 27 asks first ("Open in “Studio”?"), as for any link
+   from outside an app; the test taps Open through idb, so it needs
+   `idb_companion` (Homebrew) and the `idb` client (pip's fb-idb).
 5. Checked from outside: the phone is a member and opens the leader's
    setlist; the leader sees it in the room; it follows the leader's song,
    playhead and stop; and when the leader loads the second setlist the
@@ -68,6 +70,8 @@ FOLLOW_WAIT = 30
 # MCP reads (one through the app's DAW_RUN), and the transport's poll.
 PLAYHEAD_TOLERANCE = 0.5
 ENGINE_WAIT = 90
+# How long iOS has to show its "Open in “Studio”?" alert for the link.
+LINK_ALERT_WAIT = 20
 
 
 def stage_song(folder, name, bpm):
@@ -269,6 +273,9 @@ def room(leader, phone, setlists, studio, home, checks, made_room):
     in_app = "fasttrackstudio://join/" + link.rsplit("/", 1)[-1]
     began = time.monotonic()
     sim.simctl(phone.dev_set, "openurl", phone.udid, in_app)
+    # iOS 27 asks first ("Open in “Studio”?") when a link comes from no
+    # app, as simctl's does; a person taps Open, and so does this.
+    phone.alert.tap("Open", LINK_ALERT_WAIT)
     ok, got = until(FOLLOW_WAIT, lambda: member("ROOM"),
                     lambda v: isinstance(v, dict) and v.get("role") == "member")
     if not checks.add("the link joins the phone to the room", ok, got):
@@ -327,15 +334,78 @@ def room(leader, phone, setlists, studio, home, checks, made_room):
     checks.add("and opens what the leader has loaded", ok, f"leader {leader_second}, phone {got}")
 
 
+class Alert:
+    """The system's alerts on the simulator, answered through idb (simctl
+    cannot tap): `idb_companion` serves the device, the `idb` client
+    (pip's fb-idb) reads its screen and taps."""
+
+    def __init__(self, dev_set, udid, idb, companion, out):
+        self.idb = idb
+        # Its gRPC and debug ports, free ones: other runners on the Mac
+        # may run a companion at the same time.
+        with socket.socket() as a, socket.socket() as b:
+            a.bind(("127.0.0.1", 0))
+            b.bind(("127.0.0.1", 0))
+            port, debug = a.getsockname()[1], b.getsockname()[1]
+        self.at = f"localhost:{port}"
+        self.log = open(os.path.join(out, "idb_companion.log"), "w")
+        self.child = subprocess.Popen(
+            [companion, "--udid", udid, "--device-set-path", dev_set,
+             "--grpc-port", str(port), "--debug-port", str(debug)],
+            stdout=self.log, stderr=subprocess.STDOUT)
+
+    def _idb(self, *args):
+        return subprocess.run([self.idb, "--companion", self.at, *args],
+                              capture_output=True, text=True, timeout=30)
+
+    def tap(self, label, wait):
+        """Tap the button called `label` once it is on screen."""
+        deadline = time.monotonic() + wait
+        while time.monotonic() < deadline:
+            try:
+                items = json.loads(self._idb("ui", "describe-all", "--json").stdout or "[]")
+            except (json.JSONDecodeError, subprocess.TimeoutExpired):
+                items = []
+            for item in items:
+                if item.get("type") == "Button" and item.get("AXLabel") == label:
+                    f = item["frame"]
+                    x, y = int(f["x"] + f["width"] / 2), int(f["y"] + f["height"] / 2)
+                    self._idb("ui", "tap", str(x), str(y)).check_returncode()
+                    log(f"tapped the system's {label!r} at {x},{y}")
+                    return
+            time.sleep(0.5)
+        raise Failed(f"no {label!r} button on screen in {wait} s")
+
+    def stop(self):
+        self.child.terminate()
+        try:
+            self.child.wait(10)
+        except subprocess.TimeoutExpired:
+            self.child.kill()
+        self.log.close()
+
+
+def idb_tools(idb, companion):
+    """The idb client and companion, or why not."""
+    idb = idb or shutil.which("idb")
+    companion = companion or shutil.which("idb_companion") or "/opt/homebrew/bin/idb_companion"
+    if not idb or not os.access(idb, os.X_OK):
+        raise Failed("no idb client (pip install fb-idb; --idb): it taps iOS's \"Open in\" alert for the link")
+    if not os.access(companion, os.X_OK):
+        raise Failed(f"no idb_companion at {companion} (brew install idb-companion; --idb-companion)")
+    return idb, companion
+
+
 class Phone:
     """The app in the simulator, read through its MCP door."""
 
-    def __init__(self, dev_set, udid, bundle, data, app_log):
+    def __init__(self, dev_set, udid, bundle, data, app_log, alert):
         self.dev_set = dev_set
         self.udid = udid
         self.bundle = bundle
         self.data = data
         self.app_log = app_log
+        self.alert = alert
         self.mcp = None
 
     def launch(self, args=()):
@@ -368,6 +438,8 @@ def main():
     p.add_argument("--set", help="the simulator device set (default: a fresh folder in $TMPDIR)")
     p.add_argument("--out", default=None, help="where the outputs, a screenshot and room.json go")
     p.add_argument("--keep", action="store_true", help="leave the simulator and its set")
+    p.add_argument("--idb", help="the idb client (pip's fb-idb; default: `idb` on PATH)")
+    p.add_argument("--idb-companion", help="idb_companion (default: on PATH, or Homebrew's)")
     a = p.parse_args()
 
     app = os.path.abspath(a.app)
@@ -387,9 +459,11 @@ def main():
     app_log = os.path.join(out, "studio.log")
     udid = None
     leader = None
+    alert = None
     checks = Checks()
     made_room = []
     try:
+        idb, companion = idb_tools(a.idb, a.idb_companion)
         setlists = stage(studio)
         leader = Leader(engine, os.path.join(studio, "Rooms"), out)
         udid = sim.make_device(dev_set)
@@ -400,7 +474,8 @@ def main():
         # The app's own Studio folder (src/storage.rs: no Drive mount on a
         # phone), where its engine keeps and finds rooms.
         home = os.path.join(data, "Library", "Application Support", "fasttrackstudio", "Studio")
-        phone = Phone(dev_set, udid, bundle, data, app_log)
+        alert = Alert(dev_set, udid, idb, companion, out)
+        phone = Phone(dev_set, udid, bundle, data, app_log, alert)
         phone.launch()
         sim.wait_for("the engine in the app", sim.UP_WAIT, lambda: phone.engine("SESSION_TRANSPORT") is not None)
         room(leader.mcp, phone, setlists, studio, home, checks, made_room)
@@ -410,6 +485,8 @@ def main():
         ok = checks.ok()
         with open(os.path.join(out, "room.json"), "w") as f:
             json.dump({"test": "room-ios", "ok": ok, "join_s": checks.join_s, "checks": checks.rows}, f, indent=2)
+        if alert:
+            alert.stop()
         if leader:
             leader.stop()
         # The endpoint key the leader kept for the room (engine-collab's

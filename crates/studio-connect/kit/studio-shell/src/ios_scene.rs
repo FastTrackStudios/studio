@@ -62,7 +62,9 @@ define_class!(
             attach(MainThreadMarker::from(scene));
             // Launched by a link (the app was not running): it comes with
             // the scene's connection, never to `scene:openURLContexts:`.
-            opened(&options.URLContexts());
+            if let Some(contexts) = launch_links(options) {
+                opened(&contexts);
+            }
         }
 
         /// A link opened while the app runs.
@@ -95,6 +97,17 @@ static ON_LINK: OnceLock<fn(&str)> = OnceLock::new();
 /// call is a no-op.
 pub fn on_link(handler: fn(&str)) {
     let _ = ON_LINK.set(handler);
+}
+
+/// The links a scene connected with, if any. iOS 27 answers `URLContexts`
+/// with nil when the app was not opened by a link, where objc2-ui-kit 0.3.2
+/// (the newest) binds it as never nil and panics on nil (studio#787), so it
+/// is asked through a nullable message.
+fn launch_links(options: &UISceneConnectionOptions) -> Option<Retained<NSSet<UIOpenURLContext>>> {
+    use objc2::msg_send;
+    // SAFETY: `URLContexts` is a property of every UISceneConnectionOptions
+    // (iOS 13+), returning an NSSet of UIOpenURLContext, or nil.
+    unsafe { msg_send![options, URLContexts] }
 }
 
 /// The links in `contexts`, to the app's handler.
