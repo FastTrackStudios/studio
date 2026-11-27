@@ -1,5 +1,5 @@
 ---
-"daw-extension" = "minor"
+"daw-extension" = "patch"
 "studio-app" = "minor"
 "studio-engine" = "minor"
 ---
