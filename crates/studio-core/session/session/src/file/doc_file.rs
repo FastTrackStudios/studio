@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use super::FileError;
 use super::format::{self, Record};
-use super::index::Index;
+use super::index::{Index, loro};
 
 /// The branch every document starts with, and the one Studio edits.
 pub const MAIN: &str = "main";
@@ -151,15 +151,19 @@ impl DocFile {
         Ok(())
     }
 
-    /// Folds `main` into `snapshot` (the whole document, which holds every
-    /// step the file does) and rewrites the file to what it holds.
-    pub fn fold(&mut self, snapshot: Vec<u8>) -> Result<(), FileError> {
+    /// Folds `main` and `snapshot` (the document as the caller exported
+    /// it) into one snapshot and rewrites the file to what it holds. Built
+    /// from the file's own steps too, so a step appended after the caller
+    /// exported (another thread's commit) is never folded away unseen.
+    pub fn fold(&mut self, snapshot: &[u8]) -> Result<(), FileError> {
+        let doc = self.index.materialize(MAIN)?;
+        doc.import(snapshot).map_err(loro)?;
         let mut folded = self.index.clone();
         folded.apply(Record::Snapshot {
             branch: MAIN.to_owned(),
             upto: self.index.last_step(MAIN),
             at: now(),
-            data: snapshot,
+            data: doc.export(loro::ExportMode::Snapshot).map_err(loro)?,
         });
         replace(&self.path, &image(&folded.records())?)?;
         self.file = open(&self.path)?;
@@ -302,7 +306,7 @@ mod tests {
             let update = doc.export(loro::ExportMode::updates(&before)).unwrap();
             file.append(&update).unwrap();
         }
-        file.fold(doc.export(loro::ExportMode::Snapshot).unwrap())
+        file.fold(&doc.export(loro::ExportMode::Snapshot).unwrap())
             .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let main = main_of(&bytes).unwrap();
@@ -310,6 +314,33 @@ mod tests {
         assert_eq!(
             file.main().unwrap().get_text("t").to_string(),
             "one two three"
+        );
+    }
+
+    /// A step written after the caller exported its snapshot (another
+    /// thread's commit, queued ahead of the fold) is folded in, not
+    /// marked folded and lost.
+    #[test]
+    fn a_step_the_snapshot_missed_survives_the_fold() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.session");
+        let mut file = DocFile::create(&path, "fts.session", Uuid::from_u128(1), Some(1)).unwrap();
+        let doc = LoroDoc::new();
+        let _ = doc.get_text("t").insert(0, "saved ");
+        doc.commit();
+        let exported = doc.export(loro::ExportMode::Snapshot).unwrap();
+        let before = doc.oplog_vv();
+        let text = doc.get_text("t");
+        let _ = text.insert(text.len_unicode(), "and after");
+        doc.commit();
+        file.append(&doc.export(loro::ExportMode::updates(&before)).unwrap())
+            .unwrap();
+        file.fold(&exported).unwrap();
+        drop(file);
+        let file = DocFile::open(&path, "fts.session", 1).unwrap();
+        assert_eq!(
+            file.main().unwrap().get_text("t").to_string(),
+            "saved and after"
         );
     }
 

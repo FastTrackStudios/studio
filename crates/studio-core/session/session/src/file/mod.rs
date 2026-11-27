@@ -44,7 +44,10 @@ use crate::doc::{KIND, SCHEMA, SessionDoc};
 /// Why a session file could not be opened, made or saved.
 #[derive(Debug)]
 pub enum SessionFileError {
-    /// The file: missing, not a document file, another kind, unwritable.
+    /// The file is not a document file at all (a bare Loro snapshot, say:
+    /// what [`SessionFile::open_or_import`] brings into the format).
+    NotADocument(String),
+    /// The file: missing, another kind, from a newer build, unwritable.
     File(String),
     /// The document refused what it was given.
     Doc(String),
@@ -53,6 +56,7 @@ pub enum SessionFileError {
 impl std::fmt::Display for SessionFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::NotADocument(e) => write!(f, "session file: not a document file: {e}"),
             Self::File(e) => write!(f, "session file: {e}"),
             Self::Doc(e) => write!(f, "session document: {e}"),
         }
@@ -82,7 +86,10 @@ enum FileError {
 
 #[allow(clippy::needless_pass_by_value)] // An adapter for `map_err`.
 fn file_error(e: FileError) -> SessionFileError {
-    SessionFileError::File(e.to_string())
+    match e {
+        FileError::NotADocument(why) => SessionFileError::NotADocument(why),
+        other => SessionFileError::File(other.to_string()),
+    }
 }
 
 /// What a song's file starts with, as [`sniff`] reads it.
@@ -166,7 +173,7 @@ impl Backing {
 
     fn fold(&mut self, snapshot: Vec<u8>) -> std::result::Result<(), String> {
         match self {
-            Self::File(file) => file.fold(snapshot).map_err(|e| e.to_string()),
+            Self::File(file) => file.fold(&snapshot).map_err(|e| e.to_string()),
             Self::Part(id, part) => part.compact(*id, &snapshot),
         }
     }
@@ -220,7 +227,8 @@ impl Writer {
                                 // in, this update with it.
                                 tracing::warn!(
                                     session_file.outcome = "append-failed",
-                                    "session file: an edit was not written: {e}"
+                                    error = %e,
+                                    "session file: an edit was not written"
                                 );
                             }
                         }
@@ -358,7 +366,7 @@ impl SessionFile {
     /// No such file, or neither a session file nor a Loro document.
     pub fn open_or_import(path: &Path) -> Result<Self> {
         match Self::open(path) {
-            Err(SessionFileError::File(why)) if why.starts_with("not a document file") => {
+            Err(SessionFileError::NotADocument(_)) => {
                 let snapshot = std::fs::read(path)
                     .map_err(|e| SessionFileError::File(format!("{}: {e}", path.display())))?;
                 // Keep what was there; the session file takes its place.

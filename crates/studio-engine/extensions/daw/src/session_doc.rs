@@ -37,11 +37,11 @@ use fts_session::time::{Position, TempoPoint, TimePosition, TimeSignature};
 use fts_session::{MarkId, Marker, Region, TempoMap, Time};
 use serde_json::{Value as Json, json};
 
-/// The session at `path`: a part of the song's one file (on `branch`, or
-/// `main`), else the old pair's document file, made if it is not there.
-fn open_held(path: &Path, one_file: bool, branch: Option<&str>) -> Result<Held, String> {
-    if one_file {
-        let branch = branch.unwrap_or(session_format::store::MAIN);
+/// The session at `path`: a part of the song's one file on `one_file`'s
+/// branch when it is one, else the old pair's document file, made if it
+/// is not there.
+fn open_held(path: &Path, one_file: Option<&str>) -> Result<Held, String> {
+    if let Some(branch) = one_file {
         song_file::SongFile::open_branch(path, branch)
             .map(Held::One)
             .map_err(|e| e.to_string())
@@ -443,12 +443,13 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
         ));
         return;
     };
-    let opened = open_held(
-        &path,
-        one_file.is_some(),
-        branch.as_ref().map(|(_, b)| b.as_str()),
-    )
-    .and_then(|held| write_timing(&held, project).map(|()| held));
+    let one_file_branch = one_file.as_ref().map(|_| {
+        branch
+            .as_ref()
+            .map_or(session_format::store::MAIN, |(_, b)| b.as_str())
+    });
+    let opened = open_held(&path, one_file_branch)
+        .and_then(|held| write_timing(&held, project).map(|()| held));
     let file = match opened {
         Ok(file) => {
             problem(None);
