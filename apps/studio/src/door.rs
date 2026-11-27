@@ -1,5 +1,5 @@
-//! The web build's front door: who gets the app and who gets the stand-in
-//! page, and where the app reaches its Drive node.
+//! The web build's front door: who gets the app and who gets the landing
+//! page (`crate::landing`), and where the app reaches its Drive node.
 //!
 //! The Drive node serves Studio under `/studio` (its `--app /studio=…`), so
 //! it answers Studio's calls under `/studio/api`. That holds wherever the
@@ -44,8 +44,9 @@ pub enum Answer<I> {
 pub enum Door<I> {
     /// The app (Drive's boot then signs in, refreshes or explains).
     App,
-    /// The signed-out stand-in, signing in through this issuer.
-    StandIn(I),
+    /// The signed-out landing page (`crate::landing`), signing in through
+    /// this issuer.
+    Landing(I),
 }
 
 impl<I> Door<I> {
@@ -56,12 +57,12 @@ impl<I> Door<I> {
         (here.callback || here.token).then_some(Door::App)
     }
 
-    /// The door from the node's answer: the stand-in only when it wants a
+    /// The door from the node's answer: the landing page only when it wants a
     /// sign-in and says through whom; anything else is the app, whose
     /// boot shows what went wrong.
     pub fn from_answer(answer: Answer<I>) -> Self {
         match answer {
-            Answer::SignedOut(Some(issuer)) => Door::StandIn(issuer),
+            Answer::SignedOut(Some(issuer)) => Door::Landing(issuer),
             Answer::SignedOut(None) | Answer::In | Answer::NoAnswer => Door::App,
         }
     }
@@ -89,7 +90,7 @@ mod web {
     }
 
     /// The app for a signed-in browser (at once, nothing asked); for a
-    /// signed-out one, the stand-in page in its place.
+    /// signed-out one, the landing page in its place.
     #[component]
     pub fn Gate(children: Element) -> Element {
         let mut door = use_signal(|| {
@@ -114,7 +115,11 @@ mod web {
         });
         match door() {
             Some(Door::App) => children,
-            Some(Door::StandIn(issuer)) => rsx! { StandIn { issuer } },
+            // Signed out: the landing page (studio#706); Open in browser
+            // takes this visit into the app, whose boot signs in.
+            Some(Door::Landing(issuer)) => rsx! {
+                crate::landing::Landing { issuer, open: move |_| door.set(Some(Door::App)) }
+            },
             None => rsx! { div { style: PAGE } },
         }
     }
@@ -123,30 +128,7 @@ mod web {
     /// Drive's boot asks of it before refreshing.
     const MARGIN_MS: f64 = 60_000.0;
 
-    const PAGE: &str = "min-height:100vh;display:grid;place-items:center;background:var(--desk,#000);color:var(--ink,#f4f4f5);font:16px/1.5 var(--font,system-ui),sans-serif;padding:24px;box-sizing:border-box;";
-    const PANEL: &str =
-        "max-width:420px;width:100%;display:flex;flex-direction:column;gap:16px;text-align:center;";
-    const BUTTON: &str = "height:48px;border-radius:24px;border:0;background:var(--accent,#2dd4bf);color:var(--accent-ink,#042f2a);font:650 16px var(--font,system-ui),sans-serif;cursor:pointer;";
-
-    /// What a signed-out visitor sees at fasttrackstudio.app until the
-    /// landing page (studio#706) takes its place: what Studio is, and the
-    /// way in.
-    #[component]
-    fn StandIn(issuer: auth::Issuer) -> Element {
-        rsx! {
-            main { style: PAGE,
-                div { style: PANEL,
-                    h1 { style: "margin:0;font-size:40px;font-weight:700;letter-spacing:-0.03em;",
-                        "Studio"
-                    }
-                    p { style: "margin:0;color:var(--ink-2,#a1a1aa);",
-                        "Setlists, charts and the mix for your band, church or school, on every screen."
-                    }
-                    button { style: BUTTON, onclick: move |_| auth::begin(&issuer), "Sign in" }
-                }
-            }
-        }
-    }
+    const PAGE: &str = "min-height:100vh;background:var(--desk,#000);";
 }
 
 #[cfg(test)]
@@ -194,9 +176,9 @@ mod tests {
     }
 
     #[test]
-    fn signed_out_at_a_node_with_an_issuer_is_the_stand_in() {
+    fn signed_out_at_a_node_with_an_issuer_is_the_landing_page() {
         let answer = Answer::SignedOut(Some("issuer"));
-        assert_eq!(Door::from_answer(answer), Door::StandIn("issuer"));
+        assert_eq!(Door::from_answer(answer), Door::Landing("issuer"));
     }
 
     #[test]

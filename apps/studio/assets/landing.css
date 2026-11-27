@@ -1,0 +1,51 @@
+/* The landing page (src/landing.rs): the web build's, for a signed-out
+   visitor. On the app's tokens (style.css); its own scroll, since the app's
+   pages scroll inside themselves. */
+.landing { position: fixed; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--desk); color: var(--ink); font: 400 16px/1.5 var(--font); padding: 0 16px calc(32px + env(safe-area-inset-bottom)); box-sizing: border-box; }
+.landing * { box-sizing: border-box; }
+.landing > * { max-width: 1080px; margin-left: auto; margin-right: auto; }
+
+.lhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: calc(12px + env(safe-area-inset-top)) 0 12px; }
+.lbrand { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -0.03em; }
+.lmark { width: 28px; height: 28px; border-radius: 8px; background: var(--ink); color: var(--desk); display: grid; place-items: center; font-size: 15px; font-weight: 800; }
+.lsignin { min-height: 44px; min-width: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--rule, #27272a); background: transparent; color: var(--ink); font: 600 15px var(--font); cursor: pointer; }
+
+.lhero { padding: 48px 0 32px; }
+.lhero h1 { margin: 0; font-size: clamp(36px, 7vw, 64px); line-height: 1.05; font-weight: 700; letter-spacing: -0.04em; max-width: 14ch; }
+.llead { margin: 18px 0 0; max-width: 52ch; color: var(--ink-2); font-size: 18px; }
+.lways { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-top: 28px; }
+
+.lprimary, .lsecondary { min-height: 48px; padding: 0 22px; border-radius: 24px; font: 650 16px var(--font); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; text-decoration: none; }
+.lprimary { border: 0; background: var(--accent); color: var(--accent-ink); }
+.lsecondary { border: 1px solid var(--rule, #27272a); background: var(--surface, #111113); color: var(--ink); }
+
+.ljoin { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; max-width: 520px; }
+.ljoinin { flex: 1 1 220px; min-width: 0; min-height: 48px; padding: 0 16px; border-radius: 24px; border: 1px solid var(--rule, #27272a); background: var(--surface, #111113); color: var(--ink); font: 400 16px var(--font); }
+.lwrong { flex-basis: 100%; margin: 0; color: #fca5a5; font-size: 14px; }
+
+.lroom { margin-top: 16px; padding: 20px; border-radius: 16px; border: 1px solid var(--accent); background: var(--accent-soft); }
+.lroom h2 { margin: 4px 0 6px; font-size: 26px; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.lroom p { margin: 0; color: var(--ink-2); }
+.lkicker { font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--accent) !important; }
+
+.lpoints { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 8px 0 32px; }
+.lpoint { padding: 18px; border-radius: 16px; background: var(--surface, #111113); border: 1px solid var(--rule, #27272a); }
+.lpoint h2 { margin: 0 0 6px; font-size: 18px; font-weight: 650; color: var(--ink); text-transform: none; letter-spacing: -0.01em; }
+.lpoint p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+.lscreens { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; padding-bottom: 40px; }
+.lshot { margin: 0; }
+.lshot img { display: block; width: 100%; height: auto; aspect-ratio: 390 / 844; object-fit: cover; object-position: top; border-radius: 14px; border: 1px solid var(--rule, #27272a); background: var(--surface, #111113); }
+.lshot figcaption { margin-top: 8px; font-size: 13px; color: var(--ink-3); }
+
+.ldownloads h2 { margin: 0 0 14px; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); text-transform: none; }
+.lgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.ldownload { min-height: 64px; padding: 12px 18px; border-radius: 16px; border: 1px solid var(--rule, #27272a); background: var(--surface, #111113); color: var(--ink); text-decoration: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.ldownload:hover { border-color: var(--accent); }
+.lplat { font-size: 17px; font-weight: 650; }
+.ldetail { font-size: 13px; color: var(--ink-3); }
+.lnote { margin: 16px 0 0; color: var(--ink-2); }
+.linline { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+
+.lfoot { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule, #27272a); font-size: 13px; color: var(--ink-3); }
+.lfoot a { color: var(--ink-2); }

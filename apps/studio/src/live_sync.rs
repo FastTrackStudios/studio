@@ -112,7 +112,7 @@ mod web {
                 Attach { {children} }
             }
         };
-        // In a browser, a signed-out visitor gets the stand-in page.
+        // In a browser, a signed-out visitor gets the landing page (`door::Gate`).
         #[cfg(feature = "web")]
         return rsx! {
             crate::door::Gate { {app} }

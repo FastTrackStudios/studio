@@ -23,6 +23,8 @@ mod hosted;
 mod icons;
 mod instance;
 mod keys;
+// What a signed-out visitor to fasttrackstudio.app sees (the web build's).
+mod landing;
 mod live_sync;
 mod new_session;
 #[cfg(any(feature = "drive", test))]
@@ -85,6 +87,7 @@ use dioxus::prelude::*;
 
 use pages::drive_set::{DriveSet, NowChart};
 use pages::home::Home;
+use pages::join::JoinRoom;
 use pages::library::{Library, LibraryHome};
 use pages::live::{Chart, Lyrics};
 use pages::orgs::{AllOrgs, OrgSettings, People};
@@ -155,6 +158,9 @@ pub enum Route {
         People {},
         #[route("/org")]
         OrgSettings {},
+        // A room's lasting link (`fasttrackstudio.app/join/<room>`).
+        #[route("/join/:room")]
+        JoinRoom { room: String },
     #[end_layout]
     #[layout(SessionShell)]
         #[route("/session/:view")]
@@ -177,7 +183,10 @@ impl Route {
             Route::Home {} => Tab::Home,
             Route::Records {} | Route::Album { .. } | Route::TrackPage { .. } => Tab::Records,
             Route::Signal {} => Tab::Signal,
-            Route::AllOrgs {} | Route::People {} | Route::OrgSettings {} => Tab::Home,
+            Route::AllOrgs {}
+            | Route::People {}
+            | Route::OrgSettings {}
+            | Route::JoinRoom { .. } => Tab::Home,
             _ => Tab::Setlists,
         }
     }
