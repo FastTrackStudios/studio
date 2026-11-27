@@ -8325,6 +8325,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "utils",
  "vox",
 ]
 
@@ -9008,6 +9009,7 @@ dependencies = [
  "signal-fx",
  "tempfile",
  "tracing",
+ "utils",
  "uuid",
  "web-time",
 ]
@@ -9148,6 +9150,7 @@ dependencies = [
  "signal-fx",
  "tempfile",
  "tracing",
+ "utils",
  "web-time",
 ]
 
@@ -14614,6 +14617,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "utils",
  "vox",
  "vox-core",
  "vox-websocket",
@@ -19596,6 +19600,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "utils",
 ]
 
 [[package]]
@@ -22782,6 +22787,7 @@ dependencies = [
  "serde_json",
  "signal-rig-host",
  "tracing",
+ "utils",
 ]
 
 [[package]]

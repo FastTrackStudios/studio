@@ -54,7 +54,8 @@ impl Convolver {
     ///
     /// Returns an error if the file cannot be opened, loaded, or contains no samples.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, String> {
-        let path = path.as_ref();
+        let path = crate::assets::on_disk(path.as_ref()).map_err(|e| format!("open IR {e}"))?;
+        let path = path.as_path();
         let loaded =
             fts_sample::load_planar_f32(path, None, fts_sample::ResampleQuality::default())
                 .map_err(|e| format!("open IR {e}"))?;

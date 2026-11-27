@@ -25,9 +25,9 @@ mod perform;
 
 /// The single instrument-prefix the kit is loaded under.
 const KIT: &str = "kit";
-/// Default library root if `$SIGNAL_DRUM_LIBRARY` is unset.
-const DEFAULT_LIBRARY: &str =
-    "/run/media/AudioHaven/Signal/Libraries/Drum Kits/GGD Modern and Massive 2";
+/// Default library root if `$SIGNAL_DRUM_LIBRARY` is unset: in the Signal
+/// home (`utils::home`), the same on every machine.
+const DEFAULT_LIBRARY: &str = "Libraries/Drum Kits/GGD Modern and Massive 2";
 
 /// A kit library: its folder, the pieces any kit slot can swap to, and the
 /// mixes a kit can take.
@@ -60,7 +60,7 @@ fn library_root() -> PathBuf {
     if let Ok(dir) = std::env::var("SIGNAL_DRUM_LIBRARY") {
         return PathBuf::from(dir);
     }
-    let studio = PathBuf::from(DEFAULT_LIBRARY);
+    let studio = utils::home::located(DEFAULT_LIBRARY);
     if studio.is_dir() {
         return studio;
     }

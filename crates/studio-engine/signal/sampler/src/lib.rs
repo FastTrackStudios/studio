@@ -462,6 +462,10 @@ impl PlayerPatch {
     /// Returns an error if the spec file cannot be read or is invalid, or if
     /// scanning the samples directory fails.
     pub fn load(spec_path: &Path, samples_root: &Path) -> Result<Self, SamplerError> {
+        // A library in the Signal home (an old disk's path too) is found
+        // in this machine's.
+        let spec_path = &assets::on_disk(spec_path)?;
+        let samples_root = &assets::on_disk(samples_root)?;
         let spec = LibrarySpec::from_file(spec_path)?;
         let zoned = !spec.zones.is_empty();
         let zone_paths = if zoned {
@@ -588,7 +592,7 @@ impl PlayerPatch {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_pack(pack_path: &Path) -> Result<Self, SamplerError> {
         use crate::engine::cache::SignalPcmPack;
-        let pack = SignalPcmPack::open(pack_path)?;
+        let pack = SignalPcmPack::open(&crate::assets::on_disk(pack_path)?)?;
         Self::from_opened_pack(pack)
     }
 

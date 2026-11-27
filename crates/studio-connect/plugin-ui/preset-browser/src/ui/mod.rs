@@ -494,6 +494,8 @@ pub fn load_library_tree(root: &std::path::Path) -> (PresetBrowser, String) {
 pub fn library_root(env_var: &str, default: &str) -> std::path::PathBuf {
     match std::env::var_os(env_var) {
         Some(dir) => std::path::PathBuf::from(dir),
-        None => std::path::PathBuf::from(default),
+        // A default in the Signal home (`Libraries/Presets/…`) is found in
+        // this machine's (`utils::home`).
+        None => utils::home::located(default),
     }
 }

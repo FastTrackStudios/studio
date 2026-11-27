@@ -83,7 +83,7 @@ impl EngineSpec {
     ///
     /// Returns an error if the file cannot be read or parsed.
     pub fn from_file(path: &Path) -> Result<Self, SamplerError> {
-        Self::parse(&std::fs::read_to_string(path)?)
+        Self::parse(&std::fs::read_to_string(crate::assets::on_disk(path)?)?)
     }
 
     /// The spec in `text`, a file's contents however they arrived (a page

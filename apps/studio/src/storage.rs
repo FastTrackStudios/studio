@@ -36,45 +36,9 @@ pub fn dir() -> Option<PathBuf> {
 /// The home: where the sets and songs are (see the module's doc). Chosen
 /// once a run: a Drive mount that drops out while Studio runs leaves an
 /// empty mount point, and the home must not move to (or be made in) it.
+/// The engine finds the same home (`utils::home`), and Signal's in it.
 pub fn home() -> Option<PathBuf> {
-    static HOME: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
-    HOME.get_or_init(find_home).clone()
-}
-
-fn find_home() -> Option<PathBuf> {
-    if let Some(d) = std::env::var_os("STUDIO_HOME").filter(|v| !v.is_empty()) {
-        return Some(PathBuf::from(d));
-    }
-    let config = config_dir()?.join("fasttrackstudio");
-    if let Some(h) = std::fs::read_to_string(config.join("studio.toml"))
-        .ok()
-        .and_then(|t| home_setting(&t))
-    {
-        return Some(expand_home(&h));
-    }
-    let mount = std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Drive").join("Studio"));
-    if let Some(m) = mount.filter(|m| m.is_dir()) {
-        return Some(m);
-    }
-    Some(config.join("Studio"))
-}
-
-/// `home = "…"` in the settings file (a line of TOML; nothing else is read).
-fn home_setting(toml: &str) -> Option<String> {
-    toml.lines()
-        .find_map(|l| {
-            let (k, v) = l.split_once('=')?;
-            (k.trim() == "home")
-                .then(|| v.trim().trim_matches(|c| c == '"' || c == '\'').to_string())
-        })
-        .filter(|v| !v.is_empty())
-}
-
-fn expand_home(p: &str) -> PathBuf {
-    match (p.strip_prefix("~/"), std::env::var_os("HOME")) {
-        (Some(rest), Some(h)) => PathBuf::from(h).join(rest),
-        _ => PathBuf::from(p),
-    }
+    utils::home::studio_home()
 }
 
 /// `<home>/Setlists`: one `.setlist` file a set.
@@ -90,20 +54,7 @@ pub fn resolve(path: &str) -> Option<PathBuf> {
     home().map(|r| r.join(path))
 }
 
-pub fn config_dir() -> Option<PathBuf> {
-    let env = |k: &str| {
-        std::env::var_os(k)
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-    };
-    if cfg!(target_os = "windows") {
-        env("APPDATA")
-    } else if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
-        env("HOME").map(|h| h.join("Library").join("Application Support"))
-    } else {
-        env("XDG_CONFIG_HOME").or_else(|| env("HOME").map(|h| h.join(".config")))
-    }
-}
+pub use utils::home::config_dir;
 
 /// Called first in `main`: the clock for the start-up span, and Drive's
 /// client keeps its copies (documents, who this is, the last org) in
@@ -137,10 +88,10 @@ mod tests {
     #[test]
     fn the_home_setting() {
         assert_eq!(
-            super::home_setting("# Studio\nhome = \"/home/me/Drive/Studio\"\n").as_deref(),
+            utils::home::home_setting("# Studio\nhome = \"/home/me/Drive/Studio\"\n").as_deref(),
             Some("/home/me/Drive/Studio")
         );
-        assert_eq!(super::home_setting("theme = 'dark'\n"), None);
-        assert_eq!(super::home_setting("home = ''"), None);
+        assert_eq!(utils::home::home_setting("theme = 'dark'\n"), None);
+        assert_eq!(utils::home::home_setting("home = ''"), None);
     }
 }

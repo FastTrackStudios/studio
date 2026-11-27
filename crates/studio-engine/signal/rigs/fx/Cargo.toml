@@ -12,6 +12,8 @@ workspace = true
 daw-standalone = { workspace = true }
 daw-proto = { workspace = true }
 sampler = { workspace = true }
+# The Signal home: rig files by their place in it (`utils::home`).
+utils = { workspace = true }
 guitar = { workspace = true }
 # A rig home a page streamed in, held in memory (`files::install_text`).
 signal-rig-host = { workspace = true }

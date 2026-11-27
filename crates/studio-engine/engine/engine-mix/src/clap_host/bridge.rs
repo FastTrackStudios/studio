@@ -250,7 +250,8 @@ fn said(error: &ActionError) -> String {
 }
 
 /// Where `rig-library:` references are looked for: `SIGNAL_RIG_LIBRARY`
-/// (what the rigs' builds read), then the library Drive keeps.
+/// (what the rigs' builds read), then `rig-library` in the Signal home
+/// (`utils::home`, Drive's `Studio/Signal`).
 #[must_use]
 pub fn rig_library_roots() -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = std::env::var_os("SIGNAL_RIG_LIBRARY")
@@ -258,8 +259,8 @@ pub fn rig_library_roots() -> Vec<PathBuf> {
         .map(PathBuf::from)
         .into_iter()
         .collect();
-    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-        roots.push(home.join("Drive/Studio/Signal/rig-library"));
+    if let Some(home) = utils::home::signal_home() {
+        roots.push(home.join("rig-library"));
     }
     roots
 }
@@ -292,9 +293,14 @@ pub fn resolve_file(reference: &str, roots: &[PathBuf]) -> Result<PathBuf, ExtEr
         },
     );
     if path.is_absolute() && path.is_file() {
-        Ok(path)
-    } else {
-        Err(ExtError::NotFound(reference.to_owned()))
+        return Ok(path);
+    }
+    // A file of the Signal home (an old disk's path, `NAM_models/x.nam`) is
+    // found in this machine's, or said to be not in Drive here yet.
+    match utils::home::locate(reference) {
+        Ok(found) if found.is_file() => Ok(found),
+        Err(missing) => Err(ExtError::Failed(missing.to_string())),
+        Ok(_) => Err(ExtError::NotFound(reference.to_owned())),
     }
 }
 

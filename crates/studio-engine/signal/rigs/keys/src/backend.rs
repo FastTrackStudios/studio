@@ -35,15 +35,12 @@ use crate::KeysRig;
 /// The built `.signalpack` library — every pack root below is a folder in
 /// it, so one setting moves them all: `FTS_PACK_LIBRARY` (the sampler's own
 /// library setting — a drive mounted elsewhere, `/Volumes/…` on a Mac), else
-/// the studio machine's mount.
+/// `Libraries` in the Signal home (`utils::home`).
 fn pack_library() -> PathBuf {
     std::env::var("FTS_PACK_LIBRARY")
         .ok()
         .filter(|s| !s.is_empty())
-        .map_or_else(
-            || PathBuf::from("/run/media/AudioHaven/Signal/Libraries"),
-            PathBuf::from,
-        )
+        .map_or_else(|| utils::home::located("Libraries"), PathBuf::from)
 }
 
 /// The raw sample and patch tree (the extractions the packs were built from,

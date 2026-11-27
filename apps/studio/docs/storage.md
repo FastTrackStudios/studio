@@ -197,11 +197,44 @@ Setlists/
 ## Signal/
 
 The generic guitar rig and everything it plays with: NAM captures and
-IRs, block presets, module presets, rig presets and profiles. Today these
-live in signal's `default-config` (styx), linked from
-`~/.config/signal/rig`, and the NAM files under `~/.config/signal/nam`.
-Their home is `Studio/Signal/`, and signal reads them through
-`SIGNAL_RIG_DIR` or that link.
+IRs, block presets, module presets, rig presets and profiles, and the
+sample libraries. The rig's home files (styx) still live in signal's
+`default-config`, linked from `~/.config/signal/rig` (`SIGNAL_RIG_DIR`).
+
+The **Signal home** is `<home>/Signal` (`SIGNAL_HOME` overrides it). On
+THEBATTLESHIP it is the AudioHaven disk's `Signal/` folder, adopted into
+Drive in place on 2026-11-27 (nothing copied or moved):
+
+```text
+drive adopt /run/media/AudioHaven/Signal --as Studio/Signal
+drive unadopt Studio/Signal        # undo: the mapping only, the files stay
+```
+
+So `~/Drive/Studio/Signal/{IR,Libraries,NAM,NAM_models,Orchestral,Patches,Reference,Songs}`
+is the same folder on every computer. Another computer reads it through
+Drive. To have a folder's files there, pin it in Drive
+(`drive pin Studio/Signal/NAM_models`).
+
+A rig file is named by its **place in the Signal home**
+(`NAM_models/Amp.nam`, `Libraries/Drum Kits/…/Heavy Thwacky.signalpreset`).
+It is never named by a disk's path. `utils::home` (studio-core) finds the
+home and the file:
+
+- A path saved before the move, `/run/media/AudioHaven/Signal/X`, is read
+  as `<Signal home>/X`. Old presets and songs open on any machine as they
+  are, and nothing rewrites them.
+- The loaders map every path they are given this way: a NAM capture, an
+  IR, a `.signalpack`, a library spec, a kit's `.signalpreset` and
+  `.signalengine`, the plugin presets' folders, and the CLAP host's file
+  references.
+- A file of the Signal home that Drive has not brought to this computer
+  fails to load with `Studio/Signal/X is not on this computer … Pin it
+  (drive pin Studio/Signal/X)`. It never fails silently.
+- In a browser, a rig's file maps to the same key in the rig store
+  whichever way it is named (`files::located`, `kit_key`).
+
+Raw libraries outside `Signal/` (`/run/media/AudioHaven/Sampled/…`,
+`Kontakt/…`) are not in Drive yet, and their paths are not mapped.
 
 ## Moving in
 

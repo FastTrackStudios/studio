@@ -70,7 +70,8 @@ impl NamProcessor {
         sample_rate: f64,
         max_block: usize,
     ) -> Result<Self, String> {
-        let path = path.as_ref();
+        let path = crate::assets::on_disk(path.as_ref()).map_err(|e| e.to_string())?;
+        let path = path.as_path();
         let mut model = NamModel::load(path)?;
         model.reset(sample_rate, max_block);
         let display_name = path

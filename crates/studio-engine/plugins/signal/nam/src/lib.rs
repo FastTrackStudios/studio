@@ -191,7 +191,12 @@ impl Plugin for FtsNam {
         // Seed from the environment (see module docs), on the main thread.
         // Failure is non-fatal — the plugin becomes a dry insert.
         self.model = if let Some(path) = Self::model_path() {
-            match NamModel::load(&path) {
+            // A capture in the Signal home (an old disk's path too) is found in
+            // this machine's, or said to be not in Drive here yet.
+            let read = sampler::assets::on_disk(&path)
+                .map_err(|e| e.to_string())
+                .and_then(|p| NamModel::load(&p).map_err(|e| e.to_string()));
+            match read {
                 Ok(mut model) => {
                     model.reset(self.sample_rate, max_block);
                     Some(model)
