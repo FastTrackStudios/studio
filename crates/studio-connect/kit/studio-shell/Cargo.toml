@@ -57,7 +57,7 @@ reqwest = { workspace = true }
 tempfile = { workspace = true }
 # The check runs on its own small runtime (reqwest needs tokio), whatever
 # executor the app's UI is on.
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 # The UIScene lifecycle (`ios_scene`): the objc2 winit itself is built on.
 [target.'cfg(target_os = "ios")'.dependencies]
@@ -76,7 +76,7 @@ dioxus-test.workspace = true
 # the test so no new package enters the lock).
 axum = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 ed25519-dalek = "3"
 base64 = { workspace = true }
 sha2 = "0.10"

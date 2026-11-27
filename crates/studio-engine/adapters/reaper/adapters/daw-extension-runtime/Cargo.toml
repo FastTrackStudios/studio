@@ -24,7 +24,7 @@ daw-reaper = { workspace = true, default-features = true }
 vox.workspace = true
 eyre = { workspace = true }
 tracing.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread"] }
 crossbeam-channel.workspace = true
 reaper-high.workspace = true
 reaper-low.workspace = true

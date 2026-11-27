@@ -27,4 +27,4 @@ walkdir = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }

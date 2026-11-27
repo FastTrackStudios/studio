@@ -28,7 +28,7 @@ studio = { workspace = true, features = ["reaper"] }
 # SHM bridge for communication with signal-extension
 signal-proto.workspace = true
 daw-extension-runtime.workspace = true
-tokio = { workspace = true, features = ["rt", "time"] }
+tokio = { workspace = true, features = ["full", "rt", "time"] }
 eyre.workspace = true
 
 # Concurrency

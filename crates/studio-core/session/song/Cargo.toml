@@ -16,7 +16,7 @@ uuid = { workspace = true, features = ["v4", "serde"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["rt", "macros"] }
+tokio = { workspace = true, features = ["full", "rt", "macros"] }
 # `migrate_flat_songs` example reads the legacy `manifest.json`.
 serde_json = { workspace = true }
 # `import_gig_songs` example: a Gig Performer gig's songs (`synth::gig`)

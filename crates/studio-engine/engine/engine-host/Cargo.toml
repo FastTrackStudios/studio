@@ -221,7 +221,7 @@ daw-ui = { workspace = true, features = ["web"], optional = true }
 # standalone project round-trips through dawfile. Native-only.
 dawfile-reaper = { workspace = true, optional = true }
 # Async runtime: session's in-process engine AND engine mode's server.
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["full"] }
 axum = { workspace = true, optional = true }
 # Recording Mode's LAN proxy (reaper_lan_proxy.rs) needs PositionInSeconds
 # to compute MeasureInfo the same way SetlistServiceImpl's own `measures()`

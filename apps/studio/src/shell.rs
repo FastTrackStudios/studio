@@ -900,9 +900,14 @@ fn StudioSidebar(route: Route) -> Element {
 /// The player's audio (a browser's; other builds play nothing yet).
 #[component]
 fn PlayerHost() -> Element {
+    // In a browser: the engine plays each song from its session folder,
+    // the reference player whatever it does not (no folder, or one that
+    // did not open).
     #[cfg(feature = "web")]
     {
+        use_context_provider(|| Signal::new(crate::engine_web::WebPlay::default()));
         rsx! {
+            crate::engine_web::EnginePlayer {}
             crate::player::Player {}
         }
     }

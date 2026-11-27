@@ -32,6 +32,9 @@ mod pieces;
 mod playback;
 #[cfg(feature = "web")]
 mod player;
+// The engine in the page: a session's multitracks and click (web).
+#[cfg(feature = "web")]
+mod engine_web;
 // Desktop Studio updating itself: macOS and Linux (iOS: TestFlight).
 #[cfg(all(feature = "native", not(target_os = "ios")))]
 mod self_update;

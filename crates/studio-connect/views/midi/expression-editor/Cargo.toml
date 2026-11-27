@@ -100,9 +100,12 @@ dsp = { path = "../../../plugin-ui/plugin-ui", package = "plugin-ui", features =
 midly = { workspace = true }
 png = { workspace = true }
 sha2 = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "time"] }
+tokio = { workspace = true, features = ["full", "macros", "rt", "time"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Natively, everything tokio has (the workspace entry enables none, so
+# a browser build gets only the features above).
+tokio = { workspace = true, optional = true, features = ["full"] }
 blitz-dom = { workspace = true, features = ["custom-widget"] }
 dioxus-native-dom = { workspace = true }
 

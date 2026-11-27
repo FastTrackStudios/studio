@@ -57,7 +57,7 @@ pub static PHASE: ActionMeta = meta(
     "",
 );
 
-pub use engine_runtime::client::comp::SHOW_LANES;
+pub use engine_runtime::client::actions::SHOW_LANES;
 
 /// What to set on a track.
 #[derive(Facet)]
@@ -204,7 +204,7 @@ pub fn pick_phase(
 pub use engine_core::lane_actions::{ShowArg, ShowOut, show_lanes};
 
 /// A track by GUID, path or name, among `tracks`: the core's.
-pub use engine_core::actions::resolve_in;
+pub use engine_core::track_find::resolve_in;
 
 pub static TOGETHER_LEAVE: ActionMeta = meta(
     "SESSION_TOGETHER_LEAVE",

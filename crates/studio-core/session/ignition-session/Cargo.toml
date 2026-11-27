@@ -18,7 +18,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [lints]
 workspace = true

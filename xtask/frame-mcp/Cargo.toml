@@ -14,7 +14,7 @@ path = "src/main.rs"
 frame = {path = "../../crates/studio-core/frame/frame", features = ["design", "io", "runtime"]}
 frame-architect = {path = "../../crates/studio-core/frame/frame-architect", features = ["library", "remote"]}
 serde_json = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 frame-architect = {path = "../../crates/studio-core/frame/frame-architect", features = ["library"]}

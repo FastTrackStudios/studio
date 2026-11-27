@@ -34,7 +34,7 @@ vox = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true }
 # perform_rpc: the shared performance surface served in-process.
 architect = { workspace = true, features = ["vox", "local"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread", "macros"] }
 
 # NI Komplete Kontrol Light Guide — mirror the kit onto the keybed LEDs. A
 # USB HID keyboard: desktop only (`lightguide_none.rs` on a phone, tablet or

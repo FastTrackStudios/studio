@@ -75,4 +75,4 @@ blitz-traits = { workspace = true }
 dioxus-native = { workspace = true }
 dioxus-native-dom = { workspace = true }
 image = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }

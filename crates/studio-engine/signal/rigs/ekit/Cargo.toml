@@ -33,7 +33,7 @@ vox = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true }
 # perform_rpc: the shared performance surface served in-process.
 architect = { workspace = true, features = ["vox", "local"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread", "macros"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 midi = { workspace = true, features = ["midir", "pipewire", "vox"] }

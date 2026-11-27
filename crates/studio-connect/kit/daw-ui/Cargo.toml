@@ -47,7 +47,7 @@ dioxus-ssr = { workspace = true }
 dioxus-test = { workspace = true }
 image = { workspace = true }
 resvg = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["full", "macros", "rt"] }
 
 # The song model the views draw and the level scale (daw-view, the views'
 # contract): natively over a tokio link, in a page over the page's.

@@ -50,7 +50,7 @@ signal-rig-host = { workspace = true }
 # Wide-event fields on the per-RPC span (`library`).
 studio-otel = { workspace = true, optional = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
+tokio = { workspace = true, features = ["full", "fs", "io-util"], optional = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 vox = { workspace = true, optional = true }
@@ -68,7 +68,7 @@ libc = { workspace = true }
 memmap2 = { workspace = true }
 ratatui = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread", "time"] }
 tracing-subscriber = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

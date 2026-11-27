@@ -151,9 +151,11 @@ pub use engine_core::audio_device;
 pub use engine_core::audio_window;
 #[cfg(feature = "native")]
 pub use engine_core::backup;
+#[cfg(feature = "native")]
 pub use engine_core::drum_reference;
 #[cfg(feature = "native")]
 pub use engine_core::edit_trace;
+#[cfg(feature = "native")]
 pub use engine_core::fundamental;
 #[cfg(feature = "native")]
 pub use engine_core::history;
@@ -171,6 +173,7 @@ pub use engine_edit::drum_apply;
 pub use engine_edit::drum_bench;
 #[cfg(feature = "native")]
 pub use engine_edit::drum_lanes;
+#[cfg(feature = "native")]
 pub use engine_edit::drum_level;
 #[cfg(feature = "native")]
 pub use engine_edit::drum_map_set;
@@ -203,7 +206,9 @@ pub use engine_edit::key_change;
 pub use engine_mix::algorithms;
 #[cfg(feature = "signal")]
 pub use engine_mix::bass_rig;
+#[cfg(feature = "native")]
 pub use engine_mix::mix_chains;
+#[cfg(feature = "native")]
 pub use engine_mix::mix_export;
 pub use engine_runtime::client::drum_edit;
 pub use engine_runtime::client::drum_settings;

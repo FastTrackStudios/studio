@@ -13,13 +13,13 @@ workspace = true
 signal-content-proto.workspace = true
 architect = { workspace = true, features = ["vox"] }
 vox.workspace = true
-tokio = { workspace = true, features = ["fs", "io-util"] }
+tokio = { workspace = true, features = ["full", "fs", "io-util"] }
 walkdir.workspace = true
 sha2.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 architect = { workspace = true, features = ["vox", "local", "host"] }
 tempfile.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

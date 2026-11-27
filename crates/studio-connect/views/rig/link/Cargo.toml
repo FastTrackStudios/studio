@@ -23,7 +23,7 @@ dioxus = { workspace = true }
 vox-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread", "sync", "time"] }
 futures-timer = { workspace = true }
 tracing = { workspace = true }
 dirs = { workspace = true }

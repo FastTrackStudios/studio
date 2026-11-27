@@ -582,7 +582,7 @@ anyrender_vello_cpu = "0.18"
 zbus = { version = "5.19", default-features = false, features = ["tokio"] }
 
 # ── Async runtime ─────────────────────────────────────────────────────
-tokio = { version = "1.48", features = ["full"] }
+tokio = { version = "1.48", default-features = false }
 tokio-util = { version = "0.7", features = ["compat"] }
 futures = "0.3"
 

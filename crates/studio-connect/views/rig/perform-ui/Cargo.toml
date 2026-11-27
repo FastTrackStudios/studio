@@ -25,4 +25,4 @@ chrono.workspace = true
 architect = { workspace = true, features = ["atom", "vox", "platform"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt", "time"] }
+tokio = { workspace = true, features = ["full", "macros", "rt", "time"] }

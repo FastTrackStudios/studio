@@ -53,7 +53,7 @@ midi = { workspace = true, features = ["midir", "native", "pipewire"] }
 # Drain-style hub subscriptions (mirrors MidiStream's bounded channel).
 crossbeam-channel.workspace = true
 # The runtime a rig's own threads enter (src/thread.rs).
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread"] }
 daw = { workspace = true, features = ["standalone-audio"] }
 audio = { workspace = true, features = ["io"] }
 
@@ -61,4 +61,4 @@ audio = { workspace = true, features = ["io"] }
 signal-rig-host = { path = ".", features = ["book"] }
 tempfile.workspace = true
 blake3.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread"] }

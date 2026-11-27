@@ -124,6 +124,8 @@ web-sys = { workspace = true, optional = true, features = [
     "Storage",
     # Touch mode's default: whether the page's pointer is a finger.
     "MediaQueryList",
+    # A live set that moved on: the page opened again (`web_engine::watch_set`).
+    "Location",
 ] }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
@@ -299,3 +301,8 @@ fts-sample = { workspace = true, features = ["engine-native"] }
 
 [lints]
 workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Natively, everything tokio has (the workspace entry enables none, so
+# a browser build gets only the features above).
+tokio = { workspace = true, optional = true, features = ["full"] }

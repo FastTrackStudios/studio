@@ -35,7 +35,7 @@ zstd = { workspace = true, optional = true }
 
 [dev-dependencies]
 session-format = { path = ".", features = ["store", "read"] }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 # The `.rpp` reader over this document, for the tests that build a project
 # from a `.rpp` (`tests/rpp_roundtrip.rs`, `tests/project.rs`, …). Dev-only:
 # it depends on this crate, so nothing here may depend on it outside tests.

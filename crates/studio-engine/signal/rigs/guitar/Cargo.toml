@@ -52,7 +52,7 @@ neural-amp-modeler = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 loro = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread", "macros", "time"] }
 tracing-subscriber = { workspace = true }
 vox = { workspace = true }
 
@@ -65,13 +65,13 @@ architect-mcp = { workspace = true, features = ["http"], optional = true }
 audio = { workspace = true, features = ["io"] }
 # The workspace tokio is `full`; on wasm only sync/macros/io-util/rt/time
 # exist (mio has no wasm backend), so the browser remote gets its own line.
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["full", "rt"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 architect = { workspace = true, features = ["atom", "vox", "platform", "local"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 tracing-subscriber = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

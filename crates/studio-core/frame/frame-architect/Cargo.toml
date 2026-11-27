@@ -33,7 +33,7 @@ thiserror = { workspace = true }
 blake3 = { workspace = true }
 base64 = { workspace = true, optional = true }
 uuid = { workspace = true }
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["full"] }
 vox-core = { workspace = true, optional = true }
 vox-websocket = { workspace = true, optional = true }
 
@@ -42,7 +42,7 @@ frame-architect = { path = ".", features = ["library", "remote", "theme"] }
 # tests/theme.rs: the theme actions over MCP, tickets and all.
 architect-mcp = { workspace = true }
 frame = { path = "../frame", features = ["figma", "io", "runtime"] }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [[test]]
 name = "remote"

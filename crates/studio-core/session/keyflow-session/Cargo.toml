@@ -23,7 +23,7 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 architect = { workspace = true, features = ["vox", "local"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread", "time"] }
 tempfile = { workspace = true }
 
 [lints]

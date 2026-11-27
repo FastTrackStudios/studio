@@ -34,7 +34,7 @@ vox-stream.workspace = true
 architect = { workspace = true, features = ["vox"] }
 
 # Async runtime
-tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "net", "rt-multi-thread"] }
 
 # REAPER bindings
 reaper-high.workspace = true
@@ -72,7 +72,7 @@ eyre = { workspace = true }
 # (replaces the former `reaper-test` crate).
 daw = { workspace = true }
 studio = { workspace = true, features = ["reaper", "test-harness"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

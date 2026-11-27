@@ -226,3 +226,8 @@ fts-sample = { workspace = true, features = ["engine-native"] }
 
 [lints]
 workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Natively, everything tokio has (the workspace entry enables none, so
+# a browser build gets only the features above).
+tokio = { workspace = true, optional = true, features = ["full"] }

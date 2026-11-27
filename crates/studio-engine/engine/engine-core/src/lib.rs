@@ -120,6 +120,8 @@ pub mod journal;
 /// Something over the network, tried again until it answers.
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod retry;
+/// A track by its GUID, path or name (`resolve_in`), on every target.
+pub mod track_find;
 /// Work on a page cut into slices, the page given its turn between them.
 #[cfg(feature = "web")]
 pub mod web_slices;

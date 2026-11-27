@@ -29,7 +29,7 @@ tracing-subscriber.workspace = true
 daw-control.workspace = true
 vox.workspace = true
 vox-stream.workspace = true
-tokio = { workspace = true, features = ["rt", "net", "time", "signal", "sync", "macros"] }
+tokio = { workspace = true, features = ["full", "rt", "net", "time", "signal", "sync", "macros"] }
 # Following a session's transport (`--clock session:…`, src/session_clock.rs):
 # its host's presence and clock over vox, as the Lighting pane follows it.
 session = { path = "../../../studio-core/session/session", package = "session", features = ["architect", "sync"] }

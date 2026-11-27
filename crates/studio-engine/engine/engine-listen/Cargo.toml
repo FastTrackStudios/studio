@@ -62,3 +62,8 @@ show = ["native", "engine-core/show", "engine-mix/show"]
 
 [lints]
 workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Natively, everything tokio has (the workspace entry enables none, so
+# a browser build gets only the features above).
+tokio = { workspace = true, optional = true, features = ["full"] }

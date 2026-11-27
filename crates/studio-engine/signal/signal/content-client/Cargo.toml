@@ -12,7 +12,7 @@ workspace = true
 [dependencies]
 signal-content-proto.workspace = true
 vox.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread", "time"] }
 futures-channel.workspace = true
 futures-util.workspace = true
 sha2.workspace = true
@@ -27,5 +27,5 @@ mirror = ["dep:reqwest"]
 [dev-dependencies]
 signal-content-library.workspace = true
 architect = { workspace = true, features = ["vox", "local"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 tempfile.workspace = true

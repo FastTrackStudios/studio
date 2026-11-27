@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 frame = {path = "../../crates/studio-core/frame/frame", features = ["figma", "io", "render", "runtime"]}
 frame-architect = {path = "../../crates/studio-core/frame/frame-architect", features = ["remote"]}
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 architect = { workspace = true, features = ["vox"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

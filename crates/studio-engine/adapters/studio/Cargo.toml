@@ -44,7 +44,7 @@ daw-test-macro = { workspace = true, optional = true }
 reaper-launcher = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
 [features]
 reaper = ["dep:daw-reaper"]
@@ -103,6 +103,6 @@ dawfile-reaper = { workspace = true }
 daw = { workspace = true, features = ["standalone-bootstrap"] }
 daw-standalone = { workspace = true, features = ["bootstrap", "audio"] }
 architect = { workspace = true, features = ["vox", "local"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 eyre = { workspace = true }
 serde_json = { workspace = true }
