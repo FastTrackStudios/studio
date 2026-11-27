@@ -163,7 +163,7 @@ async fn without_a_session_nothing_is_made() {
     assert!(orgs.is_empty());
 }
 
-// ── the trade for a session ─────────────────────────────────────────────
+// ── what the issuer answers ─────────────────────────────────────────────
 
 /// Answers one request, and keeps it.
 struct Once {
@@ -179,49 +179,40 @@ impl Fetch for Once {
 }
 
 #[tokio::test]
-async fn an_access_token_is_traded_for_a_session_at_the_token_endpoint() {
+async fn the_apps_own_token_is_the_bearer_of_the_create() {
     let fetch = Once {
         answer: (
             200,
-            r#"{"access_token":"the-session","issued_token_type":"urn:fasttrackstudio:params:oauth:token-type:session","token_type":"Bearer"}"#,
+            r#"{"organization":{"id":"1","name":"Adult Jam","slug":"adult-jam"},"membership":{"role":"owner"}}"#,
         ),
         seen: RefCell::new(None),
     };
-    let session = session_for(&fetch, "https://auth.example/", "drive", "a.b+c").await;
-    assert_eq!(session, Ok("the-session".into()));
+    let d = draft("Adult Jam", None).unwrap();
+    let made = create(&fetch, "https://auth.example/", "a.b.c", &d).await;
+    assert_eq!(made.map(|m| m.role), Ok("owner".into()));
 
     let seen = fetch.seen.into_inner().expect("a request");
     assert_eq!(seen.method, "POST");
-    assert_eq!(seen.url, "https://auth.example/oauth2/token");
-    assert_eq!(
-        seen.body,
-        "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange\
-         &client_id=drive&subject_token=a.b%2Bc\
-         &subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token\
-         &requested_token_type=urn%3Afasttrackstudio%3Aparams%3Aoauth%3Atoken-type%3Asession"
+    assert_eq!(seen.url, "https://auth.example/auth/organization/create");
+    assert!(
+        seen.headers
+            .iter()
+            .any(|(k, v)| *k == "authorization" && v == "Bearer a.b.c")
     );
 }
 
 #[tokio::test]
-async fn a_refused_trade_asks_for_a_sign_in() {
+async fn an_app_the_issuer_does_not_let_create_is_told_so_not_sent_to_sign_in() {
     let fetch = Once {
-        answer: (400, r#"{"error":"invalid_grant"}"#),
+        answer: (
+            403,
+            r#"{"code":"permission_denied","message":"permission denied"}"#,
+        ),
         seen: RefCell::new(None),
     };
+    let d = draft("Adult Jam", None).unwrap();
     assert_eq!(
-        session_for(&fetch, "https://auth.example", "drive", "old").await,
-        Err(Refused::SignIn)
-    );
-}
-
-#[tokio::test]
-async fn an_app_the_issuer_does_not_let_trade_is_told_so_not_sent_to_sign_in() {
-    let fetch = Once {
-        answer: (403, r#"{"error":"access_denied"}"#),
-        seen: RefCell::new(None),
-    };
-    assert_eq!(
-        session_for(&fetch, "https://auth.example", "drive", "fresh").await,
+        create(&fetch, "https://auth.example", "a.b.c", &d).await,
         Err(Refused::NotAllowed)
     );
 }
