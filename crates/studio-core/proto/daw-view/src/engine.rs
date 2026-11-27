@@ -2182,15 +2182,52 @@ impl Bus {
 /// A parameter moved, an FX added, removed, moved or switched: what the FX
 /// row reads again ([`crate::tone::Store::sync`]). Whoever made the change:
 /// the row itself, an action over MCP, the mix chains at prepare.
-#[cfg(feature = "native")]
 pub struct FxWatch {
     changes: std::sync::mpsc::Receiver<String>,
     alive: Alive,
 }
 
-#[cfg(feature = "native")]
+/// The FX filter on the cross-domain bus.
+fn fx_events() -> daw_proto::event_bus::BusFilter {
+    daw_proto::event_bus::BusFilter {
+        fx: true,
+        ..daw_proto::event_bus::BusFilter::default()
+    }
+}
+
 impl FxWatch {
     /// Subscribe. `None` if the facade is not up.
+    ///
+    /// The browser: no thread to subscribe on, so a task on the page's
+    /// event loop, as [`Watch::start`] does.
+    #[cfg(not(feature = "native"))]
+    #[must_use]
+    pub fn start() -> Option<Self> {
+        let daw = daw::rpc::Daw::try_get()?;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let alive = Alive::new();
+        let mine = alive.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let _end = scopeguard(move || mine.ended());
+            let Ok(mut stream) = daw.events().subscribe(fx_events()).await else {
+                return;
+            };
+            while let Ok(Some(event)) = stream.recv().await {
+                let daw_proto::event_bus::DawEvent::Fx(fx) = event.get() else {
+                    continue;
+                };
+                if let daw_proto::fx::FxChainContext::Track(track) = fx_context(&fx.event)
+                    && tx.send(track.clone()).is_err()
+                {
+                    break;
+                }
+            }
+        });
+        Some(Self { changes: rx, alive })
+    }
+
+    /// Subscribe. `None` if the facade is not up.
+    #[cfg(feature = "native")]
     #[must_use]
     pub fn start() -> Option<Self> {
         let runtime = crate::open::runtime()?;
@@ -2205,11 +2242,7 @@ impl FxWatch {
                     let Some(daw) = daw::rpc::Daw::try_get() else {
                         return;
                     };
-                    let filter = daw_proto::event_bus::BusFilter {
-                        fx: true,
-                        ..daw_proto::event_bus::BusFilter::default()
-                    };
-                    let Ok(mut stream) = daw.events().subscribe(filter).await else {
+                    let Ok(mut stream) = daw.events().subscribe(fx_events()).await else {
                         return;
                     };
                     while let Ok(Some(event)) = stream.recv().await {
@@ -2240,8 +2273,71 @@ impl FxWatch {
     }
 }
 
+/// One processor on a track's chain, as the engine has it: its name in
+/// the chain (`FTS Reverb`), whether it is on, its parameters.
+#[derive(Clone, Debug)]
+pub struct ChainFx {
+    pub name: String,
+    pub enabled: bool,
+    pub params: Vec<daw_proto::fx::FxParameter>,
+}
+
+/// The engine's chain on the track `track` (its GUID), in order, each
+/// processor with its parameters; empty for a track with none, or one the
+/// song does not have. What a window's FX row reads before it draws a
+/// track ([`chain_and_tempo`] in a page, blocking on a desktop).
+///
+/// # Errors
+/// The engine did not answer.
+pub async fn track_chain(
+    daw: &daw::rpc::Daw,
+    track: &str,
+) -> Result<Vec<ChainFx>, daw::rpc::Error> {
+    let project = daw.current_project().await?;
+    let Some(handle) = project.tracks().by_guid(track).await? else {
+        return Ok(Vec::new());
+    };
+    let chain = handle.fx_chain();
+    let mut out = Vec::new();
+    for fx in chain.all().await? {
+        let params = match chain.by_guid(&fx.guid).await? {
+            Some(plugin) => plugin.parameters().await?,
+            None => Vec::new(),
+        };
+        out.push(ChainFx {
+            name: fx.name,
+            enabled: fx.enabled,
+            params,
+        });
+    }
+    Ok(out)
+}
+
+/// A page's read of `track`'s chain ([`track_chain`]) and the song's
+/// tempo at its start (what a note-valued time on it is read against):
+/// awaited on the page's event loop, where nothing may block. An empty
+/// chain at 120 bpm when the engine is not up or did not answer, as a
+/// desktop's blocking read gives.
+#[cfg(not(feature = "native"))]
+pub async fn chain_and_tempo(track: &str) -> (Vec<ChainFx>, f64) {
+    let Some(daw) = daw::rpc::Daw::try_get() else {
+        return (Vec::new(), 120.0);
+    };
+    let chain = match track_chain(daw, track).await {
+        Ok(chain) => chain,
+        Err(error) => {
+            tracing::warn!(track, %error, "a track's chain did not come back");
+            Vec::new()
+        }
+    };
+    let bpm = match daw.current_project().await {
+        Ok(project) => project.tempo_map().tempo_at(0.0).await.unwrap_or(120.0),
+        Err(_) => 120.0,
+    };
+    (chain, bpm)
+}
+
 /// The chain an FX event is about.
-#[cfg(feature = "native")]
 const fn fx_context(event: &daw_proto::fx::FxEvent) -> &daw_proto::fx::FxChainContext {
     use daw_proto::fx::FxEvent as E;
     match event {

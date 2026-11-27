@@ -30,6 +30,6 @@ pub mod simulate;
 pub mod strip_overlay;
 pub mod theme;
 pub mod tone;
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 pub mod tone_bind;
 pub mod tone_read;

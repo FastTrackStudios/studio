@@ -16209,6 +16209,7 @@ dependencies = [
  "tracing",
  "utils",
  "vello",
+ "wasm-bindgen-futures",
  "web-sys",
  "web-time",
  "wgpu_context",
