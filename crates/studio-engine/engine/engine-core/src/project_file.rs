@@ -496,7 +496,10 @@ pub fn save(
         daw,
         &daw_proto::ProjectContext::Project(project_guid.to_owned()),
     );
-    crate::telemetry::set("save.mix_states_dropped", dropped.len());
+    crate::telemetry::set(
+        "save.mix_states_dropped",
+        i64::try_from(dropped.len()).unwrap_or(i64::MAX),
+    );
     // Every step read is in the doc first.
     written(WRITE_WAIT);
     let _job = crate::jobs::start("Saving", 0);

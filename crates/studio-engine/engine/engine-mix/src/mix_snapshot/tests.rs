@@ -338,7 +338,7 @@ fn a_plugin_state_no_mix_names_goes_with_the_next_save() {
     )
     .expect("an fx");
     let hold = |state: &str| {
-        daw.apply_plugin_state(&fx.guid, state.as_bytes())
+        daw.apply_plugin_state(&fx, state.as_bytes())
             .expect("the plugin takes its state");
     };
 
