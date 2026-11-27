@@ -91,4 +91,18 @@ impl ExtState for Standalone {
         })
         .unwrap_or(false)
     }
+
+    fn keys_project(&self, project: ProjectContext, section: &str) -> Vec<String> {
+        let Some(guid) = resolve_project(self, &project) else {
+            return Vec::new();
+        };
+        self.with_project(&guid, |p| {
+            p.project_ext_state
+                .keys()
+                .filter(|(s, _)| s == section)
+                .map(|(_, k)| k.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+    }
 }
