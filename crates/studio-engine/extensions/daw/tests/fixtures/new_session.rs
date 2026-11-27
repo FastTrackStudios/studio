@@ -225,6 +225,21 @@ fn a_new_session_from_a_folder_of_stems() {
         }
         let file = folder.join("Night Drive.session");
         checks.add("saved", file.is_file(), file.display().to_string());
+        check::open(&engine, &file)?;
+        let again = tracks_and_sources(mcp)?;
+        let stem_tracks = again
+            .iter()
+            .filter(|(_, played)| played.iter().any(|f| files.contains(&f.as_str())))
+            .count();
+        checks.add(
+            "opened again: a track per file",
+            stem_tracks == files.len(),
+            format!("{again:?}"),
+        );
+        match check::plays(mcp, 0.0) {
+            Ok(said) => checks.add("opened again: plays", true, said),
+            Err(why) => checks.failed("opened again: plays", why),
+        }
         Ok(())
     };
     if let Err(why) = steps() {

@@ -11,7 +11,7 @@
 //! a `to`, and the stem of `to` becomes its name ([`named`]).
 //!
 //! `SESSION_NEW` (`crate::session_new`: a window's New Project, the CLI, a
-//! model) makes it the engine's set, a set of one ([`setlist`],
+//! model) makes it the engine's set, a set of one ([`setlist_titled`],
 //! `crate::studio_engine::set::open_new`); every window shows it, given
 //! what was asked of it.
 
@@ -112,28 +112,8 @@ pub fn named(
     });
 }
 
-/// A new song made and opened as a set of one — the start screen's New
-/// Project. `audio` as [`create`].
-///
-/// # Errors
-///
-/// The song could not be made, or read back.
-pub fn setlist(audio: Option<bool>) -> eyre::Result<crate::setlist::Setlist> {
-    let guid = create(audio).map_err(|e| eyre::eyre!(e))?;
-    setlist_of(guid)
-}
-
 /// The song `guid` — current in the engine, as [`create`] leaves it — as
-/// a set of one.
-///
-/// # Errors
-///
-/// It could not be read back.
-pub fn setlist_of(guid: String) -> eyre::Result<crate::setlist::Setlist> {
-    setlist_titled(UNTITLED.to_owned(), guid)
-}
-
-/// [`setlist_of`], the song called `title`.
+/// a set of one, the song called `title`.
 ///
 /// # Errors
 ///

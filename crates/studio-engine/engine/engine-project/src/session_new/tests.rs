@@ -307,3 +307,70 @@ fn the_stems_project_has_a_track_per_stem_playing_it() {
     assert!(text.contains("Drums/Kick.flac"), "{text}");
     assert!(text.contains("TEMPO 96 4 4"), "{text}");
 }
+
+#[test]
+fn a_song_from_scratch_is_not_saved_over_another() {
+    let dir = scratch_dir("over");
+    let to = dir.join("Song.session");
+    std::fs::write(&to, b"").unwrap();
+    let refused = start_of(NewArg {
+        to: Some(to.display().to_string()),
+        ..arg()
+    });
+    assert!(refused.is_err_and(|e| e.contains("Song.session")));
+}
+
+#[test]
+fn a_title_with_a_slash_is_refused() {
+    let refused = start_of(NewArg {
+        title: Some("AC/DC".into()),
+        ..arg()
+    });
+    assert!(refused.is_err_and(|e| e.contains("AC/DC")));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_link_to_a_folder_is_not_followed() {
+    let dir = scratch_dir("link");
+    wav(&dir.join("Bass.wav"), 1.0);
+    std::os::unix::fs::symlink(&dir, dir.join("loop")).unwrap();
+    let found = stems(&dir).unwrap();
+    assert_eq!(
+        found,
+        vec![Stem {
+            file: PathBuf::from("Bass.wav"),
+            seconds: 1.0
+        }]
+    );
+}
+
+#[test]
+fn an_ogg_stem_is_a_vorbis_source() {
+    let text = stems_project(
+        &[Stem {
+            file: PathBuf::from("Pad.ogg"),
+            seconds: 1.0,
+        }],
+        120.0,
+    );
+    assert!(text.contains("<SOURCE VORBIS"), "{text}");
+}
+
+#[test]
+fn a_session_is_named_for_its_file() {
+    let refused = start_of(NewArg {
+        title: Some("Morning Song".into()),
+        to: Some("/tmp/morning.session".into()),
+        ..arg()
+    });
+    assert!(refused.is_err_and(|e| e.contains("Morning Song.session")));
+    let named = start_of(NewArg {
+        to: Some("/tmp/Evening Song.session".into()),
+        ..arg()
+    });
+    assert!(
+        matches!(&named, Ok(Start::Scratch(s)) if s.title.as_deref() == Some("Evening Song")),
+        "{named:?}"
+    );
+}

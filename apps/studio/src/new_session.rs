@@ -144,6 +144,13 @@ impl Made {
 /// Make the session in the engine, off the UI thread.
 #[cfg(feature = "native")]
 async fn make(args: Value) -> Result<Made, String> {
+    // The song's own folder, for a song from scratch.
+    if let Some(dir) = args["to"]
+        .as_str()
+        .and_then(|t| std::path::Path::new(t).parent())
+    {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
     let (tx, rx) = futures_channel::oneshot::channel();
     std::thread::Builder::new()
         .name("studio-new-session".into())
@@ -196,14 +203,6 @@ pub fn NewSessionSheet() -> Element {
             }
         };
         let typed_key = Some(asked().key.trim().to_string()).filter(|k| !k.is_empty());
-        if let Some(to) = args["to"]
-            .as_str()
-            .and_then(|t| std::path::Path::new(t).parent())
-            && let Err(e) = std::fs::create_dir_all(to)
-        {
-            error.set(Some(format!("{}: {e}", to.display())));
-            return;
-        }
         busy.set(true);
         error.set(None);
         let lib = lib.clone();

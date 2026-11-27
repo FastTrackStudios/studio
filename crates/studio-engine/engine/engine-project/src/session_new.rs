@@ -27,7 +27,7 @@ static NEW: ActionMeta = crate::actions::meta(
     "SESSION_NEW",
     "session_new",
     "New session",
-    "Make a new session, one of three ways. From scratch (no `from`): an empty song — COUNT-IN on bar 1, SONGSTART after the two-bar count-in, SONGEND eight bars on, the guide (Click, Count, Guide) over them, the window in Organize mode — with `title`, `key` (`Eb`, `C#m`, `D minor`), `tempo` (bpm) and `form`, its sections from SONGSTART in order, each a kind and its bars (`[\"Intro 4\", \"Verse 8\", \"Chorus\"]`; intro and outro are 4 bars when not said, the rest 8), each given; saved to `to` (a `.session`) when given, else untitled until its first SESSION_SAVE with `to`. From a folder (`from` a folder of multitracks or stems): a track per audio file in it or in folders inside it (WAV, FLAC, MP3, Ogg, AIFF), each playing its file from the start, at `tempo` (120 when not said), named `title` (the folder's name when not said), in `key` when given; the folder gets `<title>.RPP` and `<title>.session`. From a REAPER project (`from` an `.RPP`): it opens as SESSION_OPEN opens one and is saved as the `.session` beside it, its tracks, items, markers and tempo as they are; refused when that `.session` is already there (open it). The song opens in the background as the engine's set: the action returns at once, and the song is there once SESSION_OPENING is idle. The song open now is left as it is — SESSION_SAVE it first if it should be. SONG_INFO reads the new song back.",
+    "Make a new session, one of three ways. From scratch (no `from`): an empty song — COUNT-IN on bar 1, SONGSTART after the two-bar count-in, SONGEND eight bars on, the guide (Click, Count, Guide) over them, the window in Organize mode — with `title`, `key` (`Eb`, `C#m`, `D minor`), `tempo` (bpm) and `form`, its sections from SONGSTART in order, each a kind and its bars (`[\"Intro 4\", \"Verse 8\", \"Chorus\"]`; intro and outro are 4 bars when not said, the rest 8), each given; saved to `to` (a `.session`, named for the song: `<title>.session`; the title is its name when `title` is left out) when given, else untitled until its first SESSION_SAVE with `to`. From a folder (`from` a folder of multitracks or stems): a track per audio file in it or in folders inside it (WAV, FLAC, MP3, Ogg, AIFF), each playing its file from the start, at `tempo` (120 when not said), named `title` (the folder's name when not said), in `key` when given; the folder gets `<title>.RPP` and `<title>.session`. From a REAPER project (`from` an `.RPP`): it opens as SESSION_OPEN opens one and is saved as the `.session` beside it, its tracks, items, markers and tempo as they are; refused when that `.session` is already there (open it). The song opens in the background as the engine's set: the action returns at once, and the song is there once SESSION_OPENING is idle. The song open now is left as it is — SESSION_SAVE it first if it should be. SONG_INFO reads the new song back.",
     "Session",
     "",
 );
@@ -201,6 +201,13 @@ fn start_of(a: NewArg) -> Result<Start, String> {
         .title
         .map(|t| t.trim().to_owned())
         .filter(|t| !t.is_empty());
+    if let Some(title) = &title
+        && title.contains(['/', '\\'])
+    {
+        return Err(format!(
+            "{title:?}: a title names the song's files, so it has no `/` or `\\` in it"
+        ));
+    }
     let key = a.key.filter(|k| !k.trim().is_empty());
     if let Some(key) = &key {
         key_named(key)?;
@@ -222,14 +229,29 @@ fn start_of(a: NewArg) -> Result<Start, String> {
         .collect::<Result<Vec<_>, _>>()?;
     let Some(from) = a.from.filter(|f| !f.trim().is_empty()) else {
         let to = a.to.filter(|t| !t.trim().is_empty()).map(PathBuf::from);
-        if let Some(to) = &to
-            && !crate::open::is_session(to)
-        {
-            return Err(format!(
-                "`to` is the `.session` it is saved to, not {}",
-                to.display()
-            ));
+        if let Some(to) = &to {
+            if !crate::open::is_session(to) {
+                return Err(format!(
+                    "`to` is the `.session` it is saved to, not {}",
+                    to.display()
+                ));
+            }
+            if to.exists() {
+                return Err(format!(
+                    "{} is already there: open it (SESSION_OPEN), or save the new one elsewhere",
+                    to.display()
+                ));
+            }
+            // A session is named for its file.
+            let named = stem(to);
+            if title.as_ref().is_some_and(|t| *t != named) {
+                return Err(format!(
+                    "a session is named for its file: save {title:?} as `{}.session`, or leave `title` out",
+                    title.as_deref().unwrap_or_default()
+                ));
+            }
         }
+        let title = title.or_else(|| to.as_deref().map(stem));
         return Ok(Start::Scratch(Scratch {
             title,
             key,
@@ -340,11 +362,17 @@ fn collect(root: &Path, at: &Path, out: &mut Vec<PathBuf>) -> Result<(), String>
         }
         let rel = at.join(&name);
         let path = entry.path();
-        if path.is_dir() {
+        // A link to a file is a stem; a link to a folder is not followed
+        // (one to a folder above would never end).
+        let kind = entry
+            .file_type()
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        if kind.is_dir() {
             collect(root, &rel, out)?;
-        } else if path
-            .extension()
-            .is_some_and(|e| AUDIO.iter().any(|a| e.eq_ignore_ascii_case(a)))
+        } else if (kind.is_file() || (kind.is_symlink() && path.is_file()))
+            && path
+                .extension()
+                .is_some_and(|e| AUDIO.iter().any(|a| e.eq_ignore_ascii_case(a)))
         {
             out.push(rel);
         }
@@ -405,6 +433,8 @@ pub fn stems_project(stems: &[Stem], bpm: f64) -> String {
                 match ext.as_str() {
                     "flac" => item.source_flac(file),
                     "mp3" => item.source_mp3(file),
+                    "ogg" | "oga" => item.take(file, dawfile_reaper::types::SourceType::Vorbis),
+                    // REAPER's WAVE source reads AIFF as well.
                     _ => item.source_wave(file),
                 }
             })
