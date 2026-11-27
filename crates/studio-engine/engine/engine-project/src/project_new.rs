@@ -10,14 +10,13 @@
 //! The song has no file until it is first saved: `SESSION_SAVE` then needs
 //! a `to`, and the stem of `to` becomes its name ([`named`]).
 //!
-//! The action (a window's New Project, the CLI, a model) makes it the
-//! engine's set, a set of one ([`setlist`],
-//! `crate::studio_engine::set::open_new`); every window shows it.
+//! `SESSION_NEW` (`crate::session_new`: a window's New Project, the CLI, a
+//! model) makes it the engine's set, a set of one ([`setlist`],
+//! `crate::studio_engine::set::open_new`); every window shows it, given
+//! what was asked of it.
 
-use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::transport::service::Transport as _;
 use daw::service::{ProjectContext, TempoMap as _};
-use facet::Facet;
 use fts_session::section_kinds::{KeyflowAction, MarkerKind};
 
 /// What a new song is called until it is saved.
@@ -31,39 +30,6 @@ const COUNT_IN_BARS: i32 = 2;
 /// click to run over. A section inserted past them moves SONGEND out
 /// (`crate::organize::insert`).
 const SONG_BARS: i32 = 8;
-
-static NEW: ActionMeta = crate::actions::meta(
-    "SESSION_NEW",
-    "session_new",
-    "New project",
-    "Start a new song from nothing, untitled: COUNT-IN on bar 1, SONGSTART after the two-bar count-in, SONGEND eight bars on, the guide (Click, Count, Guide) generated over them, the window in Organize mode. It opens in the background: the action returns at once, and the song is there once SESSION_OPENING is idle — wait for that before acting on it. The song open now is left as it is — SESSION_SAVE it first if it should be. The new one has no file until its first SESSION_SAVE, which needs `to` and takes its name from it. `template` is not there yet.",
-    "Session",
-    "",
-);
-
-/// A new song.
-#[derive(Facet)]
-struct NewArg {
-    /// A template to start from — none yet.
-    template: Option<String>,
-}
-
-pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&NEW, Effect::Mutating, |a: NewArg| {
-        if let Some(template) = a.template.filter(|t| !t.trim().is_empty()) {
-            return Err(format!(
-                "no templates yet ({template}): leave `template` out for an empty song"
-            ));
-        }
-        // The engine's set from now on: a set of the one new song. A
-        // window shows it as it does any set the engine opens.
-        crate::studio_engine::set::open_new().map_err(|e| e.to_string())?;
-        Ok(format!(
-            "a new song, {UNTITLED}, opening in the background: wait for SESSION_OPENING to be idle before acting on it. It comes up in Organize, COUNT-IN, SONGSTART and SONGEND placed and the guide over them, and is named when it is first saved (SESSION_SAVE with `to`)."
-        ))
-    })?;
-    Ok(())
-}
 
 /// Make a new, untitled song in the window's engine and make it current.
 ///
@@ -164,10 +130,17 @@ pub fn setlist(audio: Option<bool>) -> eyre::Result<crate::setlist::Setlist> {
 ///
 /// It could not be read back.
 pub fn setlist_of(guid: String) -> eyre::Result<crate::setlist::Setlist> {
+    setlist_titled(UNTITLED.to_owned(), guid)
+}
+
+/// [`setlist_of`], the song called `title`.
+///
+/// # Errors
+///
+/// It could not be read back.
+pub fn setlist_titled(title: String, guid: String) -> eyre::Result<crate::setlist::Setlist> {
     let session = crate::song_model::StudioSession::read_current(None, None)?;
     Ok(crate::setlist::Setlist::of(vec![crate::setlist::Song::of(
-        UNTITLED.to_owned(),
-        guid,
-        session,
+        title, guid, session,
     )]))
 }

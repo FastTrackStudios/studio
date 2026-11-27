@@ -160,17 +160,17 @@ pub fn open_live(link: String, name: String) -> Result<(), Busy> {
     )
 }
 
-/// A new, untitled song as the set — `SESSION_NEW`.
+/// A new song as the set, made as `start` says — `SESSION_NEW`.
 ///
 /// # Errors
 ///
 /// Another open is under way.
-pub fn open_new() -> Result<(), Busy> {
+pub fn open_new(start: crate::session_new::Start) -> Result<(), Busy> {
     open_with(
         Progress::Opening {
-            title: crate::project_new::UNTITLED.to_owned(),
+            title: start.title(),
         },
-        Box::new(|_| crate::project_new::setlist(None)),
+        Box::new(move |_| crate::session_new::make(start)),
     )
 }
 

@@ -25,6 +25,8 @@ pub mod projects;
 #[cfg(feature = "native")]
 pub mod reference_play;
 #[cfg(feature = "native")]
+pub mod session_new;
+#[cfg(feature = "native")]
 mod set_open;
 pub mod setlist;
 #[cfg(feature = "show")]
@@ -60,7 +62,7 @@ pub mod studio_engine {
 #[cfg(feature = "native")]
 pub fn register(list: &ActionList) -> Result<(), ActionError> {
     library_actions::register(list)?;
-    project_new::register(list)?;
+    session_new::register(list)?;
     instrument_tracks::register(list)?;
     organize_edit::register(list)?;
     ingest::actions::register(list)?;
