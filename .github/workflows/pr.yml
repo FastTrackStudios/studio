@@ -82,7 +82,7 @@ jobs:
   affected:
     name: Affected crates
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
     timeout-minutes: 180
     permissions:
       contents: read

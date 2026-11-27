@@ -35,10 +35,8 @@
 //! ready for review (`ready_for_review`) starts the run; every push after
 //! that runs it again and cancels the run before it.
 
-use crate::checks::{
-    LOCKFILE, POOL, assets, ci_cargo_config, hosted_cargo_job, in_shell, target_dir,
-};
-use crate::model::{Job, Step, UBUNTU, Workflow, yaml};
+use crate::checks::{LOCKFILE, assets, ci_cargo_config, hosted_cargo_job, in_shell, target_dir};
+use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
 use crate::steps::{Tools, cargo_deps_restore, checkout, hosted_setup};
 use anyhow::Result;
 
@@ -218,14 +216,22 @@ with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
 PY
 "###;
 
+/// `affected`'s runner: GitHub-hosted for a fork's PR, the shared
+/// `thebattleship` pool for everything else.
+const AFFECTED_POOL: RunsOn = RunsOn::Label(
+    "${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || fromJSON('[\"self-hosted\",\"thebattleship\"]') }}",
+);
+
 /// The crates the PR reaches, compiled and tested: one job, one target dir
 /// (the deps build once; the tests reuse the check's metadata). Each step
 /// runs even when one before it failed, so one run reports the check AND the
-/// tests. On a PR it runs on a GitHub-hosted runner, as every PR build here
-/// does (`POOL`): the shared pool runs only protected refs' code.
+/// tests. A PR from a branch of this repo runs on the shared pool, warm from
+/// kache instead of ~50 min cold on a hosted VM (THEBATTLESHIP's runner gate
+/// takes it only when fts-forge or the owner opened it); a fork's PR stays on
+/// a GitHub-hosted runner.
 fn affected() -> Result<Job> {
     const RAN: &str = "!cancelled() && steps.plan.outcome == 'success'";
-    Ok(hosted_cargo_job(Job::new(POOL))
+    Ok(hosted_cargo_job(Job::new(AFFECTED_POOL))
         .name("Affected crates")
         .cond(NOT_DRAFT)
         .timeout(180)
