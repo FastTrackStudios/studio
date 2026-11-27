@@ -825,10 +825,15 @@ fn assets_token() -> Step {
 /// runner's stdout pipe failed. A regular file cannot do that. The full log
 /// is the job's test-log artifact.
 const NEXTEST: &str = r####"pkgs=()
+# A member can share its name with a registry crate (vendor/wasm-streams-0.4 is
+# `wasm-streams` 0.4, beside 0.5 from crates.io): `-p name` is then ambiguous,
+# so pass each member as `name@version`.
+declare -A spec=()
+while read -r n v; do spec[$n]="$n@$v"; done < <(cargo metadata --no-deps --format-version 1 --offline 2>/dev/null | python3 -c 'import json,sys; [print(p["name"], p["version"]) for p in json.load(sys.stdin)["packages"]]')
 # The tested set, narrowed to rail's selection when it made one.
 sel=" ${TEST_PACKAGES:-} "
 while read -r p; do
-  if [ "$sel" = "  " ] || [[ "$sel" == *" $p "* ]]; then pkgs+=(-p "$p"); fi
+  if [ "$sel" = "  " ] || [[ "$sel" == *" $p "* ]]; then pkgs+=(-p "${spec[$p]:-$p}"); fi
 done < <(python3 scripts/boundaries.py packages all --tested)
 if [ "${#pkgs[@]}" = 0 ]; then echo "no tested package in the plan"; exit 0; fi
 echo "packages: ${pkgs[*]}"
