@@ -31,6 +31,7 @@ mod engine;
 mod fixture;
 #[path = "../unbreakable/mcp.rs"]
 mod mcp;
+mod new_session;
 #[path = "../unbreakable/otlp.rs"]
 #[allow(
     dead_code,

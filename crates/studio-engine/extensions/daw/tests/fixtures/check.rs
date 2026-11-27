@@ -64,8 +64,20 @@ impl Checks {
 ///
 /// The open failed or did not finish in time.
 pub fn open(engine: &Engine, path: &Path) -> Result<Vec<Value>, String> {
+    engine
+        .mcp
+        .run("SESSION_OPEN", &json!({"path": path.display().to_string()}))?;
+    opened(engine)
+}
+
+/// Wait until the open under way (SESSION_OPEN's, SESSION_NEW's) is done
+/// and every song of it open: its `SESSION_SONGS` rows.
+///
+/// # Errors
+///
+/// The open failed or did not finish in time.
+pub fn opened(engine: &Engine) -> Result<Vec<Value>, String> {
     let mcp = &engine.mcp;
-    mcp.run("SESSION_OPEN", &json!({"path": path.display().to_string()}))?;
     let began = Instant::now();
     loop {
         let opening = mcp.run("SESSION_OPENING", &json!({}))?;
@@ -366,7 +378,7 @@ pub fn stop(mcp: &Mcp) -> Result<(), String> {
 }
 
 /// `track`'s integrated loudness over `from`..`to`, `None` when silent.
-fn lufs(mcp: &Mcp, track: &str, from: &str, to: &str) -> Result<Option<f64>, String> {
+pub fn lufs(mcp: &Mcp, track: &str, from: &str, to: &str) -> Result<Option<f64>, String> {
     let answer = mcp.run(
         "LISTEN",
         &json!({"track": track, "from": from, "to": to, "png": false}),

@@ -218,6 +218,9 @@ pub fn SheetBody(sheet: Sheet) -> Element {
         Sheet::NewSet(preset) => rsx! {
             crate::set_sheets::NewSetSheet { preset }
         },
+        Sheet::NewSession => rsx! {
+            crate::new_session::NewSessionSheet {}
+        },
         Sheet::More => rsx! {
             MoreSheet {}
         },
@@ -336,7 +339,7 @@ fn palette_items(
         });
     }
     for a in [
-        "New project",
+        "New session",
         "Scan for projects",
         "Tuner",
         "Audio settings",
@@ -405,6 +408,7 @@ fn Palette() -> Element {
                                     Some(r) => {
                                         navigator().push(r.clone());
                                     }
+                                    None if h.says == "New session" => app.open(Sheet::NewSession),
                                     None => app.say(h.says.clone()),
                                 }
                             }

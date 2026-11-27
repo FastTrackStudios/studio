@@ -280,13 +280,7 @@ impl Fixture {
         let from = root().join("sessions").join(&self.name);
         let to = run.join("sessions").join(&self.name);
         copy_dir(&from, &to)?;
-        for media in &self.media {
-            let path = to.join(&media.file);
-            if let Some(dir) = path.parent() {
-                std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-            }
-            write_wav(&path, &render(&media.sound, media.seconds))?;
-        }
+        generate(&to, &self.media)?;
         song_in(&to)
     }
 }
@@ -309,6 +303,22 @@ impl Fixture {
             .then(|| std::fs::read_to_string(one).ok())
             .flatten()
     }
+}
+
+/// Write each of `media` under `dir`, at its `file`.
+///
+/// # Errors
+///
+/// A folder could not be made or a file written.
+pub fn generate(dir: &Path, media: &[Media]) -> Result<(), String> {
+    for media in media {
+        let path = dir.join(&media.file);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        write_wav(&path, &render(&media.sound, media.seconds))?;
+    }
+    Ok(())
 }
 
 /// Every fixture session, by folder name.

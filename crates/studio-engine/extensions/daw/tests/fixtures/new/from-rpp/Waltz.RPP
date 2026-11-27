@@ -1,0 +1,40 @@
+<REAPER_PROJECT 0.1 "7.0/fixture" 1700000000
+  SAMPLERATE 48000 0 0
+  TEMPO 100 3 4 0
+  MARKER 1 0 "Verse" 1 0 1 B {00000000-0000-0000-0000-000000000201} 0
+  MARKER 1 3.6 "" 1
+  MARKER 2 3.6 "Chorus" 1 0 1 B {00000000-0000-0000-0000-000000000202} 0
+  MARKER 2 7.2 "" 1
+  MARKER 3 5.4 "Hit" 0 0 1 B {00000000-0000-0000-0000-000000000203} 0
+  <TRACK
+    NAME "Piano"
+    <ITEM
+      POSITION 0
+      LENGTH 7.2
+      NAME piano.wav
+      <SOURCE WAVE
+        FILE "Media/piano.wav"
+      >
+    >
+  >
+  <TRACK
+    NAME "Vox"
+    <ITEM
+      POSITION 0
+      LENGTH 3.6
+      NAME vox.wav
+      <SOURCE WAVE
+        FILE "Media/vox.wav"
+      >
+    >
+    <ITEM
+      POSITION 3.6
+      LENGTH 3.6
+      SOFFS 3.6
+      NAME vox.wav
+      <SOURCE WAVE
+        FILE "Media/vox.wav"
+      >
+    >
+  >
+>

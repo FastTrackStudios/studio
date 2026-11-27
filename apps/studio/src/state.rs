@@ -59,6 +59,8 @@ pub enum Sheet {
     Export(SetRef),
     /// A new set (for a recurring event, when one is given).
     NewSet(Option<String>),
+    /// A new session: from scratch, from a folder of stems or from an RPP.
+    NewSession,
     /// More for this set: arrangement, mixer, lighting.
     More,
     /// Book a rehearsal.
