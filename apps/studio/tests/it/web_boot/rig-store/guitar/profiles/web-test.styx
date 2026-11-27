@@ -1,0 +1,11 @@
+drives ()
+
+name "Web Test"
+
+presets ({name Amp, nam "models/Test LSTM.nam"})
+
+patches ({name Clean, song "", preset Amp, preset2 "", rig_preset "", snapshot "", tone "", role "", modules (), blocks (), drives (), trim_db 0, level_db 0, boost_db 0, overrides (), macros ()} {name Lead, song "", preset Amp, preset2 "", rig_preset "", snapshot "", tone "", role "", modules (), blocks (), drives (), trim_db 0, level_db 3, boost_db 0, overrides (), macros ()})
+
+stacks ({name Clean, patches (Clean), momentary false, no_rotate false} {name Lead, patches (Lead), momentary false, no_rotate false})
+
+default_patch Clean
