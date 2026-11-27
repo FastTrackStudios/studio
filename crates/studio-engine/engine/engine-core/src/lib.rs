@@ -38,6 +38,8 @@ pub mod edit_trace;
 pub mod history;
 #[cfg(feature = "native")]
 pub mod history_marks;
+/// The plugin states a song's mixes keep, swept of the ones none names.
+pub mod mix_states;
 #[cfg(feature = "native")]
 pub mod open;
 pub mod open_core;

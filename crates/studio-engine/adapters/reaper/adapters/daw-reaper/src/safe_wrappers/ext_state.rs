@@ -74,3 +74,35 @@ pub fn set_proj_ext_state(
         );
     }
 }
+
+/// Longest project ext-state key read back; keys are short names.
+const MAX_PROJ_EXT_STATE_KEY: usize = 4096;
+
+/// The keys set in a project-scoped section (`EnumProjExtState`, its
+/// values not read).
+pub fn proj_ext_state_keys(low: &ReaperLow, project: ProjectContext, section: &CString) -> Vec<String> {
+    let mut keys = Vec::new();
+    let mut buf = vec![0 as std::os::raw::c_char; MAX_PROJ_EXT_STATE_KEY];
+    let size = i32::try_from(buf.len()).unwrap_or(i32::MAX);
+    for index in 0.. {
+        buf[0] = 0;
+        let more = unsafe {
+            low.EnumProjExtState(
+                project.to_raw(),
+                section.as_ptr(),
+                index,
+                buf.as_mut_ptr(),
+                size,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if !more {
+            break;
+        }
+        if let Some(key) = super::cstring::read_cstr(buf.as_ptr()) {
+            keys.push(key);
+        }
+    }
+    keys
+}

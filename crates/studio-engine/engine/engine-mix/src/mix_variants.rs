@@ -62,7 +62,8 @@ use crate::actions::{meta, resolve, song};
 use crate::mix_sends::{db, gain};
 use crate::mix_snapshot::{FxMix, Mix, Only, Put};
 
-const SECTION: &str = "fts.mix";
+use engine_core::mix_states::SECTION;
+
 /// The song's variant groups, a name a line.
 const GROUPS: &str = "variant_groups";
 /// The group the bindable actions (next, previous, pick) act on.

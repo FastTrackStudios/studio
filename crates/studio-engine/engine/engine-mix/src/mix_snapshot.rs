@@ -33,7 +33,8 @@ use facet::Facet;
 use crate::actions::{meta, song};
 use crate::mix_sends::{db, gain, tap_of, tap_word};
 
-const SECTION: &str = "fts.mix";
+use engine_core::mix_states::{HASH_LEN, SECTION, state_key};
+
 /// The names of the song's snapshots.
 const NAMES: &str = "snapshots";
 /// The snapshot (or `group:variant`) last taken, restored or kept: a new
@@ -457,18 +458,14 @@ fn key(name: &str) -> String {
     format!("snapshot:{}", name.trim())
 }
 
-/// A plugin state, kept once in the section by what it is: `state:<hash>`.
-fn state_key(hash: &str) -> String {
-    format!("state:{hash}")
-}
-
 /// `mix` as it is kept: each plugin state stored once, under its hash, and
 /// named in the mix by it (`@<hash>`).
 ///
 /// A song's 54 snapshots held 280 MB of plugin state, 8 MB of it unique: a
 /// snapshot repeats every FX's state, most of them unchanged since the
-/// last. An older snapshot, its states inline, reads as it did. (A state
-/// no snapshot names any more stays: the ext state cannot be listed.)
+/// last. An older snapshot, its states inline, reads as it did. A state
+/// no mix names any more goes when the song is saved
+/// (`engine_core::mix_states::sweep`).
 ///
 /// # Errors
 /// A state would not be kept, or the mix would not encode.
@@ -487,7 +484,7 @@ pub(crate) fn encode_mix(
         let hash: String = blake3::hash(fx.state.as_bytes())
             .to_hex()
             .chars()
-            .take(32)
+            .take(HASH_LEN)
             .collect();
         let hash = hash.as_str();
         let at = state_key(hash);

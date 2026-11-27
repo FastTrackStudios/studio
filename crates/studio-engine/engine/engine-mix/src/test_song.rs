@@ -20,11 +20,13 @@ fn sine(hz: f64, rms_db: f64, seconds: f64) -> Vec<f32> {
         .collect()
 }
 
-/// A plugin `late` samples late, gain `gain`, that says how late it is.
+/// A plugin `late` samples late, gain `gain`, that says how late it is;
+/// with a `state`, it keeps and takes one.
 struct Late {
     line: Vec<[f32; 2]>,
     at: usize,
     gain: f32,
+    state: Option<Vec<u8>>,
 }
 
 impl daw_standalone::plugin::PluginInstance for Late {
@@ -75,10 +77,26 @@ impl daw_standalone::plugin::PluginInstance for Late {
         Ok(())
     }
     fn deactivate(&mut self) {}
+    fn save_state(&mut self) -> Result<Vec<u8>, daw_standalone::plugin::PluginError> {
+        self.state.clone().ok_or_else(|| {
+            daw_standalone::plugin::PluginError::UnsupportedFormat(self.descriptor().format)
+        })
+    }
+    fn load_state(&mut self, state: &[u8]) -> Result<(), daw_standalone::plugin::PluginError> {
+        match &mut self.state {
+            Some(kept) => {
+                state.clone_into(kept);
+                Ok(())
+            }
+            None => Err(daw_standalone::plugin::PluginError::UnsupportedFormat(
+                self.descriptor().format,
+            )),
+        }
+    }
 }
 
-/// `Late 848` (848 samples, unity, as Signal's keyed tracks report) and
-/// `Gain 6` (+6 dB, no latency).
+/// `Late 848` (848 samples, unity, as Signal's keyed tracks report),
+/// `Gain 6` (+6 dB, no latency) and `Stateful` (unity, a state of its own).
 struct Plugins;
 
 impl daw_standalone::plugin::FxFactory for Plugins {
@@ -86,7 +104,7 @@ impl daw_standalone::plugin::FxFactory for Plugins {
         Vec::new()
     }
     fn provides(&self, name: &str) -> bool {
-        name == "Late 848" || name == "Gain 6"
+        matches!(name, "Late 848" | "Gain 6" | "Stateful")
     }
     fn create(
         &self,
@@ -96,12 +114,14 @@ impl daw_standalone::plugin::FxFactory for Plugins {
         let (late, gain) = match name {
             "Late 848" => (848, 1.0),
             "Gain 6" => (0, 10f32.powf(6.0 / 20.0)),
+            "Stateful" => (0, 1.0),
             _ => return None,
         };
         Some(Box::new(Late {
             line: vec![[0.0; 2]; late],
             at: 0,
             gain,
+            state: (name == "Stateful").then(Vec::new),
         }))
     }
 }

@@ -490,6 +490,13 @@ pub fn save(
     branch: &str,
     label: &str,
 ) -> Result<PathBuf, String> {
+    // The plugin states no mix names any more go with this save (read
+    // into the doc below, with the rest of the song).
+    let dropped = crate::mix_states::sweep(
+        daw,
+        &daw_proto::ProjectContext::Project(project_guid.to_owned()),
+    );
+    crate::telemetry::set("save.mix_states_dropped", dropped.len());
     // Every step read is in the doc first.
     written(WRITE_WAIT);
     let _job = crate::jobs::start("Saving", 0);

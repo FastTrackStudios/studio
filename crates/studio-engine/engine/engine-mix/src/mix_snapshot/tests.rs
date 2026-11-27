@@ -308,3 +308,123 @@ fn a_plugin_state_is_kept_once_however_many_mixes_hold_it() {
     let inline = facet_json::to_string(&mix).expect("inline");
     assert_eq!(decode_mix(&daw, &ctx, &inline).expect("read"), mix);
 }
+
+/// The hashes of the plugin states kept in the song's mix section.
+fn kept_states(daw: &Standalone, ctx: &ProjectContext) -> std::collections::BTreeSet<String> {
+    daw_proto::ExtState::keys_project(daw, ctx.clone(), engine_core::mix_states::SECTION)
+        .into_iter()
+        .filter_map(|k| k.strip_prefix("state:").map(str::to_owned))
+        .collect()
+}
+
+/// The hash a plugin state `bytes` is kept under.
+fn hash_of(bytes: &str) -> String {
+    use base64::Engine as _;
+    let text = base64::engine::general_purpose::STANDARD.encode(bytes);
+    blake3::hash(text.as_bytes()).to_hex()[..engine_core::mix_states::HASH_LEN].to_owned()
+}
+
+#[test]
+fn a_plugin_state_no_mix_names_goes_with_the_next_save() {
+    use crate::mix_variants::{AddArg as VariantArg, CreateArg, add, create, end};
+    let dir = tempfile::tempdir().expect("a folder");
+    let (daw, ctx) = song("snapshot-sweep", None);
+    let kick = crate::actions::resolve(&daw, &ctx, "Drums/Kick").expect("kick");
+    let fx = daw_proto::fx::Effects::add(
+        &daw,
+        ctx.clone(),
+        daw_proto::fx::FxChainContext::Track(kick),
+        "Stateful",
+    )
+    .expect("an fx");
+    let hold = |state: &str| {
+        daw.apply_plugin_state(&fx.guid, state.as_bytes())
+            .expect("the plugin takes its state");
+    };
+
+    hold("replaced");
+    snapshot(&daw, &ctx, "A").expect("A");
+    hold("kept by B");
+    snapshot(&daw, &ctx, "B").expect("B");
+    hold("kept by A");
+    snapshot(&daw, &ctx, "A").expect("A, replaced");
+    hold("a dropped variant's");
+    create(
+        &daw,
+        &ctx,
+        &CreateArg {
+            group: "g".into(),
+            ..CreateArg::default()
+        },
+    )
+    .expect("a group");
+    add(
+        &daw,
+        &ctx,
+        &VariantArg {
+            name: "v".into(),
+            ..VariantArg::default()
+        },
+    )
+    .expect("a variant");
+    hold("a kept variant's");
+    create(
+        &daw,
+        &ctx,
+        &CreateArg {
+            group: "h".into(),
+            ..CreateArg::default()
+        },
+    )
+    .expect("another group");
+    add(
+        &daw,
+        &ctx,
+        &VariantArg {
+            name: "w".into(),
+            ..VariantArg::default()
+        },
+    )
+    .expect("another variant");
+    end(&daw, &ctx, Some("g"), true).expect("g dropped");
+    let all = |names: &[&str]| names.iter().map(|n| hash_of(n)).collect();
+    assert_eq!(
+        kept_states(&daw, &ctx),
+        all(&[
+            "replaced",
+            "kept by B",
+            "kept by A",
+            "a dropped variant's",
+            "a kept variant's"
+        ]),
+        "until a save, every state stays"
+    );
+
+    let file = dir.path().join("Sweep.session");
+    crate::project_file::save(
+        &daw,
+        "snapshot-sweep",
+        &file,
+        session_format::store::MAIN,
+        "Save",
+    )
+    .expect("saved");
+    let named = all(&["kept by B", "kept by A", "a kept variant's"]);
+    assert_eq!(
+        kept_states(&daw, &ctx),
+        named,
+        "the replaced snapshot's and the dropped group's states are gone"
+    );
+    for mix in ["A", "B", "h:w"] {
+        super::load(&daw, &ctx, mix).unwrap_or_else(|e| panic!("{mix} reads: {e}"));
+    }
+
+    // The file holds what the song does.
+    let again = crate::project_file::load(&daw, "Again", &file, session_format::store::MAIN)
+        .expect("opened");
+    assert_eq!(
+        kept_states(&daw, &ProjectContext::Project(again)),
+        named,
+        "the saved song keeps only the named states"
+    );
+}
