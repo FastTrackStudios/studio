@@ -81,6 +81,12 @@ pub fn room_file(studio: &str, id: &str) -> String {
     under(studio, &format!("Rooms/{id}.room"))
 }
 
+/// Where room `id`'s lobby (what a guest joins by, `room::Lobby`) is in
+/// the Studio folder `studio`.
+pub fn lobby_file(studio: &str, id: &str) -> String {
+    under(studio, &format!("Rooms/Lobby/{id}.lobby"))
+}
+
 /// The song folder a setlist's line names by path, the setlist being at
 /// `setlist` (its path): the line's path (read as `crate::setfile::song`
 /// reads it, the arrangement it may name left out), relative to the

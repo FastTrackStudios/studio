@@ -316,5 +316,5 @@ fn a_guest_who_comes_back_is_the_same_guest() {
     let guests = rooms.find(&made.link()).unwrap().guests;
     let names: Vec<&str> = guests.iter().map(|g| g.name.as_str()).collect();
     assert_eq!(names, vec!["Guest 3f9a1c", "Guest b0b0b0"]);
-    assert_eq!(guests[0].visits, 2);
+    assert_eq!(guests.first().map(|g| g.visits), Some(2));
 }

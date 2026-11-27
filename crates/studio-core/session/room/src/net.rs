@@ -30,7 +30,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use architect::iroh_link::iroh;
+/// The iroh a member dials by: its endpoints and keys.
+pub use architect::iroh_link::iroh;
 
 use live_doc::{DocPresenceClient, DocSyncClient, PresencePeer, SyncedDoc};
 #[cfg(not(target_arch = "wasm32"))]
@@ -386,6 +387,12 @@ impl RoomPeer {
             &here_key(&self.me),
             here(&self.name, self.guest, Some(load)),
         );
+    }
+
+    /// Who this member is in the room's presence.
+    #[must_use]
+    pub fn me(&self) -> &str {
+        &self.me
     }
 
     /// Why the last attachment to the leader ended or was not made, until
