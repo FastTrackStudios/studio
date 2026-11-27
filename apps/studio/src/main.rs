@@ -39,6 +39,8 @@ mod player;
 // The engine in the page: a session's multitracks and click (web).
 #[cfg(feature = "web")]
 mod engine_web;
+#[cfg(feature = "drive")]
+mod offline;
 // Desktop Studio updating itself: macOS and Linux (iOS: TestFlight).
 #[cfg(all(feature = "native", not(target_os = "ios")))]
 mod self_update;
@@ -312,6 +314,10 @@ fn main() {
     // route it shows, and `?session=` goes with it.
     #[cfg(feature = "web")]
     engine_web::remember_address();
+    // The page keeps its own files for opening with no network
+    // (`public/sw.js`), under the path it is served at.
+    #[cfg(feature = "web")]
+    engine_web::register_service_worker(&dioxus::cli_config::web_base_path().unwrap_or_default());
     // The session's arrangement and mixer in the page: installed for the
     // panels that show them (`studio_panels::web_host::HostedView`),
     // before the first one draws.

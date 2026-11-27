@@ -91,6 +91,44 @@ pub fn remember_address() {
     ADDRESS.get_or_init(|| search);
 }
 
+/// What registers the page's service worker (`public/sw.js`) and, once
+/// the page has loaded, names its own files for it to keep: the page, its
+/// script, wasm and styles — never a song's files, which the engine's
+/// caches keep (`keep_offline`). `{base}` is the path the page is served
+/// at.
+const REGISTER_WORKER: &str = r#"
+if ("serviceWorker" in navigator) {
+  const base = "{base}";
+  navigator.serviceWorker
+    .register(base + "/sw.js", { scope: base + "/" })
+    .then(() => navigator.serviceWorker.ready)
+    .then((reg) => {
+      const keep = () => {
+        const urls = [location.href]
+          .concat(performance.getEntriesByType("resource").map((e) => e.name))
+          .filter((u) => u.startsWith(location.origin));
+        if (reg.active) reg.active.postMessage({ keep: urls });
+      };
+      if (document.readyState === "complete") keep();
+      else addEventListener("load", keep);
+      setTimeout(keep, 5000);
+    })
+    .catch((e) => console.warn("studio: the page will not open offline:", e));
+}
+"#;
+
+/// Register the page's service worker, served at `base` (`""` at the
+/// site's root, `/studio` under a base path), so the app opens again with
+/// no network (studio#716).
+pub fn register_service_worker(base: &str) {
+    let base = format!("/{}", base.trim_matches('/'));
+    let base = if base == "/" { String::new() } else { base };
+    let code = REGISTER_WORKER.replace("{base}", &base);
+    if let Err(e) = js_sys::Function::new_no_args(&code).call0(&wasm_bindgen::JsValue::NULL) {
+        tracing::warn!(error = ?e, "web: the service worker was not registered");
+    }
+}
+
 /// A session folder, as the engine knows it.
 fn key(p: &Place) -> String {
     format!("{}\u{1f}{}\u{1f}{}", p.space, p.location, p.folder)
@@ -121,8 +159,9 @@ impl Folder {
         self.place.location == LINK
     }
 
-    /// Every file under the folder, by its path in it, with its size and URL.
-    async fn walk(&self) -> eyre::Result<Vec<(String, u64, String)>> {
+    /// Every file under the folder, by its path in it, with its size, URL
+    /// and when it was last changed (0 when the folder does not say).
+    async fn walk(&self) -> eyre::Result<Vec<(String, u64, String, i64)>> {
         if self.at_link() {
             return self.link_files().await;
         }
@@ -148,6 +187,7 @@ impl Folder {
                     rel,
                     u64::try_from(hit.size).unwrap_or(0),
                     web::file_url(&hit),
+                    hit.mtime,
                 ));
                 if out.len() >= MOST_FILES {
                     eyre::bail!("{folder} has more than {MOST_FILES} files");
@@ -162,7 +202,7 @@ impl Folder {
 
     /// A link's folder: its `files.json` (`[{"path", "size"}]`), each file
     /// beside it.
-    async fn link_files(&self) -> eyre::Result<Vec<(String, u64, String)>> {
+    async fn link_files(&self) -> eyre::Result<Vec<(String, u64, String, i64)>> {
         let base = absolute(&format!("{}/", self.place.folder.trim_end_matches('/')));
         let (code, body) = plain(&format!("{base}files.json"), None)
             .await
@@ -176,7 +216,8 @@ impl Folder {
             .filter_map(|f| {
                 let path = f["path"].as_str()?.trim_start_matches('/').to_owned();
                 let url = format!("{base}{}", encode_path(&path));
-                Some((path, f["size"].as_u64().unwrap_or(0), url))
+                let mtime = f["mtime"].as_i64().unwrap_or(0);
+                Some((path, f["size"].as_u64().unwrap_or(0), url, mtime))
             })
             .collect())
     }
@@ -192,15 +233,22 @@ impl SongSource for SessionFolder {
         let this = Rc::clone(&self.0);
         Box::pin(async move {
             let files = this.walk().await?;
+            let version = listing_version(&files);
             let mut entries = Vec::with_capacity(files.len());
             let mut urls = this.urls.borrow_mut();
             urls.clear();
-            for (path, size, url) in files {
+            for (path, size, url, _) in files {
                 entries.push((path.clone(), size));
                 urls.insert(path, url);
             }
             project_first(&mut entries);
-            Ok(entries.into())
+            // A version: the page keeps the folder's small files in its
+            // cache under it (`song_stream`'s docs), so the song opens
+            // again with no network, and a changed file is a new version.
+            Ok(Listing {
+                entries,
+                version: Some(version),
+            })
         })
     }
 
@@ -232,6 +280,89 @@ impl SongSource for SessionFolder {
             }
         })
     }
+}
+
+/// A folder listing's version: every file's path, size and time, hashed.
+/// The same files at the same sizes and times are the same version.
+fn listing_version(files: &[(String, u64, String, i64)]) -> String {
+    let mut sorted: Vec<(&str, u64, i64)> = files
+        .iter()
+        .map(|(path, size, _, mtime)| (path.as_str(), *size, *mtime))
+        .collect();
+    sorted.sort_unstable();
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for (path, size, mtime) in sorted {
+        for b in path
+            .bytes()
+            .chain(size.to_le_bytes())
+            .chain(mtime.to_le_bytes())
+            .chain([0])
+        {
+            hash = (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    format!("{hash:016x}")
+}
+
+/// Bring the song at `place` onto this device, for the page to open with
+/// no network: its folder listed (the service worker keeps the listing),
+/// its small files kept in the page's cache, and every proxy of it — the
+/// reference, its preview and each stem — fetched whole into the cache.
+/// Marked kept ([`is_kept`]). The proxies' bytes now in the cache.
+///
+/// # Errors
+///
+/// The folder did not list, or the song would not mirror.
+pub async fn keep_offline(place: &Place) -> Result<u64, String> {
+    use studio_engine::song_stream::{Heard, Keep, Listen, mirror};
+    let source: Arc<dyn SongSource> = Arc::new(SessionFolder::new(place.clone()));
+    let song = mirror(
+        Arc::clone(&source),
+        Keep::Memory(studio_engine::folder::Memory::new()),
+    )
+    .await
+    .map_err(|e| e.to_string())?
+    .with_listen(Listen::Full);
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    for heard in [Heard::Preview, Heard::Reference, Heard::Stems] {
+        song.warm(heard, None, Arc::clone(&stop)).await;
+    }
+    let bytes: u64 = song.proxies().values().map(|(_, size)| size).sum();
+    remember_kept(place, true);
+    Ok(bytes)
+}
+
+/// The browser's note of which session folders are kept on this device.
+const KEPT: &str = "studio-offline-kept";
+
+/// Note `place` as kept (or no longer).
+fn remember_kept(place: &Place, on: bool) {
+    let Some(store) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) else {
+        return;
+    };
+    let mut kept: Vec<String> = store
+        .get_item(KEPT)
+        .ok()
+        .flatten()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    let k = key(place);
+    kept.retain(|x| x != &k);
+    if on {
+        kept.push(k);
+    }
+    if let Ok(text) = serde_json::to_string(&kept) {
+        let _ = store.set_item(KEPT, &text);
+    }
+}
+
+/// Whether the song at `place` was kept on this device.
+pub fn is_kept(place: &Place) -> bool {
+    web_sys::window()
+        .and_then(|w| w.local_storage().ok().flatten())
+        .and_then(|store| store.get_item(KEPT).ok().flatten())
+        .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
+        .is_some_and(|kept| kept.contains(&key(place)))
 }
 
 /// `path` under `root`, as a path in the folder.
@@ -293,6 +424,9 @@ pub fn EnginePlayer() -> Element {
     let started = use_hook(|| Rc::new(std::cell::Cell::new(false)));
     // The rig stores handed to the engine (one a Drive location).
     let rigs_from = use_hook(|| Rc::new(RefCell::new(HashSet::<String>::new())));
+    // `?session=…&keep=1`: the session kept on this device once it is open
+    // (`data-kept`: `keeping`, `kept`, or why it was not).
+    let mut kept = use_signal(String::new);
 
     // A session at a link (`?session=<url>`), opened as the page loads.
     use_hook(move || {
@@ -433,6 +567,16 @@ pub fn EnginePlayer() -> Element {
                                 len,
                             });
                         }
+                        if place.location == LINK && keep_in_address() && kept.peek().is_empty() {
+                            kept.set("keeping".to_owned());
+                            let place = place.clone();
+                            spawn(async move {
+                                kept.set(match keep_offline(&place).await {
+                                    Ok(_) => "kept".to_owned(),
+                                    Err(e) => format!("not kept: {e}"),
+                                });
+                            });
+                        }
                     }
                     Err(e) => {
                         tracing::warn!(error = %e, folder = %place.folder, "web: the session did not open; its reference plays");
@@ -486,7 +630,7 @@ pub fn EnginePlayer() -> Element {
         loop {
             crate::state::sleep_ms(100).await;
             let state = up.peek().clone();
-            write_state(&state);
+            write_state(&state, &kept.peek());
             // A rig prepared as it first plays asks for its files then.
             studio_engine::rig_files::poke();
             let Up::Ready { len, .. } = state else {
@@ -532,9 +676,10 @@ pub fn EnginePlayer() -> Element {
 
 /// The engine's state on [`STATE_ID`]'s attributes: `data-state`
 /// (`idle`, `opening`, `ready`, `failed`), `data-why`, `data-at` and
-/// `data-playing` (the song's playhead as heard), and what the worklet has
-/// put out (`data-loud-frames`, `data-peak-ever`, `data-dry-frames`).
-fn write_state(up: &Up) {
+/// `data-playing` (the song's playhead as heard), what the worklet has
+/// put out (`data-loud-frames`, `data-peak-ever`, `data-dry-frames`), and
+/// whether `?keep=1` kept the session on this device (`data-kept`).
+fn write_state(up: &Up, kept: &str) {
     let Some(el) = web_sys::window()
         .and_then(|w| w.document())
         .and_then(|d| d.get_element_by_id(STATE_ID))
@@ -580,9 +725,20 @@ fn write_state(up: &Up) {
             "data-rig-signal-heard",
             format!("{:.4}", rigs.rigs.signal_rig_heard),
         ),
+        ("data-kept", kept.to_owned()),
     ] {
         let _ = el.set_attribute(name, &value);
     }
+}
+
+/// Whether the page's address asks for its session to be kept on this
+/// device (`?keep=1`), to open again with no network.
+fn keep_in_address() -> bool {
+    ADDRESS
+        .get()
+        .and_then(|a| web_sys::UrlSearchParams::new_with_str(a).ok())
+        .and_then(|p| p.get("keep"))
+        .is_some_and(|v| v == "1" || v == "true")
 }
 
 /// The session folder the page's address names (`?session=<url>`).

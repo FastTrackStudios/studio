@@ -60,7 +60,7 @@ app-shell-extensions = { git = "https://github.com/FastTrackStudios/app-shell", 
 serde_json = "1"
 js-sys = { version = "0.3", optional = true }
 # The browser's fetch, for bytes (waveforms, uploads).
-web-sys = { version = "0.3", optional = true, features = ["Window", "Request", "RequestInit", "Response", "Headers", "Blob", "BlobPropertyBag", "Url", "Performance", "Location", "UrlSearchParams", "Document", "Element"] }
+web-sys = { version = "0.3", optional = true, features = ["Window", "Request", "RequestInit", "Response", "Headers", "Blob", "BlobPropertyBag", "Url", "Performance", "Location", "UrlSearchParams", "Document", "Element", "Storage"] }
 # The engine in the page (src/engine_web.rs): daw-standalone in-process,
 # out through an AudioWorklet, the same first-party FX as the desktop's.
 studio-engine = { workspace = true, optional = true, features = ["web"] }

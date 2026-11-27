@@ -1128,6 +1128,80 @@ pub fn new_session(args: Value) -> Result<Value, String> {
     made
 }
 
+/// Downloads a setlist onto this device in the engine (`SETLIST_DOWNLOAD`
+/// from `songs`, each a title and its session file, into `to`), so it
+/// opens and plays with no internet: the full files on a desktop, the
+/// proxies on a phone (the engine's default for its device). `progress`
+/// hears `SETLIST_DOWNLOADING` as it goes; the last of it is returned.
+/// Links to the engine first (or starts it), as playing does. Blocks: call
+/// it off the UI thread.
+pub fn download_setlist(
+    name: &str,
+    songs: &[(String, PathBuf)],
+    to: &Path,
+    progress: &dyn Fn(&Value),
+) -> Result<Value, String> {
+    /// How long a set's download may run before it is given up on.
+    const DOWNLOAD_WAIT: Duration = Duration::from_secs(60 * 60);
+    let mut span = Span::root("studio.engine.setlist_download");
+    span.set("studio.set", name);
+    span.set("studio.set.songs", songs.len() as u64);
+    let found = match linked() {
+        Some(f) => f,
+        None => choose(Mode::from_env(), &mut span)?,
+    };
+    span.set("engine.pid", found.pid);
+    let args = json!({
+        "name": name,
+        "to": to.to_string_lossy(),
+        "songs": songs
+            .iter()
+            .map(|(title, file)| json!({ "title": title, "folder": file.to_string_lossy() }))
+            .collect::<Vec<_>>(),
+    });
+    let began = Instant::now();
+    let result = run(&found, "SETLIST_DOWNLOAD", args).and_then(|_| {
+        loop {
+            let state = run(&found, "SETLIST_DOWNLOADING", Value::Null)?;
+            progress(&state);
+            match state["state"].as_str() {
+                Some("done") => break Ok(state),
+                Some("failed") => {
+                    break Err(state["error"]
+                        .as_str()
+                        .unwrap_or("the download failed")
+                        .to_owned());
+                }
+                _ if began.elapsed() > DOWNLOAD_WAIT => {
+                    break Err(format!(
+                        "not downloaded after {} minutes",
+                        DOWNLOAD_WAIT.as_secs() / 60
+                    ));
+                }
+                _ => std::thread::sleep(Duration::from_millis(500)),
+            }
+        }
+    });
+    span.set(
+        "engine.download_ms",
+        u64::try_from(began.elapsed().as_millis()).unwrap_or(u64::MAX),
+    );
+    match &result {
+        Ok(state) => {
+            span.set("engine.outcome", "downloaded");
+            span.set(
+                "studio.set.kept",
+                state["keep"].as_str().unwrap_or_default(),
+            );
+        }
+        Err(e) => {
+            span.set("engine.outcome", "failed");
+            span.fail(e.clone());
+        }
+    }
+    result
+}
+
 /// Joins the room `link` names in the engine (`ROOM_JOIN`, as `name`), so
 /// it follows that room's leader from now on: what they load opens here
 /// and the transport keeps to theirs. Links to the engine first (or starts
