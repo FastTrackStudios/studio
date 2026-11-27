@@ -28,3 +28,36 @@ fn a_state_no_other_key_names_is_unnamed() {
     let value = |key: &str| (key == "snapshot:A").then(|| format!(r#"{{"state":"@{a}"}}"#));
     assert_eq!(unnamed(&keys, value), vec![b.to_owned()]);
 }
+
+#[cfg(feature = "native")]
+#[test]
+fn inline_states_become_references_kept_once() {
+    use std::collections::BTreeMap;
+
+    use super::{SECTION, compact, hash, state_key};
+
+    let state = "QUJD".repeat(100);
+    let mix = format!(
+        r#"{{"name":"A","fx":[{{"guid":"a","state":"{state}"}},{{"guid":"b","state":"{state}"}},{{"guid":"c","state":""}}]}}"#
+    );
+    let mut ext = BTreeMap::from([(
+        SECTION.to_owned(),
+        BTreeMap::from([
+            ("snapshot:A".to_owned(), mix.clone()),
+            ("snapshot:B".to_owned(), mix),
+            ("head".to_owned(), "A".to_owned()),
+        ]),
+    )]);
+    assert_eq!(compact(&mut ext), 4);
+    let section = &ext[SECTION];
+    let h = hash(&state);
+    assert_eq!(section[&state_key(&h)], state);
+    assert_eq!(
+        section["snapshot:A"],
+        format!(
+            r#"{{"name":"A","fx":[{{"guid":"a","state":"@{h}"}},{{"guid":"b","state":"@{h}"}},{{"guid":"c","state":""}}]}}"#
+        )
+    );
+    assert_eq!(section["head"], "A");
+    assert_eq!(compact(&mut ext), 0, "once is enough");
+}

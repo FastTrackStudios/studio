@@ -33,7 +33,7 @@ use facet::Facet;
 use crate::actions::{meta, song};
 use crate::mix_sends::{db, gain, tap_of, tap_word};
 
-use engine_core::mix_states::{HASH_LEN, SECTION, state_key};
+use engine_core::mix_states::{self, SECTION, state_key};
 
 /// The names of the song's snapshots.
 const NAMES: &str = "snapshots";
@@ -477,23 +477,16 @@ pub(crate) fn encode_mix(
 ) -> Result<String, String> {
     let mut kept = mix.clone();
     for fx in &mut kept.fx {
-        // Base64 never starts with `@`.
-        if fx.state.is_empty() || fx.state.starts_with('@') {
+        if !mix_states::is_inline(&fx.state) {
             continue;
         }
-        // Half the hash (128 bits): hex, so cut on a character.
-        let hash: String = blake3::hash(fx.state.as_bytes())
-            .to_hex()
-            .chars()
-            .take(HASH_LEN)
-            .collect();
-        let hash = hash.as_str();
-        let at = state_key(hash);
+        let hash = mix_states::hash(&fx.state);
+        let at = state_key(&hash);
         if !daw_proto::ExtState::has_project(daw, project.clone(), SECTION, &at) {
             daw_proto::ExtState::set_project(daw, project.clone(), SECTION, &at, &fx.state)
                 .map_err(|e| e.to_string())?;
         }
-        fx.state = format!("@{hash}");
+        fx.state = format!("{}{hash}", mix_states::REF);
     }
     facet_json::to_string(&kept).map_err(|e| e.to_string())
 }
@@ -509,7 +502,7 @@ pub(crate) fn decode_mix(
 ) -> Result<Mix, String> {
     let mut mix = facet_json::from_str::<Mix>(text).map_err(|e| e.to_string())?;
     for fx in &mut mix.fx {
-        if let Some(hash) = fx.state.strip_prefix('@') {
+        if let Some(hash) = fx.state.strip_prefix(mix_states::REF) {
             fx.state =
                 daw_proto::ExtState::get_project(daw, project.clone(), SECTION, &state_key(hash))
                     .ok_or_else(|| format!("{}: its plugin state {hash} is gone", fx.name))?;
