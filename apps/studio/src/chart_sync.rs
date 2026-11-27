@@ -20,9 +20,22 @@ use keyflow::text::bar_times::{BarClock, BarTime, bar_times};
 
 use crate::session_file::Section;
 
-/// Width the chart is laid out at (points); the page scales it.
-const LAYOUT_WIDTH: f64 = 800.0;
+/// Width a chart is laid out at on a page with room (points); the page
+/// scales it to fit.
+pub const WIDE: f64 = 800.0;
+/// Width a chart is laid out at on a phone: fewer bars a line, so the page
+/// shows it near its own size and the chords stay readable at arm's length
+/// (laid out at [`WIDE`], a 390 pt phone would draw it at under half size).
+pub const NARROW: f64 = 360.0;
 const PADDING: f64 = 6.0;
+
+/// The width to lay a chart out at in a window `window` points wide (0:
+/// not measured yet, laid out for a page with room).
+#[must_use]
+pub fn layout_width(window: f64) -> f64 {
+    let phone = app_shell::ui::FormFactor::for_width(window) == app_shell::ui::FormFactor::Phone;
+    if window > 0.0 && phone { NARROW } else { WIDE }
+}
 
 /// A chart ready to show.
 #[derive(Clone, Debug, PartialEq)]
@@ -44,8 +57,9 @@ pub enum Timing {
     Tempo,
 }
 
-/// Engrave `source` timed by `sections` (the session's, in seconds).
-pub fn engrave(source: &str, sections: &[Section]) -> Result<Engraved, String> {
+/// Engrave `source` timed by `sections` (the session's, in seconds), laid
+/// out `width` points wide ([`layout_width`]).
+pub fn engrave(source: &str, sections: &[Section], width: f64) -> Result<Engraved, String> {
     let chart = keyflow::text::chart::parse_chart(source).map_err(|e| e.to_string())?;
     let nominal = bar_times(&chart, BarClock::at(0.0));
     let names: Vec<String> = chart.sections.iter().map(section_name).collect();
@@ -60,12 +74,7 @@ pub fn engrave(source: &str, sections: &[Section]) -> Result<Engraved, String> {
     };
     let follow = Follow::new(&chart, clock, None);
     let pipeline = pipeline()?;
-    let result = pipeline.layout(
-        &chart,
-        &LayoutMode::ContinuousScroll {
-            width: LAYOUT_WIDTH,
-        },
-    );
+    let result = pipeline.layout(&chart, &LayoutMode::ContinuousScroll { width });
     let svg = pipeline.export_svg_snippet(&result, PADDING);
     Ok(Engraved {
         svg: add_follow(&svg, &result, &follow, None),
@@ -280,7 +289,7 @@ mod tests {
             sec("Verse", 5.0, 13.0),
             sec("Chorus", 13.0, 19.0),
         ];
-        let e = engrave(CHART, &sections).unwrap();
+        let e = engrave(CHART, &sections, WIDE).unwrap();
         assert_eq!(e.timing, Timing::Sections);
         let at: Vec<f64> = e
             .svg
@@ -311,7 +320,7 @@ mod tests {
             sec("Chorus 1", 12.0, 14.0),
             sec("Chorus 2", 14.0, 16.0),
         ];
-        let e = engrave(chart, &sections).unwrap();
+        let e = engrave(chart, &sections, WIDE).unwrap();
         assert_eq!(e.timing, Timing::Sections);
         assert_eq!(e.notes.len(), 2, "{:?}", e.notes);
         assert!(
@@ -327,9 +336,54 @@ mod tests {
         assert!(e.svg.contains("data-at=\"14"), "second chorus bar at 14 s");
     }
 
+    /// The `viewBox` width of an engraved SVG.
+    fn view_width(svg: &str) -> f64 {
+        let i = svg.find("viewBox=\"").expect("a viewBox") + "viewBox=\"".len();
+        let rest = &svg[i..];
+        let parts: Vec<f64> = rest[..rest.find('"').unwrap()]
+            .split_whitespace()
+            .map(|v| v.parse().unwrap())
+            .collect();
+        parts[2]
+    }
+
+    #[test]
+    fn a_phone_lays_the_chart_out_narrow_with_every_bar_and_its_time() {
+        assert_eq!(layout_width(390.0), NARROW);
+        assert_eq!(layout_width(820.0), WIDE);
+        assert_eq!(layout_width(0.0), WIDE, "not measured yet");
+        let sections = [
+            sec("Intro", 1.0, 5.0),
+            sec("Verse", 5.0, 13.0),
+            sec("Chorus", 13.0, 19.0),
+        ];
+        let wide = engrave(CHART, &sections, WIDE).unwrap();
+        let narrow = engrave(CHART, &sections, NARROW).unwrap();
+        // Its content inside the width asked for (a chord's text may
+        // overhang the last barline a little).
+        assert!(
+            view_width(&narrow.svg) <= NARROW + 2.0 * PADDING + 24.0,
+            "{} wide",
+            view_width(&narrow.svg)
+        );
+        let times = |svg: &str| -> Vec<String> {
+            svg.match_indices("data-at=\"")
+                .map(|(i, m)| {
+                    let rest = &svg[i + m.len()..];
+                    rest[..rest.find('"').unwrap()].to_owned()
+                })
+                .collect()
+        };
+        assert_eq!(
+            times(&narrow.svg),
+            times(&wide.svg),
+            "the same bars, timed the same"
+        );
+    }
+
     #[test]
     fn a_different_form_keeps_the_charts_tempo() {
-        let e = engrave(CHART, &[sec("Intro", 2.0, 6.0)]).unwrap();
+        let e = engrave(CHART, &[sec("Intro", 2.0, 6.0)], WIDE).unwrap();
         assert_eq!(e.timing, Timing::Tempo);
         assert!(e.svg.contains("data-at=\"2"), "bar 1 at the first section");
     }
@@ -349,7 +403,7 @@ mod tests {
             .iter()
             .map(|r| r.bars)
             .collect();
-        let e = engrave(&chart, &t.sections).unwrap();
+        let e = engrave(&chart, &t.sections, WIDE).unwrap();
         std::fs::write(
             std::env::temp_dir().join("studio-chart.txt"),
             format!(

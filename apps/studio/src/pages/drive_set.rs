@@ -364,7 +364,10 @@ fn ChartFollow(chart: Shown, sections: Vec<crate::session_file::Section>) -> Ele
 
     let app = use_app();
     let name = chart.name().to_owned();
-    let engraved = use_resource(use_reactive!(|chart, sections| async move {
+    // Laid out for the window it is on: a phone's narrower, so it is drawn
+    // near its own size (engraved again on crossing over, a phone turned).
+    let width = crate::chart_sync::layout_width(app_shell::ui::use_shell().viewport().0);
+    let engraved = use_resource(use_reactive!(|chart, sections, width| async move {
         let mut span = crate::trace::Span::root("studio.chart.show");
         span.set("studio.chart", chart.name().to_owned());
         // A generated chart's bars are timed to the session it came from.
@@ -382,7 +385,8 @@ fn ChartFollow(chart: Shown, sections: Vec<crate::session_file::Section>) -> Ele
             }
         };
         let mut engraving = span.child("studio.chart.engrave");
-        let e = crate::chart_sync::engrave(&text, &sections);
+        engraving.set("studio.chart.width", width);
+        let e = crate::chart_sync::engrave(&text, &sections, width);
         if let Ok(e) = &e {
             engraving.set("studio.chart.timing", format!("{:?}", e.timing));
             engraving.set("studio.chart.bytes", e.svg.len() as u64);
@@ -434,7 +438,12 @@ fn ChartFollow(chart: Shown, sections: Vec<crate::session_file::Section>) -> Ele
                 for note in e.notes.iter() {
                     p { class: "pline chartnote", "{note}" }
                 }
-                div { id: "nowchart", class: "kfpaper", dangerous_inner_html: "{e.svg}" }
+                div {
+                    id: "nowchart",
+                    class: "kfpaper",
+                    "data-layout-width": "{width}",
+                    dangerous_inner_html: "{e.svg}",
+                }
             }
         }
     };

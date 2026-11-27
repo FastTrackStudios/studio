@@ -38,7 +38,8 @@
 //!
 //! ```text
 //!   thebattleship  rail plan, check (`cargo check --workspace`), wasm, tests
-//!                  (the core test set), lint (advisory clippy)
+//!                  (the core test set), lint (advisory clippy), the web
+//!                  screens (phone and iPad, headless Chrome)
 //!   ubuntu-latest  plan, gates, deps-cache and the `CI passed` aggregator
 //!   macos-latest   release tooling (the sandbox, macOS's own tools)
 //!   airlock        Apple builds (`studio-release-mac`: the macOS app linked
@@ -103,6 +104,7 @@ workflow_dispatch:
     .job("check", check())
     .job("lint", lint())
     .job("wasm", wasm())
+    .job("web-screens", web_screens())
     .job("tests", tests())
     .job("release-macos", release_macos())
     .job("apple", apple())
@@ -725,6 +727,44 @@ fn wasm() -> Job {
             &in_shell("just check-web\n"),
         ))
         .step(mark_green("wasm"))
+}
+
+/// REPORT-ONLY for now (not in `CI passed`), run when the browser build is
+/// planned: the app's screens at phone
+/// width (390x844) and on an iPad (820x1180), studio#702. The web build in
+/// headless Chrome (`just test-web-screens`, apps/studio/tests/it/web_boot.rs):
+/// a set built there (search, add, key, leader, reorder), then the
+/// session's arrangement, mixer, chart and overview, each checked for fit
+/// and touch size. Every screenshot is kept as the `web-screens` artifact,
+/// passed or failed, to look at.
+///
+/// It is not among `CI passed`'s needs: it has never run on the pool, and it
+/// needs Chrome and a drive-node there, so a failure of its own setup would
+/// turn main red and stop a release.
+// TODO(studio#702): once this job has been green on main, require it: add
+// "web-screens" back to `ci_passed`'s needs, its result to the aggregate's
+// env (WEB_SCREENS) and to the AGGREGATE builds loop.
+fn web_screens() -> Job {
+    pool_job("Web screens", "web-screens", 75)
+        .cond("${{ needs.rail.outputs.wasm == 'true' }}")
+        .step(
+            Step::run(
+                "Phone and iPad screens (just test-web-screens)",
+                &in_shell("just test-web-screens\n"),
+            )
+            .env("STUDIO_WEB_SHOTS", "${{ runner.temp }}/web-shots"),
+        )
+        .step(
+            Step::uses(
+                "Keep the screenshots",
+                crate::model::pinned::UPLOAD_ARTIFACT,
+            )
+            .cond("${{ always() }}")
+            .with("name", "web-screens")
+            .with("path", "${{ runner.temp }}/web-shots\n")
+            .with("if-no-files-found", "warn")
+            .with("retention-days", 14),
+        )
 }
 
 /// REQUIRED on full runs: the tests of what the merge reaches, warm on the

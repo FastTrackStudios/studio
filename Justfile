@@ -122,13 +122,31 @@ test-web-boot *ARGS:
     target="${CARGO_TARGET_DIR:-$PWD/target}"
     (cd apps/studio && dx build --platform web --features web)
     export STUDIO_WEB_DIST="$target/dx/Studio/debug/web/public"
+    export STUDIO_WEB_SHOTS="${STUDIO_WEB_SHOTS:-$target/web-shots}"
+    # The screens' tests serve the page from a Drive node (a set is a Drive document): DRIVE_NODE_BIN, else the
+    # drive-node on PATH, else Drive's own package at the revision Cargo.lock pins.
+    if [ -z "${DRIVE_NODE_BIN:-}" ]; then
+        if command -v drive-node >/dev/null; then
+            DRIVE_NODE_BIN="$(command -v drive-node)"
+        else
+            rev="$(grep -m1 -o 'FastTrackStudios/drive?rev=[0-9a-f]*#[0-9a-f]*' Cargo.lock | cut -d'#' -f2)"
+            DRIVE_NODE_BIN="$(nix build --no-link --print-out-paths "github:FastTrackStudios/drive/$rev#drive-node")/bin/drive-node"
+        fi
+        export DRIVE_NODE_BIN
+    fi
     if [ -z "${WEBDRIVER:-}" ]; then
         # Both unfree (Google's builds): fetched, not built.
         paths=$(NIXPKGS_ALLOW_UNFREE=1 nix build --impure --no-link --print-out-paths nixpkgs#chromedriver nixpkgs#google-chrome)
         export WEBDRIVER="$(echo "$paths" | grep chromedriver)/bin/chromedriver"
         export CHROME_BIN="$(echo "$paths" | grep google-chrome)/bin/google-chrome"
     fi
-    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --test it -E 'test(/^web_boot::/)' --run-ignored only --no-fail-fast {{ARGS}}
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --test it -E "test(${WEB_BOOT_TESTS:-/^web_boot::/})" --run-ignored only --no-fail-fast {{ARGS}}
+
+# The setlist, chart, arrangement and mixer screens at phone width (390x844) and on an iPad (820x1180), in a headless
+# browser over the web build, served by a Drive node: each checked for fit and touch size, and its screenshot kept in
+# target/web-shots (STUDIO_WEB_SHOTS). Builds the web app first, as test-web-boot. Extra arguments go to nextest
+test-web-screens *ARGS:
+    WEB_BOOT_TESTS='/^web_boot::screens_/' just test-web-boot {{ARGS}}
 
 # Seam 1 for the first run (studio#699): a fresh install's Studio signs in, sees its orgs and opens a setlist, all over
 # its MCP, against a Drive node and account server of the test's (apps/studio/tests/it/first_run.rs). It opens Studio's

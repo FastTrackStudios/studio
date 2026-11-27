@@ -418,7 +418,7 @@ pub fn Shell() -> Element {
 /// own bars differ: a phone's leads with the drawer, a desktop's leaves
 /// back and forward to the top bar).
 #[component]
-fn Content(class: String, children: Element) -> Element {
+pub(crate) fn Content(class: String, children: Element) -> Element {
     let form = match use_shell().form() {
         FormFactor::Phone => "phone",
         FormFactor::Desktop => "desktop",
@@ -572,7 +572,7 @@ fn NowPlayingPanel() -> Element {
 /// The prototype's sheets, opened as the shell's: one at a time, closed
 /// when the app closes it, and the app told when the person does.
 #[component]
-fn SheetBridge() -> Element {
+pub(crate) fn SheetBridge() -> Element {
     let app = use_app();
     let shell = use_shell();
     let mut open = use_signal(|| None::<(Sheet, SheetId)>);
@@ -620,7 +620,7 @@ fn SheetBridge() -> Element {
 
 /// The app's toasts, as the shell's.
 #[component]
-fn ToastBridge() -> Element {
+pub(crate) fn ToastBridge() -> Element {
     let app = use_app();
     let shell = use_shell();
     use_effect(move || {
@@ -633,7 +633,7 @@ fn ToastBridge() -> Element {
 
 /// Now Playing: above the tabs while something is queued; a tap opens the player.
 #[component]
-fn NowPlayingBar() -> Element {
+pub(crate) fn NowPlayingBar() -> Element {
     let app = use_app();
     let mut np = app.np;
     let Some(n) = np() else { return rsx! {} };
@@ -760,6 +760,24 @@ fn Transport() -> Element {
     }
 }
 
+/// Who this is, at the sidebar's foot: the mark alone on the rail (an
+/// iPad's folded sidebar has no room for the words).
+#[component]
+fn SideAccount(mark: String, hue: u32, name: String, line: String) -> Element {
+    let rail = app_shell::ui::use_sidebar_mode() == app_shell::ui::SidebarMode::Rail;
+    rsx! {
+        div { class: "sideacct", title: if rail { "{name} · {line}" } else { "" },
+            span { class: "avatar", style: "--h:{hue}", "{mark}" }
+            if !rail {
+                span { class: "who",
+                    b { "{name}" }
+                    span { "{line}" }
+                }
+            }
+        }
+    }
+}
+
 /// The sidebar (a phone's drawer): the org switcher, Studio's places,
 /// the org's people and settings, the weekly events, the shows, the
 /// loaded rig, and who is signed in.
@@ -827,20 +845,17 @@ fn StudioSidebar(route: Route) -> Element {
                 }
             },
             footer: rsx! {
-                div { class: "sideacct",
-                    span { class: "avatar", style: "--h:{me_hue}", "{me_mark}" }
-                    span { class: "who",
-                        b { "{me_name}" }
-                        span {
-                            if who.is_empty() {
-                                "Not signed in"
-                            } else if me.is_some() {
-                                "Signed in · you, in this org"
-                            } else {
-                                "Signed in"
-                            }
-                        }
-                    }
+                SideAccount {
+                    mark: me_mark,
+                    hue: me_hue,
+                    name: me_name,
+                    line: if who.is_empty() {
+                        "Not signed in"
+                    } else if me.is_some() {
+                        "Signed in · you, in this org"
+                    } else {
+                        "Signed in"
+                    },
                 }
             },
             SidebarSection { title: "Studio",

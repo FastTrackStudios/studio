@@ -145,6 +145,10 @@ fn SetView(owner: String, id: String) -> Element {
     let entries = ctx.set.entries();
     let shell = app_shell::ui::use_shell();
     let desktop = shell.form() == app_shell::ui::FormFactor::Desktop;
+    // The inspector beside the running order only where both have room (a
+    // laptop, an iPad on its side); an iPad upright, with the sidebar
+    // beside it, edits an entry in its sheet as a phone does.
+    let inspector = desktop && shell.viewport().0 >= INSPECTOR_FROM;
     let at = ctx.at();
     if !ctx.set.ready() && entries.is_empty() {
         return rsx! {
@@ -229,7 +233,7 @@ fn SetView(owner: String, id: String) -> Element {
         }
     }
     let list = rsx! {
-        SetList { ctx: ctx.clone(), desktop }
+        SetList { ctx: ctx.clone(), desktop, inspector }
         if missing > 0 {
             button {
                 class: "trow roomy add",
@@ -285,7 +289,7 @@ fn SetView(owner: String, id: String) -> Element {
     rsx! {
         Page { tint: info.hue,
             Bar { back, tools }
-            div { class: if desktop { "body setbody wide" } else { "body setbody" },
+            div { class: if inspector { "body setbody wide" } else { "body setbody" },
                 Hero {
                     img,
                     hue: info.hue,
@@ -352,7 +356,7 @@ fn SetView(owner: String, id: String) -> Element {
                         }
                     },
                 }
-                if desktop {
+                if inspector {
                     div { class: "setgrid",
                         div { class: "setmain", {list} }
                         aside { class: "inspector",
@@ -375,9 +379,13 @@ fn SetView(owner: String, id: String) -> Element {
     }
 }
 
-/// The running order, in its sections. On a desktop each row drags.
+/// The window width (points) from which a set's page has its inspector.
+const INSPECTOR_FROM: f64 = 1100.0;
+
+/// The running order, in its sections. On a desktop each row drags; with
+/// the inspector beside it a tap picks a row, else it opens its sheet.
 #[component]
-fn SetList(ctx: Ctx, desktop: bool) -> Element {
+fn SetList(ctx: Ctx, desktop: bool, inspector: bool) -> Element {
     let entries = ctx.set.entries();
     let mut dragging = use_signal(|| None::<String>);
     let mut over = use_signal(|| None::<String>);
@@ -401,6 +409,7 @@ fn SetList(ctx: Ctx, desktop: bool) -> Element {
                     entry: e.clone(),
                     n,
                     desktop,
+                    inspector,
                     over: over() == Some(e.id.clone()) && dragging().is_some_and(|d| d != e.id),
                     ondragstart: move |id: String| dragging.set(Some(id)),
                     ondragover: move |id: String| {
@@ -467,6 +476,7 @@ fn EntryRow(
     entry: Entry,
     n: usize,
     desktop: bool,
+    inspector: bool,
     over: bool,
     ondragstart: EventHandler<String>,
     ondragover: EventHandler<String>,
@@ -480,7 +490,7 @@ fn EntryRow(
     let open = {
         let (id, at) = (id.clone(), at.clone());
         move |_| {
-            if desktop {
+            if inspector {
                 let mut p = app.picked;
                 p.set(Some(id.clone()));
             } else {
