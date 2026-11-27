@@ -4,13 +4,12 @@
 //! each is on, whether everyone plays on their own or together, the
 //! invite, and leaving.
 //!
-//! In a page (the public demo) the page has already joined its set by its
-//! link: the card is the people, the transport, the invite (the page's own
-//! address) and leaving.
+//! A page has no way into a set yet: a browser joins a room by its link
+//! (studio#711).
 //!
-//! The live session is the engine's (`collab::start_in_engine`: Task
-//! auto-hosting and the sessions the environment names, each song kept with
-//! its set through its own file's doc). A window driving an engine in
+//! The live session is the engine's (`collab::start_in_engine`: the
+//! sessions the environment names, each song kept with its set through its
+//! own file's doc). A window driving an engine in
 //! another process starts none: it shows the engine's session as its link
 //! says (`view_client::live`) and asks the engine's actions
 //! (`SESSION_TOGETHER_*`) — a session of its own would be a second bridge
@@ -58,21 +57,9 @@ mod live {
             set: s.set,
             name: s.name,
             color: s.color,
-            resets_at: s.resets_in_secs.map(|secs| {
-                architect::platform::Instant::now() + std::time::Duration::from_secs(secs)
-            }),
             locked: s.locked,
             held: s.held as usize,
         })
-    }
-
-    pub fn joining() -> bool {
-        // The engine in this process, when there is one and no link.
-        #[cfg(feature = "engine")]
-        if !elsewhere() {
-            return crate::collab::joining();
-        }
-        frame().is_some_and(|f| f.joining)
     }
 
     pub fn last_error() -> Option<String> {
@@ -93,15 +80,6 @@ mod live {
         frame().is_some_and(|f| f.locked)
     }
 
-    pub fn hosted() -> Option<String> {
-        // The engine in this process, when there is one and no link.
-        #[cfg(feature = "engine")]
-        if !elsewhere() {
-            return crate::live_host::hosted().map(|h| h.title);
-        }
-        frame().and_then(|f| f.hosted.clone())
-    }
-
     pub fn notices() -> Vec<String> {
         // The engine in this process, when there is one and no link.
         #[cfg(feature = "engine")]
@@ -109,15 +87,6 @@ mod live {
             return crate::collab::notices();
         }
         frame().map(|f| f.notices.clone()).unwrap_or_default()
-    }
-
-    pub fn host_error() -> Option<String> {
-        // The engine in this process, when there is one and no link.
-        #[cfg(feature = "engine")]
-        if !elsewhere() {
-            return crate::live_host::last_error();
-        }
-        frame().and_then(|f| f.host_error.clone())
     }
 
     /// The live session's control `id` run with `args` — on the engine
@@ -163,7 +132,7 @@ mod live {
 /// A page's live session: its own (a page is its own engine).
 #[cfg(not(feature = "native"))]
 mod live {
-    pub use crate::collab::{joining, last_error, notices, status, sync_locked};
+    pub use crate::collab::{last_error, notices, status, sync_locked};
 
     /// Leave the live session (`SESSION_TOGETHER_LEAVE`, the page's list).
     pub fn leave() {
@@ -210,25 +179,15 @@ pub fn CollabBar() -> Element {
     let keys = studio_shell::ui::use_text_focus();
     let mut status = use_signal(live::status);
     let mut error = use_signal(|| None::<String>);
-    // A playground's time left, in whole seconds (ticks the countdown).
-    let mut resets_in = use_signal(|| None::<u64>);
     #[cfg(feature = "native")]
     let mut joining = use_signal(String::new);
     let mut people = use_signal(crate::ghosts::everyone);
-    // Whether a session is being joined (a page joins in the background).
-    let mut session_joining = use_signal(live::joining);
     let mut open = use_signal(|| false);
     let mut copied = use_signal(|| false);
     // This device's sync switch (`collab::sync_locked`).
     let mut locked = use_signal(live::sync_locked);
     // What the person should know: a song kept out, a version kept aside.
     let mut notices = use_signal(live::notices);
-    // Natively: the set this window hosts in Task by itself, and why it
-    // could not, if it could not (`live_host`).
-    #[cfg(feature = "native")]
-    let mut task_hosted = use_signal(live::hosted);
-    #[cfg(feature = "native")]
-    let mut host_error = use_signal(live::host_error);
     let density = crate::shell::use_density();
 
     // The song's history and the environment's session: started once, by
@@ -240,19 +199,8 @@ pub fn CollabBar() -> Element {
         loop {
             crate::pause(Duration::from_millis(500)).await;
             let now = live::status();
-            let left = now.as_ref().and_then(|s| s.resets_at).map(|at| {
-                at.saturating_duration_since(architect::platform::Instant::now())
-                    .as_secs()
-            });
-            if *resets_in.peek() != left {
-                resets_in.set(left);
-            }
             if *status.peek() != now {
                 status.set(now);
-            }
-            let now_joining = live::joining();
-            if *session_joining.peek() != now_joining {
-                session_joining.set(now_joining);
             }
             let why = live::last_error();
             if *error.peek() != why {
@@ -270,32 +218,11 @@ pub fn CollabBar() -> Element {
             if *locked.peek() != now_locked {
                 locked.set(now_locked);
             }
-            #[cfg(feature = "native")]
-            {
-                let hosted = live::hosted();
-                if *task_hosted.peek() != hosted {
-                    task_hosted.set(hosted);
-                }
-                let why = live::host_error();
-                if *host_error.peek() != why {
-                    host_error.set(why);
-                }
-            }
         }
     });
 
     let live = status();
     let others = people();
-    // Whether the live set is the one this window hosts in Task by itself.
-    #[cfg(feature = "native")]
-    let hosted_title = task_hosted();
-    #[cfg(not(feature = "native"))]
-    let hosted_title: Option<String> = None;
-    let in_task = move |set: &str| hosted_title.as_deref() == Some(set);
-    #[cfg(feature = "native")]
-    let hosting_error = move || host_error();
-    #[cfg(not(feature = "native"))]
-    let hosting_error = || None::<String>;
     // The button: who is here, you first — or, alone, a share glyph.
     let face = match &live {
         Some(l) => {
@@ -316,9 +243,6 @@ pub fn CollabBar() -> Element {
                 }
             }
         }
-        None if session_joining() => rsx! {
-            span { style: "font-size:12px; font-weight:600; color:{DIM};", "Joining…" }
-        },
         None => rsx! {
             ShareGlyph {}
             if density == Density::Full {
@@ -346,14 +270,6 @@ pub fn CollabBar() -> Element {
                         padding:0 12px; border:none; background:transparent; cursor:pointer;",
                 onclick: move |_| open.toggle(),
                 {face}
-                // A playground starts over on a timer: how long this run
-                // has left, so nobody is surprised by it.
-                if let Some(left) = resets_in() {
-                    span {
-                        style: "font-size:11px; font-variant-numeric:tabular-nums; color:{DIM};",
-                        "{clock(left)}"
-                    }
-                }
                 if error().is_some() || !notices().is_empty() {
                     span { style: "width:7px; height:7px; border-radius:4px; background:#e3b341;" }
                 }
@@ -381,16 +297,14 @@ pub fn CollabBar() -> Element {
                             span { style: "font-size:13px; font-weight:700;",
                                 match &live {
                                     Some(l) if l.hosting => rsx! { "Sharing {l.set}" },
-                                    Some(l) if in_task(&l.set) => rsx! { "Live in Task · {l.set}" },
                                     Some(l) => rsx! { "In {l.set}" },
                                     None => rsx! { "Play together" },
                                 }
                             }
                             span { style: "font-size:11px; color:{DIM};",
-                                match (&live, resets_in()) {
-                                    (Some(l), Some(left)) => rsx! { "{who(l.peers)} · starts over in {clock(left)}" },
-                                    (Some(l), None) => rsx! { "{who(l.peers)}" },
-                                    (None, _) => rsx! { "Share this set, or join someone's" },
+                                match &live {
+                                    Some(l) => rsx! { "{who(l.peers)}" },
+                                    None => rsx! { "Share this set, or join someone's" },
                                 }
                             }
                         }
@@ -430,10 +344,11 @@ pub fn CollabBar() -> Element {
                                 }
                             }
                         },
-                        // A page joins its set by its link, or is not in one.
+                        // A page has no way into a set yet: a browser joins
+                        // a room by its link (studio#711).
                         #[cfg(not(feature = "native"))]
                         None => rsx! {
-                            span { style: "font-size:12px; color:{DIM};", "Not in a session — open a live link to join one." }
+                            span { style: "font-size:12px; color:{DIM};", "Not in a session — joining from a browser is not here yet." }
                         },
                         Some(l) => {
                             let shared = l.shared_transport;
@@ -535,18 +450,10 @@ pub fn CollabBar() -> Element {
                     for line in notices() {
                         span { style: "font-size:11px; color:#e3b341;", "{line}" }
                     }
-                    if let Some(why) = hosting_error() {
-                        span { style: "font-size:11px; color:#e3b341;", "Task: {why}" }
-                    }
                 }
             }
         }
     }
-}
-
-/// Seconds as `m:ss`.
-fn clock(seconds: u64) -> String {
-    format!("{}:{:02}", seconds / 60, seconds % 60)
 }
 
 /// What a locked device is holding, in a line.

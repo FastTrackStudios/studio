@@ -317,24 +317,18 @@ pub struct JobsFrame {
 }
 
 /// The engine's live session, as a window's collaboration control shows
-/// it (`crate::collab`, `crate::live_host`): the set it is in, who is
-/// there, this device's lock, and why the last share, join or Task
-/// hosting failed. The session is the engine's: a window starts none.
+/// it (`crate::collab`): the set it is in, who is there, this device's
+/// lock, and why the last share or join failed. The session is the
+/// engine's: a window starts none.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Facet)]
 pub struct LiveFrame {
     pub version: u64,
     /// The live session, if the engine is in one.
     pub status: Option<LiveStatus>,
-    /// A session is being joined.
-    pub joining: bool,
     /// Why the last share or join failed.
     pub error: Option<String>,
     /// This device is locked: not sending its edits, not taking others'.
     pub locked: bool,
-    /// The set the engine hosts in Task by itself, by its title.
-    pub hosted: Option<String>,
-    /// Why hosting in Task last failed.
-    pub host_error: Option<String>,
     /// Everyone else in the set, and the song each is on.
     pub people: Vec<LivePerson>,
     /// What the person should know about the session: a song kept out of
@@ -352,8 +346,6 @@ pub struct LiveStatus {
     pub set: String,
     pub name: String,
     pub color: u32,
-    /// Seconds until a playground set starts over.
-    pub resets_in_secs: Option<u64>,
     pub locked: bool,
     pub held: u32,
 }

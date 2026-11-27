@@ -227,11 +227,9 @@ static ASSEMBLY: engine_core::assembly::Assembly = engine_core::assembly::Assemb
     drum_returns: crate::mix_chains::drum_returns,
     // ── engine-project's parts ──
     streams_read: crate::studio_engine::view_host::streams_read,
-    song_opened: crate::collab::song_opened,
     open_path: |path| crate::studio_engine::set::open_path(path).map_err(|e| e.to_string()),
     // ── engine-collab's parts ──
     local_chart: crate::collab::local_chart,
-    join_task_in_background: crate::collab::join_task_in_background,
 };
 
 pub fn install() {

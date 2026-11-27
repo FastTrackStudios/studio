@@ -141,7 +141,7 @@ Songs/<Song>/Media/Proxies/Reference.ogg     the reference bounce (+ preview, in
   accurately across 35 streams.
 - **Where it is made:** on the machine that holds the masters, when the
   song is prepared for a link (`link-prepare`, a bin of `studio-engine`
-  over `ingest::prepare`, what `studio ingest` runs before an upload):
+  over `song_prep::prepare`):
   the project's log folded in, a rendition and page index a recording,
   the waveforms (and a coarse copy of each for the link, 80 KB a track,
   in `Proxies/Peaks/`), and the reference bounce. A step that is current

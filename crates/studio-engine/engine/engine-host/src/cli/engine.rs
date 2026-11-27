@@ -25,16 +25,9 @@ pub struct Args {
     /// (`127.0.0.1:4040`, `0.0.0.0:4040` for the network): `ws://ADDR/vox`.
     #[arg(long)]
     pub listen: Option<String>,
-    /// Open this as the engine comes up: a path (a song, `.session` or
-    /// setlist), or a library setlist's title.
+    /// Open this as the engine comes up: a song, `.session` or setlist.
     #[arg(long)]
     pub open: Option<String>,
-    /// The org whose library holds `--open`'s setlist.
-    #[arg(long, requires = "open")]
-    pub org: Option<String>,
-    /// One song of `--open`'s setlist to open alone.
-    #[arg(long, requires = "open")]
-    pub song: Option<String>,
     /// Open what the last engine had open (what a window does when the
     /// engine it drove died and it starts another).
     #[arg(long, conflicts_with = "open")]
@@ -51,8 +44,6 @@ pub fn run(args: &Args) -> eyre::Result<()> {
         socket: args.socket.clone(),
         listen: args.listen.clone(),
         open: args.open.clone(),
-        org: args.org.clone(),
-        song: args.song.clone(),
         reopen: args.reopen,
     })
 }

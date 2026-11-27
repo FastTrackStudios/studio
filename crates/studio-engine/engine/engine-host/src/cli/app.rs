@@ -151,10 +151,7 @@ mod tests {
     #[test]
     fn an_action_is_tried_as_written_then_under_sessions_prefix() {
         assert_eq!(action_ids("open"), ["OPEN", "SESSION_OPEN"]);
-        assert_eq!(
-            action_ids("open-setlist"),
-            ["OPEN_SETLIST", "SESSION_OPEN_SETLIST"]
-        );
+        assert_eq!(action_ids("song-next"), ["SONG_NEXT", "SESSION_SONG_NEXT"]);
         assert_eq!(action_ids("SESSION_OPEN"), ["SESSION_OPEN"]);
         assert_eq!(
             action_ids("transport_play"),

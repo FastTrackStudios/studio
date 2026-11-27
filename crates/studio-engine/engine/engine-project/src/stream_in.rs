@@ -429,112 +429,33 @@ async fn load_next(song: &mut Song, playhead: f64) {
     }
 }
 
-/// Which source to stream from even when the song is here: `peer` (the
-/// engine this window drives), `share` (a share link) or `task` (the
-/// library).
+/// Set (`peer`): stream the song from the engine this window drives even
+/// when it is here (a test, a one-machine demo).
 const STREAM_SOURCE_ENV: &str = "FTS_STREAM_SOURCE";
 
-/// Share links to songs' sessions, whitespace-separated: `slug=url`, or a
-/// bare `url` for whichever song is open (the demo streams by these).
-const SHARE_LINKS_ENV: &str = "FTS_SHARE_LINKS";
-
-/// The share link for the song `slug` in `links` (see [`SHARE_LINKS_ENV`]).
-fn share_link_for(links: &str, slug: &str) -> Option<String> {
-    let mut any = None;
-    for entry in links.split_whitespace() {
-        match entry
-            .split_once('=')
-            .filter(|(k, _)| !k.contains('/') && !k.contains(':'))
-        {
-            Some((song, url)) if song == slug => return Some(url.to_owned()),
-            Some(_) => {}
-            None => any = any.or_else(|| Some(entry.to_owned())),
-        }
-    }
-    any
-}
-
 /// A song not on this machine, mirrored and streamed from the engine this
-/// window drives, or else from the Task library (the song by its name).
+/// window drives.
 async fn stream_from_elsewhere(remote: &str) -> Option<crate::song_stream::StreamedSong> {
-    use crate::song_stream::{PeerSource, ShareSource, SongSource, TaskSource, mirror};
-    let only = std::env::var(STREAM_SOURCE_ENV)
-        .ok()
-        .filter(|v| !v.is_empty());
+    use crate::song_stream::{PeerSource, mirror};
     let cache = std::env::temp_dir().join("fts-stream");
-    if only.as_deref().is_none_or(|o| o == "peer") {
-        match PeerSource::new(remote).await {
-            Ok(source) => match mirror(
-                std::sync::Arc::new(source),
-                crate::song_stream::Keep::Disk(cache.clone()),
-            )
-            .await
-            {
-                Ok(streamed) => return Some(streamed),
-                Err(e) => {
-                    tracing::info!(stream.song = remote, error = %e, "stream-in: the engine cannot send this song")
-                }
-            },
+    match PeerSource::new(remote).await {
+        Ok(source) => match mirror(
+            std::sync::Arc::new(source),
+            crate::song_stream::Keep::Disk(cache),
+        )
+        .await
+        {
+            Ok(streamed) => Some(streamed),
             Err(e) => {
-                tracing::info!(stream.song = remote, error = %e, "stream-in: no engine to stream from")
+                tracing::info!(stream.song = remote, error = %e, "stream-in: the engine cannot send this song");
+                None
             }
-        }
-    }
-    if only.as_deref() == Some("peer") {
-        return None;
-    }
-    let name = song_name(remote).await?;
-    let slug = library_sync::slugify(&name);
-    let link = std::env::var(SHARE_LINKS_ENV)
-        .ok()
-        .and_then(|links| share_link_for(&links, &slug));
-    if only.as_deref() != Some("task")
-        && let Some(link) = link
-    {
-        match ShareSource::new(&link) {
-            Ok(source) => match mirror(
-                std::sync::Arc::new(source),
-                crate::song_stream::Keep::Disk(cache.clone()),
-            )
-            .await
-            {
-                Ok(streamed) => return Some(streamed),
-                Err(e) => {
-                    tracing::warn!(stream.song = %name, error = %e, "stream-in: the share link's copy could not be mirrored")
-                }
-            },
-            Err(e) => {
-                tracing::warn!(stream.song = %name, error = %e, "stream-in: the share link is not a URL")
-            }
-        }
-    }
-    if only.as_deref() == Some("share") {
-        return None;
-    }
-    let source: std::sync::Arc<dyn SongSource> = match TaskSource::new(&slug).await {
-        Ok(source) => std::sync::Arc::new(source),
+        },
         Err(e) => {
-            tracing::warn!(stream.song = %name, stream.slug = %slug, error = %e, "stream-in: this song is not here, nor in the library");
-            return None;
-        }
-    };
-    match mirror(source, crate::song_stream::Keep::Disk(cache.clone())).await {
-        Ok(streamed) => Some(streamed),
-        Err(e) => {
-            tracing::warn!(stream.song = %name, error = %e, "stream-in: the library's copy could not be mirrored");
+            tracing::info!(stream.song = remote, error = %e, "stream-in: no engine to stream from");
             None
         }
     }
-}
-
-/// The remote project's song name: its file's stem, or its name.
-async fn song_name(remote: &str) -> Option<String> {
-    let daw = daw::rpc::Daw::try_get()?;
-    let info = daw.project(remote).await.ok()?.info().await.ok()?;
-    let stem = Path::new(&info.path)
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned());
-    Some(stem.filter(|s| !s.is_empty()).unwrap_or(info.name))
 }
 
 /// The song file on this machine for the remote's project: its own path

@@ -23,11 +23,8 @@
 mod ios_audio;
 
 /// What Studio's welcome screen hands Session (what to open, the way back,
-/// the account, the Action List).
+/// the Action List).
 pub mod handoff;
-mod library;
-/// The welcome screen's Publish to Task card (`SESSION_INGEST`).
-pub mod publish;
 /// The layer that notes what the paint thread runs, for the traces of the
 /// frames that miss 120 Hz (`daw_view_kit::frames::slow`): the app's
 /// subscriber takes it.

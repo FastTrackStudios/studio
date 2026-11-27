@@ -311,17 +311,6 @@ pub mod ask {
         super::run("SESSION_NEW", b"{}")
     }
 
-    /// Join a live set by its link, as `name`. Blocks on the engine's
-    /// answer: call it off the UI thread.
-    ///
-    /// # Errors
-    ///
-    /// The engine refused (another open is under way, or no engine).
-    pub fn join(link: &str, name: &str) -> Result<String, String> {
-        let args = serde_json::json!({ "link": link, "name": name });
-        super::run("SESSION_JOIN", args.to_string().as_bytes())
-    }
-
     /// Put the set in Live, or take it out.
     pub fn live(on: bool) {
         off_the_window("SESSION_LIVE", serde_json::json!({ "on": on }));
@@ -335,21 +324,5 @@ pub mod ask {
     pub fn open_path(path: &std::path::Path) -> Result<String, String> {
         let args = serde_json::json!({ "path": path.display().to_string() });
         super::run("SESSION_OPEN", args.to_string().as_bytes())
-    }
-
-    /// Open a library setlist as the engine's set.
-    ///
-    /// # Errors
-    ///
-    /// The engine refused (another open is under way).
-    pub fn open_library(
-        request: &crate::client::studio_engine::set::LibraryOpen,
-    ) -> Result<String, String> {
-        let args = serde_json::json!({
-            "setlist": request.setlist,
-            "org": request.org,
-            "song": request.song,
-        });
-        super::run("SESSION_OPEN_SETLIST", args.to_string().as_bytes())
     }
 }

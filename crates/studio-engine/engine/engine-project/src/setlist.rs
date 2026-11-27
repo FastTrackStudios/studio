@@ -147,9 +147,6 @@ impl SetlistOpen for Setlist {
         load.record("open.read_ms", began.elapsed().as_secs_f64() * 1e3);
         load.record("song.tracks", session.project.0.tracks.len());
         session.chart_file = prepare.chart.clone();
-        if let Some(assembly) = crate::assembly::get() {
-            (assembly.song_opened)(&guid);
-        }
         // Its waveforms behind it: the song is in the set now, its
         // pictures drawn as they are read.
         pictures_later(session.clone(), guid.clone());

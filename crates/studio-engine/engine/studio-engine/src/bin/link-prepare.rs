@@ -2,8 +2,7 @@
 //! song's project file folded whole, a compressed rendition of every
 //! recording it plays (`…/Proxies/<stem>.ogg`, Ogg Vorbis, with its page
 //! index), its waveforms, and its reference bounce
-//! (`studio_engine::ingest::prepare`, what `studio ingest` runs before it
-//! uploads).
+//! (`studio_engine::song_prep::prepare`).
 //!
 //! ```sh
 //! link-prepare [--no-reference] <song folder | .session | .RPP | folder of songs> …
@@ -16,8 +15,8 @@
 
 use std::path::{Path, PathBuf};
 
-use studio_engine::ingest::inputs::{Input, classify, song_at, songs_of};
-use studio_engine::ingest::prepare::{Steps, prepare};
+use studio_engine::song_prep::inputs::{Input, classify, song_at, songs_of};
+use studio_engine::song_prep::prepare::{Steps, prepare};
 
 fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt()
@@ -79,7 +78,7 @@ fn main() -> eyre::Result<()> {
         match prepared.map(|(done, bounced)| {
             let mut done = done;
             if bounced {
-                done.reference = studio_engine::ingest::prepare::Done::Made;
+                done.reference = studio_engine::song_prep::prepare::Done::Made;
             }
             done
         }) {

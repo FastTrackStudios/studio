@@ -302,7 +302,7 @@ fn proxy(media: &Path) -> eyre::Result<One> {
 }
 
 /// Where a media file's proxy lives: `Proxies/<stem>.ogg` beside it (the
-/// rule Task's share links and `studio proxies` follow); none for a proxy.
+/// rule share links and `studio proxies` follow); none for a proxy.
 fn proxy_of(media: &Path) -> Option<PathBuf> {
     let dir = media.parent()?;
     if dir.file_name().is_some_and(|n| n == "Proxies") {

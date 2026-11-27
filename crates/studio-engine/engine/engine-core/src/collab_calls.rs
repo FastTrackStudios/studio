@@ -8,8 +8,6 @@ use std::sync::Arc;
 use engine_sync::SessionDoc;
 use engine_sync::net::PresenceSink;
 
-use crate::task_set::TaskSet;
-
 /// The song on screen's doc in the live session, its presence and who this
 /// peer is in it: for the chart editor's carets and a chart rewritten in
 /// place (`collab::chart_context`). `None` with no session.
@@ -23,13 +21,5 @@ pub fn chart_context() -> Option<(SessionDoc, Arc<dyn PresenceSink>, String)> {
 pub fn local_chart(text: &str) {
     if let Some(assembly) = crate::assembly::get() {
         (assembly.local_chart)(text);
-    }
-}
-
-/// Join the set Task keeps, as `name`, off the calling thread
-/// (`collab::join_task_in_background`).
-pub fn join_task_in_background(set: TaskSet, name: String) {
-    if let Some(assembly) = crate::assembly::get() {
-        (assembly.join_task_in_background)(set, name);
     }
 }

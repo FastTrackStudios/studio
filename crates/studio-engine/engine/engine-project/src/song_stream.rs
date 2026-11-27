@@ -1,5 +1,5 @@
 //! A song streamed in from elsewhere, when it is not on this machine —
-//! from the engine this window drives, or from the Task library.
+//! from the engine this window drives.
 //!
 //! One way, whatever the source ([`SongSource`]) and wherever it runs: the
 //! small files — the prepared `.session`, the chart, the lyrics, the
@@ -18,11 +18,6 @@
 //! engine:
 //!
 //! - [`PeerSource`] — the engine's song folder (`daw::rpc::SongFiles`).
-//! - [`TaskSource`] — the song's session File Root in the library
-//!   (`library_sync::TaskSong`); its library chart replaces the folder's.
-//! - [`ShareSource`] — a Task share link to the song's session (the public
-//!   demo: no account): its JSON listing, its documents whole, its proxies
-//!   as the link's audio rendition with HTTP ranges.
 
 use std::path::Path;
 #[cfg(not(target_arch = "wasm32"))]
@@ -33,9 +28,7 @@ use std::sync::atomic::Ordering;
 
 pub use engine_runtime::listen::{Heard, Listen, WarmStep, warm_order};
 pub use engine_runtime::song_stream::*;
-pub use engine_runtime::source::{
-    Listing, Pending, ShareSource, SongSource, batch_records, project_first,
-};
+pub use engine_runtime::source::{Listing, Pending, SongSource, project_first};
 
 /// Mirror `source`'s song, as `engine_runtime::song_stream::mirror`
 /// does, its fetcher run on this window's runtime (when it has one).
@@ -99,139 +92,6 @@ impl SongSource for PeerSource {
     fn read(&self, path: String, range: std::ops::Range<u64>) -> Pending<Result<Vec<u8>, String>> {
         let files = self.files.clone();
         Box::pin(async move { files.read(&path, range).await.map_err(|e| e.to_string()) })
-    }
-}
-
-/// A song in the Task library: its session File Root, and its chart.
-#[cfg(feature = "native")]
-pub struct TaskSource {
-    library: library_sync::Library,
-    song: library_sync::TaskSong,
-}
-
-#[cfg(feature = "native")]
-impl TaskSource {
-    /// The library song `slug` (`washed`), from the library the
-    /// environment names (`FTS_TASK_SERVER`, `FTS_TASK_ORG`, the token).
-    ///
-    /// # Errors
-    ///
-    /// The library cannot be reached, or has no session for the song.
-    pub async fn new(slug: &str) -> eyre::Result<Self> {
-        Self::of(library_sync::Library::from_env(), slug).await
-    }
-
-    /// The song `slug` in `library` — one a window signed in to.
-    ///
-    /// # Errors
-    ///
-    /// As [`Self::new`].
-    pub async fn of(library: library_sync::Library, slug: &str) -> eyre::Result<Self> {
-        let song = library.song(slug).await?;
-        Ok(Self { library, song })
-    }
-}
-
-#[cfg(feature = "native")]
-impl SongSource for TaskSource {
-    fn label(&self) -> String {
-        format!("task-{}", self.song.slug)
-    }
-
-    fn list(&self) -> Pending<eyre::Result<Listing>> {
-        // The session's own charts give way to the library's.
-        let entries: Vec<(String, u64)> = self
-            .song
-            .entries
-            .iter()
-            .filter(|(rel, _)| rel.contains('/') || !rel.to_lowercase().ends_with(".kf"))
-            .cloned()
-            .collect();
-        let version = self.song.version.clone();
-        Box::pin(async move { Ok(Listing { entries, version }) })
-    }
-
-    fn read(&self, path: String, range: std::ops::Range<u64>) -> Pending<Result<Vec<u8>, String>> {
-        let song = self.song.clone();
-        Box::pin(async move { song.read(&path, range).await.map_err(|e| e.to_string()) })
-    }
-
-    fn chart(&self) -> Pending<eyre::Result<Option<String>>> {
-        let library = self.library.clone();
-        let slug = self.song.slug.clone();
-        Box::pin(async move { library.song_chart(&slug).await })
-    }
-
-    /// The song's small files in one request (the server's
-    /// `files/{root}/docs`) — its session's hundreds of objects and its
-    /// waveforms, which read one by one took 19 s a song. `None` when the
-    /// server has no such request, or it failed: they are read one by one.
-    fn read_many(&self, paths: Vec<String>) -> Pending<Option<Vec<(String, Option<Vec<u8>>)>>> {
-        let url = self.song.docs_url();
-        let token = self.song.token().map(str::to_owned);
-        Box::pin(async move {
-            let mut request = reqwest::Client::new()
-                .post(url)
-                .header(reqwest::header::CONTENT_TYPE, "text/plain")
-                .body(paths.join("\n"));
-            if let Some(token) = token {
-                request = request.bearer_auth(token);
-            }
-            let response = request.send().await.ok()?;
-            if !response.status().is_success() {
-                tracing::warn!(
-                    http.status = response.status().as_u16(),
-                    "library: the documents batch was refused; reading them one by one"
-                );
-                return None;
-            }
-            let body = response.bytes().await.ok()?;
-            Some(
-                batch_records(&body)?
-                    .into_iter()
-                    .map(|(path, status, bytes)| (path, (status == 0).then_some(bytes)))
-                    .collect(),
-            )
-        })
-    }
-
-    fn fetch_whole(
-        &self,
-        path: String,
-        into: PathBuf,
-        got: Arc<std::sync::atomic::AtomicU64>,
-    ) -> Pending<Option<eyre::Result<()>>> {
-        let song = self.song.clone();
-        Box::pin(async move {
-            Some(
-                async {
-                    use std::io::Write as _;
-                    let mut file = std::io::BufWriter::new(std::fs::File::create(&into)?);
-                    let mut failed = None;
-                    song.read_to(&path, |piece| {
-                        if failed.is_some() {
-                            return;
-                        }
-                        match file.write_all(piece) {
-                            Ok(()) => {
-                                got.fetch_add(
-                                    piece.len() as u64,
-                                    std::sync::atomic::Ordering::Relaxed,
-                                );
-                            }
-                            Err(e) => failed = Some(e),
-                        }
-                    })
-                    .await?;
-                    if let Some(e) = failed {
-                        return Err(e.into());
-                    }
-                    file.flush()?;
-                    Ok(())
-                }
-                .await,
-            )
-        })
     }
 }
 
