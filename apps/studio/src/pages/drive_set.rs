@@ -303,6 +303,7 @@ enum Shown {
 
 impl Shown {
     /// What the page calls it.
+    #[cfg_attr(not(feature = "drive"), allow(dead_code))]
     fn name(&self) -> &str {
         match self {
             Self::Written(hit) => &hit.name,
