@@ -20,6 +20,8 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub mod buttons;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod chart;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod deck;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod meters;
@@ -57,6 +59,7 @@ pub fn opened() -> Option<&'static str> {
 
 #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
 pub fn start_engine(open: Option<String>) {
+    chart::register(studio_engine::actions::list());
     let _ = OPENED.set(open.clone());
     let args = studio_engine::engine_host::Args {
         open,
@@ -84,6 +87,7 @@ pub fn start_engine(open: Option<String>) {
     if OPENED.set(open.clone()).is_err() {
         return;
     }
+    chart::register(studio_engine::actions::list());
     let spawned = std::thread::Builder::new()
         .name("studio-engine".to_owned())
         .spawn(move || {

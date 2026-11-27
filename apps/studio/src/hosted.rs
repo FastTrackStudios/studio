@@ -640,15 +640,30 @@ async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
     let mut span = crate::trace::Span::root("studio.session.follow");
     span.set("studio.session.doc", f.id.clone());
     // The chart draws the session itself (its sections, tempo map and
-    // markers, Keyflow's typed items): it is told only which session, and
-    // the song's title to head it with.
+    // markers, Keyflow's typed items): it is told which session, the
+    // song's title to head it with, and the chart written beside the song
+    // (its `.kf`), typed into a session nobody has charted yet. A session
+    // with neither shows the chart generated from its markers (studio#693).
     let title = current_song_title().await.unwrap_or_default();
-    match run(
-        "KEYFLOW_SESSION_FOLLOW",
-        serde_json::json!({ "url": f.url, "id": f.id, "title": title }),
-    )
-    .await
-    {
+    let mut args = serde_json::json!({ "url": f.url, "id": f.id, "title": title });
+    let written = chart_beside(std::path::Path::new(&f.path));
+    if let Some(chart) = &written {
+        args["chart_path"] = serde_json::Value::String(chart.display().to_string());
+        span.set("studio.follow.chart_path", chart.display().to_string());
+    }
+    let followed = match run("KEYFLOW_SESSION_FOLLOW", args.clone()).await {
+        // A written chart that does not fit the session's own structure is
+        // not typed into it: the session is followed all the same.
+        Err(e) if written.is_some() => {
+            span.set("studio.follow.seed", e);
+            if let Some(a) = args.as_object_mut() {
+                a.remove("chart_path");
+            }
+            run("KEYFLOW_SESSION_FOLLOW", args).await
+        }
+        other => other,
+    };
+    match followed {
         Ok(_) => span.set("studio.follow.chart", "ok"),
         Err(e) => span.set("studio.follow.chart", e),
     }
@@ -704,6 +719,18 @@ async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
         Ok(_) => span.set("studio.follow.lighting", "ok"),
         Err(e) => span.set("studio.follow.lighting", e),
     }
+}
+
+/// The chart written beside the song whose session is at `session`: the
+/// one `.kf` in its folder, as the engine finds it (`SESSION_CHART`).
+fn chart_beside(session: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut found = std::fs::read_dir(session.parent()?)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "kf"));
+    let one = found.next()?;
+    found.next().is_none().then_some(one)
 }
 
 /// The host the session's window draws the extensions with.

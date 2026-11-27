@@ -33,12 +33,16 @@ lufs_max = -10
 # No chart: the bars and sections are the markers'.
 [[chart]]
 at = 1.0
-source = "markers"
+source = "session"
 bar = 1
 section = "Intro"
 
 [[chart]]
 at = 13.0
-source = "markers"
+source = "session"
 bar = 7
 section = "Chorus 1"
+
+# No chart: Keyflow's chart generated from the markers.
+[shown]
+source = "generated"

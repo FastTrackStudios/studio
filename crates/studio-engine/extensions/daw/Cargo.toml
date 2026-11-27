@@ -33,6 +33,13 @@ fts-session = { workspace = true }
 # The song as one file: its session a part of the store (studio one-file).
 song-file = { workspace = true }
 session-format = { workspace = true }
+# The chart the song shows (`src/chart.rs`, SESSION_CHART): read from its
+# session as the chart pane reads it, generated from its markers when
+# nobody has charted it.
+keyflow-session = { workspace = true }
+keyflow-lang = { workspace = true }
+architect = { workspace = true }
+facet = { workspace = true }
 daw-ui = { workspace = true, features = ["studio"] }
 uuid = { workspace = true }
 tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread"] }

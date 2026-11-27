@@ -143,6 +143,7 @@ pub fn timing_now(song: &str) -> Option<daw_ui::studio::project::Project> {
         })
         .collect();
     let bpm = daw.get_default_tempo(ctx.clone());
+    let (num, den) = daw.get_default_time_signature(ctx.clone());
     let mut tempo: Vec<TempoChange> = daw
         .get_tempo_points(ctx)
         .into_iter()
@@ -159,6 +160,22 @@ pub fn timing_now(song: &str) -> Option<daw_ui::studio::project::Project> {
         })
         .collect();
     tempo.sort_by(|a, b| a.at.total_cmp(&b.at));
+    // A song with no tempo points has its project's tempo and meter from
+    // the start (an RPP's `TEMPO 90 3 4`): a point at zero says so, as the
+    // window's model has one (`daw_view::song::project`). Without it the
+    // session was retimed in 4/4, and a 3/4 song's chart counted its bars
+    // a third too long.
+    if tempo.first().is_none_or(|first| first.at > 0.0) {
+        tempo.insert(
+            0,
+            TempoChange {
+                at: 0.0,
+                bpm,
+                beats_per_bar: u32::try_from(num.max(1)).unwrap_or(4),
+                beat_unit: u32::try_from(den.max(1)).unwrap_or(4),
+            },
+        );
+    }
     Some(Project {
         sections,
         markers,
@@ -523,6 +540,18 @@ pub fn publish(playing: bool, at: f64, rate: f64) {
         // again on its next move, and re-anchors while it plays.
         let _sent = leader.publish(playing, at.max(0.0), rate);
     }
+}
+
+/// The open session's document and where it is kept, when it is song
+/// `song`'s (the engine's project id): what the chart it shows is read
+/// from (`crate::chart`).
+#[must_use]
+pub fn doc_of(song: &str) -> Option<(fts_session::doc::SessionDoc, PathBuf)> {
+    OPEN.lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .filter(|o| o.song == song)
+        .map(|o| (o.file.file().session().clone(), o.path.clone()))
 }
 
 /// The open session, for `DAW_STATE`: where it is, its id, where its

@@ -37,6 +37,6 @@ sections = ["IN", "CH A", "CH B"]
 
 [[chart]]
 at = 6.0
-source = "markers"
+source = "session"
 bar = 4
 section = "Verse 1"

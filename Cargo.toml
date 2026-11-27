@@ -964,6 +964,7 @@ ignition-colour = {path = "crates/studio-engine/lighting/colour"}
 ignition-rig = {path = "crates/studio-engine/lighting/rig"}
 ignition-show = {path = "crates/studio-engine/lighting/show"}
 ignition-session = {path = "crates/studio-core/session/ignition-session"}
+keyflow-session = {path = "crates/studio-core/session/keyflow-session"}
 ignition-effects = {path = "crates/studio-engine/lighting/effects"}
 ignition-playback = {path = "crates/studio-engine/lighting/playback"}
 ignition-core = {path = "crates/studio-engine/lighting/core"}
