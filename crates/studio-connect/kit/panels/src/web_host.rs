@@ -662,6 +662,36 @@ pub fn open_hosted(source: crate::web_engine::WebSource, guide: Option<String>) 
     });
 }
 
+/// An engine the host opened itself (`web_engine::open`, its own songs) as
+/// the page's hosted engine: `setlist` the hosted set, its current song on
+/// show in every [`HostedView`]. What [`open_hosted`] does once the engine
+/// is up, for a host that opens and adds its songs itself (Studio's web
+/// build, a session folder at a time). A second call replaces the set.
+pub fn host_opened(engine: crate::web_engine::EngineRef, setlist: crate::setlist::Setlist) {
+    #[cfg(not(feature = "native"))]
+    register_page_actions();
+    HOSTED_SONGS.with(|s| *s.borrow_mut() = setlist);
+    set_hosted(HostedState::Open(engine));
+}
+
+/// A song the host opened into the hosted engine after it was up
+/// (`web_engine::add_song`): into the hosted set, behind the one on show
+/// ([`hosted_show`] makes it current). Already there (by its project):
+/// nothing changes.
+pub fn host_added(song: crate::setlist::Song) {
+    let added = HOSTED_SONGS.with(|s| {
+        let mut set = s.borrow_mut();
+        if set.songs.iter().any(|have| have.project == song.project) {
+            return false;
+        }
+        set.arrive(crate::setlist::Arrival::Song(song));
+        true
+    });
+    if added {
+        hosted_changed();
+    }
+}
+
 /// Which of the engine's panels a hosted view shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostedPanel {
@@ -809,6 +839,19 @@ fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Eleme
         HostedPanel::Arrangement => "arrangement",
         HostedPanel::Mixer => "mixer",
     };
+    // What the panel was handed of the song: its tracks and items, for a
+    // test (or a person's inspector) to read off the page.
+    let (tracks, items) = current.as_ref().map_or((0, 0), |song| {
+        let project = &song.session.project.0;
+        (
+            project.tracks.len(),
+            project.items.values().map(Vec::len).sum::<usize>(),
+        )
+    });
+    let project = current
+        .as_ref()
+        .map(|song| song.project.clone())
+        .unwrap_or_default();
     rsx! {
         div {
             style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; \
@@ -816,6 +859,9 @@ fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Eleme
                     font-family:system-ui, sans-serif; overflow:hidden;",
             "data-hosted": "{which}",
             "data-hosted-listening": "{listening():?}",
+            "data-hosted-project": "{project}",
+            "data-hosted-tracks": "{tracks}",
+            "data-hosted-items": "{items}",
             div {
                 style: "flex:0 0 auto; display:flex; align-items:center; gap:8px; \
                         padding:6px 10px; min-height:32px; border-bottom:1px solid #1d1f23; \

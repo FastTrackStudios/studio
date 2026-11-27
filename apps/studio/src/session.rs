@@ -15,6 +15,11 @@
 //! (the chart, the overview). The mixer is the mixer extension's view in
 //! a window of its own. Playback is the root's, so the set plays on
 //! across a switch back to the launcher and in again.
+//!
+//! In a browser the session's views are tabs over its stage
+//! ([`WEB_VIEWS`]). The arrangement and the mixer are the same panels the
+//! desktop's extensions draw, over the engine in the page
+//! (`studio_panels::web_host::HostedView`, fed by `crate::engine_web`).
 
 use dioxus::prelude::*;
 
@@ -124,6 +129,11 @@ pub fn screenset(name: &str) -> Result<(&'static str, View), String> {
             format!("no screenset {name}: one of {}", all.join(", "))
         })
 }
+
+/// The session's views in a browser, as its tabs: the overview, the
+/// chart, and the arrangement and the mixer over the page's engine.
+#[cfg_attr(feature = "native", allow(dead_code))]
+pub const WEB_VIEWS: [View; 4] = [View::Overview, View::Chart, View::Arrangement, View::Mixer];
 
 /// Where a view of the session is.
 pub fn route(view: View) -> Route {
@@ -266,7 +276,6 @@ pub fn SessionShell() -> Element {
     }
     #[cfg(not(feature = "native"))]
     {
-        let _ = view;
         rsx! {
             div { class: "window",
                 AppShell {
@@ -277,7 +286,23 @@ pub fn SessionShell() -> Element {
                         TopBar { title: title.clone(), on_back: move |()| leave(app) }
                     },
                     div { class: "content session", "data-form": "desktop",
-                        main { class: "sessstage", Outlet::<Route> {} }
+                        main { class: "sessstage",
+                            nav { class: "sesstabs",
+                                for v in WEB_VIEWS {
+                                    button {
+                                        key: "{v.slug()}",
+                                        class: "sesstab",
+                                        "data-view": v.slug(),
+                                        "aria-current": if v == view { "page" } else { "false" },
+                                        onclick: move |_| {
+                                            navigator().replace(self::route(v));
+                                        },
+                                        "{v.name()}"
+                                    }
+                                }
+                            }
+                            Outlet::<Route> {}
+                        }
                     }
                 }
             }
@@ -311,6 +336,25 @@ pub fn page(slug: String) -> Element {
         View::Setup | View::Editor | View::Fx => rsx! {
             native::SongPanel { view: v }
         },
+        // The page's engine's own panels: its song's tracks, items,
+        // sections, automation and takes; every strip's fader, pan, mute,
+        // solo, sends, FX and Signal blocks.
+        #[cfg(feature = "web")]
+        View::Arrangement | View::Mixer => {
+            use studio_panels::web_host::{HostedPanel, HostedView};
+            let panel = if v == View::Mixer {
+                HostedPanel::Mixer
+            } else {
+                HostedPanel::Arrangement
+            };
+            return rsx! {
+                div { class: "sessview panes",
+                    div { class: "sesspane", key: "{v.slug()}",
+                        HostedView { panel }
+                    }
+                }
+            };
+        }
         other => rsx! {
             div { class: "sessempty",
                 b { "{other.name()}" }
@@ -318,7 +362,7 @@ pub fn page(slug: String) -> Element {
                     if cfg!(feature = "native") {
                         "Not in this Studio yet."
                     } else {
-                        "The session's views are the desktop app's for now; the chart and the overview are here."
+                        "This view is the desktop app's for now; the overview, the chart, the arrangement and the mixer are here."
                     }
                 }
             }

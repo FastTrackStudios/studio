@@ -18,7 +18,9 @@ use daw_view_kit::*;
 // Studio's own half of what a window is built from (the kit is any DAW's),
 // under the paths the panels were written against: the engine's, where
 // it runs in this process (`engine`), else the window's.
-#[cfg(all(any(feature = "native", feature = "web"), not(feature = "engine")))]
+// A page is its own engine: its live session is the engine's, in the
+// page (`web_host`, the collab bar's), never a window's link.
+#[cfg(all(feature = "native", not(feature = "engine")))]
 #[allow(unused_imports)]
 use ::engine_client::collab;
 /// The window's mode follows the song (a Dioxus hook, so the window's,
@@ -40,7 +42,10 @@ use ::engine_client::{audio_mode, song_model, song_modes, stream_quality};
 #[cfg(all(feature = "native", not(feature = "engine")))]
 #[allow(unused_imports)]
 use ::engine_client::{render_ahead, studio_engine};
-#[cfg(all(any(feature = "native", feature = "web"), feature = "engine"))]
+#[cfg(any(
+    all(feature = "native", feature = "engine"),
+    all(feature = "web", not(feature = "native"))
+))]
 #[allow(unused_imports)]
 use ::studio_engine::collab;
 #[cfg(all(feature = "signal", feature = "engine"))]

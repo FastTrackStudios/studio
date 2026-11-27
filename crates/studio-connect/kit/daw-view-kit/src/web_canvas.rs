@@ -172,7 +172,8 @@ fn webgl2_context(canvas: &web_sys::HtmlCanvasElement) -> Option<js_sys::Object>
 
 /// Whether this browser draws with WebGL2 at all: asked of a canvas made
 /// for the question, before the page shows anything drawn.
-fn webgl2_offered() -> bool {
+#[must_use]
+pub fn webgl2_offered() -> bool {
     web_sys::window()
         .and_then(|w| w.document())
         .and_then(|d| d.create_element("canvas").ok())

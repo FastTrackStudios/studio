@@ -16,6 +16,11 @@
 //! open, the engine itself not starting among the reasons
 //! ([`WebPlay::failed`]).
 //!
+//! The engine the page opened is the one the session's arrangement and
+//! mixer draw (`studio_panels::web_host::HostedView`): each song it
+//! opens joins the hosted set, the song on screen is the one they show,
+//! and a song picked in them is picked here.
+//!
 //! What the engine is doing is written to a hidden element (`#studio-engine`,
 //! [`STATE_ID`]): its state, the song's playhead and what the worklet has
 //! put out — what the browser boot test (`apps/studio/tests/it/web_boot.rs`)
@@ -29,6 +34,7 @@ use std::sync::Arc;
 use dioxus::prelude::*;
 use studio_engine::song_stream::{Listing, Pending, SongSource, project_first};
 use studio_engine::web_engine::{self, HostedSong};
+use studio_panels::web_host;
 
 use crate::files::Hit;
 use crate::files_live::web;
@@ -297,6 +303,32 @@ pub fn EnginePlayer() -> Element {
         studio_engine::web_audio::unlock_on_first_gesture();
     });
 
+    // A song picked in the arrangement or the mixer: Now Playing goes to
+    // it, and the engine follows as for any other pick.
+    {
+        let opened = opened.clone();
+        use_hook(move || {
+            web_host::on_hosted_pick(move |project| {
+                let Some(k) = opened
+                    .borrow()
+                    .iter()
+                    .find(|(_, (p, _))| p == project)
+                    .map(|(k, _)| k.clone())
+                else {
+                    return;
+                };
+                let at = app.np.peek().as_ref().and_then(|n| {
+                    n.places
+                        .iter()
+                        .position(|place| place.as_ref().is_some_and(|p| key(p) == k))
+                });
+                if let Some(j) = at {
+                    crate::session::go_to(app, j);
+                }
+            });
+        });
+    }
+
     // The song Now Playing is at, into the engine and on screen.
     let place = (app.np)().and_then(|n| n.place().cloned());
     let owned = play.read().owns(place.as_ref());
@@ -309,6 +341,7 @@ pub fn EnginePlayer() -> Element {
             let k = key(&place);
             if let Some((project, len)) = opened.borrow().get(&k).cloned() {
                 web_engine::switch_song(&project);
+                web_host::hosted_show(&project);
                 up.set(Up::Ready { project, len });
                 return;
             }
@@ -329,17 +362,23 @@ pub fn EnginePlayer() -> Element {
                     title,
                     source: Arc::new(SessionFolder::new(place.clone())),
                 };
+                // Each song the engine opens is one the session's views can
+                // show (`web_host`'s hosted set).
                 let opening = if started.replace(true) {
-                    web_engine::add_song(song).await
+                    web_engine::add_song(song).await.inspect(|song| {
+                        web_host::host_added(song.clone());
+                    })
                 } else {
                     web_engine::open(&web_engine::WebSource::Hosted(vec![song]), None, |_| {})
                         .await
-                        .and_then(|(_, setlist)| {
-                            setlist
+                        .and_then(|(engine, setlist)| {
+                            let first = setlist
                                 .songs
-                                .into_iter()
-                                .next()
-                                .ok_or_else(|| eyre::eyre!("the session opened no song"))
+                                .first()
+                                .cloned()
+                                .ok_or_else(|| eyre::eyre!("the session opened no song"))?;
+                            web_host::host_opened(engine, setlist);
+                            Ok(first)
                         })
                 };
                 match opening {
@@ -351,6 +390,7 @@ pub fn EnginePlayer() -> Element {
                         let now = app.np.peek().as_ref().and_then(|n| n.place().map(key));
                         if now.as_deref() == Some(&key(&place)) {
                             web_engine::switch_song(&song.project);
+                            web_host::hosted_show(&song.project);
                             app.np.with_mut(|n| {
                                 if let Some(n) = n {
                                     n.dur = len;

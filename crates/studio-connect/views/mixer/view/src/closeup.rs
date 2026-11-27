@@ -412,7 +412,7 @@ fn RackCloseup(guid: String, which: Which) -> Element {
     #[cfg(all(feature = "web", not(feature = "native")))]
     {
         let widget = use_hook(|| {
-            crate::web_canvas::HostedRef(Rc::new(RefCell::new(RackWidget::new(
+            crate::web_canvas::HostedRef(Rc::new(std::cell::RefCell::new(RackWidget::new(
                 Rc::clone(&closeups.tone),
                 guid.clone(),
                 which,

@@ -310,6 +310,14 @@ fn main() {
     // route it shows, and `?session=` goes with it.
     #[cfg(feature = "web")]
     engine_web::remember_address();
+    // The session's arrangement and mixer in the page: installed for the
+    // panels that show them (`studio_panels::web_host::HostedView`),
+    // before the first one draws.
+    #[cfg(feature = "web")]
+    {
+        arrangement_view::arrangement_host::install();
+        mixer_view::mixer_host::install();
+    }
     #[cfg(feature = "web")]
     drive_dioxus::mount::set(door::node_mount(
         &dioxus::cli_config::web_base_path().unwrap_or_default(),
