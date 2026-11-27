@@ -635,6 +635,7 @@ async fn follow(
             match open.map(|open| open(loaded.resolve(studio_root.as_deref()))) {
                 Some(Ok(())) => {
                     tracing::info!(room.loaded = %loaded.title, room.load = load, "room: opening what the leader loaded");
+                    peer.opened(load);
                     {
                         let mut seen = lock(&seen);
                         seen.opened = Some(load);
@@ -773,6 +774,10 @@ fn status() -> Value {
         "load": loaded.as_ref().map(|(_, n)| n),
         "people": room::net::people(&presence),
         "agents": room::net::agents(&presence),
+        "here": room::net::here_now(&presence)
+            .into_iter()
+            .map(|p| json!({ "name": p.name, "agent": p.agent, "opened": p.opened }))
+            .collect::<Vec<_>>(),
         "edits": edits,
         "editing": editing.is_some(),
         "transport": transport.as_ref().map(|t| json!({
@@ -852,7 +857,7 @@ static STATUS: ActionMeta = crate::actions::meta(
     "ROOM",
     "room",
     "The room",
-    "The room this engine is in: `room` (id, name, org, link; null when in none), `role` (leader or member), `name`, `loaded` (kind, path, title) and `load` (which load it is), `people` (everyone here, by name, agents working through anyone's MCP included), `agents` (the agents among them), `edits` (the load whose set this engine edits together with the room: everyone's edits to it reach everyone; null until it is shared and joined) and `editing` (a share or join under way), `transport` (the leader's: playing, position, song number), `error`. A leader's `members` (attached now) and `refused` (calls its door turned away: any without the room's pass, which only the organization's people can read); a member's `attaches` (how many times it connected to the leader: 1 unless a connection was lost) and `opened` (the load it opened). Read-only.",
+    "The room this engine is in: `room` (id, name, org, link; null when in none), `role` (leader or member), `name`, `loaded` (kind, path, title) and `load` (which load it is), `people` (everyone here, by name, agents working through anyone's MCP included), `agents` (the agents among them), `here` (each one: `name`, `agent`, and `opened`, the load a member has opened, so a leader sees each member follow, a browser's or a phone's too), `edits` (the load whose set this engine edits together with the room: everyone's edits to it reach everyone; null until it is shared and joined) and `editing` (a share or join under way), `transport` (the leader's: playing, position, song number), `error`. A leader's `members` (attached now) and `refused` (calls its door turned away: any without the room's pass, which only the organization's people can read); a member's `attaches` (how many times it connected to the leader: 1 unless a connection was lost) and `opened` (the load it opened). Read-only.",
     "Room",
     "",
 );

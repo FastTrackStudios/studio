@@ -125,7 +125,8 @@ architect-process-view = { workspace = true, optional = true, features = ["exten
 # Waveform peaks (the sidecar format; no producers in the app).
 drive-sidecars.workspace = true
 # A room's link (`room_link`): what it names, and the Rooms folder the
-# engine linked into a phone's app keeps rooms in.
+# engine linked into a phone's app keeps rooms in. In a browser, the room
+# itself (`room_web`): its file, the leader's door and the member's dial.
 room = { workspace = true, optional = true }
 # Drive's agent on this computer: any Drive file as a real local path,
 # warmed ahead of a set (desktop builds; docs/app-files.md in Drive).
@@ -144,6 +145,9 @@ web = [
     "dep:studio-panels", "studio-panels/web",
     "dep:arrangement-view", "arrangement-view/web",
     "dep:mixer-view", "mixer-view/web",
+    # A browser in a room (src/room_web.rs): the page joins the room a
+    # desktop leads, over iroh through its relay, and follows its leader.
+    "dep:room",
 ]
 desktop = ["dioxus/desktop", "local"]
 # The same app drawn by Blitz (the GPU renderer Signal's panes and the

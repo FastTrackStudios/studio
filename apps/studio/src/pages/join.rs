@@ -3,9 +3,11 @@
 //! from here. Signed out, the landing page shows the same room
 //! (`landing::RoomDoor`); signed in, this page.
 //!
-//! The room itself is joined by Studio's engine: on a computer, iPhone or
-//! iPad, through the app's own link (`fasttrackstudio://join/<room>`). A
-//! browser following the room in the page is studio#711's.
+//! On a computer, iPhone or iPad the room is joined by Studio's engine,
+//! through the app's own link (`fasttrackstudio://join/<room>`). In a
+//! browser the page itself joins and follows the leader (studio#711,
+//! `crate::room_web`): its person presses Join, the gesture a browser
+//! needs before it plays the room's sound.
 
 use dioxus::prelude::*;
 
@@ -28,10 +30,79 @@ pub fn JoinRoom(room: String) -> Element {
         Page {
             Bar { title: "Room" }
             div { class: "body", "data-room": "{room}",
-                h2 { "{room}" }
+                InThePage { room: room.clone() }
                 p { "Open this room in Studio on your computer, iPhone or iPad: whatever its leader loads, you follow." }
                 a { class: "primary wide", href: "{app}", "Open in Studio" }
             }
         }
+    }
+}
+
+/// In a browser: the room, who leads it and what is loaded, and Join.
+#[cfg(feature = "web")]
+#[component]
+fn InThePage(room: String) -> Element {
+    use crate::room_web::{JOIN, SHOWN};
+    let Ok(id) = room::parse_link(&room) else {
+        return rsx! {
+            h2 { "{room}" }
+        };
+    };
+    let s = SHOWN();
+    let joined = JOIN().as_ref() == Some(&id);
+    let title = if s.name.is_empty() {
+        id.to_string()
+    } else {
+        s.name.clone()
+    };
+    let line = match s.state {
+        _ if !joined => {
+            "Join to follow the leader here: what they load opens in this page, and plays with them."
+                .to_owned()
+        }
+        "finding" => "Finding the room…".to_owned(),
+        "joining" if s.why.is_empty() => format!("Reaching {}…", s.leader),
+        "joining" => format!("Not in the room: {}", s.why),
+        "member" if s.loaded.is_empty() => {
+            format!("In the room. {} has loaded nothing yet.", s.leader)
+        }
+        "member" => format!("Following {}: {}", s.leader, s.loaded),
+        "failed" => format!("Could not join: {}", s.why),
+        _ => String::new(),
+    };
+    let people = s.people.join(", ");
+    rsx! {
+        h2 { "{title}" }
+        p { class: "pline", "{line}" }
+        if joined && !people.is_empty() {
+            p { class: "pline", "Here: {people}" }
+        }
+        if joined && s.state == "member" && !s.why.is_empty() {
+            div { class: "s1", role: "alert", "{s.why}" }
+        }
+        if joined {
+            button {
+                id: "room-leave",
+                class: "primary",
+                onclick: move |_| *JOIN.write() = None,
+                "Leave"
+            }
+        } else {
+            button {
+                id: "room-join",
+                class: "primary wide",
+                onclick: move |_| *JOIN.write() = Some(id.clone()),
+                "Join in this browser"
+            }
+        }
+    }
+}
+
+/// Outside a browser: the room's name; Studio's engine joins it.
+#[cfg(not(feature = "web"))]
+#[component]
+fn InThePage(room: String) -> Element {
+    rsx! {
+        h2 { "{room}" }
     }
 }

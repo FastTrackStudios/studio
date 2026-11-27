@@ -142,6 +142,13 @@ test-web-boot *ARGS:
     fi
     cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --test it -E "test(${WEB_BOOT_TESTS:-/^web_boot::/})" --run-ignored only --no-fail-fast {{ARGS}}
 
+# Seam 2 with a browser member (studio#711): a desktop engine leads a room, the web build in a headless browser joins it
+# by its link over the internet (n0's relays) and follows the leader, observed from the leader's MCP; a forged pass is
+# refused (apps/studio/tests/it/web_room.rs). Builds the engine, then runs as test-web-boot. Extra arguments go to nextest
+test-web-room *ARGS:
+    cargo build {{dev_build}} -p {{engine_package}} --bin {{engine_bin}}
+    STUDIO_ENGINE_BIN="{{dev_out}}/{{engine_bin}}" WEB_BOOT_TESTS='/^web_room::/' just test-web-boot {{ARGS}}
+
 # The setlist, chart, arrangement and mixer screens at phone width (390x844) and on an iPad (820x1180), in a headless
 # browser over the web build, served by a Drive node: each checked for fit and touch size, and its screenshot kept in
 # target/web-shots (STUDIO_WEB_SHOTS). Builds the web app first, as test-web-boot. Extra arguments go to nextest

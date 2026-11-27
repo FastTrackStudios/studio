@@ -49,10 +49,15 @@ pub type Attach = Arc<
         + Sync,
 >;
 
-/// What a person says about themselves in the room.
-fn here(name: &str) -> LoroValue {
+/// What a person says about themselves in the room: their name, and the
+/// load they have opened (a member, once it has: what the leader sees it
+/// follow).
+fn here(name: &str, opened: Option<u64>) -> LoroValue {
     let mut map = std::collections::HashMap::new();
     map.insert("name".to_owned(), LoroValue::from(name));
+    if let Some(load) = opened.and_then(|l| i64::try_from(l).ok()) {
+        map.insert("opened".to_owned(), LoroValue::I64(load));
+    }
     LoroValue::from(map)
 }
 
@@ -92,23 +97,49 @@ pub fn agent_left(presence: &PresencePeer, by: &str, name: &str) {
     presence.delete(&agent_key(by, name));
 }
 
-/// Who is here, from `presence`: each one's name, and whether they are an
-/// agent.
-fn here_entries(presence: &PresencePeer) -> Vec<(String, bool)> {
-    presence
+/// Someone in the room, as they say in its presence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Person {
+    pub name: String,
+    /// An agent working through someone's MCP.
+    pub agent: bool,
+    /// The load they have opened: a member following the leader says so
+    /// once what the leader loaded is open on their device.
+    pub opened: Option<u64>,
+}
+
+/// Everyone in the room, from `presence`, sorted by name.
+#[must_use]
+pub fn here_now(presence: &PresencePeer) -> Vec<Person> {
+    let mut people: Vec<Person> = presence
         .states()
         .into_iter()
         .filter(|(k, _)| k.ends_with("/here"))
         .filter_map(|(_, v)| match v {
             LoroValue::Map(m) => match m.get("name") {
-                Some(LoroValue::String(s)) => Some((
-                    s.to_string(),
-                    matches!(m.get("kind"), Some(LoroValue::String(k)) if &**k == "agent"),
-                )),
+                Some(LoroValue::String(s)) => Some(Person {
+                    name: s.to_string(),
+                    agent: matches!(m.get("kind"), Some(LoroValue::String(k)) if &**k == "agent"),
+                    opened: match m.get("opened") {
+                        Some(LoroValue::I64(n)) => u64::try_from(*n).ok(),
+                        _ => None,
+                    },
+                }),
                 _ => None,
             },
             _ => None,
         })
+        .collect();
+    people.sort_by(|a, b| a.name.cmp(&b.name));
+    people
+}
+
+/// Who is here, from `presence`: each one's name, and whether they are an
+/// agent.
+fn here_entries(presence: &PresencePeer) -> Vec<(String, bool)> {
+    here_now(presence)
+        .into_iter()
+        .map(|p| (p.name, p.agent))
         .collect()
 }
 
@@ -212,7 +243,7 @@ impl RoomHost {
         );
         let client: DocPresenceClient = server.establish().await?;
         let (peer, mut driver) = PresencePeer::new(self.id, PRESENCE_TIMEOUT_MS);
-        peer.set(&here_key(me), here(name));
+        peer.set(&here_key(me), here(name, None));
         let mut stopped = self.stop.subscribe();
         architect::platform::spawn(async move {
             let _server = server;
@@ -234,6 +265,9 @@ impl RoomHost {
 pub struct RoomPeer {
     doc: RoomDoc,
     presence: PresencePeer,
+    /// Who this member is in the room's presence, and their name.
+    me: String,
+    name: String,
     attaches: Arc<AtomicUsize>,
     /// Why the last attachment ended, or could not be made (the leader's
     /// door refusing it, say); cleared once one is held.
@@ -249,7 +283,7 @@ impl RoomPeer {
         let doc = RoomDoc::new();
         let mut synced = SyncedDoc::new(id.doc_id(), doc.loro().clone());
         let (presence, mut driver) = PresencePeer::new(id.doc_id(), PRESENCE_TIMEOUT_MS);
-        presence.set(&here_key(me), here(name));
+        presence.set(&here_key(me), here(name, None));
         let attaches = Arc::new(AtomicUsize::new(0));
         let error = Arc::new(Mutex::new(None));
         let (stop, mut stopped) = tokio::sync::watch::channel(false);
@@ -296,10 +330,19 @@ impl RoomPeer {
         Self {
             doc,
             presence,
+            me: me.to_owned(),
+            name: name.to_owned(),
             attaches,
             error,
             stop,
         }
+    }
+
+    /// Say in the room that this member has opened load `load`: what the
+    /// leader (and its MCP) sees it follow.
+    pub fn opened(&self, load: u64) {
+        self.presence
+            .set(&here_key(&self.me), here(&self.name, Some(load)));
     }
 
     /// Why the last attachment to the leader ended or was not made, until

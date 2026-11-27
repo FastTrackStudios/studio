@@ -8,7 +8,10 @@
 //!   `first_run`'s harness (`just test-org-create`);
 //! - `org_invites`: Seam 1 on desktop for an org's people, an owner
 //!   inviting, a second account joining and being removed, on the same
-//!   harness (`just test-org-invites`).
+//!   harness (`just test-org-invites`);
+//! - `web_room`: Seam 2 with a browser member, the web build joining a
+//!   room a desktop engine leads, by its link, and following the leader,
+//!   observed from the leader's MCP (`just test-web-room`).
 //!
 //! All are ignored unless their recipe runs them.
 
@@ -16,3 +19,4 @@ mod first_run;
 mod org_create;
 mod org_invites;
 mod web_boot;
+mod web_room;
