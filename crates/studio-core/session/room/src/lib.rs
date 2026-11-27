@@ -24,7 +24,7 @@
 //!   and presence ([`net::RoomHost`]); a member holds one connection to
 //!   them ([`net::RoomPeer`]) for as long as it is in the room, from a
 //!   desktop's engine or a browser's page alike ([`net::attach_to`]).
-//! - `gate` (feature `net`): the leader's door ([`gate::Door`]), which
+//! - `gate` (feature `net`, on a device): the leader's door ([`gate::Door`]), which
 //!   admits a call only when it presents the room's [`Pass`]: knowing the
 //!   link, or the leader's endpoint, is not enough to join.
 //!
@@ -35,7 +35,8 @@ pub mod lead;
 pub mod record;
 pub mod state;
 
-#[cfg(feature = "net")]
+// The leader's door: serving is a device's (a page never leads a room).
+#[cfg(all(feature = "net", not(target_arch = "wasm32")))]
 pub mod gate;
 #[cfg(feature = "net")]
 pub mod net;

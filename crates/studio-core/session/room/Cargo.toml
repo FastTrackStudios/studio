@@ -32,8 +32,6 @@ tracing = { workspace = true }
 # `iroh`: a member dials the leader, natively and in a browser (relay-only
 # there); serving is native.
 architect = { workspace = true, features = ["vox", "platform", "local", "iroh"], optional = true }
-# The leader's door (`gate`): who presented the room's pass.
-architect-permissions = { workspace = true, optional = true }
 # A member's calls carrying the pass (`net::Presents`), and its dial.
 vox = { workspace = true, optional = true }
 vox-core = { workspace = true, optional = true }
@@ -44,6 +42,10 @@ tokio = { version = "1", default-features = false, features = ["sync", "macros"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = ["js"] }
+
+# The leader's door (`gate`): who presented the room's pass. A device's.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+architect-permissions = { workspace = true, optional = true }
 
 [dev-dependencies]
 architect = { workspace = true, features = ["vox", "platform", "local", "iroh"] }

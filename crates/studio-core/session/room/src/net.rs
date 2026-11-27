@@ -27,9 +27,11 @@ use std::time::Duration;
 
 use architect::iroh_link::iroh;
 
+use live_doc::{DocPresenceClient, DocSyncClient, PresencePeer, SyncedDoc};
+#[cfg(not(target_arch = "wasm32"))]
 use live_doc::{
-    DocPresenceClient, DocPresenceDispatcher, DocSyncClient, DocSyncDispatcher, Hosts,
-    PresencePeer, SyncedDoc, doc_presence_service_descriptor, doc_sync_service_descriptor,
+    DocPresenceDispatcher, DocSyncDispatcher, Hosts, doc_presence_service_descriptor,
+    doc_sync_service_descriptor,
 };
 use loro::LoroValue;
 use session_sync::transport::{KEY, SharedTransport};
@@ -171,7 +173,9 @@ pub fn transport(presence: &PresencePeer) -> Option<SharedTransport> {
     presence.states().get(KEY).and_then(SharedTransport::decode)
 }
 
-/// The leader's end of a room: its doc, served with its presence.
+/// The leader's end of a room: its doc, served with its presence. A
+/// device's: a page never leads a room.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 pub struct RoomHost {
     id: uuid::Uuid,
@@ -181,6 +185,7 @@ pub struct RoomHost {
     stop: Arc<tokio::sync::watch::Sender<bool>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl RoomHost {
     /// Host room `id`, nothing loaded yet.
     #[must_use]
@@ -383,6 +388,10 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// The metadata a call's bearer rides (architect's permissions gate reads
+/// it: `permissions_gate::AUTHORIZATION_METADATA_KEY`, a device's only).
+const AUTHORIZATION: &str = "authorization";
+
 /// A member's calls to the leader, each presenting the room's pass as its
 /// `authorization` bearer: what the leader's door admits it by.
 #[derive(Clone)]
@@ -395,10 +404,7 @@ impl vox::ClientMiddleware for Presents {
         request: &'a mut vox::ClientRequest<'_, 'a>,
     ) -> vox::BoxMiddlewareFuture<'a> {
         if !self.0.is_empty() {
-            request.push_string_metadata(
-                architect::permissions_gate::AUTHORIZATION_METADATA_KEY,
-                format!("Bearer {}", self.0.expose()),
-            );
+            request.push_string_metadata(AUTHORIZATION, format!("Bearer {}", self.0.expose()));
         }
         Box::pin(async {})
     }
