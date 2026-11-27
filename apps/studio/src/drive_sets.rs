@@ -334,12 +334,24 @@ async fn read(
             }
         },
         web::list_in(Some(span), space, location, dir),
-        futures_util::future::join_all(places.iter().map(|p| async move {
-            match p {
-                Some((s, l, f)) => web::list_in(Some(span), s, l, f).await,
-                None => Vec::new(),
+        // Each song's folder, and the folder of the arrangement it plays.
+        futures_util::future::join_all(places.iter().zip(&lines).map(
+            |(p, (_, line))| async move {
+                let Some((s, l, f)) = p else {
+                    return (Vec::new(), Vec::new());
+                };
+                let arranged = async {
+                    match setfile::arrangement(line).1 {
+                        Some(a) => {
+                            let dir = crate::reference::arrangement_dir(f, a);
+                            web::list_in(Some(span), s, l, &dir).await
+                        }
+                        None => Vec::new(),
+                    }
+                };
+                futures_util::join!(web::list_in(Some(span), s, l, f), arranged)
             }
-        })),
+        )),
     );
     let location_name = siblings
         .first()
@@ -353,7 +365,7 @@ async fn read(
             songs: Vec::new(),
         })
         .collect();
-    for (((a, line), place), hits) in lines.into_iter().zip(places).zip(listed) {
+    for (((a, line), place), (hits, arranged)) in lines.into_iter().zip(places).zip(listed) {
         let hint = match setfile::song(line) {
             setfile::Song::Id { hint, .. } | setfile::Song::Title(hint) => hint.to_string(),
             setfile::Song::Path(p) => setfile::title_of(&setfile::folder(path, p), &[]),
@@ -365,7 +377,14 @@ async fn read(
                 place: Place {
                     space: space.into(),
                     location: location.into(),
-                    chart: crate::reference::pick_chart(&hint, &charts).cloned(),
+                    chart: crate::reference::place_chart(
+                        "",
+                        &hint,
+                        arrangement.as_deref(),
+                        &[],
+                        &[],
+                        &charts,
+                    ),
                     folder: String::new(),
                     arrangement,
                 },
@@ -373,12 +392,7 @@ async fn read(
             });
             continue;
         };
-        // Its own chart first (a `.kf` in its folder), then one named like it.
-        let own = hits
-            .iter()
-            .find(|h| !h.dir && h.name.ends_with(".kf"))
-            .cloned();
-        let names: Vec<String> = hits.into_iter().map(|h| h.name).collect();
+        let names: Vec<String> = hits.iter().map(|h| h.name.clone()).collect();
         let title = if names.is_empty() && !hint.is_empty() {
             hint
         } else {
@@ -386,9 +400,15 @@ async fn read(
         };
         acts[a].songs.push(FileSong {
             place: Place {
-                chart: own
-                    .or_else(|| crate::reference::pick_chart(&folder, &charts).cloned())
-                    .or_else(|| crate::reference::pick_chart(&title, &charts).cloned()),
+                // The arrangement's chart when it plays one, else the song's own.
+                chart: crate::reference::place_chart(
+                    &folder,
+                    &title,
+                    arrangement.as_deref(),
+                    &hits,
+                    &arranged,
+                    &charts,
+                ),
                 space: s,
                 location: l,
                 folder,
