@@ -729,13 +729,21 @@ fn wasm() -> Job {
         .step(mark_green("wasm"))
 }
 
-/// REQUIRED when the browser build is planned: the app's screens at phone
+/// REPORT-ONLY for now (not in `CI passed`), run when the browser build is
+/// planned: the app's screens at phone
 /// width (390x844) and on an iPad (820x1180), studio#702. The web build in
 /// headless Chrome (`just test-web-screens`, apps/studio/tests/it/web_boot.rs):
 /// a set built there (search, add, key, leader, reorder), then the
 /// session's arrangement, mixer, chart and overview, each checked for fit
 /// and touch size. Every screenshot is kept as the `web-screens` artifact,
 /// passed or failed, to look at.
+///
+/// It is not among `CI passed`'s needs: it has never run on the pool, and it
+/// needs Chrome and a drive-node there, so a failure of its own setup would
+/// turn main red and stop a release.
+// TODO(studio#702): once this job has been green on main, require it: add
+// "web-screens" back to `ci_passed`'s needs, its result to the aggregate's
+// env (WEB_SCREENS) and to the AGGREGATE builds loop.
 fn web_screens() -> Job {
     pool_job("Web screens", "web-screens", 75)
         .cond("${{ needs.rail.outputs.wasm == 'true' }}")
@@ -923,7 +931,6 @@ fn ci_passed() -> Result<Job> {
             "gates",
             "check",
             "wasm",
-            "web-screens",
             "tests",
             "release-macos",
             "apple",
@@ -939,7 +946,6 @@ fn ci_passed() -> Result<Job> {
                 .env("GATES", "${{ needs.gates.result }}")
                 .env("CHECK", "${{ needs.check.result }}")
                 .env("WASM", "${{ needs.wasm.result }}")
-                .env("WEB_SCREENS", "${{ needs.web-screens.result }}")
                 .env("TESTS", "${{ needs.tests.result }}")
                 .env("RELEASE_MACOS", "${{ needs.release-macos.result }}")
                 .env("APPLE", "${{ needs.apple.result }}")
@@ -972,7 +978,7 @@ for job in "gates:$GATES" "release-macos:$RELEASE_MACOS"; do
 done
 # The builds: skipped is fine when the rail plan skipped them (nothing they
 # cover changed since a green base); anything else must have succeeded.
-for job in "check:$CHECK" "wasm:$WASM" "web-screens:$WEB_SCREENS" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
+for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
   case "${job#*:}" in
     success | skipped) ;;
     *) bad "${job%%:*}: ${job#*:}" ;;

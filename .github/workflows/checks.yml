@@ -726,7 +726,6 @@ jobs:
     - gates
     - check
     - wasm
-    - web-screens
     - tests
     - release-macos
     - apple
@@ -744,7 +743,6 @@ jobs:
         GATES: ${{ needs.gates.result }}
         CHECK: ${{ needs.check.result }}
         WASM: ${{ needs.wasm.result }}
-        WEB_SCREENS: ${{ needs.web-screens.result }}
         TESTS: ${{ needs.tests.result }}
         RELEASE_MACOS: ${{ needs.release-macos.result }}
         APPLE: ${{ needs.apple.result }}
@@ -761,7 +759,7 @@ jobs:
         done
         # The builds: skipped is fine when the rail plan skipped them (nothing they
         # cover changed since a green base); anything else must have succeeded.
-        for job in "check:$CHECK" "wasm:$WASM" "web-screens:$WEB_SCREENS" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
+        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
           case "${job#*:}" in
             success | skipped) ;;
             *) bad "${job%%:*}: ${job#*:}" ;;
