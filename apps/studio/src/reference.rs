@@ -105,6 +105,61 @@ pub fn pick_chart<'a>(folder: &str, charts: &'a [Hit]) -> Option<&'a Hit> {
         .map(|(_, h)| h)
 }
 
+/// The folder an arrangement's own files are in, under its song's folder
+/// (`Arrangements/<name>`, as the chart extension's `song_folder` reads it).
+pub fn arrangement_dir(folder: &str, arrangement: &str) -> String {
+    format!("{folder}/Arrangements/{arrangement}")
+}
+
+/// The chart a set's place follows.
+///
+/// A place that plays an arrangement follows that arrangement's: a `.kf`
+/// in its folder ([`arrangement_dir`]; `arranged` is that folder's
+/// listing, else one Drive found there among `charts`), else one named
+/// like the song and the arrangement ("Know Me (Extended)"). Never the
+/// song's own, which is another form, often in another key: with none,
+/// the chart generated from the arrangement's session shows.
+///
+/// The song as recorded follows its own (a `.kf` in `own`, its folder's
+/// listing), else one named like its folder, else like its `title`.
+pub fn place_chart(
+    folder: &str,
+    title: &str,
+    arrangement: Option<&str>,
+    own: &[Hit],
+    arranged: &[Hit],
+    charts: &[Hit],
+) -> Option<Hit> {
+    let kf = |h: &&Hit| !h.dir && h.name.ends_with(".kf");
+    let name = folder.rsplit('/').next().filter(|n| !n.is_empty());
+    let Some(arrangement) = arrangement else {
+        return own
+            .iter()
+            .find(kf)
+            .or_else(|| name.and_then(|n| pick_chart(n, charts)))
+            .or_else(|| pick_chart(title, charts))
+            .cloned();
+    };
+    let dir = (!folder.is_empty()).then(|| format!("{}/", arrangement_dir(folder, arrangement)));
+    let in_dir = || {
+        let dir = dir.as_deref()?;
+        charts
+            .iter()
+            .filter(kf)
+            .filter(|h| h.path.starts_with(dir) && !h.path[dir.len()..].contains('/'))
+            .min_by(|a, b| a.name.cmp(&b.name))
+    };
+    let named = |song: &str| pick_chart(&format!("{song} {arrangement}"), charts);
+    arranged
+        .iter()
+        .filter(kf)
+        .min_by(|a, b| a.name.cmp(&b.name))
+        .or_else(in_dir)
+        .or_else(|| name.and_then(named))
+        .or_else(|| named(title))
+        .cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +211,63 @@ mod tests {
         assert_eq!(got("know-me"), Some("10 Know Me (Extended).kf"));
         assert_eq!(got("songs/sleigh-ride"), Some("Sleigh Ride.kf"));
         assert_eq!(got("sleeptalker"), None);
+    }
+
+    /// #624: a set's place that plays an arrangement follows that
+    /// arrangement's chart, never the song's own (another form, often
+    /// another key).
+    #[test]
+    fn a_place_that_plays_an_arrangement_follows_its_chart() {
+        let kf = |path: &str| Hit {
+            name: path.rsplit('/').next().unwrap().into(),
+            path: path.into(),
+            online: true,
+            ..Default::default()
+        };
+        let folder = "Libraries/L/Know Me";
+        // The song's own chart (in G), beside its session.
+        let own = vec![kf("Libraries/L/Know Me/Know Me.kf")];
+        // Its Big Intro arrangement's (in A), in its arrangement's folder.
+        let big_intro = vec![kf("Libraries/L/Know Me/Arrangements/Big Intro/Know Me.kf")];
+        let charts = vec![
+            own[0].clone(),
+            big_intro[0].clone(),
+            kf("Libraries/L/Know Me/Arrangements/Extended/Know Me (Extended).kf"),
+            kf("Projects/Recital/charts/10 Know Me (Acoustic).kf"),
+        ];
+        let got = |arr: Option<&str>, arranged: &[Hit]| {
+            place_chart(folder, "Know Me", arr, &own, arranged, &charts).map(|h| h.path)
+        };
+        // The song as recorded: its own chart.
+        assert_eq!(
+            got(None, &[]).as_deref(),
+            Some("Libraries/L/Know Me/Know Me.kf")
+        );
+        // Big Intro: its folder's chart, listed.
+        assert_eq!(
+            got(Some("Big Intro"), &big_intro).as_deref(),
+            Some("Libraries/L/Know Me/Arrangements/Big Intro/Know Me.kf")
+        );
+        // Extended: its folder's chart, as Drive found it (no listing).
+        assert_eq!(
+            got(Some("Extended"), &[]).as_deref(),
+            Some("Libraries/L/Know Me/Arrangements/Extended/Know Me (Extended).kf")
+        );
+        // Acoustic: a chart named like the song and the arrangement.
+        assert_eq!(
+            got(Some("Acoustic"), &[]).as_deref(),
+            Some("Projects/Recital/charts/10 Know Me (Acoustic).kf")
+        );
+        // Shortened has none: no chart (the one generated from the
+        // arrangement's session shows), never the song's own.
+        assert_eq!(got(Some("Shortened"), &[]), None);
+        // A song with no session found: by its title and the arrangement.
+        assert_eq!(
+            place_chart("", "Know Me", Some("Acoustic"), &[], &[], &charts)
+                .map(|h| h.path)
+                .as_deref(),
+            Some("Projects/Recital/charts/10 Know Me (Acoustic).kf")
+        );
     }
 
     #[test]
