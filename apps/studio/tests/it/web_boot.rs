@@ -342,10 +342,14 @@ fn building_a_set(session: &Session<'_>, origin: &str, shots: &Shots) {
     session.wait_for(Duration::from_secs(10), "the song's sheet", |s| {
         (s.count(".edrow select option") >= 2).then_some(())
     });
-    let leader = session.script(
-        "return document.querySelector('.edrow select option:nth-child(2)')?.textContent || '';",
+    // Someone who does not lead it yet, so the row's change is this pick's.
+    let pick = ".edrow select option:not(:checked):not([value=''])";
+    let leader = session.script_with(
+        "return document.querySelector(arguments[0])?.textContent || '';",
+        json!([pick]),
     );
-    session.click(".edrow select option:nth-child(2)");
+    assert!(!leader.trim().is_empty(), "nobody else to lead the song");
+    session.click(pick);
     session.wait_for(Duration::from_secs(10), "the leader shown on its row", |s| {
         let row = s.script(
             "return document.querySelector('.erow:not(.esec):not(.eitem) .meta3')?.innerText || '';",
@@ -927,7 +931,7 @@ impl Session<'_> {
         serde_json::from_str(&listed).unwrap_or_default()
     }
 
-    /// What does not fit on `where` at this screen's width: the page
+    /// What does not fit on `place` at this screen's width: the page
     /// scrolling sideways, or any of `parts` (each must be there) reaching
     /// past either edge.
     fn fits(&self, place: &str, parts: &[&str]) {

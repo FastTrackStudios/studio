@@ -754,7 +754,7 @@ fn web_screens() -> Job {
             .cond("${{ always() }}")
             .with("name", "web-screens")
             .with("path", "${{ runner.temp }}/web-shots\n")
-            .with("if-no-files-found", "ignore")
+            .with("if-no-files-found", "warn")
             .with("retention-days", 14),
         )
 }

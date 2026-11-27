@@ -505,7 +505,7 @@ jobs:
         name: web-screens
         path: |
           ${{ runner.temp }}/web-shots
-        if-no-files-found: ignore
+        if-no-files-found: warn
         retention-days: 14
   tests:
     name: Tests

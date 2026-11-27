@@ -27,19 +27,14 @@ pub const WIDE: f64 = 800.0;
 /// shows it near its own size and the chords stay readable at arm's length
 /// (laid out at [`WIDE`], a 390 pt phone would draw it at under half size).
 pub const NARROW: f64 = 360.0;
-/// Windows narrower than this (points) are a phone's.
-const PHONE_BELOW: f64 = 600.0;
 const PADDING: f64 = 6.0;
 
 /// The width to lay a chart out at in a window `window` points wide (0:
 /// not measured yet, laid out for a page with room).
 #[must_use]
 pub fn layout_width(window: f64) -> f64 {
-    if window > 0.0 && window < PHONE_BELOW {
-        NARROW
-    } else {
-        WIDE
-    }
+    let phone = app_shell::ui::FormFactor::for_width(window) == app_shell::ui::FormFactor::Phone;
+    if window > 0.0 && phone { NARROW } else { WIDE }
 }
 
 /// A chart ready to show.

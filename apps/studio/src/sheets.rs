@@ -595,12 +595,12 @@ fn MoreSheet() -> Element {
             div { class: "bhead",
                 b { "More for this set" }
             }
-            for (l , i) in [
-                ("Arrangement", I::Branch),
-                ("Mixer", I::Sliders),
-                ("Lighting visualizer", I::Bulb),
-                ("Lighting cue list", I::Cues),
-                ("Notes", I::Message),
+            for (l , i , view) in [
+                ("Arrangement", I::Branch, Some(crate::session::View::Arrangement)),
+                ("Mixer", I::Sliders, Some(crate::session::View::Mixer)),
+                ("Lighting visualizer", I::Bulb, None),
+                ("Lighting cue list", I::Cues, None),
+                ("Notes", I::Message, None),
             ]
             {
                 button {
@@ -611,11 +611,6 @@ fn MoreSheet() -> Element {
                         // The arrangement and the mixer are the session's:
                         // into it, the set playing (from its top if nothing
                         // is yet).
-                        let view = match l {
-                            "Arrangement" => Some(crate::session::View::Arrangement),
-                            "Mixer" => Some(crate::session::View::Mixer),
-                            _ => None,
-                        };
                         let Some(view) = view else {
                             app.say(l);
                             return;

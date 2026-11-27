@@ -124,12 +124,13 @@ test-web-boot *ARGS:
     export STUDIO_WEB_DIST="$target/dx/Studio/debug/web/public"
     export STUDIO_WEB_SHOTS="${STUDIO_WEB_SHOTS:-$target/web-shots}"
     # The screens' tests serve the page from a Drive node (a set is a Drive document): DRIVE_NODE_BIN, else the
-    # drive-node on PATH, else Drive's own package.
+    # drive-node on PATH, else Drive's own package at the revision Cargo.lock pins.
     if [ -z "${DRIVE_NODE_BIN:-}" ]; then
         if command -v drive-node >/dev/null; then
             DRIVE_NODE_BIN="$(command -v drive-node)"
         else
-            DRIVE_NODE_BIN="$(nix build --no-link --print-out-paths github:FastTrackStudios/drive#drive-node)/bin/drive-node"
+            rev="$(grep -m1 -o 'FastTrackStudios/drive?rev=[0-9a-f]*#[0-9a-f]*' Cargo.lock | cut -d'#' -f2)"
+            DRIVE_NODE_BIN="$(nix build --no-link --print-out-paths "github:FastTrackStudios/drive/$rev#drive-node")/bin/drive-node"
         fi
         export DRIVE_NODE_BIN
     fi
