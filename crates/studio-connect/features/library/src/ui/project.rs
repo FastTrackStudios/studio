@@ -89,7 +89,7 @@ pub(crate) fn Projects() -> Element {
     };
     rsx! {
         Page {
-            ListHeader { title: "Projects", detail: format!("{} projects · what the band is working on, kept in Task", projects.len()), action: "New project" }
+            ListHeader { title: "Projects", detail: format!("{} projects · what the band is working on", projects.len()), action: "New project" }
             Columns { columns: columns.clone(), names }
             for p in projects {
                 {

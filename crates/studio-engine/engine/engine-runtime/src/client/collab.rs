@@ -16,9 +16,6 @@ pub struct Status {
     /// This person, as the others see them: name and colour.
     pub name: String,
     pub color: u32,
-    /// When a playground set (the public demo) starts over, on this
-    /// machine's clock; `None` for a set that keeps what is done in it.
-    pub resets_at: Option<architect::platform::Instant>,
     /// This device is locked ([`sync_locked`]): nothing goes out or comes
     /// in until it is unlocked.
     pub locked: bool,

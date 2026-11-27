@@ -358,18 +358,11 @@ pub fn live_now() -> LiveFrame {
             set: s.set,
             name: s.name,
             color: s.color,
-            resets_in_secs: s.resets_at.map(|at| {
-                at.saturating_duration_since(architect::platform::Instant::now())
-                    .as_secs()
-            }),
             locked: s.locked,
             held: count(s.held),
         }),
-        joining: crate::collab::joining(),
         error: crate::collab::last_error(),
         locked: crate::collab::sync_locked(),
-        hosted: crate::live_host::hosted().map(|h| h.title),
-        host_error: crate::live_host::last_error(),
         notices: crate::collab::notices(),
         people: crate::presence::everyone()
             .into_iter()

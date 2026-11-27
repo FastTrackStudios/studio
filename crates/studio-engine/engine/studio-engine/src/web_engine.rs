@@ -81,19 +81,12 @@ impl EngineRef {
 /// What the page opens.
 #[derive(Clone, Debug, PartialEq)]
 pub enum WebSource {
-    /// A song shared by a Task share link: its files mirrored into memory,
-    /// its proxies streamed by range, what will be heard first first.
-    Shared { link: String },
     /// A copy bundled with the page: its project and chart by URL; silent.
     Bundled {
         name: String,
         rpp_url: String,
         chart_url: Option<String>,
     },
-    /// A live share link to a set Task keeps (`live-proto`): the page joins
-    /// it — its first song opened from that song's files link, everyone in
-    /// the set in one session with it (`collab::join_task`), by `name`.
-    Live { link: String, name: String },
     /// A set shared by an Architect share link (`https://<node>/s/<code>/`):
     /// every song the link lists with a project, all in the page's one
     /// engine, each song's renditions streamed by range from the link's own
@@ -119,8 +112,6 @@ struct Wanted {
 }
 
 enum Origin {
-    /// A Task share link to the song's session folder.
-    Share(String),
     /// A song of an Architect share link.
     Link(engine_runtime::link::LinkSong),
     /// A copy bundled with the page.
@@ -508,18 +499,11 @@ const OPEN_AT_ONCE: usize = 4;
 
 pub use engine_core::web_slices::in_slices;
 
-thread_local! {
-    /// Whether the page opens a live set: each song's build hands its
-    /// bridge to the session it joins (`collab::song_built`).
-    static IN_LIVE_SET: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
 /// Open the page the one way songs open (`open_core::open_song_in`, from
-/// a memory folder), first song first: a live set is joined (and joined
-/// again until Task answers — it may be restarting), its first song
-/// fetched, opened, read back and returned to be shown, and the set's
-/// other songs opened into the same engine behind it, one by one
-/// ([`take_arrivals`]) — each joining the live session as it does.
+/// a memory folder), first song first: a share link's set is read (tried
+/// again until it answers), its first song fetched, opened, read back and
+/// returned to be shown, and the set's other songs opened into the same
+/// engine behind it, one by one ([`take_arrivals`]).
 /// `progress` hears each step for the loading screen. `guide` is a share
 /// link to the guide sample library (as Ogg) the click, count and cue
 /// tracks play from; without it they play synthesized ticks and beeps.
@@ -552,51 +536,11 @@ pub async fn open_with(
     // How long each step took, for the events that say the set is up.
     let began = web_time::Instant::now();
     let ms = move || u64::try_from(began.elapsed().as_millis()).unwrap_or(u64::MAX);
-    // What to open: a live set's songs (joined first, for their files
-    // links), or the one song a link or the page names.
-    let mut live: Option<crate::collab::TaskSet> = None;
+    // What to open: a share link's set, or the song the page bundles.
     let mut wanted: Vec<Wanted> = match source {
-        WebSource::Live { link, .. } => {
-            IN_LIVE_SET.with(|l| l.set(true));
-            let set = crate::collab::TaskSet::parse(&format!("share:{link}"));
-            progress(Progress::Joining { retry: None });
-            let joined = crate::task_set::until_ok(
-                None,
-                || crate::task_set::join(&set.url),
-                |why| {
-                    progress(Progress::Joining { retry: Some(why) });
-                },
-            )
-            .await?;
-            tracing::info!(live.setlist = %joined.title, live.songs = joined.songs.len(), live.epoch = joined.epoch, "web: joined a live set");
-            watch_set(set.url.clone(), joined.setlist.clone(), joined.epoch);
-            let wanted = joined
-                .songs
-                .iter()
-                .filter_map(|s| {
-                    Some(Wanted {
-                        title: Some(s.title.clone()),
-                        note: None,
-                        folder: None,
-                        from: Origin::Share(s.files.clone()?),
-                    })
-                })
-                .collect();
-            live = Some(crate::collab::TaskSet {
-                setlist: joined.setlist,
-                ..set
-            });
-            wanted
-        }
-        WebSource::Shared { link } => vec![Wanted {
-            title: None,
-            note: None,
-            folder: None,
-            from: Origin::Share(link.clone()),
-        }],
         WebSource::Link { url } => {
             progress(Progress::Joining { retry: None });
-            let set = crate::task_set::until_ok(
+            let set = crate::retry::until_ok(
                 Some(6),
                 || engine_runtime::link::LinkSet::open(url),
                 |why| {
@@ -657,7 +601,7 @@ pub async fn open_with(
     });
     // The first song and the guide's samples at once: neither needs the
     // other, and the guide's were fetched only once the song was in.
-    let song = crate::task_set::until_ok(
+    let song = crate::retry::until_ok(
         Some(8),
         || fetch_song(&first),
         |why| {
@@ -735,15 +679,6 @@ pub async fn open_with(
         "web: the first song is up"
     );
 
-    // In the live set with everyone else (the facade is up: the session's
-    // bridges read and drive the engine through it). The songs that open
-    // after this join it as they do (`collab::song_opened`).
-    if let (Some(set), WebSource::Live { name, .. }) = (live, source) {
-        if let Err(e) = crate::collab::join_task(&set, name.clone()) {
-            tracing::warn!(collab.error = %e, "web: could not join the live set");
-        }
-    }
-
     // The set's other songs, behind the one on screen, in set order.
     let mut setlist = crate::setlist::Setlist::of(vec![song]);
     setlist.pending = rest
@@ -775,7 +710,7 @@ pub async fn open_with(
             let mut fetching = futures_util::stream::iter(rest)
                 .map(|want| async move {
                     let fetched =
-                        crate::task_set::until_ok(Some(6), || fetch_song(&want), |_| {}).await;
+                        crate::retry::until_ok(Some(6), || fetch_song(&want), |_| {}).await;
                     (want, fetched)
                 })
                 .buffered(OPEN_AT_ONCE);
@@ -808,7 +743,6 @@ pub async fn open_with(
                             }
                         }
                     });
-                    crate::collab::song_opened(&project);
                     songs_opened += 1;
                     Arrival::Song(song)
                 }
@@ -840,22 +774,8 @@ pub async fn open_with(
 /// proxies stream later, by range), or the page's bundled copy.
 async fn fetch_song(want: &Wanted) -> eyre::Result<Fetched> {
     use crate::folder::Memory;
-    use crate::song_stream::{Keep, ShareSource, mirror};
+    use crate::song_stream::{Keep, mirror};
     match &want.from {
-        Origin::Share(link) => {
-            let song = mirror(
-                Arc::new(ShareSource::new(link)?),
-                Keep::Memory(Memory::new()),
-            )
-            .await?
-            .with_listen(listen());
-            Ok(Fetched {
-                folder: Arc::clone(&song.folder),
-                path: song.project.clone(),
-                streamed: Some(song),
-                by_stems: false,
-            })
-        }
         Origin::Link(song) => {
             let song = mirror(Arc::new(song.clone()), Keep::Memory(Memory::new()))
                 .await?
@@ -994,9 +914,8 @@ async fn open_project_file(
         .await
         .map_err(|e| eyre::eyre!("{name} is not in the engine: {e}"))?;
     // Built, the bridge has done its work here: a page keeps no project
-    // file to save into. In a live set the session joins the song through
-    // it (`collab::song_built`), so the song is not read back again.
-    let built = engine_sync::Bridge::join(
+    // file to save into.
+    engine_sync::Bridge::join(
         project,
         engine_sync::engine::MediaRoot(media_dir.clone()),
         doc,
@@ -1007,9 +926,6 @@ async fn open_project_file(
     )
     .await
     .map_err(|e| eyre::eyre!("{name} did not build: {e}"))?;
-    if IN_LIVE_SET.with(std::cell::Cell::get) {
-        crate::collab::song_built(&guid, built);
-    }
     daw::standalone::project_loader::anchor_media(standalone, &guid, &media_dir);
     Ok((guid, name))
 }
@@ -1332,67 +1248,6 @@ fn hear_stems(web: &Web, project: &str, asked: bool) {
 /// Where the play cursor is, as the fetchers follow it.
 fn playhead() -> Arc<dyn Fn() -> f64 + Send + Sync> {
     Arc::new(|| crate::engine::Transport::shared().map_or(0.0, |t| t.read().0))
-}
-
-/// Keep the page in the set it joined. A playground set (the public
-/// demo) starts over every few minutes — its songs' docs made new, the
-/// ones this page syncs no longer served — so when the set's epoch moves
-/// past `epoch` the page opens again, its songs from the browser's cache,
-/// into the new run. And when the connection to Task goes (Task
-/// restarting, a network blip), the set is joined again once Task answers
-/// — which is also what has Task serve the set's docs again after a
-/// restart; the session's replicas reconnect by themselves. Only a set
-/// that moved on meanwhile opens the page again.
-fn watch_set(url: String, setlist: String, epoch: u64) {
-    use live_proto::LiveSessionsStreamClient;
-    let reload = || {
-        if let Some(window) = web_sys::window() {
-            let _ = window.location().reload();
-        }
-    };
-    wasm_bindgen_futures::spawn_local(async move {
-        loop {
-            if let Ok(stream) =
-                task_dial::establish_at::<LiveSessionsStreamClient>(&url, None).await
-            {
-                let (tx, mut rx) = vox::channel::<live_proto::LiveEpoch>();
-                wasm_bindgen_futures::spawn_local(async move {
-                    let _ = stream.epochs(tx).await;
-                });
-                while let Ok(Some(message)) = rx.recv().await {
-                    let mut next = None;
-                    let _ = message.map(|e| next = Some((e.setlist.clone(), e.epoch)));
-                    if let Some((set, moved)) = next
-                        && set == setlist
-                        && moved > epoch
-                    {
-                        tracing::info!(
-                            live.epoch = moved,
-                            "web: the set starts over; opening it again"
-                        );
-                        reload();
-                        return;
-                    }
-                }
-            }
-            // The connection went: join again once Task answers.
-            tracing::info!("web: lost Task; joining the set again");
-            let Ok(joined) =
-                crate::task_set::until_ok(None, || crate::task_set::join(&url), |_| {}).await
-            else {
-                continue;
-            };
-            if joined.setlist == setlist && joined.epoch != epoch {
-                tracing::info!(
-                    live.epoch = joined.epoch,
-                    "web: the set moved on while away; opening it again"
-                );
-                reload();
-                return;
-            }
-            tracing::info!("web: back in the set");
-        }
-    });
 }
 
 /// Every take of a shared song attached as its proxy, streaming in — the

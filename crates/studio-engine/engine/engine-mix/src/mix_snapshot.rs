@@ -33,7 +33,8 @@ use facet::Facet;
 use crate::actions::{meta, song};
 use crate::mix_sends::{db, gain, tap_of, tap_word};
 
-const SECTION: &str = engine_core::mix_states::SECTION;
+use engine_core::mix_states::{self, SECTION, state_key};
+
 /// The names of the song's snapshots.
 const NAMES: &str = "snapshots";
 /// The snapshot (or `group:variant`) last taken, restored or kept: a new
@@ -458,12 +459,14 @@ fn key(name: &str) -> String {
 }
 
 /// `mix` as it is kept: each plugin state stored once, under its hash, and
-/// named in the mix by it (`@<hash>`).
+/// named in the mix by it (`@<hash>`). Call it holding
+/// `engine_core::mix_states::writing` until the mix is written.
 ///
 /// A song's 54 snapshots held 280 MB of plugin state, 8 MB of it unique: a
 /// snapshot repeats every FX's state, most of them unchanged since the
-/// last. An older snapshot, its states inline, reads as it did. (A state
-/// no snapshot names any more stays: the ext state cannot be listed.)
+/// last. An older snapshot, its states inline, reads as it did. A state
+/// no mix names any more goes when the song is saved
+/// (`engine_core::mix_states::sweep`).
 ///
 /// # Errors
 /// A state would not be kept, or the mix would not encode.
@@ -474,16 +477,16 @@ pub(crate) fn encode_mix(
 ) -> Result<String, String> {
     let mut kept = mix.clone();
     for fx in &mut kept.fx {
-        if fx.state.is_empty() || fx.state.starts_with(engine_core::mix_states::REF) {
+        if !mix_states::is_inline(&fx.state) {
             continue;
         }
-        let hash = engine_core::mix_states::hash(&fx.state);
-        let at = engine_core::mix_states::state_key(&hash);
+        let hash = mix_states::hash(&fx.state);
+        let at = state_key(&hash);
         if !daw_proto::ExtState::has_project(daw, project.clone(), SECTION, &at) {
             daw_proto::ExtState::set_project(daw, project.clone(), SECTION, &at, &fx.state)
                 .map_err(|e| e.to_string())?;
         }
-        fx.state = format!("{}{hash}", engine_core::mix_states::REF);
+        fx.state = format!("{}{hash}", mix_states::REF);
     }
     facet_json::to_string(&kept).map_err(|e| e.to_string())
 }
@@ -499,10 +502,10 @@ pub(crate) fn decode_mix(
 ) -> Result<Mix, String> {
     let mut mix = facet_json::from_str::<Mix>(text).map_err(|e| e.to_string())?;
     for fx in &mut mix.fx {
-        if let Some(hash) = fx.state.strip_prefix(engine_core::mix_states::REF) {
-            let at = engine_core::mix_states::state_key(hash);
-            fx.state = daw_proto::ExtState::get_project(daw, project.clone(), SECTION, &at)
-                .ok_or_else(|| format!("{}: its plugin state {hash} is gone", fx.name))?;
+        if let Some(hash) = fx.state.strip_prefix(mix_states::REF) {
+            fx.state =
+                daw_proto::ExtState::get_project(daw, project.clone(), SECTION, &state_key(hash))
+                    .ok_or_else(|| format!("{}: its plugin state {hash} is gone", fx.name))?;
         }
     }
     Ok(mix)
@@ -600,6 +603,8 @@ fn snapshot_with(
     }
     let label = format!("Mix snapshot {name}");
     daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
+    // No save sweeps the states between their keeping and the mix naming them.
+    let writing = engine_core::mix_states::writing();
     let kept = encode_mix(daw, project, &mix).and_then(|text| {
         daw_proto::ExtState::set_project(daw, project.clone(), SECTION, &key(name), &text)
             .and_then(|()| {
@@ -614,6 +619,7 @@ fn snapshot_with(
             .map(|()| text.len())
             .map_err(|e| e.to_string())
     });
+    drop(writing);
     daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
     let kept_bytes = kept?;
     set_head(daw, project, name.trim());

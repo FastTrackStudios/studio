@@ -1,7 +1,8 @@
 //! The UIScene lifecycle, which iOS 27 requires of every app — and the
 //! little else of UIKit the apps reach for themselves: which side the
 //! camera housing is on ([`island_on_left`]), what the device is called
-//! ([`device_name`]), links ([`open_url`]) and the pasteboard ([`pasted`]).
+//! ([`device_name`]), links ([`open_url`]; and the links the app is opened
+//! with, [`on_link`]) and the pasteboard ([`pasted`]).
 //!
 //! One copy for every app (Studio, and Session's and Signal's own builds):
 //! a process registers ONE scene delegate, `StudioSceneDelegate`, which the
@@ -28,14 +29,16 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::ptr::NonNull;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use objc2::rc::Retained;
 use objc2::runtime::NSObjectProtocol;
 use objc2::{ClassType, MainThreadMarker, MainThreadOnly, define_class};
+use objc2_foundation::NSSet;
 use objc2_ui_kit::{
-    UIApplication, UIResponder, UIScene, UISceneConnectionOptions, UISceneDelegate, UISceneSession,
-    UIView, UIWindow, UIWindowScene, UIWindowSceneDelegate,
+    UIApplication, UIOpenURLContext, UIResponder, UIScene, UISceneConnectionOptions,
+    UISceneDelegate, UISceneSession, UIView, UIWindow, UIWindowScene, UIWindowSceneDelegate,
 };
 
 define_class!(
@@ -54,9 +57,18 @@ define_class!(
             &self,
             scene: &UIScene,
             _session: &UISceneSession,
-            _options: &UISceneConnectionOptions,
+            options: &UISceneConnectionOptions,
         ) {
             attach(MainThreadMarker::from(scene));
+            // Launched by a link (the app was not running): it comes with
+            // the scene's connection, never to `scene:openURLContexts:`.
+            opened(&options.URLContexts());
+        }
+
+        /// A link opened while the app runs.
+        #[unsafe(method(scene:openURLContexts:))]
+        fn open_url_contexts(&self, _scene: &UIScene, contexts: &NSSet<UIOpenURLContext>) {
+            opened(contexts);
         }
 
         #[unsafe(method(sceneDidBecomeActive:))]
@@ -71,6 +83,35 @@ define_class!(
 thread_local! {
     /// winit's window, once the shell has handed it over.
     static WINDOW: RefCell<Option<Retained<UIWindow>>> = const { RefCell::new(None) };
+}
+
+/// What the app does with a link it is opened with (a URL in a scheme its
+/// `Info.plist` declares).
+static ON_LINK: OnceLock<fn(&str)> = OnceLock::new();
+
+/// Hand every link the app is opened with to `handler`, on the main thread:
+/// the link it was launched by and each one opened while it runs. Call it
+/// before [`register`], so the launch's own link is not missed; a second
+/// call is a no-op.
+pub fn on_link(handler: fn(&str)) {
+    let _ = ON_LINK.set(handler);
+}
+
+/// The links in `contexts`, to the app's handler.
+fn opened(contexts: &NSSet<UIOpenURLContext>) {
+    for context in contexts.iter() {
+        let Some(url) = context.URL().absoluteString() else {
+            continue;
+        };
+        let url = url.to_string();
+        match ON_LINK.get() {
+            Some(handler) => handler(&url),
+            None => tracing::warn!(
+                ios.link.scheme = url.split(':').next().unwrap_or_default(),
+                "ios: opened with a link the app has no handler for"
+            ),
+        }
+    }
 }
 
 /// Which way the app opens on a phone.

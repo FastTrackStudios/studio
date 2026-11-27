@@ -43,9 +43,6 @@ use ::engine_client::{render_ahead, studio_engine};
 #[cfg(all(any(feature = "native", feature = "web"), feature = "engine"))]
 #[allow(unused_imports)]
 use ::studio_engine::collab;
-#[cfg(any(feature = "web", feature = "engine"))]
-#[allow(unused_imports)]
-use ::studio_engine::live_host;
 #[cfg(all(feature = "signal", feature = "engine"))]
 #[allow(unused_imports)]
 use ::studio_engine::rig_actions;

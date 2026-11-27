@@ -85,4 +85,13 @@ impl ExtState for crate::Reaper {
     fn has_project(&self, project: ProjectContext, section: &str, key: &str) -> bool {
         ExtState::get_project(self, project, section, key).is_some()
     }
+
+    fn keys_project(&self, project: ProjectContext, section: &str) -> Vec<String> {
+        let Ok(section_c) = CString::new(section) else {
+            return Vec::new();
+        };
+        let low = ReaperHigh::get().medium_reaper().low();
+        let proj_ctx = resolve_project_context(&project);
+        sw::proj_ext_state_keys(low, proj_ctx, &section_c)
+    }
 }

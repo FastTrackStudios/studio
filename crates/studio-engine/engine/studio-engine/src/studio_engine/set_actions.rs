@@ -26,23 +26,6 @@ struct OpenArg {
     path: Option<String>,
 }
 
-static OPEN_SETLIST: ActionMeta = meta(
-    "SESSION_OPEN_SETLIST",
-    "session_open_setlist",
-    "Open a setlist from the library",
-    "Stream a setlist of an org's Task library in, as a click on it does: `setlist` its title, `org` the org whose library holds it (FTS_TASK_ORG, else the one last picked, when left out), `song` one of its songs (slug or title) to open alone — or, with no `setlist`, a song of the library in no list. What is open is not saved first. Opens in the engine, as the person signed in on this machine, a window or none; returns at once — SESSION_OPENING says how it goes, SESSION_SONGS lists the songs as they open.",
-    "Session",
-    "",
-);
-
-/// Which setlist of which library, and optionally which of its songs.
-#[derive(Facet)]
-struct OpenSetlistArg {
-    setlist: String,
-    org: Option<String>,
-    song: Option<String>,
-}
-
 static OPENING: ActionMeta = meta(
     "SESSION_OPENING",
     "session_opening",
@@ -127,22 +110,6 @@ static CLOSE: ActionMeta = meta(
     "",
 );
 
-static JOIN: ActionMeta = meta(
-    "SESSION_JOIN",
-    "session_join",
-    "Join a live set",
-    "Join a set Task keeps, by its live link (`link`, `https://…/org/<org>/share/<id>`), as `name` (left out: Guest): its songs stream into the engine and play, the set followed with everyone in it. Returns at once — SESSION_OPENING says how it goes.",
-    "Set",
-    "",
-);
-
-/// Which live set, as whom.
-#[derive(Facet)]
-struct JoinArg {
-    link: String,
-    name: Option<String>,
-}
-
 static SONG_SET: ActionMeta = meta(
     "SESSION_SONG_SET",
     "session_song_set",
@@ -200,7 +167,7 @@ static TOGETHER_STATUS: ActionMeta = meta(
     "SESSION_TOGETHER",
     "session_together",
     "The live session",
-    "The live session the engine is in, as the collaboration control shows it: `status` (the set, hosting or joined, the ticket or link, how many others, whether the transport is shared, this person's name and colour), `joining`, `error` (why the last share or join failed), `locked` (this device is not syncing), `hosted` (the set the engine hosts in Task by itself, signed in) and `host_error`, `people` (everyone else, and the song each is on), and `notices` (what the person should know: a song kept out of the set because it syncs with its org, or their version of a song kept as an alternative when it moved onto the set's). Read-only.",
+    "The live session the engine is in, as the collaboration control shows it: `status` (the set, hosting or joined, the ticket or link, how many others, whether the transport is shared, this person's name and colour), `error` (why the last share or join failed), `locked` (this device is not syncing), `people` (everyone else, and the song each is on), and `notices` (what the person should know: a song kept out of the set, or their version of a song kept as an alternative when it moved onto the set's). Read-only.",
     "Set",
     "",
 );
@@ -253,18 +220,6 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         );
         Ok(format!("opening {}", path.display()))
     })?;
-    list.register(&OPEN_SETLIST, Effect::Mutating, |a: OpenSetlistArg| {
-        let request = library_open(a)?;
-        let said = opening_said(&request);
-        let kept = serde_json::json!({
-            "setlist": request.setlist,
-            "org": request.org,
-            "song": request.song,
-        });
-        set::open_library(request).map_err(|e| e.to_string())?;
-        super::link::remember_open("SESSION_OPEN_SETLIST", &kept);
-        Ok(said)
-    })?;
     list.register(&OPENING, Effect::ReadOnly, |(): ()| {
         Ok(opening_row(&set::view().opening))
     })?;
@@ -295,18 +250,6 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         crate::engine::transport_here(crate::engine::Move::Stop, 0.0);
         set::close();
         Ok("the set is closed".to_owned())
-    })?;
-    list.register(&JOIN, Effect::Mutating, |a: JoinArg| {
-        let name = a
-            .name
-            .filter(|n| !n.trim().is_empty())
-            .unwrap_or_else(|| "Guest".to_owned());
-        set::open_live(a.link.clone(), name.clone()).map_err(|e| e.to_string())?;
-        super::link::remember_open(
-            "SESSION_JOIN",
-            &serde_json::json!({ "link": a.link, "name": name }),
-        );
-        Ok(format!("joining {}", a.link))
     })?;
     list.register(&SONG_SET, Effect::Mutating, |a: SongSetArg| {
         let index = usize::try_from(a.song.saturating_sub(1)).unwrap_or(usize::MAX);
@@ -403,43 +346,6 @@ fn path_to_open(a: OpenArg) -> Result<std::path::PathBuf, String> {
     } else {
         Err(format!("{} is not there", path.display()))
     }
-}
-
-/// `SESSION_OPEN_SETLIST`'s arguments as a request, trimmed; an empty
-/// title refused.
-fn library_open(a: OpenSetlistArg) -> Result<set::LibraryOpen, String> {
-    let setlist = a.setlist.trim().to_owned();
-    let given = |s: Option<String>| s.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty());
-    let song = given(a.song);
-    // No list: one song of the library, alone.
-    if setlist.is_empty() && song.is_none() {
-        return Err(
-            "`setlist`: the title of a setlist in the library (or `song` alone)".to_owned(),
-        );
-    }
-    Ok(set::LibraryOpen {
-        org: given(a.org),
-        setlist,
-        song,
-    })
-}
-
-/// What `SESSION_OPEN_SETLIST` says it is doing.
-fn opening_said(request: &set::LibraryOpen) -> String {
-    format!(
-        "opening the setlist {:?}{}{}",
-        request.setlist,
-        request
-            .song
-            .as_deref()
-            .map(|s| format!(", its song {s:?}"))
-            .unwrap_or_default(),
-        request
-            .org
-            .as_deref()
-            .map(|o| format!(" from {o}'s library"))
-            .unwrap_or_default()
-    )
 }
 
 fn opening_row(opening: &Opening) -> OpeningRow {

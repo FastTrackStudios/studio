@@ -5,19 +5,17 @@
 //! Studio's, or Session's own — through its Action List over MCP
 //! ([`app`]): `studio open`, `studio songs`, `studio song`, `studio
 //! actions`, `studio run`. The rest work on files (proxies, peaks, import,
-//! lyrics, the vault), on Task's library and sharing, on a real REAPER
-//! ([`reaper`]), or play a setlist in a terminal ([`player`]).
+//! lyrics, the vault), on a real REAPER ([`reaper`]), or play a setlist in
+//! a terminal ([`player`]).
 //!
 //! ```text
 //! studio open Song.session                     # open a song, setlist or .session in the running app
-//! studio open "Crescendum" --org fasttrackaudio --bench   # a library setlist, timed
+//! studio open Set.setlist --bench               # a setlist, timed
 //! studio songs                                 # the open set (SESSION_SONGS)
 //! studio song next                             # go to a song (SESSION_SONG)
 //! studio actions --filter drums                # what the window can do
 //! studio run SESSION_PLAY                      # run one action, args as JSON
 //! studio engine                                # the whole engine, no window
-//! studio ingest Album/ --org fasttrackaudio --project Album --form album --link
-//!                                              # songs into Task, ready to open anywhere
 //! ```
 //!
 //! `studio engine` ([`engine`]) runs Session's engine with no window and
@@ -34,7 +32,6 @@ pub mod app;
 pub mod bench;
 #[cfg(feature = "native")]
 pub mod engine;
-pub mod ingest;
 mod lyrics;
 mod multitracks;
 mod peaks;
@@ -47,17 +44,10 @@ pub mod vault_sync;
 /// flattens them into its top level).
 #[derive(Subcommand)]
 pub enum Command {
-    /// Open a song, setlist or `.session` in the running app (a path that
-    /// exists), or a setlist of an org's Task library (its title).
+    /// Open a song, setlist or `.session` in the running app.
     Open {
-        /// A path, or a library setlist's title (`Crescendum`).
-        what: String,
-        /// The org whose library holds the setlist; the one shown when left out.
-        #[arg(long)]
-        org: Option<String>,
-        /// One of the setlist's songs (slug or title) to open alone.
-        #[arg(long)]
-        song: Option<String>,
+        /// The song, setlist or `.session` to open.
+        what: PathBuf,
         /// Time it: poll the window until every song is open (and local,
         /// when the set streams in), then print the timings as one JSON
         /// object. Exits non-zero if `--bench-timeout` passes first.
@@ -78,13 +68,6 @@ pub enum Command {
     /// WebSocket). Until Ctrl-C.
     #[cfg(feature = "native")]
     Engine(engine::Args),
-    /// Put songs into an org's Task library, ready to open anywhere: a
-    /// Live set (split into songs), song folders, `.session`/`.RPP` files
-    /// or an album folder. Prepares each (proxies, peaks, reference),
-    /// uploads what the server lacks to its root at `session/<slug>`,
-    /// makes the setlist and projects, and with `--link` a live link. Run
-    /// again, it only updates.
-    Ingest(Box<ingest::Args>),
     /// The running app's actions, by id (`--filter` narrows them).
     Actions {
         #[arg(long)]
@@ -96,11 +79,6 @@ pub enum Command {
         action: String,
         args: Option<String>,
     },
-    /// The song library in Task (keyflow's): setlists, and pulling a
-    /// setlist's sessions down to open here. Server, org and token from
-    /// FTS_TASK_SERVER / FTS_TASK_ORG / FTS_TASK_TOKEN.
-    #[command(subcommand)]
-    Library(LibraryCommand),
     /// Write Ogg Vorbis proxies of a session's media: `Media/Bass.wav` →
     /// `Media/Proxies/Bass.ogg`, beside what they stand in for, so they
     /// sync with the session. What a browser or a phone plays from.
@@ -253,67 +231,6 @@ pub const fn service_of(command: &Command) -> &'static str {
     }
 }
 
-#[derive(Subcommand)]
-pub enum LibraryCommand {
-    /// Every setlist in the org, with its songs.
-    List,
-    /// Download a setlist's sessions (proxies, charts, lyrics, the
-    /// `.session`) and write a `.setlist` the app opens.
-    Pull {
-        /// The setlist's title (`Worship Set`).
-        setlist: String,
-        /// Where to put it. Default: the platform cache, under the org.
-        #[arg(long)]
-        into: Option<PathBuf>,
-        /// The original media too, not only the proxies.
-        #[arg(long)]
-        originals: bool,
-    },
-}
-
-async fn library(command: LibraryCommand) -> eyre::Result<()> {
-    let lib = library_sync::Library::from_env();
-    let setlists = lib.setlists().await?;
-    match command {
-        LibraryCommand::List => {
-            for list in &setlists {
-                println!("{} ({} songs)", list.title, list.songs.len());
-                for song in &list.songs {
-                    let by = song.writers.join(", ");
-                    println!(
-                        "  song:{:<28} {}{}",
-                        song.slug,
-                        song.title,
-                        if by.is_empty() {
-                            String::new()
-                        } else {
-                            format!(" — {by}")
-                        }
-                    );
-                }
-            }
-        }
-        LibraryCommand::Pull {
-            setlist,
-            into,
-            originals,
-        } => {
-            let list = setlists
-                .iter()
-                .find(|l| l.title == setlist)
-                .ok_or_else(|| eyre::eyre!("no setlist `{setlist}` in {}", lib.org))?;
-            let into = into.unwrap_or_else(|| {
-                std::env::temp_dir()
-                    .join("fts-session-library")
-                    .join(&lib.org)
-            });
-            let file = lib.pull_setlist(list, &into, originals).await?;
-            println!("{}", file.display());
-        }
-    }
-    Ok(())
-}
-
 /// Run one of Session's commands; a tokio runtime must be current (the
 /// caller's `block_on`).
 ///
@@ -324,14 +241,10 @@ pub async fn run(command: Command) -> eyre::Result<ExitCode> {
     match command {
         Command::Open {
             what,
-            org,
-            song,
             bench,
             bench_timeout,
         } => open(
             &what,
-            org,
-            song,
             bench.then(|| Duration::from_secs_f64(bench_timeout.max(0.0))),
         ),
         Command::Songs => songs(),
@@ -344,7 +257,6 @@ pub async fn run(command: Command) -> eyre::Result<ExitCode> {
         }
         #[cfg(feature = "native")]
         Command::Engine(args) => run_engine(args),
-        Command::Ingest(args) => run_ingest(*args),
         Command::Actions { filter } => app::list(filter.as_deref()),
         Command::Run { action, args } => {
             let args = match args {
@@ -355,7 +267,6 @@ pub async fn run(command: Command) -> eyre::Result<ExitCode> {
             println!("{}", app::run(&action, args)?);
             Ok(())
         }
-        Command::Library(command) => library(command).await,
         Command::Proxies {
             session,
             quality,
@@ -411,9 +322,6 @@ pub fn log_filter(command: &Command) -> Option<&'static str> {
         Command::Engine(_) => Some(
             "info,wgpu=warn,naga=warn,symphonia=warn,iroh=warn,vox=warn,loro=warn,loro_internal=warn",
         ),
-        // Opening songs to prepare them is the engine's own business: its
-        // per-block complaints would bury the progress.
-        Command::Ingest(_) => Some("error"),
         _ => None,
     }
 }
@@ -429,41 +337,18 @@ fn run_engine(args: engine::Args) -> eyre::Result<()> {
         .map_err(|_| eyre::eyre!("the engine stopped with a panic"))?
 }
 
-/// `studio ingest`, on a thread of its own: it runs a runtime of its own
-/// and blocks on it, which it may not do on this one's.
-fn run_ingest(args: ingest::Args) -> eyre::Result<()> {
-    std::thread::Builder::new()
-        .name("studio-ingest".into())
-        .spawn(move || ingest::run(&args))?
-        .join()
-        .map_err(|_| eyre::eyre!("the ingest stopped with a panic"))?
-}
-
-/// `studio open`: a path that exists is opened (`SESSION_OPEN`), anything
-/// else is a library setlist's title (`SESSION_OPEN_SETLIST`). With
-/// `bench`, timed until the set is open ([`bench::bench`]).
-fn open(
-    what: &str,
-    org: Option<String>,
-    song: Option<String>,
-    bench: Option<Duration>,
-) -> eyre::Result<()> {
-    let path = Path::new(what);
-    let (action, args) = if path.exists() {
-        if org.is_some() || song.is_some() {
-            eyre::bail!("--org and --song pick from a library setlist; {what} is a path");
-        }
-        let full = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        (
-            "SESSION_OPEN",
-            serde_json::json!({"path": full.to_string_lossy()}),
-        )
-    } else {
-        (
-            "SESSION_OPEN_SETLIST",
-            serde_json::json!({"setlist": what, "org": org, "song": song}),
-        )
-    };
+/// `studio open`: the song, setlist or `.session` at `path`
+/// (`SESSION_OPEN`). With `bench`, timed until the set is open
+/// ([`bench::bench`]).
+fn open(path: &Path, bench: Option<Duration>) -> eyre::Result<()> {
+    if !path.exists() {
+        eyre::bail!("{} is not there", path.display());
+    }
+    let full = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let (action, args) = (
+        "SESSION_OPEN",
+        serde_json::json!({"path": full.to_string_lossy()}),
+    );
     match bench {
         Some(timeout) => bench::bench(&app::window()?, action, args, timeout),
         None => {
@@ -477,7 +362,7 @@ fn open(
 fn songs() -> eyre::Result<()> {
     let songs = bench::songs(&app::window()?, app::CALL_TIMEOUT)?;
     if songs.is_empty() {
-        println!("no set is open — `studio open <path|setlist>`");
+        println!("no set is open — `studio open <path>`");
         return Ok(());
     }
     let width = songs

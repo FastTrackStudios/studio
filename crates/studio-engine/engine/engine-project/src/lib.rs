@@ -1,5 +1,6 @@
-//! Projects: ingest, the project list, new projects, instrument tracks,
-//! streaming a set in, a song streamed, a show split, and the set's openers.
+//! Projects: the project list, new projects, instrument tracks, songs made
+//! ready to travel, a set's streamed songs, a song streamed, a show split,
+//! and the set's openers.
 //!
 //! One of studio-engine's domains, on engine-core (docs/MONOREPO-MIGRATION.md,
 //! "Splitting studio-engine"). studio-engine re-exports each module from its
@@ -11,11 +12,7 @@ use architect::action::{ActionError, ActionList};
 pub use engine_core::*;
 
 #[cfg(feature = "native")]
-pub mod ingest;
-#[cfg(feature = "native")]
 pub mod instrument_tracks;
-#[cfg(feature = "native")]
-pub mod library_actions;
 #[cfg(feature = "native")]
 pub mod organize_edit;
 #[cfg(feature = "native")]
@@ -33,6 +30,8 @@ pub mod setlist;
 pub mod show;
 #[cfg(feature = "native")]
 pub mod song_open;
+#[cfg(feature = "native")]
+pub mod song_prep;
 pub mod song_stream;
 #[cfg(feature = "native")]
 pub mod stream_in;
@@ -52,8 +51,8 @@ pub mod studio_engine {
     }
 }
 
-/// This domain's actions, into the engine's Action List: new projects and
-/// instrument tracks, the library, organizing, ingest. What the engine
+/// This domain's actions, into the engine's Action List: new projects,
+/// instrument tracks and organizing. What the engine
 /// binary's collector (`studio_engine::actions::register_all`) calls.
 ///
 /// # Errors
@@ -61,11 +60,9 @@ pub mod studio_engine {
 /// The first registration the list refuses ([`ActionError::Duplicate`]).
 #[cfg(feature = "native")]
 pub fn register(list: &ActionList) -> Result<(), ActionError> {
-    library_actions::register(list)?;
     session_new::register(list)?;
     instrument_tracks::register(list)?;
     organize_edit::register(list)?;
-    ingest::actions::register(list)?;
     Ok(())
 }
 

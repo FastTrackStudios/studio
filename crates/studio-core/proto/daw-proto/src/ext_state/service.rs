@@ -48,4 +48,9 @@ pub trait ExtState {
 
     /// Whether a project-scoped value is set.
     fn has_project(&self, project: ProjectContext, section: &str, key: &str) -> bool;
+
+    /// The keys set in a project-scoped `section`, in no set order: what a
+    /// feature keeping one value per key sweeps to drop the ones it no
+    /// longer names.
+    fn keys_project(&self, project: ProjectContext, section: &str) -> Vec<String>;
 }
