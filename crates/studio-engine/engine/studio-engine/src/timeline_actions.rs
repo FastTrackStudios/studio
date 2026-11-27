@@ -475,9 +475,12 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                 );
             }
         };
-        // Not an undo step: the engine's undo keeps tracks and items, not
-        // the tempo map or the ruler.
-        set_tempo(daw, &project, a.bpm, at, follow)?;
+        // One undo step: the engine's undo keeps the tempo map, and a
+        // later undo of an earlier edit must not take this tempo with it.
+        daw::service::Projects::begin_undo_block(daw, project.clone(), "Set the tempo");
+        let set = set_tempo(daw, &project, a.bpm, at, follow);
+        daw::service::Projects::end_undo_block(daw, project.clone(), "Set the tempo", None);
+        set?;
         regenerate_guide(daw);
         crate::song_model::request_resync();
         crate::actions::list().changed("tempo", &format!("{} bpm", a.bpm));
@@ -497,12 +500,14 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     })?;
     list.register(&TEMPO_MAP, Effect::Mutating, |a: TempoMapArg| {
         let (daw, project) = crate::actions::song()?;
-        // Not an undo step, as TEMPO_SET is not: the engine's undo keeps
-        // tracks and items, not the tempo map.
         if a.bar_one.is_some_and(|at| !at.is_finite() || at < 0.0) {
             return Err("`bar_one` is a time in the song, seconds".to_owned());
         }
-        let meters = set_tempo_map(daw, &project, &a.points, a.follow.unwrap_or(false))?;
+        // One undo step, as TEMPO_SET is.
+        daw::service::Projects::begin_undo_block(daw, project.clone(), "Set the tempo map");
+        let meters = set_tempo_map(daw, &project, &a.points, a.follow.unwrap_or(false));
+        daw::service::Projects::end_undo_block(daw, project.clone(), "Set the tempo map", None);
+        let meters = meters?;
         let started = a
             .bar_one
             .map(|at| set_song_start(daw, &project, at))

@@ -868,15 +868,15 @@ impl EditorView {
         });
     }
 
+    /// Line the stack's takes up: nothing in the page, which stacks no
+    /// audio takes yet.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    pub const fn align_takes(&mut self) {}
+
     /// Line the stack's takes up on its first: each aligned over the
     /// stretch of the song it shares with the first, off the window, its
     /// stretch markers written to its item; the lanes follow when the
     /// answers land ([`Self::aligned`]).
-    #[cfg(all(feature = "web", not(feature = "native")))]
-    pub const fn align_takes(&mut self) {}
-
-    /// Line the stack's takes up on its first (natively: the page stacks
-    /// no audio takes).
     #[cfg(feature = "native")]
     pub fn align_takes(&mut self) {
         let (Some((reference, dubs)), Some(runtime)) =

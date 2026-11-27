@@ -281,20 +281,27 @@ pub async fn read_keeping(
             ))
         })
         .collect();
-    let mut tempo: Vec<TempoPoint> = project
-        .tempo_map()
-        .points()
-        .await?
+    // A point that sets no meter keeps the one before it (the project's
+    // own before the first), as the engine counts it: written into the doc
+    // as 4/4, a tempo change in a 3/4 song came back from an undo in 4/4.
+    let (beats, unit) = project.tempo_map().default_time_signature().await?;
+    let mut meter = (
+        u32::try_from(beats.max(1)).unwrap_or(4),
+        u32::try_from(unit.max(1)).unwrap_or(4),
+    );
+    let mut points = project.tempo_map().points().await?;
+    points.sort_by(|a, b| a.position_seconds().total_cmp(&b.position_seconds()));
+    let mut tempo: Vec<TempoPoint> = points
         .into_iter()
         .map(|p| {
-            let (beats_per_bar, beat_unit) = p
-                .time_signature
-                .map_or((4, 4), |s| (s.numerator, s.denominator));
+            if let Some(s) = p.time_signature {
+                meter = (s.numerator, s.denominator);
+            }
             TempoPoint {
                 at: p.position.time.map_or(0.0, |t| t.as_seconds()),
                 bpm: p.bpm,
-                beats_per_bar,
-                beat_unit,
+                beats_per_bar: meter.0,
+                beat_unit: meter.1,
             }
         })
         .collect();

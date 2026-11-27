@@ -50,8 +50,8 @@ const READING_W: f64 = 44.0;
 /// Beats a minute per pixel dragged: coarse, and with the fine key.
 const PER_PX: (f64, f64) = (0.5, 0.05);
 
-/// How close two times are to be one change, seconds (the engine's too).
-const SAME: f64 = 0.001;
+/// How close two times are to be one change, seconds: the engine's rule.
+const SAME: f64 = crate::engine::SAME_POINT;
 
 /// Where the TEMPO lane is in the widget, and how time runs across it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -342,7 +342,12 @@ pub fn predict(tempo: &mut Vec<TempoChange>, edit: &Edit) {
                 }
             }
         },
-        Edit::MoveTempo(_, from, to) if from >= SAME && to >= SAME => {
+        // Never onto another change, as the engine refuses it.
+        Edit::MoveTempo(_, from, to)
+            if from >= SAME
+                && to >= SAME
+                && ((to - from).abs() < SAME || at_point(tempo, to).is_none()) =>
+        {
             if let Some(change) = at_point(tempo, from).and_then(|i| tempo.get_mut(i)) {
                 change.at = to;
             }

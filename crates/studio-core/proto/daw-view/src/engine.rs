@@ -2089,8 +2089,8 @@ async fn set_tempo(project: &daw_control::Project, at: f64, bpm: f64) -> daw_con
 }
 
 /// How close two times are to be one tempo change: a millisecond (see
-/// [`set_tempo`]).
-const SAME_POINT: f64 = 0.001;
+/// [`set_tempo`]). The ruler's prediction holds changes by the same rule.
+pub const SAME_POINT: f64 = 0.001;
 
 /// The engine's number for the tempo point at `at`, if it has one there.
 async fn tempo_point_at(map: &daw_control::TempoMap, at: f64) -> Option<u32> {
@@ -2109,12 +2109,16 @@ async fn tempo_point_at(map: &daw_control::TempoMap, at: f64) -> Option<u32> {
 
 /// Move the tempo change at `from` to `to`. Neither end may be the song's
 /// start: the change there is the song's own tempo, and a change dragged
-/// onto it would take its place.
+/// onto it would take its place. Nor onto another change: two at one time
+/// is a bar with two tempos ([`set_tempo`]).
 async fn move_tempo(project: &daw_control::Project, from: f64, to: f64) -> daw_control::Result<()> {
     if from < SAME_POINT || to < SAME_POINT {
         return Ok(());
     }
     let map = project.tempo_map();
+    if (to - from).abs() >= SAME_POINT && tempo_point_at(&map, to).await.is_some() {
+        return Ok(());
+    }
     match tempo_point_at(&map, from).await {
         Some(index) => map.move_point(index, to).await,
         None => Ok(()),

@@ -788,7 +788,10 @@ pub struct ArrangementWidget {
     /// The engine's tempo map, followed: a change made anywhere (an
     /// action, a member, the engine) reads the song back and cuts the
     /// ruler and grid again (studio#97).
-    _tempo_watch: Option<crate::engine::TempoWatch>,
+    tempo_watch: Option<crate::engine::TempoWatch>,
+    /// When the watch was last started: tried again at most once a second
+    /// while the engine is not up.
+    tempo_watch_at: web_time::Instant,
     /// A tempo change's menu, open over the window: the change it is for.
     tempo_menu: Option<(
         crate::popup::Popup<crate::tempo_edit::Pick>,
@@ -980,7 +983,8 @@ impl ArrangementWidget {
             #[cfg(feature = "native")]
             menu: None,
             tempo_drag: None,
-            _tempo_watch: crate::engine::TempoWatch::start(),
+            tempo_watch: crate::engine::TempoWatch::start(),
+            tempo_watch_at: web_time::Instant::now(),
             tempo_menu: None,
             edits: Rc::new(RefCell::new(Vec::new())),
             controls: None,
@@ -5397,6 +5401,17 @@ impl ArrangementWidget {
                 self.resync_as(scope);
             }
             let _ = self.apply_actions(crate::window_queue::take_window());
+        }
+        // Following the tempo map from the first frame the engine is up,
+        // and again if it went.
+        if !self
+            .tempo_watch
+            .as_ref()
+            .is_some_and(crate::engine::TempoWatch::is_live)
+            && self.tempo_watch_at.elapsed() >= std::time::Duration::from_secs(1)
+        {
+            self.tempo_watch_at = web_time::Instant::now();
+            self.tempo_watch = crate::engine::TempoWatch::start();
         }
         self.marks_seen.set(crate::marks_strip::version());
         self.poi_seen.set(crate::poi::version());

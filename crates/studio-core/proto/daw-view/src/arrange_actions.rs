@@ -823,10 +823,8 @@ async fn carry_out(arg: GestureArg) -> Result<Carried, String> {
         made: Vec::new(),
     };
     let mut items = false;
-    let mut tempo = false;
     for edit in arg.edits.iter().map(ArrangeEdit::edit) {
         items |= edit.is_item();
-        tempo |= edit.is_tempo();
         crate::engine::apply_reported(&edit).await;
         carried.edits = carried.edits.saturating_add(1);
         if let Some(predicted) = edit.predicted() {
@@ -847,11 +845,8 @@ async fn carry_out(arg: GestureArg) -> Result<Carried, String> {
         #[cfg(feature = "native")]
         crate::body::body().view_changed(None, crate::view::Change::Items);
     }
-    // Every bar line moved: the windows read the song again, the ruler and
-    // the grid with it.
-    if tempo {
-        crate::song::request_resync();
-    }
+    // A tempo edit needs no read-back asked for here: every window follows
+    // the engine's tempo map itself (`crate::engine::TempoWatch`).
     Ok(carried)
 }
 
