@@ -31,6 +31,18 @@ pub struct Leader {
     /// presence someone else hosts ([`Leader::on`]).
     url: Option<String>,
     here: Here<PresencePeer>,
+    /// The presence server and the peer's driver [`Leader::serve`]
+    /// spawned: stopped with it, so a session's port is let go when
+    /// another session leads (an engine opens many in a day).
+    tasks: Vec<tokio::task::AbortHandle>,
+}
+
+impl Drop for Leader {
+    fn drop(&mut self) {
+        for task in &self.tasks {
+            task.abort();
+        }
+    }
 }
 
 impl Leader {
@@ -47,15 +59,19 @@ impl Leader {
         );
         let port = bind.rsplit(':').next().unwrap_or("4142").to_owned();
         let bind = bind.to_owned();
-        tokio::spawn(async move {
+        let server = tokio::spawn(async move {
             let _ = EngineHost::ungated(router, bind).serve().await;
-        });
+        })
+        .abort_handle();
         let local = format!("ws://127.0.0.1:{port}/vox");
         let mut tries = 0_u32;
         let client: DocPresenceClient = loop {
             match pool().client(&Endpoint::url(&local)).await {
                 Ok(client) => break client,
-                Err(e) if tries >= 50 => return Err(e.to_string()),
+                Err(e) if tries >= 50 => {
+                    server.abort();
+                    return Err(e.to_string());
+                }
                 Err(_) => {
                     tries = tries.saturating_add(1);
                     tokio::time::sleep(Duration::from_millis(20)).await;
@@ -64,20 +80,25 @@ impl Leader {
         };
         let (peer, mut driver) = PresencePeer::new(doc, 30_000);
         let clock = peer.clock().clone();
-        tokio::spawn(async move {
+        let driver = tokio::spawn(async move {
             let _ = driver.run(&client).await;
-        });
+        })
+        .abort_handle();
         // The driver's first ping gives the clock estimate `publish`
         // stamps with: wait for it, so the first publish is not dropped.
         let mut waited = 0_u32;
         while clock.offset_ms().is_none() {
             if waited >= 250 {
+                server.abort();
+                driver.abort();
                 return Err("the host's clock gave no estimate in 5 s".to_owned());
             }
             waited = waited.saturating_add(1);
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
-        Ok(Self::on(peer).with_url(local))
+        let mut leader = Self::on(peer).with_url(local);
+        leader.tasks = vec![server, driver];
+        Ok(leader)
     }
 
     /// Leads on `peer`, a presence its owner drives: the node's own, which
@@ -90,6 +111,7 @@ impl Leader {
         Self {
             url: None,
             here: Here::new(peer, LEAD, PeerState::new(LEAD, "Transport")),
+            tasks: Vec::new(),
         }
     }
 
