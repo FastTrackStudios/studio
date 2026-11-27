@@ -82,10 +82,10 @@ Everything left from the old Session app has been removed or renamed
   |---|---|---|
   | `proto` (setlist, song and mode services; the action traits) | `studio-proto` (`studio-core/proto/studio-proto`) | core |
   | `sync`: `align`, `crop`, `diff`, `doc`, `hold`, `model`, `slug`, `transport`, `drift`, `relay`, `net`, `clock`; `presence` | `session-sync` (`net` and `clock` behind feature `net`; presence is the primitive's). Its old copies of the same files are gone. | core |
-  | `library` (+ `publish`) | `library-sync` (`studio-core/session/library-sync`, feature `publish`; `project_sync` removed in #728) | core |
+  | `library` (+ `publish`), `project_sync` | gone with Task (studio#727): `library-sync` was the song library in Task (`project_sync` went in #728) | — |
   | `sync`: `bridge`, `direct`, `engine`, `whole` | `engine-sync` (`studio-engine/engine/engine-sync`; re-exports `session-sync`) | engine |
   | `setlist`, `song`, `keyflow`, `guide` (+ `tts`), `key`, `key_actions`, `key_change`, `modes`, `mode_phases`, `playback`, `routing`, `track_manager`, `guitar_grow`, `comping`, `count_in`, `reference`, `review`, `cache`, `event_bus`, `color`, `lyrics`, `load_selection`, `vault_sync`, `SessionServices` / `daw_services` / `register_all_actions` | `engine-domain` (`studio-engine/engine/engine-domain`; re-exports `studio-proto` as `proto` and `engine-sync` as `sync`) | engine |
-  | `ui` (components, layouts, signals, shell), `open_link`, `strip_width` | `studio-ui` (`studio-connect/kit/studio-ui`, features `web`, `desktop`, `chart-editor`) | connect |
+  | `ui` (components, layouts, signals, shell), `strip_width` | `studio-ui` (`studio-connect/kit/studio-ui`, features `web`, `desktop`, `chart-editor`) | connect |
   | `section_kinds`, `mix_phases` (re-exports) | callers name `fts_session::…` | core |
 
   Edges across a group line that the move made visible (they were all inside
@@ -129,7 +129,7 @@ its file I/O:
 | `session-sync` | the live document, its diff, relay and network lanes | 5 crates |
 
 1. **Remove `song`**: nothing depends on it. If library code still wants
-   its vault-folder schema, fold it into `library-sync`.
+   its vault-folder schema, fold it into what holds the library then.
 2. **Fold `song-file` into `session-format`** as `session_format::file`
    (`open`, `new`, `convert`, `media`), with its bin as an example or an
    xtask. It already depends on `session-format` and has one user.

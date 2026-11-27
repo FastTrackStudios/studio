@@ -37,13 +37,8 @@ pub struct Args {
     pub socket: Option<PathBuf>,
     /// Also serve over WebSocket on this address: `ws://ADDR/vox`.
     pub listen: Option<String>,
-    /// Open this as the engine comes up: a path (a song, `.session` or
-    /// setlist), or a library setlist's title.
+    /// Open this as the engine comes up: a song, `.session` or setlist.
     pub open: Option<String>,
-    /// The org whose library holds `open`'s setlist.
-    pub org: Option<String>,
-    /// One song of `open`'s setlist to open alone.
-    pub song: Option<String>,
     /// Open what the last engine had open (an engine started again after
     /// one died): `last-open.json` beside the engines' files.
     pub reopen: bool,
@@ -51,8 +46,7 @@ pub struct Args {
 
 impl Args {
     /// The arguments after `--session-engine` (the app run as its own
-    /// engine): `--socket P`, `--listen A`, `--open X`, `--org O`,
-    /// `--song S`, `--reopen`.
+    /// engine): `--socket P`, `--listen A`, `--open X`, `--reopen`.
     #[must_use]
     pub fn parse(args: &[String]) -> Self {
         let mut out = Self::default();
@@ -62,8 +56,6 @@ impl Args {
                 "--socket" => out.socket = at.next().map(PathBuf::from),
                 "--listen" => out.listen = at.next().cloned(),
                 "--open" => out.open = at.next().cloned(),
-                "--org" => out.org = at.next().cloned(),
-                "--song" => out.song = at.next().cloned(),
                 "--reopen" => out.reopen = true,
                 _ => {}
             }
@@ -145,7 +137,7 @@ pub fn run(args: &Args) -> eyre::Result<()> {
     let step = tracing::info_span!("engine.open").entered();
     let at = web_time::Instant::now();
     if let Some(what) = &args.open {
-        open_first(what, args.org.clone(), args.song.clone());
+        open_first(what);
     } else if args.reopen {
         crate::studio_engine::link::reopen_last();
     }
@@ -242,20 +234,9 @@ fn mcp_url() -> String {
     format!("http://127.0.0.1:{port}/mcp")
 }
 
-/// Open `what` as the engine's set: a path that exists, else a library
-/// setlist's title.
-fn open_first(what: &str, org: Option<String>, song: Option<String>) {
-    let path = Path::new(what);
-    let asked = if path.exists() {
-        set::open_path(path.to_path_buf())
-    } else {
-        set::open_library(set::LibraryOpen {
-            org,
-            setlist: what.to_owned(),
-            song,
-        })
-    };
-    if let Err(busy) = asked {
+/// Open `what` as the engine's set: a song, `.session` or setlist.
+fn open_first(what: &str) {
+    if let Err(busy) = set::open_path(Path::new(what).to_path_buf()) {
         tracing::warn!(error = %busy, "engine: --open not taken");
     }
 }

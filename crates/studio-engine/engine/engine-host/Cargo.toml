@@ -49,7 +49,7 @@ cli = [
     "dep:libc",
     "dep:serde",
     "dep:serde_json",
-    "dep:engine-domain", "dep:library-sync", "dep:studio-ui",
+    "dep:engine-domain", "dep:studio-ui",
     "dep:studio-engine",
     "studio-engine?/show",
     "dep:dirs",
@@ -89,8 +89,7 @@ session = ["session-domain", "tts"]
 # The guide still runs; spoken section cues fall back to the synthesized
 # guide samples, exactly as they do when FTS_TTS is unset on desktop.
 session-domain = [
-    "dep:engine-domain", "dep:library-sync", "dep:studio-ui",
-    "dep:collection-proto",
+    "dep:engine-domain", "dep:studio-ui",
     "dep:daw-ui",
     "dep:dawfile-reaper",
     "dep:keyflow",
@@ -145,7 +144,6 @@ fts-audio-ui = { workspace = true }
 # The in-process player crates (session facade, daw-standalone, the guide)
 # are native-only and live in the cfg(not wasm) table below.
 engine-domain = { workspace = true, optional = true }
-library-sync = { workspace = true, optional = true }
 fts-session = { workspace = true }
 keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
 # `studio setlist …` and `studio productions …` went with features/setlists
@@ -294,7 +292,6 @@ studio-ui = { workspace = true, features = ["web"], optional = true }
 # The collection browser's wire client (CollectionServiceClient + Collection /
 # CollectionItem / NodeRef). Wasm-only: this surface exists only in the web
 # build. Enabled via the `session` feature's `dep:collection-proto`.
-collection-proto = { workspace = true, features = ["vox"], optional = true }
 # NO daw-ui here: its daw-control backend is not wasm-clean, and the daw
 # panels (Arrangement / Mixer) are native-only workspaces anyway — the
 # session feature's "dep:daw-ui" is a no-op on the web build.

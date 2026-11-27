@@ -23,11 +23,8 @@
 mod ios_audio;
 
 /// What Studio's welcome screen hands Session (what to open, the way back,
-/// the account, the Action List).
+/// the Action List).
 pub mod handoff;
-mod library;
-/// The welcome screen's Publish to Task card (`SESSION_INGEST`).
-pub mod publish;
 /// The layer that notes what the paint thread runs, for the traces of the
 /// frames that miss 120 Hz (`daw_view_kit::frames::slow`): the app's
 /// subscriber takes it.
@@ -71,13 +68,6 @@ fn choose() -> Option<PathBuf> {
         .or_else(|| {
             Some(PathBuf::from(EXAMPLE)).filter(|p| cfg!(not(target_os = "ios")) && p.is_file())
         })
-}
-
-/// The songs `target` names: the one song it is (a project, a `.session`,
-/// or a song's folder); or a setlist's (a folder of song folders, or a
-/// `.setlist` file — see `studio_engine::setlist::read_setlist`).
-fn songs_of(target: &Path) -> Option<Vec<PathBuf>> {
-    studio_engine::studio_engine::set::songs_at(target)
 }
 
 /// The Open dialog: a REAPER project.
@@ -130,25 +120,6 @@ fn ask(title: &str, description: String, buttons: &[&str]) -> Option<String> {
 fn ask(title: &str, description: String, _buttons: &[&str]) -> Option<String> {
     tracing::error!(dialog.title = title, dialog.description = %description, "launch: no dialog to ask on this platform");
     None
-}
-
-/// Open `url` in the browser (a sign-in's approval page).
-fn open_url(url: &str) {
-    #[cfg(target_os = "ios")]
-    studio_shell::ios_scene::open_url(url);
-    #[cfg(not(target_os = "ios"))]
-    {
-        let opener = if cfg!(target_os = "macos") {
-            "open"
-        } else if cfg!(windows) {
-            "explorer"
-        } else {
-            "xdg-open"
-        };
-        if let Err(e) = std::process::Command::new(opener).arg(url).spawn() {
-            tracing::warn!(error = %e, "could not open a link in the browser");
-        }
-    }
 }
 
 /// What is on the clipboard, when a platform lets it be read here (a

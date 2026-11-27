@@ -10,7 +10,7 @@
 //! asked it for picks through a queue the window polled — so with no window
 //! nothing could open a set or change songs.
 //!
-//! Opening runs here too ([`open_with`], [`open_library`], [`open_path`]):
+//! Opening runs here too ([`open_with`], [`open_path`]):
 //! on a thread of its own, its progress published as [`Opening::Busy`],
 //! the set installed when it is ready and the songs behind the first
 //! drained into it as they arrive ([`install`]).

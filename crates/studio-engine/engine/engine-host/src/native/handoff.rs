@@ -1,33 +1,26 @@
 //! What Studio's welcome screen hands Session: what to open as Session
-//! comes up ([`request`] an [`Entry`]: a song, a library setlist, a live
-//! link, a new song), the songs opened lately, how to leave Session for the
+//! comes up ([`request`] an [`Entry`]: a song, a REAPER bridge's or an
+//! engine's address, a new song), the songs opened lately, how to leave Session for the
 //! welcome screen again ([`Host`]), and Session's Action List for the
 //! welcome screen's command palette ([`actions`], [`run_action`]).
 //!
 //! Studio shows its library first; Session's own start screen is never a
-//! page there. A library setlist is opened by the engine
-//! (`studio_engine::studio_engine::set::open_library`, as the Action List's
-//! `SESSION_OPEN_SETLIST` opens one); a song, a live link or a new song is
-//! handed to Session's start screen, which opens it in the engine too. A
-//! hosted start screen draws only its loading screen (`super::start`).
+//! page there. A song, an address or a new song is handed to Session's
+//! start screen, which opens it in the engine. A hosted start screen draws
+//! only its loading screen (`super::start`).
 
 use std::path::{Path, PathBuf};
 
-pub use super::start::{
-    WelcomeAccount, WelcomeAccountMenu, WelcomeAccountSheet, WelcomeLists, use_welcome_account,
-    welcome_org,
-};
 use dioxus::prelude::*;
 pub use studio_engine::projects::{Recent, ago, open_next, recent};
-pub use studio_engine::stream_set::{LibrarySetlist, LibrarySong, ListKind};
 
 static JOIN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 /// Whether a new, untitled song was asked for ([`Entry::New`]).
 static NEW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Join `link` (a live link, a REAPER bridge's or an engine's address, or
-/// `demo`) as soon as the start screen is shown.
+/// Connect to `link` (a REAPER bridge's or an engine's address) as soon as
+/// the start screen is shown.
 pub fn join_on_start(link: String) {
     *JOIN
         .lock()
@@ -51,10 +44,7 @@ pub(super) fn take_new() -> bool {
 pub enum Entry {
     /// A song, a `.session`, a song's folder or a `.setlist` on this device.
     Path(PathBuf),
-    /// A setlist of an org's Task library, by its title; `org` the one
-    /// shown when `None`.
-    Setlist { org: Option<String>, title: String },
-    /// A live link, a REAPER bridge's or an engine's address, or `demo`.
+    /// A REAPER bridge's or an engine's address.
     Join(String),
     /// A new, untitled song.
     New,
@@ -62,8 +52,8 @@ pub enum Entry {
 
 impl Entry {
     /// What `text` names, the way a command line or `FTS_STUDIO_OPEN` says
-    /// it: `new`; `demo`, a live link or an engine's address; a path that
-    /// `exists`; else the title of a library setlist. `None` for nothing.
+    /// it: `new`; a REAPER bridge's or an engine's address; a path that
+    /// `exists`. `None` for anything else.
     pub fn parse(text: &str, exists: impl Fn(&Path) -> bool) -> Option<Self> {
         let text = text.trim();
         if text.is_empty() {
@@ -72,32 +62,22 @@ impl Entry {
         if text.eq_ignore_ascii_case("new") {
             return Some(Self::New);
         }
-        if text.eq_ignore_ascii_case("demo") || is_link(text) {
+        if is_address(text) {
             return Some(Self::Join(text.to_owned()));
         }
         let path = PathBuf::from(text);
-        if exists(&path) {
-            return Some(Self::Path(path));
-        }
-        Some(Self::Setlist {
-            org: None,
-            title: text.to_owned(),
-        })
+        exists(&path).then_some(Self::Path(path))
     }
 }
 
-/// Whether `text` is a link or an address rather than a name: a URL, an
-/// engine id, or `host.tld/path`.
-fn is_link(text: &str) -> bool {
+/// Whether `text` is an engine's address rather than a name: a
+/// `ws://`/`wss://` URL, `fts-engine:<id>`, or a bare iroh id.
+fn is_address(text: &str) -> bool {
     let bare_id = text.len() == 64 && text.bytes().all(|b| b.is_ascii_hexdigit());
-    if text.contains("://") || text.starts_with("fts-engine:") || bare_id {
-        return true;
-    }
-    !text.starts_with('/')
-        && !text.contains(' ')
-        && text
-            .split_once('/')
-            .is_some_and(|(host, _)| host.contains('.') && !host.starts_with('.'))
+    text.starts_with("ws://")
+        || text.starts_with("wss://")
+        || text.starts_with("fts-engine:")
+        || bare_id
 }
 
 /// Hand `entry` to Session: its start screen opens it as soon as it is
@@ -105,23 +85,13 @@ fn is_link(text: &str) -> bool {
 pub fn request(entry: Entry) {
     match entry {
         Entry::Path(path) => open_next(path),
-        Entry::Setlist { org, title } => {
-            let request = studio_engine::studio_engine::set::LibraryOpen {
-                org,
-                setlist: title,
-                song: None,
-            };
-            if let Err(busy) = studio_engine::view_client::ask::open_library(&request) {
-                tracing::warn!(error = %busy, "open: the engine did not take the setlist");
-            }
-        }
         Entry::Join(link) => join_on_start(link),
         Entry::New => NEW.store(true, std::sync::atomic::Ordering::Release),
     }
 }
 
 /// Whether something waits for Session to open it: asked for here, or over
-/// the Action List (`SESSION_OPEN`, `SESSION_OPEN_SETLIST`, `SESSION_NEW`)
+/// the Action List (`SESSION_OPEN`, `SESSION_NEW`)
 /// — from the CLI or a model while the welcome screen is up.
 #[must_use]
 pub fn pending() -> bool {
@@ -298,31 +268,19 @@ mod tests {
     }
 
     #[test]
-    fn words_name_a_setlist_and_links_join() {
+    fn new_and_addresses_are_read_and_names_are_nothing() {
         assert_eq!(Entry::parse("  ", none), None);
         assert_eq!(Entry::parse("new", none), Some(Entry::New));
-        assert_eq!(Entry::parse("demo", none), Some(Entry::Join("demo".into())));
-        assert_eq!(
-            Entry::parse("https://task.example.app/org/x/share/abc", none),
-            Some(Entry::Join(
-                "https://task.example.app/org/x/share/abc".into()
-            ))
-        );
-        assert_eq!(
-            Entry::parse("task.example.app/org/x/share/abc", none),
-            Some(Entry::Join("task.example.app/org/x/share/abc".into()))
-        );
         assert_eq!(
             Entry::parse("ws://127.0.0.1:4040/vox", none),
             Some(Entry::Join("ws://127.0.0.1:4040/vox".into()))
         );
         assert_eq!(
-            Entry::parse("JHM Sunday", none),
-            Some(Entry::Setlist {
-                org: None,
-                title: "JHM Sunday".into()
-            })
+            Entry::parse("fts-engine:abc", none),
+            Some(Entry::Join("fts-engine:abc".into()))
         );
+        assert_eq!(Entry::parse("JHM Sunday", none), None);
+        assert_eq!(Entry::parse("https://example.app/x", none), None);
     }
 
     #[test]
@@ -332,14 +290,8 @@ mod tests {
             Entry::parse("/songs/Always On Time.RPP", there),
             Some(Entry::Path(PathBuf::from("/songs/Always On Time.RPP")))
         );
-        // Not there: a name, not a file (and never a link).
-        assert_eq!(
-            Entry::parse("/songs/Gone.RPP", there),
-            Some(Entry::Setlist {
-                org: None,
-                title: "/songs/Gone.RPP".into()
-            })
-        );
+        // Not there: nothing to open.
+        assert_eq!(Entry::parse("/songs/Gone.RPP", there), None);
     }
 
     #[test]

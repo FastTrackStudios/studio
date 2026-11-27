@@ -84,8 +84,7 @@ impl SharedClock {
 
     /// A joiner's, following any clock: `now` asks it the time
     /// (microseconds; `None` when it did not answer) — the host's
-    /// [`SessionClock`], or Task's (`live_proto::LiveSessions::now`) for a
-    /// set Task keeps.
+    /// [`SessionClock`], or any other.
     #[must_use]
     pub fn follow_with<F, Fut>(now: F) -> Self
     where

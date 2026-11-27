@@ -1,9 +1,9 @@
-//! What was handed to `studio ingest`, and the songs it holds.
+//! What a path holds, and the songs in it.
 //!
 //! An input is a Live set to split (`.als`), one song (its folder, its
 //! `.session` or its `.RPP`), or a folder of song folders (an album, a
 //! setlist's folder). [`classify`] says which; [`songs_of`] lists the songs
-//! in each, in order. What a song is called and its library id come from
+//! in each, in order. What a song is called and its slug come from
 //! its project file's name ([`identity`]).
 
 use std::path::{Path, PathBuf};
@@ -37,8 +37,8 @@ impl Input {
     }
 }
 
-/// A song to ingest: what it is called, its library id, its project file,
-/// and the folder that is uploaded as its session.
+/// A song to prepare: what it is called, its slug, its project file,
+/// and the folder that travels as its session.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SongSource {
     pub title: String,
@@ -51,7 +51,7 @@ pub struct SongSource {
 ///
 /// # Errors
 ///
-/// It is not there, or it is nothing ingest knows: not a Live set, a song
+/// It is not there, or it is nothing this knows: not a Live set, a song
 /// or a folder holding songs.
 pub fn classify(path: &Path) -> eyre::Result<Input> {
     let meta = std::fs::metadata(path).map_err(|e| eyre::eyre!("{}: {e}", path.display()))?;
@@ -116,18 +116,17 @@ pub fn song_at(file: &Path) -> SongSource {
     }
 }
 
-/// A song's title and library id from its project file's name: the
-/// name, a leading track number dropped (`05 Empty Focus` → `Empty
+/// A song's title and slug from its project file's name: the name, a
+/// leading track number dropped (`05 Empty Focus` → `Empty
 /// Focus`, `empty-focus`).
 #[must_use]
 pub fn identity(stem: &str) -> (String, String) {
-    let title = library_sync::without_track_number(stem).to_owned();
-    let slug = library_sync::slugify(&title);
+    let title = without_track_number(stem).to_owned();
+    let slug = engine_sync::slug::slugify(&title);
     (title, slug)
 }
 
-/// Two songs of one ingest with the same library id, if any: the first
-/// pair, by title.
+/// Two songs with the same slug, if any: the first pair, by title.
 #[must_use]
 pub fn clash(songs: &[SongSource]) -> Option<(&str, &str)> {
     songs.iter().enumerate().find_map(|(i, a)| {
@@ -174,4 +173,22 @@ fn extension(path: &Path) -> String {
 fn is_hidden(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+}
+
+/// `name` without the track number an album's folders lead with
+/// (`05 Empty Focus`, `05 - Empty Focus`, `05_Empty Focus`); as it is
+/// when it has none, or is nothing but a number (`1999`).
+#[must_use]
+pub fn without_track_number(name: &str) -> &str {
+    let name = name.trim();
+    let digits = name.len() - name.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+    if digits == 0 || digits > 3 {
+        return name;
+    }
+    let rest = name[digits..].trim_start_matches([' ', '-', '_', '.']);
+    if rest.is_empty() || rest.len() == name.len() - digits {
+        name
+    } else {
+        rest
+    }
 }

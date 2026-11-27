@@ -32,10 +32,6 @@ pub fn WebDemo(
     if !use_hook(webgl2_offered) {
         return rsx! { crate::loading::HardwareNeeded {} };
     }
-    // A live set, joined by its share link, is a guest's: played, not
-    // rearranged (there is no signing in on the web yet; the demo's
-    // playground is one of these).
-    let read_only = matches!(source, crate::web_engine::WebSource::Live { .. });
     // What the loading screen says: each step of the open, and why it is
     // trying again when it is.
     let progress = use_signal(|| Progress::Joining { retry: None });
@@ -69,7 +65,7 @@ pub fn WebDemo(
             }
         },
         Some(Ok((engine, setlist))) => rsx! {
-            DemoView { engine: engine.clone(), setlist: setlist.clone(), read_only }
+            DemoView { engine: engine.clone(), setlist: setlist.clone() }
         },
     }
 }
@@ -77,12 +73,7 @@ pub fn WebDemo(
 /// The opened demo: the app's frame — the views, the setlist, the
 /// transport and the mode — over whichever song is up.
 #[component]
-fn DemoView(
-    engine: crate::web_engine::EngineRef,
-    setlist: crate::setlist::Setlist,
-    /// A guest's set: no reorder or removal (`ReadOnlySet`).
-    read_only: bool,
-) -> Element {
+fn DemoView(engine: crate::web_engine::EngineRef, setlist: crate::setlist::Setlist) -> Element {
     use crate::compact::{CompactShell, PhoneView};
     use crate::shell::{SAFE_AREA, TopBar, View};
     use engine_domain::modes::Mode;
@@ -94,7 +85,6 @@ fn DemoView(
     let mode = use_signal(|| Mode::Live);
     use_context_provider(|| mode);
     crate::shows::provide(mode);
-    use_context_provider(|| ::engine_client::setlist::ReadOnlySet(read_only));
     // The lyrics' Audience / Performer and layer, held across songs.
     use_context_provider(crate::lyrics_panel::LyricsChoice::new);
     // The songs — a signal from here on, which the tabs read and a pick

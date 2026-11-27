@@ -8,7 +8,6 @@
 "fts-account" = "minor"
 "keyflow-extension" = "minor"
 "keyflow-session" = "minor"
-"library-sync" = "minor"
 "session" = "minor"
 "session-format" = "minor"
 "song-file" = "minor"

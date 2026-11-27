@@ -66,7 +66,6 @@ pub mod panel_registration;
 pub mod shell;
 pub mod signals;
 
-pub mod open_link;
 pub mod strip_width;
 
 // Re-export key types for convenience

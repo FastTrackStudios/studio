@@ -10,7 +10,7 @@
 //! engine`, a window's own) a song's one bridge is its project file's
 //! (`crate::project_file`): the set's doc of the song is never bridged to
 //! the engine. Hosting over iroh serves the song's own doc as it is;
-//! joining a set (by ticket, or one Task keeps) keeps the set's replica of
+//! joining a set by its ticket keeps the set's replica of
 //! the song in step with the song's doc as a CRDT
 //! (`engine_sync::relay`) — seeded from it when the set has none yet, or,
 //! when another peer seeded the set from a copy of its own, the song moved
@@ -34,16 +34,12 @@
 //! Hosting serves the set over iroh; joining dials it. The ticket
 //! (`fts-session:<endpoint id>/<set uuid>`) is what you hand someone. A
 //! joiner opens the same setlist first — the media is read from its own
-//! copy — and each of its songs is then made to match the host's. Or Task
-//! keeps the set ([`join_task`]): everyone joins it there, a browser too.
+//! copy — and each of its songs is then made to match the host's. A
+//! browser has no way into a set yet: that is a room's (studio#711).
 //!
 //! The same code runs natively and in a browser: its tasks and timers are
 //! `architect::platform`'s (tokio natively, the page's event loop in wasm).
-//! Hosting and iroh are the desktop's; a page only joins a set Task keeps.
-//!
-//! Signed in to Task, the desktop needs no button to share: whatever it
-//! has open is hosted in Task by itself (`live_host`), and the
-//! members and agents in the set edit it live.
+//! Hosting and iroh are the desktop's.
 //!
 //! **This device's lock.** "Lock / don't sync" ([`set_sync_locked`]) is
 //! per device and remembered on it: locked, the session's task holds the
@@ -182,44 +178,18 @@ const LOCAL_ME: &str = "local";
 
 /// Join a song's doc that already holds the session: the engine made to
 /// match it — or, locked ([`sync_locked`]), left as it is until the lock
-/// lifts. A song whose build left its bridge ([`song_built`]) is joined
-/// through it ([`Bridge::rejoin`]): the engine is not read again. A
-/// page's: an engine's songs keep their file's bridge.
+/// lifts. A page's: an engine's songs keep their file's bridge.
 #[cfg_attr(feature = "native", allow(dead_code))]
 async fn join_bridge(
     project: daw_control::Project,
     media: MediaRoot,
     doc: SessionDoc,
 ) -> eyre::Result<Bridge> {
-    let built = take_built(project.guid());
     if sync_locked() {
         Bridge::join_held(project, media, doc, blobs(), local()).await
-    } else if let Some(built) = built {
-        built.rejoin(doc).await
     } else {
         Bridge::join(project, media, doc, blobs(), local()).await
     }
-}
-
-thread_local! {
-    /// Bridges songs were built by, by project, until the session takes
-    /// them ([`song_built`]). The page's: it builds and joins on its one
-    /// thread, and its bridges are not `Send` (the facade's handles).
-    static BUILT: std::cell::RefCell<HashMap<String, Bridge>> =
-        std::cell::RefCell::new(HashMap::new());
-}
-
-/// `project` was just built from its file by `bridge`, and is about to
-/// join a set Task keeps: the session joins it through that bridge, which
-/// knows the engine as built, instead of reading the song back again.
-pub fn song_built(project: &str, bridge: Bridge) {
-    BUILT.with(|built| built.borrow_mut().insert(project.to_owned(), bridge));
-}
-
-/// The bridge `project` was built by, if it left one ([`song_built`]).
-#[cfg_attr(feature = "native", allow(dead_code))]
-fn take_built(project: &str) -> Option<Bridge> {
-    BUILT.with(|built| built.borrow_mut().remove(project))
 }
 
 /// Why the last share or join failed, for the bar.
@@ -381,8 +351,7 @@ pub fn history(project: &str) -> Option<engine_sync::loro::LoroDoc> {
 ///
 /// The name, not the project guid: the engine mints a guid per open, so
 /// two copies of one song never share it. The file's stem is the same on
-/// every machine (`Washed`); once songs live in the Task library this is
-/// the library's song id.
+/// every machine (`Washed`).
 async fn open_songs()
 -> eyre::Result<Vec<(daw_control::Project, MediaRoot, String, std::path::PathBuf)>> {
     let daw = daw::rpc::Daw::try_get().ok_or_else(|| eyre::eyre!("the daw facade is not up"))?;
@@ -454,9 +423,6 @@ fn stop(live: Option<Live>) -> HashMap<String, SessionDoc> {
         return HashMap::new();
     };
     let _ = live.stop.send(true);
-    if let Ok(mut opened) = OPENED.lock() {
-        *opened = None;
-    }
     live.songs.into_iter().map(|s| (s.key, s.doc)).collect()
 }
 
@@ -634,8 +600,7 @@ fn host_inner(name: String) -> eyre::Result<String> {
         clear_notices();
         // Each song's set doc is a copy of its own, history and all, kept
         // in step with it — so this device's lock holds the peers' edits
-        // back here, as in a set Task keeps; each song keeps its file's one
-        // bridge.
+        // back here; each song keeps its file's one bridge.
         let host = SetHost::new(id);
         let mut bridges = Vec::new();
         for (project, _, key, path) in open {
@@ -760,8 +725,7 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
             } else {
                 Meeting::Own
             };
-            let (song, link, _) =
-                link_song(meet, song, Some(side), &set, &mut HashMap::new()).await?;
+            let (song, link) = link_song(meet, song, Some(side), &set, &mut HashMap::new()).await?;
             bridges.push((song, link));
         }
         crate::song_model::request_resync();
@@ -803,444 +767,28 @@ fn parse_ticket(ticket: &str) -> eyre::Result<(architect::iroh_link::iroh::Endpo
     ))
 }
 
-pub use engine_core::task_set::{TASK_SET_ENV, TaskSet};
-
-/// [`join_task`] off the calling thread.
-pub fn join_task_in_background(set: TaskSet, name: String) {
-    std::thread::spawn(move || {
-        let _ = join_task(&set, name);
-    });
-}
-
-/// Join a set Task keeps: its songs' docs synced through Task, its
-/// presence, Task's clock. Each open song meets the set's song of the same
-/// library id; the first peer on a song seeds its doc from what it has open
-/// (Task starts every song empty), and everyone after takes the doc's
-/// state. A song the set does not have stays this machine's own.
-///
-/// # Errors
-///
-/// Task could not be reached or refused the set, or an engine call failed.
-pub fn join_task(set: &TaskSet, name: String) -> eyre::Result<()> {
-    record(join_task_inner(set, name))
-}
-
-#[cfg(feature = "native")]
-fn join_task_inner(set: &TaskSet, name: String) -> eyre::Result<()> {
-    let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
-    let live = runtime.block_on(join_task_live(set.clone(), name))?;
-    if let Ok(mut slot) = LIVE.lock() {
-        *slot = Some(live);
-    }
-    Ok(())
-}
-
-/// The songs open in this engine, by the name every machine knows each by
-/// (`Washed`), in the engine's order.
-///
-/// # Errors
-/// When the engine is not up or cannot be read.
-#[cfg(feature = "native")]
-pub fn open_song_keys() -> eyre::Result<Vec<String>> {
-    let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
-    runtime.block_on(async {
-        Ok::<_, eyre::Report>(open_songs().await?.into_iter().map(|s| s.2).collect())
-    })
-}
-
-/// The name the open set is known by (the setlist's, or a lone song's):
-/// what its live set in Task is called.
-///
-/// # Errors
-/// When the engine is not up or cannot be read.
-#[cfg(feature = "native")]
-pub fn open_set_title() -> eyre::Result<String> {
-    let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
-    runtime.block_on(async { Ok::<_, eyre::Report>(set_key(&open_songs().await?)) })
-}
-
-/// Run `work` on the engine's runtime, to its end — for what a thread of
-/// its own must do against Task (the auto-host's library calls).
-///
-/// # Errors
-/// When the engine is not up, or `work` fails.
-#[cfg(feature = "native")]
-pub fn on_runtime<T>(work: impl std::future::Future<Output = eyre::Result<T>>) -> eyre::Result<T> {
-    let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
-    runtime.block_on(work)
-}
-
-/// Whether a session is being joined right now — a page joins in the
-/// background, and the session bar says so rather than offering to share.
-static JOINING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Whether a session is being joined (see [`JOINING`]).
-#[must_use]
-pub fn joining() -> bool {
-    JOINING.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// [`join_task`] in a page: joined on the page's event loop.
-#[cfg(not(feature = "native"))]
-fn join_task_inner(set: &TaskSet, name: String) -> eyre::Result<()> {
-    let set = set.clone();
-    JOINING.store(true, std::sync::atomic::Ordering::Relaxed);
-    architect::platform::spawn(async move {
-        let joined = record(join_task_live(set, name).await);
-        JOINING.store(false, std::sync::atomic::Ordering::Relaxed);
-        match joined {
-            Ok(live) => {
-                if let Ok(mut slot) = LIVE.lock() {
-                    *slot = Some(live);
-                }
-            }
-            Err(e) => {
-                tracing::warn!(collab.error = %e, "collab: could not join the set Task keeps")
-            }
-        }
-    });
-    Ok(())
-}
-
-/// Joining a set Task keeps — the part both a desktop and a page run.
-async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
-    use live_proto::LiveSessionsClient;
-    let open = open_songs().await?;
-    let token = set.token.as_deref();
-    let lane: LiveSessionsClient = task_dial::establish_at(&set.url, token)
-        .await
-        .map_err(|e| eyre::eyre!("dialling {}: {e}", set.url))?;
-    let joined = lane
-        .join(set.setlist.clone())
-        .await
-        .map_err(|e| eyre::eyre!("joining the set: {e:?}"))?;
-    // A playground's end, from Task's clock onto this machine's.
-    let resets_at = match joined.resets_at {
-        Some(at) => lane.now().await.ok().map(|now| {
-            let left = std::time::Duration::from_secs_f64(((at - now) / 1e6).max(0.0));
-            architect::platform::Instant::now() + left
-        }),
-        None => None,
-    };
-    // Each replica and the presence dial Task again whenever their
-    // connection goes (Task restarting, a network blip) and catch up.
-    let sync: Dial<live_doc::DocSyncClient> = task_dial_for(&set);
-    let presence_dial: Dial<live_doc::DocPresenceClient> = task_dial_for(&set);
-    // Task's clock is the session's.
-    let clock = task_clock(&set, lane);
-    let presence_id: Uuid = joined
-        .presence_id
-        .parse()
-        .map_err(|e| eyre::eyre!("presence id: {e}"))?;
-    let mut peer = SetPeer::new(presence_id);
-    peer.run_presence(presence_dial);
-    let presence: Arc<dyn PresenceSink> = Arc::new(peer.presence().clone());
-
-    // Each open song, replicated from the set's song of its id.
-    let ids: Arc<HashMap<String, Uuid>> = Arc::new(
-        joined
-            .songs
-            .iter()
-            .filter_map(|s| Some((s.slug.clone(), s.doc_id.parse().ok()?)))
-            .collect(),
-    );
-    let replicas: Vec<_> = open
-        .into_iter()
-        .map(|song| (replicate(&ids, &sync, &song.2), song))
-        .collect();
-    settle(
-        replicas
-            .iter()
-            .filter_map(|(replica, _)| replica.as_ref().map(|(doc, _)| doc)),
-    )
-    .await;
-    let mut docs = LIVE
-        .lock()
-        .ok()
-        .map(|mut l| stop(l.take()))
-        .unwrap_or_default();
-    let seeds = may_seed(&set, joined.read_only);
-    clear_notices();
-    let title = joined.title.clone();
-    let mut bridges = Vec::new();
-    let mut waiting = Vec::new();
-    let mut seeded = 0usize;
-    for (replica, song) in replicas {
-        let (doc, side) = replica.unzip();
-        match meeting(doc, seeds) {
-            Meeting::Wait(doc) => waiting.push((doc, side, song)),
-            meet => {
-                let (song, link, was_seeded) =
-                    sliced(link_song(meet, song, side, &title, &mut docs)).await?;
-                seeded += usize::from(was_seeded);
-                bridges.push((song, link));
-            }
-        }
-    }
-    crate::song_model::request_resync();
-    let me = format!("peer-{}", &Uuid::new_v4().simple().to_string()[..8]);
-    tracing::info!(
-        collab.setlist = %joined.setlist,
-        collab.epoch = joined.epoch,
-        collab.songs = bridges.len(),
-        collab.seeded = seeded,
-        collab.waiting = waiting.len(),
-        collab.guest = set.is_guest(),
-        "collab: joined a set Task keeps"
-    );
-    // Songs opened after this (a page opens its first song, then the
-    // rest): the same replica and bridge, handed to the running session.
-    let (adds_tx, adds_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (opened_tx, mut opened_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-    let mut bridged: std::collections::HashSet<String> = bridges
-        .iter()
-        .map(|(song, _)| song.project.clone())
-        .chain(waiting.iter().map(|(_, _, song)| song.0.guid().to_owned()))
-        .collect();
-    for (doc, side, song) in waiting {
-        bridge_when_seeded(doc, side, song, title.clone(), adds_tx.clone());
-    }
-    let later = title.clone();
-    architect::platform::spawn(async move {
-        while let Some(project) = opened_rx.recv().await {
-            if !bridged.insert(project.clone()) {
-                continue;
-            }
-            let Ok(open) = open_songs().await else {
-                continue;
-            };
-            let Some(song) = open.into_iter().find(|s| s.0.guid() == project) else {
-                continue;
-            };
-            let (doc, side) = replicate(&ids, &sync, &song.2).unzip();
-            settle(doc.iter()).await;
-            let meet = match meeting(doc, seeds) {
-                Meeting::Wait(doc) => {
-                    bridge_when_seeded(doc, side, song, later.clone(), adds_tx.clone());
-                    continue;
-                }
-                meet => meet,
-            };
-            match sliced(link_song(meet, song, side, &later, &mut HashMap::new())).await {
-                Ok((song, link, _)) => {
-                    if adds_tx.send((song, link)).is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(collab.error = %e, "collab: a song opened later could not join the session")
-                }
-            }
-        }
-    });
-    if let Ok(mut slot) = OPENED.lock() {
-        // Songs that opened while this was joining — after `open_songs`
-        // looked, or before: the adder skips the ones already bridged.
-        for project in EARLY
-            .lock()
-            .map(|mut e| std::mem::take(&mut *e))
-            .unwrap_or_default()
-        {
-            let _ = opened_tx.send(project);
-        }
-        *slot = Some(opened_tx);
-    }
-    let started = start(
-        bridges,
-        Arc::clone(&presence),
-        clock,
-        joined.title.clone(),
-        me,
-        name,
-        None,
-        Some(adds_rx),
-    );
-    let _keep = peer;
-    let mut live = started.into_live(set.url.clone(), false, presence);
-    live.status.resets_at = resets_at;
-    Ok::<_, eyre::Report>(live)
-}
-
-/// Where a song opened after the session began is announced (see
-/// [`song_opened`]); set while in a set Task keeps.
-static OPENED: Mutex<Option<tokio::sync::mpsc::UnboundedSender<String>>> = Mutex::new(None);
-
-/// Songs that opened before a session could take them (it was still
-/// joining): handed to it once it has.
-static EARLY: Mutex<Vec<String>> = Mutex::new(Vec::new());
-
-/// `project` has just opened in this engine: in a set Task keeps, it joins
-/// the session like the songs that were open when it began — or, while
-/// the session is still joining, as soon as it has.
-pub fn song_opened(project: &str) {
-    let Ok(slot) = OPENED.lock() else { return };
-    match slot.as_ref() {
-        Some(opened) => {
-            let _ = opened.send(project.to_owned());
-        }
-        None => {
-            if let Ok(mut early) = EARLY.lock() {
-                early.push(project.to_owned());
-            }
-        }
-    }
-}
-
 /// A song as `open_songs` finds it.
 type OpenSong = (daw_control::Project, MediaRoot, String, std::path::PathBuf);
-
-// The same trait: the desktop reaches vox through vox-core, a page
-// through the vox facade.
-#[cfg(not(feature = "native"))]
-use vox::FromVoxLane;
-#[cfg(feature = "native")]
-use vox_core::FromVoxLane;
-
-/// A dial for `C` on the Task server `set` is on, for a replica to
-/// reconnect with.
-fn task_dial_for<C>(set: &TaskSet) -> Dial<C>
-where
-    C: FromVoxLane + 'static,
-{
-    let (url, token) = (set.url.clone(), set.token.clone());
-    Arc::new(move || {
-        let (url, token) = (url.clone(), token.clone());
-        Box::pin(async move {
-            task_dial::establish_at::<C>(&url, token.as_deref())
-                .await
-                .map_err(|e| eyre::eyre!("dialling {url}: {e}"))
-        })
-    })
-}
-
-/// Task's clock, followed — through `lane` while it answers, and a lane
-/// dialled again when it stops (Task restarting).
-fn task_clock(set: &TaskSet, lane: live_proto::LiveSessionsClient) -> SharedClock {
-    let lane = Arc::new(Mutex::new(Some(lane)));
-    let dial: Dial<live_proto::LiveSessionsClient> = task_dial_for(set);
-    SharedClock::follow_with(move || {
-        let (lane, dial) = (Arc::clone(&lane), Arc::clone(&dial));
-        async move {
-            let current = lane.lock().ok().and_then(|l| l.clone());
-            if let Some(client) = current {
-                if let Ok(now) = client.now().await {
-                    return Some(now);
-                }
-            }
-            // Gone: dial again for the next ping.
-            let fresh = dial().await.ok();
-            if let Ok(mut slot) = lane.lock() {
-                *slot = fresh;
-            }
-            None
-        }
-    })
-}
-
-/// A replica of the set's doc for the song named `key`, syncing, and it as
-/// a relay's side — `None` for a song the set does not have.
-fn replicate(
-    ids: &HashMap<String, Uuid>,
-    sync: &Dial<live_doc::DocSyncClient>,
-    key: &str,
-) -> Option<(SessionDoc, Side)> {
-    ids.get(&engine_sync::slug::slugify(key))
-        .map(|id| SetPeer::sync_song_relayed(*id, Arc::clone(sync)))
-}
-
-/// Wait for what Task has of these replicas to arrive — at once, when it
-/// has any; a replica still empty after that is this peer's to seed.
-async fn settle<'a>(docs: impl Iterator<Item = &'a SessionDoc> + Clone) {
-    for _ in 0..80 {
-        if docs.clone().all(SessionDoc::has_session) {
-            break;
-        }
-        architect::platform::sleep(Duration::from_millis(25)).await;
-    }
-}
-
-/// Whether this peer may seed a song's doc the set has not got yet: a
-/// member who can write may; a guest (a live share link) or an observer
-/// (`read_only`) never — a guest's song waits for the host's seed.
-#[must_use]
-pub fn may_seed(set: &TaskSet, read_only: bool) -> bool {
-    !set.is_guest() && !read_only
-}
 
 /// How one open song meets the set's replica of it.
 enum Meeting {
     /// The set holds it: take the doc's state.
     Join(SessionDoc),
-    /// The set has none yet and this peer seeds it from its song.
-    Seed(SessionDoc),
-    /// The set has none yet and this peer may not seed it: joined once
-    /// the doc holds the session ([`bridge_when_seeded`]).
-    Wait(SessionDoc),
     /// The set does not have this song: it stays this machine's own.
     Own,
-}
-
-/// How a song with replica `doc` meets the set, for a peer that may or
-/// may not seed ([`may_seed`]).
-fn meeting(doc: Option<SessionDoc>, may_seed: bool) -> Meeting {
-    match doc {
-        Some(doc) if doc.has_session() => Meeting::Join(doc),
-        Some(doc) if may_seed => Meeting::Seed(doc),
-        Some(doc) => Meeting::Wait(doc),
-        None => Meeting::Own,
-    }
-}
-
-/// How often a song waiting for the host's seed looks again.
-const SEED_POLL: Duration = Duration::from_millis(250);
-
-/// Join `song` to its replica once the doc holds the session (another
-/// peer seeded it), and hand it to the running session through `adds`.
-/// Until then the song is this machine's alone and nothing is written.
-fn bridge_when_seeded(
-    doc: SessionDoc,
-    side: Option<Side>,
-    song: OpenSong,
-    set: String,
-    adds: tokio::sync::mpsc::UnboundedSender<(Song, Link)>,
-) {
-    architect::platform::spawn(async move {
-        while !doc.has_session() {
-            if adds.is_closed() {
-                return;
-            }
-            architect::platform::sleep(SEED_POLL).await;
-        }
-        match sliced(link_song(
-            Meeting::Join(doc),
-            song,
-            side,
-            &set,
-            &mut HashMap::new(),
-        ))
-        .await
-        {
-            Ok((song, link, _)) => {
-                let _ = adds.send((song, link));
-            }
-            Err(e) => {
-                tracing::warn!(collab.error = %e, "collab: a song seeded by the host could not join the session");
-            }
-        }
-    });
 }
 
 /// Keep one song with the set's replica of it (`side`, the replica as a
 /// relay's side) as `meet` says — an engine's through its project file's
 /// one doc ([`relay_song`]), a page's through its one bridge
-/// ([`bridge_song`]). `set` is the set's title. Says whether it seeded.
+/// ([`bridge_song`]). `set` is the set's title.
 async fn link_song(
     meet: Meeting,
     song: OpenSong,
     side: Option<Side>,
     set: &str,
     docs: &mut HashMap<String, SessionDoc>,
-) -> eyre::Result<(Song, Link, bool)> {
+) -> eyre::Result<(Song, Link)> {
     #[cfg(feature = "native")]
     {
         let _ = docs;
@@ -1249,8 +797,8 @@ async fn link_song(
     #[cfg(not(feature = "native"))]
     {
         let _ = (side, set);
-        let (song, bridge, seeded) = bridge_song(meet, song, docs).await?;
-        Ok((song, Link::Bridged(bridge), seeded))
+        let (song, bridge) = bridge_song(meet, song, docs).await?;
+        Ok((song, Link::Bridged(bridge)))
     }
 }
 
@@ -1279,15 +827,12 @@ async fn song_side(guid: String, path: std::path::PathBuf) -> eyre::Result<Side>
 /// An engine's song kept with the set's replica of it (`live`) as `meet`
 /// says, through its file's one doc and bridge — never a second bridge:
 ///
-/// - **Seed**: the set has no doc of it yet; it is seeded from the song's
-///   own, and kept in step with it.
 /// - **Join**: the set's doc is of the song's own lineage (seeded from
 ///   it, or from a copy of its file): kept in step with it. Of another
 ///   lineage (another peer's copy seeded it): the song is moved onto it
 ///   (`project_file::adopt`) — this device's version kept in its file as
-///   `Before joining <set> (<date>)` — then kept in step. A song synced with
-///   its org is not moved: it stays out of the set, and the person is told
-///   ([`notices`]).
+///   `Before joining <set> (<date>)` — then kept in step. A song that will
+///   not move stays out of the set, and the person is told ([`notices`]).
 /// - **Own**: the set does not have it; nothing is kept.
 #[cfg(feature = "native")]
 async fn relay_song(
@@ -1295,19 +840,10 @@ async fn relay_song(
     (project, _, key, path): OpenSong,
     live: Option<Side>,
     set: &str,
-) -> eyre::Result<(Song, Link, bool)> {
+) -> eyre::Result<(Song, Link)> {
     use engine_sync::relay;
     let guid = project.guid().to_owned();
-    let (doc, link, seeded) = match (meet, live) {
-        (Meeting::Seed(doc), Some(live)) => {
-            let own = song_side(guid.clone(), path).await?;
-            relay::pass(&live, relay::seed(&own.doc)?).await?;
-            (
-                doc,
-                Link::Relayed(Relay::start(own, live, LOCK.subscribe())),
-                true,
-            )
-        }
+    let (doc, link) = match (meet, live) {
         (Meeting::Join(doc), Some(live)) => {
             let own = song_side(guid.clone(), path).await?;
             let own = if relay::same_lineage(&own.doc, &live.doc) {
@@ -1328,8 +864,8 @@ async fn relay_song(
                         ));
                         Some(adopted.side)
                     }
-                    // Refused (a song synced with its org keeps its org's
-                    // doc): this song stays out of the set; the rest join.
+                    // Refused: this song stays out of the set; the rest
+                    // join.
                     Err(why) => {
                         tracing::warn!(collab.song = %key, collab.why = %why, "collab: the song stays out of the set");
                         notice(format!("{key} is not in this set: {why}"));
@@ -1341,19 +877,14 @@ async fn relay_song(
                 Some(own) => (
                     doc,
                     Link::Relayed(Relay::start(own, live, LOCK.subscribe())),
-                    false,
                 ),
-                None => (doc, Link::Kept, false),
+                None => (doc, Link::Kept),
             }
         }
-        (Meeting::Wait(_), _) => eyre::bail!("{key}: the set's doc is not seeded yet"),
-        (Meeting::Own | Meeting::Seed(_) | Meeting::Join(_), _) => {
-            (SessionDoc::new(), Link::Kept, false)
-        }
+        (Meeting::Own | Meeting::Join(_), _) => (SessionDoc::new(), Link::Kept),
     };
     tracing::info!(
         collab.song = %key,
-        collab.seeded = seeded,
         collab.kept = matches!(link, Link::Kept),
         "collab: the song is kept with the set through its own doc"
     );
@@ -1364,40 +895,26 @@ async fn relay_song(
             doc,
         },
         link,
-        seeded,
     ))
 }
 
 /// Bridge one song to its replica as `meet` says: joining the set's
-/// session of it, seeding it from this song, or (no replica) keeping this
-/// machine's own record from `docs`. Says whether it seeded. A page's: it
-/// has no project file, so the set's doc is its song's one doc.
+/// session of it, or (no replica) keeping this machine's own record from
+/// `docs`. A page's: it has no project file, so the set's doc is its
+/// song's one doc.
 #[cfg(not(feature = "native"))]
 async fn bridge_song(
     meet: Meeting,
     (project, media, key, path): OpenSong,
     docs: &mut HashMap<String, SessionDoc>,
-) -> eyre::Result<(Song, Bridge, bool)> {
+) -> eyre::Result<(Song, Bridge)> {
     let guid = project.guid().to_owned();
-    let (bridge, seeded) = match meet {
-        Meeting::Join(doc) => (join_bridge(project, media, doc).await?, false),
-        Meeting::Seed(doc) => {
-            let chart = chart_for(&path, &doc);
-            (
-                Bridge::host(project, media, doc, chart, blobs(), local()).await?,
-                true,
-            )
-        }
-        Meeting::Wait(_) => eyre::bail!("{key}: the set's doc is not seeded yet"),
+    let bridge = match meet {
+        Meeting::Join(doc) => join_bridge(project, media, doc).await?,
         Meeting::Own => {
-            // Not in the set: nothing joins through its build's bridge.
-            drop(take_built(&guid));
             let own = docs.remove(&key).unwrap_or_default();
             let chart = chart_for(&path, &own);
-            (
-                Bridge::host(project, media, own, chart, blobs(), local()).await?,
-                false,
-            )
+            Bridge::host(project, media, own, chart, blobs(), local()).await?
         }
     };
     let song = Song {
@@ -1405,7 +922,7 @@ async fn bridge_song(
         key,
         doc: bridge.doc().clone(),
     };
-    Ok((song, bridge, seeded))
+    Ok((song, bridge))
 }
 
 /// `work`, on a page cut into slices (`web_slices::in_slices`): a song's
@@ -1519,7 +1036,6 @@ impl Started {
                 set: self.set,
                 color: presence::color_for(&self.me),
                 name: self.name,
-                resets_at: None,
                 locked: false,
                 held: 0,
             },
@@ -2178,11 +1694,9 @@ fn ticket_path() -> std::path::PathBuf {
 /// bridge on the engine's songs (#316).
 ///
 /// Once the song is up: the session the environment names, for the
-/// two-instance demo and tests — `FTS_COLLAB_TASK` (a set Task keeps),
-/// `FTS_COLLAB_HOST=1` (shares the set and writes the ticket to
+/// two-instance demo and tests — `FTS_COLLAB_HOST=1` (shares the set and writes the ticket to
 /// `FTS_COLLAB_TICKET`), `FTS_COLLAB_JOIN` (a ticket, or a file the host
-/// writes one to) — then hosting what is open in Task by itself, signed in
-/// ([`crate::live_host`]; off when the environment started a session).
+/// writes one to).
 /// `name` is who this person is in a set when the account does not say.
 #[cfg(feature = "native")]
 pub fn start_in_engine(name: String) {
@@ -2193,7 +1707,6 @@ pub fn start_in_engine(name: String) {
             .spawn(move || {
                 std::thread::sleep(Duration::from_millis(1500));
                 from_env(&name);
-                crate::live_host::start(name);
             });
         if let Err(e) = spawned {
             tracing::warn!(collab.error = %e, "collab: no thread to start the live sessions on");
@@ -2205,16 +1718,7 @@ pub fn start_in_engine(name: String) {
 /// [`start_in_engine`]).
 #[cfg(feature = "native")]
 fn from_env(name: &str) {
-    if let Some(set) = TaskSet::from_env() {
-        match join_task(&set, name.to_owned()) {
-            Ok(()) => {
-                tracing::info!(collab.setlist = %set.setlist, "collab: in the set Task keeps")
-            }
-            Err(e) => {
-                tracing::warn!(collab.error = %e, "collab: could not join the set Task keeps");
-            }
-        }
-    } else if env_set("FTS_COLLAB_HOST") {
+    if env_set("FTS_COLLAB_HOST") {
         match host(name.to_owned()) {
             Ok(ticket) => {
                 let path = ticket_path();
@@ -2248,6 +1752,3 @@ fn from_env(name: &str) {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -106,9 +106,6 @@ pub struct Assembly {
     /// The streaming state published to the windows, under the next
     /// revision (`view_host::streams_read`); `frame.version` is ignored.
     pub streams_read: fn(daw_view::view::StreamsFrame),
-    /// Song `project` opened into the set: a live session's host offers it
-    /// (`collab::song_opened`).
-    pub song_opened: fn(&str),
     /// Open what is at the path as the set, as SESSION_OPEN does
     /// (`set_open::open_path`): a room's member opening what its leader
     /// loaded. Returns at once; `Err` when another open is under way.
@@ -118,9 +115,6 @@ pub struct Assembly {
     /// session's doc, or held while this device is locked
     /// (`collab::local_chart`).
     pub local_chart: fn(&str),
-    /// Join the set Task keeps, as `name`, off the calling thread
-    /// (`collab::join_task_in_background`).
-    pub join_task_in_background: fn(crate::task_set::TaskSet, String),
 }
 
 static ASSEMBLY: OnceLock<&'static Assembly> = OnceLock::new();

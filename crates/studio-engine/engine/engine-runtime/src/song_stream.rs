@@ -654,9 +654,6 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         keep.forget_log(&local)?;
         keep.write(&local, bytes)?;
     }
-    if let Some(chart) = source.chart().await? {
-        write_chart(&keep, &project, &label, &chart)?;
-    }
     keep.mirrored_at(&base, version.as_deref())?;
     tracing::info!(
         stream.source = %label,
@@ -815,30 +812,6 @@ async fn cache_get(cache: &web_sys::Cache, key: &str) -> Option<Vec<u8>> {
         .await
         .ok()?;
     Some(js_sys::Uint8Array::new(&body).to_vec())
-}
-
-/// The source's chart, as THE chart beside `project` (the folder's own
-/// gave way to it in the source's listing).
-fn write_chart(keep: &Keep, project: &Path, label: &str, chart: &str) -> eyre::Result<()> {
-    match keep {
-        #[cfg(feature = "library")]
-        Keep::Disk(_) => {
-            if let Some(folder) = project.parent() {
-                library_sync::write_chart(folder, label, chart)?;
-            }
-            Ok(())
-        }
-        #[allow(unreachable_patterns)]
-        _ => {
-            let stem = project
-                .file_stem()
-                .map_or_else(|| label.to_owned(), |s| s.to_string_lossy().into_owned());
-            keep.write(
-                &project.with_file_name(format!("{stem}.kf")),
-                chart.as_bytes().to_vec(),
-            )
-        }
-    }
 }
 
 /// A take attached as a stream of its proxy: what to fetch for it, and the

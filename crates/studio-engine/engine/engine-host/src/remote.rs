@@ -1,10 +1,9 @@
 //! Shared "dial the engine" plumbing for every remote surface.
 //!
-//! The browser session player (session_remote_view.rs) and the collection
-//! browser (collection_browser.rs) reach `engine-host --engine` the
-//! same way: one shared engine target (local WebSocket by default, a
-//! saved iroh endpoint id for p2p), one typed vox client per service
-//! established over its own link. This module owns that plumbing so
+//! The browser session player (session_remote_view.rs) reaches
+//! `engine-host --engine` this way: one shared engine target (local
+//! WebSocket by default, a saved iroh endpoint id for p2p), one typed vox
+//! client per service established over its own link. This module owns that plumbing so
 //! every view connects identically.
 
 use architect::iroh_link::iroh;

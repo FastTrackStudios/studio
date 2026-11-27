@@ -4,7 +4,7 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-description = "Working together: the live session, the agent, Task's account and set, hosting a live set"
+description = "Working together: the live session and the agent"
 
 # One of studio-engine's domains (docs/MONOREPO-MIGRATION.md, "Splitting
 # studio-engine"). It depends on engine-core and studio-core, never on
@@ -23,8 +23,6 @@ engine-runtime = { workspace = true }
 daw = { workspace = true }
 daw-control = { workspace = true }
 daw-proto = { workspace = true }
-# Hosting what is open in Task (`live_host`): the org's library.
-library-sync = { workspace = true }
 # `Instant` that works in a browser.
 web-time = { workspace = true }
 eyre = { workspace = true }
@@ -37,8 +35,6 @@ live-doc = { workspace = true, optional = true }
 vox-core = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 daw-transport-sync = { workspace = true, optional = true }
-live-proto = { workspace = true, optional = true }
-task-dial = { workspace = true, optional = true }
 # Where this device's lock is remembered (`collab`).
 dirs = { workspace = true, optional = true }
 # A room: its record, its doc and presence over live-doc (`room`).
@@ -53,9 +49,9 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 default = ["native"]
 # studio-engine's features, forwarded (its `native`, `signal`, `web`,
 # `show` turn these on): gate the modules here as they were gated there.
-native = ["engine-core/native", "engine-runtime/native", "architect/host", "architect/iroh", "dep:tokio", "tokio?/net", "dep:live-doc", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:live-proto", "dep:task-dial", "dep:dirs", "dep:room", "library-sync/publish"]
+native = ["engine-core/native", "engine-runtime/native", "architect/host", "architect/iroh", "dep:tokio", "tokio?/net", "dep:live-doc", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:dirs", "dep:room"]
 signal = ["native", "engine-core/signal"]
-web = ["engine-core/web", "engine-runtime/web", "dep:live-doc", "dep:uuid", "dep:daw-transport-sync", "dep:live-proto", "dep:task-dial"]
+web = ["engine-core/web", "engine-runtime/web", "dep:live-doc", "dep:uuid", "dep:daw-transport-sync"]
 show = ["native", "engine-core/show"]
 
 [lints]

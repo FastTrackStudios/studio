@@ -115,13 +115,9 @@ pub mod collab_calls;
 /// into the Action List uses (engine-collab's `agent` acts on it).
 #[cfg(feature = "native")]
 pub mod journal;
-/// Task's account on this machine: signing in, the org libraries, the org
-/// picked.
-#[cfg(feature = "native")]
-pub mod task_account;
-/// A set Task keeps: which, joined, tried again until Task answers.
+/// Something over the network, tried again until it answers.
 #[cfg(any(feature = "native", feature = "web"))]
-pub mod task_set;
+pub mod retry;
 /// Work on a page cut into slices, the page given its turn between them.
 #[cfg(feature = "web")]
 pub mod web_slices;
