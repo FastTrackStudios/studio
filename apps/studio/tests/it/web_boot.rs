@@ -372,6 +372,97 @@ fn cab_ir() -> Vec<u8> {
     wav
 }
 
+/// A session kept on this device opens and plays with the network off
+/// (studio#716). The page opens the fixture with `?keep=1`, which keeps it
+/// for offline as a setlist's "Download for offline" keeps each of its
+/// songs (`engine_web::keep_offline`: its listing and small files in the
+/// page's caches, every proxy fetched whole). Its service worker keeps the
+/// page itself (`public/sw.js`). Then the server is cut — every connection
+/// closed unanswered — and the page reloaded: it comes back from the
+/// service worker, the session opens from what was kept, and Play is heard.
+#[test]
+#[ignore = "needs the web build and a WebDriver: `just test-web-boot`"]
+fn a_kept_session_opens_and_plays_with_the_network_off() {
+    let dist = PathBuf::from(
+        std::env::var_os("STUDIO_WEB_DIST")
+            .expect("STUDIO_WEB_DIST: the web build's public folder"),
+    );
+    assert!(
+        dist.join("sw.js").is_file(),
+        "{} has no sw.js: the web build copies public/ (its service worker) into it",
+        dist.display()
+    );
+    let sessions = tempfile::tempdir().expect("a folder for the session");
+    stage_session(&sessions.path().join("multitrack-click"));
+    let site = Server::start(dist, sessions.path().to_path_buf());
+
+    let driver = Driver::start();
+    let session = driver.new_session();
+    session.navigate(&format!(
+        "{}/?session=/sessions/multitrack-click&keep=1",
+        site.origin
+    ));
+
+    // Online: open, then kept on this device.
+    let kept = session.wait_for(Duration::from_secs(120), "the session to be kept", |s| {
+        if s.state("data-state") == "failed" {
+            return Some(Err(format!("it did not open: {}", s.state("data-why"))));
+        }
+        match s.state("data-kept").as_str() {
+            "kept" => Some(Ok(())),
+            k if k.starts_with("not kept") => Some(Err(k.to_owned())),
+            _ => None,
+        }
+    });
+    if let Err(why) = kept {
+        panic!("the session was not kept for offline: {why}");
+    }
+    // The service worker in charge of the page, its files kept.
+    session.wait_for(Duration::from_secs(30), "the page's files kept", |s| {
+        let script = "return (async () => { \
+            if (!navigator.serviceWorker || !navigator.serviceWorker.controller) return 'no worker'; \
+            const c = await caches.open('studio-shell-v1'); \
+            const urls = (await c.keys()).map(r => r.url); \
+            return urls.some(u => u.endsWith('.wasm')) ? 'kept' : ('kept ' + urls.length); })();";
+        (s.script(script) == "kept").then_some(())
+    });
+
+    // The network off, the page again.
+    site.cut();
+    session.refresh();
+    let ready = session.wait_for(
+        Duration::from_secs(90),
+        "the kept session to open with the network off",
+        |s| match s.state("data-state").as_str() {
+            "ready" => Some(Ok(())),
+            "failed" => Some(Err(s.state("data-why"))),
+            _ => None,
+        },
+    );
+    if let Err(why) = ready {
+        panic!("with the network off the session did not open: {why}");
+    }
+    session.click("button.npb[aria-label='Play']");
+    session.wait_for(
+        Duration::from_secs(30),
+        "the kept session to be heard with the network off",
+        |s| {
+            let loud: u64 = s.state("data-loud-frames").parse().unwrap_or(0);
+            let at: f64 = s.state("data-at").parse().unwrap_or(0.0);
+            (loud >= u64::from(RATE) && at > 1.0).then_some(())
+        },
+    );
+    let peak: f32 = session.state("data-peak-ever").parse().unwrap_or(0.0);
+    assert!(
+        peak > 0.01,
+        "offline, the page played silence (peak {peak})"
+    );
+    assert!(
+        site.refused() > 0,
+        "the page never asked the network once it was cut: the test proves nothing"
+    );
+}
+
 /// What a hosted panel (`studio_panels::web_host::HostedView`) says it
 /// shows, off its `data-hosted-*` attributes.
 #[derive(Debug)]
@@ -796,24 +887,55 @@ fn free_port() -> u16 {
 }
 
 /// The web build at the root and the sessions under `/sessions/`, served by
-/// range, every other path the app's page (its router's).
+/// range, every other path the app's page (its router's). Once [`cut`]
+/// (the network off), every connection is closed unanswered.
+///
+/// [`cut`]: Server::cut
 struct Server {
     origin: String,
+    cut: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Connections refused since it was cut: the page asked the network.
+    refused: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl Server {
     fn start(dist: PathBuf, sessions: PathBuf) -> Self {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
         let listener = TcpListener::bind("127.0.0.1:0").expect("the server's port");
         let origin = format!("http://{}", listener.local_addr().expect("its address"));
-        std::thread::spawn(move || {
-            for stream in listener.incoming().flatten() {
-                let (dist, sessions) = (dist.clone(), sessions.clone());
-                std::thread::spawn(move || {
-                    let _ = serve(stream, &dist, &sessions);
-                });
-            }
-        });
-        Self { origin }
+        let cut = Arc::new(AtomicBool::new(false));
+        let refused = Arc::new(AtomicUsize::new(0));
+        {
+            let (cut, refused) = (Arc::clone(&cut), Arc::clone(&refused));
+            std::thread::spawn(move || {
+                for stream in listener.incoming().flatten() {
+                    if cut.load(Ordering::SeqCst) {
+                        refused.fetch_add(1, Ordering::SeqCst);
+                        let _ = stream.shutdown(std::net::Shutdown::Both);
+                        continue;
+                    }
+                    let (dist, sessions) = (dist.clone(), sessions.clone());
+                    std::thread::spawn(move || {
+                        let _ = serve(stream, &dist, &sessions);
+                    });
+                }
+            });
+        }
+        Self {
+            origin,
+            cut,
+            refused,
+        }
+    }
+
+    /// The network off: nothing is answered from now on.
+    fn cut(&self) {
+        self.cut.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn refused(&self) -> usize {
+        self.refused.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -1134,6 +1256,11 @@ impl Session<'_> {
             ),
         );
         self.call("POST", "/url", Some(&json!({ "url": url })));
+    }
+
+    /// Reload the page.
+    fn refresh(&self) {
+        self.call("POST", "/refresh", Some(&json!({})));
     }
 
     /// An attribute of the page's engine state element (`#studio-engine`).
