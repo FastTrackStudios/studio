@@ -105,26 +105,31 @@ pub fn millis(text: &str) -> Option<f64> {
 pub fn chain(track: &str) -> Vec<EngineFx> {
     let track = track.to_owned();
     crate::open::facade_blocking("a track's chain", move |daw| async move {
-        let project = daw.current_project().await?;
-        let Some(handle) = project.tracks().by_guid(&track).await? else {
-            return Ok(Vec::new());
-        };
-        let chain = handle.fx_chain();
-        let mut out = Vec::new();
-        for fx in chain.all().await? {
-            let params = match chain.by_guid(&fx.guid).await? {
-                Some(plugin) => plugin.parameters().await?,
-                None => Vec::new(),
-            };
-            out.push(EngineFx {
-                name: fx.name,
-                enabled: fx.enabled,
-                params,
-            });
-        }
-        Ok(out)
+        crate::engine::track_chain(daw, &track).await
     })
     .unwrap_or_default()
+    .into_iter()
+    .map(EngineFx::from)
+    .collect()
+}
+
+/// A page's [`chain`], and the song's tempo at its start: awaited on the
+/// page's event loop, where nothing may block
+/// (`crate::tone::Store::sync_tracks`).
+#[cfg(all(feature = "web", not(feature = "native")))]
+pub async fn read_chain(track: String) -> (Vec<EngineFx>, f64) {
+    let (chain, bpm) = crate::engine::chain_and_tempo(&track).await;
+    (chain.into_iter().map(EngineFx::from).collect(), bpm)
+}
+
+impl From<crate::engine::ChainFx> for EngineFx {
+    fn from(fx: crate::engine::ChainFx) -> Self {
+        Self {
+            name: fx.name,
+            enabled: fx.enabled,
+            params: fx.params,
+        }
+    }
 }
 
 /// Put what `chain` holds into `tone`.

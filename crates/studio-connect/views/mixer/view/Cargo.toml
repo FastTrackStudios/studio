@@ -51,6 +51,8 @@ web-sys = { workspace = true, optional = true, features = [
     "MediaQueryList",
 ] }
 builtin = { workspace = true, optional = true, features = ["engine"] }
+# A page's FX row reads each chain on the page's event loop (`tone::Store::sync_tracks`).
+wasm-bindgen-futures = { workspace = true, optional = true }
 num-traits = { workspace = true }
 facet = { workspace = true }
 serde_json = { workspace = true }
@@ -65,7 +67,10 @@ tokio = { version = "1.48", default-features = false, features = ["sync", "macro
 default = ["native"]
 # daw-view-kit's features, forwarded, with what the mixer's own code needs.
 native = ["daw-view-kit/native", "daw-view/native", "dep:dioxus-native", "dep:wgpu_context", "dep:winit", "dep:architect", "dep:builtin", "builtin?/engine", "dsp/eq-native", "dep:tokio"]
-web = ["daw-view-kit/web", "daw-view/web", "dioxus/web", "dep:web-sys", "dep:architect"]
+# A page's racks resolve their settings in the plugins' own words as the
+# desktop's do (`tone_bind`): the FTS processors, built for the engine in
+# the page already.
+web = ["daw-view-kit/web", "daw-view/web", "dioxus/web", "dep:web-sys", "dep:architect", "dep:builtin", "builtin?/engine", "dep:wasm-bindgen-futures"]
 signal = ["native", "daw-view-kit/signal"]
 
 [dev-dependencies]

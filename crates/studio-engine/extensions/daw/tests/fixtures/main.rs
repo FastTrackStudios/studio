@@ -56,6 +56,7 @@ mod otlp;
     reason = "shared with tests/unbreakable, which uses all of it"
 )]
 mod report;
+mod routing;
 mod speed;
 
 use std::path::{Path, PathBuf};
@@ -226,6 +227,29 @@ fn agent_mixes_the_drums() {
         Err(why) => checks.failed("opens", why),
     }
     finish(name, "an agent mixes the drums over MCP", engine, &checks);
+}
+
+/// A send made and changed in every parameter the window's routing
+/// close-up has, over MCP (studio#98, `routing.rs`): on the `drum-kit`
+/// fixture.
+#[test]
+fn a_send_is_controlled_in_every_parameter() {
+    let name = "routing";
+    let fixture = drums::fixture();
+    let song = fixture
+        .stage(&run_dir(name))
+        .unwrap_or_else(|e| panic!("staging drum-kit: {e}"));
+    let (engine, _spans) = engine(name);
+    let mut checks = Checks::default();
+    match check::open(&engine, &song) {
+        Ok(_) => {
+            if let Err(why) = routing::every_parameter(&engine.mcp, &mut checks) {
+                checks.failed("routing", why);
+            }
+        }
+        Err(why) => checks.failed("opens", why),
+    }
+    finish(name, "a send in every parameter over MCP", engine, &checks);
 }
 
 /// A setlist downloaded from its share link, as a desktop keeps it and as

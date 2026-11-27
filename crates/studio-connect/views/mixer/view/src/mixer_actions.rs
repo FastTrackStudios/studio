@@ -88,7 +88,7 @@ pub static CLOSEUP: ActionMeta = meta(
     "SESSION_CLOSEUP",
     "closeup",
     "Close-up",
-    "Show one panel of a track's rack over the whole window — `track` (its GUID), `panel` (`eq`, `comp`, `sat`, `gate`, `rescue_eq`, `reverb`, `delay`, …), `name` the title (the track's name) — or one block of the track's Signal FX, `block` (its id, `rescue.gate`: its parameters and meters) — or `close` it. A rack's zoom button, the close-up's tabs and its Back.",
+    "Show one panel of a track's rack over the whole window — `track` (its GUID), `panel` (`eq`, `comp`, `sat`, `gate`, `rescue_eq`, `reverb`, `delay`, …), `name` the title (the track's name) — or one block of the track's Signal FX, `block` (its id, `rescue.gate`: its parameters and meters) — or the track's routing, `routing: true` (its sends, receives and hardware outputs: level, pan, mute, tap, remove, and a send added) — or `close` it. A rack's zoom button, a strip's routing widget, the close-up's tabs and its Back.",
     "View",
     "",
 );
@@ -106,6 +106,10 @@ pub struct CloseupArg {
     /// rack panel.
     #[facet(default)]
     pub block: Option<String>,
+    /// The track's routing (its sends, receives and hardware outputs), in
+    /// place of a rack panel: what the strip's routing widget opens.
+    #[facet(default)]
+    pub routing: bool,
     #[facet(default)]
     pub close: bool,
 }
@@ -171,6 +175,14 @@ fn closeup(a: CloseupArg) -> Result<String, String> {
         return Ok("closed".to_owned());
     }
     let track = a.track.ok_or("`track` (its GUID), or `close`")?;
+    if a.routing {
+        let name = a.name.unwrap_or_else(|| track.clone());
+        post(
+            &CLOSEUP_ASKS,
+            Some(crate::closeup::Closeup::Routing { guid: track, name }),
+        );
+        return Ok("the track's routing close up".to_owned());
+    }
     if let Some(block) = a.block {
         if block.trim().is_empty() {
             return Err("`block` is a Signal block's id (`rescue.gate`)".to_owned());

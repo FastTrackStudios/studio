@@ -430,7 +430,7 @@ struct DeviceRow {
     watch: Option<crate::engine::Watch>,
     /// Which tracks' FX chains changed in the engine: read again before
     /// they are drawn (`tone::Store::sync_tracks`).
-    #[cfg(feature = "native")]
+    #[cfg(any(feature = "native", feature = "web"))]
     fx_watch: Option<crate::engine::FxWatch>,
     /// Changes taken off the watch to ask for a frame, applied in it.
     pending: RefCell<Vec<daw_proto::track::TrackEvent>>,
@@ -506,7 +506,7 @@ impl DeviceRow {
             tracks: rows.into_iter().map(|(t, _)| t).collect(),
             depths,
             watch: crate::engine::Watch::start(),
-            #[cfg(feature = "native")]
+            #[cfg(any(feature = "native", feature = "web"))]
             fx_watch: crate::engine::FxWatch::start(),
             pending: RefCell::new(Vec::new()),
             palette: crate::skin::palette(&crate::palette::Palette::from_theme(
@@ -825,7 +825,7 @@ impl DeviceRow {
     /// Whether the engine has said anything since the last frame.
     fn heard(&self) -> bool {
         // An FX changed in the engine: a frame, to read and draw it.
-        #[cfg(feature = "native")]
+        #[cfg(any(feature = "native", feature = "web"))]
         if let Some(fx) = &self.fx_watch {
             let changed: Vec<String> = fx.drain().collect();
             if !changed.is_empty() {
@@ -2170,7 +2170,7 @@ impl DeviceRow {
             .min(family.len().saturating_sub(lanes.min(family.len())));
         // What the lanes show is what their tracks have: each chain read
         // from the engine before it is drawn — again where it changed.
-        #[cfg(feature = "native")]
+        #[cfg(any(feature = "native", feature = "web"))]
         {
             // The tracks first: finding a lane's returns reads the store.
             let shown: Vec<String> = family

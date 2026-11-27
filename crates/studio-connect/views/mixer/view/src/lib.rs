@@ -25,11 +25,12 @@ pub mod mixer_panel;
 pub mod plugin_faces;
 pub mod rails;
 pub mod rig;
+pub mod routing;
 pub mod signal;
 pub mod simulate;
 pub mod strip_overlay;
 pub mod theme;
 pub mod tone;
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 pub mod tone_bind;
 pub mod tone_read;

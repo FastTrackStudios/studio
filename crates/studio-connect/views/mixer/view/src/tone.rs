@@ -9867,16 +9867,16 @@ pub struct Shared {
     generation: std::cell::Cell<u64>,
     /// Where the racks' edits go: the track's FTS processors, in the
     /// engine (`crate::tone_bind`). Started the first time there is one.
-    #[cfg(feature = "native")]
+    #[cfg(any(feature = "native", feature = "web"))]
     applier: std::cell::OnceCell<Option<crate::engine::Applier>>,
     /// What the gesture under way has moved, to commit when it ends.
-    #[cfg(feature = "native")]
+    #[cfg(any(feature = "native", feature = "web"))]
     gesture: std::cell::RefCell<Gesture>,
 }
 
 /// A rack gesture under way: the undo step its live edits are in, and
 /// each FX's parameters as they are now, by track.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 #[derive(Default)]
 struct Gesture {
     /// The undo step is open.
@@ -9888,7 +9888,7 @@ struct Gesture {
 }
 
 /// The undo step a rack gesture makes.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 const RACK_STEP: &str = "Edit the rack";
 
 impl Shared {
@@ -9898,7 +9898,7 @@ impl Shared {
     /// edit to send.
     pub fn edited(&self) {
         self.generation.set(self.generation.get().wrapping_add(1));
-        #[cfg(feature = "native")]
+        #[cfg(any(feature = "native", feature = "web"))]
         {
             let edits = match self.store.try_borrow_mut() {
                 Ok(mut store) => store.flush(),
@@ -9938,7 +9938,7 @@ impl Shared {
     /// committed as `FX_SET` / `FX_ENABLE`, after its live edits, and its
     /// undo step closed. Nothing moved, nothing happens.
     pub fn commit(&self) {
-        #[cfg(feature = "native")]
+        #[cfg(any(feature = "native", feature = "web"))]
         {
             // Anything the editor held back goes first.
             self.edited();
@@ -9947,6 +9947,12 @@ impl Shared {
                 return;
             }
             let mut out = Vec::new();
+            // A page's Action List has no `FX_SET`/`FX_ENABLE` (the
+            // engine in the page carries the window's own actions): its
+            // live edits above are the whole change, in the same step.
+            #[cfg(not(feature = "native"))]
+            let _ = &gesture.moved;
+            #[cfg(feature = "native")]
             for ((track, fx), (params, on)) in gesture.moved {
                 if !params.is_empty() {
                     let set: serde_json::Map<String, serde_json::Value> = params
@@ -9976,14 +9982,14 @@ impl Shared {
     /// (`Edit::Run`): what another control on the same surfaces commits —
     /// a rig block (`RIG_BLOCK_SET`).
     pub fn run(&self, id: &str, args: &serde_json::Value) {
-        #[cfg(feature = "native")]
+        #[cfg(any(feature = "native", feature = "web"))]
         self.send([crate::engine::Edit::Run(id.to_owned(), args.to_string())]);
-        #[cfg(not(feature = "native"))]
+        #[cfg(not(any(feature = "native", feature = "web")))]
         let _ = (id, args);
     }
 
     /// Edits to the engine, in order, on the racks' own worker.
-    #[cfg(feature = "native")]
+    #[cfg(any(feature = "native", feature = "web"))]
     fn send(&self, edits: impl IntoIterator<Item = crate::engine::Edit>) {
         if let Some(applier) = self.applier.get_or_init(crate::engine::Applier::start) {
             for edit in edits {
@@ -10033,7 +10039,27 @@ pub struct Store {
     /// coming back ([`Self::changed`] lets them pass): read again under a
     /// knob being turned, the row would fight the hand turning it.
     own: std::collections::HashMap<String, web_time::Instant>,
+    /// A page's chain reads still out, by track ([`Self::sync_tracks`]):
+    /// each read's ticket, and the track's edit count when it was asked.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    asked: std::collections::HashMap<String, (u64, u64)>,
+    /// The last ticket a page's read was given.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    tickets: u64,
+    /// How many times each track has been edited ([`Self::edit`]): a read
+    /// asked for before the last edit is older than the window's settings.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    edits: std::collections::HashMap<String, u64>,
+    /// What those reads answered (the chain, the tempo), for the next
+    /// [`Self::sync_tracks`] to put in.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    arriving: std::sync::Arc<std::sync::Mutex<Vec<ChainRead>>>,
 }
+
+/// One track's chain as a page's read answered it: the track, the read's
+/// ticket, its processors, the tempo a note-valued time is read against.
+#[cfg(all(feature = "web", not(feature = "native")))]
+type ChainRead = (String, u64, Vec<crate::tone_read::EngineFx>, f64);
 
 /// How long after the window's own edit to a track the engine's news of
 /// it is taken to be that edit.
@@ -10097,11 +10123,67 @@ impl Store {
         }
     }
 
+    /// The page's [`Self::sync_tracks`]: a page cannot block on the engine,
+    /// so each track's chain is asked for on the page's event loop
+    /// (`crate::tone_read::read_chain`) and what has come back since the
+    /// last call is put into its settings now. A track already asked for
+    /// is not asked again until it answers.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    pub fn sync_tracks(&mut self, guids: impl IntoIterator<Item = String>) {
+        let arrived = std::mem::take(
+            &mut *self
+                .arriving
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for (guid, ticket, chain, bpm) in arrived {
+            // Only the read still asked for: one the engine's news
+            // replaced ([`Self::changed`]) answers about an older chain.
+            let Some(&(asked, edits)) = self.asked.get(&guid) else {
+                continue;
+            };
+            if asked != ticket {
+                continue;
+            }
+            self.asked.remove(&guid);
+            // Edited while the read was out, or the window's own edits
+            // still coming back: the window's settings are newer than
+            // what the engine answered. Asked again when next shown.
+            let edited = self.edits.get(&guid).copied().unwrap_or(0) != edits;
+            let echo = self
+                .own
+                .get(&guid)
+                .is_some_and(|until| web_time::Instant::now() < *until);
+            if !edited && !echo {
+                self.sync(&guid, &chain, bpm);
+            }
+        }
+        for guid in guids {
+            if self.read.contains(&guid)
+                || !self.by_guid.contains_key(&guid)
+                || self.asked.contains_key(&guid)
+            {
+                continue;
+            }
+            self.tickets = self.tickets.wrapping_add(1);
+            let ticket = self.tickets;
+            let edits = self.edits.get(&guid).copied().unwrap_or(0);
+            self.asked.insert(guid.clone(), (ticket, edits));
+            let into = std::sync::Arc::clone(&self.arriving);
+            wasm_bindgen_futures::spawn_local(async move {
+                let (chain, bpm) = crate::tone_read::read_chain(guid.clone()).await;
+                into.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push((guid, ticket, chain, bpm));
+            });
+        }
+    }
+
     /// `chain` (the engine's, on the track `guid`) into its settings: its
     /// processors' values, which are on, which devices it shows. What it
     /// now holds is what the chain was last given, so an edit after sends
     /// only what the edit moves.
-    #[cfg(feature = "native")]
+    #[cfg(any(feature = "native", feature = "web"))]
     pub fn sync(&mut self, guid: &str, chain: &[crate::tone_read::EngineFx], bpm: f64) {
         let Some(tone) = self.by_guid.get_mut(guid) else {
             return;
@@ -10132,6 +10214,10 @@ impl Store {
             .is_some_and(|until| web_time::Instant::now() < *until);
         if !self.dirty.contains(guid) && !echo {
             self.read.remove(guid);
+            // A page's read already out answers about the chain before
+            // this change: let it go, and ask again.
+            #[cfg(all(feature = "web", not(feature = "native")))]
+            self.asked.remove(guid);
         }
     }
 
@@ -10144,7 +10230,12 @@ impl Store {
     /// The same, to change. Marked for the next [`Self::flush`].
     pub fn edit(&mut self, guid: &str) -> Option<&mut Tone> {
         let tone = self.by_guid.get_mut(guid)?;
-        #[cfg(feature = "native")]
+        #[cfg(all(feature = "web", not(feature = "native")))]
+        {
+            let count = self.edits.entry(guid.to_owned()).or_default();
+            *count = count.wrapping_add(1);
+        }
+        #[cfg(any(feature = "native", feature = "web"))]
         if !self.sent.contains_key(guid) {
             // What the chain has before this edit: the baseline a flush
             // compares against.
@@ -10159,7 +10250,7 @@ impl Store {
     /// edited track's chain given the rack's settings
     /// (`crate::tone_bind`). A stage changed for the first time is switched
     /// on and sent whole; after that, only what moved.
-    #[cfg(feature = "native")]
+    #[cfg(any(feature = "native", feature = "web"))]
     pub fn flush(&mut self) -> Vec<crate::engine::Edit> {
         use crate::engine::Edit;
         let mut edits = Vec::new();
@@ -10197,8 +10288,9 @@ impl Store {
         edits
     }
 
-    /// No engine to send to (a page): the edits only mark the store.
-    #[cfg(not(feature = "native"))]
+    /// No engine to send to (a view built for neither a desktop nor a
+    /// page): the edits only mark the store.
+    #[cfg(not(any(feature = "native", feature = "web")))]
     pub fn flush(&mut self) -> Vec<crate::engine::Edit> {
         self.dirty.clear();
         Vec::new()
