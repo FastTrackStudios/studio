@@ -291,6 +291,74 @@ fn write_timing(held: &Held, project: &daw_ui::studio::project::Project) -> Resu
     held.save()
 }
 
+/// A song charted before its chart lived in its session: the `.kf` beside
+/// `song_path` (an arrangement's in `Arrangements/<arrangement>/`)
+/// imported into `held`'s session as one undo step, when the session has
+/// no chart (`keyflow_session::import`). A session's own chart is never
+/// replaced; one that differs from the file is kept, and said. Saved when
+/// imported, so the file (and Drive, syncing it) has the chart.
+fn import_chart(held: &Held, song_path: &Path, arrangement: Option<&str>) {
+    use keyflow_session::import::{Found, Outcome, import_beside};
+    let span = tracing::info_span!(
+        "session.chart_import",
+        song.path = %song_path.display(),
+        song.arrangement = arrangement.unwrap_or_default(),
+        chart.file = tracing::field::Empty,
+        chart.outcome = tracing::field::Empty,
+        error = tracing::field::Empty,
+    );
+    let _in = span.enter();
+    let beside = match import_beside(held.file().session(), song_path, arrangement) {
+        Ok(beside) => beside,
+        Err(e) => {
+            span.record("chart.outcome", "refused");
+            span.record("error", tracing::field::display(&e));
+            tracing::warn!("daw: a chart beside the song was not imported");
+            return;
+        }
+    };
+    match &beside.found {
+        Found::Nothing => return,
+        Found::One(file) => {
+            span.record("chart.file", tracing::field::display(file.display()));
+        }
+        Found::Several(files) => {
+            span.record("chart.outcome", "several");
+            span.record(
+                "chart.file",
+                tracing::field::debug(
+                    files
+                        .iter()
+                        .map(|f| f.display().to_string())
+                        .collect::<Vec<_>>(),
+                ),
+            );
+            tracing::info!("daw: several charts beside the song, none named for it: none imported");
+            return;
+        }
+    }
+    let Some(outcome) = beside.outcome else {
+        return;
+    };
+    span.record("chart.outcome", outcome.as_str());
+    match outcome {
+        Outcome::Same => {}
+        Outcome::Kept => {
+            tracing::info!(
+                "daw: the session's chart differs from the .kf beside the song: the session's kept"
+            );
+        }
+        Outcome::Imported => {
+            if let Err(e) = held.save() {
+                span.record("error", tracing::field::display(&e));
+                tracing::warn!("daw: the imported chart did not save");
+            } else {
+                tracing::info!("daw: the chart beside the song is in its session now");
+            }
+        }
+    }
+}
+
 /// Song `song` (the engine's project id) is current: its session
 /// document opened.
 ///
@@ -336,7 +404,14 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
             .map_or(session_format::store::MAIN, |(_, b)| b.as_str())
     });
     let opened = open_held(&path, one_file_branch)
-        .and_then(|held| write_timing(&held, project).map(|()| held));
+        .and_then(|held| write_timing(&held, project).map(|()| held))
+        .inspect(|held| {
+            // The song's own file: a branch's is its song's store.
+            let song_path = branch.as_ref().map(|(file, _)| file.as_path()).or(source);
+            if let Some(song_path) = song_path {
+                import_chart(held, song_path, branch.as_ref().map(|(_, b)| b.as_str()));
+            }
+        });
     let file = match opened {
         Ok(file) => {
             problem(None);

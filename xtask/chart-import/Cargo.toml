@@ -1,0 +1,24 @@
+[package]
+name = "chart-import"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bring a setlist's songs' .kf charts into their sessions, the import Studio does on open, run over a whole set (dry run by default)"
+publish = false
+
+# Nothing depends on this. It runs `keyflow_session::import`, the step the
+# engine takes when it opens a song, over every song of a setlist at once,
+# with charts found elsewhere than beside the song (an old vault).
+
+[dependencies]
+keyflow-session = { workspace = true }
+keyflow-lang = { workspace = true }
+fts-session = { workspace = true }
+session-format = { workspace = true, features = ["read"] }
+song-file = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

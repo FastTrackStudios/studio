@@ -112,6 +112,26 @@ pub(crate) async fn retype(
     if !force && !now.is_typed() {
         return Ok(0);
     }
+    let calls = retype_calls(&at, &now, source)?;
+    for call in &calls {
+        ask_session(handle, call).await?;
+    }
+    Ok(calls.len())
+}
+
+/// The `fts.session` calls that make the session `at` (holding `now`)
+/// hold `source`'s chart as typed items: what [`retype`] makes through the
+/// host.
+///
+/// # Errors
+///
+/// `source` is not a chart, or it does not fit the session's own tempo
+/// map and sections.
+pub(crate) fn retype_calls(
+    at: &ChartSource,
+    now: &typed::Held,
+    source: &str,
+) -> Result<Vec<keyflow_session::ServiceCall>, String> {
     let chart = keyflow::text::chart::parse_chart(source)?;
     // A session with a tempo map or sections of its own keeps them, and
     // the chart must already agree with them: typed against a structure
@@ -124,12 +144,8 @@ pub(crate) async fn retype(
             disagreements.join("; ")
         ));
     }
-    let requests = typed::plan(&chart, &now);
-    let calls = at.typed_calls(requests).map_err(|e| e.to_string())?;
-    for call in &calls {
-        ask_session(handle, call).await?;
-    }
-    Ok(calls.len())
+    at.typed_calls(typed::plan(&chart, now))
+        .map_err(|e| e.to_string())
 }
 
 /// `KEYFLOW_SESSION_TYPED`: what of the chart the session's timeline
