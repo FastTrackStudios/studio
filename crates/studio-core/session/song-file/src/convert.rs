@@ -29,8 +29,6 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crdt::DocFile;
-use crdt::persistence::Persistence as _;
 use fts_session::doc::SessionDoc;
 use loro::LoroDoc;
 use session_format::read::ProjectFile;
@@ -170,37 +168,15 @@ struct OldSession {
     branches: BTreeMap<String, LoroDoc>,
 }
 
-async fn read_old_session(path: &Path) -> Result<OldSession> {
+fn read_old_session(path: &Path) -> Result<OldSession> {
     let bytes = std::fs::read(path)?;
-    let file = DocFile::from_bytes(bytes, &fts_session::doc::kind())
-        .await
-        .map_err(|e| file_error(path, e))?;
-    let id = file
-        .id()
-        .await
-        .ok_or_else(|| file_error(path, "the document names no id"))?;
-    let mut branches = BTreeMap::new();
-    for branch in file.branches().await {
-        // As the session opens it: its snapshot, then its steps.
-        let persistence = file.persistence(&branch.name);
-        let doc = LoroDoc::new();
-        if let Some(snapshot) = persistence
-            .load_snapshot(id)
-            .await
-            .map_err(|e| file_error(path, e))?
-        {
-            doc.import(&snapshot).map_err(|e| file_error(path, e))?;
-        }
-        for update in persistence
-            .load_updates(id)
-            .await
-            .map_err(|e| file_error(path, e))?
-        {
-            doc.import(&update).map_err(|e| file_error(path, e))?;
-        }
-        branches.insert(branch.name, doc);
-    }
-    Ok(OldSession { id, branches })
+    // As the session opens it: each branch's snapshot, then its steps.
+    let (id, branches) =
+        fts_session::file::read_branches(&bytes).map_err(|e| file_error(path, e))?;
+    Ok(OldSession {
+        id,
+        branches: branches.into_iter().collect(),
+    })
 }
 
 /// A store's files: the file, its log and its shared memory.
@@ -357,8 +333,7 @@ fn pending(target: &Path) -> PathBuf {
 /// The folder holds more than one song, a file would not read, the new
 /// file does not verify (the old pair is then untouched), or the Trash
 /// refused.
-pub async fn convert(folder: &Path, options: &Options) -> Result<Outcome> {
-    use tracing::Instrument as _;
+pub fn convert(folder: &Path, options: &Options) -> Result<Outcome> {
     let span = tracing::info_span!(
         "song_file.convert",
         song.dry_run = options.dry_run,
@@ -367,10 +342,10 @@ pub async fn convert(folder: &Path, options: &Options) -> Result<Outcome> {
         song.sessions = tracing::field::Empty,
         song.trashed = tracing::field::Empty,
     );
-    convert_in(folder, options).instrument(span).await
+    span.in_scope(|| convert_in(folder, options))
 }
 
-async fn convert_in(folder: &Path, options: &Options) -> Result<Outcome> {
+fn convert_in(folder: &Path, options: &Options) -> Result<Outcome> {
     let span = tracing::Span::current();
     let (project, session) = match Layout::of(folder)? {
         Layout::Empty => {
@@ -407,7 +382,7 @@ async fn convert_in(folder: &Path, options: &Options) -> Result<Outcome> {
             "is there but is not a store: convert it by hand",
         ));
     }
-    let old = read_old_session(&session).await?;
+    let old = read_old_session(&session)?;
 
     let scratch = tempfile::tempdir()?;
     let new = if options.dry_run {

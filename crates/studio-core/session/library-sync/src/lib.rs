@@ -74,10 +74,6 @@ pub fn session_root_dir(song_slug: &str) -> String {
 #[cfg(feature = "publish")]
 pub mod publish;
 
-/// A project file synced through the org that owns it.
-#[cfg(all(feature = "project-sync", not(target_arch = "wasm32")))]
-pub mod project_sync;
-
 /// The File Root the song `slug` plays from, among `roots`.
 ///
 /// Best first: a root at `…/session/<slug>` (what `studio ingest` and

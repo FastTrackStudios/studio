@@ -39,10 +39,10 @@ tokio = { workspace = true, features = ["sync"] }
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 architect-extensions = { workspace = true, features = ["guest", "doc-sync"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest", "paint"] }
-# Hosting and joining a session (src/session_host.rs): Architect's sync and
-# presence over vox on a WebSocket, the session's clock.
+# Hosting and joining a session (src/session_host.rs): live-doc's sync and
+# presence over vox on a WebSocket (Architect's host), the session's clock.
 architect = { workspace = true, features = ["vox", "host", "connect"] }
-crdt = { workspace = true, features = ["vox"] }
+live-doc = { workspace = true }
 session = { path = "../../../../studio-core/session/session", package = "session", features = ["sync", "extension"] }
 uuid = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt", "time"] }

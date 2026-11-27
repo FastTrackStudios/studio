@@ -8,7 +8,7 @@
 //!   with `chart` when it is not there) and serves it; answers its id and
 //!   the pane state that shows it (`session:<id>`).
 //! - `KEYFLOW_SESSION_SERVE {id, bind}`: serves that session to other app
-//!   instances: Architect's document sync (`DocSyncHost` on this file's
+//!   instances: its live sync (`live-doc`'s `DocSyncHost` on this file's
 //!   document), its presence, and the session clock, over vox on a
 //!   WebSocket (`EngineHost`, `/vox`).
 //! - `KEYFLOW_SESSION_JOIN {url, id, path}`: joins a served session: a
@@ -31,13 +31,12 @@ use architect::LayerRouter;
 use architect::connect::{Endpoint, pool};
 use architect::host::EngineHost;
 use architect_extensions::linked::Builder;
-use crdt::presence::{Here, PeerState};
-use crdt::sync::{
-    DocPresenceClient, DocPresenceDispatcher, DocSyncClient, DocSyncDispatcher, DocSyncHost,
-    PresenceDriver, PresenceHost, PresencePeer, doc_presence_service_descriptor,
+use keyflow_session::{ChartSession, Provider};
+use live_doc::{
+    DocPresenceClient, DocPresenceDispatcher, DocSyncClient, DocSyncDispatcher, DocSyncHost, Here,
+    PeerState, PresenceDriver, PresenceHost, PresencePeer, doc_presence_service_descriptor,
     doc_sync_service_descriptor,
 };
-use keyflow_session::{ChartSession, Provider};
 use serde_json::{Value as Json, json};
 use session::doc::{SessionDoc, transport_of};
 use session::sync::Tracker;
@@ -53,7 +52,7 @@ struct Sessions {
     tracker: Tracker,
     /// Per session, the subscription that re-reads its chart panes when
     /// another replica's edit arrives.
-    watches: HashMap<Uuid, crdt::loro::Subscription>,
+    watches: HashMap<Uuid, live_doc::loro::Subscription>,
     /// Sessions that are vault documents, held as the node's copy through
     /// the host (`KEYFLOW_SESSION_DOCUMENT`): no file of this extension's
     /// and no host of its own; the node syncs them like any document.
@@ -69,9 +68,9 @@ fn sessions() -> std::sync::MutexGuard<'static, Sessions> {
 }
 
 /// This process's clock, microseconds: the one the presence clock's
-/// offset is to (`crdt::presence::clock_ms`).
+/// offset is to (`live_doc::clock_ms`).
 fn now_micros_f64() -> f64 {
-    crdt::presence::clock_ms() * 1000.0
+    live_doc::clock_ms() * 1000.0
 }
 
 /// The host's clock as the presence driver estimates it (the presence
@@ -121,7 +120,7 @@ fn answer(method: &'static str, args: &Json, cx: &Json) -> Result<Json, String> 
 
 /// Re-reads the panes showing session `id`'s chart when another
 /// replica's edit arrives: the other machine's typing appears here.
-fn watch(chart: &ChartSession, id: Uuid) -> crdt::loro::Subscription {
+fn watch(chart: &ChartSession, id: Uuid) -> live_doc::loro::Subscription {
     let pane = format!("session:{id}");
     chart.on_remote_change(move || crate::reload(Some(&pane)))
 }
@@ -150,18 +149,16 @@ fn chart_source(args: &Json) -> Result<String, String> {
 async fn open(args: Json) -> Result<Json, String> {
     let path = PathBuf::from(text(&args, "path")?);
     let chart = if path.exists() {
-        ChartSession::open(&path).await.map_err(|e| e.to_string())?
+        ChartSession::open(&path).map_err(|e| e.to_string())?
     } else {
         // A new session's chart, given in Keyflow's language, imported as
         // typed items: the session holds no chart text.
         let source = chart_source(&args)?;
-        let chart = ChartSession::create(&path, "")
-            .await
-            .map_err(|e| e.to_string())?;
+        let chart = ChartSession::create(&path, "").map_err(|e| e.to_string())?;
         if !source.trim().is_empty() {
             let parsed = keyflow::parse(&source).map_err(|e| e.to_string())?;
             keyflow_session::typed::import(chart.session(), &parsed).map_err(|e| e.to_string())?;
-            chart.save().await.map_err(|e| e.to_string())?;
+            chart.save().map_err(|e| e.to_string())?;
         }
         chart
     };
@@ -182,7 +179,7 @@ async fn serve(args: Json) -> Result<Json, String> {
     let (file, document) = {
         let s = sessions();
         (
-            s.charts.get(&id).map(ChartSession::crdt),
+            s.charts.get(&id).map(ChartSession::doc),
             s.documents.contains_key(&id),
         )
     };
@@ -403,7 +400,7 @@ async fn document(args: Json) -> Result<Json, String> {
             .doc()
             .loro()
             .subscribe_root(std::sync::Arc::new(move |event| {
-                if matches!(event.triggered_by, crdt::loro::EventTriggerKind::Import) {
+                if matches!(event.triggered_by, live_doc::loro::EventTriggerKind::Import) {
                     crate::reload(Some(&pane));
                 }
             }))
@@ -425,16 +422,16 @@ async fn join(args: Json) -> Result<Json, String> {
     let id = id_of(&args)?;
     let path = PathBuf::from(text(&args, "path")?);
     let chart = if path.exists() {
-        ChartSession::open(&path).await
+        ChartSession::open(&path)
     } else {
-        ChartSession::adopt(&path, id).await
+        ChartSession::adopt(&path, id)
     }
     .map_err(|e| e.to_string())?;
     let client: DocSyncClient = pool()
         .client(&Endpoint::url(&url))
         .await
         .map_err(|e| e.to_string())?;
-    let mut synced = chart.synced();
+    let mut synced = chart.synced().map_err(|e| e.to_string())?;
     tokio::spawn(async move {
         let _ = synced.run(&client).await;
     });
@@ -589,8 +586,8 @@ mod tests {
         assert!(set_bar_one(&json!({ "id": uuid::Uuid::new_v4().to_string(), "bar": 5 })).is_err());
     }
 
-    /// A leader that serves only its presence (Architect's, whose host
-    /// serves its clock: the session engine's `Leader` once
+    /// A leader that serves only its presence (whose host serves its
+    /// clock: the session engine's `Leader` once
     /// `session::clock` is gone, session#189) is followed: the chart's
     /// position comes from the presence peer's own clock estimate.
     #[tokio::test(flavor = "multi_thread")]

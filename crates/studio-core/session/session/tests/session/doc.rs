@@ -250,7 +250,7 @@ fn concurrent_payload_edits_to_one_item_merge_per_key() {
 }
 
 /// Undo is the document's: an extension's step undoes like any other, and
-/// only this peer's (what `crdt::History` builds on).
+/// only this peer's (what Loro's `UndoManager` gives).
 #[test]
 fn undo_takes_back_my_extension_edit_and_not_yours() {
     let (a, b) = pair();

@@ -15,11 +15,9 @@ sync = ["dep:web-time"]
 # Presence held for the process (`presence::store`): what a collaboration
 # driver publishes and a view paints.
 store = ["dep:web-time"]
-# The session as an Architect document: a Loro doc in the shape
-# `docs/design/session.md` gives, of crdt's `DocKind` `fts.session`.
-# crdt without its sync transport and without Architect's workspace-hack
-# (patched out at the root: vendor/no-workspace-hack).
-architect = ["dep:loro", "dep:crdt", "dep:uuid"]
+# The session as a Loro document in the shape `docs/design/session.md`
+# gives, of kind `fts.session`, and its file (`session::file`, native).
+architect = ["dep:loro", "dep:uuid", "dep:thiserror", "dep:tracing", "dep:crc32fast"]
 # What a runtime extension may ask of the session its host holds: plain
 # requests, one `handle` every host answers with (no transport: the host
 # serves it as `fts.session`).
@@ -41,11 +39,14 @@ vox = ["service", "dep:architect", "architect/vox", "dep:architect-permissions",
 facet = { workspace = true }
 facet-json = { workspace = true, optional = true }
 loro = { workspace = true, optional = true }
-crdt = { workspace = true, optional = true }
+# The session file's records, each checked by CRC-32 (`session::file`).
+crc32fast = { version = "1", optional = true }
+# The session file's writer reports an edit it could not write.
+tracing = { workspace = true, optional = true }
 live-doc = { workspace = true, optional = true }
 architect = { workspace = true, optional = true }
-# A session file's document id (`session::file`): named, never made here,
-# so no `v4` (and no getrandom in a wasm build).
+# A session's document id. Made only by a new session file (`v4`, native
+# below), so no getrandom in a wasm build.
 uuid = { version = "1", optional = true }
 architect-permissions = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
@@ -57,6 +58,7 @@ web-time = { workspace = true, optional = true }
 # a server, so native only; `--all-features` on wasm enables nothing here.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 architect = { workspace = true, optional = true, features = ["host", "connect"] }
+uuid = { version = "1", optional = true, features = ["v4"] }
 tokio = { workspace = true, optional = true, features = ["rt", "time"] }
 
 [lints]
@@ -72,8 +74,7 @@ tempfile = "3"
 # The document tests drive Loro directly: two replicas, an undo manager.
 loro = { workspace = true }
 # tests/sync_e2e.rs: two peers through the live-set sync path, in process
-# (live-doc's hosts over `LocalServer`); `crdt::History` until undo moves.
-crdt = { workspace = true }
+# (live-doc's hosts over `LocalServer`), undo through Loro's UndoManager.
 live-doc = { workspace = true }
 architect = { workspace = true, features = ["vox", "local", "host", "connect"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

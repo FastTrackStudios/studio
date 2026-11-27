@@ -6,9 +6,10 @@
 //! - **Alone**: a document of the app's, read through the host
 //!   (`read_document`), as Keyflow's chart extension does today. No session
 //!   is needed for a chart.
-//! - **In a session**: Keyflow's data in a `.session`, an Architect
-//!   document (`session::doc::kind()`) that syncs like any other: through
-//!   the org's driver or a share link, every device's edits merged. Keyflow
+//! - **In a session**: Keyflow's data in a `.session`, a document of kind
+//!   `fts.session` (`session::doc::KIND`) that syncs like any other: hosted
+//!   by one app and joined by others (`live-doc`), every device's edits
+//!   merged. Keyflow
 //!   keeps its chart as its own extension data there, the text entry
 //!   [`CHART`] in namespace [`EXTENSION`]: not a `.kf` file path, since
 //!   `.kf` text is becoming an input method rather than the file format.
@@ -17,10 +18,10 @@
 //!
 //! What a host does with it:
 //!
-//! - [`ChartSession`]: open or make a `.session` file, read and write the
-//!   chart, bind it to an editor ([`ChartSession::binding`]: Architect's
-//!   `TextBinding`, carets included), hand its document to the sync
-//!   driver ([`ChartSession::crdt`]).
+//! - [`ChartSession`]: open or make a `.session` file
+//!   (`session::file::SessionFile`), read and write the chart, hand its
+//!   document to a sync host ([`ChartSession::doc`]) or join one durably
+//!   ([`ChartSession::synced`]).
 //! - [`Provider`]: the sessions this host has open, served as `fts.session`
 //!   to extension views (`session::extension`). An app that hosts Keyflow
 //!   registers its three actions; the chart view calls the service.
@@ -34,13 +35,10 @@ pub mod typed;
 #[cfg(not(target_family = "wasm"))]
 use std::path::Path;
 
-#[cfg(not(target_family = "wasm"))]
-use crdt::file::DiskStorage;
-use crdt::file::MAIN;
-use crdt::persistence::Persistence as _;
-use crdt::{CrdtDoc, DocFile, TextBinding};
 use session::doc::SessionDoc;
 use session::extension::{call_json, response_of};
+#[cfg(not(target_family = "wasm"))]
+use session::file::SessionFile;
 use session::service::{READ, Request, Response, Sessions, WRITE};
 use session::{Entry, ExtensionId};
 use uuid::Uuid;
@@ -66,29 +64,30 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// A `.session` file holding a chart, open on this device.
+#[cfg(not(target_family = "wasm"))]
 pub struct ChartSession {
-    id: Uuid,
-    // Kept open: the file the document's persistence writes to.
-    file: DocFile,
-    doc: CrdtDoc,
-    session: SessionDoc,
+    file: SessionFile,
 }
 
+#[cfg(not(target_family = "wasm"))]
+#[allow(clippy::needless_pass_by_value)] // An adapter for `map_err`.
+fn file_error(e: session::file::SessionFileError) -> Error {
+    Error::File(e.to_string())
+}
+
+#[cfg(not(target_family = "wasm"))]
 impl ChartSession {
     /// Makes a `.session` at `path` holding `chart` (Keyflow source).
     ///
     /// # Errors
     ///
     /// The file could not be made, or the document refused the chart.
-    #[cfg(not(target_family = "wasm"))]
-    pub async fn create(path: &Path, chart: &str) -> Result<Self> {
-        let storage = DiskStorage::open(path).map_err(|e| Error::File(e.to_string()))?;
-        let file = DocFile::create(storage, &session::doc::kind())
-            .await
-            .map_err(|e| Error::File(e.to_string()))?;
-        let this = Self::over(file).await?;
+    pub fn create(path: &Path, chart: &str) -> Result<Self> {
+        let this = Self {
+            file: SessionFile::create(path).map_err(file_error)?,
+        };
         this.set_chart(chart)?;
-        this.save().await?;
+        this.save()?;
         Ok(this)
     }
 
@@ -97,45 +96,21 @@ impl ChartSession {
     /// # Errors
     ///
     /// No such file, not a session, or from a newer build.
-    #[cfg(not(target_family = "wasm"))]
-    pub async fn open(path: &Path) -> Result<Self> {
-        let storage = DiskStorage::open(path).map_err(|e| Error::File(e.to_string()))?;
-        let file = DocFile::open(storage, &session::doc::kind())
-            .await
-            .map_err(|e| Error::File(e.to_string()))?;
-        Self::over(file).await
+    pub fn open(path: &Path) -> Result<Self> {
+        Ok(Self {
+            file: SessionFile::open(path).map_err(file_error)?,
+        })
     }
 
     /// A `.session` at `path` for the session `id` made on another device:
-    /// empty until it syncs, of the same lineage (`DocFile::adopt`).
+    /// empty until it syncs, of the same lineage (`SessionFile::adopt`).
     ///
     /// # Errors
     ///
     /// The file could not be made.
-    #[cfg(not(target_family = "wasm"))]
-    pub async fn adopt(path: &Path, id: Uuid) -> Result<Self> {
-        let storage = DiskStorage::open(path).map_err(|e| Error::File(e.to_string()))?;
-        let file = DocFile::adopt(storage, &session::doc::kind(), id)
-            .await
-            .map_err(|e| Error::File(e.to_string()))?;
-        Self::over(file).await
-    }
-
-    #[cfg(not(target_family = "wasm"))]
-    async fn over(file: DocFile) -> Result<Self> {
-        let id = file
-            .id()
-            .await
-            .ok_or_else(|| Error::File("the file names no document".into()))?;
-        let doc = CrdtDoc::open(id, file.persistence(MAIN))
-            .await
-            .map_err(|e| Error::Doc(e.to_string()))?;
-        let session = SessionDoc::from_doc(doc.loro().clone());
+    pub fn adopt(path: &Path, id: Uuid) -> Result<Self> {
         Ok(Self {
-            id,
-            file,
-            doc,
-            session,
+            file: SessionFile::adopt(path, id).map_err(file_error)?,
         })
     }
 
@@ -143,35 +118,36 @@ impl ChartSession {
     /// sync driver name it by.
     #[must_use]
     pub const fn id(&self) -> Uuid {
-        self.id
+        self.file.id()
     }
 
     /// The session.
     #[must_use]
     pub const fn session(&self) -> &SessionDoc {
-        &self.session
+        self.file.session()
     }
 
-    /// The document (for the org's driver; a single session syncs with
-    /// [`Self::synced`]).
+    /// The document, for a sync host (`live_doc::DocSyncHost`); a copy
+    /// that joins one syncs with [`Self::synced`].
     #[must_use]
-    pub fn crdt(&self) -> CrdtDoc {
-        self.doc.clone()
+    pub fn doc(&self) -> live_doc::loro::LoroDoc {
+        self.session().doc().clone()
     }
 
     /// Where the chart's bar 1 is in this session, seconds (the song's
     /// bar 1 after a count-in; `0` when the session sets none).
     #[must_use]
     pub fn chart_start(&self) -> f64 {
-        self.session
+        let session = self.session();
+        session
             .bar_one()
-            .map_or(0.0, |at| at.seconds(&self.session.tempo()))
+            .map_or(0.0, |at| at.seconds(&session.tempo()))
     }
 
     /// The chart's source; empty when it has none yet.
     #[must_use]
     pub fn chart(&self) -> String {
-        self.session
+        self.session()
             .read_ext(&ExtensionId::from(EXTENSION))
             .text(CHART)
             .unwrap_or_default()
@@ -187,29 +163,13 @@ impl ChartSession {
     pub fn set_chart(&self, source: &str) -> Result<()> {
         let id = ExtensionId::from(EXTENSION);
         let ext = self
-            .session
+            .session()
             .ext(&id)
             .map_err(|e| Error::Doc(e.to_string()))?;
         ext.set_text(CHART, source)
             .map_err(|e| Error::Doc(e.to_string()))?;
-        self.session.doc().commit();
+        self.session().doc().commit();
         Ok(())
-    }
-
-    /// The chart's text bound to an editor: the editor reports its edits
-    /// (`TextBinding::on_local`), others' come back transformed
-    /// (`sync_into`), and carets are stable cursors.
-    ///
-    /// # Errors
-    ///
-    /// The document refused declaring the chart's text.
-    pub fn binding(&self) -> Result<TextBinding> {
-        let text = self
-            .session
-            .ext(&ExtensionId::from(EXTENSION))
-            .and_then(|ext| ext.text(CHART))
-            .map_err(|e| Error::Doc(e.to_string()))?;
-        Ok(TextBinding::new(self.session.doc(), text))
     }
 
     /// Calls `changed` whenever an edit made on another replica arrives
@@ -221,55 +181,48 @@ impl ChartSession {
     pub fn on_remote_change(
         &self,
         changed: impl Fn() + Send + Sync + 'static,
-    ) -> crdt::loro::Subscription {
-        self.doc
-            .loro()
+    ) -> live_doc::loro::Subscription {
+        self.session()
+            .doc()
             .subscribe_root(std::sync::Arc::new(move |event| {
-                if matches!(event.triggered_by, crdt::loro::EventTriggerKind::Import) {
+                if matches!(event.triggered_by, live_doc::loro::EventTriggerKind::Import) {
                     changed();
                 }
             }))
     }
 
     /// Writes everything the session holds to its file and folds the
-    /// file's records into one.
-    ///
-    /// A local edit reaches the file through the document's own writer, a
-    /// task of its own that appends each commit when it runs; folding
-    /// alone (`CrdtDoc::compact` on a file branch folds only what is on
-    /// disk) could miss the newest edits, and a file opened again before
-    /// that task ran had lost them. So the whole state is written as a
-    /// step first: the writer's later copies of the same commits change
-    /// nothing (an update already in the document is a no-op).
+    /// file's records into one. Every edit is in the file already (the
+    /// session file appends each as it is made); a save makes the file
+    /// small again.
     ///
     /// # Errors
     ///
     /// The file could not be written.
-    pub async fn save(&self) -> Result<()> {
-        let state = self
-            .doc
-            .loro()
-            .export(crdt::loro::ExportMode::Snapshot)
-            .map_err(|e| Error::Doc(e.to_string()))?;
-        self.file
-            .persistence(MAIN)
-            .write_snapshot(self.id, &state)
-            .await
-            .map_err(|e| Error::File(e.to_string()))?;
-        self.doc
-            .compact(self.id)
-            .await
-            .map_err(|e| Error::File(e.to_string()))
+    pub fn save(&self) -> Result<()> {
+        self.file.save().map_err(file_error)
     }
 
-    /// The sync driver for this session: Architect's `SyncedDoc`, made
-    /// `durable`, so what arrives from other devices is written to this
-    /// file as it arrives, not only this device's own edits. Run it
-    /// against a client of the org's lane or a share link
-    /// (`SyncedDoc::run`), again on reconnect.
-    #[must_use]
-    pub fn synced(&self) -> crdt::sync::SyncedDoc {
-        crdt::sync::SyncedDoc::new(self.id, self.doc.clone()).durable()
+    /// The sync driver for this session, joining a host: `live-doc`'s
+    /// `SyncedDoc`, durable, so what arrives from other devices is written
+    /// to this file as it arrives, not only this device's own edits. Run
+    /// it against a client of the host (`SyncedDoc::run`), again on
+    /// reconnect.
+    ///
+    /// # Errors
+    ///
+    /// The file is closed.
+    pub fn synced(&self) -> Result<live_doc::SyncedDoc> {
+        let keeper = self.file.keeper().map_err(file_error)?;
+        type Kept = std::pin::Pin<
+            Box<dyn std::future::Future<Output = std::result::Result<(), String>> + Send>,
+        >;
+        let persist: std::sync::Arc<live_doc::sync::Persist> =
+            std::sync::Arc::new(move |update: Vec<u8>| -> Kept {
+                keeper.keep(update);
+                Box::pin(async { Ok(()) })
+            });
+        Ok(live_doc::SyncedDoc::new(self.id(), self.doc()).persist(persist))
     }
 }
 
@@ -289,6 +242,7 @@ pub struct Provider {
 
 impl Provider {
     /// Serves `chart`'s session.
+    #[cfg(not(target_family = "wasm"))]
     pub fn open(&self, chart: &ChartSession) {
         self.sessions
             .open(chart.id().to_string(), chart.session().clone());

@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
-description = "The song library in the org (songs, setlists and their sessions as files), pulled to and published from a device; and a project's .session synced through the org that owns it"
+description = "The song library in the org (songs, setlists and their sessions as files), pulled to and published from a device"
 
 [lints]
 workspace = true
@@ -13,9 +13,6 @@ workspace = true
 # Putting songs into the library (`publish`, the `studio ingest` side):
 # their roots, files, lists, projects and links.
 publish = ["dep:project-proto", "dep:share-proto"]
-# A project file synced through the org that owns it (`project_sync`,
-# native only): its branches as `session` docs on the account's driver.
-project-sync = ["dep:crdt", "dep:dirs", "dep:fts-account", "fts-account/sync", "dep:session-format", "session-format/sync", "session-format/store"]
 
 [dependencies]
 session-sync = { workspace = true }
@@ -38,21 +35,7 @@ uuid = { version = "1", features = ["js", "serde", "v4", "v7"] }
 vox = { workspace = true }
 vox-core = { workspace = true }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-crdt = { workspace = true, optional = true, features = ["vox"] }
-dirs = { workspace = true, optional = true }
-fts-account = { workspace = true, optional = true }
-session-format = { workspace = true, optional = true }
-
 [dev-dependencies]
 architect = { workspace = true, features = ["local", "platform", "vox"] }
-crdt = { workspace = true, features = ["vox"] }
-session-format = { workspace = true, features = ["store"] }
-tempfile = { workspace = true }
 chrono = "0.4"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
-
-[[test]]
-name = "project_sync"
-path = "tests/project_sync.rs"
-required-features = ["project-sync"]

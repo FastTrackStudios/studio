@@ -111,12 +111,6 @@ fn main() -> ExitCode {
     let Some((verb, rest)) = args.split_first() else {
         return usage();
     };
-    let Ok(rt) = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-    else {
-        return ExitCode::FAILURE;
-    };
     let mut out = std::io::stdout().lock();
     match verb.as_str() {
         "convert" => {
@@ -141,7 +135,7 @@ fn main() -> ExitCode {
             let mut failed = false;
             for folder in folders {
                 let _ = writeln!(out, "{}", folder.display());
-                let written = match rt.block_on(song_file::convert(&folder, &options)) {
+                let written = match song_file::convert(&folder, &options) {
                     Ok(Outcome::Nothing) => writeln!(out, "  no song here"),
                     Ok(Outcome::AlreadyOneFile { file, id }) => writeln!(
                         out,

@@ -14,28 +14,23 @@ name = "song-file"
 path = "src/main.rs"
 
 [dependencies]
-session-format = { workspace = true, features = ["store", "sync", "read"] }
+session-format = { workspace = true, features = ["store", "read"] }
 fts-session = { workspace = true }
 # The live document (session-sync): the engine project's doc, read for its timing
 # when a store-only song is seeded.
 session-sync = { workspace = true }
-crdt = { workspace = true }
 loro = { workspace = true }
 uuid = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-tokio = { workspace = true }
 
 # The old pair goes to the desktop's Trash (freedesktop on Linux), never
 # deleted. iOS has no Trash an app can use (src/convert.rs: `Replaced`
 # beside the song there).
 [target.'cfg(not(target_os = "ios"))'.dependencies]
 trash = "5"
-
-[dev-dependencies]
-tokio = { workspace = true }
 
 [lints]
 workspace = true

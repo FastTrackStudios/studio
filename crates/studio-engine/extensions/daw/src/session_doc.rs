@@ -4,7 +4,7 @@
 //! project, and the session primitive's document (FastTrackStudios/session,
 //! kind `fts.session`) as a part of the same store, under the song's id.
 //! Until a folder is converted, the document sits beside the song as
-//! `<song stem>.fts-session` (an Architect document file): told apart by
+//! `<song stem>.fts-session` (a document file of its own): told apart by
 //! the files' headers, never their names.
 //!
 //! - **Opened** inside the song's one file (`song_file::SongFile`) when the
@@ -37,6 +37,25 @@ use fts_session::time::{Position, TempoPoint, TimePosition, TimeSignature};
 use fts_session::{MarkId, Marker, Region, TempoMap, Time};
 use serde_json::{Value as Json, json};
 
+/// The session at `path`: a part of the song's one file (on `branch`, or
+/// `main`), else the old pair's document file, made if it is not there.
+fn open_held(path: &Path, one_file: bool, branch: Option<&str>) -> Result<Held, String> {
+    if one_file {
+        let branch = branch.unwrap_or(session_format::store::MAIN);
+        song_file::SongFile::open_branch(path, branch)
+            .map(Held::One)
+            .map_err(|e| e.to_string())
+    } else if path.exists() {
+        SessionFile::open(path)
+            .map(Held::Pair)
+            .map_err(|e| e.to_string())
+    } else {
+        SessionFile::create(path)
+            .map(Held::Pair)
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// Where the open session is kept.
 enum Held {
     /// The old pair's `.fts-session`, a document file of its own.
@@ -53,11 +72,11 @@ impl Held {
         }
     }
 
-    async fn save(&self) -> Result<(), String> {
+    fn save(&self) -> Result<(), String> {
         match self {
-            Self::Pair(file) => file.save().await.map_err(|e| e.to_string()),
+            Self::Pair(file) => file.save().map_err(|e| e.to_string()),
             // The session folded into the file, and the file's log too.
-            Self::One(song) => song.save().await.map_err(|e| e.to_string()),
+            Self::One(song) => song.save().map_err(|e| e.to_string()),
         }
     }
 }
@@ -203,16 +222,13 @@ pub fn behind(song: &str, timing: u64) -> bool {
 /// cue list reading the session follows. Nothing when it is not the song
 /// open.
 pub fn retime(song: &str, project: &daw_ui::studio::project::Project) {
-    let Some(rt) = studio_engine::open::runtime() else {
-        return;
-    };
-    // Taken out for the write (it awaits), and put back.
+    // Taken out for the write (it saves the file), and put back.
     let open = OPEN.lock().unwrap_or_else(PoisonError::into_inner).take();
     let Some(mut open) = open else {
         return;
     };
     if open.song == song {
-        match rt.block_on(write_timing(&open.file, project)) {
+        match write_timing(&open.file, project) {
             Ok(()) => open.timing = timing_of(project),
             Err(e) => tracing::warn!(error = %e, "daw: the session's timing was not written again"),
         }
@@ -328,10 +344,7 @@ fn seconds_at_bar(project: &daw_ui::studio::project::Project, bar: u32) -> f64 {
 }
 
 /// The engine's timing for `project`, written into `file`'s session.
-async fn write_timing(
-    held: &Held,
-    project: &daw_ui::studio::project::Project,
-) -> Result<(), String> {
+fn write_timing(held: &Held, project: &daw_ui::studio::project::Project) -> Result<(), String> {
     let doc = held.file().session();
     let mut changes: Vec<_> = project.tempo.iter().collect();
     changes.sort_by(|a, b| a.at.total_cmp(&b.at));
@@ -388,7 +401,7 @@ async fn write_timing(
     }
     doc.set_bar_one(bar_one(project).map(Time::Seconds))
         .map_err(|e| err(&e))?;
-    held.save().await
+    held.save()
 }
 
 /// Song `song` (the engine's project id) is current: its session
@@ -430,34 +443,12 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
         ));
         return;
     };
-    let Some(rt) = studio_engine::open::runtime() else {
-        problem(Some("no runtime to open the session on".to_owned()));
-        return;
-    };
-    let opened = rt.block_on(async {
-        let held = if one_file.is_some() {
-            Held::One(
-                song_file::SongFile::open_branch(
-                    &path,
-                    branch
-                        .as_ref()
-                        .map_or(session_format::store::MAIN, |(_, b)| b),
-                )
-                .await
-                .map_err(|e| e.to_string())?,
-            )
-        } else if path.exists() {
-            Held::Pair(SessionFile::open(&path).await.map_err(|e| e.to_string())?)
-        } else {
-            Held::Pair(
-                SessionFile::create(&path)
-                    .await
-                    .map_err(|e| e.to_string())?,
-            )
-        };
-        write_timing(&held, project).await?;
-        Ok::<_, String>(held)
-    });
+    let opened = open_held(
+        &path,
+        one_file.is_some(),
+        branch.as_ref().map(|(_, b)| b.as_str()),
+    )
+    .and_then(|held| write_timing(&held, project).map(|()| held));
     let file = match opened {
         Ok(file) => {
             problem(None);
@@ -605,26 +596,26 @@ pub async fn call(method: &str, args: &Json, cx: &Json) -> Result<Json, String> 
     let caller = cx.get("caller").and_then(Json::as_str);
     let reply = fts_session::extension::answer(sessions(), method, &args.to_string(), caller)?;
     if method != fts_session::service::READ {
-        // The file to save, out of the lock: a save awaits.
+        // The file to save, out of the lock: a save writes the file.
         let saving = OPEN
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .as_ref()
             .map(|o| o.path.clone());
         if saving.is_some() {
-            save().await;
+            save();
         }
     }
     serde_json::from_str(&reply).map_err(|e| e.to_string())
 }
 
 /// Saves the open session to its file.
-async fn save() {
-    // Taken out for the save (a save awaits; the lock is not held across
-    // it), and put back.
+fn save() {
+    // Taken out for the save (the lock is not held across it), and put
+    // back.
     let open = OPEN.lock().unwrap_or_else(PoisonError::into_inner).take();
     if let Some(open) = open {
-        if let Err(e) = open.file.save().await {
+        if let Err(e) = open.file.save() {
             tracing::warn!(error = %e, "daw: the session document did not save");
         }
         let mut slot = OPEN.lock().unwrap_or_else(PoisonError::into_inner);

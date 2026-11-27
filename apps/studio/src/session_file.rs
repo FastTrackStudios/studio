@@ -285,7 +285,8 @@ mod tests {
         LoroValue::List(vec![LoroValue::from(base), LoroValue::Double(n)].into())
     }
 
-    /// A file of a snapshot and a step after it, as `crdt::file` writes them.
+    /// A file of a snapshot and a step after it, as a session's document
+    /// file writes them.
     fn file() -> Vec<u8> {
         let doc = LoroDoc::new();
         region(&doc, "b", "Chorus", time("s", 30.0), time("s", 60.0));

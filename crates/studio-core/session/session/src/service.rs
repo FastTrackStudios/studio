@@ -27,9 +27,9 @@
 //! as `fts.session`, a WIT import, a web view's `call`. This module has no
 //! transport yet: the `#[architect::rpc]` wrapper is the next step (the
 //! design, §9), now that `architect` resolves here with its workspace-hack
-//! patched out (§2.4). One request is one Loro transaction; a host wraps [`handle`] in
-//! `crdt::History::transact` to make it one named undo step, made as the
-//! extension.
+//! patched out (§2.4). One request is one Loro transaction, so one step of
+//! a `loro::UndoManager` over the document: a host names it for the
+//! extension that made it.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, PoisonError, RwLock};

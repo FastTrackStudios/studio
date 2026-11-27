@@ -5,7 +5,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use crdt::Persistence as _;
 use loro::{ExportMode, LoroDoc, LoroValue};
 use session_format::read::ProjectFile;
 use session_format::store::{MAIN, PartReplica, SESSION, Store, StoreError};
@@ -126,37 +125,34 @@ fn an_arrangement_is_a_branch_with_its_own_session() {
     assert!(!store.has_part(SESSION, "Acoustic").unwrap());
 }
 
-#[tokio::test]
-async fn the_parts_are_a_sync_replica() {
+#[test]
+fn the_parts_are_what_a_session_file_writes_through() {
     let dir = tempfile::tempdir().unwrap();
     let store = Arc::new(Mutex::new(
         Store::open(&dir.path().join("Song.session")).unwrap(),
     ));
     let id = store.lock().unwrap().ensure_song_id().unwrap();
     let replica = PartReplica::new(store.clone());
-    {
-        assert_eq!(replica.load_snapshot(id).await.unwrap(), None);
-        let doc = LoroDoc::new();
-        replica
-            .append_update(id, &put(&doc, "bpm", 120.0))
-            .await
-            .unwrap();
-        let snapshot = replica.load_snapshot(id).await.unwrap().unwrap();
-        let back = LoroDoc::new();
-        back.import(&snapshot).unwrap();
-        assert_eq!(tempo(&back), tempo(&doc));
-        put(&doc, "bpm", 90.0);
-        replica
-            .compact(id, &doc.export(ExportMode::Snapshot).unwrap())
-            .await
-            .unwrap();
-        let snapshot = replica.load_snapshot(id).await.unwrap().unwrap();
-        let back = LoroDoc::new();
-        back.import(&snapshot).unwrap();
-        assert_eq!(tempo(&back), tempo(&doc));
-        // A doc that is not this song's is refused, not made.
-        assert!(replica.append_update(Uuid::new_v4(), b"x").await.is_err());
-    }
+    assert_eq!(replica.load(id).unwrap(), None);
+    let doc = LoroDoc::new();
+    replica.append(id, &put(&doc, "bpm", 120.0)).unwrap();
+    let snapshot = replica.load(id).unwrap().unwrap();
+    let back = LoroDoc::new();
+    back.import(&snapshot).unwrap();
+    assert_eq!(tempo(&back), tempo(&doc));
+    put(&doc, "bpm", 90.0);
+    replica
+        .compact(id, &doc.export(ExportMode::Snapshot).unwrap())
+        .unwrap();
+    let snapshot = replica.load(id).unwrap().unwrap();
+    let back = LoroDoc::new();
+    back.import(&snapshot).unwrap();
+    assert_eq!(tempo(&back), tempo(&doc));
+    // A doc that is not this song's is refused, not made.
+    assert!(matches!(
+        replica.append(Uuid::new_v4(), b"x"),
+        Err(StoreError::NotAPart(_))
+    ));
 }
 
 #[test]

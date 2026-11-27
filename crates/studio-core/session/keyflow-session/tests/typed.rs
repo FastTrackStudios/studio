@@ -11,13 +11,13 @@
     clippy::missing_panics_doc
 )]
 
-use crdt::loro::ExportMode;
 use keyflow_lang::edit::select::{Step, push_pull_after};
 use keyflow_lang::text::chart::parse_chart;
 use keyflow_session::typed::{
     self, BARS, CHORD, CHORDS, CUES, Held, TypedChart, Untyped, chord_id, import, plan, read,
     set_flag, set_push,
 };
+use live_doc::loro::ExportMode;
 use session::doc::SessionDoc;
 use session::{ExtensionId, Item, ItemId, LaneId, MarkId, Time, Value};
 

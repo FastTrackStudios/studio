@@ -58,7 +58,6 @@ cli = [
     "dep:ureq",
     "dep:vox",
     "dep:vox-stream",
-    "library-sync?/project-sync",
     "engine-domain?/reaper",
     "engine-domain?/vault-sync",
     "tokio?/macros",

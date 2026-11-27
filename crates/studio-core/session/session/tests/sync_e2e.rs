@@ -8,7 +8,7 @@
 //! (`architect::LocalServer`): the same services, codecs and drivers a
 //! networked peer runs, without the network. Extensions write through
 //! `session::service::handle`, as a host would answer them; undo is
-//! `crdt::History`.
+//! Loro's `UndoManager`, one group per step.
 //!
 //! What is simulated: the network (in-process), and the clock. Both peers
 //! are in one process, so they share `session::sync::clock` and the
@@ -32,12 +32,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use architect::{LayerRouter, LocalServer, Scope};
-use crdt::History;
 use live_doc::{
     DocPresenceClient, DocPresenceDispatcher, DocSyncClient, DocSyncDispatcher, Here, Hosts,
     PeerState, PlayState, PresencePeer, SyncedDoc, doc_presence_service_descriptor,
     doc_sync_service_descriptor,
 };
+use loro::UndoManager;
 use session::doc::{SessionDoc, transport_of};
 use session::service::{Grants, Request, handle};
 use session::sync::Tracker;
@@ -152,12 +152,20 @@ async fn two_peers_share_a_session_undo_and_a_transport() {
     let doc_id = Uuid::new_v4();
     let a = Peer::join(&local, doc_id, "ann").await;
     let b = Peer::join(&local, doc_id, "bob").await;
-    let mut history = History::new(a.session.doc(), 100);
+    let mut undo = UndoManager::new(a.session.doc());
+    // A step is what a group says it is: never merged by time.
+    undo.set_merge_interval(0);
+    let step = |undo: &mut UndoManager, change: &dyn Fn()| {
+        undo.group_start().unwrap();
+        change();
+        a.session.doc().commit();
+        undo.group_end();
+    };
 
     // ── data, both ways at once ───────────────────────────────────────
     // On A, Ignition sets up its rig, a cue list and a cue at 4 s: one
     // step. On B, at the same time, Keyflow types its chart.
-    history.transact(a.session.doc(), "Ignition: cue list", |_| {
+    step(&mut undo, &|| {
         a.ask(
             "ignition",
             Request::MapSet {
@@ -223,7 +231,7 @@ async fn two_peers_share_a_session_undo_and_a_transport() {
     .await;
 
     // ── undo takes back A's step only ────────────────────────────────
-    history.transact(a.session.doc(), "Ignition: add cue 2", |_| {
+    step(&mut undo, &|| {
         a.ask(
             "ignition",
             Request::PutItem {
@@ -246,7 +254,7 @@ async fn two_peers_share_a_session_undo_and_a_transport() {
             && cue_ids(&a) == ["cue-1", "cue-2"]
     })
     .await;
-    assert_eq!(history.undo().as_deref(), Some("Ignition: add cue 2"));
+    assert!(undo.undo().unwrap(), "Ignition: add cue 2 undoes");
     eventually("B sees cue 2 undone", || cue_ids(&b) == ["cue-1"]).await;
     // B's edit, made meanwhile, and A's earlier step both stand.
     assert_eq!(

@@ -1,10 +1,10 @@
-//! The session as an Architect document (feature `architect`).
+//! The session as a Loro document (feature `architect`).
 //!
-//! An Architect document is a Loro document of a `crdt::DocKind` ([`kind`]:
-//! its id and schema stamp in the `meta` map); everything else
-//! (the file, sync to the org, peer-to-peer links, presence, undo) is
-//! Architect's, over that `LoroDoc`. This module is the session's shape
-//! inside it:
+//! A session is a Loro document that says what it is in its `meta` map
+//! ([`KIND`] and its schema stamp, [`stamp`]); its file
+//! ([`crate::file`]), its live sync (`live-doc`) and undo (Loro's
+//! `UndoManager`) all work over that `LoroDoc`. This module is the
+//! session's shape inside it:
 //!
 //! ```text
 //! meta       : Map  { kind: "fts.session", schema: 1, name }
@@ -35,9 +35,9 @@
 //! `ext:ignition:m:cues` are one map and both cues land.
 //!
 //! **What this does not do**: open, save or sync the document (that is
-//! `crdt::DocFile`, `OrgDocs`, `SyncedDoc` over [`SessionDoc::doc`]), or
-//! undo (`crdt::History` over the same doc). `tests/sync_e2e.rs` syncs two
-//! peers through Architect's real path. See the design, "Architect".
+//! [`crate::file::SessionFile`] and `live-doc`'s `SyncedDoc` over
+//! [`SessionDoc::doc`]), or undo (a `loro::UndoManager` over the same
+//! doc). `tests/sync_e2e.rs` syncs two peers through the live-set path.
 
 use std::collections::BTreeMap;
 
@@ -56,17 +56,52 @@ pub const KIND: &str = "fts.session";
 /// The schema this build writes.
 pub const SCHEMA: u32 = 1;
 
-/// The session as an Architect document kind: register it in the app's
-/// `crdt::DocKinds`, so `DocFile` and the org driver open, stamp and
-/// migrate sessions like any other document. A `.session` file is one.
-#[must_use]
-pub fn kind() -> crdt::DocKind {
-    crdt::DocKind::new(KIND, "Session")
-        .extension("session")
-        .schema(SCHEMA, Vec::new())
+const META: &str = "meta";
+/// The `meta` keys a document says what it is by (the ones Architect's
+/// document kinds wrote, so a session made there reads the same).
+const META_KIND: &str = "kind";
+const META_SCHEMA: &str = "schema";
+
+/// Marks `doc` as a session at this build's schema, and commits.
+pub fn stamp(doc: &LoroDoc) {
+    let meta = doc.get_map(META);
+    let _ = meta.insert(META_KIND, KIND);
+    let _ = meta.insert(META_SCHEMA, i64::from(SCHEMA));
+    doc.commit();
 }
 
-const META: &str = "meta";
+/// The kind `doc` says it is.
+#[must_use]
+pub fn kind_of(doc: &LoroDoc) -> Option<String> {
+    let v = doc.get_map(META).get(META_KIND)?;
+    v.into_value()
+        .ok()?
+        .into_string()
+        .ok()
+        .map(|s| s.to_string())
+}
+
+/// The schema stamp `doc` says it is at.
+#[must_use]
+pub fn schema_of(doc: &LoroDoc) -> Option<u32> {
+    let v = doc.get_map(META).get(META_SCHEMA)?;
+    u32::try_from(v.into_value().ok()?.into_i64().ok()?).ok()
+}
+
+/// Refuses a session a newer build wrote (one with no stamp yet is at 1).
+///
+/// # Errors
+///
+/// Its schema is newer than [`SCHEMA`].
+pub fn check_schema(doc: &LoroDoc) -> Result<(), String> {
+    let at = schema_of(doc).unwrap_or(1);
+    if at > SCHEMA {
+        return Err(format!(
+            "this session was written by a newer version (schema {at}, this build reads {SCHEMA})"
+        ));
+    }
+    Ok(())
+}
 const TEMPO: &str = "tempo";
 const RULERS: &str = "rulers";
 const MARKERS: &str = "markers";
@@ -76,8 +111,8 @@ const ITEMS: &str = "items";
 const EXTENSIONS: &str = "extensions";
 /// Where the session's presence (its transport, and the clock its peers
 /// share) is hosted: `host`, the node serving it (session#192). The same
-/// root and key as Architect's `crdt::presence::presence_host`, which a
-/// node's relay reads to route an extension's presence there.
+/// root and key Architect's presence used, which a node's relay reads to
+/// route an extension's presence there.
 const TRANSPORT: &str = "presence";
 
 /// Writing the document failed.
@@ -117,34 +152,34 @@ impl SessionDoc {
     #[must_use]
     pub fn new() -> Self {
         let doc = LoroDoc::new();
-        kind().stamp(&doc);
+        stamp(&doc);
         Self { doc }
     }
 
-    /// A document that already exists (opened from a `DocFile`, joined
-    /// through a link). Its kind is not checked here: `crdt::DocKinds`
-    /// does that on open.
+    /// A document that already exists (opened from its file, joined
+    /// through a link). Its kind is not checked here: its file does that
+    /// on open.
     #[must_use]
     pub const fn from_doc(doc: LoroDoc) -> Self {
         Self { doc }
     }
 
-    /// The Loro document, for Architect's file, sync and undo.
+    /// The Loro document, for its file, sync and undo.
     #[must_use]
     pub const fn doc(&self) -> &LoroDoc {
         &self.doc
     }
 
-    /// The kind the document says it is (`crdt::kinds::kind_of`).
+    /// The kind the document says it is ([`kind_of`]).
     #[must_use]
     pub fn kind(&self) -> Option<String> {
-        crdt::kinds::kind_of(&self.doc)
+        kind_of(&self.doc)
     }
 
     /// Writes `session` into the document, recording only what differs
     /// (Loro skips a write of the value already there), and commits. One
-    /// call is one transaction; wrap it in `crdt::History::transact` to
-    /// make it one named undo step.
+    /// call is one transaction, and so one step of a `loro::UndoManager`
+    /// over the document.
     ///
     /// # Errors
     ///
@@ -620,10 +655,10 @@ impl ExtWriter<'_> {
     }
 }
 
-/// A transport as Architect's presence carries a playhead.
+/// A transport as presence carries a playhead.
 ///
-/// That is `crdt::presence::PlayState`: `playing`, `position` (seconds),
-/// `at` (milliseconds) and `rate`. Architect's presence stamps `at` in each
+/// That is `live_doc::PlayState`: `playing`, `position` (seconds),
+/// `at` (milliseconds) and `rate`. Presence stamps `at` in each
 /// process's own clock; for a playhead others follow, stamp the transport
 /// in the shared clock first (the design, "Playback sync").
 #[must_use]

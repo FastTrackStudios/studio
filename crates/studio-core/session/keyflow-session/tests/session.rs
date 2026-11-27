@@ -1,6 +1,6 @@
 //! Keyflow as a session's host: a chart alone in its file, two Keyflows
-//! sharing it through Architect's sync, typed through the editor binding,
-//! and the chart view reading and editing it through `fts.session`.
+//! sharing it through a live-doc host, both typing into it, and the chart
+//! view reading and editing it through `fts.session`.
 
 #![allow(
     clippy::unwrap_used,
@@ -13,41 +13,29 @@
 use std::time::Duration;
 
 use architect::{LayerRouter, LocalServer, Scope};
-use crdt::sync::{DocSyncClient, DocSyncDispatcher, doc_sync_service_descriptor};
-use crdt::text::{EditorBinding, TextOp};
-use crdt::{CrdtDoc, DocRegistry};
 use keyflow_session::{ChartSession, ChartSource, EXTENSION, Provider};
+use live_doc::{DocSyncClient, DocSyncDispatcher, Hosts, doc_sync_service_descriptor};
 use session::service::{READ, WRITE};
 
 const VERSE: &str = "Verse: C G Am F\n";
 
-/// An editor's text, as a chord-chart editor holds it.
-#[derive(Default)]
-struct Editor(Vec<char>);
-
-impl Editor {
-    fn text(&self) -> String {
-        self.0.iter().collect()
-    }
+/// The host two Keyflows sync through: one sync service for every
+/// document, as a hosting app serves it, here in process.
+fn host() -> LocalServer {
+    let router = LayerRouter::new().with(
+        doc_sync_service_descriptor(),
+        DocSyncDispatcher::new(Hosts::new(30_000)),
+    );
+    LocalServer::serve(router, Scope::new())
 }
 
-impl EditorBinding for Editor {
-    fn apply_remote(&mut self, ops: &[TextOp]) {
-        for op in ops {
-            match op {
-                TextOp::Insert { pos, text } => {
-                    let at = usize::try_from(*pos).unwrap();
-                    for (i, c) in text.chars().enumerate() {
-                        self.0.insert(at + i, c);
-                    }
-                }
-                TextOp::Delete { pos, len } => {
-                    let at = usize::try_from(*pos).unwrap();
-                    self.0.drain(at..at + usize::try_from(*len).unwrap());
-                }
-            }
-        }
-    }
+/// Joins `chart` to the host, until the task it answers is aborted.
+async fn join(local: &LocalServer, chart: &ChartSession) -> tokio::task::JoinHandle<()> {
+    let client: DocSyncClient = local.establish().await.unwrap();
+    let mut synced = chart.synced().unwrap();
+    tokio::spawn(async move {
+        let _ = synced.run(&client).await;
+    })
 }
 
 async fn eventually(what: &str, mut pred: impl FnMut() -> bool) {
@@ -63,13 +51,13 @@ async fn a_chart_alone_lives_in_its_session_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("Belief.session");
     let id = {
-        let chart = ChartSession::create(&path, VERSE).await.unwrap();
+        let chart = ChartSession::create(&path, VERSE).unwrap();
         assert_eq!(chart.session().kind().as_deref(), Some(session::doc::KIND));
         chart.set_chart(&format!("{VERSE}Chorus: F G C\n")).unwrap();
-        chart.save().await.unwrap();
+        chart.save().unwrap();
         chart.id()
     };
-    let chart = ChartSession::open(&path).await.unwrap();
+    let chart = ChartSession::open(&path).unwrap();
     assert_eq!(chart.id(), id);
     assert_eq!(chart.chart(), format!("{VERSE}Chorus: F G C\n"));
     // Keyflow's data is Keyflow's: the session holds no chart of its own.
@@ -82,11 +70,9 @@ async fn a_chart_alone_lives_in_its_session_file() {
     assert_eq!(ids, [EXTENSION]);
 }
 
-/// What was set and saved is in the file when it is opened again, however
-/// the document's own writer task is scheduled. On one thread that task
-/// never runs between the edit and the reopen, so a save that only folded
-/// what the writer had already appended lost the edit every time (it was
-/// one run in three on many threads).
+/// What was set and saved is in the file when it is opened again, on one
+/// thread as on many: a save that only folded what had been appended so
+/// far once lost the newest edit every time on one thread.
 #[tokio::test(flavor = "current_thread")]
 async fn a_saved_chart_is_in_its_file_before_the_writer_task_runs() {
     let dir = tempfile::tempdir().unwrap();
@@ -95,101 +81,90 @@ async fn a_saved_chart_is_in_its_file_before_the_writer_task_runs() {
         let text = format!("{VERSE}Chorus {round}: F G C\n");
         {
             let chart = if round == 0 {
-                ChartSession::create(&path, VERSE).await.unwrap()
+                ChartSession::create(&path, VERSE).unwrap()
             } else {
-                ChartSession::open(&path).await.unwrap()
+                ChartSession::open(&path).unwrap()
             };
             chart.set_chart(&text).unwrap();
-            chart.save().await.unwrap();
+            chart.save().unwrap();
         }
-        let chart = ChartSession::open(&path).await.unwrap();
+        let chart = ChartSession::open(&path).unwrap();
         assert_eq!(chart.chart(), text, "round {round}");
     }
 }
 
+/// A chart session Architect's document file wrote (`crdt::DocFile`,
+/// before studio's own: a snapshot, then steps after it never folded)
+/// opens with everything it held, takes an edit and a save, and opens
+/// again.
+#[test]
+fn a_chart_session_architect_wrote_still_opens() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("Belief.session");
+    std::fs::copy(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/architect-chart.session"),
+        &path,
+    )
+    .unwrap();
+    let id: uuid::Uuid = "f8c4fc31-ec7f-4e77-bc0f-10cf8e9b89b3".parse().unwrap();
+    let chorus = format!("{VERSE}Chorus: F G C\n");
+    {
+        let chart = ChartSession::open(&path).unwrap();
+        assert_eq!(chart.id(), id);
+        assert_eq!(chart.session().kind().as_deref(), Some(session::doc::KIND));
+        assert_eq!(chart.chart(), chorus);
+        assert!((chart.chart_start() - 2.0).abs() < 1e-9);
+        let notes = chart
+            .session()
+            .read_ext(&session::ExtensionId::from("ignition"))
+            .text("notes")
+            .map(str::to_owned);
+        assert_eq!(notes.as_deref(), Some("Lights down at the bridge"));
+        chart.set_chart(&format!("{chorus}Bridge: Am G\n")).unwrap();
+        chart.save().unwrap();
+    }
+    let chart = ChartSession::open(&path).unwrap();
+    assert_eq!(chart.id(), id);
+    assert_eq!(chart.chart(), format!("{chorus}Bridge: Am G\n"));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn two_keyflows_share_a_session_and_type_into_it() {
-    // The host the two sync through: Architect's sync service, as an org
-    // lane or a share link serves it, here in process.
-    let scope = Scope::new();
-    let registry = DocRegistry::new(|_| Box::pin(async { Ok(CrdtDoc::ephemeral()) }));
-    let router = LayerRouter::new().with(
-        doc_sync_service_descriptor(),
-        DocSyncDispatcher::new(registry),
-    );
-    let local = LocalServer::serve(router, scope.clone());
-    let sync = |chart: &ChartSession| {
-        let synced = chart.synced();
-        let local = &local;
-        async move {
-            let client: DocSyncClient = local.establish().await.unwrap();
-            let mut synced = synced;
-            tokio::spawn(async move {
-                let _ = synced.run(&client).await;
-            });
-        }
-    };
-
+    let local = host();
     let dir = tempfile::tempdir().unwrap();
-    let a = ChartSession::create(&dir.path().join("a.session"), VERSE)
-        .await
-        .unwrap();
+    let a = ChartSession::create(&dir.path().join("a.session"), VERSE).unwrap();
     // B adopts the session A made: its own file, the same lineage.
     let b_path = dir.path().join("b.session");
-    let b = ChartSession::adopt(&b_path, a.id()).await.unwrap();
-    sync(&a).await;
-    sync(&b).await;
+    let b = ChartSession::adopt(&b_path, a.id()).unwrap();
+    let _a = join(&local, &a).await;
+    let b_online = join(&local, &b).await;
     eventually("B has A's chart", || b.chart() == VERSE).await;
 
-    // Both type, each in an editor bound to the chart.
-    let a_text = a.binding().unwrap();
-    let b_text = b.binding().unwrap();
-    let mut a_editor = Editor(a_text.shown().chars().collect());
-    let mut b_editor = Editor(b_text.shown().chars().collect());
-    a_text
-        .on_local(&[TextOp::Insert {
-            pos: 0,
-            text: "Intro: C\n".into(),
-        }])
-        .unwrap();
-    a_editor.apply_remote(&[TextOp::Insert {
-        pos: 0,
-        text: "Intro: C\n".into(),
-    }]);
-    let end = u32::try_from(b_editor.0.len()).unwrap();
-    b_text
-        .on_local(&[TextOp::Insert {
-            pos: end,
-            text: "Chorus: F G C\n".into(),
-        }])
-        .unwrap();
-    b_editor.apply_remote(&[TextOp::Insert {
-        pos: end,
-        text: "Chorus: F G C\n".into(),
-    }]);
+    // Both type, neither seeing the other's yet (B offline): A an intro at
+    // the top, B a chorus at the end. B comes back and both have both.
+    b_online.abort();
+    let _ = b_online.await;
+    a.set_chart(&format!("Intro: C\n{VERSE}")).unwrap();
+    b.set_chart(&format!("{VERSE}Chorus: F G C\n")).unwrap();
+    let _b = join(&local, &b).await;
     let both = format!("Intro: C\n{VERSE}Chorus: F G C\n");
-    eventually("both editors show both edits", || {
-        a_text.sync_into(&mut a_editor);
-        b_text.sync_into(&mut b_editor);
-        a_editor.text() == both && b_editor.text() == both
+    eventually("both show both edits", || {
+        a.chart() == both && b.chart() == both
     })
     .await;
-    assert_eq!(a.chart(), both);
 
     // B's file holds what it received as it arrived (a durable sync): the
     // process ends with no save, and the file, reopened, reads the chart.
-    drop(b_text);
     drop(b);
-    let reopened = ChartSession::open(&b_path).await.unwrap();
+    let reopened = ChartSession::open(&b_path).unwrap();
     assert_eq!(reopened.chart(), both);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_chart_view_reads_and_edits_through_fts_session() {
     let dir = tempfile::tempdir().unwrap();
-    let chart = ChartSession::create(&dir.path().join("song.session"), VERSE)
-        .await
-        .unwrap();
+    let chart = ChartSession::create(&dir.path().join("song.session"), VERSE).unwrap();
     let provider = Provider::default();
     provider.open(&chart);
 
@@ -249,9 +224,7 @@ async fn a_whole_chart_write_is_one_splice_and_merges() {
     assert_eq!(splice_between("ändern", "ändern!"), (6, 0, "!".into()));
 
     let dir = tempfile::tempdir().unwrap();
-    let chart = ChartSession::create(&dir.path().join("s.session"), VERSE)
-        .await
-        .unwrap();
+    let chart = ChartSession::create(&dir.path().join("s.session"), VERSE).unwrap();
     let provider = Provider::default();
     provider.open(&chart);
     let source = ChartSource::of_pane_state(&format!("session:{}", chart.id()));
@@ -276,26 +249,12 @@ async fn a_peers_edit_tells_the_view_and_its_own_does_not() {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    let registry = DocRegistry::new(|_| Box::pin(async { Ok(CrdtDoc::ephemeral()) }));
-    let router = LayerRouter::new().with(
-        doc_sync_service_descriptor(),
-        DocSyncDispatcher::new(registry),
-    );
-    let local = LocalServer::serve(router, Scope::new());
+    let local = host();
     let dir = tempfile::tempdir().unwrap();
-    let a = ChartSession::create(&dir.path().join("a.session"), VERSE)
-        .await
-        .unwrap();
-    let b = ChartSession::adopt(&dir.path().join("b.session"), a.id())
-        .await
-        .unwrap();
-    for chart in [&a, &b] {
-        let client: DocSyncClient = local.establish().await.unwrap();
-        let mut synced = chart.synced();
-        tokio::spawn(async move {
-            let _ = synced.run(&client).await;
-        });
-    }
+    let a = ChartSession::create(&dir.path().join("a.session"), VERSE).unwrap();
+    let b = ChartSession::adopt(&dir.path().join("b.session"), a.id()).unwrap();
+    let _a = join(&local, &a).await;
+    let _b = join(&local, &b).await;
     eventually("B has A's chart", || b.chart() == VERSE).await;
 
     let told = Arc::new(AtomicUsize::new(0));
