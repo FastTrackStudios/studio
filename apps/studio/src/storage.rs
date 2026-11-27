@@ -20,7 +20,7 @@
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use std::time::Instant;
+use web_time::Instant;
 
 static START: OnceLock<Instant> = OnceLock::new();
 
