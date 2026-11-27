@@ -18,7 +18,7 @@
 //!
 //! What the engine is doing is written to a hidden element (`#studio-engine`,
 //! [`STATE_ID`]): its state, the song's playhead and what the worklet has
-//! put out — what the browser boot test (`apps/studio/tests/web_boot.rs`)
+//! put out — what the browser boot test (`apps/studio/tests/it/web_boot.rs`)
 //! reads.
 
 use std::cell::RefCell;

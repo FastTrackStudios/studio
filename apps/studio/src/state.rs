@@ -457,12 +457,16 @@ impl AppState {
             filters: Signal::new(Filters::default()),
             org: Signal::new(Some(FIRST_ORG.to_string())),
             here: Signal::new(FIRST_ORG.to_string()),
-            orgs: Signal::new(
+            // With Drive, the node's (`live_sync::Attach`): a fresh
+            // account sees its own orgs, never the made-up ones.
+            orgs: Signal::new(if cfg!(feature = "drive") {
+                Vec::new()
+            } else {
                 crate::orgs::KNOWN
                     .iter()
                     .map(|k| k.slug.to_string())
-                    .collect(),
-            ),
+                    .collect()
+            }),
             who: Signal::new(String::new()),
             every_q: Signal::new(String::new()),
             review: Signal::new(Review::default()),

@@ -77,6 +77,9 @@ mod imp {
 
     static LIST: OnceLock<ActionList> = OnceLock::new();
     static CALLS: OnceLock<Calls> = OnceLock::new();
+    /// Whether [`ActionHost`] is mounted: the app is past Drive's sign-in.
+    /// Until then a call for the UI is refused at once, not held.
+    static HOSTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
     fn calls() -> &'static Calls {
         CALLS.get_or_init(|| {
@@ -119,7 +122,7 @@ mod imp {
         "STUDIO_ROUTE",
         "The page showing",
         "Navigation",
-        "The route of the page the app shows now."
+        "The route of the page the app shows now, and the setlist file it shows (`shown`: its `name` and `songs`, once read), if any."
     );
     meta!(
         ORGS,
@@ -141,6 +144,27 @@ mod imp {
         "Create an organization",
         "Orgs",
         "Creates an organization at the account server, as the account signed in here, which becomes its owner: `name`, and `slug` (its id in links and documents; from the name when left out). Studio is then in it, and STUDIO_ORGS lists it. Answers its `org` (the slug), `name` and the account's `role` (owner)."
+    );
+    meta!(
+        ACCOUNT,
+        "STUDIO_ACCOUNT",
+        "Account",
+        "Orgs",
+        "Who Studio is signed in as, asked of its Drive node (answers signed in or out): `node` (where it is), `signed_in`, `signed_out` (the node wants a sign-in), `who`, `issuer` (the account server) and the `orgs` the node lists for the account."
+    );
+    meta!(
+        SIGN_IN,
+        "STUDIO_SIGN_IN",
+        "Sign in",
+        "Orgs",
+        "Signs in through the account server the Drive node names: opens it in the system's browser and waits (up to 5 minutes) for it to come back on a loopback port. Studio then starts again, signed in (`restarting: true`). Already signed in, answers so (`already: true`)."
+    );
+    meta!(
+        FIRST_RUN,
+        "STUDIO_FIRST_RUN",
+        "First run",
+        "Orgs",
+        "Where this person is on the way from signing in to an open setlist, as Home shows it: `step` (`no-organization`, `no-setlist` or `ready`), the org Studio is in (`here`), and each org's setlists (`orgs: [{org, name, setlists: [{title, route}]}]`), each opened by STUDIO_NAVIGATE with its `route`."
     );
     meta!(
         SETLIST_FILES,
@@ -455,6 +479,12 @@ mod imp {
                     expected: None,
                 })?;
             }
+            if !HOSTED.load(std::sync::atomic::Ordering::Acquire) {
+                return Err(failed(
+                    id,
+                    "Studio is not past signing in yet: STUDIO_ACCOUNT says why, STUDIO_SIGN_IN signs in",
+                ));
+            }
             let (answer, answered) = oneshot::channel();
             calls()
                 .send
@@ -478,6 +508,82 @@ mod imp {
         }
     }
 
+    /// Put an action on the list that needs no UI (it asks Drive's node
+    /// itself): answered even while Drive's sign-in screen shows.
+    fn direct<F, Fut>(list: &ActionList, meta: &'static ActionMeta, effect: Effect, run: F)
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<Value, String>> + Send + 'static,
+    {
+        let id = meta.id;
+        let handler = Arc::new(move |_: &[u8]| -> Result<ActionFuture, ActionError> {
+            let fut = run();
+            Ok(Box::pin(async move {
+                match fut.await {
+                    Ok(v) => serde_json::to_vec(&v).map_err(|e| failed(id, &e.to_string())),
+                    Err(e) => Err(failed(id, &e)),
+                }
+            }) as ActionFuture)
+        });
+        if let Err(e) = list.register_dynamic_async(meta, effect, None, None, handler) {
+            tracing::warn!(action.id = id, error = %e, "an action could not be registered");
+        }
+    }
+
+    /// The node's `/orgs`, asked with this app's sign-in when it has one.
+    /// The token refreshed first when it runs out within a minute, as
+    /// Drive's boot does, so this says what the app's pages see.
+    async fn node_orgs() -> Result<Value, String> {
+        let token = drive_dioxus::auth::fresh_token(60_000.0).await;
+        let bearer = token.map(|t| format!("Bearer {t}"));
+        let headers: Vec<(&str, &str)> = bearer
+            .iter()
+            .map(|b| ("authorization", b.as_str()))
+            .collect();
+        let at = drive_dioxus::env::origin();
+        match drive_dioxus::auth::fetch("GET", "/orgs", &headers, None).await {
+            Some((200, v)) => Ok(v),
+            Some((status, _)) => Err(format!("the Drive node at {at} answered {status}")),
+            None => Err(format!("the Drive node at {at} did not answer")),
+        }
+    }
+
+    /// STUDIO_ACCOUNT: who the node says this is.
+    async fn account() -> Result<Value, String> {
+        let v = node_orgs().await?;
+        let a = crate::first_run::Account::read(&v);
+        Ok(json!({
+            "node": drive_dioxus::env::origin(),
+            "signed_in": a.signed_in(),
+            "signed_out": a.signed_out,
+            "who": a.who,
+            "issuer": a.issuer,
+            "orgs": a.orgs,
+        }))
+    }
+
+    /// STUDIO_SIGN_IN: Drive's native sign-in (the issuer in the system's
+    /// browser, back on a loopback port), then Studio again, signed in, as
+    /// Drive starts an app again when it signs out.
+    async fn sign_in() -> Result<Value, String> {
+        let v = node_orgs().await?;
+        let a = crate::first_run::Account::read(&v);
+        if !a.signed_out {
+            return Ok(json!({ "signed_in": a.signed_in(), "who": a.who, "already": true }));
+        }
+        let issuer: drive_dioxus::auth::Issuer = serde_json::from_value(v["auth"].clone())
+            .map_err(|_| {
+                "the Drive node wants a sign-in but names no account server".to_string()
+            })?;
+        drive_dioxus::auth::sign_in(&issuer).await?;
+        // Once this answer is on its way (it is sent when this returns).
+        architect::platform::spawn(async {
+            architect::platform::sleep(std::time::Duration::from_millis(750)).await;
+            drive_dioxus::env::reload();
+        });
+        Ok(json!({ "signed_in": true, "restarting": true }))
+    }
+
     fn failed(id: &str, message: &str) -> ActionError {
         ActionError::Failed {
             id: id.to_owned(),
@@ -495,6 +601,9 @@ mod imp {
             forward::<()>(&list, &ORGS, R, false);
             forward::<OrgArgs>(&list, &ORG_SWITCH, M, true);
             forward::<OrgCreateArgs>(&list, &ORG_CREATE, M, true);
+            direct(&list, &ACCOUNT, R, account);
+            direct(&list, &SIGN_IN, M, sign_in);
+            forward::<()>(&list, &FIRST_RUN, R, false);
             forward::<()>(&list, &SETLIST_FILES, R, false);
             forward::<FileArgs>(&list, &SETLIST_FILE_OPEN, M, true);
             forward::<()>(&list, &NOW_PLAYING, R, false);
@@ -557,6 +666,14 @@ mod imp {
         let mut bytes = [0u8; 32];
         std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
         Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+    }
+
+    /// Open the doors once a run, from wherever is first: the app's root
+    /// (so an agent reaches a Studio still at Drive's sign-in) or the
+    /// shell.
+    pub fn open_doors_once() {
+        static OPENED: std::sync::Once = std::sync::Once::new();
+        OPENED.call_once(|| open_doors(list()));
     }
 
     /// Open MCP (loopback, a token, published) and the control socket.
@@ -645,7 +762,10 @@ mod imp {
             ))
         });
         *now.borrow_mut() = Some((route.to_string(), index, library));
-        use_hook(|| open_doors(list()));
+        use_hook(|| {
+            open_doors_once();
+            HOSTED.store(true, std::sync::atomic::Ordering::Release);
+        });
         let held = now.clone();
         use_future(move || {
             let held = held.clone();
@@ -733,7 +853,20 @@ mod imp {
                 navigator().push(to.clone());
                 Ok(json!({ "route": to.to_string() }))
             }
-            "STUDIO_ROUTE" => Ok(json!({ "route": route })),
+            "STUDIO_ROUTE" => Ok(json!({
+                "route": route,
+                "shown": app.shown_set.peek().as_ref().map(|(name, list)| json!({
+                    "name": name,
+                    "songs": list.iter().map(|(s, _)| s.title).collect::<Vec<_>>(),
+                })),
+            })),
+            "STUDIO_FIRST_RUN" => {
+                // The UI is up: Drive let this app in, so it is past signing in.
+                let files = (app.drive_sets)().unwrap_or_default();
+                let (step, listed) =
+                    crate::first_run::on_home(&(app.orgs)(), &here, &index.faces(), &files);
+                Ok(crate::first_run::answer(step, &here, &listed))
+            }
             "STUDIO_ORGS" => Ok(json!({ "here": here, "orgs": (app.orgs)() })),
             "STUDIO_ORG_SWITCH" => {
                 let a: OrgArgs = args(raw)?;

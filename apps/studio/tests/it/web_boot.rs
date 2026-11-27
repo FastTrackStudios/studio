@@ -1,7 +1,7 @@
 //! Seam 3, the web build's boot test: a browser opens a fixture session in
 //! the web build and plays it through the engine in the page.
 //!
-//! The fixture is `tests/web_boot/multitrack-click`: a project of a click,
+//! The fixture is `tests/it/web_boot/multitrack-click`: a project of a click,
 //! a bass and keys. Its recordings are made here, never committed, as the
 //! proxies a page plays (`Media/Proxy/<stem>.ogg` and their page indexes),
 //! with the `files.json` a folder at a link is listed by. One server serves
@@ -156,7 +156,7 @@ fn the_chart_page_shows_a_generated_chart_and_follows_the_playhead() {
 /// The fixture session staged into `dir`: its project, each track's
 /// recording as a proxy with its page index, and the folder's `files.json`.
 fn stage_session(dir: &Path) {
-    let here = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/web_boot/multitrack-click");
+    let here = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/web_boot/multitrack-click");
     let proxies = dir.join("Media/Proxy");
     std::fs::create_dir_all(&proxies).expect("the session's folders");
     std::fs::copy(

@@ -135,6 +135,12 @@ mod web {
                 here.set(ctx.org.clone());
                 org.set(Some(ctx.org.clone()));
                 who.set(ctx.who.clone());
+                // Until the node says, the org Studio is in (all there is
+                // offline).
+                let mut orgs = app.orgs;
+                if orgs.peek().is_empty() {
+                    orgs.set(vec![ctx.org.clone()]);
+                }
                 d.set(Some(ctx));
                 s.set(Some(spine_doc));
             }
@@ -148,17 +154,13 @@ mod web {
                 .collect();
             if let Some((200, v)) = drive_dioxus::auth::fetch("GET", "/orgs", &headers, None).await
             {
-                let list: Vec<String> = v["orgs"]
-                    .as_array()
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|o| o.as_str().map(str::to_string))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                if !list.is_empty() {
-                    let mut orgs = app.orgs;
-                    orgs.set(crate::orgs::ordered(list));
+                // An account's are the node's, none included (a new
+                // account is in no org yet: Home offers to make one).
+                let answer = crate::first_run::Account::read(&v);
+                let mut orgs = app.orgs;
+                let listed = crate::first_run::orgs_listed(&answer, &orgs.peek());
+                if *orgs.peek() != listed {
+                    orgs.set(listed);
                 }
             }
         });
