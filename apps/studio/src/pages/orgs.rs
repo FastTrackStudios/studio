@@ -64,6 +64,7 @@ pub fn NewOrg(#[props(default)] done: Option<EventHandler<()>>) -> Element {
                 match crate::org_create::create_here(&typed, None).await {
                     Ok(made) => {
                         crate::org_create::joined(app, &made);
+                        app.switch_org(&made.org);
                         name.set(String::new());
                         if let Some(done) = done {
                             done.call(());

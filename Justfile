@@ -136,6 +136,12 @@ test-web-boot *ARGS:
 test-first-run *ARGS:
     cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --features native --test it -E 'test(/^first_run::/)' --run-ignored only --no-fail-fast {{ARGS}}
 
+# Seam 1 for creating an organization (studio#697): signed in, Studio creates an org at the account server, owns it,
+# lists it and is in it; a taken slug is refused, all over its MCP (apps/studio/tests/it/org_create.rs, on first_run's
+# stand-ins). It opens Studio's window, so run it in a desktop session. STUDIO_APP names another Studio; extra arguments go to nextest
+test-org-create *ARGS:
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --features native --test it -E 'test(/^org_create::/)' --run-ignored only --no-fail-fast {{ARGS}}
+
 # The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
 ci-local BASE="":
     bash scripts/ci-local.sh {{BASE}}

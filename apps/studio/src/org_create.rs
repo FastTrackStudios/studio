@@ -248,8 +248,9 @@ mod here {
     }
 
     /// The new org, one of this person's now: listed (the switcher, All
-    /// organizations), its name kept in its team document, and Studio in
-    /// it. On the UI thread, inside the app (it opens a document).
+    /// organizations) and its name kept in its team document. On the UI
+    /// thread, inside the app (it opens a document). Going into it is the
+    /// caller's (`app.switch_org`): on desktop that starts Studio again.
     pub fn joined(app: AppState, made: &Created) {
         let mut orgs = app.orgs;
         let mut list = orgs.peek().clone();
@@ -266,7 +267,6 @@ mod here {
                 let _ = crate::orgs::put_settings(d, &st);
             },
         );
-        app.switch_org(&made.org);
     }
 }
 
