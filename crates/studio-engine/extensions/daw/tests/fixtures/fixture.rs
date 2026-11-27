@@ -292,16 +292,22 @@ impl Fixture {
 }
 
 impl Fixture {
-    /// The chart written beside the session (its `.kf`), when it has one.
+    /// The chart written beside the session (its one `.kf`), when it has one.
     #[must_use]
     pub fn written_chart(&self) -> Option<String> {
         let dir = root().join("sessions").join(&self.name);
-        std::fs::read_dir(&dir)
+        let mut charts = std::fs::read_dir(&dir)
             .ok()?
             .flatten()
             .map(|e| e.path())
-            .find(|p| p.extension().is_some_and(|x| x == "kf"))
-            .and_then(|p| std::fs::read_to_string(p).ok())
+            .filter(|p| p.extension().is_some_and(|x| x == "kf"));
+        let one = charts.next()?;
+        // Two charts are none, as the engine finds a song's chart.
+        charts
+            .next()
+            .is_none()
+            .then(|| std::fs::read_to_string(one).ok())
+            .flatten()
     }
 }
 

@@ -73,13 +73,15 @@ pub fn register(list: &ActionList) {
 /// `.kf` beside it), then the chart from them.
 fn shown() -> Result<ChartOut, String> {
     let (project, title) = current().ok_or("no song is open")?;
-    let (doc, kept) = crate::session_doc::doc_of(&project)
+    let (doc, source) = crate::session_doc::doc_of(&project)
         .ok_or("the song's session is not open yet: ask again in a moment")?;
     let held = Held::of_doc(&doc);
     let written = if held.is_typed() {
         None
     } else {
-        kept.parent()
+        source
+            .as_deref()
+            .and_then(Path::parent)
             .and_then(chart_in)
             .map(|file| {
                 std::fs::read_to_string(&file)
@@ -89,9 +91,23 @@ fn shown() -> Result<ChartOut, String> {
             .transpose()?
     };
     match written {
-        Some((file, text)) => from_file(&title, &file, text),
-        None => from_session(&title, &held),
+        Some((file, text)) if fits(&held, &text) => from_file(&title, &file, text),
+        _ => from_session(&title, &held),
     }
+}
+
+/// Whether written chart `text` is the one the pane draws for a session
+/// nobody has typed a chart into: one the chart pane types into it as it
+/// follows the song (`KEYFLOW_SESSION_FOLLOW`'s `chart_path`), by the rule
+/// it types one by (`typed_session::retype`): it reads, and the session
+/// takes its structure or already agrees with it. One that does not fit
+/// is not typed in, and the pane shows the generated chart.
+fn fits(held: &Held, text: &str) -> bool {
+    let Ok(chart) = keyflow_lang::text::chart::parse_chart(text) else {
+        return false;
+    };
+    let brings = held.brings();
+    (brings.tempo && brings.sections) || held.disagreements(&chart).is_empty()
 }
 
 /// The current song: its project id and its title.
@@ -104,8 +120,9 @@ fn current() -> Option<(String, String)> {
 }
 
 /// The one `.kf` in `dir`, if there is exactly one (as
-/// `SESSION_CHART_AT` finds a song's chart).
-fn chart_in(dir: &Path) -> Option<PathBuf> {
+/// `SESSION_CHART_AT` finds a song's chart, beside its file).
+#[must_use]
+pub fn chart_in(dir: &Path) -> Option<PathBuf> {
     let mut found = std::fs::read_dir(dir)
         .ok()?
         .filter_map(Result::ok)
@@ -123,7 +140,7 @@ fn chart_in(dir: &Path) -> Option<PathBuf> {
 /// The chart composed does not read back as the road map's bars: a chart
 /// the pane could not draw as the session has it.
 pub fn from_session(title: &str, held: &Held) -> Result<ChartOut, String> {
-    let road = held.road_map();
+    let road = held.shown_road_map();
     let text = held.shown_source(title);
     check_reads_back(&road, &text)?;
     Ok(ChartOut {
@@ -157,7 +174,9 @@ fn from_file(title: &str, file: &Path, text: String) -> Result<ChartOut, String>
     let mut sections = Vec::new();
     for s in &chart.sections {
         let bars = u32::try_from(s.measures().len()).unwrap_or(u32::MAX);
-        if s.section.section_type.is_compact() {
+        // A count-in before bar 1; one later in the chart is bars of
+        // the song like any other.
+        if s.section.section_type.is_compact() && sections.is_empty() {
             count_in += bars;
             continue;
         }
@@ -184,7 +203,7 @@ fn check_reads_back(road: &RoadMap, text: &str) -> Result<(), String> {
     let read: Vec<usize> = chart
         .sections
         .iter()
-        .filter(|s| !s.section.section_type.is_compact())
+        .skip_while(|s| s.section.section_type.is_compact())
         .map(|s| s.measures().len())
         .filter(|n| *n > 0)
         .collect();
@@ -270,6 +289,34 @@ mod tests {
         let out = from_session("Markers", &Held::of_doc(&doc)).unwrap();
         assert_eq!(out.source, "chart");
         assert!(out.text.contains("Am"), "{}", out.text);
+    }
+
+    /// Typed bars past the session's regions are drawn in a section of
+    /// their own, and answered so.
+    #[test]
+    fn typed_bars_past_the_regions_are_a_section_of_their_own() {
+        let doc = SessionDoc::new();
+        let written = "Bare - Test\n#C 100bpm 4/4\n\nVS 2\nC\nG\n\nCH 2\nF\nC\n";
+        keyflow_session::typed::import(
+            &doc,
+            &keyflow_lang::text::chart::parse_chart(written).unwrap(),
+        )
+        .unwrap();
+        for id in doc.regions().keys() {
+            doc.remove_region(id).unwrap();
+        }
+        let out = from_session("Bare", &Held::of_doc(&doc)).unwrap();
+        assert_eq!(out.source, "chart");
+        let bars: u32 = out.sections.iter().map(|s| s.bars).sum();
+        assert_eq!(bars, 4, "{:?}", out.sections);
+    }
+
+    #[test]
+    fn a_count_in_after_bar_one_is_bars_of_the_song() {
+        let text = "Song - Artist\n120bpm 4/4 #C\n\nVS 2\nC G\n\ncount 1\n\nCH 2\nF G\n";
+        let out = from_file("Song", Path::new("song.kf"), text.to_owned()).unwrap();
+        assert_eq!(out.count_in, 0);
+        assert_eq!(out.sections.last().map(|s| s.first_bar), Some(4));
     }
 
     #[test]

@@ -409,6 +409,8 @@ pub struct Followed {
     pub id: String,
     pub url: String,
     pub path: String,
+    /// The chart written beside the song (its `.kf`), when there is one.
+    pub chart: Option<String>,
 }
 
 async fn run(id: &str, args: serde_json::Value) -> Result<serde_json::Value, String> {
@@ -572,6 +574,7 @@ pub fn use_follow_session(ui: ExtensionUi, layout: Signal<Workspace>) -> Signal<
                         id: text("id")?,
                         url: text("url")?,
                         path: text("path")?,
+                        chart: text("chart"),
                     })
                 });
             if now.is_some() && now != *followed.peek() {
@@ -646,23 +649,21 @@ async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
     // with neither shows the chart generated from its markers (studio#693).
     let title = current_song_title().await.unwrap_or_default();
     let mut args = serde_json::json!({ "url": f.url, "id": f.id, "title": title });
-    let written = chart_beside(std::path::Path::new(&f.path));
-    if let Some(chart) = &written {
-        args["chart_path"] = serde_json::Value::String(chart.display().to_string());
-        span.set("studio.follow.chart_path", chart.display().to_string());
+    if let Some(chart) = &f.chart {
+        args["chart_path"] = serde_json::Value::String(chart.clone());
+        span.set("studio.follow.chart_path", chart.clone());
     }
-    let followed = match run("KEYFLOW_SESSION_FOLLOW", args.clone()).await {
-        // A written chart that does not fit the session's own structure is
-        // not typed into it: the session is followed all the same.
-        Err(e) if written.is_some() => {
-            span.set("studio.follow.seed", e);
-            if let Some(a) = args.as_object_mut() {
-                a.remove("chart_path");
-            }
-            run("KEYFLOW_SESSION_FOLLOW", args).await
-        }
-        other => other,
-    };
+    // A written chart that does not fit the session's own structure is not
+    // typed into it (`seed_error`): the session is followed all the same.
+    let followed = run("KEYFLOW_SESSION_FOLLOW", args).await;
+    if let Some(e) = followed
+        .as_ref()
+        .ok()
+        .and_then(|r| r.get("seed_error"))
+        .and_then(serde_json::Value::as_str)
+    {
+        span.set("studio.follow.seed", e.to_owned());
+    }
     match followed {
         Ok(_) => span.set("studio.follow.chart", "ok"),
         Err(e) => span.set("studio.follow.chart", e),
@@ -719,18 +720,6 @@ async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
         Ok(_) => span.set("studio.follow.lighting", "ok"),
         Err(e) => span.set("studio.follow.lighting", e),
     }
-}
-
-/// The chart written beside the song whose session is at `session`: the
-/// one `.kf` in its folder, as the engine finds it (`SESSION_CHART`).
-fn chart_beside(session: &std::path::Path) -> Option<std::path::PathBuf> {
-    let mut found = std::fs::read_dir(session.parent()?)
-        .ok()?
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "kf"));
-    let one = found.next()?;
-    found.next().is_none().then_some(one)
 }
 
 /// The host the session's window draws the extensions with.

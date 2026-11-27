@@ -418,15 +418,18 @@ impl Held {
         sections_ruler_of(&self.regions)
     }
 
-    /// The chart this session shows, in Keyflow's language, titled
-    /// `title`: its road map with its typed items in it.
+    /// The road map the chart this session shows is drawn on
+    /// ([`Held::shown_source`]): [`Held::road_map`], with typed bars past
+    /// the session's sections (a session with no regions, or regions that
+    /// end before the chart does) drawn all the same, in a section of
+    /// their own.
     #[must_use]
-    pub fn shown_source(&self, title: &str) -> String {
-        let typed = self.chart();
+    pub fn shown_road_map(&self) -> RoadMap {
+        self.shown_road_map_of(&self.chart())
+    }
+
+    fn shown_road_map_of(&self, typed: &TypedChart) -> RoadMap {
         let mut road = self.road_map();
-        // Typed bars past the session's sections (a session with no
-        // regions, or regions that end before the chart does) are drawn
-        // all the same, in a section of their own.
         let covered: i64 = road.sections.last().map_or(i64::from(road.lead_in), |s| {
             i64::from(s.first_bar) + i64::from(s.bars) - 1
         });
@@ -443,6 +446,15 @@ impl Held {
                 bars,
             });
         }
-        road.source(title, &typed)
+        road
+    }
+
+    /// The chart this session shows, in Keyflow's language, titled
+    /// `title`: its road map ([`Held::shown_road_map`]) with its typed
+    /// items in it.
+    #[must_use]
+    pub fn shown_source(&self, title: &str) -> String {
+        let typed = self.chart();
+        self.shown_road_map_of(&typed).source(title, &typed)
     }
 }

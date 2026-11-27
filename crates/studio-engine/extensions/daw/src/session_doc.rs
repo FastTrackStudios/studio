@@ -65,6 +65,9 @@ impl Held {
 /// The session open now.
 struct Open {
     song: String,
+    /// The song's own file (a branch's: its song's store), beside which
+    /// its written chart is: where the session is kept may be elsewhere.
+    source: Option<PathBuf>,
     path: PathBuf,
     id: String,
     file: Held,
@@ -473,6 +476,9 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
     tracing::info!(session.id = %id, session.path = %path.display(), "daw: the session document is open");
     *open = Some(Open {
         song: song.to_owned(),
+        source: branch
+            .map(|(file, _)| file)
+            .or_else(|| source.map(Path::to_path_buf)),
         path,
         id,
         file,
@@ -542,28 +548,39 @@ pub fn publish(playing: bool, at: f64, rate: f64) {
     }
 }
 
-/// The open session's document and where it is kept, when it is song
+/// The open session's document and the song's own file, when it is song
 /// `song`'s (the engine's project id): what the chart it shows is read
 /// from (`crate::chart`).
 #[must_use]
-pub fn doc_of(song: &str) -> Option<(fts_session::doc::SessionDoc, PathBuf)> {
+pub fn doc_of(song: &str) -> Option<(fts_session::doc::SessionDoc, Option<PathBuf>)> {
     OPEN.lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
         .filter(|o| o.song == song)
-        .map(|o| (o.file.file().session().clone(), o.path.clone()))
+        .map(|o| (o.file.file().session().clone(), o.source.clone()))
 }
 
 /// The open session, for `DAW_STATE`: where it is, its id, where its
 /// transport is led from.
 #[must_use]
 pub fn state() -> Json {
-    let (path, id) = OPEN
+    let (path, id, chart) = OPEN
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
-        .map(|o| (o.path.display().to_string(), o.id.clone()))
-        .unzip();
+        .map_or((None, None, None), |o| {
+            (
+                Some(o.path.display().to_string()),
+                Some(o.id.clone()),
+                // The chart written beside the song, for the chart pane
+                // to type into a session nobody has charted yet.
+                o.source
+                    .as_deref()
+                    .and_then(Path::parent)
+                    .and_then(crate::chart::chart_in)
+                    .map(|c| c.display().to_string()),
+            )
+        });
     let url = LEADER
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -572,6 +589,7 @@ pub fn state() -> Json {
     json!({
         "path": path,
         "id": id,
+        "chart": chart,
         "url": url,
         "problem": PROBLEM.lock().unwrap_or_else(PoisonError::into_inner).clone(),
     })

@@ -281,9 +281,16 @@ async fn follow(args: Json) -> Result<Json, String> {
     // `chart_path`), imported as Keyflow's typed items when the session
     // holds none yet. The session's own structure is what the chart
     // draws either way.
-    let seeded = match args.get("chart_path").and_then(Json::as_str) {
-        Some(path) => seed_chart(&id.to_string(), path).await?,
-        None => false,
+    // One that cannot be typed in (it does not read, or does not fit the
+    // session's own structure) is said, not a failure: the session is
+    // followed all the same, and shows the chart generated from its
+    // markers (studio#693).
+    let (seeded, seed_error) = match args.get("chart_path").and_then(Json::as_str) {
+        Some(path) => match seed_chart(&id.to_string(), path).await {
+            Ok(seeded) => (seeded, None),
+            Err(e) => (false, Some(e)),
+        },
+        None => (false, None),
     };
     // A pane on this session opened before (a window restoring its
     // layout) read it with nobody to answer: it reads again now.
@@ -293,6 +300,7 @@ async fn follow(args: Json) -> Result<Json, String> {
         "id": id.to_string(),
         "pane": format!("session:{id}"),
         "seeded": seeded,
+        "seed_error": seed_error,
     }))
 }
 
