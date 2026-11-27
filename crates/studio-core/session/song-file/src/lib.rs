@@ -10,13 +10,14 @@
 //! - arrangements and variations as branches (`<id>@<branch>`).
 //!
 //! [`SongFile`] opens it: the store, and the session over the store's
-//! parts (`session_format::store::PartReplica`), so every edit of the
+//! parts (`session_format::store::PartReplica`, as the session file's
+//! `PartStore`), so every edit of the
 //! session is a row of the one file. Closing it folds the write-ahead log
 //! in, so the file alone is the song, to copy or carry on a drive.
 //!
 //! A folder not converted yet still holds the old pair (`<Title>.session`
-//! the engine's store, `<Title>.fts-session` the session's own Architect
-//! document): [`Layout::of`] says which a folder holds, by the files'
+//! the engine's store, `<Title>.fts-session` the session's own document
+//! file): [`Layout::of`] says which a folder holds, by the files'
 //! headers, and [`convert`] folds the pair into one file.
 //!
 //! The design: the session repo's `docs/design/one-file.md`.
@@ -28,7 +29,7 @@ pub mod new;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use fts_session::file::SessionFile;
+use fts_session::file::{PartStore, SessionFile};
 use session_format::store::{MAIN, PartReplica, SESSION, Store};
 use session_format::{FileFormat, sniff_path};
 use uuid::Uuid;
@@ -67,6 +68,23 @@ fn file_error(path: &Path, why: impl std::fmt::Display) -> Error {
     }
 }
 
+/// The song file's parts, as the session's file writes through them.
+struct Parts(PartReplica);
+
+impl PartStore for Parts {
+    fn load(&self, id: Uuid) -> std::result::Result<Option<Vec<u8>>, String> {
+        self.0.load(id).map_err(|e| e.to_string())
+    }
+
+    fn append(&self, id: Uuid, update: &[u8]) -> std::result::Result<(), String> {
+        self.0.append(id, update).map_err(|e| e.to_string())
+    }
+
+    fn compact(&self, id: Uuid, snapshot: &[u8]) -> std::result::Result<(), String> {
+        self.0.compact(id, snapshot).map_err(|e| e.to_string())
+    }
+}
+
 /// A song's file open: its store, and its session over the store.
 pub struct SongFile {
     path: PathBuf,
@@ -82,8 +100,8 @@ impl SongFile {
     /// # Errors
     ///
     /// The file is not a store, or would not open.
-    pub async fn open(path: &Path) -> Result<Self> {
-        Self::open_branch(path, MAIN).await
+    pub fn open(path: &Path) -> Result<Self> {
+        Self::open_branch(path, MAIN)
     }
 
     /// Opens the song at `path` on `branch` (an arrangement): the
@@ -92,17 +110,16 @@ impl SongFile {
     /// # Errors
     ///
     /// The file is not a store, or would not open.
-    pub async fn open_branch(path: &Path, branch: &str) -> Result<Self> {
-        use tracing::Instrument as _;
+    pub fn open_branch(path: &Path, branch: &str) -> Result<Self> {
         let span = tracing::info_span!(
             "song_file.open",
             song.branch = branch,
             song.id = tracing::field::Empty,
         );
-        Self::open_in(path, branch).instrument(span).await
+        span.in_scope(|| Self::open_in(path, branch))
     }
 
-    async fn open_in(path: &Path, branch: &str) -> Result<Self> {
+    fn open_in(path: &Path, branch: &str) -> Result<Self> {
         if path.exists() && sniff_path(path) != FileFormat::Store {
             return Err(file_error(path, "not a song's one file (no store header)"));
         }
@@ -111,8 +128,7 @@ impl SongFile {
         let id = store.part_id(SESSION, branch)?;
         tracing::Span::current().record("song.id", tracing::field::display(id));
         let store = Arc::new(Mutex::new(store));
-        let session = SessionFile::over_persistence(id, Arc::new(PartReplica::new(store.clone())))
-            .await
+        let session = SessionFile::over_part(id, Arc::new(Parts(PartReplica::new(store.clone()))))
             .map_err(|e| Error::Session(e.to_string()))?;
         Ok(Self {
             path: path.to_path_buf(),
@@ -160,10 +176,9 @@ impl SongFile {
     /// # Errors
     ///
     /// The file could not be written.
-    pub async fn save(&self) -> Result<()> {
+    pub fn save(&self) -> Result<()> {
         self.session
             .save()
-            .await
             .map_err(|e| Error::Session(e.to_string()))?;
         self.with_store(Store::checkpoint)?;
         Ok(())
@@ -175,8 +190,8 @@ impl SongFile {
     /// # Errors
     ///
     /// The file could not be written.
-    pub async fn close(self) -> Result<()> {
-        self.save().await?;
+    pub fn close(self) -> Result<()> {
+        self.save()?;
         let Self { store, session, .. } = self;
         drop(session);
         match Arc::try_unwrap(store) {

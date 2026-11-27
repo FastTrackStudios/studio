@@ -88,14 +88,12 @@ fn a_real_chart_round_trips() {
     assert_eq!(a, b, "chords");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_real_session_shows() {
+#[test]
+fn a_real_session_shows() {
     let Ok(path) = std::env::var("KF_SESSION") else {
         return;
     };
-    let file = session::file::SessionFile::open(std::path::Path::new(&path))
-        .await
-        .unwrap();
+    let file = session::file::SessionFile::open(std::path::Path::new(&path)).unwrap();
     let held = Held::of_doc(file.session());
     let road = held.road_map();
     println!(

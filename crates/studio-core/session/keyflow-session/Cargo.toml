@@ -3,7 +3,7 @@ name = "keyflow-session"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Keyflow in a session: a chart as Keyflow's data in a `.session` (an Architect document), synced, bound to an editor, and served to the chart view as `fts.session`"
+description = "Keyflow in a session: a chart as Keyflow's data in a `.session` (a Loro document), synced, and served to the chart view as `fts.session`"
 publish = false
 
 [dependencies]
@@ -11,7 +11,8 @@ publish = false
 # extension service. Pinned by rev until it is tagged (session#179, #181,
 # #182).
 session = { path = "../session", package = "session", features = ["architect", "service", "extension"] }
-crdt = { workspace = true, features = ["vox"] }
+# Its live sync (a joiner's `SyncedDoc`) and the Loro it is made of.
+live-doc = { workspace = true }
 # The chart as typed data in the session (`typed`): the chart model it is
 # made from and read back to.
 keyflow-lang = { workspace = true }

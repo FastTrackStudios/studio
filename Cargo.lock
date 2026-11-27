@@ -5843,7 +5843,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
- "turso",
  "uuid",
  "vox",
  "wasm-bindgen-futures",
@@ -8856,7 +8855,6 @@ dependencies = [
  "blake3",
  "chrono",
  "clap-sys",
- "crdt",
  "daw",
  "daw-control",
  "daw-edit",
@@ -8929,7 +8927,6 @@ dependencies = [
  "chatterbox-rs",
  "chrono",
  "color-palette",
- "crdt",
  "daw",
  "daw-actions",
  "daw-control",
@@ -9172,7 +9169,6 @@ dependencies = [
  "blake3",
  "chrono",
  "clap-sys",
- "crdt",
  "daw",
  "daw-control",
  "daw-edit",
@@ -10818,22 +10814,14 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 name = "fts-account"
 version = "26.10.3"
 dependencies = [
- "architect",
- "async-trait",
  "auth-client",
- "crdt",
  "dioxus",
  "dirs 6.0.0",
  "futures-timer",
- "org-proto",
  "reqwest 0.12.28",
  "serde_json",
- "session-format",
- "task-dial",
  "tokio",
  "tracing",
- "utils",
- "uuid",
 ]
 
 [[package]]
@@ -14501,13 +14489,13 @@ dependencies = [
  "architect-extensions-dioxus",
  "architect-workspace",
  "base64 0.22.1",
- "crdt",
  "dioxus",
  "gloo-timers 0.3.0",
  "keyflow",
  "keyflow-session",
  "keyflow-ui",
  "kurbo 0.13.1",
+ "live-doc",
  "serde_json",
  "session",
  "tempfile",
@@ -14572,10 +14560,10 @@ name = "keyflow-session"
 version = "26.10.3"
 dependencies = [
  "architect",
- "crdt",
  "facet-json",
  "keyflow-lang",
  "keyflow-proto",
+ "live-doc",
  "session",
  "tempfile",
  "thiserror 2.0.20",
@@ -15062,23 +15050,18 @@ dependencies = [
  "architect",
  "chrono",
  "collection-proto",
- "crdt",
- "dirs 6.0.0",
  "eyre",
  "files-client",
  "files-proto",
- "fts-account",
  "futures-util",
  "links-proto",
  "loro",
  "project-proto",
  "resources-proto",
  "serde",
- "session-format",
  "session-sync",
  "share-proto",
  "task-dial",
- "tempfile",
  "tokio",
  "tracing",
  "uuid",
@@ -18339,8 +18322,6 @@ dependencies = [
  "thiserror 2.0.20",
  "toml 0.8.2",
  "uuid",
- "vox",
- "vox-types",
 ]
 
 [[package]]
@@ -22506,7 +22487,7 @@ version = "26.10.3"
 dependencies = [
  "architect",
  "architect-permissions",
- "crdt",
+ "crc32fast",
  "facet",
  "facet-json",
  "live-doc",
@@ -22514,6 +22495,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
+ "tracing",
  "uuid",
  "vox",
  "web-time",
@@ -22523,8 +22505,6 @@ dependencies = [
 name = "session-format"
 version = "26.10.3"
 dependencies = [
- "async-trait",
- "crdt",
  "daw-proto",
  "dawfile-reaper",
  "facet",
@@ -23687,14 +23667,12 @@ dependencies = [
 name = "song-file"
 version = "26.10.3"
 dependencies = [
- "crdt",
  "loro",
  "session",
  "session-format",
  "session-sync",
  "tempfile",
  "thiserror 2.0.20",
- "tokio",
  "tracing",
  "tracing-subscriber",
  "trash",
@@ -24468,7 +24446,6 @@ dependencies = [
  "blake3",
  "chrono",
  "clap-sys",
- "crdt",
  "daw",
  "daw-control",
  "daw-edit",

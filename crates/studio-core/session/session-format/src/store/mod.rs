@@ -52,10 +52,8 @@ use sha2::{Digest, Sha256};
 
 mod parts;
 pub use parts::{ID_KEY, PartRef, SESSION};
-#[cfg(feature = "sync")]
 mod replica;
-#[cfg(feature = "sync")]
-pub use replica::{PartReplica, Replica, SYNC_LABEL};
+pub use replica::PartReplica;
 
 /// How long a write waits for another connection's lock on the file.
 const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -171,6 +169,8 @@ pub enum StoreError {
     NoBranch(String),
     #[error("the song is {had}, not {asked}: an id names one song for good")]
     IdTaken { had: String, asked: String },
+    #[error("doc {0} is not a part of this song")]
+    NotAPart(uuid::Uuid),
 }
 
 /// The song's own branch: what it is when nothing else is named.

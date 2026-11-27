@@ -380,8 +380,6 @@ auth-proto = { git = "https://github.com/FastTrackStudios/auth", rev = "36b877c9
 auth-db = { git = "https://github.com/FastTrackStudios/auth", rev = "36b877c96ce2875a299e1931ef4851587d99997e" }
 # auth-client (`auth_client::device`, sign-in from another device).
 auth-client = { git = "https://github.com/FastTrackStudios/auth", rev = "36b877c96ce2875a299e1931ef4851587d99997e" }
-crdt = { git = "https://github.com/FastTrackStudios/architect", rev = "7e366566fba79c27b832b9cfeeffd5bd08fdf0f3" }
-crdt-derive = { git = "https://github.com/FastTrackStudios/architect", rev = "7e366566fba79c27b832b9cfeeffd5bd08fdf0f3" }
 # The Dioxus primitive library (was libs/ui/fts-ui, renamed on the split).
 architect-ui = { git = "https://github.com/FastTrackStudios/architect", rev = "7e366566fba79c27b832b9cfeeffd5bd08fdf0f3" }
 # Architect extensions: Studio's features are linked extensions, compiled

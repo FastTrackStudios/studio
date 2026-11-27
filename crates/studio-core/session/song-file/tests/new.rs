@@ -16,8 +16,8 @@ fn names(dir: &Path) -> Vec<String> {
     out
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_new_song_is_one_file_with_an_id_and_its_tempo() {
+#[test]
+fn a_new_song_is_one_file_with_an_id_and_its_tempo() {
     let dir = tempfile::tempdir().unwrap();
     let song = dir.path().join("Praise - Elevation Worship");
     // Material not converted yet sits beside it and is left alone.
@@ -46,7 +46,7 @@ async fn a_new_song_is_one_file_with_an_id_and_its_tempo() {
         Some(made.id.clone())
     );
 
-    let opened = SongFile::open(&made.file).await.unwrap();
+    let opened = SongFile::open(&made.file).unwrap();
     assert_eq!(opened.id().unwrap().to_string(), made.id);
     let points = opened.session().session().tempo().points().to_vec();
     assert_eq!(points.len(), 1);
@@ -57,7 +57,7 @@ async fn a_new_song_is_one_file_with_an_id_and_its_tempo() {
         assert_eq!(project.tempo.len(), 1);
         assert!((project.tempo[0].bpm - 127.0).abs() < 1e-9);
     });
-    opened.close().await.unwrap();
+    opened.close().unwrap();
 }
 
 #[test]

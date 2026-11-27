@@ -110,11 +110,8 @@ struct Open {
     /// Updates on the branch since its last compaction: past
     /// [`COMPACT_AFTER`], the next save folds them into a snapshot.
     uncompacted: usize,
-    /// The branch as its org's synced doc, when the project is shared and
-    /// this device signed in (`project_sync`): the bridge edits that doc,
-    /// whose own writer appends each step, so [`append`] does not.
-    synced: Option<library_sync::project_sync::SyncedBranch>,
-    /// Applies what other devices send, while the song is open.
+    /// Applies what reaches the song's doc from elsewhere (a live set's
+    /// doc of it), while the song is open.
     _remote: Option<engine_sync::loro::Subscription>,
     /// The doc's version when the song was opened: where a fold makes it
     /// shallow ([`take_fold`]), so this session's steps stay in the file.
@@ -125,13 +122,6 @@ struct Open {
 }
 
 impl Open {
-    /// Name the commit about to be made, for a synced song's history.
-    fn name_next(&self, label: &str) {
-        if let Some(synced) = &self.synced {
-            synced.name_next(label);
-        }
-    }
-
     /// The song's archive, opened (and its folder made) the first time.
     fn archive(&mut self) -> Result<Arc<Mutex<Store>>, String> {
         if let Some(archive) = &self.archive {
@@ -175,17 +165,8 @@ pub fn fold(guid: &str) -> Result<(), String> {
 
 /// The snapshot to fold `open`'s branch into: shallow at the version the
 /// song was opened at, its history before that put in its archive first
-/// (`Store::take_shallow`), so the file opens small and fast. A song synced
-/// through its org keeps its whole history: that doc's own writer appends
-/// to it.
+/// (`Store::take_shallow`), so the file opens small and fast.
 fn take_fold(open: &mut Open) -> Result<session_format::store::Snapshot, String> {
-    if open.synced.is_some() {
-        let doc = open.bridge.doc();
-        return with_store(&open.store, |s| {
-            s.take_snapshot(&open.branch, doc.loro())
-                .map_err(|e| e.to_string())
-        });
-    }
     let archive = open.archive()?;
     let doc = open.bridge.doc();
     with_store(&open.store, |s| {
@@ -196,43 +177,12 @@ fn take_fold(open: &mut Open) -> Result<session_format::store::Snapshot, String>
     })
 }
 
-/// The doc a song's bridge edits: the branch's synced doc when the project
-/// is shared (and this device signed in), else the branch as the file
-/// loaded it.
-async fn song_doc(
-    path: &Path,
-    store: &Arc<Mutex<Store>>,
-    branch: &str,
-    loaded: engine_sync::loro::LoroDoc,
-) -> (
-    engine_sync::loro::LoroDoc,
-    Option<library_sync::project_sync::SyncedBranch>,
-) {
-    let shared = match store.lock() {
-        Ok(held) => library_sync::project_sync::org_of(&held).is_some(),
-        Err(_) => false,
-    };
-    if !shared {
-        return (loaded, None);
-    }
-    // A second handle on the file for the replica: the store's own is held
-    // by this song for its blobs and folds.
-    let Ok(own) = Store::open(path) else {
-        return (loaded, None);
-    };
-    match library_sync::project_sync::open(path, &own, branch).await {
-        Some(synced) => (synced.loro(), Some(synced)),
-        None => (loaded, None),
-    }
-}
-
-/// From now on, what reaches the song `guid`'s doc from elsewhere —
-/// another device of its org, a live set's doc of it ([`live_side`]) —
-/// reaches its engine through its bridge, and (a song not synced through
-/// its org) its file.
+/// From now on, what reaches the song `guid`'s doc from elsewhere — a
+/// live set's doc of it ([`live_side`]) — reaches its engine through its
+/// bridge, and its file.
 fn watch_remote(guid: &str, doc: &engine_sync::loro::LoroDoc) -> engine_sync::loro::Subscription {
     let guid = guid.to_owned();
-    library_sync::project_sync::watch_imports(doc, move || {
+    watch_imports(doc, move || {
         let guid = guid.clone();
         async move {
             // A step read and still being written: the doc is behind what
@@ -268,6 +218,34 @@ fn watch_remote(guid: &str, doc: &engine_sync::loro::LoroDoc) -> engine_sync::lo
             }
         }
     })
+}
+
+/// Runs `apply` after edits arrive in `doc` from elsewhere (an import,
+/// never a local commit); a burst of them is one run.
+fn watch_imports<F, Fut>(
+    doc: &engine_sync::loro::LoroDoc,
+    apply: F,
+) -> engine_sync::loro::Subscription
+where
+    F: Fn() -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = ()> + Send + 'static,
+{
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let subscription = doc.subscribe_root(Arc::new(move |event| {
+        if matches!(
+            event.triggered_by,
+            engine_sync::loro::EventTriggerKind::Import
+        ) {
+            let _ = tx.send(());
+        }
+    }));
+    architect::platform::spawn(async move {
+        while rx.recv().await.is_some() {
+            while rx.try_recv().is_ok() {}
+            apply().await;
+        }
+    });
+    subscription
 }
 
 /// What an edit that reached a song from elsewhere is named in its file.
@@ -576,13 +554,9 @@ pub fn save(
 async fn begin(daw: &Standalone, guid: &str, path: &Path, branch: &str) -> Result<Open, String> {
     record_steps();
     let (store, loaded, uncompacted) = open_branch(path, branch)?;
-    let (loaded, synced) = song_doc(path, &store, branch, loaded).await;
     let doc = SessionDoc::from_loro(loaded);
     let saved = doc.version();
     let chart = doc.read().chart;
-    if let Some(synced) = &synced {
-        synced.name_next("Save");
-    }
     let bridge = Bridge::host(
         project(daw, guid).await?,
         media_of(path),
@@ -601,7 +575,6 @@ async fn begin(daw: &Standalone, guid: &str, path: &Path, branch: &str) -> Resul
         bridge,
         saved,
         uncompacted,
-        synced,
         _remote: None,
         opened_at,
         archive: None,
@@ -647,7 +620,6 @@ async fn save_copy(
 
 /// The song as it is now into its file: read, and what changed appended.
 async fn save_open(open: &mut Open, label: &str) -> Result<(), String> {
-    open.name_next(label);
     open.bridge
         .local_changed()
         .await
@@ -667,8 +639,8 @@ fn append(open: &mut Open, label: &str) -> Result<(), String> {
 fn append_as(open: &mut Open, label: &str, action: Option<&str>) -> Result<(), String> {
     let doc = open.bridge.doc();
     if doc.version() != open.saved {
-        // Every step in the history, a synced song's too: a name, a time
-        // and the frontier to go back to, never folded away.
+        // Every step in the history: a name, a time and the frontier to go
+        // back to, never folded away.
         let frontiers = doc.loro().state_frontiers();
         with_store(&open.store, |s| {
             s.note(
@@ -679,15 +651,11 @@ fn append_as(open: &mut Open, label: &str, action: Option<&str>) -> Result<(), S
             .map(drop)
             .map_err(|e| e.to_string())
         })?;
-        // A synced song's doc appends its own commits (named by
-        // `Open::name_next`); appending here too would write each twice.
-        if open.synced.is_none() {
-            let update = doc.updates_since(&open.saved).map_err(|e| e.to_string())?;
-            with_store(&open.store, |s| {
-                s.append_update(&open.branch, label, &update)
-                    .map_err(|e| e.to_string())
-            })?;
-        }
+        let update = doc.updates_since(&open.saved).map_err(|e| e.to_string())?;
+        with_store(&open.store, |s| {
+            s.append_update(&open.branch, label, &update)
+                .map_err(|e| e.to_string())
+        })?;
         open.saved = doc.version();
         open.uncompacted = open.uncompacted.saturating_add(1);
         if let Ok(mut at) = LAST_WRITE.lock() {
@@ -1182,43 +1150,22 @@ pub fn record(project_guid: &str, label: &str, action: Option<&str>) -> Result<(
         let Some(open) = songs.get_mut(&guid) else {
             return Ok(());
         };
-        // A song synced through its org: its doc's own writer appends each
-        // commit as it is made, read and written in one.
-        if open.synced.is_none() {
-            let revision = revision(&guid);
-            let read = tracing::Instrument::instrument(
-                open.bridge.read_step(&label),
-                tracing::info_span!("bridge.read_step"),
-            )
-            .await
-            .map_err(|e| e.to_string())?;
-            read_at(&guid, revision);
-            // One undo item more in the doc, a quiet one included.
-            with_book(&guid, |b| b.recorded(&label));
-            let Some(read) = read else {
-                return Ok(());
-            };
-            send_write(open, (&guid, &label, action.as_deref()), read)?;
-            drop(songs);
-            return Ok(());
-        }
-        open.name_next(&label);
-        let stepped = tracing::Instrument::instrument(
-            open.bridge.local_step(&label),
-            tracing::info_span!("bridge.local_step"),
+        let revision = revision(&guid);
+        let read = tracing::Instrument::instrument(
+            open.bridge.read_step(&label),
+            tracing::info_span!("bridge.read_step"),
         )
-        .await;
-        if stepped.is_ok() {
-            with_book(&guid, |b| b.recorded(&label));
-        }
-        let recorded = match stepped {
-            Ok(true) => tracing::info_span!("project_file.append")
-                .in_scope(|| append_as(open, &label, action.as_deref())),
-            Ok(false) => Ok(()),
-            Err(e) => Err(e.to_string()),
+        .await
+        .map_err(|e| e.to_string())?;
+        read_at(&guid, revision);
+        // One undo item more in the doc, a quiet one included.
+        with_book(&guid, |b| b.recorded(&label));
+        let Some(read) = read else {
+            return Ok(());
         };
+        send_write(open, (&guid, &label, action.as_deref()), read)?;
         drop(songs);
-        recorded
+        Ok(())
     }))?
 }
 
@@ -1282,7 +1229,6 @@ async fn step_back(
     // A step of this song the recorder has not reached yet is recorded
     // first, so it is the one undone; with none waiting, nothing to read.
     if song_pending(guid) {
-        open.name_next(pending);
         if open
             .bridge
             .local_step(pending)
@@ -1340,7 +1286,6 @@ async fn step_back(
 /// to match and it appended to the file: its name, `None` with nothing to
 /// take back.
 async fn one_back(open: &mut Open, back: bool) -> Result<Option<String>, String> {
-    open.name_next(if back { "Undo" } else { "Redo" });
     let step = if back {
         open.bridge.undo().await
     } else {
@@ -1459,12 +1404,6 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
     {
         *at = Some(web_time::Instant::now());
     }
-    // A shared project opens as its synced doc: what this device missed
-    // is merged in as the driver catches up.
-    let (loaded, synced) = run(tracing::Instrument::instrument(
-        song_doc(path, &store, branch, loaded),
-        tracing::info_span!("project_file.song_doc"),
-    ))?;
     let doc =
         tracing::info_span!("project_file.from_loro").in_scope(|| SessionDoc::from_loro(loaded));
     let saved = doc.version();
@@ -1512,7 +1451,6 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
                 bridge,
                 saved,
                 uncompacted,
-                synced,
                 _remote: remote,
                 opened_at,
                 archive: None,
@@ -1712,7 +1650,7 @@ pub fn mark(
         let unread =
             PENDING.load(std::sync::atomic::Ordering::SeqCst) > 0 || !unchanged_since_read(&guid);
         tracing::Span::current().record("history.read_first", unread);
-        if unread && open.synced.is_none() {
+        if unread {
             let revision = revision(&guid);
             if let Some(read) = open
                 .bridge
@@ -1723,16 +1661,6 @@ pub fn mark(
                 send_write(open, (&guid, &name, Some(&action)), read)?;
             }
             read_at(&guid, revision);
-        } else if unread {
-            open.name_next(&name);
-            if open
-                .bridge
-                .local_step(&name)
-                .await
-                .map_err(|e| e.to_string())?
-            {
-                append_as(open, &name, Some(&action))?;
-            }
         }
         // A step still being written (its own, or one before it): the mark
         // goes after it, noted by the writer — before any step read after
@@ -1817,7 +1745,6 @@ pub fn restore(guid: &str, which: MomentRef) -> Result<Moment, String> {
         // A step of this song the recorder has not reached yet is recorded
         // first, so the going back is a step of its own after it.
         if song_pending(&guid) {
-            open.name_next("Edits");
             if open
                 .bridge
                 .local_step("Edits")
@@ -1828,7 +1755,6 @@ pub fn restore(guid: &str, which: MomentRef) -> Result<Moment, String> {
             }
         }
         let label = format!("Back to {}", moment.label);
-        open.name_next(&label);
         open.bridge
             .restore(model, &label)
             .await
@@ -2091,15 +2017,10 @@ pub fn live_side(
     })?
 }
 
-/// `open`'s doc as a relay's side.
+/// `open`'s doc as a relay's side: an import, which the watch makes the
+/// engine match and appends.
 fn side_of(open: &Open) -> engine_sync::relay::Side {
-    match &open.synced {
-        // Through the org's doc: written through the file, as an update
-        // from another device is.
-        Some(synced) => synced.side(),
-        // An import: the watch makes the engine match and appends it.
-        None => engine_sync::relay::Side::imported(open.bridge.doc().loro().clone()),
-    }
+    engine_sync::relay::Side::imported(open.bridge.doc().loro().clone())
 }
 
 /// Why a song cannot be moved onto a live set's doc.
@@ -2107,9 +2028,6 @@ fn side_of(open: &Open) -> engine_sync::relay::Side {
 pub enum NotAdopted {
     /// The song is not open from a project file here.
     NotOpen,
-    /// The song syncs through its org: its doc is the org's, and is not
-    /// replaced by a live set's.
-    SyncedWithItsOrg,
     /// What went wrong on the way (the file, the engine).
     Failed(String),
 }
@@ -2118,9 +2036,6 @@ impl std::fmt::Display for NotAdopted {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotOpen => f.write_str("the song is not open from a project file"),
-            Self::SyncedWithItsOrg => f.write_str(
-                "it syncs with its org and keeps the org's version — the set was started from another copy of it",
-            ),
             Self::Failed(why) => f.write_str(why),
         }
     }
@@ -2183,9 +2098,6 @@ pub fn adopt(
     run(async move {
         let mut songs = open_songs().lock().await;
         let open = songs.get_mut(&guid).ok_or(NotAdopted::NotOpen)?;
-        if open.synced.is_some() {
-            return Err(NotAdopted::SyncedWithItsOrg);
-        }
         let copy = engine_sync::loro::LoroDoc::new();
         copy.import_batch(&frames)
             .map_err(|e| NotAdopted::Failed(format!("the live doc would not copy: {e}")))?;

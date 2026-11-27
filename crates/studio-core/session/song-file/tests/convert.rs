@@ -65,8 +65,8 @@ mod serde_like {
 }
 
 /// The session document as Studio and Keyflow leave it.
-async fn old_session(path: &Path) -> (uuid::Uuid, BTreeMap<&'static str, String>) {
-    let file = SessionFile::create(path).await.unwrap();
+fn old_session(path: &Path) -> (uuid::Uuid, BTreeMap<&'static str, String>) {
+    let file = SessionFile::create(path).unwrap();
     let s = file.session();
     s.set_tempo(&TempoMap::new(
         92.0,
@@ -166,7 +166,7 @@ async fn old_session(path: &Path) -> (uuid::Uuid, BTreeMap<&'static str, String>
     )
     .unwrap();
     s.doc().commit();
-    file.save().await.unwrap();
+    file.save().unwrap();
     let id = file.id();
     let want = BTreeMap::from([
         ("chart", "Verse 1: C G Am F\n".to_owned()),
@@ -184,14 +184,13 @@ struct Fixture {
     session_value: loro::LoroValue,
 }
 
-async fn fixture() -> Fixture {
+fn fixture() -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let song = dir.path().join("Songs").join("Drive To LA - JT");
     std::fs::create_dir_all(&song).unwrap();
     let project = old_project(&song.join(format!("{TITLE}.session")));
-    let (id, _) = old_session(&song.join(format!("{TITLE}.fts-session"))).await;
+    let (id, _) = old_session(&song.join(format!("{TITLE}.fts-session")));
     let session_value = SessionFile::open(&song.join(format!("{TITLE}.fts-session")))
-        .await
         .unwrap()
         .session()
         .doc()
@@ -206,9 +205,9 @@ async fn fixture() -> Fixture {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn the_pair_becomes_one_file_with_everything_in_it() {
-    let f = fixture().await;
+#[test]
+fn the_pair_becomes_one_file_with_everything_in_it() {
+    let f = fixture();
     let before = names(&f.song);
     assert!(matches!(
         Layout::of(&f.song).unwrap(),
@@ -226,7 +225,6 @@ async fn the_pair_becomes_one_file_with_everything_in_it() {
             trash_dir: None,
         },
     )
-    .await
     .unwrap();
     let Outcome::Converted(dry) = dry else {
         panic!("a dry run converts: {dry:?}")
@@ -238,7 +236,7 @@ async fn the_pair_becomes_one_file_with_everything_in_it() {
         dry_run: false,
         trash_dir: Some(f.trash.clone()),
     };
-    let Outcome::Converted(report) = convert(&f.song, &options).await.unwrap() else {
+    let Outcome::Converted(report) = convert(&f.song, &options).unwrap() else {
         panic!("converted")
     };
     assert_eq!(report.id, f.id.to_string());
@@ -269,7 +267,7 @@ async fn the_pair_becomes_one_file_with_everything_in_it() {
         Layout::of(&f.song).unwrap(),
         Layout::OneFile { .. }
     ));
-    let song = SongFile::open(&file).await.unwrap();
+    let song = SongFile::open(&file).unwrap();
     assert_eq!(song.id().unwrap(), f.id);
     assert_eq!(
         song.session().session().doc().get_deep_value(),
@@ -290,11 +288,11 @@ async fn the_pair_becomes_one_file_with_everything_in_it() {
         assert_eq!(s.blob(&f.project.blob).unwrap(), b"a compressor's state");
         assert_eq!(s.history(MAIN, (0, 10)).unwrap().1, 1);
     });
-    song.close().await.unwrap();
+    song.close().unwrap();
 
     // Again: nothing to do.
     assert!(matches!(
-        convert(&f.song, &options).await.unwrap(),
+        convert(&f.song, &options).unwrap(),
         Outcome::AlreadyOneFile { .. }
     ));
     // Opening a store leaves its (empty, once closed) log and shared
@@ -314,25 +312,23 @@ async fn the_pair_becomes_one_file_with_everything_in_it() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn the_one_file_opens_from_wherever_it_is_copied() {
-    let f = fixture().await;
+#[test]
+fn the_one_file_opens_from_wherever_it_is_copied() {
+    let f = fixture();
     let options = Options {
         dry_run: false,
         trash_dir: Some(f.trash.clone()),
     };
-    convert(&f.song, &options).await.unwrap();
+    convert(&f.song, &options).unwrap();
     // Edited and closed: the log folded in, the file alone the song.
     {
-        let song = SongFile::open(&f.song.join(format!("{TITLE}.session")))
-            .await
-            .unwrap();
+        let song = SongFile::open(&f.song.join(format!("{TITLE}.session"))).unwrap();
         song.session()
             .session()
             .set_bar_one(Some(Time::Seconds(4.0)))
             .unwrap();
         song.session().session().doc().commit();
-        song.close().await.unwrap();
+        song.close().unwrap();
     }
     // Only the `.session` goes to the "external drive".
     let drive = tempfile::tempdir().unwrap();
@@ -345,25 +341,20 @@ async fn the_one_file_opens_from_wherever_it_is_copied() {
         fts_session::doc::SessionDoc::from_doc(part).bar_one(),
         Some(Time::Seconds(4.0))
     );
-    let song = SongFile::open(&carried).await.unwrap();
+    let song = SongFile::open(&carried).unwrap();
     assert_eq!(song.id().unwrap(), f.id);
     assert_eq!(song.session().session().bar_one(), Some(Time::Seconds(4.0)));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_folder_is_read_by_its_headers_not_its_names() {
+#[test]
+fn a_folder_is_read_by_its_headers_not_its_names() {
     let dir = tempfile::tempdir().unwrap();
     assert_eq!(Layout::of(dir.path()).unwrap(), Layout::Empty);
     // A `.session` that is a text file, and a session document under
     // another name: the document is the session, the text is nothing.
     std::fs::write(dir.path().join("Notes.session"), b"not a store").unwrap();
     let doc = dir.path().join("Renamed.fts-session");
-    SessionFile::create(&doc)
-        .await
-        .unwrap()
-        .save()
-        .await
-        .unwrap();
+    SessionFile::create(&doc).unwrap().save().unwrap();
     match Layout::of(dir.path()).unwrap() {
         Layout::Pair { project, session } => {
             assert_eq!(project, None);
@@ -373,9 +364,9 @@ async fn a_folder_is_read_by_its_headers_not_its_names() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_conversion_stopped_before_the_trash_finishes_on_the_next_run() {
-    let f = fixture().await;
+#[test]
+fn a_conversion_stopped_before_the_trash_finishes_on_the_next_run() {
+    let f = fixture();
     // Stopped after building and verifying: the Trash refused (here, a
     // file where its folder should be), so the new file waits beside the
     // old pair, which is untouched.
@@ -385,7 +376,7 @@ async fn a_conversion_stopped_before_the_trash_finishes_on_the_next_run() {
         dry_run: false,
         trash_dir: Some(blocked),
     };
-    assert!(convert(&f.song, &stopped).await.is_err());
+    assert!(convert(&f.song, &stopped).is_err());
     let pending = names(&f.song);
     assert!(pending.contains(&format!("{TITLE}.session.new")));
     assert!(pending.contains(&format!("{TITLE}.fts-session")));
@@ -393,7 +384,7 @@ async fn a_conversion_stopped_before_the_trash_finishes_on_the_next_run() {
         dry_run: false,
         trash_dir: Some(f.trash.clone()),
     };
-    let Outcome::Converted(report) = convert(&f.song, &options).await.unwrap() else {
+    let Outcome::Converted(report) = convert(&f.song, &options).unwrap() else {
         panic!()
     };
     assert_eq!(report.id, f.id.to_string());
@@ -404,8 +395,8 @@ async fn a_conversion_stopped_before_the_trash_finishes_on_the_next_run() {
 /// made, so no id): the song gets an id, and a session seeded from the
 /// project's own timing; an older session in a subfolder is not the song
 /// and is left alone.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
+#[test]
+fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
     use session_sync::model::{MarkerState, RegionState, SessionModel, TempoPoint as EngineTempo};
     let dir = tempfile::tempdir().unwrap();
     let song = dir.path().join("sleigh-ride");
@@ -475,7 +466,6 @@ async fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
             trash_dir: None,
         },
     )
-    .await
     .unwrap();
     let Outcome::Seeded(dry) = dry else {
         panic!("{dry:?}")
@@ -489,7 +479,7 @@ async fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
         dry_run: false,
         trash_dir: Some(trash.clone()),
     };
-    let Outcome::Seeded(report) = convert(&song, &options).await.unwrap() else {
+    let Outcome::Seeded(report) = convert(&song, &options).unwrap() else {
         panic!("seeded")
     };
     assert_eq!(report.sessions["main"].tempo_points, 2);
@@ -500,7 +490,7 @@ async fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
         Some(report.id.clone())
     );
 
-    let opened = SongFile::open(&file).await.unwrap();
+    let opened = SongFile::open(&file).unwrap();
     assert_eq!(opened.id().unwrap().to_string(), report.id);
     let s = opened.session().session();
     assert_eq!(
@@ -516,11 +506,11 @@ async fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
             project
         );
     });
-    opened.close().await.unwrap();
+    opened.close().unwrap();
 
     // Again: nothing; the older session below is untouched.
     assert!(matches!(
-        convert(&song, &options).await.unwrap(),
+        convert(&song, &options).unwrap(),
         Outcome::AlreadyOneFile { id: Some(_), .. }
     ));
     assert_eq!(
