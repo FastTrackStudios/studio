@@ -99,6 +99,7 @@ pub enum Refused {
     /// This person is not in an org of that name.
     NotIn(String),
     /// Not an invitation link.
+    #[cfg_attr(not(feature = "drive"), allow(dead_code))]
     NotALink,
     /// The link is used up, revoked, expired or made up.
     LinkGone,
@@ -107,6 +108,7 @@ pub enum Refused {
     /// Already in the org this invitation is for.
     AlreadyIn,
     /// The account to remove is not in the org (any more).
+    #[cfg_attr(not(feature = "drive"), allow(dead_code))]
     NotAMember,
     /// The issuer could not be reached, or said something else.
     Issuer(String),
