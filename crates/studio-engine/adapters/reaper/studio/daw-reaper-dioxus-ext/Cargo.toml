@@ -33,7 +33,7 @@ reaper-low.workspace = true
 reaper-high.workspace = true
 reaper-macros = { workspace = true }
 # The action-dispatch channel's receiver type.
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["full", "sync"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 

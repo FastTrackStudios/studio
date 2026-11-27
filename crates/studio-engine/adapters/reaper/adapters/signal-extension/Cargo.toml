@@ -27,7 +27,7 @@ fragile = { workspace = true }
 # mismatch in `daw[reaper]` + this crate's reaper_low.)
 reaper-low = { workspace = true }
 reaper-macros = { workspace = true }
-tokio = { workspace = true, features = ["time", "net", "rt"] }
+tokio = { workspace = true, features = ["full", "time", "net", "rt"] }
 eyre.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -37,5 +37,5 @@ tracing-subscriber.workspace = true
 signal = { workspace = true, features = ["daw"] }
 daw = { workspace = true }
 studio = { workspace = true, features = ["file", "test-harness"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 eyre.workspace = true

@@ -18,7 +18,7 @@ daw = { workspace = true }
 facet = { workspace = true }
 facet-postcard = { workspace = true, optional = true }
 rusty_link = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["full", "macros", "rt", "sync", "time"] }
 tokio-util = { version = "0.7" }
 tracing = { workspace = true }
 
@@ -28,5 +28,5 @@ tracing = { workspace = true }
 daw-sync = { path = ".", features = ["link", "network"] }
 daw = { workspace = true }
 eyre = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread", "sync", "time"] }
 

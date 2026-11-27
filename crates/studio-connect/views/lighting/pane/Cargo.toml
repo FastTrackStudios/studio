@@ -65,7 +65,7 @@ uuid = { workspace = true, optional = true }
 architect-extensions = { workspace = true, optional = true, features = ["guest"] }
 architect-extensions-dioxus = { workspace = true, optional = true, features = ["guest"] }
 architect-process-view = { workspace = true, optional = true, features = ["host"] }
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["full"] }
 
 # In a browser the visualizer is Ignition's web renderer (`ignition_viz::run_web`,
 # Bevy on WebGPU) in a canvas of the view's, and the session's presence is

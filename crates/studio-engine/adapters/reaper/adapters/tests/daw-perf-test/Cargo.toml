@@ -24,7 +24,7 @@ reaper-low.workspace = true
 reaper-macros.workspace = true
 
 # Async runtime (for RPC benchmarks)
-tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "net", "rt-multi-thread"] }
 
 # VOX RPC client (connect to daw-bridge socket)
 vox.workspace = true

@@ -22,7 +22,7 @@ base64 = { workspace = true }
 tracing.workspace = true
 futures.workspace = true
 uuid = { workspace = true }
-tokio = { workspace = true, features = ["sync", "time"] }
+tokio = { workspace = true, features = ["full", "sync", "time"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt", "macros"] }
+tokio = { workspace = true, features = ["full", "rt", "macros"] }

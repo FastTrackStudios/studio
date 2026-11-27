@@ -43,7 +43,7 @@ web-time = { workspace = true }
 # The mixer's track grouping (monarchy sort), natively. An engine-group
 # adapter: to untangle (docs/MONOREPO-MIGRATION.md).
 dynamic-template = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["full", "macros", "rt", "sync", "time"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = { workspace = true }

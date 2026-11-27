@@ -46,4 +46,4 @@ reaper-hwnd = { workspace = true }
 workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

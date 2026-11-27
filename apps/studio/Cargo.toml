@@ -60,7 +60,14 @@ app-shell-extensions = { git = "https://github.com/FastTrackStudios/app-shell", 
 serde_json = "1"
 js-sys = { version = "0.3", optional = true }
 # The browser's fetch, for bytes (waveforms, uploads).
-web-sys = { version = "0.3", optional = true, features = ["Window", "Request", "RequestInit", "Response", "Headers", "Blob", "BlobPropertyBag", "Url", "Performance", "Location"] }
+web-sys = { version = "0.3", optional = true, features = ["Window", "Request", "RequestInit", "Response", "Headers", "Blob", "BlobPropertyBag", "Url", "Performance", "Location", "UrlSearchParams", "Document", "Element"] }
+# The engine in the page (src/engine_web.rs): daw-standalone in-process,
+# out through an AudioWorklet, the same first-party FX as the desktop's.
+studio-engine = { workspace = true, optional = true, features = ["web"] }
+eyre = { workspace = true, optional = true }
+# A panic in the page said on its console from the first line of `main`
+# (the crash span, src/trace.rs, comes only once the app renders).
+console_error_panic_hook = { version = "0.1", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 # Charts: a song's .kf parsed and engraved to SVG in the page, each bar
@@ -125,7 +132,7 @@ default = []
 # Drive's code (the live sets, setlist files, songs' files), in every
 # build that has a renderer.
 drive = ["dep:drive-dioxus", "dep:drive-client", "dep:tracing"]
-web = ["dioxus/web", "drive", "dep:js-sys", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+web = ["dioxus/web", "drive", "dep:js-sys", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:studio-engine", "dep:eyre", "dep:console_error_panic_hook"]
 desktop = ["dioxus/desktop", "local"]
 # The same app drawn by Blitz (the GPU renderer Signal's panes and the
 # engine's views use), on a desktop and on iOS: what the one app runs on
@@ -227,3 +234,7 @@ sea-orm.workspace = true
 sea-orm-migration.workspace = true
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt", "net"] }
+# The browser boot test (tests/web_boot.rs): the fixture session's proxies
+# encoded where it runs, served from a folder of its own.
+fts-sample = { workspace = true, features = ["engine-native"] }
+tempfile = { workspace = true }

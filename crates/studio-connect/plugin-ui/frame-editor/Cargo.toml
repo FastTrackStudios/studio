@@ -18,7 +18,7 @@ figcraft-engine = { workspace = true }
 frame = {path = "../../../studio-core/frame/frame", features = ["theme"]}
 serde_json = { workspace = true }
 dioxus = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 fontique = { version = "0.12", features = ["fontconfig-dlopen"], optional = true }

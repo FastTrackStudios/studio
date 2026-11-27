@@ -42,7 +42,7 @@ architect = { workspace = true }
 facet = { workspace = true }
 daw-ui = { workspace = true, features = ["studio"] }
 uuid = { workspace = true }
-tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "net", "io-util", "rt-multi-thread"] }
 # The engine's own log (engine.log): src/owner.rs.
 tracing-subscriber = { workspace = true }
 # The running version, set first thing in `main` (utils::version) from

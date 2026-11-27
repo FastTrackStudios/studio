@@ -41,7 +41,7 @@ uuid = { workspace = true, features = ["js"] }
 architect = { workspace = true, features = ["vox", "platform", "local"] }
 live-doc = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread", "time"] }
 
 [lints]
 workspace = true

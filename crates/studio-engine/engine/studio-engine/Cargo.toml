@@ -124,6 +124,8 @@ web-sys = { workspace = true, optional = true, features = [
     "Storage",
     # Touch mode's default: whether the page's pointer is a finger.
     "MediaQueryList",
+    # A live set that moved on: the page opened again (`web_engine::watch_set`).
+    "Location",
 ] }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
@@ -217,8 +219,10 @@ native = ["dep:signal-clap", "engine-listen/native", "engine-edit/native", "engi
 show = ["engine-listen/show", "engine-edit/show", "engine-mix/show", "engine-project/show", "engine-collab/show", "native", "engine-core/show", "dep:ableton", "studio/convert-ableton"]
 # The browser: the engine in the page (`web_engine`), its audio out
 # (`engine_runtime::web_audio`) and its shared half (`engine_runtime::client`
-# for a page). No Dioxus: the page's UI is studio-panels' `web_host`.
-web = ["engine-listen/web", "engine-edit/web", "engine-mix/web", "engine-project/web", "engine-collab/web", "engine-core/web", "daw-view/web", "daw-view/standalone", "engine-runtime/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "daw-standalone/stream-ogg", "dep:fts-sample", "dep:futures-util", "dep:reqwest", "daw/standalone-session-file", "engine-domain/net", "dep:architect", "dep:uuid", "dep:daw-transport-sync", "daw-standalone/reapeaks", "dep:session-format", "session-format/read", "vox"]
+# for a page), with the first-party FX built in as on a desktop
+# (`engine-runtime/builtin`). No Dioxus: the page's UI is studio-panels'
+# `web_host`.
+web = ["engine-listen/web", "engine-edit/web", "engine-mix/web", "engine-project/web", "engine-collab/web", "engine-core/web", "daw-view/web", "daw-view/standalone", "engine-runtime/web", "engine-runtime/builtin", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "daw-standalone/stream-ogg", "dep:fts-sample", "dep:futures-util", "dep:reqwest", "daw/standalone-session-file", "engine-domain/net", "dep:architect", "dep:uuid", "dep:daw-transport-sync", "daw-standalone/reapeaks", "dep:session-format", "session-format/read", "vox"]
 # The `#[]` suites, which need a REAPER to talk to. Behind a
 # feature so an ordinary `cargo nextest run --workspace` does not try to
 # reach one that is not running — `just reaper-test` turns it on, via
@@ -299,3 +303,8 @@ fts-sample = { workspace = true, features = ["engine-native"] }
 
 [lints]
 workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Natively, everything tokio has (the workspace entry enables none, so
+# a browser build gets only the features above).
+tokio = { workspace = true, optional = true, features = ["full"] }

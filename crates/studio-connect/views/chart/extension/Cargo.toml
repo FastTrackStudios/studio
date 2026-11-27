@@ -33,7 +33,7 @@ serde_json = { workspace = true }
 kurbo = { workspace = true }
 base64 = "0.22"
 # A pane told to read its chart again, from an action's thread.
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["full", "sync"] }
 
 # Off the browser also its process copy (`guest`: vox and tokio).
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
@@ -45,7 +45,7 @@ architect = { workspace = true, features = ["vox", "host", "connect"] }
 live-doc = { workspace = true }
 session = { path = "../../../../studio-core/session/session", package = "session", features = ["sync", "extension"] }
 uuid = { workspace = true }
-tokio = { workspace = true, features = ["sync", "rt", "time"] }
+tokio = { workspace = true, features = ["full", "sync", "rt", "time"] }
 
 # In a browser: the chart on a WebGL2 canvas (`paint-web-ui`, src/web_pane.rs),
 # the app's Action List its view is given, and the page's timer. (The app's

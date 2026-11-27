@@ -12,11 +12,6 @@ pub static SWIPE_COMP: architect::action::ActionMeta = crate::client::actions::m
     "",
 );
 
-pub static SHOW_LANES: ActionMeta = crate::client::actions::meta(
-    "TRACK_SHOW_LANES",
-    "track_show_lanes",
-    "Show a track's lanes",
-    "Show every lane of `track` (a path, name or GUID; left out, the selected track — Alt+L) stacked in its row — the takes, the comp and the edit side by side, to hear and comp from — or only the lane that plays: `show` true or false, toggled when left out. On a folder, its row (shut, each lane folded from the tracks under it) and every track under it with lanes. The window's view, not the song's. Says whether they show now.",
-    "View",
-    "Alt+L",
-);
+/// `TRACK_SHOW_LANES`: the window's, on every target (a page shows lanes
+/// too).
+pub use crate::client::actions::SHOW_LANES;

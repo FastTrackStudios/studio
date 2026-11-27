@@ -680,15 +680,49 @@ pub mod web {
         r
     }
 
+    /// The bytes `range` of a file at `url` (a [`file_url`]): `206` and
+    /// that stretch, or `200` and the whole file from a node that ignores
+    /// ranges.
+    pub async fn range(url: &str, range: std::ops::Range<u64>) -> Result<(u16, Vec<u8>), String> {
+        if let Some(r) = disk::bytes(url) {
+            return r.map(|(code, b)| {
+                let (start, end) = (range.start as usize, (range.end as usize).min(b.len()));
+                (code, b.get(start..end).unwrap_or_default().to_vec())
+            });
+        }
+        let wanted = format!("bytes={}-{}", range.start, range.end.saturating_sub(1));
+        let mut span = call_span(None, "GET", url);
+        let r = bytes_with("GET", url, None, &span.traceparent(), &[("range", &wanted)]).await;
+        match &r {
+            Ok((code, b)) => {
+                span.set("http.response.status_code", *code);
+                span.set("http.response.body.size", b.len() as u64);
+            }
+            Err(e) => span.fail(e.clone()),
+        }
+        r
+    }
+
     async fn bytes_raw(
         method: &str,
         url: &str,
         body: Option<&[u8]>,
         traceparent: &str,
     ) -> Result<(u16, Vec<u8>), String> {
+        bytes_with(method, url, body, traceparent, &[]).await
+    }
+
+    async fn bytes_with(
+        method: &str,
+        url: &str,
+        body: Option<&[u8]>,
+        traceparent: &str,
+        extra: &[(&str, &str)],
+    ) -> Result<(u16, Vec<u8>), String> {
         let auth = headers();
         let mut h: Vec<(&str, &str)> = vec![("traceparent", traceparent)];
         h.extend(auth.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        h.extend_from_slice(extra);
         drive_dioxus::env::http_bytes(
             method,
             &drive_dioxus::mount::api(url),

@@ -250,7 +250,7 @@ impl Standalone {
         // slowest: what the plugins cost, beside the wall time it took.
         let (load_us, slowest_load_us) = (AtomicU64::new(0), AtomicU64::new(0));
         let (prepare_us, slowest_prepare_us) = (AtomicU64::new(0), AtomicU64::new(0));
-        let timed = |sum: &AtomicU64, slowest: &AtomicU64, began: std::time::Instant| {
+        let timed = |sum: &AtomicU64, slowest: &AtomicU64, began: web_time::Instant| {
             let us = u64::try_from(began.elapsed().as_micros()).unwrap_or(u64::MAX);
             sum.fetch_add(us, Ordering::Relaxed);
             slowest.fetch_max(us, Ordering::Relaxed);
@@ -272,34 +272,43 @@ impl Standalone {
         let next = AtomicUsize::new(0);
         let answers: Vec<std::sync::Mutex<Option<DawResult<()>>>> =
             loads.iter().map(|_| std::sync::Mutex::new(None)).collect();
-        let parent = tracing::Span::current();
-        std::thread::scope(|scope| {
-            for _ in 0..threads {
-                scope.spawn(|| {
-                    let _in = parent.enter();
-                    loop {
-                        let i = next.fetch_add(1, Ordering::Relaxed);
-                        let Some((target, chunk)) = loads.get(i) else {
-                            break;
-                        };
-                        let began = std::time::Instant::now();
-                        let loaded =
-                            self.set_state_chunk(project.clone(), target.clone(), chunk.clone());
-                        timed(&load_us, &slowest_load_us, began);
-                        if loaded.is_ok()
-                            && let Some(rate) = rate
-                        {
-                            let began = std::time::Instant::now();
-                            self.prepare_ahead(project, target, rate);
-                            timed(&prepare_us, &slowest_prepare_us, began);
-                        }
-                        if let Ok(mut slot) = answers[i].lock() {
-                            *slot = Some(loaded);
-                        }
-                    }
-                });
+        // One worker's turn: loads taken in order until none are left.
+        let work = || {
+            loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                let Some((target, chunk)) = loads.get(i) else {
+                    break;
+                };
+                let began = web_time::Instant::now();
+                let loaded = self.set_state_chunk(project.clone(), target.clone(), chunk.clone());
+                timed(&load_us, &slowest_load_us, began);
+                if loaded.is_ok()
+                    && let Some(rate) = rate
+                {
+                    let began = web_time::Instant::now();
+                    self.prepare_ahead(project, target, rate);
+                    timed(&prepare_us, &slowest_prepare_us, began);
+                }
+                if let Ok(mut slot) = answers[i].lock() {
+                    *slot = Some(loaded);
+                }
             }
-        });
+        };
+        // A page has no threads: its loads run here, one after another.
+        #[cfg(target_arch = "wasm32")]
+        work();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let parent = tracing::Span::current();
+            std::thread::scope(|scope| {
+                for _ in 0..threads {
+                    scope.spawn(|| {
+                        let _in = parent.enter();
+                        work();
+                    });
+                }
+            });
+        }
         let answers: Vec<DawResult<()>> = answers
             .into_iter()
             .map(|a| {

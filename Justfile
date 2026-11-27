@@ -113,6 +113,23 @@ test-fixtures *ARGS:
 test-room *ARGS:
     cargo nextest run --cargo-profile desktop-dev --target {{host}} -p {{engine_package}} --test room --no-fail-fast {{ARGS}}
 
+# Seam 3 for the web: the web build opens a fixture session in a headless browser and plays it through the engine in
+# the page (apps/studio/tests/web_boot.rs). Builds the web app first; WEBDRIVER (chromedriver or geckodriver) and
+# CHROME_BIN when set, else nixpkgs' chromedriver and the Chrome it matches. Extra arguments go to nextest
+[script]
+test-web-boot *ARGS:
+    set -euo pipefail
+    target="${CARGO_TARGET_DIR:-$PWD/target}"
+    (cd apps/studio && dx build --platform web --features web)
+    export STUDIO_WEB_DIST="$target/dx/Studio/debug/web/public"
+    if [ -z "${WEBDRIVER:-}" ]; then
+        # Both unfree (Google's builds): fetched, not built.
+        paths=$(NIXPKGS_ALLOW_UNFREE=1 nix build --impure --no-link --print-out-paths nixpkgs#chromedriver nixpkgs#google-chrome)
+        export WEBDRIVER="$(echo "$paths" | grep chromedriver)/bin/chromedriver"
+        export CHROME_BIN="$(echo "$paths" | grep google-chrome)/bin/google-chrome"
+    fi
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --test web_boot --run-ignored only --no-fail-fast {{ARGS}}
+
 # The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
 ci-local BASE="":
     bash scripts/ci-local.sh {{BASE}}

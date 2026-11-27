@@ -36,7 +36,7 @@ path = "src/lib.rs"
 daw-transport-sync.workspace = true
 reaper-medium = { workspace = true }
 reaper-low = { workspace = true }
-tokio = { workspace = true, features = ["net", "sync", "time", "rt", "macros"] }
+tokio = { workspace = true, features = ["full", "net", "sync", "time", "rt", "macros"] }
 tracing.workspace = true
 # Stable peer identifiers across restarts of the same machine.
 uuid = { version = "1", features = ["v4", "serde"] }

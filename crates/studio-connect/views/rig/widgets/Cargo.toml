@@ -25,4 +25,4 @@ nice-plug-dioxus = { workspace = true, optional = true }
 piano = ["dep:plugin-core", "plugin-core?/gui", "dep:nice-plug-dioxus"]
 
 [dev-dependencies]
-tokio.workspace = true
+tokio = { workspace = true, features = ["full"] }

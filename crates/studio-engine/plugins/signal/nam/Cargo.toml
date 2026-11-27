@@ -30,7 +30,7 @@ signal-nam.workspace = true
 sampler = { workspace = true }
 # The in-process engine: a memory-link server for the editor's clients.
 architect = { workspace = true, features = ["local", "vox"] }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread"] }
 tracing.workspace = true
 
 # The NAM inference engine (load .nam files, run mono inference).

@@ -6,6 +6,10 @@
 //! The element lives in the page, not in the component tree, so it plays
 //! on while sheets and bars come and go; a script holds it and talks to
 //! [`Player`] over `dioxus.send` / `dioxus.recv`.
+//!
+//! A song in a session folder the list knows is the engine's
+//! (`crate::engine_web`): the element stays silent for it, and plays only
+//! a song with no folder, or one whose session did not open.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -189,6 +193,7 @@ async fn warm(url: &str) {
 #[component]
 pub fn Player() -> Element {
     let app = use_app();
+    let engine = use_context::<Signal<crate::engine_web::WebPlay>>();
     let eval = use_hook(|| document::eval(SCRIPT));
 
     // What the element says: the playhead, the length, the end.
@@ -209,6 +214,13 @@ pub fn Player() -> Element {
                     // The pause an ending fires comes before its end: the
                     // end moves on, still playing.
                     if !ended && m["x"].as_bool().unwrap_or(false) {
+                        continue;
+                    }
+                    // The engine's song: what the element says is not about it.
+                    if engine
+                        .peek()
+                        .owns(np.peek().as_ref().and_then(|n| n.place()))
+                    {
                         continue;
                     }
                     np.with_mut(|n| {
@@ -244,6 +256,8 @@ pub fn Player() -> Element {
         .as_ref()
         .and_then(|n| n.song().map(|s| s.title.to_string()));
     let place = np.as_ref().and_then(|n| n.place().cloned());
+    let owned = engine.read().owns(place.as_ref());
+    let key = key.map(|k| format!("{k}#{owned}"));
     let bpm = np
         .as_ref()
         .and_then(|n| n.song().and_then(|s| s.tempo))
@@ -266,6 +280,11 @@ pub fn Player() -> Element {
             let mut np = app.np;
             if key.is_none() {
                 let _ = eval.send(json!({ "play": false }));
+                return;
+            }
+            // The engine plays it: the element lets its last song go.
+            if owned {
+                let _ = eval.send(json!({ "src": "", "play": false }));
                 return;
             }
             spawn(async move {
@@ -337,6 +356,10 @@ pub fn Player() -> Element {
             spawn(async move {
                 for (k, t) in titles.iter().enumerate().skip(i + 1) {
                     let place = places.get(k).and_then(Option::as_ref);
+                    // The engine brings in the songs it plays.
+                    if place.is_some() {
+                        continue;
+                    }
                     if let Some(h) = find_for(place, &spaces, t).await {
                         warm(&web::file_url(&h)).await;
                     }
@@ -349,8 +372,10 @@ pub fn Player() -> Element {
     let playing = np.as_ref().is_some_and(|n| n.playing);
     {
         let eval = eval.clone();
-        use_effect(use_reactive!(|playing| {
-            let _ = eval.send(json!({ "play": playing }));
+        use_effect(use_reactive!(|playing, owned| {
+            if !owned {
+                let _ = eval.send(json!({ "play": playing }));
+            }
         }));
     }
 
@@ -360,6 +385,11 @@ pub fn Player() -> Element {
         let mut seek = app.seek;
         use_effect(move || {
             if let Some(t) = seek() {
+                // The engine's song: the engine takes the jump.
+                let np = app.np.peek();
+                if engine.peek().owns(np.as_ref().and_then(|n| n.place())) {
+                    return;
+                }
                 let _ = eval.send(json!({ "seek": t }));
                 seek.set(None);
             }

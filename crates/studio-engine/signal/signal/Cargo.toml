@@ -21,13 +21,13 @@ signal-proto.workspace = true
 signal-storage.workspace = true
 signal-nam.workspace = true
 daw = { workspace = true, optional = true }
-tokio.workspace = true
+tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 utils.workspace = true
 
 [dev-dependencies]
 daw = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 eyre.workspace = true
 uuid.workspace = true
 futures.workspace = true

@@ -28,7 +28,7 @@ vox-stream.workspace = true
 tracing.workspace = true
 # `rt` for `tokio::task::spawn` in socket_publisher (was `moire::task::spawn`).
 # `time` for the TransportSync position pump's tick.
-tokio = { workspace = true, features = ["net", "rt", "time"] }
+tokio = { workspace = true, features = ["full", "net", "rt", "time"] }
 
 # RPP chunk parsing/serialization for chunk-based FX manipulation. This is
 # the RPP *output* serializer — mandatory, used by every importer.
@@ -78,7 +78,7 @@ base64 = { workspace = true }
 daw = { workspace = true, features = ["standalone-audio"] }
 studio = { workspace = true, features = ["test-harness"] }
 eyre.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread", "time"] }
 vox.workspace = true
 
 [features]

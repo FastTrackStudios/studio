@@ -340,6 +340,10 @@ pub fn install(daw: &daw_standalone::Standalone, library: Library) {
     // — is the engine's own, no plugin file loaded.
     // And signal's rigs, with the `signal` feature: the bass rig's NAM
     // amp and cab, the drum kit's sampled voices.
+    // Their automated parameters read as they write them, wherever they
+    // run (a desktop's engine, a page's).
+    #[cfg(feature = "builtin")]
+    crate::client::automation::install_param_reading(builtin::engine::reading);
     #[cfg(feature = "builtin")]
     let factory: Arc<dyn FxFactory> = Arc::new(builtin::engine::Chain(vec![
         Arc::new(builtin::engine::BuiltinFx),

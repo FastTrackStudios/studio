@@ -39,6 +39,9 @@ tokio = { version = "1", default-features = false, features = ["sync"] }
 futures = { workspace = true }
 uuid = { version = "1", features = ["v4"] }
 web-time = { workspace = true }
+# The live taps' rings (`audio_engine::render::live_tap`), and natively the
+# renderer's live-input and live-MIDI rings: lock-free, pure Rust, every target.
+rtrb = { workspace = true }
 
 # Optional: in-process Daw client bootstrap (LocalCaller-style helper).
 daw-control = { workspace = true, optional = true }
@@ -83,11 +86,10 @@ base64 = { workspace = true }
 # mmap-backed PCM streaming (native only; WASM falls back to decode) —
 # fts-sample's `mapped` feature (memmap2 only, none of the engine codecs).
 fts-sample = { workspace = true, features = ["mapped"] }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 # Shared device-selection / open-stream plumbing + lock-free input ring.
 # Native-only (cpal device streams); pulled in by the `audio` feature.
 audio = { workspace = true, features = ["io", "monitor"], optional = true }
-rtrb = { workspace = true, optional = true }
 # The set engine's voice list, swapped in whole from control threads and
 # read by the audio callback without a lock (`audio_engine::set_audio`).
 arc-swap = { workspace = true, optional = true }
@@ -121,7 +123,7 @@ daw-control = { workspace = true }
 eyre = { workspace = true }
 # `streamed_playback` encodes the proxy it streams.
 fts-sample = { workspace = true, features = ["engine-native"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread", "test-util"] }
 base64 = { workspace = true }
 dawfile-reaper = { workspace = true }
 tempfile = { workspace = true }
@@ -133,15 +135,13 @@ midi-input = ["audio", "dep:midi", "midi?/native"]
 # Resident source decoding (fts-sample/symphonium) without cpal.
 # WASM-compatible — the decoder is pure Rust and doesn't touch the audio
 # device. `budget` bounds the decoded-bytes accounting (see materialize).
-# `rtrb` because the renderer's live-input and live-MIDI rings are built
-# natively whenever it is — a native-only target dep, so a no-op on wasm.
-decode = ["fts-sample/load", "fts-sample/decode-compressed", "fts-sample/budget", "dep:rtrb"]
+decode = ["fts-sample/load", "fts-sample/decode-compressed", "fts-sample/budget"]
 # Full audio engine = decode + cpal output stream. Native-only audio
 # output (cpal+wasm-bindgen on WASM, but cpal pulls JS bindings).
-# `daw-audio-io` + `rtrb` are native-only (`cfg(not(wasm32))` target
+# `daw-audio-io` is native-only (`cfg(not(wasm32))` target
 # deps); enabling them here is a no-op on wasm32 where Cargo ignores
 # the target dep, and the live-input paths are themselves `cfg`-gated.
-audio = ["decode", "dep:cpal", "audio/io", "dep:rtrb", "dep:arc-swap"]
+audio = ["decode", "dep:cpal", "audio/io", "dep:arc-swap"]
 # Native PipeWire duplex engine (`DuplexAudioEngine`) — one realtime callback
 # (input+output, no ring) via daw-audio-io's `pw_filter` backend. Linux-only.
 # PipeWire is DEFAULT on Linux (daw-audio-io target-gates it); alias kept

@@ -20,7 +20,7 @@ eyre = { workspace = true }
 facet = { workspace = true }
 facet-styx = { workspace = true }
 midir = { workspace = true, optional = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 vox = { workspace = true }
 

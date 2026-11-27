@@ -350,7 +350,7 @@ naga = { workspace = true, features = ["wgsl-in"] }
 png = "0.18"
 pollster = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["full", "macros", "rt"] }
 wgpu = "30"
 plugin-ui = { path = ".", features = [
     "comp", "comp-native", "comp-profiles", "comp-ui", "comp-viz",

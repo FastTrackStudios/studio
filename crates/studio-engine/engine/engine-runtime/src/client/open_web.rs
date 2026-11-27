@@ -4,8 +4,7 @@
 //! host drives the engine its own way (`web_host`).
 
 pub use crate::open_core::{
-    AsItIs, Media, OpenHost, Opened, ProjectText, SongPlan, is_session, project_text,
-    project_text_in,
+    AsItIs, Media, OpenHost, Opened, ProjectText, SongPlan, is_session, project_text_in,
 };
 
 /// A page's runtime stand-in and the song on screen: the views' contract's

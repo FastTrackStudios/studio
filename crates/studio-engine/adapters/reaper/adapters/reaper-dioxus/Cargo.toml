@@ -21,7 +21,7 @@ daw-module = { workspace = true }
 # DockHostService trait + DockHandle/DockEvent types
 daw-proto = { workspace = true }
 architect = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["full", "sync"] }
 thiserror.workspace = true
 
 # REAPER API access

@@ -23,4 +23,4 @@ dioxus = { workspace = true }
 dioxus-test = { workspace = true }
 fts-audio-ui = { workspace = true }
 dsp = { path = "../../crates/studio-connect/plugin-ui/plugin-ui", package = "plugin-ui", features = ["comp", "comp-native", "comp-profiles", "comp-ui", "delay", "delay-native", "delay-profiles", "delay-ui", "delay-viz", "eq", "eq-native", "eq-ui", "reverb", "reverb-native", "reverb-profiles", "reverb-ui", "reverb-viz", "saturate", "saturate-native", "saturate-profiles", "saturate-ui", "saturate-viz"] }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["full", "macros", "rt"] }

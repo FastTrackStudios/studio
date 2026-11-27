@@ -46,7 +46,7 @@ daw-standalone = { workspace = true, optional = true }
 # wasm build gets `daw::get()`/`service`/`Mounted`/`LayerRouter` (all runtime-
 # free); `block_on` / `init_from_parts` are `#[cfg(not(wasm32))]` in lib.rs.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
 [features]
 standalone = ["dep:daw-standalone"]
@@ -89,5 +89,5 @@ workspace = true
 
 [dev-dependencies]
 architect = { workspace = true, features = ["vox", "local"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 eyre = { workspace = true }

@@ -45,7 +45,7 @@ facet-styx = { workspace = true }
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 
 [[bin]]
 name = "dynamic-template"

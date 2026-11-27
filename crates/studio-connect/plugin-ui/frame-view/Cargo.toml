@@ -21,7 +21,7 @@ dioxus = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [[bin]]
 name = "frame-surface"

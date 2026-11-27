@@ -126,6 +126,15 @@ pub fn if_docked(request: DockRequest) -> bool {
     docked()
 }
 
+pub static SHOW_LANES: ActionMeta = meta(
+    "TRACK_SHOW_LANES",
+    "track_show_lanes",
+    "Show a track's lanes",
+    "Show every lane of `track` (a path, name or GUID; left out, the selected track — Alt+L) stacked in its row — the takes, the comp and the edit side by side, to hear and comp from — or only the lane that plays: `show` true or false, toggled when left out. On a folder, its row (shut, each lane folded from the tracks under it) and every track under it with lanes. The window's view, not the song's. Says whether they show now.",
+    "View",
+    "Alt+L",
+);
+
 pub static VERSIONS: ActionMeta = meta(
     "SESSION_VERSIONS",
     "session_versions",

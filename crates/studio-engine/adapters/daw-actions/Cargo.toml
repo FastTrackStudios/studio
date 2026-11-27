@@ -17,7 +17,7 @@ architect = { workspace = true, features = ["vox"] }
 music-catalog = { workspace = true }
 eyre = { workspace = true }
 tracing = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["full", "sync"] }
 
 [lints]
 workspace = true

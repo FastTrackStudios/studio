@@ -33,6 +33,14 @@
 //! decoded — the references alone come in, the multitracks are not
 //! offered, and the project still shows every track and item. [`open`] is
 //! [`Listen::Full`]: as above.
+//!
+//! **Hosted songs.** A host that reaches a song's files itself — Studio's
+//! web build, a session folder in Drive — hands them over as a
+//! [`SongSource`](crate::song_stream::SongSource) ([`WebSource::Hosted`],
+//! [`HostedSong`]); more songs open into the running engine with
+//! [`add_song`]. A session opened in the app is the listener's own to mix,
+//! so it is heard by its stems from the start. [`set_playing`], [`seek`]
+//! and [`position`] are its transport.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -93,6 +101,32 @@ pub enum WebSource {
     /// file URLs ([`engine_runtime::link`]). How deep it is heard is the
     /// link's layer, never more.
     Link { url: String },
+    /// Songs the host reaches itself, each by its files ([`HostedSong`]),
+    /// the first opened first: heard by their stems.
+    Hosted(Vec<HostedSong>),
+}
+
+/// A song the host that embeds the page reaches itself — Studio's web
+/// build, a session folder in Drive — by its files, and what to call it.
+#[derive(Clone)]
+pub struct HostedSong {
+    pub title: String,
+    pub source: Arc<dyn crate::song_stream::SongSource>,
+}
+
+impl PartialEq for HostedSong {
+    fn eq(&self, other: &Self) -> bool {
+        self.title == other.title && Arc::ptr_eq(&self.source, &other.source)
+    }
+}
+
+impl std::fmt::Debug for HostedSong {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HostedSong")
+            .field("title", &self.title)
+            .field("source", &self.source.label())
+            .finish()
+    }
 }
 
 pub use crate::open_progress::Progress;
@@ -114,6 +148,8 @@ struct Wanted {
 enum Origin {
     /// A song of an Architect share link.
     Link(engine_runtime::link::LinkSong),
+    /// A song whose files the host reaches ([`HostedSong`]).
+    Hosted(Arc<dyn crate::song_stream::SongSource>),
     /// A copy bundled with the page.
     Bundled {
         name: String,
@@ -573,6 +609,15 @@ pub async fn open_with(
                 })
                 .collect()
         }
+        WebSource::Hosted(songs) => songs
+            .iter()
+            .map(|song| Wanted {
+                title: Some(song.title.clone()),
+                note: None,
+                folder: None,
+                from: Origin::Hosted(Arc::clone(&song.source)),
+            })
+            .collect(),
         WebSource::Bundled {
             name,
             rpp_url,
@@ -627,7 +672,11 @@ pub async fn open_with(
     // (a share link's set) when the device can carry them; else the
     // reference, saying why ([`reference_reason`]).
     let carried = matches!(source, WebSource::Link { .. }) && carry().carries();
-    MULTITRACKS.with(|m| m.set((chose_multitracks() || carried) && self::listen().hears_stems()));
+    // A hosted session is the listener's own to mix: its stems from the start.
+    let hosted = matches!(source, WebSource::Hosted(_));
+    MULTITRACKS.with(|m| {
+        m.set((chose_multitracks() || carried || hosted) && self::listen().hears_stems());
+    });
     HELD_BACK.with(|h| h.set(matches!(source, WebSource::Link { .. }) && !carried));
     ON_LINK.with(|l| l.set(matches!(source, WebSource::Link { .. })));
     if crate::stream_quality::current() == crate::stream_quality::Quality::Full {
@@ -770,12 +819,111 @@ pub async fn open_with(
     Ok((engine, setlist))
 }
 
+/// Open another hosted song into the page's running engine, behind the one
+/// on screen (it does not become current: [`switch_song`] it), and say it
+/// read back. The page's engine must be up ([`open`]).
+///
+/// # Errors
+///
+/// No engine yet, or the song's files did not come or did not open.
+pub async fn add_song(song: HostedSong) -> eyre::Result<crate::setlist::Song> {
+    let standalone = WEB
+        .with(|web| web.borrow().as_ref().map(|web| web.standalone.clone()))
+        .ok_or_else(|| eyre::eyre!("the page's engine is not up"))?;
+    let want = Wanted {
+        title: Some(song.title.clone()),
+        note: None,
+        folder: None,
+        from: Origin::Hosted(song.source),
+    };
+    let fetched = crate::retry::until_ok(Some(6), || fetch_song(&want), |_| {}).await?;
+    let (song, kept) = in_slices(async {
+        let loaded = open_fetched(&standalone, want.title.clone(), fetched).await?;
+        read_back(loaded).await
+    })
+    .await?;
+    let project = song.project.clone();
+    WEB.with(|web| {
+        if let Some(web) = web.borrow_mut().as_mut() {
+            web.songs.insert(project.clone(), kept);
+            web.order.push(project.clone());
+        }
+    });
+    tracing::info!(song.title = %song.name, "web: a hosted song opened");
+    Ok(song)
+}
+
+/// Play the song on screen, or pause it where it is. Off the caller: the
+/// transport's reading ([`position`]) says when it has.
+pub fn set_playing(play: bool) {
+    wasm_bindgen_futures::spawn_local(async move {
+        let Some(transport) = current_transport().await else {
+            return;
+        };
+        let done = if play {
+            transport.play().await
+        } else {
+            transport.pause().await
+        };
+        if let Err(e) = done {
+            tracing::warn!(error = %e, play, "web: the transport did not move");
+        }
+    });
+}
+
+/// Move the song on screen to `seconds`.
+pub fn seek(seconds: f64) {
+    wasm_bindgen_futures::spawn_local(async move {
+        let Some(transport) = current_transport().await else {
+            return;
+        };
+        if let Err(e) = transport.set_position(seconds.max(0.0)).await {
+            tracing::warn!(error = %e, seconds, "web: the transport did not seek");
+        }
+    });
+}
+
+/// Where the song on screen is, in seconds as heard (what the device has
+/// put out), and whether it is playing. `(0, false)` before the engine is up.
+#[must_use]
+pub fn position() -> (f64, bool) {
+    // Not before: the transport's poller is made once, on first use, and
+    // made with no engine it would read nothing for the page's lifetime.
+    if !is_up() {
+        return (0.0, false);
+    }
+    crate::engine::Transport::shared().map_or((0.0, false), crate::engine::Transport::read)
+}
+
+/// Whether the page's engine is up: its first song open ([`open`]).
+#[must_use]
+pub fn is_up() -> bool {
+    WEB.with(|web| web.borrow().is_some())
+}
+
+async fn current_transport() -> Option<daw_control::Transport> {
+    let daw = daw_control::Daw::try_get()?;
+    let project = daw.current_project().await.ok()?;
+    Some(project.transport())
+}
+
 /// A song's files, fetched: mirrored from its share link into memory (its
 /// proxies stream later, by range), or the page's bundled copy.
 async fn fetch_song(want: &Wanted) -> eyre::Result<Fetched> {
     use crate::folder::Memory;
     use crate::song_stream::{Keep, mirror};
     match &want.from {
+        Origin::Hosted(source) => {
+            let song = mirror(Arc::clone(source), Keep::Memory(Memory::new()))
+                .await?
+                .with_listen(listen());
+            Ok(Fetched {
+                folder: Arc::clone(&song.folder),
+                path: song.project.clone(),
+                streamed: Some(song),
+                by_stems: true,
+            })
+        }
         Origin::Link(song) => {
             let song = mirror(Arc::new(song.clone()), Keep::Memory(Memory::new()))
                 .await?

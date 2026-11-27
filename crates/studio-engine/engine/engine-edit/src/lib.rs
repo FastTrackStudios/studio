@@ -9,6 +9,7 @@
 // modules and the window's shared half); this crate's modules shadow it.
 pub use engine_core::*;
 
+#[cfg(feature = "native")]
 pub mod actions;
 
 #[cfg(feature = "native")]
@@ -78,5 +79,10 @@ use architect::action::{ActionError, ActionList};
 ///
 /// The first registration the list refuses ([`ActionError::Duplicate`]).
 pub fn register(list: &ActionList) -> Result<(), ActionError> {
-    actions::edit::register(list)
+    // The desktop engine's: none off it.
+    #[cfg(feature = "native")]
+    actions::edit::register(list)?;
+    #[cfg(not(feature = "native"))]
+    let _ = list;
+    Ok(())
 }
