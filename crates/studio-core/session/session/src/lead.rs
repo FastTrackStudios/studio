@@ -47,7 +47,12 @@ impl Drop for Leader {
 
 impl Leader {
     /// Serves session `doc`'s presence and this host's clock on `bind`
-    /// (`0.0.0.0:4142`), and joins it as the leader.
+    /// (`127.0.0.1:4142`), and joins it as the leader.
+    ///
+    /// The presence is served ungated: anyone who reaches `bind` may
+    /// write it, the transport included. Bind it to loopback; what other
+    /// machines follow goes through a door of its own (a room's,
+    /// `room::gate`; studio#362).
     ///
     /// # Errors
     ///
@@ -60,6 +65,7 @@ impl Leader {
         let port = bind.rsplit(':').next().unwrap_or("4142").to_owned();
         let bind = bind.to_owned();
         let server = tokio::spawn(async move {
+            // Ungated: for loopback only (see above).
             let _ = EngineHost::ungated(router, bind).serve().await;
         })
         .abort_handle();

@@ -96,6 +96,7 @@ async fn a_leader_on_its_nodes_presence_is_followed() {
     );
     let bind = format!("127.0.0.1:{port}");
     tokio::spawn(async move {
+        // Ungated: a test's, on loopback.
         let _ = EngineHost::ungated(router, bind).serve().await;
     });
     let url = format!("ws://127.0.0.1:{port}/vox");

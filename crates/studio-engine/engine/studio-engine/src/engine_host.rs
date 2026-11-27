@@ -11,6 +11,9 @@
 //!   by default (`--socket` names another) — what a local GUI attaches to;
 //! - with `--listen ADDR`, over WebSocket too (`ws://ADDR/vox`), for a phone,
 //!   a browser or another machine. Off unless asked: it is the network.
+//!   Behind the engine's door (`crate::gate`): a connection is admitted
+//!   only with the engine's token, which a client on this machine reads
+//!   with `crate::gate::local_token` (studio#362).
 //!
 //! Where it is goes in `$XDG_CONFIG_HOME/fts/engines/studio-<pid>.json`
 //! (pid, socket, MCP and WebSocket addresses), removed when it stops
@@ -108,8 +111,10 @@ pub fn run(args: &Args) -> eyre::Result<()> {
     };
     engine.runtime.spawn(serve_socket(listener, router.clone()));
     if let Some(addr) = &args.listen {
-        // Ungated as before: no PermissionsGate on this engine yet (FastTrackStudios/studio#362).
-        let host = architect::host::EngineHost::ungated(router, addr.clone());
+        // The network: only who presents the engine's token gets in.
+        let host = crate::gate::EngineGate::load()
+            .map_err(|e| eyre::eyre!("the engine's token: {e}"))?
+            .host(router, addr.clone());
         let addr = addr.clone();
         engine.runtime.spawn(async move {
             if let Err(e) = host.serve().await {

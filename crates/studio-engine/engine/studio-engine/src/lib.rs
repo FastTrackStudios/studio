@@ -85,6 +85,9 @@ pub use engine_runtime::client::stream_quality;
 /// extension run.
 #[cfg(all(feature = "native", unix, not(target_os = "ios")))]
 pub mod engine_host;
+/// The engine's door: who its `/vox` and iroh lanes admit (studio#362).
+#[cfg(feature = "native")]
+pub mod gate;
 #[cfg(feature = "native")]
 pub mod studio_engine;
 pub use daw_view::take_colors;

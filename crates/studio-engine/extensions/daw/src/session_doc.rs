@@ -369,6 +369,14 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
 
 /// Serves the open session's presence and the host's clock, once per
 /// session, on `FTS_DAW_LEAD_PORT` (4142) or the next port free.
+///
+/// On loopback unless `FTS_DAW_LEAD_BIND` names another address: the
+/// presence is ungated, and whoever reaches it can write the transport
+/// everyone follows. A room shares the transport with other machines
+/// through its own door (`room::gate`), not this (studio#362). A lighting
+/// desk on the network that follows the session's clock (Ignition's
+/// `--clock session:ws://<this machine>:4142/vox#…`) needs
+/// `FTS_DAW_LEAD_BIND=0.0.0.0`, on a network the owner trusts.
 fn lead() {
     let Some(id) = OPEN
         .lock()
@@ -388,13 +396,17 @@ fn lead() {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(4142);
+    let host = std::env::var("FTS_DAW_LEAD_BIND")
+        .ok()
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "127.0.0.1".to_owned());
     let mut last = String::new();
     for port in base..base.saturating_add(10) {
         // Free: the leader's own dial would otherwise find another host.
-        if std::net::TcpListener::bind(("0.0.0.0", port)).is_err() {
+        if std::net::TcpListener::bind((host.as_str(), port)).is_err() {
             continue;
         }
-        match rt.block_on(Leader::serve(&format!("0.0.0.0:{port}"), id)) {
+        match rt.block_on(Leader::serve(&format!("{host}:{port}"), id)) {
             Ok(leader) => {
                 // A leader that serves its own presence has a URL (one on
                 // its node's presence would have none).
