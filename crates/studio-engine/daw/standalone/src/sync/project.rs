@@ -531,6 +531,17 @@ fn end_step(slot: &mut super::daw::ProjectSlot, label: &str) -> Option<String> {
 }
 
 impl Standalone {
+    /// Whether an undo step is open on `project` (begun, not yet ended): an
+    /// action that would make a step of its own joins that one instead, as
+    /// a step begun inside another would replace it.
+    #[must_use]
+    pub fn undo_step_open(&self, project: &ProjectContext) -> bool {
+        resolve_ctx_guid(self, project)
+            .and_then(|guid| self.cell(&guid))
+            .and_then(|cell| cell.read().map(|slot| slot.history.pending.is_some()))
+            .unwrap_or(false)
+    }
+
     /// Undo (`Side::Before`) or redo (`Side::After`) the project's last
     /// step, moving it to the other stack. Whether there was one.
     fn step_back(&self, project: &ProjectContext, side: crate::journal::Side) -> bool {

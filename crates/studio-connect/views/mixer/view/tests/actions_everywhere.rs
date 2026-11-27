@@ -39,7 +39,8 @@ const ALLOWED: &[Allowance] = &[
         pattern: "applier.send(",
         count: 1,
         why: "the racks' worker: a gesture's live edits, then its FX_SET / \
-              FX_ENABLE / RIG_BLOCK_SET commits (Edit::Run) in order after them",
+              FX_ENABLE / RIG_BLOCK_SET commits (Edit::Run) in order after them; \
+              the routing close-up's too, committed as SEND_SET / SEND_REMOVE",
     },
     Allowance {
         file: "mixer_panel.rs",

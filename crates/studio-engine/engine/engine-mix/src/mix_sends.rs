@@ -358,9 +358,9 @@ pub fn add(daw: &Standalone, project: &ProjectContext, a: &AddArg) -> Result<Add
         ));
     }
     let label = "Add send";
-    daw::service::Projects::begin_undo_block(daw, project.clone(), label);
-    let made = add_send(daw, project, (&from, &to), a.level_db.unwrap_or(0.0), mode);
-    daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+    let made = one_step(daw, project, label, || {
+        add_send(daw, project, (&from, &to), a.level_db.unwrap_or(0.0), mode)
+    });
     let index = made?;
     let send = Routing::sends(daw, project.clone(), TrackRef::Guid(from.clone()))
         .into_iter()
@@ -478,8 +478,7 @@ pub fn set(daw: &Standalone, project: &ProjectContext, a: &SetArg) -> Result<Sen
         RouteRef::Index(send.index),
     );
     let label = "Set send";
-    daw::service::Projects::begin_undo_block(daw, project.clone(), label);
-    let done = (|| -> Result<(), String> {
+    let done = one_step(daw, project, label, || -> Result<(), String> {
         if let Some(level) = a.level_db {
             Routing::set_volume(daw, project.clone(), at.clone(), gain(level))
                 .map_err(|e| e.to_string())?;
@@ -502,8 +501,7 @@ pub fn set(daw: &Standalone, project: &ProjectContext, a: &SetArg) -> Result<Sen
             .map_err(|e| e.to_string())?;
         }
         Ok(())
-    })();
-    daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+    });
     done?;
     crate::actions::list().changed("track", &from);
     let now = Routing::get_route(daw, project.clone(), at).ok_or("the send went missing")?;
@@ -539,7 +537,10 @@ fn remove(daw: &Standalone, project: &ProjectContext, a: &RemoveArg) -> Result<R
     // Last first: taking one off renumbers the ones after it.
     doomed.sort_unstable_by(|a, b| b.cmp(a));
     let label = "Remove send";
-    daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+    let own = !daw.undo_step_open(project);
+    if own {
+        daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+    }
     let mut removed = 0u32;
     let mut failed = None;
     for index in doomed {
@@ -549,7 +550,9 @@ fn remove(daw: &Standalone, project: &ProjectContext, a: &RemoveArg) -> Result<R
             Err(e) => failed = Some(e.to_string()),
         }
     }
-    daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+    if own {
+        daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+    }
     crate::actions::list().changed("track", &from);
     span.record("mix.removed", removed);
     span.record("mix.ms", began.elapsed().as_secs_f64() * 1e3);
@@ -580,4 +583,24 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         remove(daw, &project, &a)
     })?;
     Ok(())
+}
+
+/// Run `f` as one undo step named `label` — or inside the step already
+/// open (the routing close-up's slider commits its SEND_SET in its own
+/// gesture's step): a step begun inside another would replace it.
+fn one_step<R>(
+    daw: &daw::standalone::Standalone,
+    project: &daw::service::ProjectContext,
+    label: &str,
+    f: impl FnOnce() -> R,
+) -> R {
+    let own = !daw.undo_step_open(project);
+    if own {
+        daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+    }
+    let out = f();
+    if own {
+        daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+    }
+    out
 }

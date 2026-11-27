@@ -9988,6 +9988,15 @@ impl Shared {
         let _ = (id, args);
     }
 
+    /// Edits to the engine on the racks' worker, in order with theirs: the
+    /// routing close-up's live edits and its send actions (`crate::routing`).
+    pub fn send_edits(&self, edits: impl IntoIterator<Item = crate::engine::Edit>) {
+        #[cfg(any(feature = "native", feature = "web"))]
+        self.send(edits);
+        #[cfg(not(any(feature = "native", feature = "web")))]
+        drop(edits.into_iter());
+    }
+
     /// Edits to the engine, in order, on the racks' own worker.
     #[cfg(any(feature = "native", feature = "web"))]
     fn send(&self, edits: impl IntoIterator<Item = crate::engine::Edit>) {
