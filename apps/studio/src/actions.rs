@@ -143,7 +143,7 @@ mod imp {
         "STUDIO_ORG_CREATE",
         "Create an organization",
         "Orgs",
-        "Creates an organization at the account server, as the account signed in here, which becomes its owner: `name`, and `slug` (its id in links and documents; from the name when left out). Studio is then in it, and STUDIO_ORGS lists it. Answers its `org` (the slug), `name` and the account's `role` (owner)."
+        "Creates an organization at the account server, as the account signed in here, which becomes its owner: `name`, and `slug` (its id in links and documents; from the name when left out). STUDIO_ORGS lists it, and Studio goes into it just after answering (on desktop it starts again in it, as after STUDIO_SIGN_IN). Answers its `org` (the slug), `name` and the account's `role` (owner)."
     );
     meta!(
         ACCOUNT,
@@ -800,6 +800,14 @@ mod imp {
             .await
             .map_err(|e| e.to_string())?;
         crate::org_create::joined(app, &made);
+        // Once this answer is on its way: going into another org starts
+        // a desktop Studio again (Drive's reload), and an answer sent
+        // after that never arrives.
+        let org = made.org.clone();
+        spawn(async move {
+            architect::platform::sleep(std::time::Duration::from_millis(750)).await;
+            app.switch_org(&org);
+        });
         Ok(json!({ "org": made.org, "name": made.name, "role": made.role }))
     }
 

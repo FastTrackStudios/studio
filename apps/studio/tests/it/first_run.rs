@@ -41,8 +41,8 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 /// The account the account server signs in, and what the node lists for it.
-const WHO: &str = "ada@example.com";
-const ORG: &str = "adult-jam";
+pub(super) const WHO: &str = "ada@example.com";
+pub(super) const ORG: &str = "adult-jam";
 /// The token the account server issues; the node takes nothing else.
 const TOKEN: &str = "first-run-access-token";
 const CODE: &str = "first-run-code";
@@ -55,61 +55,11 @@ const SONGS: [&str; 2] = ["Amazing Grace", "How Great Thou Art"];
 const SET_TEXT: &str =
     "# org: adult-jam\n# Sunday morning\n= Amazing Grace\n= How Great Thou Art\n";
 
-/// The instance this test's Studio is (its doors and engine its own).
-const INSTANCE: &str = "first-run-test";
-
 #[test]
 #[ignore = "opens Studio's window (a desktop session): `just test-first-run`"]
 fn a_fresh_install_signs_in_sees_its_orgs_and_opens_a_setlist() {
     let sandbox = tempfile::tempdir().expect("a sandbox");
-    let root = sandbox.path();
-    let stand = Stand::start();
-    let opened = root.join("opened.txt");
-    let bin = fake_browser(&root.join("bin"), &opened);
-    let mut studio = Studio::start(root, &stand, &bin, &opened);
-
-    // Signed out: the node wants a sign-in through its account server.
-    let mcp = studio.door(Duration::from_secs(120));
-    let account = mcp
-        .run("STUDIO_ACCOUNT", &json!({}))
-        .expect("STUDIO_ACCOUNT");
-    assert_eq!(account["signed_in"], false, "{account}");
-    assert_eq!(account["signed_out"], true, "{account}");
-    assert_eq!(account["issuer"], stand.origin, "{account}");
-    // Nothing of the app's own is up yet: it says so at once.
-    let early = mcp.run("STUDIO_ORGS", &json!({}));
-    assert!(early.is_err(), "STUDIO_ORGS before signing in: {early:?}");
-
-    // Sign in: the account server in the browser, then back to Studio.
-    let signing = {
-        let mcp = mcp.clone();
-        std::thread::spawn(move || mcp.run("STUDIO_SIGN_IN", &json!({})))
-    };
-    let page = until(Duration::from_secs(60), "the browser to be opened", || {
-        std::fs::read_to_string(&opened).ok().and_then(|t| {
-            t.lines()
-                .find(|l| l.contains("/oauth2/authorize"))
-                .map(str::to_string)
-        })
-    });
-    assert!(page.starts_with(&stand.origin), "the browser opened {page}");
-    browse(&page);
-    let signed = signing
-        .join()
-        .expect("the sign-in's thread")
-        .expect("STUDIO_SIGN_IN");
-    assert_eq!(signed["signed_in"], true, "{signed}");
-    assert_eq!(signed["restarting"], true, "{signed}");
-
-    // Started again, signed in, on Home: no setup screen between.
-    let mcp = studio.door_after_restart(&mcp, Duration::from_secs(120));
-    let account = until(Duration::from_secs(30), "Studio to be signed in", || {
-        mcp.run("STUDIO_ACCOUNT", &json!({}))
-            .ok()
-            .filter(|a| a["signed_in"] == true)
-    });
-    assert_eq!(account["who"], WHO, "{account}");
-    assert_eq!(account["orgs"], json!([ORG]), "{account}");
+    let (stand, mut studio, mcp) = signed_in(sandbox.path(), "first-run-test");
     let orgs = until(Duration::from_secs(30), "the app's pages", || {
         mcp.run("STUDIO_ORGS", &json!({})).ok()
     });
@@ -157,6 +107,61 @@ fn a_fresh_install_signs_in_sees_its_orgs_and_opens_a_setlist() {
         asked.iter().any(|a| a.starts_with("POST /oauth2/token")),
         "the code was traded at the account server: {asked:?}"
     );
+}
+
+/// A first-time user's Studio, started on `root` against a stand-in node
+/// and account server, signed in through the browser and started again:
+/// checked on the way, and answering on its new door. `instance` is its
+/// `STUDIO_INSTANCE` (its doors and engine its own), one per test.
+pub(super) fn signed_in(root: &Path, instance: &'static str) -> (Stand, Studio, Mcp) {
+    let stand = Stand::start();
+    let opened = root.join("opened.txt");
+    let bin = fake_browser(&root.join("bin"), &opened);
+    let mut studio = Studio::start(root, instance, &stand, &bin, &opened);
+
+    // Signed out: the node wants a sign-in through its account server.
+    let mcp = studio.door(Duration::from_secs(120));
+    let account = mcp
+        .run("STUDIO_ACCOUNT", &json!({}))
+        .expect("STUDIO_ACCOUNT");
+    assert_eq!(account["signed_in"], false, "{account}");
+    assert_eq!(account["signed_out"], true, "{account}");
+    assert_eq!(account["issuer"], stand.origin, "{account}");
+    // Nothing of the app's own is up yet: it says so at once.
+    let early = mcp.run("STUDIO_ORGS", &json!({}));
+    assert!(early.is_err(), "STUDIO_ORGS before signing in: {early:?}");
+
+    // Sign in: the account server in the browser, then back to Studio.
+    let signing = {
+        let mcp = mcp.clone();
+        std::thread::spawn(move || mcp.run("STUDIO_SIGN_IN", &json!({})))
+    };
+    let page = until(Duration::from_secs(60), "the browser to be opened", || {
+        std::fs::read_to_string(&opened).ok().and_then(|t| {
+            t.lines()
+                .find(|l| l.contains("/oauth2/authorize"))
+                .map(str::to_string)
+        })
+    });
+    assert!(page.starts_with(&stand.origin), "the browser opened {page}");
+    browse(&page);
+    let signed = signing
+        .join()
+        .expect("the sign-in's thread")
+        .expect("STUDIO_SIGN_IN");
+    assert_eq!(signed["signed_in"], true, "{signed}");
+    assert_eq!(signed["restarting"], true, "{signed}");
+
+    // Started again, signed in, on Home: no setup screen between.
+    let mcp = studio.door_after_restart(&mcp, Duration::from_secs(120));
+    let account = until(Duration::from_secs(30), "Studio to be signed in", || {
+        mcp.run("STUDIO_ACCOUNT", &json!({}))
+            .ok()
+            .filter(|a| a["signed_in"] == true)
+    });
+    assert_eq!(account["who"], WHO, "{account}");
+    assert_eq!(account["orgs"], json!([ORG]), "{account}");
+    (stand, studio, mcp)
 }
 
 // ── the browser ─────────────────────────────────────────────────────────
@@ -233,10 +238,20 @@ fn get(url: &str) -> (u16, String, Vec<u8>) {
 // ── the stand-in node and account server ────────────────────────────────
 
 /// Drive's node and the account server, as their HTTP goes, on loopback.
-struct Stand {
+pub(super) struct Stand {
     /// `http://127.0.0.1:<port>`: the issuer, and the node's address.
-    origin: String,
+    pub(super) origin: String,
     asked: Arc<Mutex<Vec<String>>>,
+    made: Arc<Mutex<Vec<Made>>>,
+}
+
+/// An org the account server made (`POST /auth/organization/create`):
+/// its slug, its name, and who made it (its owner).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Made {
+    pub(super) slug: String,
+    pub(super) name: String,
+    pub(super) owner: String,
 }
 
 impl Stand {
@@ -244,23 +259,33 @@ impl Stand {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let origin = format!("http://{}", listener.local_addr().expect("addr"));
         let asked = Arc::new(Mutex::new(Vec::new()));
-        let (o, a) = (origin.clone(), asked.clone());
+        let made = Arc::new(Mutex::new(Vec::new()));
+        let (o, a, m) = (origin.clone(), asked.clone(), made.clone());
         std::thread::spawn(move || {
             for stream in listener.incoming().flatten() {
-                let (o, a) = (o.clone(), a.clone());
-                std::thread::spawn(move || serve(stream, &o, &a));
+                let (o, a, m) = (o.clone(), a.clone(), m.clone());
+                std::thread::spawn(move || serve(stream, &o, &a, &m));
             }
         });
-        Self { origin, asked }
+        Self {
+            origin,
+            asked,
+            made,
+        }
     }
 
-    fn asked(&self) -> Vec<String> {
+    pub(super) fn asked(&self) -> Vec<String> {
         self.asked.lock().map(|a| a.clone()).unwrap_or_default()
+    }
+
+    /// The orgs the account server has made, in order.
+    pub(super) fn made(&self) -> Vec<Made> {
+        self.made.lock().map(|m| m.clone()).unwrap_or_default()
     }
 }
 
 /// One request: its line, its headers (lower-cased names) and body.
-fn serve(stream: TcpStream, origin: &str, asked: &Mutex<Vec<String>>) {
+fn serve(stream: TcpStream, origin: &str, asked: &Mutex<Vec<String>>, made: &Mutex<Vec<Made>>) {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
     if reader.read_line(&mut line).is_err() || line.is_empty() {
@@ -293,20 +318,35 @@ fn serve(stream: TcpStream, origin: &str, asked: &Mutex<Vec<String>>) {
         .find(|(k, _)| k == "authorization")
         .map(|(_, v)| v.as_str());
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
-    let reply = answer(method, path, query, bearer, origin);
+    let reply = answer(method, path, query, bearer, &body, origin, made);
     let mut stream = reader.into_inner();
     let _ = stream.write_all(&reply);
 }
 
 /// What the node or the account server answers.
-fn answer(method: &str, path: &str, query: &str, bearer: Option<&str>, origin: &str) -> Vec<u8> {
+fn answer(
+    method: &str,
+    path: &str,
+    query: &str,
+    bearer: Option<&str>,
+    body: &[u8],
+    origin: &str,
+    made: &Mutex<Vec<Made>>,
+) -> Vec<u8> {
     let auth = json!({ "issuer": origin, "client_id": "drive" });
     let signed_in = bearer == Some(&format!("Bearer {TOKEN}"));
     match (method, path) {
-        ("GET", "/orgs") if signed_in => json_reply(
-            200,
-            &json!({ "auth": auth, "signed_in": true, "who": WHO, "orgs": [ORG], "default": "" }),
-        ),
+        ("GET", "/orgs") if signed_in => {
+            // The account's orgs: its own, and every one it has made since.
+            let mut orgs = vec![ORG.to_string()];
+            if let Ok(m) = made.lock() {
+                orgs.extend(m.iter().filter(|m| m.owner == WHO).map(|m| m.slug.clone()));
+            }
+            json_reply(
+                200,
+                &json!({ "auth": auth, "signed_in": true, "who": WHO, "orgs": orgs, "default": "" }),
+            )
+        }
         ("GET", "/orgs") => json_reply(
             200,
             &json!({ "auth": auth, "signed_in": false, "orgs": [], "default": "" }),
@@ -327,6 +367,15 @@ fn answer(method: &str, path: &str, query: &str, bearer: Option<&str>, origin: &
                 "token_type": "Bearer", "expires_in": 3600,
             }),
         ),
+        // The account server's org create, as since auth#4: the bearer is
+        // a first-party app's access token (here, the one it issued) or a
+        // session; anything else is a 401. A slug some org has is a 400.
+        // The account it signs in is the new org's owner.
+        ("POST", "/auth/organization/create") if !signed_in => json_reply(
+            401,
+            &json!({ "code": "unauthorized", "message": "invalid session" }),
+        ),
+        ("POST", "/auth/organization/create") => create_org(body, made),
         // The org's files are for its members only, as on Drive's node:
         // read with the account's sign-in or not at all.
         ("GET", _) if !signed_in && (path == "/search" || path.starts_with("/fetch/")) => {
@@ -357,13 +406,49 @@ fn answer(method: &str, path: &str, query: &str, bearer: Option<&str>, origin: &
     }
 }
 
+/// `POST /auth/organization/create` for the signed-in account: the org
+/// made, the account its owner, or the slug refused as taken.
+fn create_org(body: &[u8], made: &Mutex<Vec<Made>>) -> Vec<u8> {
+    let v: Value = serde_json::from_slice(body).unwrap_or_default();
+    let org = &v["organization"];
+    let (Some(name), Some(slug)) = (org["name"].as_str(), org["slug"].as_str()) else {
+        return json_reply(
+            400,
+            &json!({ "code": "invalid_input", "message": "organization name and slug" }),
+        );
+    };
+    let Ok(mut m) = made.lock() else {
+        return json_reply(500, &json!({}));
+    };
+    if slug == ORG || m.iter().any(|m| m.slug == slug) {
+        return json_reply(
+            400,
+            &json!({ "code": "invalid_input", "message": "organization slug already exists" }),
+        );
+    }
+    m.push(Made {
+        slug: slug.to_string(),
+        name: name.to_string(),
+        owner: WHO.to_string(),
+    });
+    json_reply(
+        200,
+        &json!({
+            "organization": { "id": format!("org-{}", m.len()), "name": name, "slug": slug },
+            "membership": { "role": "owner", "user": WHO },
+        }),
+    )
+}
+
 fn json_reply(status: u16, v: &Value) -> Vec<u8> {
     let body = v.to_string();
     format!(
         "HTTP/1.1 {status} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         match status {
             200 => "OK",
+            400 => "Bad Request",
             401 => "Unauthorized",
+            500 => "Internal Server Error",
             _ => "Not Found",
         },
         body.len()
@@ -416,14 +501,21 @@ fn encode(s: &str) -> String {
 
 /// The Studio under test, in a process group of its own (it starts itself
 /// again on signing in, and the new one is in the same group).
-struct Studio {
+pub(super) struct Studio {
     child: Child,
+    instance: &'static str,
     home: PathBuf,
     config: PathBuf,
 }
 
 impl Studio {
-    fn start(root: &Path, stand: &Stand, bin: &Path, opened: &Path) -> Self {
+    fn start(
+        root: &Path,
+        instance: &'static str,
+        stand: &Stand,
+        bin: &Path,
+        opened: &Path,
+    ) -> Self {
         let app = std::env::var_os("STUDIO_APP").map_or_else(
             || PathBuf::from(env!("CARGO_BIN_EXE_Studio")),
             PathBuf::from,
@@ -445,7 +537,7 @@ impl Studio {
             .env("XDG_CONFIG_HOME", &config)
             .env("XDG_DATA_HOME", home.join(".local/share"))
             .env("XDG_RUNTIME_DIR", &runtime)
-            .env("STUDIO_INSTANCE", INSTANCE)
+            .env("STUDIO_INSTANCE", instance)
             .env("DRIVE_NODE", node)
             .env("PATH", path)
             .env("FIRST_RUN_OPENED", opened);
@@ -467,6 +559,7 @@ impl Studio {
         let child = cmd.spawn().expect("Studio started");
         Self {
             child,
+            instance,
             home,
             config,
         }
@@ -474,7 +567,7 @@ impl Studio {
 
     /// Where the discovery file of this instance's MCP door is.
     fn discovery(&self) -> Option<PathBuf> {
-        let name = format!("studio-{INSTANCE}-mcp.json");
+        let name = format!("studio-{}-mcp.json", self.instance);
         [
             self.config.join("fts").join(&name),
             self.home
@@ -502,7 +595,7 @@ impl Studio {
     }
 
     /// The new Studio's door, once it has replaced `old`.
-    fn door_after_restart(&self, old: &Mcp, wait: Duration) -> Mcp {
+    pub(super) fn door_after_restart(&self, old: &Mcp, wait: Duration) -> Mcp {
         until(wait, "Studio to start again", || {
             self.read_door().filter(|m| m.url != old.url && m.ping())
         })
@@ -510,7 +603,7 @@ impl Studio {
 
     /// Every process of the group: the Studio started and the one it
     /// started again.
-    fn stop(&mut self) {
+    pub(super) fn stop(&mut self) {
         let group = format!("-{}", self.child.id());
         let _ = Command::new("kill").args(["-TERM", "--", &group]).status();
         let _ = self.child.wait();
@@ -525,7 +618,7 @@ impl Drop for Studio {
 }
 
 /// `f` until it gives something, or fail after `wait`.
-fn until<T>(wait: Duration, what: &str, mut f: impl FnMut() -> Option<T>) -> T {
+pub(super) fn until<T>(wait: Duration, what: &str, mut f: impl FnMut() -> Option<T>) -> T {
     let start = Instant::now();
     loop {
         if let Some(v) = f() {
@@ -542,7 +635,7 @@ fn until<T>(wait: Duration, what: &str, mut f: impl FnMut() -> Option<T>) -> T {
 /// loopback with the token from its discovery file, every action through
 /// the `run` tool.
 #[derive(Clone, Debug)]
-struct Mcp {
+pub(super) struct Mcp {
     url: String,
     at: String,
     path: String,
@@ -567,7 +660,7 @@ impl Mcp {
         self.rpc("ping", &json!({})).is_ok()
     }
 
-    fn run(&self, id: &str, args: &Value) -> Result<Value, String> {
+    pub(super) fn run(&self, id: &str, args: &Value) -> Result<Value, String> {
         let result = self.rpc(
             "tools/call",
             &json!({"name": "run", "arguments": {"id": id, "args": args}}),
