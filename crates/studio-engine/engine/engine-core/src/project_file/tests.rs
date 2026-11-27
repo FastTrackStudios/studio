@@ -488,6 +488,14 @@ fn a_real_song_tidied_and_folded() {
         return;
     };
     let path = std::path::PathBuf::from(path);
+    // The tidy's and the fold's spans, with what they record, as each closes.
+    let _spans = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+            .with_env_filter("engine_core::project_file=info,session_format::store=info")
+            .with_test_writer()
+            .finish(),
+    );
     let size = |p: &Path| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
     let file_before = size(&path);
 
