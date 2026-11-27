@@ -41,6 +41,11 @@ fn row(a: Account, role: &str) -> Value {
     json!({ "account": a.id, "name": a.name, "email": a.email, "role": role })
 }
 
+/// A member as the stand-in keeps it: account id and role.
+fn member(a: Account, role: &str) -> (String, String) {
+    (a.id.to_string(), role.to_string())
+}
+
 #[test]
 #[ignore = "opens two Studio windows (a desktop session): `just test-org-invites`"]
 fn an_owner_invites_a_second_account_joins_by_link_and_the_owner_removes_it() {
@@ -94,7 +99,7 @@ fn an_owner_invites_a_second_account_joins_by_link_and_the_owner_removes_it() {
         "{by_link}"
     );
     assert_eq!(by_link["email"], Value::Null, "{by_link}");
-    assert_eq!(stand.links(), 1);
+    assert_eq!(stand.link_count(), 1);
 
     // Bob, another account, in his own org; not in Ada's.
     let (mut bob_studio, bob) = signed_in_as(
@@ -120,10 +125,7 @@ fn an_owner_invites_a_second_account_joins_by_link_and_the_owner_removes_it() {
     assert_eq!(joined["role"], "member", "{joined}");
     assert_eq!(
         stand.members(ORG),
-        vec![
-            (ADA.id.to_string(), "owner".to_string()),
-            (BOB.id.to_string(), "member".to_string())
-        ]
+        vec![member(ADA, "owner"), member(BOB, "member")]
     );
 
     // His Studio goes into it (starting again, as going into an org does
@@ -163,7 +165,7 @@ fn an_owner_invites_a_second_account_joins_by_link_and_the_owner_removes_it() {
     let not_his = bob.run("STUDIO_ORG_INVITE", &json!({}));
     let why = not_his.expect_err("a member invites no one");
     assert!(why.contains("only an owner or an admin"), "{why}");
-    assert_eq!(stand.links(), 1, "no link made");
+    assert_eq!(stand.link_count(), 1, "no link made");
 
     // Both listed, by account, as either sees it.
     let both = json!([row(ADA, "owner"), row(BOB, "member")]);
@@ -184,10 +186,7 @@ fn an_owner_invites_a_second_account_joins_by_link_and_the_owner_removes_it() {
         .run("STUDIO_ORG_REMOVE", &json!({ "account": BOB.id }))
         .expect("STUDIO_ORG_REMOVE");
     assert_eq!(removed["removed"], BOB.id, "{removed}");
-    assert_eq!(
-        stand.members(ORG),
-        vec![(ADA.id.to_string(), "owner".to_string())]
-    );
+    assert_eq!(stand.members(ORG), vec![member(ADA, "owner")]);
     let gone = bob.run("STUDIO_ORG_MEMBERS", &json!({ "org": ORG }));
     let why = gone.expect_err("removed");
     assert!(why.contains(&format!("you are not in {ORG}")), "{why}");
@@ -203,10 +202,7 @@ fn an_owner_invites_a_second_account_joins_by_link_and_the_owner_removes_it() {
     let last = ada.run("STUDIO_ORG_REMOVE", &json!({ "account": ADA.id }));
     let why = last.expect_err("the last owner stays");
     assert!(why.contains("keeps at least one owner"), "{why}");
-    assert_eq!(
-        stand.members(ORG),
-        vec![(ADA.id.to_string(), "owner".to_string())]
-    );
+    assert_eq!(stand.members(ORG), vec![member(ADA, "owner")]);
 
     bob_studio.stop();
     ada_studio.stop();

@@ -446,7 +446,7 @@ impl Stand {
     }
 
     /// How many invite links have been made.
-    pub(super) fn links(&self) -> usize {
+    pub(super) fn link_count(&self) -> usize {
         self.with(|w| w.links.len())
     }
 }
@@ -620,13 +620,16 @@ fn organization(call: &str, who: Account, v: &Value, w: &mut World) -> (u16, Val
         w.role(who, org)
             .is_some_and(|r| r.split(',').any(|r| ["owner", "admin"].contains(&r.trim())))
     };
+    let already_in = || {
+        (
+            400,
+            json!({ "code": "invalid_input", "message": "organization member already exists" }),
+        )
+    };
     let admit = |w: &mut World, org: &str| -> Result<(), (u16, Value)> {
         let o = w.org_mut(org).ok_or_else(bad_credentials)?;
         if o.members.iter().any(|(m, _)| m == who.id) {
-            return Err((
-                400,
-                json!({ "code": "invalid_input", "message": "organization member already exists" }),
-            ));
+            return Err(already_in());
         }
         o.members.push((who.id.into(), "member".into()));
         Ok(())
@@ -652,7 +655,9 @@ fn organization(call: &str, who: Account, v: &Value, w: &mut World) -> (u16, Val
             if w.role(who, org).is_none() {
                 return forbidden();
             }
-            let o = w.orgs.iter().find(|o| o.id == org).expect("a member's org");
+            let Some(o) = w.orgs.iter().find(|o| o.id == org) else {
+                return forbidden();
+            };
             let people = o
                 .members
                 .iter()
@@ -732,10 +737,7 @@ fn organization(call: &str, who: Account, v: &Value, w: &mut World) -> (u16, Val
             };
             let org = w.invitations[at].org.clone();
             if w.role(who, &org).is_some() {
-                return (
-                    400,
-                    json!({ "code": "invalid_input", "message": "organization member already exists" }),
-                );
+                return already_in();
             }
             if w.invitations[at].accepted {
                 return (
@@ -761,7 +763,9 @@ fn organization(call: &str, who: Account, v: &Value, w: &mut World) -> (u16, Val
             if !manages(w, org) {
                 return forbidden();
             }
-            let o = w.org_mut(org).expect("a manager's org");
+            let Some(o) = w.org_mut(org) else {
+                return forbidden();
+            };
             let Some(at) = o.members.iter().position(|(m, _)| m == gone) else {
                 return bad_credentials();
             };
