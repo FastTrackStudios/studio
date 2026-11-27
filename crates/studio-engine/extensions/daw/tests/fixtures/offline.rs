@@ -282,7 +282,9 @@ fn played_offline(run: &Path) {
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or(Value::Null);
-    if cfg!(target_os = "linux") {
+    // Only in the network namespace (the run NETWORK_OFF names): without
+    // one (not Linux, or a sandbox forbidding it) the network is still on.
+    if std::env::var_os(NETWORK_OFF).is_some() {
         let (ok, said) = no_route_out();
         checks.add("no route out", ok, said);
     }
