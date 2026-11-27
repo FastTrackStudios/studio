@@ -438,6 +438,10 @@ fn Palette() -> Element {
 fn Player() -> Element {
     let app = use_app();
     let mut np = app.np;
+    let in_session = matches!(
+        use_route::<crate::Route>(),
+        crate::Route::SessionPage { .. }
+    );
     let Some(n) = np() else { return rsx! {} };
     let Some(x) = n.song().copied() else {
         return rsx! {};
@@ -532,6 +536,23 @@ fn Player() -> Element {
                     Icon { name: I::Skip, size: 30, w: 2.0 }
                 }
             }
+            // Into the session (a phone has no top bar's Session button).
+            if !in_session {
+                div { class: "psess",
+                    for v in [crate::session::View::Arrangement, crate::session::View::Mixer, crate::session::View::Chart] {
+                        button {
+                            key: "{v.slug()}",
+                            class: "secondary",
+                            "data-open": v.slug(),
+                            onclick: move |_| {
+                                app.close();
+                                navigator().push(crate::session::route(v));
+                            },
+                            "{v.name()}"
+                        }
+                    }
+                }
+            }
             if !sections.is_empty() {
                 div { class: "dayhead", "Sections" }
                 div { class: "psecs",
@@ -587,7 +608,28 @@ fn MoreSheet() -> Element {
                     class: "mi big",
                     onclick: move |_| {
                         app.close();
-                        app.say(l);
+                        // The arrangement and the mixer are the session's:
+                        // into it, the set playing (from its top if nothing
+                        // is yet).
+                        let view = match l {
+                            "Arrangement" => Some(crate::session::View::Arrangement),
+                            "Mixer" => Some(crate::session::View::Mixer),
+                            _ => None,
+                        };
+                        let Some(view) = view else {
+                            app.say(l);
+                            return;
+                        };
+                        if !app.np.peek().as_ref().is_some_and(|n| n.song().is_some()) {
+                            let titles: Vec<String> = app
+                                .live_list
+                                .peek()
+                                .iter()
+                                .map(|s| s.title.clone())
+                                .collect();
+                            app.play_titles(&titles, "This set".into(), None);
+                        }
+                        navigator().push(crate::session::route(view));
                     },
                     Icon { name: i, size: 20 }
                     "{l}"

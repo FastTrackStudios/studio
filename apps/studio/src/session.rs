@@ -276,6 +276,12 @@ pub fn SessionShell() -> Element {
     }
     #[cfg(not(feature = "native"))]
     {
+        // The song playing, its transport under the views: at the foot of a
+        // phone (in thumb's reach) or under the stage on a wider screen; a
+        // tap opens the player, as in the launcher.
+        let accessory = (app.np)()
+            .is_some_and(|n| n.song().is_some())
+            .then(|| rsx! { crate::shell::NowPlayingBar {} });
         rsx! {
             div { class: "window",
                 AppShell {
@@ -285,9 +291,10 @@ pub fn SessionShell() -> Element {
                         // Back is home: the launcher (⌘⇧H, STUDIO_HOME).
                         TopBar { title: title.clone(), on_back: move |()| leave(app) }
                     },
-                    div { class: "content session", "data-form": "desktop",
+                    accessory,
+                    crate::shell::Content { class: "session",
                         main { class: "sessstage",
-                            nav { class: "sesstabs",
+                            nav { class: "sesstabs", aria_label: "The session's views",
                                 for v in WEB_VIEWS {
                                     button {
                                         key: "{v.slug()}",
@@ -304,6 +311,8 @@ pub fn SessionShell() -> Element {
                             Outlet::<Route> {}
                         }
                     }
+                    crate::shell::SheetBridge {}
+                    crate::shell::ToastBridge {}
                 }
             }
         }

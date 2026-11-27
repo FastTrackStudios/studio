@@ -418,7 +418,7 @@ pub fn Shell() -> Element {
 /// own bars differ: a phone's leads with the drawer, a desktop's leaves
 /// back and forward to the top bar).
 #[component]
-fn Content(class: String, children: Element) -> Element {
+pub(crate) fn Content(class: String, children: Element) -> Element {
     let form = match use_shell().form() {
         FormFactor::Phone => "phone",
         FormFactor::Desktop => "desktop",
@@ -572,7 +572,7 @@ fn NowPlayingPanel() -> Element {
 /// The prototype's sheets, opened as the shell's: one at a time, closed
 /// when the app closes it, and the app told when the person does.
 #[component]
-fn SheetBridge() -> Element {
+pub(crate) fn SheetBridge() -> Element {
     let app = use_app();
     let shell = use_shell();
     let mut open = use_signal(|| None::<(Sheet, SheetId)>);
@@ -620,7 +620,7 @@ fn SheetBridge() -> Element {
 
 /// The app's toasts, as the shell's.
 #[component]
-fn ToastBridge() -> Element {
+pub(crate) fn ToastBridge() -> Element {
     let app = use_app();
     let shell = use_shell();
     use_effect(move || {
@@ -633,7 +633,7 @@ fn ToastBridge() -> Element {
 
 /// Now Playing: above the tabs while something is queued; a tap opens the player.
 #[component]
-fn NowPlayingBar() -> Element {
+pub(crate) fn NowPlayingBar() -> Element {
     let app = use_app();
     let mut np = app.np;
     let Some(n) = np() else { return rsx! {} };

@@ -38,7 +38,8 @@
 //!
 //! ```text
 //!   thebattleship  rail plan, check (`cargo check --workspace`), wasm, tests
-//!                  (the core test set), lint (advisory clippy)
+//!                  (the core test set), lint (advisory clippy), the web
+//!                  screens (phone and iPad, headless Chrome)
 //!   ubuntu-latest  plan, gates, deps-cache and the `CI passed` aggregator
 //!   macos-latest   release tooling (the sandbox, macOS's own tools)
 //!   airlock        Apple builds (`studio-release-mac`: the macOS app linked
@@ -103,6 +104,7 @@ workflow_dispatch:
     .job("check", check())
     .job("lint", lint())
     .job("wasm", wasm())
+    .job("web-screens", web_screens())
     .job("tests", tests())
     .job("release-macos", release_macos())
     .job("apple", apple())
@@ -727,6 +729,36 @@ fn wasm() -> Job {
         .step(mark_green("wasm"))
 }
 
+/// REQUIRED when the browser build is planned: the app's screens at phone
+/// width (390x844) and on an iPad (820x1180), studio#702. The web build in
+/// headless Chrome (`just test-web-screens`, apps/studio/tests/it/web_boot.rs):
+/// a set built there (search, add, key, leader, reorder), then the
+/// session's arrangement, mixer, chart and overview, each checked for fit
+/// and touch size. Every screenshot is kept as the `web-screens` artifact,
+/// passed or failed, to look at.
+fn web_screens() -> Job {
+    pool_job("Web screens", "web-screens", 75)
+        .cond("${{ needs.rail.outputs.wasm == 'true' }}")
+        .step(
+            Step::run(
+                "Phone and iPad screens (just test-web-screens)",
+                &in_shell("just test-web-screens\n"),
+            )
+            .env("STUDIO_WEB_SHOTS", "${{ runner.temp }}/web-shots"),
+        )
+        .step(
+            Step::uses(
+                "Keep the screenshots",
+                crate::model::pinned::UPLOAD_ARTIFACT,
+            )
+            .cond("${{ always() }}")
+            .with("name", "web-screens")
+            .with("path", "${{ runner.temp }}/web-shots\n")
+            .with("if-no-files-found", "ignore")
+            .with("retention-days", 14),
+        )
+}
+
 /// REQUIRED on full runs: the tests of what the merge reaches, warm on the
 /// pool. The tested set is every group's members minus boundaries.toml's
 /// `[test] skip` (`scripts/boundaries.py packages all --tested`, what `just
@@ -891,6 +923,7 @@ fn ci_passed() -> Result<Job> {
             "gates",
             "check",
             "wasm",
+            "web-screens",
             "tests",
             "release-macos",
             "apple",
@@ -906,6 +939,7 @@ fn ci_passed() -> Result<Job> {
                 .env("GATES", "${{ needs.gates.result }}")
                 .env("CHECK", "${{ needs.check.result }}")
                 .env("WASM", "${{ needs.wasm.result }}")
+                .env("WEB_SCREENS", "${{ needs.web-screens.result }}")
                 .env("TESTS", "${{ needs.tests.result }}")
                 .env("RELEASE_MACOS", "${{ needs.release-macos.result }}")
                 .env("APPLE", "${{ needs.apple.result }}")
@@ -938,7 +972,7 @@ for job in "gates:$GATES" "release-macos:$RELEASE_MACOS"; do
 done
 # The builds: skipped is fine when the rail plan skipped them (nothing they
 # cover changed since a green base); anything else must have succeeded.
-for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
+for job in "check:$CHECK" "wasm:$WASM" "web-screens:$WEB_SCREENS" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
   case "${job#*:}" in
     success | skipped) ;;
     *) bad "${job%%:*}: ${job#*:}" ;;

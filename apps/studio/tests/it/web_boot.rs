@@ -207,6 +207,259 @@ fn the_chart_page_shows_a_generated_chart_and_follows_the_playhead() {
     });
 }
 
+/// A screen the app is laid out for, in CSS pixels.
+#[derive(Clone, Copy, Debug)]
+struct Screen {
+    name: &'static str,
+    width: u32,
+    height: u32,
+}
+
+/// An iPhone 15's (and 14's, 13's) screen, upright.
+const PHONE: Screen = Screen {
+    name: "phone",
+    width: 390,
+    height: 844,
+};
+
+/// An iPad Air's, upright: app-shell's desktop form, with its sidebar.
+const IPAD: Screen = Screen {
+    name: "ipad",
+    width: 820,
+    height: 1180,
+};
+
+/// A built-in set with five songs, in the org a page starts in.
+const SET: &str = "/set/main_2026-11-22";
+
+/// studio#702 at phone width: a set built (searched, added to, a key and a
+/// leader picked, a song moved), then the session's arrangement, mixer,
+/// chart and overview, each checked for fit and kept as a screenshot.
+#[test]
+#[ignore = "needs the web build and a WebDriver: `just test-web-screens`"]
+fn screens_at_phone_width() {
+    screens(PHONE);
+}
+
+/// studio#702 on an iPad: the same, at its size.
+#[test]
+#[ignore = "needs the web build and a WebDriver: `just test-web-screens`"]
+fn screens_on_an_ipad() {
+    screens(IPAD);
+}
+
+fn screens(screen: Screen) {
+    let dist = PathBuf::from(
+        std::env::var_os("STUDIO_WEB_DIST")
+            .expect("STUDIO_WEB_DIST: the web build's public folder"),
+    );
+    let sessions = tempfile::tempdir().expect("a folder for the session");
+    stage_session(&sessions.path().join("multitrack-click"));
+    let site = Server::start(dist, sessions.path().to_path_buf());
+    let driver = Driver::start();
+    let session = driver.new_session_at(Some(screen));
+    let shots = Shots::new(screen);
+    building_a_set(&session, &site.origin, &shots);
+    the_sessions_views(&session, &site.origin, &shots);
+}
+
+/// The set's page, then each step of building it a person takes there.
+fn building_a_set(session: &Session<'_>, origin: &str, shots: &Shots) {
+    session.navigate(&format!("{origin}{SET}"));
+    let before = session.wait_for(Duration::from_secs(90), "the set's running order", |s| {
+        let songs = s.songs();
+        (songs.len() >= 5).then_some(songs)
+    });
+    session.fits(
+        "the set's page",
+        &[".erow", "button.tool[aria-label='Add songs']"],
+    );
+    shots.take(session, "setlist");
+
+    // Search the library and add the first song found.
+    session.click("button.tool[aria-label='Add songs']");
+    let search = "input[aria-label='Search the library']";
+    let first = session.wait_for(Duration::from_secs(20), "the library's songs", |s| {
+        let t = s.script("return document.querySelector('.addsong .t1')?.textContent || '';");
+        (!t.trim().is_empty()).then_some(t)
+    });
+    let query = first
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_lowercase();
+    session.type_into(search, &query);
+    session.wait_for(Duration::from_secs(10), "the library searched", |s| {
+        let value = s.script_with(
+            "return document.querySelector(arguments[0])?.value || '';",
+            json!([search]),
+        );
+        let rows: u64 = s
+            .script("return String(document.querySelectorAll('.addsong').length);")
+            .parse()
+            .unwrap_or(0);
+        (value == query && rows > 0).then_some(())
+    });
+    session.fits("adding songs", &[search, ".addsong"]);
+    shots.take(session, "add-songs");
+    session.click(".addsong");
+    session.wait_for(Duration::from_secs(10), "the song added", |s| {
+        (s.songs().len() == before.len() + 1).then_some(())
+    });
+    session.click(".bsheet .bhead button");
+    session.wait_for(Duration::from_secs(10), "the sheet closed", |s| {
+        (s.count(search) == 0).then_some(())
+    });
+
+    // The first song's key, moved.
+    let key =
+        "return document.querySelector('.erow:not(.esec):not(.eitem) .key2')?.innerText || '';";
+    let was = session.script(key);
+    session.click(".erow:not(.esec):not(.eitem) .key2");
+    session.wait_for(Duration::from_secs(10), "the keys", |s| {
+        (s.count(".keypick .kp") >= 12).then_some(())
+    });
+    session.fits("picking a key", &[".keypick .kp"]);
+    session.taps("picking a key", &[".keypick .kp"]);
+    shots.take(session, "key");
+    session.click(".keypick .kp:not(.on):not(.orig)");
+    session.wait_for(Duration::from_secs(10), "the key moved", |s| {
+        let now = s.script(key);
+        (!now.is_empty() && now != was).then_some(())
+    });
+
+    // Who leads it, then down one.
+    let title = before[0].clone();
+    let at = |s: &Session<'_>| s.rows().iter().position(|t| *t == title);
+    let from = at(session).expect("the first song in the running order");
+    session.click(".erow:not(.esec):not(.eitem) > button.mid");
+    session.wait_for(Duration::from_secs(10), "the song's sheet", |s| {
+        (s.count(".edrow select option") >= 2).then_some(())
+    });
+    let leader = session.script(
+        "return document.querySelector('.edrow select option:nth-child(2)')?.textContent || '';",
+    );
+    session.click(".edrow select option:nth-child(2)");
+    session.wait_for(Duration::from_secs(10), "the leader shown on its row", |s| {
+        let row = s.script(
+            "return document.querySelector('.erow:not(.esec):not(.eitem) .meta3')?.innerText || '';",
+        );
+        row.contains(leader.trim()).then_some(())
+    });
+    session.fits("a song in the set", &[".edmove button", ".edrow select"]);
+    session.taps("a song in the set", &[".edmove button"]);
+    shots.take(session, "entry");
+    session.click("button[aria-label='Move down']");
+    session.wait_for(Duration::from_secs(10), "the song moved down", |s| {
+        (at(s) == Some(from + 1)).then_some(())
+    });
+}
+
+/// Into the session as a phone goes (the Now Playing bar opens the player,
+/// the player the session), then each of its views.
+fn the_sessions_views(session: &Session<'_>, origin: &str, shots: &Shots) {
+    session.navigate(&format!("{origin}/?session=/sessions/multitrack-click"));
+    let ready = session.wait_for(Duration::from_secs(90), "the session to open", |s| match s
+        .state("data-state")
+        .as_str()
+    {
+        "ready" => Some(Ok(())),
+        "failed" => Some(Err(s.state("data-why"))),
+        _ => None,
+    });
+    if let Err(why) = ready {
+        panic!("the session did not open in the page: {why}");
+    }
+    session.click("button.npb[aria-label='Play']");
+    session.wait_for(Duration::from_secs(30), "the session to play", |s| {
+        (s.state("data-at").parse::<f64>().unwrap_or(0.0) > 0.5).then_some(())
+    });
+    session.click("button.npmain");
+    session.click("button[data-open='arrangement']");
+    session.wait_for(Duration::from_secs(30), "the arrangement", |s| {
+        s.hosted("arrangement")
+            .filter(|h| h.tracks >= 3 && h.canvases > 0)
+    });
+    let chrome = [".sesstab", "[data-hosted]", ".np .npb"];
+    session.fits("the arrangement", &chrome);
+    session.taps(
+        "the session's tabs and transport",
+        &[".sesstab", ".np .npb"],
+    );
+    session.drawn("the arrangement");
+    shots.take(session, "arrangement");
+
+    session.click("button.sesstab[data-view='mixer']");
+    session.wait_for(Duration::from_secs(30), "the mixer", |s| {
+        s.hosted("mixer").filter(|h| h.canvases > 0)
+    });
+    session.fits("the mixer", &chrome);
+    session.drawn("the mixer");
+    shots.take(session, "mixer");
+
+    session.click("button.sesstab[data-view='chart']");
+    session.wait_for(Duration::from_secs(60), "the chart", |s| {
+        (!s.bars().is_empty()).then_some(())
+    });
+    session.fits("the chart", &[".sesstab", "#nowchart svg", ".np .npb"]);
+    let drawn: Value = serde_json::from_str(&session.script(
+        "const svg = document.querySelector('#nowchart svg'); \
+         const r = svg.getBoundingClientRect(); \
+         const own = svg.viewBox.baseVal.width || svg.width.baseVal.value; \
+         return JSON.stringify({ scale: r.width / own, own, shown: r.width, \
+           laid: Number(document.getElementById('nowchart').getAttribute('data-layout-width')) });",
+    ))
+    .expect("the chart's size");
+    let scale = drawn["scale"].as_f64().unwrap_or(0.0);
+    assert!(
+        scale >= 0.8,
+        "{}: the chart is drawn at {scale:.2} of its size ({drawn}): too small to read",
+        screen_of(session)
+    );
+    shots.take(session, "chart");
+
+    session.click("button.sesstab[data-view='overview']");
+    session.wait_for(Duration::from_secs(10), "the overview", |s| {
+        (s.count(".sessrow") > 0).then_some(())
+    });
+    session.fits("the overview", &[".sessrow", ".sesstab"]);
+    shots.take(session, "overview");
+}
+
+/// The page's width, for a failure to say.
+fn screen_of(session: &Session<'_>) -> String {
+    session.script("return innerWidth + 'x' + innerHeight;")
+}
+
+/// Where the screenshots go: `STUDIO_WEB_SHOTS` (the recipe's
+/// `target/web-shots`), else a folder in the temp dir.
+struct Shots {
+    dir: PathBuf,
+    screen: Screen,
+}
+
+impl Shots {
+    fn new(screen: Screen) -> Self {
+        let dir = std::env::var_os("STUDIO_WEB_SHOTS").map_or_else(
+            || std::env::temp_dir().join("studio-web-shots"),
+            PathBuf::from,
+        );
+        std::fs::create_dir_all(&dir).expect("the screenshots' folder");
+        Self { dir, screen }
+    }
+
+    /// The page as it is now, as `<screen>-<name>.png`.
+    fn take(&self, session: &Session<'_>, name: &str) {
+        use base64::Engine as _;
+        let shot = session.call("GET", "/screenshot", None);
+        let png = base64::engine::general_purpose::STANDARD
+            .decode(shot.as_str().unwrap_or_default())
+            .expect("a screenshot");
+        let path = self.dir.join(format!("{}-{name}.png", self.screen.name));
+        std::fs::write(&path, png).expect("the screenshot is written");
+    }
+}
+
 /// The fixture session staged into `dir`: its project, each track's
 /// recording as a proxy with its page index, and the folder's `files.json`.
 fn stage_session(dir: &Path) {
@@ -454,6 +707,12 @@ impl Driver {
     }
 
     fn new_session(&self) -> Session<'_> {
+        self.new_session_at(None)
+    }
+
+    /// A browser whose page is `screen` (a touch screen, as a phone's and
+    /// an iPad's are), else a desktop's window.
+    fn new_session_at(&self, screen: Option<Screen>) -> Session<'_> {
         let browser = if self.gecko {
             json!({ "moz:firefoxOptions": { "args": ["-headless"] } })
         } else {
@@ -461,6 +720,12 @@ impl Driver {
                 "args": ["--headless=new", "--no-sandbox", "--window-size=1280,800",
                          "--autoplay-policy=no-user-gesture-required"]
             });
+            if let Some(screen) = screen {
+                options["mobileEmulation"] = json!({ "deviceMetrics": {
+                    "width": screen.width, "height": screen.height,
+                    "pixelRatio": 2.0, "touch": true,
+                } });
+            }
             if let Ok(bin) = std::env::var("CHROME_BIN") {
                 options["binary"] = json!(bin);
             }
@@ -477,7 +742,16 @@ impl Driver {
             .as_str()
             .unwrap_or_else(|| panic!("no session: {answer}"))
             .to_owned();
-        Session { driver: self, id }
+        let session = Session { driver: self, id };
+        // geckodriver has no emulation: the window at the screen's size.
+        if let (true, Some(screen)) = (self.gecko, screen) {
+            session.call(
+                "POST",
+                "/window/rect",
+                Some(&json!({ "width": screen.width, "height": screen.height })),
+            );
+        }
+        session
     }
 }
 
@@ -540,14 +814,97 @@ impl Session<'_> {
 
     /// What `script` returns, as text.
     fn script(&self, script: &str) -> String {
+        self.script_with(script, json!([]))
+    }
+
+    /// What `script` returns given `args`, as text.
+    fn script_with(&self, script: &str, args: Value) -> String {
         self.call(
             "POST",
             "/execute/sync",
-            Some(&json!({ "script": script, "args": [] })),
+            Some(&json!({ "script": script, "args": args })),
         )
         .as_str()
         .unwrap_or_default()
         .to_owned()
+    }
+
+    /// How many elements `css` matches.
+    fn count(&self, css: &str) -> usize {
+        self.script_with(
+            "return String(document.querySelectorAll(arguments[0]).length);",
+            json!([css]),
+        )
+        .parse()
+        .unwrap_or(0)
+    }
+
+    /// The set's songs as its page lists them, in order.
+    fn songs(&self) -> Vec<String> {
+        self.texts(".erow:not(.esec):not(.eitem) > button.mid .t1")
+    }
+
+    /// Every row of the set's running order (songs, sections, items).
+    fn rows(&self) -> Vec<String> {
+        self.texts(".erow > button.mid .t1")
+    }
+
+    fn texts(&self, css: &str) -> Vec<String> {
+        let listed = self.script_with(
+            "return JSON.stringify([...document.querySelectorAll(arguments[0])]                .filter(e => e.getClientRects().length)                .map(e => e.textContent.trim()));",
+            json!([css]),
+        );
+        serde_json::from_str(&listed).unwrap_or_default()
+    }
+
+    /// What does not fit on `where` at this screen's width: the page
+    /// scrolling sideways, or any of `parts` (each must be there) reaching
+    /// past either edge.
+    fn fits(&self, place: &str, parts: &[&str]) {
+        let found = self.script_with(
+            "const w = innerWidth, out = [];              const doc = document.scrollingElement || document.documentElement;              if (doc.scrollWidth > w + 1) out.push(`the page scrolls sideways (${doc.scrollWidth} > ${w})`);              for (const css of arguments[0]) {                const all = [...document.querySelectorAll(css)].filter(e => e.getClientRects().length && e.offsetWidth > 0);                if (!all.length) out.push(`no ${css}`);                for (const e of all) { const r = e.getBoundingClientRect();                  if (r.left < -1 || r.right > w + 1)                    out.push(`${css} at ${Math.round(r.left)}..${Math.round(r.right)} of ${w}: ${(e.innerText || '').trim().slice(0, 40)}`); }              }              return JSON.stringify(out.slice(0, 12));",
+            json!([parts]),
+        );
+        let wrong: Vec<String> = serde_json::from_str(&found).unwrap_or_default();
+        assert!(
+            wrong.is_empty(),
+            "{place} does not fit {}:\n  {}",
+            screen_of(self),
+            wrong.join("\n  ")
+        );
+    }
+
+    /// Whether each of `parts` is a finger's size (44 pt, at least 40 for a
+    /// tab in a pill) where the screen is touched: a phone's form, or a
+    /// coarse pointer.
+    fn taps(&self, place: &str, parts: &[&str]) {
+        let found = self.script_with(
+            "const touch = matchMedia('(pointer: coarse)').matches || innerWidth < 600;              if (!touch) return '[]';              const out = [];              for (const css of arguments[0]) for (const e of document.querySelectorAll(css)) {                const r = e.getBoundingClientRect();                if (!e.getClientRects().length || r.width === 0) continue;                if (r.height < 40 || r.width < 40)                  out.push(`${css} is ${Math.round(r.width)}x${Math.round(r.height)}: ${(e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)}`);              }              return JSON.stringify(out.slice(0, 12));",
+            json!([parts]),
+        );
+        let small: Vec<String> = serde_json::from_str(&found).unwrap_or_default();
+        assert!(
+            small.is_empty(),
+            "{place}: too small to tap at {}:\n  {}",
+            screen_of(self),
+            small.join("\n  ")
+        );
+    }
+
+    /// Whether the hosted panel on show draws in canvases that are inside
+    /// the screen, and of a size to see.
+    fn drawn(&self, place: &str) {
+        let found = self.script(
+            "const w = innerWidth, h = innerHeight;              const cs = [...document.querySelectorAll('[data-hosted] canvas')]                .map(c => c.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0);              const area = cs.reduce((a, r) => a + Math.max(0, Math.min(r.right, w) - Math.max(r.left, 0))                * Math.max(0, Math.min(r.bottom, h) - Math.max(r.top, 0)), 0);              return JSON.stringify({ canvases: cs.length, share: area / (w * h) });",
+        );
+        let drawn: Value = serde_json::from_str(&found).unwrap_or_default();
+        let share = drawn["share"].as_f64().unwrap_or(0.0);
+        assert!(
+            share >= 0.2,
+            "{place} at {} draws on {:.0}% of the screen ({drawn})",
+            screen_of(self),
+            share * 100.0
+        );
     }
 
     /// The chart page's bars as it times them: each `kf-bar`'s time
@@ -617,9 +974,25 @@ impl Session<'_> {
         format!("{shown}\n console:\n  {log}\n crashes:\n  {crashes}")
     }
 
+    /// Wait for `css` to be there, then type `text` into it.
+    fn type_into(&self, css: &str, text: &str) {
+        let found = self.find(css);
+        self.call(
+            "POST",
+            &format!("/element/{found}/value"),
+            Some(&json!({ "text": text })),
+        );
+    }
+
     /// Wait for `css` to be there, then click it.
     fn click(&self, css: &str) {
-        let found = self.wait_for(Duration::from_secs(20), css, |s| {
+        let found = self.find(css);
+        self.call("POST", &format!("/element/{found}/click"), Some(&json!({})));
+    }
+
+    /// The first element `css` matches, once there is one.
+    fn find(&self, css: &str) -> String {
+        self.wait_for(Duration::from_secs(20), css, |s| {
             let path = format!("/session/{}/element", s.id);
             let answer = http(
                 &s.driver.base,
@@ -635,8 +1008,7 @@ impl Session<'_> {
                 .as_str()?
                 .to_owned();
             Some(element)
-        });
-        self.call("POST", &format!("/element/{found}/click"), Some(&json!({})));
+        })
     }
 
     /// Poll `ready` until it says something, at most `within`.

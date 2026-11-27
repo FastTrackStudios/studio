@@ -253,3 +253,5 @@ tokio = { version = "1", features = ["macros", "rt", "net"] }
 # encoded where it runs, served from a folder of its own.
 fts-sample = { workspace = true, features = ["engine-native"] }
 tempfile = { workspace = true }
+# Its screenshots, which WebDriver hands over as base64.
+base64 = { workspace = true }

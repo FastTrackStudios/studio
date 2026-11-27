@@ -332,3 +332,29 @@
   .srrow .s1 { grid-column: 1; grid-row: 2; }
   .srrow .rdy { grid-row: 1 / span 2; grid-column: 2; }
 }
+
+/* ── At phone width and on an iPad (studio#702) ─────────────────────── */
+/* Into the session from the player: its three views, a thumb wide each. */
+.psess { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0 4px; }
+.psess .secondary { min-height: 44px; padding: 0 6px; font-size: 15px; }
+/* The session on a phone: the stage edge to edge, its views one segmented
+   control across the top (four in 390 pt, each 44 pt tall), the song's
+   transport at the foot. */
+.content.session[data-form="phone"] .sessstage { padding: 6px 8px 4px; }
+.content.session[data-form="phone"] .sesstabs { gap: 2px; padding: 3px; margin: 0 0 8px; border-radius: 12px; background: var(--surface); border: 1px solid var(--rule); overflow: visible; }
+.content.session[data-form="phone"] .sesstab { flex: 1 1 0px; min-width: 0; height: 44px; padding: 0 2px; border: 0; border-radius: 9px; text-align: center; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.content.session[data-form="phone"] .sesstab[aria-current="page"] { background: var(--active); color: var(--ink); border: 0; }
+.content.session[data-form="phone"] .sesspane { border-radius: 10px; }
+.content.session[data-form="phone"] .sessover h2 { font-size: 22px; }
+.content.session[data-form="phone"] .sessrow { min-height: 48px; padding: 6px 8px; }
+/* A touch screen at a desktop's width (an iPad): the session's tabs a
+   finger's size. */
+@media (pointer: coarse) {
+  .sesstab { height: 40px; padding: 0 16px; font-size: 14px; }
+  .sessrow { min-height: 48px; }
+}
+/* The chart on a phone: laid out narrow (chart_sync::NARROW), so drawn
+   near its own size; the paper's margin is the page's. */
+.content[data-form="phone"] .kfpaper { padding: 6px 4px; border-radius: 8px; }
+.content[data-form="phone"] .chartnowhead b { font-size: 18px; }
+.content[data-form="phone"] .chartnow .pline { font-size: 13px; }

@@ -24215,6 +24215,7 @@ dependencies = [
  "auth",
  "auth-proto",
  "axum",
+ "base64 0.22.1",
  "console_error_panic_hook",
  "daw-extension",
  "daw-theme",
