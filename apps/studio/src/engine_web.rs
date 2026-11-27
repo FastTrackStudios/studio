@@ -14,6 +14,12 @@
 //! reference player plays it (`crate::player`). Nor is one whose session
 //! did not open ([`WebPlay::failed`]).
 //!
+//! **Opt-in for now.** The engine plays only on a page whose address asks
+//! for it (`?session=<url>`, or `?engine=1` for the songs of a setlist):
+//! opening a session in a page still panics on a clock call that a browser
+//! has none of (`time not implemented on this platform`, found by the boot
+//! test), so every other page keeps the reference player ([`WebPlay::enabled`]).
+//!
 //! What the engine is doing is written to a hidden element (`#studio-engine`,
 //! [`STATE_ID`]): its state, the song's playhead and what the worklet has
 //! put out — what the browser boot test (`apps/studio/tests/web_boot.rs`)
@@ -47,13 +53,29 @@ const MOST_FILES: usize = 20_000;
 /// it: the session folders it could not open (the player plays those).
 #[derive(Clone, Default, PartialEq)]
 pub struct WebPlay {
+    /// Whether the page's address asked for the engine (`?session=`,
+    /// `?engine=1`): without it the reference player plays every song.
+    pub enabled: bool,
     pub failed: HashSet<String>,
 }
 
 impl WebPlay {
+    /// As the page's address asks ([`WebPlay::enabled`]).
+    pub fn from_address() -> Self {
+        let asked = || {
+            let search = web_sys::window()?.location().search().ok()?;
+            let params = web_sys::UrlSearchParams::new_with_str(&search).ok()?;
+            Some(params.has("session") || params.get("engine").as_deref() == Some("1"))
+        };
+        Self {
+            enabled: asked().unwrap_or(false),
+            failed: HashSet::new(),
+        }
+    }
+
     /// Whether the engine plays the song at `place`.
     pub fn owns(&self, place: Option<&Place>) -> bool {
-        place.is_some_and(|p| !self.failed.contains(&key(p)))
+        self.enabled && place.is_some_and(|p| !self.failed.contains(&key(p)))
     }
 }
 

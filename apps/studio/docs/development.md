@@ -51,8 +51,9 @@ same package name.
 cd apps/studio && dx build --platform web --release --base-path studio
 ```
 
-**The engine in the page.** In a browser, Now Playing's session folder
-opens in the engine running in the page (`src/engine_web.rs` over
+**The engine in the page.** In a browser, on a page whose address asks
+for it (`?session=<url>`, or `?engine=1` for a setlist's songs), Now
+Playing's session folder opens in the engine running in the page (`src/engine_web.rs` over
 `studio_engine::web_engine`: daw-standalone in-process, out through an
 AudioWorklet, the first-party FX built in). Its files come by range from
 Drive, and the page streams their proxies (`Media/Proxy/<stem>.ogg` with
@@ -74,6 +75,10 @@ just test-web-boot   # builds the web app, opens a fixture session in headless C
 It takes `WEBDRIVER` (chromedriver or geckodriver) and `CHROME_BIN` when
 set, and otherwise fetches nixpkgs' chromedriver and the Chrome it
 matches.
+
+It's opt-in because opening a session in the page still panics on a clock
+call a browser doesn't have (`time not implemented on this platform`); the
+boot test shows it. Every other page plays references as before.
 
 Signal's session rigs don't run in the page yet: they load their models,
 packs and rig homes from the desktop's disk.

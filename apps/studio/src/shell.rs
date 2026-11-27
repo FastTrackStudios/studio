@@ -905,7 +905,7 @@ fn PlayerHost() -> Element {
     // did not open).
     #[cfg(feature = "web")]
     {
-        use_context_provider(|| Signal::new(crate::engine_web::WebPlay::default()));
+        use_context_provider(|| Signal::new(crate::engine_web::WebPlay::from_address()));
         rsx! {
             crate::engine_web::EnginePlayer {}
             crate::player::Player {}
