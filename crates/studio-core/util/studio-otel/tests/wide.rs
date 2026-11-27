@@ -42,7 +42,7 @@ fn a_field_set_on_the_current_span_is_exported_with_it() {
 }
 
 #[test]
-fn with_no_exporter_set_does_nothing() {
+fn with_no_subscriber_set_is_harmless() {
     let _span = tracing::info_span!("rpc").entered();
     studio_otel::set("pack.name", "Rhodes".to_owned());
 }

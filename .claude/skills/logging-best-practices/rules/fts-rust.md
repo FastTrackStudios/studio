@@ -111,7 +111,7 @@ delete, and it applies to *scaffolding* too, not just committed code:
    the regression. `eprintln!` output proves nothing once the terminal
    scrolls.
 2. **Query the span.** If the code already runs under a request span,
-   the answer is usually a missing `wide::set` field away — add the
+   the answer is usually a missing `studio_otel::set` field away — add the
    field, keep it, and read it in Tempo/`--no-capture` test output.
    That field is *useful forever*; a print statement is noise you must
    remember to remove.

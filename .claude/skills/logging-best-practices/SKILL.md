@@ -125,7 +125,8 @@ Use middleware to handle wide event infrastructure (timing, status, environment,
 The rules above are written in TypeScript. In this codebase the wide
 event is **the tracing span**, not a struct you assemble by hand:
 `architect` already opens one span per vox RPC and `tower_http` one per
-HTTP request. Add fields with `studio_otel::set`, enrich via
+HTTP request. Declare a span's fields and `record` them, add one to a span opened
+elsewhere with `studio_otel::set`, enrich via
 decorators on existing framework seams, and follow the established field
 names — plus the hard rules on secrets and unbounded cardinality.
 
