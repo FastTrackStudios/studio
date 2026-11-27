@@ -1135,7 +1135,7 @@ pub async fn read_take(
 pub const TICKS_PER_QN: f64 = 960.0;
 
 /// The editor's take content (ticks) as the daw takes it (quarters).
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 fn to_quarters(
     mut content: daw::service::midi::MidiTakeContent,
 ) -> daw::service::midi::MidiTakeContent {
@@ -1162,7 +1162,7 @@ fn to_quarters(
 /// The Editor's take as `NOTES_WRITE` takes it: item `item_guid`'s new
 /// contents, in quarter notes (`studio_engine::notes_actions`). `None`
 /// when it will not say itself as JSON.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 #[must_use]
 pub fn notes_write_args(
     item_guid: &str,

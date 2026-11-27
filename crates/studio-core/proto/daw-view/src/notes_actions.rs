@@ -65,6 +65,7 @@ pub async fn write(item: &str, content: MidiTakeContent) -> Result<(), String> {
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register_async(&NOTES_WRITE, Effect::Mutating, |a: NotesArg| async move {
         write(&a.item, a.content).await?;
+        #[cfg(feature = "native")]
         crate::actions::list().changed("items", &a.item);
         Ok(())
     })

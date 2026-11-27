@@ -237,6 +237,8 @@ fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register_async(&daw_view::actions::REDO, Effect::Mutating, |(): ()| {
         step(false)
     })?;
+    // The Editor's write-back: a take's notes, through the engine in the page.
+    daw_view::notes_actions::register(list)?;
     crate::arrange_actions::register(list)
 }
 

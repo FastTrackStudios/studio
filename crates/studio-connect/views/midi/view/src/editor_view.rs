@@ -9,9 +9,9 @@
 //! screen when there is nothing to edit rather than an empty roll that
 //! reads as a broken load.
 
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 use anyrender::Scene;
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 use blitz_traits::events::{BlitzWheelDelta, MouseEventButton, UiEvent};
 use dioxus::prelude::*;
 
@@ -300,7 +300,39 @@ pub fn EditorPanel() -> Element {
             }
         }
     }
-    #[cfg(not(feature = "native"))]
+    // The page: the same view in a canvas (`crate::web_canvas`), on the
+    // engine in the page — its takes read and written back through it.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        let element = use_hook(|| Rc::new(RefCell::new(None::<web_sys::HtmlElement>)));
+        let widget = use_hook(|| {
+            let shown = Rc::clone(&element);
+            // A canvas takes no painted cursor: each glyph's nearest CSS
+            // shape, as the arrangement's.
+            let sink: crate::window_cursor::Sink =
+                Rc::new(move |shape: crate::window_cursor::Shape| {
+                    if let Some(el) = shown.borrow().as_ref() {
+                        let _ = el.style().set_property("cursor", shape.icon().name());
+                    }
+                });
+            crate::web_canvas::HostedRef(Rc::new(RefCell::new(
+                EditorView::new(song).with_cursor(sink),
+            )))
+        });
+        rsx! {
+            div {
+                style: "position:absolute; left:0; top:0; width:100%; height:100%; background:#0b0c0e; overflow:hidden;",
+                "data-editor": "page",
+                crate::web_canvas::WidgetCanvas {
+                    widget: widget.clone(),
+                    element: Some(crate::web_canvas::ElementSlot(Rc::clone(&element))),
+                }
+            }
+        }
+    }
+    #[cfg(not(any(feature = "native", feature = "web")))]
     {
         let _ = song;
         rsx! { crate::chrome::EditorComing {} }
@@ -308,7 +340,7 @@ pub fn EditorPanel() -> Element {
 }
 
 /// The widget: the editor on its item, or why there is none.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 pub struct EditorView {
     /// The session, kept current from the engine: a selection made in
     /// the arrangement moves the editor to that track's item.
@@ -335,7 +367,7 @@ pub struct EditorView {
     /// The saver: one thread committing each saved take (`NOTES_WRITE`)
     /// in the order it was saved, so a save never holds the window and two
     /// saves never land out of order.
-    saver: Option<std::sync::mpsc::Sender<(String, Content)>>,
+    saver: Option<Saver>,
     dirty: bool,
     /// The view on screen is the previous take's, kept up while the next
     /// one loads ([`Self::retarget`]).
@@ -364,12 +396,16 @@ pub struct EditorView {
 }
 
 /// What a read hands back: nothing yet, then the take or `None`.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 type Slot = std::sync::Arc<std::sync::Mutex<Option<Read>>>;
 
 /// What a read hands back: a MIDI take, or an audio take analysed into
 /// the editor — `None` inside when there was nothing to edit.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
+#[cfg_attr(
+    not(feature = "native"),
+    allow(dead_code, reason = "the page analyses no audio take yet")
+)]
 enum Read {
     Midi(Option<daw::service::midi::MidiTakeSnapshot>),
     Audio(Option<(Box<editor::Editor>, Vec<Take>)>),
@@ -377,7 +413,11 @@ enum Read {
 
 /// One take of a stack, as aligning it needs it: its item, where the item
 /// starts in the song, and its analysis.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
+#[cfg_attr(
+    not(feature = "native"),
+    allow(dead_code, reason = "the page stacks no audio takes yet")
+)]
 #[derive(Clone)]
 struct Take {
     item: String,
@@ -389,11 +429,19 @@ struct Take {
 pub const ALIGN_TAKES: &str = editor::actions::takes::ALIGN.id;
 
 /// An alignment in flight: each take aligned, by item, when it lands.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 type Aligning =
     std::sync::Arc<std::sync::Mutex<Option<Vec<(String, f64, editor::audio::Alignment)>>>>;
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 type Content = daw::service::midi::MidiTakeContent;
+
+/// Where a saved take goes: the saver's thread (natively), or the page's
+/// edit queue, which runs `NOTES_WRITE` in order with the page's other
+/// edits and actions.
+#[cfg(feature = "native")]
+type Saver = std::sync::mpsc::Sender<(String, Content)>;
+#[cfg(all(feature = "web", not(feature = "native")))]
+type Saver = crate::engine::Applier;
 
 /// One audio take's analysis, through the in-process engine: what its
 /// lane draws and what aligning it reads. `None` with no engine, or a
@@ -473,6 +521,11 @@ fn stacked(
 #[cfg(feature = "native")]
 static SAVING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+/// Wait, briefly, for the saver to write what it was sent. (The page's
+/// queue runs the undo after the write, so it never waits.)
+#[cfg(all(feature = "web", not(feature = "native")))]
+const fn saved() {}
+
 /// Wait, briefly, for the saver to write what it was sent.
 #[cfg(feature = "native")]
 fn saved() {
@@ -512,7 +565,13 @@ fn saver() -> Option<std::sync::mpsc::Sender<(String, Content)>> {
     Some(tx)
 }
 
-#[cfg(feature = "native")]
+/// The page's saver: its edit queue, on the engine in the page.
+#[cfg(all(feature = "web", not(feature = "native")))]
+fn saver() -> Option<Saver> {
+    crate::engine::Applier::start()
+}
+
+#[cfg(any(feature = "native", feature = "web"))]
 impl EditorView {
     #[must_use]
     pub fn new(song: Song) -> Self {
@@ -545,8 +604,35 @@ impl EditorView {
         }
     }
 
+    /// Read the target's take on the page's event loop: a MIDI take (the
+    /// page analyses no audio yet, so an audio take says it cannot be
+    /// read). A take with no notes leaves no editor.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    fn load(&mut self) {
+        self.tried = true;
+        self.failed = false;
+        let Some(t) = self.target.as_ref().filter(|t| !t.audio) else {
+            self.failed = self.target.is_some();
+            if std::mem::take(&mut self.stale) {
+                self.view = None;
+            }
+            return;
+        };
+        let slot: Slot = std::sync::Arc::default();
+        let into = std::sync::Arc::clone(&slot);
+        let (item, bpm, length) = (t.item.clone(), t.bpm, t.length);
+        wasm_bindgen_futures::spawn_local(async move {
+            let read = crate::expression::read_take(item, bpm, length).await;
+            if let Ok(mut slot) = into.lock() {
+                *slot = Some(Read::Midi(read));
+            }
+        });
+        self.loading = Some(slot);
+    }
+
     /// Read the target's take into the editor, `size` big. A take with
     /// no notes, or no engine to read it from, leaves no editor.
+    #[cfg(feature = "native")]
     fn load(&mut self) {
         self.tried = true;
         self.failed = false;
@@ -691,7 +777,23 @@ impl EditorView {
             saved();
             self.awaiting_undo = Some(web_time::Instant::now());
             self.stale = self.view.is_some();
-            crate::actions::undo_behind(ask == editor::UndoAsk::Undo);
+            self.ask_undo(ask == editor::UndoAsk::Undo);
+        }
+    }
+
+    /// Session's Undo (`back`) or Redo, behind the window: natively on the
+    /// key worker, in the page after the write-backs queued before it.
+    fn ask_undo(&self, back: bool) {
+        #[cfg(feature = "native")]
+        crate::actions::undo_behind(back);
+        #[cfg(all(feature = "web", not(feature = "native")))]
+        if let Some(queue) = &self.saver {
+            let id = if back {
+                crate::actions::UNDO.id
+            } else {
+                crate::actions::REDO.id
+            };
+            queue.send(crate::engine::Edit::Run(id.to_owned(), String::new()));
         }
     }
 
@@ -770,6 +872,12 @@ impl EditorView {
     /// stretch of the song it shares with the first, off the window, its
     /// stretch markers written to its item; the lanes follow when the
     /// answers land ([`Self::aligned`]).
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    pub const fn align_takes(&mut self) {}
+
+    /// Line the stack's takes up on its first (natively: the page stacks
+    /// no audio takes).
+    #[cfg(feature = "native")]
     pub fn align_takes(&mut self) {
         let (Some((reference, dubs)), Some(runtime)) =
             (self.takes.split_first(), crate::open::runtime())
@@ -851,17 +959,42 @@ impl EditorView {
             return;
         };
         let content = view.take_content();
+        let sent = self.send_take(&item, content);
+        if !sent {
+            tracing::warn!(editor.item = %item, "the editor has no engine to write its take back to");
+        }
+    }
+
+    /// Send a saved take to be written back: to the saver's thread, which
+    /// counts it until written ([`saved`]).
+    #[cfg(feature = "native")]
+    fn send_take(&self, item: &str, content: Content) -> bool {
         SAVING.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         let sent = self
             .saver
             .as_ref()
-            .is_some_and(|tx| tx.send((item.clone(), content)).is_ok());
+            .is_some_and(|tx| tx.send((item.to_owned(), content)).is_ok());
         if !sent {
             SAVING.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
         }
-        if !sent {
-            tracing::warn!(editor.item = %item, "the editor has no engine to write its take back to");
-        }
+        sent
+    }
+
+    /// Send a saved take to be written back: `NOTES_WRITE` on the page's
+    /// edit queue, through the engine in the page.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    fn send_take(&self, item: &str, content: Content) -> bool {
+        let (Some(queue), Some(args)) = (
+            self.saver.as_ref(),
+            crate::expression::notes_write_args(item, content),
+        ) else {
+            return false;
+        };
+        queue.send(crate::engine::Edit::Run(
+            crate::notes_actions::NOTES_WRITE.id.to_owned(),
+            args,
+        ));
+        true
     }
 
     /// Take the engine's track events: a newly selected track with a
@@ -928,6 +1061,7 @@ impl EditorView {
     }
 
     /// Whether the engine has said anything since the last frame.
+    #[cfg(feature = "native")]
     fn heard(&self) -> bool {
         if crate::tool::zoom_held() != self.zoom_shown.get() {
             return true;
@@ -1011,20 +1145,17 @@ impl EditorView {
 
 /// The editor's colours from the loaded theme: the window's palette, and
 /// the theme's `editor.*` tokens over it.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 fn look() -> editor::paint::paint::Look {
     crate::expression::look_of(&crate::skin::palette(&crate::palette::Palette::from_theme(
         &daw_ui::theming::Theme::dark(),
     )))
 }
 
-/// A key as the editor names it: a character's text, else the W3C name
-/// (`"Delete"`, `"ArrowLeft"`).
-#[cfg(feature = "native")]
 /// Frame what was just opened: the whole item across, its notes top to
 /// bottom — the editor's "fit item" (`z i`), MeMagic's fixed framing. A
 /// stack frames its own lanes.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 fn frame_item(view: &mut Expression) {
     if view.stacked() {
         return;
@@ -1088,7 +1219,7 @@ fn write_warp(item: &str, alignment: &editor::audio::Alignment) -> eyre::Result<
 
 /// Every note of `doc` moved by `warp` (a unit to a unit): its start and
 /// end, its curves stretched between them.
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 fn warp_doc(doc: &mut editor::ExpressionDoc, warp: impl Fn(f64) -> f64) {
     use editor::doc::Dimension;
     for n in &mut doc.notes {
@@ -1104,10 +1235,25 @@ fn warp_doc(doc: &mut editor::ExpressionDoc, warp: impl Fn(f64) -> f64) {
     }
 }
 
+/// A key as the editor names it: a character's text, else the W3C name
+/// (`"Delete"`, `"ArrowLeft"`).
+#[cfg(any(feature = "native", feature = "web"))]
 fn key_name(key: &blitz_traits::events::Key) -> String {
     match key {
         blitz_traits::events::Key::Character(text) => text.clone(),
         other => other.to_string(),
+    }
+}
+
+/// The view in a page's canvas (`crate::web_canvas`): painted every frame.
+#[cfg(all(feature = "web", not(feature = "native")))]
+impl crate::web_canvas::Hosted for EditorView {
+    fn paint(&mut self, width: u32, height: u32, scale: f64) -> Scene {
+        self.paint_scene(width, height, scale)
+    }
+
+    fn event(&mut self, event: &UiEvent) {
+        Self::event(self, event);
     }
 }
 

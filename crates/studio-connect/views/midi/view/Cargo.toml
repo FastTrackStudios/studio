@@ -36,12 +36,15 @@ web-time = { workspace = true }
 eyre = { workspace = true }
 tracing = { workspace = true }
 facet-json = { workspace = true }
+# The page: its canvas's pointer shape, and the take read on its event loop.
+web-sys = { workspace = true, optional = true, features = ["Window", "HtmlElement", "CssStyleDeclaration"] }
+wasm-bindgen-futures = { workspace = true, optional = true }
 
 [features]
 default = ["native"]
 # daw-view-kit's features, forwarded.
 native = ["daw-view-kit/native", "daw-view/native"]
-web = ["daw-view-kit/web", "daw-view/web", "dioxus/web"]
+web = ["daw-view-kit/web", "daw-view/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen-futures"]
 
 [dev-dependencies]
 daw-view-kit = { workspace = true, features = ["test-support"] }

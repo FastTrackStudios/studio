@@ -214,6 +214,21 @@ fn the_web_build_opens_and_plays_a_fixture_session() {
     );
     assert_eq!(mixer.tracks, arrangement.tracks);
 
+    // Its editor: the expression editor's canvas, over the same song in the
+    // same engine (the song has no MIDI, so it says so; a take it opens is
+    // written back through the engine in the page, `NOTES_WRITE`).
+    session.click("button.sesstab[data-view='editor']");
+    let editor = session.wait_for(
+        Duration::from_secs(30),
+        "the editor over the page's engine",
+        |s| s.hosted("editor").filter(|h| h.canvases > 0),
+    );
+    assert_eq!(
+        editor.project, arrangement.project,
+        "the editor shows another song than the arrangement"
+    );
+    session.click("button.sesstab[data-view='mixer']");
+
     // The views are over the engine that plays: it plays on under them.
     let before: f64 = session.state("data-at").parse().unwrap_or(0.0);
     session.wait_for(
