@@ -478,15 +478,15 @@ fn piece_of(p: &toml::Table) -> Result<Piece, String> {
         .map(|b| b.as_float().or_else(|| b.as_integer().map(|i| i as f64)))
         .collect::<Option<Vec<f64>>>()
         .ok_or("piece: `beats` are numbers")?;
-    let levels: Vec<f64> = p
-        .get("levels_db")
-        .and_then(toml::Value::as_array)
-        .map(|l| {
-            l.iter()
-                .filter_map(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
-                .collect()
-        })
-        .unwrap_or_else(|| vec![0.0]);
+    let levels: Vec<f64> = match p.get("levels_db").and_then(toml::Value::as_array) {
+        None => vec![0.0],
+        Some(l) => l
+            .iter()
+            .map(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
+            .collect::<Option<Vec<f64>>>()
+            .filter(|l| !l.is_empty())
+            .ok_or("piece: `levels_db`, one or more numbers")?,
+    };
     let beat = 60.0 / bpm;
     let strokes = (0..bars as usize)
         .flat_map(|bar| {

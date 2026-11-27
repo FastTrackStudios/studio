@@ -63,7 +63,7 @@ static ADD: ActionMeta = meta(
     "FX_ADD",
     "fx_add",
     "Add an FX",
-    "Put an FX on `track`: one of the FTS processors (`fx`: `FTS Mic`, `FTS EQ`, `FTS Comp`, …), Signal (`Signal Dev`: built into the engine, nothing installed), or a CLAP plugin by its bundle (`fx`: a path to a `.clap`, or a bundle's name in ~/.clap or the CLAP search path — `Signal Dev`, `DragonflyRoomReverb.clap`) — at place `at` in its chain (1 is first; the end when not given) — on, or bypassed with `on: false` — and `set` its parameters as FX_SET does, in the plugin's own words (a CLAP's through its own text-to-value). Says its place and what each setting now reads. One undo step.",
+    "Put an FX on `track`: one of the FTS processors (`fx`: `FTS Mic`, `FTS EQ`, `FTS Comp`, …), Signal (`Signal Dev`: built into the engine, nothing installed), or a CLAP plugin by its bundle (`fx`: a path to a `.clap`, or a bundle's name in ~/.clap or the CLAP search path — `DragonflyRoomReverb.clap`) — at place `at` in its chain (1 is first; the end when not given) — on, or bypassed with `on: false` — and `set` its parameters as FX_SET does, in the plugin's own words (a CLAP's through its own text-to-value). Says its place and what each setting now reads. One undo step.",
     "FX",
     "",
 );

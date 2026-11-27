@@ -42,15 +42,38 @@ const ALIGN_GAIN_DB: f64 = 1.0;
 const LEVELED_SHARE: f64 = 0.6;
 /// The least a gate must take off the bleed between the piece's hits, dB.
 const GATE_DROP_DB: f64 = 10.0;
-/// A gate keyed by the hits must pass them: the kick's first stroke and its
-/// ring, as loud through the gate as before it, within this, dB.
+/// A gate keyed by the hits must pass them: a stroke as loud through the
+/// gate as before it, within this, dB.
 const HIT_KEPT_DB: f64 = 1.0;
-const HIT_FROM: &str = "0s";
-const HIT_TO: &str = "0.15s";
-/// Where the kick folder hears only the snare's bleed: from a snare hit
-/// (0.5 s) to before the next kick (1.0 s), the kick's own ring long gone.
-const BLEED_FROM: &str = "0.55s";
-const BLEED_TO: &str = "0.95s";
+/// How long a newly keyed gate is given for Studio to send it the song's
+/// placed hits (on its next turn for plugins, not inside the call that
+/// keyed it): a render started sooner copies a gate that has none yet and
+/// shuts every hit. The engine should hand a render's copy the hits itself.
+const PLACED_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Where a piece's gate is heard: its folder over one of its strokes, and
+/// where it hears only the other drum's bleed, early in the song and past
+/// the ten seconds after which a gate that has lost its hits opens on its
+/// own input (`fixture.toml`: kicks on 1 and 3, snares on 2 and 4, 0.5 s
+/// beats).
+struct GateWindows {
+    piece: &'static str,
+    hit: (&'static str, &'static str),
+    bleed: [(&'static str, &'static str); 2],
+}
+
+const GATES: [GateWindows; 2] = [
+    GateWindows {
+        piece: "Kick",
+        hit: ("0s", "0.15s"),
+        bleed: [("0.55s", "0.95s"), ("12.55s", "12.95s")],
+    },
+    GateWindows {
+        piece: "Snare",
+        hit: ("0.5s", "0.65s"),
+        bleed: [("1.05s", "1.45s"), ("13.05s", "13.45s")],
+    },
+];
 /// Signal, as an agent adds it: built into the engine.
 const SIGNAL: &str = "Signal Dev";
 
@@ -207,38 +230,33 @@ fn spreads(mcp: &Mcp, log: &mut Answers) -> Result<Vec<(&'static str, f64)>, Str
 
 /// 4. Each piece folder gated, keyed from its trigger's hit markers: the
 /// template's gate (keyed by the trigger's audio) switched off, a Signal
-/// gate keyed by the trigger's lane (its hit markers) in its place.
+/// gate keyed by the trigger's lane (the hits Studio places) in its place.
+/// Each folder heard over a stroke and over the other drum's bleed, before
+/// and after.
 fn gates(mcp: &Mcp, log: &mut Answers, checks: &mut Checks) -> Result<(), String> {
-    let rms = |log: &mut Answers, (from, to): (&str, &str)| -> Result<Option<f64>, String> {
-        let heard = log.run(
-            mcp,
-            "LISTEN",
-            &json!({"track": "Drums/Kick", "from": from, "to": to, "exact": true, "png": false}),
-        )?;
-        Ok(heard.pointer("/figures/rms").and_then(Value::as_f64))
-    };
-    let (bleed, hit) = ((BLEED_FROM, BLEED_TO), (HIT_FROM, HIT_TO));
-    for piece in ["Kick", "Snare"] {
-        let folder = format!("Drums/{piece}");
-        let state = log.run(
-            mcp,
-            "MIX_STATE",
-            &json!({"track": folder, "depth": 0, "params": false, "from": "1", "to": "1"}),
-        )?;
-        for fx in rows_of(&state["tracks"][0], "fx") {
-            if fx["on"] == json!(true) && fx["name"].as_str().is_some_and(|n| n.contains("Gate")) {
+    let heard = |log: &mut Answers, g: &GateWindows| -> Result<Vec<Option<f64>>, String> {
+        let folder = format!("Drums/{}", g.piece);
+        std::iter::once(g.hit)
+            .chain(g.bleed)
+            .map(|(from, to)| {
                 log.run(
                     mcp,
-                    "FX_ENABLE",
-                    &json!({"track": folder, "fx": fx["place"], "on": false}),
-                )?;
-            }
-        }
+                    "LISTEN",
+                    &json!({"track": folder, "from": from, "to": to, "exact": true, "png": false}),
+                )
+                .map(|heard| heard.pointer("/figures/rms").and_then(Value::as_f64))
+            })
+            .collect()
+    };
+    for g in &GATES {
+        template_gates_off(mcp, log, &format!("Drums/{}", g.piece))?;
     }
-    let before = rms(log, bleed)?;
-    let hit_before = rms(log, hit)?;
-    for piece in ["Kick", "Snare"] {
-        let folder = format!("Drums/{piece}");
+    let before = GATES
+        .iter()
+        .map(|g| heard(log, g))
+        .collect::<Result<Vec<_>, _>>()?;
+    for g in &GATES {
+        let folder = format!("Drums/{}", g.piece);
         let trigger = format!("{folder}/Sum/Trig");
         log.run(mcp, "FX_ADD", &json!({"track": folder, "fx": SIGNAL}))?;
         log.run(
@@ -247,40 +265,70 @@ fn gates(mcp: &Mcp, log: &mut Answers, checks: &mut Checks) -> Result<(), String
             &json!({"track": folder, "action": "SIGNAL_BLOCK_ADD",
                     "args": {"phase": "rescue", "kind": "gate", "key": trigger}}),
         )?;
+        // Keyed by the trigger, not fallen back to its own input. Whether
+        // the hits reach it is heard below: `via` says `placed` only once
+        // the live instance has played, and the engine here never plays.
         let chain = log.run(mcp, "SIGNAL_CHAIN", &json!({"track": folder}))?;
-        let key = find_block(&chain, "gate").map(|b| b["key"].clone());
+        let key = find_block(&chain, "gate")
+            .map(|b| b["key"].clone())
+            .ok_or_else(|| format!("no gate on {folder}: {}", short(&chain)))?;
         checks.add(
-            format!("{piece} gate keyed"),
-            key.as_ref().is_some_and(|k| {
-                k["from"].as_str() == Some(&trigger) && k["via"].as_str() != Some("self")
-            }),
-            format!("its gate's key: {}", key.unwrap_or(Value::Null)),
+            format!("{} gate keyed", g.piece),
+            key["from"].as_str() == Some(&trigger) && key["via"] != "self",
+            format!("its gate's key: {key}"),
         );
     }
-    let after = rms(log, bleed)?;
-    let hit_after = rms(log, hit)?;
-    let drop = before.zip(after).map(|(b, a)| b - a);
-    checks.add(
-        "gate takes the bleed",
-        drop.is_some_and(|d| d >= GATE_DROP_DB),
-        format!(
-            "Kick between its hits ({BLEED_FROM}..{BLEED_TO}): {} → {} dBFS RMS",
-            fmt(before),
-            fmt(after)
-        ),
-    );
-    checks.add(
-        "gate passes the hits",
-        hit_before
-            .zip(hit_after)
-            .is_some_and(|(b, a)| (b - a).abs() <= HIT_KEPT_DB),
-        format!(
-            "Kick over its first stroke ({HIT_FROM}..{HIT_TO}): {} → {} dBFS RMS",
-            fmt(hit_before),
-            fmt(hit_after)
-        ),
-    );
+    std::thread::sleep(PLACED_WAIT);
+    for (g, was) in GATES.iter().zip(&before) {
+        let now = heard(log, g)?;
+        checks.add(
+            format!("{} gate passes its hit", g.piece),
+            was[0]
+                .zip(now[0])
+                .is_some_and(|(b, a)| (b - a).abs() <= HIT_KEPT_DB),
+            format!(
+                "over a stroke ({}..{}): {} → {} dBFS RMS",
+                g.hit.0,
+                g.hit.1,
+                fmt(was[0]),
+                fmt(now[0])
+            ),
+        );
+        for ((span, b), a) in g.bleed.iter().zip(&was[1..]).zip(&now[1..]) {
+            checks.add(
+                format!("{} gate takes the bleed at {}", g.piece, span.0),
+                b.zip(*a).is_some_and(|(b, a)| b - a >= GATE_DROP_DB),
+                format!(
+                    "between its hits ({}..{}): {} → {} dBFS RMS",
+                    span.0,
+                    span.1,
+                    fmt(*b),
+                    fmt(*a)
+                ),
+            );
+        }
+    }
     log.run(mcp, "MIX_SNAPSHOT", &json!({"name": "gated"}))?;
+    Ok(())
+}
+
+/// Switch off the gates the template put on `folder` (keyed by its
+/// trigger's audio), as an agent does before keying one from the hits.
+fn template_gates_off(mcp: &Mcp, log: &mut Answers, folder: &str) -> Result<(), String> {
+    let state = log.run(
+        mcp,
+        "MIX_STATE",
+        &json!({"track": folder, "depth": 0, "params": false, "from": "1", "to": "1"}),
+    )?;
+    for fx in rows_of(&state["tracks"][0], "fx") {
+        if fx["on"] == json!(true) && fx["name"].as_str().is_some_and(|n| n.contains("Gate")) {
+            log.run(
+                mcp,
+                "FX_ENABLE",
+                &json!({"track": folder, "fx": fx["place"], "on": false}),
+            )?;
+        }
+    }
     Ok(())
 }
 
@@ -394,14 +442,7 @@ fn tone(mcp: &Mcp, log: &mut Answers, checks: &mut Checks) -> Result<(), String>
 /// `signal::engine::signal_action`), each read back as the window reads
 /// it.
 fn by_hand(mcp: &Mcp, log: &mut Answers, checks: &mut Checks) -> Result<(), String> {
-    let tracks = log.run(mcp, "SESSION_TRACKS", &json!({"filter": "Drums/Snare"}))?;
-    let guid = rows(&tracks)
-        .iter()
-        .find(|t| {
-            t["path"] == "Drums/Snare" || (t["name"] == "Snare" && t["folder"] == json!(true))
-        })
-        .and_then(|t| t["guid"].as_str().map(str::to_owned))
-        .ok_or_else(|| format!("SESSION_TRACKS: no Drums/Snare in {}", short(&tracks)))?;
+    let guid = track_guid(mcp, log, "Drums/Snare")?;
     let was = volume_db(&log.run(
         mcp,
         "MIX_STATE",
@@ -424,17 +465,18 @@ fn by_hand(mcp: &Mcp, log: &mut Answers, checks: &mut Checks) -> Result<(), Stri
         now.is_some_and(|n| (n - wanted).abs() < 0.01),
         format!("Snare {was:.2} → {} dB (asked {wanted:.2})", fmt(now)),
     );
-    let chain = log.run(mcp, "SIGNAL_CHAIN", &json!({"track": "Drums"}))?;
+    let drums = track_guid(mcp, log, "Drums")?;
+    let chain = log.run(mcp, "SIGNAL_CHAIN", &json!({"track": drums}))?;
     let eq = find_block(&chain, "eq")
         .and_then(|b| b["id"].as_str().map(str::to_owned))
         .ok_or("no eq on Drums")?;
     log.run(
         mcp,
         "SIGNAL_RUN",
-        &json!({"track": "Drums", "action": "SIGNAL_BLOCK_SET",
+        &json!({"track": drums, "action": "SIGNAL_BLOCK_SET",
                 "args": {"block": eq, "params": {"band.3.gain": 1.5}}}),
     )?;
-    let chain = log.run(mcp, "SIGNAL_CHAIN", &json!({"track": "Drums"}))?;
+    let chain = log.run(mcp, "SIGNAL_CHAIN", &json!({"track": drums}))?;
     let gain = find_block(&chain, "eq").and_then(|b| param(b, "band.3.gain"));
     checks.add(
         "Signal by hand",
@@ -442,6 +484,17 @@ fn by_hand(mcp: &Mcp, log: &mut Answers, checks: &mut Checks) -> Result<(), Stri
         format!("the kit's air band now {} dB (asked 1.5)", fmt(gain)),
     );
     Ok(())
+}
+
+/// The GUID of the track at `path`, as the mixer window names a track.
+fn track_guid(mcp: &Mcp, log: &mut Answers, path: &str) -> Result<String, String> {
+    let tracks = log.run(mcp, "SESSION_TRACKS", &json!({"filter": path}))?;
+    let name = path.rsplit('/').next().unwrap_or(path);
+    rows(&tracks)
+        .iter()
+        .find(|t| t["path"] == path || (t["name"] == name && t["folder"] == json!(true)))
+        .and_then(|t| t["guid"].as_str().map(str::to_owned))
+        .ok_or_else(|| format!("SESSION_TRACKS: no {path} in {}", short(&tracks)))
 }
 
 // ── Reading answers ─────────────────────────────────────────────────────
