@@ -199,7 +199,9 @@ pub async fn run(args: &EngineArgs) -> eyre::Result<()> {
                 Ok(endpoint) => {
                     connect = Some(crate::remote::EngineAddr::connect_string(&endpoint.id()));
                     let gate = gate.clone();
-                    tokio::spawn(async move { gate.serve_iroh(&endpoint, router).await });
+                    architect::platform::spawn(async move {
+                        gate.serve_iroh(&endpoint, router).await;
+                    });
                 }
                 Err(e) => tracing::warn!(
                     error = %e,
@@ -218,8 +220,8 @@ pub async fn run(args: &EngineArgs) -> eyre::Result<()> {
         engine.lan = ?if args.lan { lan_addresses(port) } else { Vec::new() },
         engine.iroh_connect = connect.as_deref().unwrap_or("off"),
         engine.serves_daw = serves_daw,
-        "engine-host --engine: serving (open http://<lan addr> on another device; \
-         dial the iroh connect string from a native Session)"
+        "engine-host --engine: serving behind the engine's door (a client presents \
+         the engine's token; an iroh peer must be one of its devices: --admit ID)"
     );
     host.serve()
         .await

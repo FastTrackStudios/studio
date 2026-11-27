@@ -732,7 +732,7 @@ fn host_inner(name: String, room: Option<RoomSet>) -> eyre::Result<(String, Vec<
         let router = host.mount(architect::LayerRouter::new());
         let serving = endpoint.clone();
         // Only who presents the pass edits it.
-        tokio::spawn(async move { door.serve(&serving, router).await });
+        architect::platform::spawn(async move { door.serve(&serving, router).await });
 
         let me = format!("host-{}", &endpoint.id().to_string()[..8]);
         let presence: Arc<dyn PresenceSink> = Arc::new(host.own_presence().await?);
@@ -1849,6 +1849,25 @@ impl Outbox {
     }
 }
 
+/// Write `text` to `path`, readable by this user only.
+#[cfg(feature = "native")]
+fn write_private(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    std::io::Write::write_all(&mut options.open(path)?, text.as_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
+}
+
 /// Where an env-started host leaves its ticket (`FTS_COLLAB_TICKET`, else
 /// the temp dir's `fts-session-ticket`).
 #[cfg(feature = "native")]
@@ -1894,7 +1913,9 @@ fn from_env(name: &str) {
         match host(name.to_owned()) {
             Ok(ticket) => {
                 let path = ticket_path();
-                if let Err(e) = std::fs::write(&path, &ticket) {
+                // The ticket carries the set's pass: readable by this user
+                // only.
+                if let Err(e) = write_private(&path, &ticket) {
                     tracing::warn!(collab.ticket_error = %e, "collab: the ticket was not written");
                 }
                 tracing::info!(collab.ticket_file = %path.display(), "collab: hosting");

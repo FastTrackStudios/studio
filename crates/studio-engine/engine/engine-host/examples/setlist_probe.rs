@@ -20,14 +20,32 @@
 //! NEVER point this at the deployed rig on :4040 when seeking — start a
 //! scratch engine on another port (`SIGNAL_ENGINE_ADDR=127.0.0.1:14041
 //! engine-host --engine`).
+//!
+//! The engine admits it only with its token (studio#362): this reads
+//! `FTS_ENGINE_TOKEN`, else `~/.config/fts/engine-token`, and presents it
+//! at the handshake.
 
 use engine_domain::proto::services::setlist_service::SetlistServiceStreamClient;
 use engine_domain::proto::{ActiveIndices, SetlistEvent, SetlistServiceClient};
 
+/// The engine's token: `FTS_ENGINE_TOKEN`, else the engine's file.
+fn token() -> Option<String> {
+    std::env::var("FTS_ENGINE_TOKEN").ok().or_else(|| {
+        let home = std::env::var_os("HOME")?;
+        std::fs::read_to_string(std::path::Path::new(&home).join(".config/fts/engine-token")).ok()
+    })
+}
+
 async fn establish<C: vox_core::FromVoxLane>(url: &str) -> C {
-    let link = vox_websocket::WsLink::connect(url)
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
+    let mut request = url.into_client_request().expect("a ws URL");
+    if let Some(value) = token().and_then(|t| format!("Bearer {}", t.trim()).parse().ok()) {
+        request.headers_mut().insert("authorization", value);
+    }
+    let (ws, _) = tokio_tungstenite::connect_async(request)
         .await
-        .expect("ws connect");
+        .expect("ws connect (refused without the engine's token)");
+    let link = vox_websocket::WsLink::new(ws);
     vox_core::initiator_on(link)
         .establish::<C>()
         .await
