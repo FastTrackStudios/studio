@@ -114,7 +114,7 @@ test-room *ARGS:
     cargo nextest run --cargo-profile desktop-dev --target {{host}} -p {{engine_package}} --test room --no-fail-fast {{ARGS}}
 
 # Seam 3 for the web: the web build opens a fixture session in a headless browser and plays it through the engine in
-# the page (apps/studio/tests/web_boot.rs). Builds the web app first; WEBDRIVER (chromedriver or geckodriver) and
+# the page (apps/studio/tests/it/web_boot.rs). Builds the web app first; WEBDRIVER (chromedriver or geckodriver) and
 # CHROME_BIN when set, else nixpkgs' chromedriver and the Chrome it matches. Extra arguments go to nextest
 [script]
 test-web-boot *ARGS:
@@ -128,13 +128,13 @@ test-web-boot *ARGS:
         export WEBDRIVER="$(echo "$paths" | grep chromedriver)/bin/chromedriver"
         export CHROME_BIN="$(echo "$paths" | grep google-chrome)/bin/google-chrome"
     fi
-    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --test web_boot --run-ignored only --no-fail-fast {{ARGS}}
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --test it -E 'test(/^web_boot::/)' --run-ignored only --no-fail-fast {{ARGS}}
 
 # Seam 1 for the first run (studio#699): a fresh install's Studio signs in, sees its orgs and opens a setlist, all over
-# its MCP, against a Drive node and account server of the test's (apps/studio/tests/first_run.rs). It opens Studio's
+# its MCP, against a Drive node and account server of the test's (apps/studio/tests/it/first_run.rs). It opens Studio's
 # window, so run it in a desktop session. STUDIO_APP names another Studio to test (a dx build); extra arguments go to nextest
 test-first-run *ARGS:
-    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --features native --test first_run --run-ignored only --no-fail-fast {{ARGS}}
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --features native --test it -E 'test(/^first_run::/)' --run-ignored only --no-fail-fast {{ARGS}}
 
 # The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
 ci-local BASE="":

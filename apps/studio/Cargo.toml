@@ -238,7 +238,7 @@ sea-orm.workspace = true
 sea-orm-migration.workspace = true
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt", "net"] }
-# The browser boot test (tests/web_boot.rs): the fixture session's proxies
+# The browser boot test (tests/it/web_boot.rs): the fixture session's proxies
 # encoded where it runs, served from a folder of its own.
 fts-sample = { workspace = true, features = ["engine-native"] }
 tempfile = { workspace = true }

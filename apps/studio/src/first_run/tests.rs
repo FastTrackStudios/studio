@@ -61,7 +61,6 @@ fn a_node_that_wants_a_sign_in_is_read_as_signed_out() {
     assert!(a.signed_out);
     assert!(!a.signed_in());
     assert_eq!(a.issuer.as_deref(), Some(ISSUER));
-    assert_eq!(step(a.signed_out, &a.orgs, 0), Step::SignIn);
 }
 
 #[test]
@@ -85,7 +84,7 @@ fn a_new_account_in_no_org_lists_none() {
     let a = Account::read(&v);
     let listed = orgs_listed(&a, &["crossroads-church".to_string()]);
     assert!(listed.is_empty(), "{listed:?}");
-    assert_eq!(step(a.signed_out, &listed, 0), Step::NoOrganization);
+    assert_eq!(step(&listed, 0), Step::NoOrganization);
 }
 
 #[test]
@@ -104,8 +103,16 @@ fn a_node_that_lets_anyone_in_and_lists_nothing_keeps_what_studio_had() {
 #[test]
 fn in_an_org_with_no_setlist_says_so_and_with_one_is_ready() {
     let orgs = vec!["adult-jam".to_string()];
-    assert_eq!(step(false, &orgs, 0), Step::NoSetlist);
-    assert_eq!(step(false, &orgs, 1), Step::Ready);
+    assert_eq!(step(&orgs, 0), Step::NoSetlist);
+    assert_eq!(step(&orgs, 1), Step::Ready);
+}
+
+fn face(id: &str, title: &str) -> crate::setlist::Face {
+    crate::setlist::Face {
+        id: id.into(),
+        title: title.into(),
+        ..Default::default()
+    }
 }
 
 fn file(space: &str, path: &str) -> Hit {
@@ -121,7 +128,7 @@ fn file(space: &str, path: &str) -> Hit {
 #[test]
 fn each_org_offers_its_own_sets_and_files_each_one_tap_from_open() {
     let orgs = vec!["adult-jam".to_string(), "days-to-praise".to_string()];
-    let sets = vec![("s1".to_string(), "Sunday".to_string())];
+    let sets = vec![face("s1", "Sunday")];
     let files = vec![
         file("adult-jam", "Setlists/Friday.setlist"),
         file("days-to-praise", "Sets/Christmas Eve.setlist"),
@@ -159,10 +166,23 @@ fn each_org_offers_its_own_sets_and_files_each_one_tap_from_open() {
 #[test]
 fn a_file_of_a_set_the_index_already_has_is_offered_once() {
     let orgs = vec!["adult-jam".to_string()];
-    let sets = vec![("s1".to_string(), "Sunday".to_string())];
+    let sets = vec![face("s1", "Sunday")];
     let files = vec![file("adult-jam", "Setlists/Sunday.setlist")];
     let listed = offers(&orgs, "adult-jam", &sets, &files);
     assert_eq!(listed[0].setlists.len(), 1);
+}
+
+#[test]
+fn home_is_ready_once_an_organization_has_a_setlist() {
+    let orgs = vec!["adult-jam".to_string()];
+    let (step, listed) = on_home(&orgs, "adult-jam", &[], &[]);
+    assert_eq!(step, Step::NoSetlist);
+    assert_eq!(listed[0].setlists.len(), 0);
+    let (step, _) = on_home(&orgs, "adult-jam", &[face("s1", "Sunday")], &[]);
+    assert_eq!(step, Step::Ready);
+    let (step, listed) = on_home(&[], "home", &[face("s1", "Sunday")], &[]);
+    assert_eq!(step, Step::NoOrganization);
+    assert!(listed.is_empty());
 }
 
 #[test]

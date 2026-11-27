@@ -131,15 +131,18 @@ when the agent's `config.json` names one, else a node on this computer
 `wss://drive.fasttrackstudio.app/sync` (`src/first_run.rs`). That last one
 is what a fresh install reaches: it wants a sign-in, and Studio signs in
 through the account server in the system's browser, back on a loopback
-port (drive#206). Signed in, the orgs are the account's, as the node lists
-them, and Home lists each org's setlists (studio#699).
+port (drive#206). Signed in, the organizations are the account's, as the node
+lists them, and Home lists each one's setlists (studio#699).
+On iPhone and iPad there is no browser to hand a sign-in to yet (Drive
+needs a custom-scheme redirect, drive#183), so a phone names no node and
+stays on its own copies.
 
 To develop against a node of your own, set `DRIVE_NODE`. Over MCP,
 `STUDIO_ACCOUNT` says who Studio is signed in as and `STUDIO_SIGN_IN`
 signs in (both answer on the sign-in screen too); `STUDIO_FIRST_RUN` is
 what Home offers. `just test-first-run` is the Seam 1 test of the whole
 way, from a fresh install to an open setlist
-(`apps/studio/tests/first_run.rs`); it opens Studio's window.
+(`apps/studio/tests/it/first_run.rs`); it opens Studio's window.
 
 ## What a session needs
 

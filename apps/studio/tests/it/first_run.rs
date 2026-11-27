@@ -327,6 +327,11 @@ fn answer(method: &str, path: &str, query: &str, bearer: Option<&str>, origin: &
                 "token_type": "Bearer", "expires_in": 3600,
             }),
         ),
+        // The org's files are for its members only, as on Drive's node:
+        // read with the account's sign-in or not at all.
+        ("GET", _) if !signed_in && (path == "/search" || path.starts_with("/fetch/")) => {
+            json_reply(401, &json!({ "error": "sign in" }))
+        }
         // The org's index: its one setlist file.
         ("GET", "/search") if param(query, "exts").is_some_and(|e| e.split(',').any(|x| x == "setlist")) => {
             let results = if param(query, "space").as_deref() == Some(ORG) {
@@ -356,7 +361,11 @@ fn json_reply(status: u16, v: &Value) -> Vec<u8> {
     let body = v.to_string();
     format!(
         "HTTP/1.1 {status} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        if status == 200 { "OK" } else { "Not Found" },
+        match status {
+            200 => "OK",
+            401 => "Unauthorized",
+            _ => "Not Found",
+        },
         body.len()
     )
     .into_bytes()

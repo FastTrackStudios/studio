@@ -137,18 +137,13 @@ fn YourOrgs() -> Element {
     use crate::first_run::{self, Step};
     let app = use_app();
     let index = crate::sets::use_index();
-    let orgs = (app.orgs)();
-    let here = (app.here)();
-    let sets: Vec<(String, String)> = index.faces().into_iter().map(|f| (f.id, f.title)).collect();
     let files = (app.drive_sets)().unwrap_or_default();
-    let listed = first_run::offers(&orgs, &here, &sets, &files);
-    let count = listed.iter().map(|o| o.setlists.len()).sum();
-    match first_run::step(false, &orgs, count) {
-        Step::SignIn => rsx! {},
+    let (step, listed) = first_run::on_home(&(app.orgs)(), &(app.here)(), &index.faces(), &files);
+    match step {
         Step::NoOrganization => rsx! {
             div { class: "dayhead", "Welcome to Studio" }
             p { class: "lede",
-                "You are not in an organization yet. Make one for your band, church or school, or open the invitation someone sent you."
+                "You are not in an organization yet. Make one for your band, church or school, or ask its owner to invite you."
             }
             crate::pages::orgs::NewOrg {}
         },
@@ -167,7 +162,7 @@ fn YourOrgs() -> Element {
     rsx! {}
 }
 
-/// One org and its setlists, each opening where it is kept.
+/// One organization and its setlists, each opening where it is kept.
 #[cfg(feature = "drive")]
 #[component]
 fn OrgSetlists(org: crate::first_run::OrgSetlists) -> Element {
@@ -181,10 +176,10 @@ fn OrgSetlists(org: crate::first_run::OrgSetlists) -> Element {
                 span { class: "mid",
                     span { class: "t1", "{name}" }
                     span { class: "s1",
-                        if none {
-                            "No setlists yet"
-                        } else {
-                            "{count} setlists"
+                        match count {
+                            0 => "No setlists yet".to_string(),
+                            1 => "1 setlist".to_string(),
+                            n => format!("{n} setlists"),
                         }
                     }
                 }

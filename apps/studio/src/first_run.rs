@@ -10,13 +10,18 @@
 //! - **The organizations.** Signed in, the orgs Studio lists are the
 //!   node's answer for that account, none included ([`orgs_listed`]):
 //!   never the made-up ones a build without Drive shows.
-//! - **The setlists.** Home lists each org's setlists, each one tap from
-//!   open ([`offers`]); with no org, it offers to create one, and with
-//!   no setlist, says so ([`step`]).
+//! - **The setlists.** Home lists each organization's setlists, each one
+//!   tap from open ([`on_home`]); in no organization, it offers to create
+//!   one, and with no setlist, says so ([`Step`]).
+//!
+//! On iPhone and iPad a fresh install stays on this device's copies for
+//! now: Drive's native sign-in opens the system's browser and comes back
+//! on a loopback port, which an iOS app cannot do (it needs a
+//! custom-scheme redirect, drive#183).
 //!
 //! `STUDIO_ACCOUNT`, `STUDIO_SIGN_IN` and `STUDIO_FIRST_RUN` say and do
 //! the same over the Action List (`crate::actions`), which is how the
-//! Seam 1 test (`tests/first_run.rs`) drives a fresh install end to end.
+//! Seam 1 test (`tests/it/first_run.rs`) drives a fresh install end to end.
 
 // The node and the Action List's answers are the native build's; without
 // Drive (the in-memory build) only the tests read the rest.
@@ -68,6 +73,10 @@ pub fn agent_names_node(config: Option<&str>) -> bool {
 /// port. What `main` sets `DRIVE_NODE` to.
 #[cfg(feature = "native")]
 pub fn node_to_name() -> Option<&'static str> {
+    // No browser to hand a sign-in to on iOS yet (see the module's doc).
+    if cfg!(target_os = "ios") {
+        return None;
+    }
     let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty());
     let agent_dir = var("DRIVE_AGENT_DIR")
         .map(std::path::PathBuf::from)
@@ -144,11 +153,10 @@ pub fn orgs_listed(answer: &Account, had: &[String]) -> Vec<String> {
 
 // ── where the first run is ──────────────────────────────────────────────
 
-/// Where a person is on their way from signing in to an open setlist.
+/// Where a person is, once signed in, on the way to an open setlist
+/// (signed out, Drive's sign-in screen shows and `STUDIO_ACCOUNT` says so).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
-    /// The node wants a sign-in.
-    SignIn,
     /// Signed in, in no organization: create one, or open an invitation.
     NoOrganization,
     /// In an organization that has no setlist yet.
@@ -160,7 +168,6 @@ pub enum Step {
 impl Step {
     pub fn slug(self) -> &'static str {
         match self {
-            Step::SignIn => "sign-in",
             Step::NoOrganization => "no-organization",
             Step::NoSetlist => "no-setlist",
             Step::Ready => "ready",
@@ -168,12 +175,10 @@ impl Step {
     }
 }
 
-/// The step from what the app knows: signed out, the orgs listed, and
-/// how many setlists they have between them.
-pub fn step(signed_out: bool, orgs: &[String], setlists: usize) -> Step {
-    if signed_out {
-        Step::SignIn
-    } else if orgs.is_empty() {
+/// The step from the organizations listed and how many setlists they
+/// have between them.
+pub fn step(orgs: &[String], setlists: usize) -> Step {
+    if orgs.is_empty() {
         Step::NoOrganization
     } else if setlists == 0 {
         Step::NoSetlist
@@ -197,26 +202,39 @@ pub struct OrgSetlists {
     pub setlists: Vec<Offer>,
 }
 
-/// Each org's setlists, in the orgs' order: the sets of the org Studio is
-/// in (`here`'s index: `(id, title)`) and the setlist files Drive and
-/// this computer have, each in the org it belongs to. A file in an org
-/// not listed is left out (it is not this person's).
+/// What Home shows, and `STUDIO_FIRST_RUN` answers: the step, and each
+/// organization's setlists ([`offers`]).
+pub fn on_home(
+    orgs: &[String],
+    here: &str,
+    faces: &[crate::setlist::Face],
+    files: &[Hit],
+) -> (Step, Vec<OrgSetlists>) {
+    let listed = offers(orgs, here, faces, files);
+    let count = listed.iter().map(|o| o.setlists.len()).sum();
+    (step(orgs, count), listed)
+}
+
+/// Each organization's setlists, in the organizations' order: the
+/// setlists of the one Studio is in (`here`'s index) and the setlist files
+/// Drive and this computer have, each in the organization it belongs to.
+/// A file in one not listed is left out (it is not this person's).
 pub fn offers(
     orgs: &[String],
     here: &str,
-    sets: &[(String, String)],
+    faces: &[crate::setlist::Face],
     files: &[Hit],
 ) -> Vec<OrgSetlists> {
     orgs.iter()
         .map(|org| {
             let mut setlists: Vec<Offer> = Vec::new();
             if org == here {
-                setlists.extend(sets.iter().map(|(id, title)| Offer {
+                setlists.extend(faces.iter().map(|f| Offer {
                     org: org.clone(),
-                    title: title.clone(),
+                    title: f.title.clone(),
                     open: Route::OrgSet {
                         owner: org.clone(),
-                        id: id.clone(),
+                        id: f.id.clone(),
                     },
                 }));
             }

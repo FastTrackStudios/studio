@@ -531,21 +531,21 @@ mod imp {
     }
 
     /// The node's `/orgs`, asked with this app's sign-in when it has one.
+    /// The token refreshed first when it runs out within a minute, as
+    /// Drive's boot does, so this says what the app's pages see.
     async fn node_orgs() -> Result<Value, String> {
-        let bearer = drive_dioxus::auth::bearer();
+        let token = drive_dioxus::auth::fresh_token(60_000.0).await;
+        let bearer = token.map(|t| format!("Bearer {t}"));
         let headers: Vec<(&str, &str)> = bearer
             .iter()
             .map(|b| ("authorization", b.as_str()))
             .collect();
-        drive_dioxus::auth::fetch("GET", "/orgs", &headers, None)
-            .await
-            .map(|(_, v)| v)
-            .ok_or_else(|| {
-                format!(
-                    "the Drive node at {} did not answer",
-                    drive_dioxus::env::origin()
-                )
-            })
+        let at = drive_dioxus::env::origin();
+        match drive_dioxus::auth::fetch("GET", "/orgs", &headers, None).await {
+            Some((200, v)) => Ok(v),
+            Some((status, _)) => Err(format!("the Drive node at {at} answered {status}")),
+            None => Err(format!("the Drive node at {at} did not answer")),
+        }
     }
 
     /// STUDIO_ACCOUNT: who the node says this is.
@@ -576,9 +576,9 @@ mod imp {
                 "the Drive node wants a sign-in but names no account server".to_string()
             })?;
         drive_dioxus::auth::sign_in(&issuer).await?;
-        // Once this answer is on its way.
-        std::thread::spawn(|| {
-            std::thread::sleep(std::time::Duration::from_millis(750));
+        // Once this answer is on its way (it is sent when this returns).
+        architect::platform::spawn(async {
+            architect::platform::sleep(std::time::Duration::from_millis(750)).await;
             drive_dioxus::env::reload();
         });
         Ok(json!({ "signed_in": true, "restarting": true }))
@@ -862,13 +862,9 @@ mod imp {
             })),
             "STUDIO_FIRST_RUN" => {
                 // The UI is up: Drive let this app in, so it is past signing in.
-                let orgs = (app.orgs)();
-                let sets: Vec<(String, String)> =
-                    index.faces().into_iter().map(|f| (f.id, f.title)).collect();
                 let files = (app.drive_sets)().unwrap_or_default();
-                let listed = crate::first_run::offers(&orgs, &here, &sets, &files);
-                let count = listed.iter().map(|o| o.setlists.len()).sum();
-                let step = crate::first_run::step(false, &orgs, count);
+                let (step, listed) =
+                    crate::first_run::on_home(&(app.orgs)(), &here, &index.faces(), &files);
                 Ok(crate::first_run::answer(step, &here, &listed))
             }
             "STUDIO_ORGS" => Ok(json!({ "here": here, "orgs": (app.orgs)() })),
