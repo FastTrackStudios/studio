@@ -2039,7 +2039,7 @@ dependencies = [
 [[package]]
 name = "auth"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
+source = "git+https://github.com/FastTrackStudios/auth?rev=39f4bf2d8eb438fe4773a753314d643603885374#39f4bf2d8eb438fe4773a753314d643603885374"
 dependencies = [
  "argon2",
  "async-trait",
@@ -2081,7 +2081,7 @@ dependencies = [
 [[package]]
 name = "auth-client"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
+source = "git+https://github.com/FastTrackStudios/auth?rev=39f4bf2d8eb438fe4773a753314d643603885374#39f4bf2d8eb438fe4773a753314d643603885374"
 dependencies = [
  "base64 0.22.1",
  "libc",
@@ -2099,7 +2099,7 @@ dependencies = [
 [[package]]
 name = "auth-db"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
+source = "git+https://github.com/FastTrackStudios/auth?rev=39f4bf2d8eb438fe4773a753314d643603885374#39f4bf2d8eb438fe4773a753314d643603885374"
 dependencies = [
  "auth-proto",
  "chrono",
@@ -2113,7 +2113,7 @@ dependencies = [
 [[package]]
 name = "auth-macros"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
+source = "git+https://github.com/FastTrackStudios/auth?rev=39f4bf2d8eb438fe4773a753314d643603885374#39f4bf2d8eb438fe4773a753314d643603885374"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -2124,7 +2124,7 @@ dependencies = [
 [[package]]
 name = "auth-proto"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
+source = "git+https://github.com/FastTrackStudios/auth?rev=39f4bf2d8eb438fe4773a753314d643603885374#39f4bf2d8eb438fe4773a753314d643603885374"
 dependencies = [
  "auth-macros",
  "axum",
@@ -24215,6 +24215,7 @@ dependencies = [
  "auth",
  "auth-proto",
  "axum",
+ "base64 0.22.1",
  "console_error_panic_hook",
  "daw-extension",
  "daw-theme",
@@ -24254,6 +24255,7 @@ dependencies = [
  "serde_json",
  "session-format",
  "session-sync",
+ "sha2 0.10.9",
  "studio-arrangement",
  "studio-engine",
  "studio-lyrics",

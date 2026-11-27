@@ -108,6 +108,251 @@ pub fn NewOrg(#[props(default)] done: Option<EventHandler<()>>) -> Element {
     }
 }
 
+// ── joining, and an org's members ───────────────────────────────────────
+
+/// Join an organization from an invitation: paste its link, and Join. The
+/// account signed in here becomes a member, and Studio goes into it
+/// (`done` then runs). What STUDIO_ORG_JOIN does.
+#[component]
+pub fn JoinOrg(#[props(default)] done: Option<EventHandler<()>>) -> Element {
+    #[cfg(feature = "drive")]
+    {
+        let app = use_app();
+        let mut link = use_signal(String::new);
+        let mut busy = use_signal(|| false);
+        let mut said = use_signal(|| None::<String>);
+        let mut go = move || {
+            if busy() || link().trim().is_empty() {
+                return;
+            }
+            busy.set(true);
+            said.set(None);
+            let pasted = link();
+            spawn(async move {
+                match crate::org_members::join_here(&pasted).await {
+                    Ok(joined) => {
+                        crate::org_members::joined(app, &joined);
+                        app.say(format!("You are in {}", orgs::org_name(&joined.slug)));
+                        link.set(String::new());
+                        if let Some(done) = done {
+                            done.call(());
+                        }
+                    }
+                    Err(why) => said.set(Some(format!("Not joined: {why}."))),
+                }
+                busy.set(false);
+            });
+        };
+        rsx! {
+            div { class: "addrow",
+                input {
+                    class: "edtitle",
+                    placeholder: "Join with an invitation: paste its link",
+                    aria_label: "Invitation link",
+                    value: "{link}",
+                    oninput: move |e| link.set(e.value()),
+                    onkeydown: move |e: KeyboardEvent| {
+                        if e.key().to_string() == "Enter" {
+                            go();
+                        }
+                    },
+                }
+                button {
+                    class: "secondary",
+                    disabled: busy() || link().trim().is_empty(),
+                    onclick: move |_| go(),
+                    if busy() { "Joining…" } else { "Join" }
+                }
+            }
+            if let Some(s) = said() {
+                div { class: "s1", role: "alert", "{s}" }
+            }
+        }
+    }
+    #[cfg(not(feature = "drive"))]
+    {
+        let _ = done;
+        rsx! {}
+    }
+}
+
+/// Who is in `org`, from the account server (by account, never matched
+/// by email), and for an owner or an admin: invite by email or by link,
+/// and remove a member. What STUDIO_ORG_MEMBERS, _INVITE and _REMOVE do.
+#[component]
+pub fn Members(org: String) -> Element {
+    #[cfg(feature = "drive")]
+    {
+        use crate::org_members as m;
+        let app = use_app();
+        let mut tick = use_signal(|| 0u32);
+        let slug = org.clone();
+        let listed = use_resource(move || {
+            let slug = slug.clone();
+            let _ = tick();
+            async move { m::members_here(&slug).await }
+        });
+        let mut email = use_signal(String::new);
+        let mut made = use_signal(|| None::<m::Invited>);
+        let mut busy = use_signal(|| false);
+        let mut said = use_signal(|| None::<String>);
+        let mut confirm = use_signal(|| None::<String>);
+        let mut invite = {
+            let org = org.clone();
+            move |to: Option<String>| {
+                if busy() {
+                    return;
+                }
+                busy.set(true);
+                said.set(None);
+                let org = org.clone();
+                spawn(async move {
+                    match m::invite_here(&org, to.as_deref()).await {
+                        Ok(inv) => {
+                            email.set(String::new());
+                            made.set(Some(inv));
+                        }
+                        Err(why) => said.set(Some(format!("Not invited: {why}."))),
+                    }
+                    busy.set(false);
+                });
+            }
+        };
+        let mut invite2 = invite.clone();
+        let mut invite_link = invite.clone();
+        let remove = {
+            let org = org.clone();
+            move |account: String| {
+                if confirm().as_deref() != Some(account.as_str()) {
+                    confirm.set(Some(account));
+                    return;
+                }
+                confirm.set(None);
+                let org = org.clone();
+                spawn(async move {
+                    match m::remove_here(&org, &account).await {
+                        Ok(()) => {
+                            app.say("Removed");
+                            tick += 1;
+                        }
+                        Err(why) => said.set(Some(format!("Not removed: {why}."))),
+                    }
+                });
+            }
+        };
+        let state = listed.read().clone();
+        rsx! {
+            div { class: "songh", "Members" }
+            match state {
+                None => rsx! { div { class: "s1", "Asking the account server…" } },
+                Some(Err(why)) => rsx! { div { class: "s1", role: "alert", "Members not shown: {why}." } },
+                Some(Ok((here, people))) => {
+                    let manage = here.manages();
+                    rsx! {
+                        div { class: "sfgroup",
+                            for p in people {
+                                {
+                                    let account = p.account.clone();
+                                    let asking = confirm().as_deref() == Some(p.account.as_str());
+                                    let mut remove = remove.clone();
+                                    let sub = p.email.clone().filter(|e| p.name.as_deref().is_some_and(|n| !n.trim().is_empty()) && !e.is_empty());
+                                    rsx! {
+                                        div { key: "{p.account}", class: "sfrow",
+                                            span { class: "mid",
+                                                span { class: "t1", "{p.label()}" }
+                                                if let Some(e) = sub {
+                                                    span { class: "s1", "{e}" }
+                                                }
+                                            }
+                                            span { class: "sfchip", "{p.role}" }
+                                            if manage && !m::has_role(&p.role, "owner") {
+                                                button {
+                                                    class: if asking { "secondary danger" } else { "rb danger" },
+                                                    aria_label: "Remove {p.label()}",
+                                                    onclick: move |_| remove(account.clone()),
+                                                    if asking { "Remove?" } else { Icon { name: I::Trash, size: 15 } }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if manage {
+                            div { class: "addrow",
+                                input {
+                                    class: "edtitle",
+                                    r#type: "email",
+                                    placeholder: "Invite by email",
+                                    aria_label: "Email to invite",
+                                    value: "{email}",
+                                    oninput: move |e| email.set(e.value()),
+                                    onkeydown: move |e: KeyboardEvent| {
+                                        let to = email().trim().to_string();
+                                        if e.key().to_string() == "Enter" && !to.is_empty() {
+                                            invite(Some(to));
+                                        }
+                                    },
+                                }
+                                button {
+                                    class: "primary",
+                                    disabled: busy() || email().trim().is_empty(),
+                                    onclick: move |_| invite2(Some(email().trim().to_string())),
+                                    "Invite"
+                                }
+                                button {
+                                    class: "secondary",
+                                    disabled: busy(),
+                                    onclick: move |_| invite_link(None),
+                                    Icon { name: I::Link, size: 16 }
+                                    "Invite link"
+                                }
+                            }
+                            if let Some(inv) = made() {
+                                {
+                                    let to = inv.email.clone().map_or_else(
+                                        || "Anyone with this link joins as a member, with any account:".to_string(),
+                                        |e| format!("Send {e} this link; they accept with any account:"),
+                                    );
+                                    let link = inv.link.clone();
+                                    rsx! {
+                                        div { class: "s1", "{to}" }
+                                        div { class: "addrow",
+                                            input { class: "edtitle", readonly: true, aria_label: "Invitation link", value: "{inv.link}" }
+                                            button {
+                                                class: "secondary",
+                                                onclick: move |_| {
+                                                    let js = format!(
+                                                        "navigator.clipboard && navigator.clipboard.writeText({})",
+                                                        serde_json::to_string(&link).unwrap_or_default()
+                                                    );
+                                                    document::eval(&js);
+                                                    app.say("Link copied");
+                                                },
+                                                "Copy"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            div { class: "s1", "Your role here is {here.role}: an owner or an admin invites and removes people." }
+                        }
+                    }
+                }
+            }
+            if let Some(s) = said() {
+                div { class: "s1", role: "alert", "{s}" }
+            }
+        }
+    }
+    #[cfg(not(feature = "drive"))]
+    {
+        let _ = org;
+        rsx! {}
+    }
+}
+
 // ── All orgs ────────────────────────────────────────────────────────────
 
 #[component]
@@ -128,6 +373,7 @@ pub fn AllOrgs() -> Element {
                     }
                 }
                 NewOrg {}
+                JoinOrg {}
             }
         }
     }
@@ -590,6 +836,8 @@ pub fn OrgSettings() -> Element {
                         span { class: "s1", "{here}" }
                     }
                 }
+                Members { key: "{here}", org: here.clone() }
+                div { class: "songh", "In Studio" }
                 label { class: "fieldrow",
                     span { "Name in Studio" }
                     input {
