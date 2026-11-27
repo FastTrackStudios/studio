@@ -1301,6 +1301,18 @@ impl StreamedSong {
             .await;
     }
 
+    /// Whether every block of what the song is `heard` by is in the
+    /// browser's cache: all of it here, to play with no network.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn is_warm(&self, heard: Heard) -> bool {
+        let wanted = self.warm_paths(heard);
+        let mut files = self.versions();
+        files.retain(|path, _| wanted.contains(path.as_str()));
+        CachedFetch::new(self.media(), &self.source.label(), files)
+            .all_cached()
+            .await
+    }
+
     /// Each proxy's size and version (its page index's hash: a proxy made
     /// again is indexed again), by its path in the song.
     #[cfg(target_arch = "wasm32")]
@@ -1464,6 +1476,21 @@ impl CachedFetch {
         wasm_bindgen_futures::JsFuture::from(cache.match_with_str(&self.key(path, version, block)))
             .await
             .is_ok_and(|hit| !hit.is_undefined())
+    }
+
+    /// Whether every block of every proxy is in the cache.
+    async fn all_cached(&self) -> bool {
+        let Ok(cache) = Self::cache().await else {
+            return false;
+        };
+        for (path, (size, _)) in &self.files {
+            for block in 0..size.div_ceil(Self::BLOCK) {
+                if !self.cached(&cache, path, block).await {
+                    return false;
+                }
+            }
+        }
+        true
     }
 
     /// Fill the cache with every proxy's blocks — all of them, or the

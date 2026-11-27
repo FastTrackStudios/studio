@@ -66,8 +66,11 @@ impl ProjectRelativeResolver {
 impl ProjectRelativeResolver {
     /// Where `path` is on this machine: the file itself, or — when only
     /// its proxy was fetched (a session pulled from a library streams
-    /// from its proxies) — `Proxies/<stem>.ogg` beside where it would be.
-    /// The same rule the proxy writer and the server's renditions use.
+    /// from its proxies, a setlist downloaded to a phone keeps only them)
+    /// — its proxy, newest layout first: `Media/Proxy/<rel>.ogg` for
+    /// `Media/<rel>` (song-file's `media::proxy_of`), then the older
+    /// `Proxies/<stem>.ogg` beside where it would be (what share links and
+    /// `link-prepare` still write).
     fn locate(&self, path: &str) -> Option<std::path::PathBuf> {
         let pb = std::path::PathBuf::from(path);
         let abs = if pb.is_absolute() {
@@ -78,12 +81,25 @@ impl ProjectRelativeResolver {
         if abs.exists() {
             return Some(abs);
         }
-        let proxy = abs
-            .parent()?
-            .join("Proxies")
-            .join(abs.file_stem()?)
-            .with_extension("ogg");
-        proxy.exists().then_some(proxy)
+        let mirrored = abs
+            .strip_prefix(&self.project_dir)
+            .ok()
+            .and_then(|rel| rel.strip_prefix("Media").ok())
+            .filter(|rest| !rest.starts_with("Proxy"))
+            .map(|rest| {
+                self.project_dir
+                    .join("Media")
+                    .join("Proxy")
+                    .join(rest.with_extension("ogg"))
+            });
+        let beside = abs
+            .parent()
+            .zip(abs.file_stem())
+            .map(|(dir, stem)| dir.join("Proxies").join(stem).with_extension("ogg"));
+        mirrored
+            .into_iter()
+            .chain(beside)
+            .find(|proxy| proxy.exists())
     }
 }
 
@@ -122,6 +138,31 @@ mod proxy_fallback {
             r.resolve_path("Media/Bass.wav"),
             Some(dir.path().join("Media/Proxies/Bass.ogg"))
         );
+    }
+
+    #[test]
+    fn a_missing_source_is_found_by_its_proxy_in_the_mirrored_layout() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("Media/Proxy/Drums")).unwrap();
+        std::fs::create_dir_all(dir.path().join("Media/Proxy/Reference")).unwrap();
+        std::fs::write(dir.path().join("Media/Proxy/Drums/Kick.ogg"), b"kick").unwrap();
+        std::fs::write(dir.path().join("Media/Proxy/Reference/Song.ogg"), b"ref").unwrap();
+        std::fs::create_dir_all(dir.path().join("Media/Drums/Proxies")).unwrap();
+        std::fs::write(dir.path().join("Media/Drums/Proxies/Kick.ogg"), b"old").unwrap();
+        let r = ProjectRelativeResolver::new(dir.path());
+        assert_eq!(
+            r.resolve("Media/Drums/Kick.wav").unwrap(),
+            b"kick",
+            "the newest layout first"
+        );
+        assert_eq!(r.resolve("Media/Reference/Song.wav").unwrap(), b"ref");
+        let absolute = dir.path().join("Media/Drums/Kick.wav");
+        assert_eq!(
+            r.resolve_path(&absolute.to_string_lossy()),
+            Some(dir.path().join("Media/Proxy/Drums/Kick.ogg")),
+            "an absolute path inside the song is found the same way"
+        );
+        assert!(r.resolve("Other/Kick.wav").is_err(), "only under Media/");
     }
 }
 

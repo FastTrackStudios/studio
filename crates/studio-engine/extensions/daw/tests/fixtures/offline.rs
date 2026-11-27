@@ -3,8 +3,10 @@
 //!
 //! 1. **Shared.** Two fixture sessions are staged as the setlist's source
 //!    and made ready to share by `SESSION_PREPARE` (each recording's Ogg
-//!    proxy). A share link serves them (`/s/<code>/_files.json` and each
-//!    file by `Range`), as a Drive node serves one.
+//!    proxy), the first song's proxies then moved to the newer layout
+//!    (`Media/Proxy/`). A share link serves them (`/s/<code>/_files.json`
+//!    and each file by `Range`) as a Drive node serves one: each song's
+//!    prepared `.session` is its project.
 //! 2. **Downloaded.** `SETLIST_DOWNLOAD` brings the setlist down twice, as
 //!    a desktop keeps it (`full`: the original recordings too) and as a
 //!    phone or a browser keeps it (`proxies`: never an original), and
@@ -124,6 +126,17 @@ fn download(run: &Path) {
             Err(why) => checks.failed(format!("{name} prepared"), why),
         }
     }
+    // The first song's proxies in the newer layout (`Media/Proxy/<rel>.ogg`,
+    // song-file's `media`), the others where `SESSION_PREPARE` writes them
+    // (`Media/Proxies/<stem>.ogg`): a phone's copy plays from either.
+    if let Some((name, song)) = songs.first() {
+        let moved = mirror_proxies(song.parent().unwrap_or(song));
+        checks.add(
+            format!("{name} in the mirrored layout"),
+            matches!(moved, Ok(n) if n > 0),
+            format!("{moved:?} proxy files moved to Media/Proxy/"),
+        );
+    }
     let link = ShareLink::serve(&source.join("sessions"), &songs);
     let url = link.url();
     let mut setlists = serde_json::Map::new();
@@ -165,6 +178,28 @@ fn download(run: &Path) {
         engine,
         &checks,
     );
+}
+
+/// Move every proxy (and its page index) under `folder`'s
+/// `Media/Proxies/` into the mirrored layout, `Media/Proxy/`. How many
+/// files moved.
+fn mirror_proxies(folder: &Path) -> Result<usize, String> {
+    let old = folder.join("Media").join("Proxies");
+    let new = folder.join("Media").join("Proxy");
+    std::fs::create_dir_all(&new).map_err(|e| e.to_string())?;
+    let mut moved = 0;
+    for entry in std::fs::read_dir(&old)
+        .map_err(|e| format!("{}: {e}", old.display()))?
+        .flatten()
+    {
+        let path = entry.path();
+        if path.is_file() {
+            let to = new.join(entry.file_name());
+            std::fs::rename(&path, &to).map_err(|e| format!("{}: {e}", path.display()))?;
+            moved += 1;
+        }
+    }
+    Ok(moved)
 }
 
 /// `SETLIST_DOWNLOAD` one way, waited on: `SETLIST_DOWNLOADING` once
@@ -417,9 +452,10 @@ impl ShareLink {
     }
 }
 
-/// The link's listing: one note per song attaching its `.RPP` (whose
-/// recordings are named relative to it), and every file under each song's
-/// folder but the project files the engine wrote, with its size and URL.
+/// The link's listing: one note per song attaching its prepared
+/// `.session` (its recordings named relative to its folder), and every
+/// file under each song's folder but the session's log, with its size and
+/// URL.
 fn listing(root: &Path, songs: &[(&str, PathBuf)]) -> Value {
     let mut notes = Vec::new();
     let mut files = Vec::new();
@@ -427,18 +463,22 @@ fn listing(root: &Path, songs: &[(&str, PathBuf)]) -> Value {
         let folder = song.parent().unwrap_or(song);
         let mut under = Vec::new();
         walk(folder, &mut under);
-        let mut project = None;
+        let (mut session, mut rpp) = (None, None);
         for file in under {
             let rel = file
                 .strip_prefix(root)
                 .map(|r| r.to_string_lossy().replace('\\', "/"))
                 .unwrap_or_default();
             let lower = rel.to_lowercase();
-            if lower.contains(".session") {
+            // A `.session`'s log (`-wal`, `-shm`, `-tshm`) is the engine's
+            // own, never served (`song_files::folder`).
+            if lower.contains(".session-") {
                 continue;
             }
-            if lower.ends_with(".rpp") {
-                project = Some(rel.clone());
+            if lower.ends_with(".session") {
+                session = Some(rel.clone());
+            } else if lower.ends_with(".rpp") {
+                rpp = Some(rel.clone());
             }
             let size = std::fs::metadata(&file).map_or(0, |m| m.len());
             files.push(json!({
@@ -448,6 +488,8 @@ fn listing(root: &Path, songs: &[(&str, PathBuf)]) -> Value {
                 "layer": "full",
             }));
         }
+        // The prepared `.session`, as a node serves a song, else the `.RPP`.
+        let project = session.or(rpp);
         notes.push(json!({
             "path": format!("Songs/{name}.md"),
             "title": name,

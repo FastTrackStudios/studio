@@ -177,6 +177,7 @@ fn Loaded(space: String, location: String, path: String) -> Element {
                     Icon { name: I::Layers, size: 14 }
                     "Arrangement"
                 }
+                crate::offline::OfflineButton { name: name.clone(), list: list.clone() }
             }
         }
         for act in set.acts.iter() {

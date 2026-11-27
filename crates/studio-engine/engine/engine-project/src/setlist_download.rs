@@ -33,7 +33,7 @@ static DOWNLOAD: ActionMeta = crate::actions::meta(
     "SETLIST_DOWNLOAD",
     "setlist_download",
     "Download setlist",
-    "Download a setlist onto this device so it opens and plays with no internet. `from` is the setlist's share link (`https://<node>/s/<code>/`). `keep` says what comes down: `full` (every file the link serves, the original recordings too: a desktop's default), `proxies` (each song's small files and the Ogg proxies of every track, never the originals: a phone's and a browser's default) or `reference` (the small files, the reference mix and the guide's proxies only). `to` is the folder the setlist goes in (a folder per setlist under the device's offline folder when not said). It runs in the background and returns at once; SETLIST_DOWNLOADING says how far it is, and once it is `done` its `setlist` is the `.setlist` file to SESSION_OPEN, with or without a network. A song already downloaded keeps every file that is here at its size.",
+    "Download a setlist onto this device so it opens and plays with no internet. It comes from `from`, the setlist's share link (`https://<node>/s/<code>/`), or from `songs`, each song's `folder` (or project file) on this device and its `title`, in running order, the setlist called `name`. `keep` says what comes down: `full` (every file the link serves, the original recordings too: a desktop's default), `proxies` (each song's small files and the Ogg proxies of every track, never the originals: a phone's and a browser's default) or `reference` (the small files, the reference mix and the guide's proxies only). `to` is the folder the setlist goes in (a folder per setlist under the device's offline folder when not said). It runs in the background and returns at once; SETLIST_DOWNLOADING says how far it is, and once it is `done` its `setlist` is the `.setlist` file to SESSION_OPEN, with or without a network. A song already downloaded keeps every file that is here at its size.",
     "Setlist",
     "",
 );
@@ -345,40 +345,157 @@ async fn fetch_the_rest(
     Ok(())
 }
 
-/// Download the setlist `from` shares into `to`, keeping what `kept`
+/// Where a setlist comes down from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Origin {
+    /// A share link (`https://<node>/s/<code>/`): its songs in list order.
+    Link(String),
+    /// Song folders this device can read — on its disk, on a drive, or
+    /// brought here by Drive's agent: what the app downloads a set from.
+    Folders {
+        name: String,
+        /// Each song's title and its folder (or its project file).
+        songs: Vec<(String, PathBuf)>,
+    },
+}
+
+impl Origin {
+    /// What a person reads it as (never a link: that is a capability).
+    fn said(&self) -> String {
+        match self {
+            Self::Link(link) => host_of(link),
+            Self::Folders { name, .. } => name.clone(),
+        }
+    }
+}
+
+/// A setlist's name and its songs, each a title and where its files come
+/// from.
+type Songs = (String, Vec<(String, Arc<dyn SongSource>)>);
+
+/// The songs `origin` names.
+async fn songs_of(origin: &Origin) -> eyre::Result<Songs> {
+    match origin {
+        Origin::Link(link) => {
+            let set = engine_runtime::link::LinkSet::open(link).await?;
+            let songs = set
+                .songs
+                .into_iter()
+                .map(|song| {
+                    let source: Arc<dyn SongSource> = Arc::new(song.clone());
+                    (song.title, source)
+                })
+                .collect();
+            Ok((set.title, songs))
+        }
+        Origin::Folders { name, songs } => {
+            let mut out = Vec::with_capacity(songs.len());
+            for (title, folder) in songs {
+                let source: Arc<dyn SongSource> = Arc::new(FolderSource::at(folder)?);
+                out.push((title.clone(), source));
+            }
+            Ok((name.clone(), out))
+        }
+    }
+}
+
+/// A song folder on this device, served as a source: its files listed and
+/// read the way a peer serves its own (`daw_proto::song_files::folder`).
+struct FolderSource {
+    /// The song's project file, which names its folder.
+    project: String,
+}
+
+impl FolderSource {
+    /// The song at `at`: a song folder (its `.session`, else its `.RPP`), or
+    /// the project file itself.
+    fn at(at: &Path) -> eyre::Result<Self> {
+        let project = if at.is_dir() {
+            crate::setlist::song_in(at).ok_or_else(|| eyre::eyre!("no song in {}", at.display()))?
+        } else if at.is_file() {
+            at.to_path_buf()
+        } else {
+            eyre::bail!("{} is not on this device", at.display());
+        };
+        Ok(Self {
+            project: project.display().to_string(),
+        })
+    }
+}
+
+impl SongSource for FolderSource {
+    fn label(&self) -> String {
+        self.project.clone()
+    }
+
+    fn list(&self) -> Pending<eyre::Result<Listing>> {
+        let listed = daw_proto::song_files::folder::list(&self.project)
+            .map(|files| {
+                files
+                    .into_iter()
+                    .map(|f| (f.path, f.size))
+                    .collect::<Vec<_>>()
+                    .into()
+            })
+            .map_err(|e| eyre::eyre!("{e}"));
+        Box::pin(async move { listed })
+    }
+
+    fn read(&self, path: String, range: std::ops::Range<u64>) -> Pending<Result<Vec<u8>, String>> {
+        let project = self.project.clone();
+        Box::pin(async move {
+            let mut out = Vec::new();
+            let mut at = range.start;
+            while at < range.end {
+                let len =
+                    u32::try_from((range.end - at).min(u64::from(daw_proto::song_files::MAX_READ)))
+                        .unwrap_or(daw_proto::song_files::MAX_READ);
+                let bytes = daw_proto::song_files::folder::read(&project, &path, at, len)
+                    .map_err(|e| e.to_string())?;
+                if bytes.is_empty() {
+                    break;
+                }
+                at += bytes.len() as u64;
+                out.extend(bytes);
+            }
+            Ok(out)
+        })
+    }
+}
+
+/// Download the setlist `origin` names into `to`, keeping what `kept`
 /// says. Returns the `.setlist` written there and each song as it is on
 /// the device.
 ///
 /// # Errors
 ///
-/// The link did not list, a song could not be fetched, or the disk could
-/// not be written.
+/// It names no songs, a song could not be fetched, or the disk could not
+/// be written.
 pub async fn download(
-    from: &str,
+    origin: &Origin,
     to: &Path,
     kept: Kept,
 ) -> eyre::Result<(PathBuf, Vec<DownloadedSong>)> {
-    let set = engine_runtime::link::LinkSet::open(from).await?;
-    if set.songs.is_empty() {
-        eyre::bail!("{from} shares no songs");
+    let (title, songs) = songs_of(origin).await?;
+    if songs.is_empty() {
+        eyre::bail!("{} names no songs", origin.said());
     }
-    let name = if set.title.trim().is_empty() {
+    let name = if title.trim().is_empty() {
         "Setlist".to_owned()
     } else {
-        set.title.clone()
+        title
     };
-    let titles: Vec<String> = set.songs.iter().map(|s| s.title.clone()).collect();
+    let titles: Vec<String> = songs.iter().map(|(t, _)| t.clone()).collect();
     let folders = folder_names(&titles);
-    let count = u32::try_from(set.songs.len()).unwrap_or(u32::MAX);
+    let count = u32::try_from(songs.len()).unwrap_or(u32::MAX);
     update(|s| {
         s.name = Some(name.clone());
         s.songs = count;
     });
     std::fs::create_dir_all(to)?;
-    let mut downloaded = Vec::with_capacity(set.songs.len());
-    let mut written = Vec::with_capacity(set.songs.len());
-    for (i, (song, folder)) in set.songs.into_iter().zip(&folders).enumerate() {
-        let title = song.title.clone();
+    let mut downloaded = Vec::with_capacity(songs.len());
+    let mut written = Vec::with_capacity(songs.len());
+    for (i, ((title, song), folder)) in songs.into_iter().zip(&folders).enumerate() {
         let number = u32::try_from(i + 1).unwrap_or(u32::MAX);
         update(|s| {
             s.song = number;
@@ -396,7 +513,7 @@ pub async fn download(
         );
         let source: Arc<dyn SongSource> = Arc::new(Named {
             name: folder.clone(),
-            inner: Arc::new(song),
+            inner: song,
         });
         let progress = |bytes: u64, total: u64| {
             update(|s| {
@@ -426,29 +543,79 @@ pub async fn download(
         downloaded.push(here);
     }
     let setlist = to.join(format!("{}.setlist", file_name(&name)));
-    std::fs::write(&setlist, setlist_text(&name, from, &written))?;
+    std::fs::write(&setlist, setlist_text(&name, &origin.said(), &written))?;
     Ok((setlist, downloaded))
 }
 
 /// `SETLIST_DOWNLOAD`'s arguments.
 #[derive(Facet)]
 struct DownloadArg {
-    from: String,
+    from: Option<String>,
+    songs: Option<Vec<SongArg>>,
+    name: Option<String>,
     to: Option<String>,
     keep: Option<String>,
 }
 
+/// One of `SETLIST_DOWNLOAD`'s `songs`.
+#[derive(Facet)]
+struct SongArg {
+    title: Option<String>,
+    folder: String,
+}
+
+/// Where the arguments say the setlist comes from.
+fn origin_of(arg: &mut DownloadArg) -> Result<Origin, String> {
+    match (arg.from.take(), arg.songs.take()) {
+        (Some(from), None) => {
+            let from = from.trim().to_owned();
+            engine_runtime::link::listing_url(&from).map_err(|e| e.to_string())?;
+            Ok(Origin::Link(from))
+        }
+        (None, Some(songs)) if !songs.is_empty() => Ok(Origin::Folders {
+            name: arg
+                .name
+                .take()
+                .filter(|n| !n.trim().is_empty())
+                .unwrap_or_else(|| "Setlist".to_owned()),
+            songs: songs
+                .into_iter()
+                .map(|s| {
+                    let folder = PathBuf::from(s.folder.trim());
+                    let title = s.title.filter(|t| !t.trim().is_empty()).unwrap_or_else(|| {
+                        folder
+                            .file_stem()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default()
+                    });
+                    (title, folder)
+                })
+                .collect(),
+        }),
+        (Some(_), Some(_)) => {
+            Err("`from` (a share link) or `songs` (song folders), not both".to_owned())
+        }
+        _ => Err(
+            "`from` (a setlist's share link) or `songs` (each `folder`, and its `title`)"
+                .to_owned(),
+        ),
+    }
+}
+
 /// Where a setlist is downloaded when `to` is not said: under the device's
-/// offline folder, by its link.
-fn default_folder(from: &str) -> PathBuf {
+/// offline folder, by its link's code or its name.
+fn default_folder(origin: &Origin) -> PathBuf {
     let root = dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)
         .join("FastTrackStudio")
         .join("Offline");
-    let code = engine_runtime::link::listing_url(from)
-        .map(|(_, code)| code)
-        .unwrap_or_else(|_| "setlist".to_owned());
-    root.join(file_name(&code))
+    let name = match origin {
+        Origin::Link(link) => engine_runtime::link::listing_url(link)
+            .map(|(_, code)| code)
+            .unwrap_or_else(|_| "setlist".to_owned()),
+        Origin::Folders { name, .. } => name.clone(),
+    };
+    root.join(file_name(&name))
 }
 
 /// A share link's host, for telemetry: the link itself is a capability.
@@ -460,17 +627,17 @@ fn host_of(link: &str) -> String {
 }
 
 /// Start a download in the background.
-fn start(arg: DownloadArg) -> Result<String, String> {
+fn start(mut arg: DownloadArg) -> Result<String, String> {
     let kept = arg
         .keep
         .as_deref()
         .map_or(Ok(Kept::for_this_device()), Kept::named)?;
-    let from = arg.from.trim().to_owned();
-    engine_runtime::link::listing_url(&from).map_err(|e| e.to_string())?;
+    let origin = origin_of(&mut arg)?;
+    let from = origin.said();
     let to = arg
         .to
         .filter(|t| !t.trim().is_empty())
-        .map_or_else(|| default_folder(&from), PathBuf::from);
+        .map_or_else(|| default_folder(&origin), PathBuf::from);
     {
         let mut s = status().lock().map_err(|e| e.to_string())?;
         if s.state == "downloading" {
@@ -487,13 +654,13 @@ fn start(arg: DownloadArg) -> Result<String, String> {
         };
     }
     let into = to.clone();
-    let link = from.clone();
+    let said = from.clone();
     std::thread::Builder::new()
         .name("setlist-download".to_owned())
         .spawn(move || {
             let span = tracing::info_span!(
                 "setlist_download",
-                host = %host_of(&link),
+                from = %said,
                 to = %into.display(),
                 keep = kept.name(),
                 songs = tracing::field::Empty,
@@ -506,7 +673,7 @@ fn start(arg: DownloadArg) -> Result<String, String> {
                 .map_err(eyre::Report::from)
                 .and_then(|rt| {
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        rt.block_on(download(&link, &into, kept))
+                        rt.block_on(download(&origin, &into, kept))
                     }))
                     .unwrap_or_else(|_| Err(eyre::eyre!("the download panicked")))
                 });
@@ -666,6 +833,75 @@ mod tests {
         assert_eq!(kind_of("Media/Bass.WAV"), (false, true));
         assert_eq!(kind_of("Song.session"), (false, false));
         assert_eq!(kind_of("Media/Proxies/Bass.ogg.idx"), (false, false));
+    }
+
+    #[test]
+    fn a_song_folder_on_this_device_is_listed_and_read_as_a_source() {
+        let dir = tempfile::tempdir().expect("a folder");
+        let song = dir.path().join("Waltz");
+        std::fs::create_dir_all(song.join("Media")).expect("its media folder");
+        std::fs::write(song.join("Waltz.RPP"), b"<REAPER_PROJECT\n>\n").expect("its project");
+        let bytes: Vec<u8> = (0..=255u8).cycle().take(3 * 1024 * 1024 + 7).collect();
+        std::fs::write(song.join("Media/Bass.wav"), &bytes).expect("its recording");
+        let source = FolderSource::at(&song).expect("a song");
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a runtime");
+        let listing = rt.block_on(source.list()).expect("it lists");
+        assert_eq!(listing.entries[0].0, "Waltz.RPP", "the project first");
+        assert!(
+            listing
+                .entries
+                .contains(&("Media/Bass.wav".to_owned(), bytes.len() as u64))
+        );
+        let read = rt
+            .block_on(source.read("Media/Bass.wav".to_owned(), 5..bytes.len() as u64))
+            .expect("it reads past one request's most");
+        assert_eq!(read, bytes[5..]);
+        assert!(FolderSource::at(&dir.path().join("Gone")).is_err());
+    }
+
+    #[test]
+    fn a_setlist_comes_from_a_link_or_from_song_folders_not_both() {
+        let mut both = DownloadArg {
+            from: Some("https://n/s/abc/".into()),
+            songs: Some(vec![SongArg {
+                title: None,
+                folder: "/a".into(),
+            }]),
+            name: None,
+            to: None,
+            keep: None,
+        };
+        assert!(origin_of(&mut both).is_err());
+        let mut folders = DownloadArg {
+            from: None,
+            songs: Some(vec![SongArg {
+                title: None,
+                folder: "/songs/Silent Night".into(),
+            }]),
+            name: Some("Christmas".into()),
+            to: None,
+            keep: None,
+        };
+        assert_eq!(
+            origin_of(&mut folders),
+            Ok(Origin::Folders {
+                name: "Christmas".into(),
+                songs: vec![("Silent Night".into(), PathBuf::from("/songs/Silent Night"))],
+            })
+        );
+        let mut link = DownloadArg {
+            from: Some(" https://n/s/abc/ ".into()),
+            songs: None,
+            name: None,
+            to: None,
+            keep: None,
+        };
+        assert_eq!(
+            origin_of(&mut link),
+            Ok(Origin::Link("https://n/s/abc/".into()))
+        );
     }
 
     #[test]
