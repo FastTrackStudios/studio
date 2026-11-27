@@ -16,7 +16,6 @@ vox = ["architect/vox", "dep:vox"]
 
 [dependencies]
 architect = { workspace = true, features = ["rig", "vox"] }
-architect-telemetry = { workspace = true }
 daw = { workspace = true }
 audio = { workspace = true, features = ["io", "monitor"] }
 eyre = { workspace = true }
@@ -28,6 +27,7 @@ signal-plugin-host = { workspace = true }
 signal-proto = { workspace = true }
 signal-rig-host = { workspace = true }
 signal-rigs-proto = { workspace = true }
+studio-otel = { workspace = true }
 sampler = { workspace = true }
 synth = { workspace = true }
 tracing = { workspace = true }

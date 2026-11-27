@@ -107,6 +107,16 @@ where
     tracing_opentelemetry::layer().with_tracer(tracer)
 }
 
+/// Set `key` to `value` among the current span's exported attributes: a
+/// field of the wide event known only where it is computed, on a span
+/// opened elsewhere (the RPC span the framework makes per call). A span
+/// may only record fields it declared; this adds any. Nothing when no
+/// span is exported.
+pub fn set(key: impl Into<opentelemetry::Key>, value: impl Into<opentelemetry::Value>) {
+    use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+    tracing::Span::current().set_attribute(key, value);
+}
+
 /// Send the spans buffered so far, waiting for the collector (bounded by
 /// the exporter's timeout). Nothing when no provider was made.
 pub fn flush() {

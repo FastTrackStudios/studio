@@ -13,6 +13,9 @@
 //!   nowhere: a plain build sends nothing.
 //! - [`layer`] (native): the `tracing` layer exporting every span, with the
 //!   global meter's metrics beside it.
+//! - [`set`]: a field added to the current span's exported
+//!   attributes, for a span opened elsewhere (the wide event, enriched
+//!   where the value is known); nothing in a page.
 //! - [`install_crash_hook`] (native): a panic becomes a `crash` span (the
 //!   wide event: thread, where, what), exported before the hook that was
 //!   there runs and the process goes.
@@ -22,7 +25,13 @@
 #[cfg(not(target_arch = "wasm32"))]
 mod export;
 #[cfg(not(target_arch = "wasm32"))]
-pub use export::{adopt, flush, install_crash_hook, layer, layer_to};
+pub use export::{adopt, flush, install_crash_hook, layer, layer_to, set};
+
+/// [`set`]'s browser form: a page exports no `tracing` spans (it posts its
+/// own OTLP/JSON), so there is no span attribute to add.
+#[cfg(target_arch = "wasm32")]
+#[allow(clippy::needless_pass_by_value)]
+pub fn set<K, V>(_key: K, _value: V) {}
 
 /// The collector a release build bakes in (`STUDIO_OTLP_ENDPOINT` at build
 /// time, through `build.rs`: the OTLP base URL, `/v1/traces` and

@@ -396,6 +396,12 @@ Reuse, don't reinvent:
 
 ### W10 — full telemetry (DONE)
 
+> Since studio#722 the keys rig and sampler are on plain `tracing` +
+> OpenTelemetry like the rest of Studio: the enrichments below ride
+> `studio_otel::set`, and the exporter is `studio_otel::layer` in the
+> process that hosts them. architect-telemetry is gone. The notes below
+> are kept as they were written.
+
 Every FTS process exports logs/traces/metrics via OTLP to the live
 collector (the Task observability stack: collector → Tempo/Loki,
 Grafana on top), the same `architect_telemetry` pattern as task-server.

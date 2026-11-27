@@ -253,7 +253,7 @@ enum Gesture {                // at most one at a time, by construction
 - **Deterministic lookups.** `ItemRef::ProjectIndex(n)` is
   `p.items.keys().nth(n)` on a `HashMap` — O(n) and in no defined order.
   Index-based refs need an ordered index or should be removed.
-- Measure with the span fields (`architect_telemetry::timing::Stages`,
+- Measure with the span fields (child spans per step,
   `PERF_RECENT`), never with prints — see `logging-best-practices`.
 
 ## What SoundCraft changes (details in `research.md` §10)

@@ -66,7 +66,7 @@ In Rust here:
   action callbacks, `main`) are "backwards" functions: keep their bodies
   tiny, read the context they must, and jump straight into honest code.
 - **Tracing is skin too.** Per `logging-best-practices`, enrich the span
-  with `architect_telemetry::wide::set` in the handler; honest helpers
+  with `studio_otel::set` in the handler; honest helpers
   return what happened (`Result`, a count, an outcome enum) and the top
   records it. Never `println!`/`eprintln!`/`dbg!` anywhere.
 - Realtime code: `process()` is already honest by necessity (no
