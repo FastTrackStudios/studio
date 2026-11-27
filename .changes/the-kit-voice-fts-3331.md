@@ -1,6 +1,6 @@
 ---
 "engine-runtime" = "minor"
-"fts-sample" = "minor"
+"fts-sample" = "patch"
 "sampler" = "minor"
 "signal-fx" = "minor"
 "studio-app" = "minor"

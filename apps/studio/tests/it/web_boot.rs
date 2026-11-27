@@ -140,12 +140,19 @@ fn the_web_build_opens_and_plays_a_fixture_session() {
         let heard: f32 = s.state("data-rig-kit-heard").parse().unwrap_or(0.0);
         (s.state("data-rig-wanted") == "0" && heard > 1e-4).then_some(())
     });
-    let (pack_len, room) = (kit_pack().0.len() as u64, kit_pack().1);
+    let (pack, room) = kit_pack();
+    let pack_len = pack.len() as u64;
+    let word = |at: usize| u64::from_le_bytes(pack[at..at + 8].try_into().expect("a header word"));
+    let index = (word(24), word(24) + word(32) - 1);
     let spans = PACK_SPANS.lock().map(|s| s.clone()).unwrap_or_default();
     let served: u64 = spans.iter().map(|(a, b)| b - a + 1).sum();
     assert!(
         spans.len() >= 3,
         "the pack's header, index and close samples, each by range; served {spans:?}"
+    );
+    assert!(
+        spans.contains(&(0, 63)) && spans.contains(&index),
+        "the pack's header and index each read by range; served {spans:?}"
     );
     assert!(
         served < pack_len,

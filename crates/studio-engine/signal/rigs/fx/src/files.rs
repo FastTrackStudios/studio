@@ -113,7 +113,8 @@ pub(crate) fn kit_key(path: &str) -> String {
     if path.is_empty() || path.starts_with(ROOT) {
         return path.to_owned();
     }
-    if !path.starts_with('/') && !path.contains(":\\") {
+    let drive = path.as_bytes().get(1) == Some(&b':');
+    if !path.starts_with(['/', '\\']) && !drive {
         return joined(&kits, path);
     }
     let parts: Vec<&str> = path.split(['/', '\\']).filter(|p| !p.is_empty()).collect();
@@ -246,9 +247,14 @@ pub fn pack(key: &str) -> Result<sampler::SignalPcmPack, Need> {
     if !has(&index) {
         return Err(Need::Keys(vec![index]));
     }
-    // One reader for every pack opened so: the first one set wins, and
-    // this is it in a page (nothing else reads packs there).
-    let _ = set_external_pack_reader(Box::new(read_span));
+    // One reader for every pack opened so. Only the first set in a process
+    // counts: a pack opened under someone else's would read their bytes.
+    static OURS: OnceLock<bool> = OnceLock::new();
+    if !*OURS.get_or_init(|| set_external_pack_reader(Box::new(read_span))) {
+        return Err(Need::Failed(
+            "another pack reader is installed; packs cannot be read by range".to_owned(),
+        ));
+    }
     let id = {
         let mut opened = lock(opened());
         let at = opened.iter().position(|k| k == key).unwrap_or_else(|| {
@@ -465,6 +471,12 @@ impl<T: Send> Pending for Slot<T> {
                 }
             }
         }
+        tracing::warn!(
+            stages = STAGES,
+            "a rig's files named more stages than any rig has; it plays without them"
+        );
+        lock(&self.keys).clear();
+        self.stage.store(TAKEN, Ordering::Release);
         false
     }
 

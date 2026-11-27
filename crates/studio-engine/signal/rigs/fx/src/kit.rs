@@ -231,7 +231,7 @@ impl KitMic {
         let old = self.adopt(voices);
         slot.retire(old);
         self.arriving = None;
-        self.streamed = true;
+        self.streamed = !self.pieces.is_empty();
     }
 
     /// One note to the pieces it routes to.
@@ -877,6 +877,15 @@ block { pack "../Packs/Kick.signalpack" }
         assert_eq!(
             files::kit_key("D:\\Kits\\Mine\\Presets\\Big.signalpreset"),
             "/rigs/drums/Mine/Presets/Big.signalpreset"
+        );
+        assert_eq!(
+            files::kit_key("D:/Kits/Mine/Presets/Big.signalpreset"),
+            "/rigs/drums/Mine/Presets/Big.signalpreset"
+        );
+        assert_eq!(
+            files::kit_key("Mine/Presets/Big.signalpreset"),
+            "/rigs/drums/Mine/Presets/Big.signalpreset",
+            "a relative path is under the kits"
         );
         assert_eq!(
             files::joined("/rigs/drums/Mine/Presets", "../Packs/Kick/A b.signalpack"),
