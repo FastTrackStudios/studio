@@ -139,3 +139,20 @@ async fn a_leader_on_its_nodes_presence_is_followed() {
         .unwrap();
     assert!((12.0..12.5).contains(&shown), "shown {shown}");
 }
+
+/// A leader let go stops serving: its port is free again for the next
+/// session's (an engine that opened ten sessions held all ten of its
+/// lead ports, and the eleventh could not lead).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dropped_leader_lets_its_port_go() {
+    let port = free_port();
+    let leader = Leader::serve(&format!("127.0.0.1:{port}"), Uuid::new_v4())
+        .await
+        .unwrap();
+    assert!(std::net::TcpListener::bind(("127.0.0.1", port)).is_err());
+    drop(leader);
+    until("the port is free", || {
+        std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+    })
+    .await;
+}

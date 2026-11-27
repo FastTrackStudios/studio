@@ -25,6 +25,7 @@ hint_below = 0
 [open.budget_ms]
 arrangements = 5000
 chart-repeats = 5000
+drum-kit = 5000
 markers-only = 5000
 multitrack-click = 5000
 same-name = 5000

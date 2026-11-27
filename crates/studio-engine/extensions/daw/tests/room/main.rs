@@ -767,7 +767,12 @@ fn no_route_out() -> (bool, String) {
 /// runs itself again inside a user and network namespace of its own
 /// (`unshare`), where the leader's and the member's engines have only a
 /// local network between them. They still make, lead, join and follow.
+/// Linux only: elsewhere there is no network namespace to make.
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "needs a Linux network namespace (unshare)"
+)]
 fn a_room_plays_on_a_network_with_no_route_out() {
     const NAME: &str = "a_room_plays_on_a_network_with_no_route_out";
     if std::env::var_os(NO_ROUTE_OUT).is_none() {

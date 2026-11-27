@@ -17,6 +17,9 @@
 //!   found in its registry file, and `session-mcp.json` left to the owner;
 //! - `FTS_AUDIO_DEVICE=null`: no sound card, the callback at real time;
 //! - `FTS_RENDER_WORKER=process`: renders in the engine, as the owner's;
+//! - `FTS_DAW_LEAD_PORT`: a free port to serve its session's presence
+//!   (the lighting's clock) from, never 4142 and the nine after it, which
+//!   the owner's engine and every other test's take;
 //! - `OTEL_EXPORTER_OTLP_ENDPOINT`: the test's receiver, never the
 //!   owner's collector.
 //!
@@ -35,6 +38,15 @@ use crate::mcp::Mcp;
 const START_WAIT: Duration = Duration::from_secs(90);
 /// How long it has to stop when asked, before it is killed.
 const STOP_WAIT: Duration = Duration::from_secs(20);
+
+/// A port free on every address now, for the engine to take next
+/// (it tries this one and the nine after it).
+fn free_port() -> Result<u16, String> {
+    std::net::TcpListener::bind(("0.0.0.0", 0))
+        .and_then(|l| l.local_addr())
+        .map(|a| a.port())
+        .map_err(|e| format!("a free port: {e}"))
+}
 
 /// A running private engine.
 pub struct Engine {
@@ -116,6 +128,7 @@ impl Engine {
             .env("FTS_MCP_PRIVATE", "1")
             .env("FTS_AUDIO_DEVICE", "null")
             .env("FTS_RENDER_WORKER", "process")
+            .env("FTS_DAW_LEAD_PORT", free_port()?.to_string())
             .env("OTEL_EXPORTER_OTLP_ENDPOINT", otlp)
             .env("OTEL_BSP_SCHEDULE_DELAY", "100")
             .env("OTEL_BSP_MAX_QUEUE_SIZE", "65536")

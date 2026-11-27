@@ -142,16 +142,6 @@ mod presses {
         "SESSION_TOGETHER_LEAVE",
         "SESSION_TOGETHER_TRANSPORT",
         "SESSION_TOGETHER_LOCK",
-        "LIBRARY_LISTS",
-        "LIBRARY_LIST_CREATE",
-        "LIBRARY_LIST_RENAME",
-        "LIBRARY_LIST_DELETE",
-        "LIBRARY_LIST_DUPLICATE",
-        "LIBRARY_LIST_SONGS",
-        "LIBRARY_SONG_SAVE",
-        "LIBRARY_SONG_DELETE",
-        "LIBRARY_ORG",
-        "ACCOUNT_SIGN_OUT",
     ];
 
     #[test]
