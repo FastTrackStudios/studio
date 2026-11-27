@@ -8,7 +8,7 @@
     reason = "a test fails loudly"
 )]
 
-use room::{Live, Pass, Rooms};
+use room::{Kind, Live, Loaded, Opens, Pass, Rooms};
 
 #[test]
 fn a_room_made_once_is_found_again_by_its_link() {
@@ -143,7 +143,91 @@ fn a_room_file_from_before_passes_still_reads() {
     let old = r#"{"id":"ID","name":"Adult Jam","org":"rockstars","live":{"leader":"Cody","endpoint":"abc","addrs":[]}}"#
         .replace("ID", made.id.as_str());
     std::fs::write(dir.path().join(format!("{}.room", made.id)), old).unwrap();
-    let live = rooms.find(made.id.as_str()).unwrap().live.unwrap();
+    let found = rooms.find(made.id.as_str()).unwrap();
+    assert_eq!(found.setlist, None);
+    let live = found.live.unwrap();
     assert!(live.pass.is_empty());
     assert!(live.relays.is_empty());
+}
+
+fn live(leader: &str) -> Live {
+    Live {
+        leader: leader.to_owned(),
+        endpoint: "abc".to_owned(),
+        addrs: Vec::new(),
+        relays: Vec::new(),
+        pass: Pass::mint(),
+    }
+}
+
+#[test]
+fn a_room_nobody_leads_opens_its_setlist_to_practise() {
+    // studio#714: the same link all week. Led, it follows the leader;
+    // left, it opens what the leader last loaded, for each person alone.
+    let dir = tempfile::tempdir().unwrap();
+    let rooms = Rooms::at(dir.path());
+    let made = rooms.create("Adult Jam", "rockstars").unwrap();
+    assert_eq!(made.opens(), Opens::Nothing, "a new room has no setlist");
+
+    let first = Loaded {
+        kind: Kind::Setlist,
+        path: "Setlists/Sunday.setlist".to_owned(),
+        title: "Sunday".to_owned(),
+    };
+    let led = rooms.set_live(&made.id, Some(live("Cody"))).unwrap();
+    rooms.set_setlist(&made.id, first.clone()).unwrap();
+    let now = rooms.find(&made.link()).unwrap();
+    assert_eq!(now.setlist.as_ref(), Some(&first));
+    assert_eq!(now.opens(), Opens::Leader(led.live.as_ref().unwrap()));
+
+    // The leader loads a lone session, then leaves: the link opens that.
+    let lone = Loaded {
+        kind: Kind::Session,
+        path: "Songs/Amazing Grace".to_owned(),
+        title: "Amazing Grace".to_owned(),
+    };
+    rooms.set_setlist(&made.id, lone.clone()).unwrap();
+    rooms.set_live(&made.id, None).unwrap();
+    // Another device reading the folder later in the week.
+    let later = Rooms::at(dir.path()).find(&made.link()).unwrap();
+    assert_eq!(later.live, None);
+    assert_eq!(later.opens(), Opens::Practice(&lone));
+
+    // Led again, it follows the leader again, its setlist kept.
+    rooms.set_live(&made.id, Some(live("Alex"))).unwrap();
+    let again = rooms.find(&made.link()).unwrap();
+    assert!(matches!(again.opens(), Opens::Leader(l) if l.leader == "Alex"));
+    assert_eq!(again.setlist, Some(lone));
+}
+
+#[test]
+fn a_room_file_keeps_its_setlist_as_its_kind_and_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let rooms = Rooms::at(dir.path());
+    let made = rooms.create("Adult Jam", "rockstars").unwrap();
+    let setlist = Loaded {
+        kind: Kind::Setlist,
+        path: "Setlists/Sunday.setlist".to_owned(),
+        title: "Sunday".to_owned(),
+    };
+    rooms.set_setlist(&made.id, setlist).unwrap();
+    let text = std::fs::read_to_string(dir.path().join(format!("{}.room", made.id))).unwrap();
+    let file: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(
+        file["setlist"],
+        serde_json::json!({"kind": "setlist", "path": "Setlists/Sunday.setlist", "title": "Sunday"})
+    );
+}
+
+#[test]
+fn a_setlist_for_no_room_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let rooms = Rooms::at(dir.path());
+    let nobody = room::parse_link("nobody-123456").unwrap();
+    let setlist = Loaded {
+        kind: Kind::Setlist,
+        path: "Setlists/Sunday.setlist".to_owned(),
+        title: "Sunday".to_owned(),
+    };
+    assert!(rooms.set_setlist(&nobody, setlist).is_err());
 }

@@ -21,7 +21,11 @@
 //! member's lighting is checked to follow the room's session
 //! (studio#720): the session it follows (`SESSION_FOLLOWED`, what the app
 //! points Ignition's visualizer at) is the leader's, led from the member's
-//! own engine. Its checks go to `target/<triple>/<profile>/room/room.json`.
+//! own engine. Then the leader leaves, and the member opens the same link
+//! again (studio#714): nobody leads the room, so it opens the room's
+//! setlist (the lone session, the last thing loaded) on the member's own,
+//! to practise, and plays it with the leader stopped. Its checks go to
+//! `target/<triple>/<profile>/room/room.json`.
 //!
 //! **Speed (studio#717):** the join, and each load the member follows, is
 //! timed and held to its budget in `../fixtures/speed.toml`; a time over
@@ -651,6 +655,89 @@ fn room(
     );
 }
 
+/// The leader leaves; the member, on a setlist of its own, opens the
+/// room's link again: nobody leads it, so its setlist (the last thing the
+/// leader loaded, the lone session) opens on the member's engine alone,
+/// and plays there with the leader's stopped (studio#714).
+fn practice(leader: &Engine, member: &Engine, member_first: &Path, checks: &mut Checks) {
+    let (l, m) = (&leader.mcp, &member.mcp);
+    let Some(rooms) = run(l, checks, "practice", "ROOMS", &json!({})) else {
+        return;
+    };
+    let link = rooms[0]["link"].as_str().unwrap_or_default().to_owned();
+    if run(l, checks, "practice", "ROOM_LEAVE", &json!({})).is_none()
+        || run(m, checks, "practice", "ROOM_LEAVE", &json!({})).is_none()
+    {
+        return;
+    }
+    let rooms = l.run("ROOMS", &json!({})).unwrap_or_default();
+    checks.add(
+        "the room keeps its setlist when nobody leads",
+        rooms[0]["live"].is_null()
+            && rooms[0]["setlist"]["kind"] == json!("session")
+            && rooms[0]["setlist"]["title"] == json!(LONE),
+        format!("{rooms}"),
+    );
+    // Somewhere else first: the member's own copy of the first setlist.
+    let args = json!({"path": member_first.display().to_string()});
+    if run(m, checks, "practice", "SESSION_OPEN", &args).is_none() {
+        return;
+    }
+    let (ok, got) = until(
+        FOLLOW_WAIT,
+        || open_titles(m),
+        |v| v.as_array().is_some_and(|a| a.len() == FIRST.len()),
+    );
+    checks.add("member opens a setlist of its own", ok, format!("{got}"));
+    if !ok {
+        return;
+    }
+    let Some(joined) = run(
+        m,
+        checks,
+        "practice",
+        "ROOM_JOIN",
+        &json!({"link": link, "name": "Alex"}),
+    ) else {
+        return;
+    };
+    checks.add(
+        "the link opens the room's setlist to practise",
+        joined["role"] == json!("practice") && joined["loaded"]["title"] == json!(LONE),
+        format!("{joined}"),
+    );
+    // The leader's engine still has the lone session open, as it left it.
+    let lone = open_titles(l).unwrap_or_default();
+    let (ok, got) = until(
+        FOLLOW_WAIT,
+        || open_titles(m),
+        |v| v.as_array().is_some_and(|a| a.len() == 1) && *v == lone,
+    );
+    checks.add(
+        "member practises the room's setlist",
+        ok,
+        format!("leader {lone}, member {got}"),
+    );
+    let alone = m.run("ROOM", &json!({})).unwrap_or_default();
+    checks.add(
+        "practising is in no room",
+        alone["room"].is_null(),
+        format!("{alone}"),
+    );
+    match check::play_from(m, 0.5) {
+        Ok(()) => {
+            let lt = l.run("SESSION_TRANSPORT", &json!({})).unwrap_or_default();
+            checks.add(
+                "member plays it alone",
+                lt["playing"] != json!(true),
+                format!("leader {lt}"),
+            );
+            let _ = check::stop(m);
+        }
+        Err(e) => checks.failed("member plays it alone", e),
+    }
+}
+
 /// Play the room (`room`) with a leader and a member, each its own
 /// engine, after the checks already in `checks`; the record goes to
 /// `<profile>/room/<record>.json`.
@@ -665,7 +752,7 @@ fn play_the_room(record: &str, mut checks: Checks) {
         (studio, staged)
     };
     let (leader_studio, (first, second)) = folder("leader");
-    let (member_studio, _) = folder("member");
+    let (member_studio, (member_first, _)) = folder("member");
     // One Rooms folder, the organization's: the member's is the leader's.
     let rooms = leader_studio.join("Rooms");
     std::fs::create_dir_all(&rooms).unwrap_or_else(|e| panic!("{}: {e}", rooms.display()));
@@ -690,6 +777,9 @@ fn play_the_room(record: &str, mut checks: Checks) {
             &mut checks,
             &mut times,
         );
+    }
+    if checks.ok() {
+        practice(&leader, &member, &member_first, &mut checks);
     }
 
     let tails = format!(

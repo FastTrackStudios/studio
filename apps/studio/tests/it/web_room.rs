@@ -23,6 +23,12 @@
 //!    making is refused by the leader's door: its page says why, the
 //!    leader's `ROOM` counts it in `refused`, and it is never in the room.
 //!
+//! Then the room when nobody leads it (studio#714,
+//! [`a_room_nobody_leads_opens_its_setlist_to_practise`]): the leader
+//! loads a setlist and leaves, and the same link, opened in a page, opens
+//! that setlist there on its person's own, to practise. It dials nobody,
+//! and plays when its person presses Play, with the leader stopped.
+//!
 //! The page reaches the leader through n0's relays (a page has no direct
 //! path to a device), so the test needs the internet. It needs the web
 //! build (`STUDIO_WEB_DIST`), a W3C WebDriver (`WEBDRIVER`, `CHROME_BIN`)
@@ -203,6 +209,111 @@ fn a_browser_joins_a_desktop_hosted_room_and_follows_the_leader() {
     );
     // The member is still in, and still on one connection.
     assert_eq!(room(&page, "data-attaches"), "1");
+}
+
+/// The link of a room nobody leads (studio#714): its setlist, what the
+/// leader last loaded, opens in the page for its person to practise alone.
+#[test]
+#[ignore = "needs the web build, a WebDriver and the engine: `just test-web-room`"]
+fn a_room_nobody_leads_opens_its_setlist_to_practise() {
+    let dist = PathBuf::from(
+        std::env::var_os("STUDIO_WEB_DIST")
+            .expect("STUDIO_WEB_DIST: the web build's public folder"),
+    );
+    let engine_bin = PathBuf::from(
+        std::env::var_os("STUDIO_ENGINE_BIN")
+            .expect("STUDIO_ENGINE_BIN: the engine (daw-extension)"),
+    );
+    let site = tempfile::tempdir().expect("a folder for the site");
+    let studio = site.path().join("studio");
+    let (first, _) = stage_studio(&studio);
+
+    // The leader leads the room this week, loads a setlist, and leaves.
+    let leader = Leader::start(&engine_bin, &studio.join("Rooms"));
+    let made = leader.run(
+        "ROOM_CREATE",
+        &json!({"name": "Adult Jam", "org": "fixtures"}),
+    );
+    let id = made["id"].as_str().expect("the room's id").to_owned();
+    let _key = KeyCleanup(id.clone());
+    leader.run("ROOM_LEAD", &json!({"room": id, "name": "Leader"}));
+    leader.run("ROOM_LOAD", &json!({"path": first}));
+    leader.settled();
+    leader.run("ROOM_LEAVE", &json!({}));
+    let file: Value = serde_json::from_slice(
+        &std::fs::read(studio.join(format!("Rooms/{id}.room"))).expect("the room's file"),
+    )
+    .expect("the room's file is JSON");
+    assert!(file["live"].is_null(), "the room is still live: {file}");
+    assert_eq!(
+        file["setlist"],
+        json!({"kind": "setlist", "path": "Setlists/first.setlist", "title": "first"}),
+        "the room's file keeps its setlist: {file}"
+    );
+
+    // Later in the week, someone opens the link.
+    let web = Server::start(dist, site.path().to_path_buf());
+    let driver = Driver::start();
+    let page = driver.new_session();
+    page.navigate(&format!("{}/join/{id}?studio=/sessions/studio", web.origin));
+    page.wait_for(Duration::from_secs(60), "the room's page", |p| {
+        (p.script_with(
+            "return String(!!document.getElementById('room-join'));",
+            json!([]),
+        ) == "true")
+            .then_some(())
+    });
+    page.click("#room-join");
+    room_wait(
+        &page,
+        FOLLOW_WAIT,
+        "the page to open the room's setlist to practise",
+        |p| room(p, "data-state") == "practising",
+    );
+    assert_eq!(room(&page, "data-loaded"), "first");
+    assert_eq!(
+        room(&page, "data-attaches"),
+        "0",
+        "the page dialled a leader"
+    );
+    assert_eq!(room(&page, "data-people"), "", "practising is in no room");
+    let says = page.script_with(
+        "return String(document.body.innerText.includes(arguments[0]));",
+        json!(["open to practise on your own"]),
+    );
+    assert_eq!(
+        says,
+        "true",
+        "the room's page says it is practising: {}",
+        page.page()
+    );
+    page.wait_for(
+        Duration::from_secs(90),
+        "the setlist's first song to open",
+        |p| match p.state("data-state").as_str() {
+            "ready" => Some(()),
+            "failed" => panic!("the song did not open: {}", p.state("data-why")),
+            _ => None,
+        },
+    );
+
+    // Its person plays it, alone: the leader's engine stays stopped.
+    page.click("button.npb[aria-label='Play']");
+    room_wait(&page, FOLLOW_WAIT, "the page to play on its own", |p| {
+        p.state("data-playing") == "true"
+            && p.state("data-at").parse::<f64>().is_ok_and(|at| at > 0.5)
+    });
+    let theirs = leader.run("SESSION_TRANSPORT", &json!({}));
+    assert_ne!(
+        theirs["playing"],
+        json!(true),
+        "the leader's engine plays: {theirs}"
+    );
+    let gone = leader.room();
+    assert!(
+        gone["room"].is_null(),
+        "the leader is still in the room: {gone}"
+    );
 }
 
 /// An attribute of the page's room state (`#studio-room`).

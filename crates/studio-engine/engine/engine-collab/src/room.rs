@@ -9,8 +9,9 @@
 //!   and says in the room's file where to reach it: its addresses, its
 //!   relays (what a browser dials it through) and a new pass
 //!   ([`room::Pass`]). `ROOM_LOAD` opens a
-//!   setlist or a lone session here and loads it into the room's doc. A
-//!   task of the room's writes this engine's transport into the room's
+//!   setlist or a lone session here and loads it into the room's doc,
+//!   and keeps it in the room's file as the room's setlist
+//!   ([`room::Room::setlist`]). A task of the room's writes this engine's transport into the room's
 //!   presence whenever it starts, stops, changes song or jumps
 //!   (`room::lead::entry`).
 //! - **The door.** The room is open to the internet, so the leader serves
@@ -26,6 +27,9 @@
 //!   `TransportSync`, the song by its number in the set. The leader
 //!   loading another setlist is a change to the doc, never a new
 //!   connection (`ROOM`'s `attaches` stays 1).
+//! - **Practising.** `ROOM_JOIN` of a room nobody leads opens its setlist
+//!   here, on this engine's own, to practise (studio#714): no leader to
+//!   follow, so the transport is this engine's.
 //!
 //! - **On the local network.** Both ends bind their endpoint with
 //!   n0's lookup and the local network's (`PeerLookup::N0AndLan`), and
@@ -60,7 +64,7 @@ use engine_sync::transport as session_transport;
 use facet::Facet;
 use room::gate::Door;
 use room::net::{Find, RoomHost, RoomPeer};
-use room::{Live, Loaded, Pass, Room, RoomId, Rooms, Share};
+use room::{Live, Loaded, Opens, Pass, Room, RoomId, Rooms, Share};
 use serde_json::{Value, json};
 use session_transport::{KEY, LocalTransport, SharedTransport, TransportSync};
 
@@ -518,11 +522,12 @@ fn load(path: &str) -> Result<Value, String> {
     if !path.exists() {
         return Err(format!("{}: no such file", path.display()));
     }
-    let host = match lock(&ACTIVE).as_ref() {
+    let (host, id) = match lock(&ACTIVE).as_ref() {
         Some(Active {
             role: Role::Leader { host, .. },
+            room,
             ..
-        }) => host.clone(),
+        }) => (host.clone(), room.id.clone()),
         _ => return Err("this engine leads no room: ROOM_LEAD first".to_owned()),
     };
     let open = crate::assembly::get()
@@ -535,6 +540,23 @@ fn load(path: &str) -> Result<Value, String> {
     let rooms = rooms()?;
     let loaded = Loaded::of_path(&path, rooms.studio_root());
     host.doc().load(&loaded).map_err(|e| e.to_string())?;
+    // The room's setlist from now on: what its link opens to practise
+    // once nobody leads it. Only one inside the Studio folder, which means
+    // the same file on every device.
+    if Path::new(&loaded.path).is_relative() {
+        match rooms.set_setlist(&id, loaded.clone()) {
+            Ok(room) => {
+                if let Some(active) = lock(&ACTIVE).as_mut()
+                    && active.room.id == room.id
+                {
+                    active.room = room;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(room.error = %e, "room: could not keep what was loaded as the room's setlist");
+            }
+        }
+    }
     tracing::info!(room.loaded = %loaded.title, room.kind = loaded.kind.as_str(), "room: loaded");
     Ok(json!({ "loaded": loaded_json(&loaded) }))
 }
@@ -544,10 +566,16 @@ fn join(link: &str, name: String) -> Result<Value, String> {
     let _turn = lock(&TURN);
     let rooms = rooms()?;
     let room = rooms.find(link).map_err(|e| e.to_string())?;
-    let live = room
-        .live
-        .clone()
-        .ok_or_else(|| format!("{} is not live: nobody leads it now", room.name))?;
+    let live = match room.opens() {
+        Opens::Leader(live) => live.clone(),
+        Opens::Practice(setlist) => return practise(&rooms, &room, setlist),
+        Opens::Nothing => {
+            return Err(format!(
+                "{} is not live, and has no setlist yet: nobody has led it",
+                room.name
+            ));
+        }
+    };
     room::net::leader_addr(&live)?;
     leave();
     let endpoint = on_runtime(bind(iroh::SecretKey::generate()))?;
@@ -590,6 +618,37 @@ fn join(link: &str, name: String) -> Result<Value, String> {
         endpoint,
     });
     Ok(json!({ "link": link, "role": "member" }))
+}
+
+/// Open `room`'s setlist here, alone, to practise: nobody leads it, so
+/// there is no one to follow, and this engine's transport is its own. The
+/// room this engine was in, it leaves.
+fn practise(rooms: &Rooms, room: &Room, setlist: &Loaded) -> Result<Value, String> {
+    let path = setlist.resolve(rooms.studio_root());
+    if !path.exists() {
+        return Err(format!(
+            "{}'s setlist, {}, is not on this device: {}",
+            room.name,
+            setlist.title,
+            path.display()
+        ));
+    }
+    let open = crate::assembly::get()
+        .ok_or("no engine installed")?
+        .open_path;
+    leave();
+    open(path)?;
+    tracing::info!(
+        room.id = %room.id,
+        room.role = "practice",
+        room.loaded = %setlist.title,
+        "room: nobody leads it; practising its setlist"
+    );
+    Ok(json!({
+        "link": room.link(),
+        "role": "practice",
+        "loaded": loaded_json(setlist),
+    }))
 }
 
 /// What a member's task follows.
@@ -732,7 +791,7 @@ fn obey(command: session_transport::Command) {
 }
 
 fn loaded_json(loaded: &Loaded) -> Value {
-    json!({ "kind": loaded.kind.as_str(), "path": loaded.path, "title": loaded.title })
+    serde_json::to_value(loaded).unwrap_or_default()
 }
 
 fn room_json(room: &Room) -> Value {
@@ -742,6 +801,7 @@ fn room_json(room: &Room) -> Value {
         "org": room.org,
         "link": room.link(),
         "live": room.live.as_ref().map(|l| json!({ "leader": l.leader })),
+        "setlist": room.setlist.as_ref().map(loaded_json),
     })
 }
 
@@ -821,7 +881,7 @@ static LIST: ActionMeta = crate::actions::meta(
     "ROOMS",
     "rooms",
     "The rooms",
-    "Every room in the Rooms folder: `id`, `name`, `org`, `link`, and `live` (who leads it now; null when it is not live). `org` narrows it to one organization's. Read-only.",
+    "Every room in the Rooms folder: `id`, `name`, `org`, `link`, `live` (who leads it now; null when it is not live) and `setlist` (what its leader last loaded: kind, path, title; what ROOM_JOIN opens to practise while nobody leads it). `org` narrows it to one organization's. Read-only.",
     "Room",
     "",
 );
@@ -839,7 +899,7 @@ static LOAD: ActionMeta = crate::actions::meta(
     "ROOM_LOAD",
     "room_load",
     "Load into the room",
-    "Open `path` (a `.setlist`, or a lone session: `.RPP`, `.session`, a song's folder) here and load it into the room this engine leads: everyone in it opens it too, without reconnecting. Returns at once — SESSION_OPENING says how the open goes.",
+    "Open `path` (a `.setlist`, or a lone session: `.RPP`, `.session`, a song's folder) here and load it into the room this engine leads: everyone in it opens it too, without reconnecting. It becomes the room's setlist, which its link opens to practise while nobody leads it. Returns at once — SESSION_OPENING says how the open goes.",
     "Room",
     "",
 );
@@ -848,7 +908,7 @@ static JOIN: ActionMeta = crate::actions::meta(
     "ROOM_JOIN",
     "room_join",
     "Join a room",
-    "Join room `link` (`https://fasttrackstudio.app/join/<id>`, or the id) as `name` (left out: Member), and follow its leader: what they load opens here, and the transport plays, stops, jumps and changes song with theirs. Joined once; the leader loading something else needs no rejoin. ROOM says how it goes.",
+    "Join room `link` (`https://fasttrackstudio.app/join/<id>`, or the id) as `name` (left out: Member), and follow its leader: what they load opens here, and the transport plays, stops, jumps and changes song with theirs. Joined once; the leader loading something else needs no rejoin. ROOM says how it goes. A room nobody leads opens its setlist here instead (`role`: practice, `loaded`), to practise alone; a room nobody has loaded anything into is refused.",
     "Room",
     "",
 );

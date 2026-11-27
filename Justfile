@@ -144,7 +144,8 @@ test-web-boot *ARGS:
 
 # Seam 2 with a browser member (studio#711): a desktop engine leads a room, the web build in a headless browser joins it
 # by its link over the internet (n0's relays) and follows the leader, observed from the leader's MCP; a forged pass is
-# refused (apps/studio/tests/it/web_room.rs). Builds the engine, then runs as test-web-boot. Extra arguments go to nextest
+# refused; and the link of a room nobody leads opens its setlist to practise (studio#714) (apps/studio/tests/it/web_room.rs).
+# Builds the engine, then runs as test-web-boot. Extra arguments go to nextest
 test-web-room *ARGS:
     cargo build {{dev_build}} -p {{engine_package}} --bin {{engine_bin}}
     STUDIO_ENGINE_BIN="{{dev_out}}/{{engine_bin}}" WEB_BOOT_TESTS='/^web_room::/' just test-web-boot {{ARGS}}

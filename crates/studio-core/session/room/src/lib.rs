@@ -10,7 +10,8 @@
 //! - [`record`]: the room as its organization keeps it, one file per room
 //!   in the org's Rooms folder ([`Rooms`]), and how its link is found
 //!   again. While a leader has it live, the file says where to reach them
-//!   ([`Live`]).
+//!   ([`Live`]); it keeps what was last loaded, which the link opens to
+//!   practise while nobody leads ([`Room::opens`]).
 //! - [`state`]: what the room shares while it is live, on live-doc: one
 //!   Loro doc with what is loaded ([`Loaded`]), and its presence, which
 //!   carries who is here (people, and the agents editing through a
@@ -41,5 +42,7 @@ pub mod gate;
 #[cfg(feature = "net")]
 pub mod net;
 
-pub use record::{APP_JOIN_BASE, Error, Live, Pass, Room, RoomId, Rooms, link_of, parse_link};
+pub use record::{
+    APP_JOIN_BASE, Error, Live, Opens, Pass, Room, RoomId, Rooms, link_of, parse_link,
+};
 pub use state::{Kind, Loaded, RoomDoc, Share};

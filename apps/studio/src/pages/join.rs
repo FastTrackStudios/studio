@@ -67,6 +67,7 @@ fn InThePage(room: String) -> Element {
             format!("In the room. {} has loaded nothing yet.", s.leader)
         }
         "member" => format!("Following {}: {}", s.leader, s.loaded),
+        "practising" => format!("Nobody leads it now: {} is open to practise on your own.", s.loaded),
         "failed" => format!("Could not join: {}", s.why),
         _ => String::new(),
     };
