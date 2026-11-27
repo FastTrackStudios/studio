@@ -183,7 +183,7 @@ jobs:
         if [ "${#pkgs[@]}" = 0 ]; then echo "no tested package affected"; exit 0; fi
         cargo nextest run "${pkgs[@]}" --no-fail-fast --no-tests=pass
         EOF
-    - name: Fixture sessions over MCP (every PR)
+    - name: Fixture sessions and a room over MCP (every PR)
       if: ${{ !cancelled() && steps.plan.outcome == 'success' }}
       env:
         TEST_PACKAGES: ${{ steps.plan.outputs.test_packages }}
@@ -192,9 +192,9 @@ jobs:
         devenv shell -- bash -euo pipefail -s <<'EOF'
         sel=" ${TEST_PACKAGES:-} "
         if [ "${TESTS_RAN:-}" = "true" ] && { [ "$sel" = "  " ] || [[ "$sel" == *" daw-extension "* ]]; }; then
-          echo "daw-extension's tests ran above, the fixtures with them"; exit 0
+          echo "daw-extension's tests ran above, the fixtures and the room with them"; exit 0
         fi
-        cargo nextest run -p daw-extension --test fixtures --no-fail-fast
+        cargo nextest run -p daw-extension --test fixtures --test room --no-fail-fast
         EOF
     - name: wasm check (just check-web)
       if: ${{ !cancelled() && steps.plan.outcome == 'success' && steps.plan.outputs.wasm == 'true' }}

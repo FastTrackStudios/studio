@@ -33,3 +33,10 @@ threads-required = "num-test-threads"
 filter = 'package(daw-extension) & binary(fixtures)'
 slow-timeout = { period = "60s", terminate-after = 5 }
 threads-required = 2
+
+# The room (daw-extension's tests/room, `just test-room`): two engines of
+# its own, a leader and a member, playing in real time.
+[[profile.default.overrides]]
+filter = 'package(daw-extension) & binary(room)'
+slow-timeout = { period = "60s", terminate-after = 5 }
+threads-required = 2

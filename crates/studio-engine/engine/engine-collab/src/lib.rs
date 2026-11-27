@@ -7,7 +7,8 @@
 //!   presence and the shared transport;
 //! - [`agent`]: an agent's edits beside the person's (`AGENT_RUN`,
 //!   `SESSION_CHANGES`, …) on the core's journal;
-//! - [`live_host`]: what is open hosted in Task by itself, signed in.
+//! - [`live_host`]: what is open hosted in Task by itself, signed in;
+//! - [`room`]: an organization's room, led or followed (`ROOM_*`).
 //!
 //! Task's account and set (`task_account`, `task_set`), the song's journal
 //! and what other domains ask of the live session (`collab_calls`) are the
@@ -24,6 +25,8 @@ pub mod agent;
 pub mod collab;
 #[cfg(feature = "native")]
 pub mod live_host;
+#[cfg(feature = "native")]
+pub mod room;
 
 /// This domain's actions, into the engine's Action List: what the engine
 /// binary's collector (`studio_engine::actions::register_all`) calls.
@@ -34,6 +37,8 @@ pub mod live_host;
 pub fn register(list: &ActionList) -> Result<(), ActionError> {
     #[cfg(feature = "native")]
     agent::register(list)?;
+    #[cfg(feature = "native")]
+    room::register(list)?;
     #[cfg(not(feature = "native"))]
     let _ = list;
     Ok(())

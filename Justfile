@@ -109,6 +109,10 @@ test-unbreakable *ARGS:
 test-fixtures *ARGS:
     cargo nextest run --cargo-profile desktop-dev --target {{host}} -p {{engine_package}} --test fixtures --no-fail-fast {{ARGS}}
 
+# A room with a leader and a member, each its own engine, over MCP (Seam 2's base, daw-extension's tests/room)
+test-room *ARGS:
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p {{engine_package}} --test room --no-fail-fast {{ARGS}}
+
 # The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
 ci-local BASE="":
     bash scripts/ci-local.sh {{BASE}}

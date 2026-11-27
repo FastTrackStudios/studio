@@ -109,6 +109,10 @@ pub struct Assembly {
     /// Song `project` opened into the set: a live session's host offers it
     /// (`collab::song_opened`).
     pub song_opened: fn(&str),
+    /// Open what is at the path as the set, as SESSION_OPEN does
+    /// (`set_open::open_path`): a room's member opening what its leader
+    /// loaded. Returns at once; `Err` when another open is under way.
+    pub open_path: fn(std::path::PathBuf) -> Result<(), String>,
     // ── engine-collab's parts ──
     /// The chart was edited here, on the song on screen: into the live
     /// session's doc, or held while this device is locked

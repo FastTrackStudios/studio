@@ -12,6 +12,7 @@
 //!                    and the wasm check when a browser build is among them
 //!                    — and, on every PR, the fixture sessions played over
 //!                    the engine's MCP door (daw-extension's `fixtures` test)
+//!                    and a room led and followed by two engines (`room`)
 //!   Architect pin    a PR that moves the Architect pin starts `CI` on its
 //!                    branch (below)
 //! ```
@@ -160,14 +161,15 @@ if [ "${#pkgs[@]}" = 0 ]; then echo "no tested package affected"; exit 0; fi
 cargo nextest run "${pkgs[@]}" --no-fail-fast --no-tests=pass
 "#;
 
-/// The fixture sessions and setlist (daw-extension's `fixtures` test),
-/// whatever the plan selected: a real engine opened and played over MCP.
+/// The fixture sessions and setlist (daw-extension's `fixtures` test) and
+/// a room with a leader and a member (its `room` test), whatever the plan
+/// selected: real engines opened and played over MCP.
 /// Skipped when the affected tests already ran daw-extension's.
 const FIXTURES: &str = r#"sel=" ${TEST_PACKAGES:-} "
 if [ "${TESTS_RAN:-}" = "true" ] && { [ "$sel" = "  " ] || [[ "$sel" == *" daw-extension "* ]]; }; then
-  echo "daw-extension's tests ran above, the fixtures with them"; exit 0
+  echo "daw-extension's tests ran above, the fixtures and the room with them"; exit 0
 fi
-cargo nextest run -p daw-extension --test fixtures --no-fail-fast
+cargo nextest run -p daw-extension --test fixtures --test room --no-fail-fast
 "#;
 
 /// The crates the PR reaches, compiled and tested: one job, one target dir
@@ -214,10 +216,11 @@ fn affected() -> Result<Job> {
                 .cond(&format!("${{{{ {RAN} && steps.plan.outputs.tests == 'true' }}}}"))
                 .env("TEST_PACKAGES", "${{ steps.plan.outputs.test_packages }}"),
         )
-        // Seam 1's base (studio#691), on every PR whatever it touches: the
-        // fixture sessions opened and played over the engine's MCP door.
+        // Seam 1's base (studio#691) and Seam 2's (studio#709), on every PR
+        // whatever it touches: the fixture sessions opened and played over
+        // the engine's MCP door, and a room led and followed by two engines.
         .step(
-            Step::run("Fixture sessions over MCP (every PR)", &in_shell(FIXTURES))
+            Step::run("Fixture sessions and a room over MCP (every PR)", &in_shell(FIXTURES))
                 .cond(&format!("${{{{ {RAN} }}}}"))
                 .env("TEST_PACKAGES", "${{ steps.plan.outputs.test_packages }}")
                 .env("TESTS_RAN", "${{ steps.plan.outputs.tests }}"),

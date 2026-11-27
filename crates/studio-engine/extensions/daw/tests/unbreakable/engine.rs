@@ -60,6 +60,21 @@ impl Engine {
     /// It did not start, or did not serve its door in time (its log's
     /// tail is in the error).
     pub fn start(bin: &Path, otlp: &str, instance: &str) -> Result<Self, String> {
+        Self::start_with(bin, otlp, instance, &[])
+    }
+
+    /// [`Self::start`], with `env` set for it too: what several engines
+    /// share (a room's harness gives them one Rooms folder).
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::start`].
+    pub fn start_with(
+        bin: &Path,
+        otlp: &str,
+        instance: &str,
+        env: &[(&str, &std::ffi::OsStr)],
+    ) -> Result<Self, String> {
         let sandbox = tempfile::Builder::new()
             .prefix("ube-")
             .tempdir_in("/tmp")
@@ -105,6 +120,7 @@ impl Engine {
             .env("OTEL_BSP_SCHEDULE_DELAY", "100")
             .env("OTEL_BSP_MAX_QUEUE_SIZE", "65536")
             .env("OTEL_METRIC_EXPORT_INTERVAL", "600000")
+            .envs(env.iter().copied())
             .stdin(Stdio::null())
             .stdout(out)
             .stderr(err);

@@ -1,0 +1,47 @@
+[package]
+name = "room"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "A room: an organization's lasting place to play together, its one link, what its leader has loaded, and its shared state over live-doc"
+
+[features]
+default = ["net"]
+# The room over vox (`net`): its leader hosts the room's doc and presence,
+# a member follows them on one held-open connection.
+net = ["dep:architect", "dep:eyre", "dep:tokio"]
+
+[dependencies]
+# The room's shared state (`state`): one Loro doc, and the presence its
+# people and the leader's transport ride.
+live-doc = { workspace = true }
+loro = { workspace = true }
+# The shared transport's entry and its follower (`lead`): the same one a
+# live session plays together by.
+session-sync = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+architect = { workspace = true, features = ["vox", "platform", "local"], optional = true }
+eyre = { workspace = true, optional = true }
+# The member's loop: its stop and its `select!` (no runtime: the
+# platform's, as live-doc).
+tokio = { version = "1", default-features = false, features = ["sync", "macros"], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["js"] }
+
+[dev-dependencies]
+architect = { workspace = true, features = ["vox", "platform", "local"] }
+live-doc = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
+[lints]
+workspace = true
