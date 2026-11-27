@@ -201,7 +201,7 @@ fn Loaded(space: String, location: String, path: String) -> Element {
                                     span { class: "t1", "{song.title}" }
                                     span { class: "s1",
                                         if let Some(c) = &song.place.chart {
-                                            "Chart: {c.name}"
+                                            "Chart: {chart_label(c)}"
                                         } else {
                                             "No chart yet"
                                         }
@@ -259,13 +259,18 @@ pub fn ChartView() -> Element {
     let title = n.song().map(|s| s.title.to_string()).unwrap_or_default();
     let (now, _) = n.secs();
     let section = n.timeline.at(now).map(|s| s.name.clone());
-    // A chart found beside the song (a `.kf`) is its own; a song with none
-    // shows the one Keyflow generates from its session's markers, once the
-    // page's engine has opened it.
-    let chart = n.place().and_then(|p| {
+    // The song's own chart: the one its session keeps (where each song's
+    // chart moved from its `.kf`), else its `.kf`, as its set found them;
+    // a song opened from a link or a room, which no set read, has its
+    // session read here. A song with none shows the one Keyflow generates
+    // from its session's markers, once the page's engine has opened it.
+    let place = n.place().cloned();
+    let kept = use_kept_chart(place.clone());
+    let chart = place.as_ref().and_then(|p| {
         p.chart
             .clone()
             .map(Shown::Written)
+            .or_else(|| kept.map(Shown::Kept))
             .or_else(|| crate::chart_generated::of(p).map(Shown::Generated))
     });
     let sections = n.timeline.sections.clone();
@@ -287,30 +292,78 @@ pub fn ChartView() -> Element {
                     ChartFollow { chart, sections }
                 },
                 None => rsx! {
-                    p { class: "pline", "No chart for this song yet: Studio looks for a Keyflow chart (.kf) named like its session folder, and makes one from the session's sections once it opens." }
+                    p { class: "pline", "No chart for this song yet: Studio shows the chart its session keeps (or, for a song not moved into its session yet, a Keyflow chart (.kf) beside it), and makes one from the session's sections once it opens." }
                 },
             }
         }
     }
 }
 
-/// The chart a song shows: its own, written (a `.kf` beside it), or the one
-/// generated from its session's markers when it has none.
+/// The chart a song shows: its own (the one its session keeps, or a `.kf`
+/// beside it), or the one generated from its session's markers when it
+/// has none.
 #[derive(Clone, Debug, PartialEq)]
 enum Shown {
+    /// The file its set found it in: its session file, or its `.kf`.
     Written(crate::files::Hit),
+    /// The chart its session keeps, read from its folder here.
+    #[cfg_attr(not(feature = "web"), allow(dead_code))]
+    Kept(String),
     Generated(crate::chart_generated::Generated),
 }
+
+/// What a session's own chart is called on the page.
+const KEPT: &str = "The chart in its session";
 
 impl Shown {
     /// What the page calls it.
     #[cfg_attr(not(feature = "drive"), allow(dead_code))]
     fn name(&self) -> &str {
         match self {
-            Self::Written(hit) => &hit.name,
+            Self::Written(hit) => chart_label(hit),
+            Self::Kept(_) => KEPT,
             Self::Generated(_) => "The generated chart",
         }
     }
+}
+
+/// What the page calls a song's chart file: a `.kf` by its name, the
+/// chart a session keeps as that.
+fn chart_label(hit: &crate::files::Hit) -> &str {
+    if crate::session_file::is_session(&hit.name) {
+        KEPT
+    } else {
+        &hit.name
+    }
+}
+
+/// A song's chart in Keyflow's language, from its file's bytes: the chart
+/// a session file keeps (`session_file::chart`), else the `.kf`'s text.
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
+fn written_text(name: &str, bytes: &[u8]) -> Result<String, String> {
+    if crate::session_file::is_session(name) {
+        return crate::session_file::chart(bytes)
+            .ok_or_else(|| "its session keeps no chart".to_owned());
+    }
+    Ok(String::from_utf8_lossy(bytes).into_owned())
+}
+
+/// The chart the session at `place` keeps, read from its folder, for a
+/// place whose set did not find it one (a song opened from a link or in a
+/// room). `None` until it is read, or when it keeps none.
+#[cfg(feature = "web")]
+fn use_kept_chart(place: Option<crate::state::Place>) -> Option<String> {
+    let kept = use_resource(use_reactive!(|place| async move {
+        let place = place.filter(|p| p.chart.is_none() && !p.folder.is_empty())?;
+        crate::engine_web::session_chart(&place).await
+    }));
+    kept().flatten()
+}
+
+#[cfg(not(feature = "web"))]
+fn use_kept_chart(place: Option<crate::state::Place>) -> Option<String> {
+    let _ = place;
+    None
 }
 
 #[cfg(not(feature = "drive"))]
@@ -374,11 +427,19 @@ fn ChartFollow(chart: Shown, sections: Vec<crate::session_file::Section>) -> Ele
         // A generated chart's bars are timed to the session it came from.
         let (text, sections) = match chart {
             Shown::Written(hit) => {
-                span.set("studio.chart.source", "chart");
+                let session = crate::session_file::is_session(&hit.name);
+                span.set(
+                    "studio.chart.source",
+                    if session { "session" } else { "chart" },
+                );
                 match web::bytes_in(Some(&span), "GET", &web::file_url(&hit), None).await? {
-                    (200 | 206, b) => (String::from_utf8_lossy(&b).into_owned(), sections),
+                    (200 | 206, b) => (written_text(&hit.name, &b)?, sections),
                     (code, _) => return Err(format!("its computer answered {code}")),
                 }
+            }
+            Shown::Kept(text) => {
+                span.set("studio.chart.source", "session");
+                (text, sections)
             }
             Shown::Generated(g) => {
                 span.set("studio.chart.source", "generated");
@@ -451,5 +512,100 @@ fn ChartFollow(chart: Shown, sections: Vec<crate::session_file::Section>) -> Ele
     rsx! {
         style { dangerous_inner_html: "{fonts}" }
         {body}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::files::Hit;
+    use crate::session_file::fixture;
+
+    /// A folder on disk listed as a set lists a song's folder.
+    fn listed(dir: &std::path::Path) -> Vec<Hit> {
+        let mut v: Vec<Hit> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| {
+                let e = e.unwrap();
+                Hit {
+                    location: crate::files::DISK.into(),
+                    name: e.file_name().to_string_lossy().into_owned(),
+                    path: e.path().to_string_lossy().into_owned(),
+                    dir: e.file_type().unwrap().is_dir(),
+                    online: true,
+                    ..Default::default()
+                }
+            })
+            .collect();
+        v.sort_by(|a, b| a.name.cmp(&b.name));
+        v
+    }
+
+    /// The chart a set's place shows, as its set picks it and the chart
+    /// page reads it: from the song's folder as listed, its files' bytes
+    /// read from disk.
+    fn shown(folder: &std::path::Path, charts: &[Hit]) -> Option<(String, String)> {
+        let listing = listed(folder);
+        let session = crate::reference::session_of(&listing)
+            .filter(|f| crate::session_file::chart(&std::fs::read(&f.path).unwrap()).is_some());
+        let chart = crate::reference::place_chart(
+            &folder.to_string_lossy(),
+            "Fire",
+            None,
+            session,
+            &listing,
+            &[],
+            charts,
+        )?;
+        let text = written_text(&chart.name, &std::fs::read(&chart.path).unwrap()).unwrap();
+        Some((chart_label(&chart).to_owned(), text))
+    }
+
+    /// #624: a song whose chart moved into its session (no `.kf` beside
+    /// it) shows that chart: its set's place names its session, and the
+    /// chart page reads the chart out of it.
+    #[test]
+    fn a_place_shows_the_chart_its_session_keeps() {
+        let song = fixture::folder("Fire - JT Wright");
+        fixture::song(&song, "Fire", Some(fixture::FIRE));
+        std::fs::write(song.join("Fire.session.log"), "opened\n").unwrap();
+        assert_eq!(
+            shown(&song, &[]),
+            Some((KEPT.to_owned(), fixture::FIRE.to_owned()))
+        );
+    }
+
+    /// #716 with #624: a set downloaded for offline carries each song's
+    /// session file, and with it the chart it keeps; nothing else of the
+    /// song's chart need come down.
+    #[test]
+    fn an_offline_copy_shows_the_chart_its_session_keeps() {
+        let drive = fixture::folder("drive");
+        fixture::song(&drive, "Fire", Some(fixture::FIRE));
+        // The download: the song's small files into `Offline/<set>/<song>`.
+        let offline = fixture::folder("offline")
+            .join("JT's Senior Recital")
+            .join("Fire");
+        std::fs::create_dir_all(&offline).unwrap();
+        std::fs::copy(drive.join("Fire.session"), offline.join("Fire.session")).unwrap();
+        assert_eq!(
+            shown(&offline, &[]).map(|(_, text)| text).as_deref(),
+            Some(fixture::FIRE)
+        );
+    }
+
+    /// A song whose session keeps no chart yet (not moved from its `.kf`)
+    /// shows its `.kf`; a song with neither has none (its generated chart
+    /// shows).
+    #[test]
+    fn a_song_not_moved_yet_shows_its_kf() {
+        let song = fixture::folder("Last Christmas");
+        fixture::song(&song, "Fire", None);
+        assert_eq!(shown(&song, &[]), None);
+        std::fs::write(song.join("Fire.kf"), "D G | A D\n").unwrap();
+        assert_eq!(
+            shown(&song, &[]),
+            Some(("Fire.kf".to_owned(), "D G | A D\n".to_owned()))
+        );
     }
 }

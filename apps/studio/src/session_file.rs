@@ -56,6 +56,23 @@ pub fn read(bytes: &[u8], bpm: f64) -> Result<Timeline, String> {
     Ok(timeline(&doc, bpm))
 }
 
+/// The chart a session file keeps, written in Keyflow's language (the
+/// `keyflow/chart` text entry of its `main` branch, where a song's chart
+/// moved from its `.kf`: `keyflow_session::written_chart`); `None` when
+/// it keeps none, or the bytes are not a session.
+pub fn chart(bytes: &[u8]) -> Option<String> {
+    let doc = main_doc(bytes).ok()?;
+    let text = keyflow_session::written_chart_in(&doc);
+    (!text.trim().is_empty()).then_some(text)
+}
+
+/// Whether a file is a song's session file (the one file, or the old
+/// pair's document), by its name: what a chart is read out of rather than
+/// being one.
+pub fn is_session(name: &str) -> bool {
+    name.ends_with(".session") || name.ends_with(".fts-session")
+}
+
 /// The song's id in a one-file song's bytes (`meta.id`); `None` for
 /// anything else (the old pair's id is in its `.fts-session` header).
 pub fn store_id(bytes: &[u8]) -> Option<String> {
@@ -255,6 +272,51 @@ pub fn song_file(folder: &str) -> Option<std::path::PathBuf> {
     store.cloned().or_else(|| all.into_iter().next())
 }
 
+/// Songs whose chart moved from its `.kf` into its session, as test
+/// fixtures: a song's one file (a store) whose session keeps its chart
+/// (`keyflow/chart`), with no `.kf` beside it.
+#[cfg(test)]
+pub(crate) mod fixture {
+    use std::path::{Path, PathBuf};
+
+    /// A chart as a migrated song's session keeps it.
+    pub const FIRE: &str = "Fire\n\\title \"Fire\"\n#D 120bpm 4/4\n\nVERSE 2\nD G | A D\n";
+
+    /// A new, empty folder for one test.
+    pub fn folder(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir()
+            .join("studio-session-chart")
+            .join(format!("{name}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// `<dir>/<title>.session`: a song's one file, its session's `main`
+    /// branch keeping `chart` (none when `None`) beside a section.
+    pub fn song(dir: &Path, title: &str, chart: Option<&str>) -> PathBuf {
+        let file = dir.join(format!("{title}.session"));
+        let store = session_format::store::Store::open(&file).unwrap();
+        store.set_song_id(uuid::Uuid::new_v4()).unwrap();
+        let doc = loro::LoroDoc::new();
+        let verse = doc
+            .get_map("regions")
+            .insert_container("verse", loro::LoroMap::new())
+            .unwrap();
+        verse.insert("name", "Verse").unwrap();
+        doc.commit();
+        if let Some(chart) = chart {
+            keyflow_session::write_chart_in(&doc, chart).unwrap();
+        }
+        let update = doc.export(loro::ExportMode::Snapshot).unwrap();
+        store
+            .append_part_update(session_format::read::SESSION, super::MAIN, &update)
+            .unwrap();
+        // Closed: its log folded in, the file alone the song.
+        store.close().unwrap();
+        file
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,6 +392,28 @@ mod tests {
         assert_eq!(names, vec![("Verse", 0.0, 30.0), ("Chorus", 30.0, 60.0)]);
         assert_eq!(t.at(45.0).map(|s| s.name.as_str()), Some("Chorus"));
         assert_eq!(t.at(61.0), None);
+    }
+
+    /// #624: a song's chart moved from its `.kf` into its session file is
+    /// read out of it; a session keeping none, or bytes that are not a
+    /// session, have none.
+    #[test]
+    fn the_chart_a_session_keeps_is_read_from_its_file() {
+        let dir = fixture::folder("kept");
+        let fire = fixture::song(&dir, "Fire", Some(fixture::FIRE));
+        let bytes = std::fs::read(&fire).unwrap();
+        assert!(is_store(&bytes));
+        assert_eq!(chart(&bytes).as_deref(), Some(fixture::FIRE));
+        let bare = fixture::song(&dir, "Last Christmas", None);
+        assert_eq!(chart(&std::fs::read(bare).unwrap()), None);
+        assert_eq!(
+            chart(&file()),
+            None,
+            "the old pair's document, no chart in it"
+        );
+        assert_eq!(chart(b"D G | A D"), None, "a .kf is not a session");
+        assert!(is_session("Fire.session") && is_session("Intro.fts-session"));
+        assert!(!is_session("Fire.session.log") && !is_session("Fire.kf"));
     }
 
     #[test]

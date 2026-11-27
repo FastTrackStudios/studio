@@ -63,6 +63,49 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// The chart `session` keeps written in Keyflow's language (the text
+/// entry [`CHART`] in namespace [`EXTENSION`]); empty when it has none.
+#[must_use]
+pub fn written_chart(session: &SessionDoc) -> String {
+    session
+        .read_ext(&ExtensionId::from(EXTENSION))
+        .text(CHART)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// [`written_chart`] of a session's Loro document as read from its file
+/// (`session_format::read`, the old pair's document): a reader with the
+/// document and no [`SessionDoc`] of its own.
+#[must_use]
+pub fn written_chart_in(doc: &live_doc::loro::LoroDoc) -> String {
+    written_chart(&SessionDoc::from_doc(doc.clone()))
+}
+
+/// Makes the chart `session` keeps written read `source` ([`written_chart`]),
+/// as a diff, committed: someone else's typing elsewhere in it survives.
+///
+/// # Errors
+///
+/// The document refused the edit.
+pub fn write_chart(session: &SessionDoc, source: &str) -> Result<()> {
+    let id = ExtensionId::from(EXTENSION);
+    let ext = session.ext(&id).map_err(|e| Error::Doc(e.to_string()))?;
+    ext.set_text(CHART, source)
+        .map_err(|e| Error::Doc(e.to_string()))?;
+    session.doc().commit();
+    Ok(())
+}
+
+/// [`write_chart`] into a session's Loro document.
+///
+/// # Errors
+///
+/// The document refused the edit.
+pub fn write_chart_in(doc: &live_doc::loro::LoroDoc, source: &str) -> Result<()> {
+    write_chart(&SessionDoc::from_doc(doc.clone()), source)
+}
+
 /// A `.session` file holding a chart, open on this device.
 #[cfg(not(target_family = "wasm"))]
 pub struct ChartSession {
@@ -147,11 +190,7 @@ impl ChartSession {
     /// The chart's source; empty when it has none yet.
     #[must_use]
     pub fn chart(&self) -> String {
-        self.session()
-            .read_ext(&ExtensionId::from(EXTENSION))
-            .text(CHART)
-            .unwrap_or_default()
-            .to_owned()
+        written_chart(self.session())
     }
 
     /// Makes the chart read `source`, as a diff: someone else's typing
@@ -161,15 +200,7 @@ impl ChartSession {
     ///
     /// The document refused the edit.
     pub fn set_chart(&self, source: &str) -> Result<()> {
-        let id = ExtensionId::from(EXTENSION);
-        let ext = self
-            .session()
-            .ext(&id)
-            .map_err(|e| Error::Doc(e.to_string()))?;
-        ext.set_text(CHART, source)
-            .map_err(|e| Error::Doc(e.to_string()))?;
-        self.session().doc().commit();
-        Ok(())
+        write_chart(self.session(), source)
     }
 
     /// Calls `changed` whenever an edit made on another replica arrives

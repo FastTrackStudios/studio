@@ -282,6 +282,27 @@ impl SongSource for SessionFolder {
     }
 }
 
+/// The chart the session at `place` keeps (`session_file::chart`), read
+/// from its folder the way the page's engine reads the song: in Drive, at
+/// a link, or kept in the page's caches for offline. `None` when it keeps
+/// none, or the folder did not read.
+pub async fn session_chart(place: &Place) -> Option<String> {
+    let folder = SessionFolder::new(place.clone());
+    let listing = folder.list().await.ok()?;
+    // The song's file at the top of its folder: the old pair's document
+    // while there is one, else the one file.
+    let top = |ext: &str| {
+        listing
+            .entries
+            .iter()
+            .find(|(path, _)| !path.contains('/') && path.ends_with(ext))
+            .cloned()
+    };
+    let (path, size) = top(".fts-session").or_else(|| top(".session"))?;
+    let bytes = folder.read(path, 0..size).await.ok()?;
+    crate::session_file::chart(&bytes)
+}
+
 /// A folder listing's version: every file's path, size and time, hashed.
 /// The same files at the same sizes and times are the same version.
 fn listing_version(files: &[(String, u64, String, i64)]) -> String {
