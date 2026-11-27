@@ -69,7 +69,11 @@ end
 
 # The request's status and parsed body. soft: a failure is returned
 # ({"_error" => code, "_body" => ...}) instead of ending the run.
-def api(method, path, body = nil, soft: false)
+# Options are a plain hash, not keywords: under macOS's system Ruby (2.6)
+# a trailing `{ data: ... }` body was taken as keywords ("unknown keyword:
+# data") whenever the method had a keyword parameter.
+def api(method, path, body = nil, opts = {})
+  soft = opts.fetch(:soft, false)
   uri = URI("https://api.appstoreconnect.apple.com#{path}")
   cls = { get: Net::HTTP::Get, post: Net::HTTP::Post, patch: Net::HTTP::Patch }.fetch(method)
   req = cls.new(uri)
