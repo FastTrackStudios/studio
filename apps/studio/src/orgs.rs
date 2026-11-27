@@ -130,20 +130,21 @@ pub fn known(slug: &str) -> Option<&'static Known> {
 }
 
 thread_local! {
-    /// The names organizations made here were given, this run (their team
-    /// document keeps them for good; the switcher reads names from here).
+    /// What this person's organizations are called: the issuer's names,
+    /// read once Studio is up, and those made or joined here this run
+    /// (every page that names an org reads them from here).
     static NAMED: std::cell::RefCell<std::collections::HashMap<String, String>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
-/// Remember what an organization made here is called.
+/// Remember what an organization is called.
 #[cfg_attr(not(feature = "drive"), allow(dead_code))]
 pub fn remember_name(slug: &str, name: &str) {
     NAMED.with(|n| n.borrow_mut().insert(slug.to_string(), name.to_string()));
 }
 
-/// An org's name: Studio's for the ones it knows, the one it was given
-/// when it was made here, else its slug in words.
+/// An org's name: the issuer's (or the one it was given when it was made
+/// here), else Studio's for the ones it knows, else its slug in words.
 pub fn org_name(slug: &str) -> String {
     if let Some(name) = NAMED.with(|n| n.borrow().get(slug).cloned()) {
         return name;

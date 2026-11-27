@@ -162,6 +162,17 @@ mod web {
                 if *orgs.peek() != listed {
                     orgs.set(listed);
                 }
+                // Their names, as the issuer keeps them (what was typed
+                // when one was made), shown wherever an org is named.
+                if answer.signed_in()
+                    && let Ok(named) = crate::org_members::orgs_here().await
+                {
+                    for o in named.iter().filter(|o| !o.name.is_empty()) {
+                        crate::orgs::remember_name(&o.slug, &o.name);
+                    }
+                    // What names an org reads its list: shown again, named.
+                    orgs.write();
+                }
             }
         });
         children

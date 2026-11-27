@@ -136,7 +136,7 @@ mod imp {
         "STUDIO_ORG_SWITCH",
         "Switch org",
         "Orgs",
-        "Puts Studio in org `org` (one of STUDIO_ORGS' `orgs`): its sets, library and team."
+        "Puts Studio in org `org` (one of STUDIO_ORGS' `orgs`): its sets, library and team. Studio goes into it just after answering (on desktop it starts again in it, as after STUDIO_SIGN_IN)."
     );
     meta!(
         ORG_CREATE,
@@ -998,7 +998,7 @@ mod imp {
                 if !(app.orgs)().contains(&a.org) {
                     return Err(format!("not in org {} (STUDIO_ORGS lists them)", a.org));
                 }
-                app.switch_org(&a.org);
+                switch_after_answer(app, a.org.clone());
                 Ok(json!({ "here": a.org }))
             }
             "STUDIO_SETLIST_FILES" => Ok(Value::Array(
