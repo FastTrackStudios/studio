@@ -76,10 +76,12 @@ fn set_play_state(daw: &Standalone, guid: &str, ps: PlayState) -> DawResult<()> 
         bundle.shared.play_state(),
         PlayStateRepr::Playing | PlayStateRepr::Recording
     );
+    bundle.shared.set_play_state(play_state_repr(ps));
+    // After the state is set: the watcher stops as soon as it reads the
+    // transport not rolling, and it reads it at once.
     if !was_rolling && matches!(ps, PlayState::Playing | PlayState::Recording) {
         watch_first_audio(&bundle);
     }
-    bundle.shared.set_play_state(play_state_repr(ps));
     let mirrored = daw.with_project_mut(guid, |p| p.transport.play_state = ps);
     if was_recording && !recording {
         // After the state change, so the audio thread has stopped

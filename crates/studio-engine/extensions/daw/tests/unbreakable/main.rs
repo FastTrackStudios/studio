@@ -252,8 +252,8 @@ fn drive(plan: &Plan, date: String, unix: u64, began: Instant, context: Value, t
     );
 }
 
-/// The trend's one line: the step times, the open's named stages, the
-/// checks' values.
+/// The trend's one line: the step times, the open's named stages, each
+/// span's own time, the song's sizes, the checks' values.
 fn trend_line(record: &Value) -> Value {
     let pick = |name: &str| {
         record["open"]["breakdown"]
@@ -300,6 +300,37 @@ fn trend_line(record: &Value) -> Value {
             )
         })
         .collect();
+    let rows = record["open"]["breakdown"].as_array();
+    // Each span's own time (what no span under it accounts for), where
+    // it is 10 ms or more: where the open's time actually goes.
+    let own: serde_json::Map<String, Value> = rows
+        .into_iter()
+        .flatten()
+        .filter(|r| r["self_ms"].as_f64().is_some_and(|ms| ms >= 10.0))
+        .map(|r| {
+            (
+                r["name"].as_str().unwrap_or("?").to_owned(),
+                r["self_ms"].clone(),
+            )
+        })
+        .collect();
+    // A size, as a number: OTLP carries a u64 field as a string.
+    let field = |span: &str, key: &str| {
+        let value = rows
+            .and_then(|rows| rows.iter().find(|r| r["name"] == json!(span)))
+            .map_or(Value::Null, |r| r["fields"][key].clone());
+        value
+            .as_str()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map_or(value, Value::from)
+    };
+    // The `.session` file, and the snapshot the song loaded from
+    // (unpacked, and as stored).
+    let sizes = json!({
+        "file_bytes": record["context"]["copy"]["of"]["bytes"],
+        "snapshot_bytes": field("store.import", "store.snapshot_bytes"),
+        "snapshot_packed_bytes": field("store.read_snapshot", "store.packed_bytes"),
+    });
     json!({
         "date": record["date"],
         "commit": record["commit"],
@@ -307,9 +338,37 @@ fn trend_line(record: &Value) -> Value {
         "total_ms": record["total_ms"],
         "steps_ms": steps,
         "open_ms": stages,
+        "open_self_ms": own,
+        "sizes": sizes,
         "checks": checks,
         "ok": record["failures"].as_array().is_none_or(Vec::is_empty),
     })
+}
+
+#[test]
+fn the_trend_line_keeps_each_spans_own_time_and_the_songs_sizes() {
+    let record = json!({
+        "open": {"breakdown": [
+            {"name": "song.open", "total_ms": 100.0, "self_ms": 2.0, "fields": {}},
+            {"name": "load.store", "total_ms": 90.0, "self_ms": 40.0, "fields": {}},
+            {"name": "store.read_snapshot", "total_ms": 5.0, "self_ms": 5.0,
+             "fields": {"store.packed_bytes": "42"}},
+            {"name": "store.import", "total_ms": 45.0, "self_ms": 45.0,
+             "fields": {"store.snapshot_bytes": 77}},
+        ]},
+        "context": {"copy": {"of": {"bytes": 454}}},
+    });
+    let line = trend_line(&record);
+    assert_eq!(line["open_ms"]["load.store"], json!(90.0));
+    // song.open's 2 ms are left out: noise in a line meant for the trend.
+    assert_eq!(
+        line["open_self_ms"],
+        json!({"load.store": 40.0, "store.import": 45.0})
+    );
+    assert_eq!(
+        line["sizes"],
+        json!({"file_bytes": 454, "snapshot_bytes": 77, "snapshot_packed_bytes": 42})
+    );
 }
 
 /// The run, for the person reading the test's output.

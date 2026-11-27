@@ -22,14 +22,24 @@ hint_below = 0
 
 # Opening each fixture session, and the fixture setlist (its five places,
 # every song open), in an engine of its own (tests/fixtures).
+#
+# Set from CI's first reports (studio#726), the `thebattleship` pool on
+# 2026-11-27, two runs: each other session 303–509 ms, drum-kit
+# 1006–1312 ms, the setlist 908–1113 ms (to the 100 ms poll). On airlock
+# with all of daw-extension's fixture and Unbreakable tests at once and a
+# workspace check beside them: each other session 333–875 ms, drum-kit
+# 3939 ms, the setlist 3276 ms. Each budget is at least 2.5× CI's slowest
+# and 1.25× the contended one, and a time fails only past 1.25× its
+# budget. The real song's open target (7 s) is held by `just
+# test-unbreakable` (../unbreakable/budgets.toml): CI has no copy of it.
 [open.budget_ms]
-arrangements = 5000
-chart-repeats = 5000
+arrangements = 2000
+chart-repeats = 2000
 drum-kit = 5000
-markers-only = 5000
-multitrack-click = 5000
-same-name = 5000
-setlist = 10000
+markers-only = 2000
+multitrack-click = 2000
+same-name = 2000
+setlist = 5000
 
 # A room with a leader and a member (tests/room).
 #
