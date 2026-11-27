@@ -160,6 +160,13 @@ test-first-run *ARGS:
 test-org-create *ARGS:
     cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --features native --test it -E 'test(/^org_create::/)' --run-ignored only --no-fail-fast {{ARGS}}
 
+# Seam 1 for an org's people (studio#770): an owner invites by email and by link, a second account's Studio joins with
+# the link and sees the org's setlist, both are listed, and the owner removes it (the last owner stays), all over two
+# Studios' MCP (apps/studio/tests/it/org_invites.rs, on first_run's stand-ins). It opens two Studio windows, so run it in
+# a desktop session. STUDIO_APP names another Studio; extra arguments go to nextest
+test-org-invites *ARGS:
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --features native --test it -E 'test(/^org_invites::/)' --run-ignored only --no-fail-fast {{ARGS}}
+
 # The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
 ci-local BASE="":
     bash scripts/ci-local.sh {{BASE}}

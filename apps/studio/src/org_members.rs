@@ -516,7 +516,9 @@ mod here {
     }
 
     /// An org joined, one of this person's now: listed (the switcher, All
-    /// organizations), named, and Studio in it. On the UI thread.
+    /// organizations) and named. On the UI thread. Going into it is the
+    /// caller's (`AppState::switch_org`; on desktop that starts Studio
+    /// again, so an action answers first).
     pub fn joined(app: AppState, org: &Org) {
         let mut orgs = app.orgs;
         let mut list = orgs.peek().clone();
@@ -527,7 +529,6 @@ mod here {
         if !org.name.is_empty() {
             crate::orgs::remember_name(&org.slug, &org.name);
         }
-        app.switch_org(&org.slug);
     }
 
     /// Join from a pasted invitation; a refusal a fresh sign-in did not

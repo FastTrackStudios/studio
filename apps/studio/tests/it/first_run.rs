@@ -43,7 +43,8 @@ use serde_json::{Value, json};
 /// The account the account server signs in, and what the node lists for it.
 pub(super) const WHO: &str = "ada@example.com";
 pub(super) const ORG: &str = "adult-jam";
-/// The token the account server issues; the node takes nothing else.
+/// The account server's tokens begin so (one per account, [`Account::token`]);
+/// the node takes nothing else.
 const TOKEN: &str = "first-run-access-token";
 const CODE: &str = "first-run-code";
 
@@ -115,9 +116,22 @@ fn a_fresh_install_signs_in_sees_its_orgs_and_opens_a_setlist() {
 /// `STUDIO_INSTANCE` (its doors and engine its own), one per test.
 pub(super) fn signed_in(root: &Path, instance: &'static str) -> (Stand, Studio, Mcp) {
     let stand = Stand::start();
+    let (studio, mcp) = signed_in_as(&stand, ADA, root, instance);
+    (stand, studio, mcp)
+}
+
+/// [`signed_in`] as `who`, against `stand` (one stand-in, any number of
+/// Studios, each on its own `root` and `instance`).
+pub(super) fn signed_in_as(
+    stand: &Stand,
+    who: Account,
+    root: &Path,
+    instance: &'static str,
+) -> (Studio, Mcp) {
+    stand.browser_signs_in(who);
     let opened = root.join("opened.txt");
     let bin = fake_browser(&root.join("bin"), &opened);
-    let mut studio = Studio::start(root, instance, &stand, &bin, &opened);
+    let mut studio = Studio::start(root, instance, stand, &bin, &opened);
 
     // Signed out: the node wants a sign-in through its account server.
     let mcp = studio.door(Duration::from_secs(120));
@@ -159,9 +173,9 @@ pub(super) fn signed_in(root: &Path, instance: &'static str) -> (Stand, Studio, 
             .ok()
             .filter(|a| a["signed_in"] == true)
     });
-    assert_eq!(account["who"], WHO, "{account}");
-    assert_eq!(account["orgs"], json!([ORG]), "{account}");
-    (stand, studio, mcp)
+    assert_eq!(account["who"], who.email, "{account}");
+    assert_eq!(account["orgs"], json!(stand.orgs_of(who)), "{account}");
+    (studio, mcp)
 }
 
 // ── the browser ─────────────────────────────────────────────────────────
@@ -237,12 +251,53 @@ fn get(url: &str) -> (u16, String, Vec<u8>) {
 
 // ── the stand-in node and account server ────────────────────────────────
 
+/// An account at the account server: its id there, address and name.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Account {
+    pub(super) id: &'static str,
+    pub(super) email: &'static str,
+    pub(super) name: &'static str,
+}
+
+/// The account `first_run` signs in (`WHO`), owner of `ORG`.
+pub(super) const ADA: Account = Account {
+    id: "acct-ada",
+    email: WHO,
+    name: "Ada",
+};
+/// A second account, with an org of its own (`BOB_ORG`).
+pub(super) const BOB: Account = Account {
+    id: "acct-bob",
+    email: "bob@example.com",
+    name: "Bob",
+};
+pub(super) const BOB_ORG: &str = "bobs-band";
+const ACCOUNTS: [Account; 2] = [ADA, BOB];
+
+impl Account {
+    /// The access token the account server issues it; the node and the
+    /// account server take no other (as since auth#4, a first-party app's
+    /// access token, here Drive's).
+    fn token(self) -> String {
+        format!("{TOKEN}-{}", self.id)
+    }
+
+    fn by_token(bearer: Option<&str>) -> Option<Self> {
+        let t = bearer?.strip_prefix("Bearer ")?;
+        ACCOUNTS.into_iter().find(|a| a.token() == t)
+    }
+
+    fn by(f: impl Fn(&Self) -> bool) -> Option<Self> {
+        ACCOUNTS.into_iter().find(f)
+    }
+}
+
 /// Drive's node and the account server, as their HTTP goes, on loopback.
 pub(super) struct Stand {
     /// `http://127.0.0.1:<port>`: the issuer, and the node's address.
     pub(super) origin: String,
     asked: Arc<Mutex<Vec<String>>>,
-    made: Arc<Mutex<Vec<Made>>>,
+    world: Arc<Mutex<World>>,
 }
 
 /// An org the account server made (`POST /auth/organization/create`):
@@ -254,23 +309,99 @@ pub(super) struct Made {
     pub(super) owner: String,
 }
 
+/// What the account server keeps: its orgs and their members, the
+/// invitations and links made, and who the browser is signed in as.
+struct World {
+    /// The account the account server's page signs in (the person at the
+    /// browser): what a code it hands out stands for.
+    browser: Account,
+    orgs: Vec<Org>,
+    invitations: Vec<Invitation>,
+    /// Invite links: their secret and the org's id.
+    links: Vec<(String, String)>,
+    made: Vec<Made>,
+}
+
+struct Org {
+    id: String,
+    slug: String,
+    name: String,
+    /// Account ids and their roles, in the order they came.
+    members: Vec<(String, String)>,
+}
+
+/// An invitation sent to an address.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Invitation {
+    pub(super) id: String,
+    pub(super) org: String,
+    pub(super) email: String,
+    secret: String,
+    pub(super) accepted: bool,
+}
+
+impl World {
+    fn new() -> Self {
+        let org = |id: &str, slug: &str, name: &str, owner: Account| Org {
+            id: id.into(),
+            slug: slug.into(),
+            name: name.into(),
+            members: vec![(owner.id.into(), "owner".into())],
+        };
+        Self {
+            browser: ADA,
+            orgs: vec![
+                org("org-adult-jam", ORG, "Adult Jam", ADA),
+                org("org-bobs-band", BOB_ORG, "Bob's Band", BOB),
+            ],
+            invitations: Vec::new(),
+            links: Vec::new(),
+            made: Vec::new(),
+        }
+    }
+
+    /// The account's orgs, and its role in each.
+    fn of(&self, who: Account) -> Vec<(&Org, &str)> {
+        self.orgs
+            .iter()
+            .filter_map(|o| {
+                o.members
+                    .iter()
+                    .find(|(m, _)| m == who.id)
+                    .map(|(_, r)| (o, r.as_str()))
+            })
+            .collect()
+    }
+
+    fn role(&self, who: Account, org: &str) -> Option<String> {
+        self.of(who)
+            .into_iter()
+            .find(|(o, _)| o.id == org || o.slug == org)
+            .map(|(_, r)| r.to_string())
+    }
+
+    fn org_mut(&mut self, id: &str) -> Option<&mut Org> {
+        self.orgs.iter_mut().find(|o| o.id == id)
+    }
+}
+
 impl Stand {
-    fn start() -> Self {
+    pub(super) fn start() -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let origin = format!("http://{}", listener.local_addr().expect("addr"));
         let asked = Arc::new(Mutex::new(Vec::new()));
-        let made = Arc::new(Mutex::new(Vec::new()));
-        let (o, a, m) = (origin.clone(), asked.clone(), made.clone());
+        let world = Arc::new(Mutex::new(World::new()));
+        let (o, a, w) = (origin.clone(), asked.clone(), world.clone());
         std::thread::spawn(move || {
             for stream in listener.incoming().flatten() {
-                let (o, a, m) = (o.clone(), a.clone(), m.clone());
-                std::thread::spawn(move || serve(stream, &o, &a, &m));
+                let (o, a, w) = (o.clone(), a.clone(), w.clone());
+                std::thread::spawn(move || serve(stream, &o, &a, &w));
             }
         });
         Self {
             origin,
             asked,
-            made,
+            world,
         }
     }
 
@@ -278,14 +409,50 @@ impl Stand {
         self.asked.lock().map(|a| a.clone()).unwrap_or_default()
     }
 
+    fn with<T>(&self, f: impl FnOnce(&mut World) -> T) -> T {
+        f(&mut self.world.lock().expect("the stand-in's world"))
+    }
+
+    /// Sign `who` in at the account server's page: the next sign-in
+    /// through the browser is theirs.
+    pub(super) fn browser_signs_in(&self, who: Account) {
+        self.with(|w| w.browser = who);
+    }
+
     /// The orgs the account server has made, in order.
     pub(super) fn made(&self) -> Vec<Made> {
-        self.made.lock().map(|m| m.clone()).unwrap_or_default()
+        self.with(|w| w.made.clone())
+    }
+
+    /// The slugs of `who`'s orgs, as the node lists them.
+    pub(super) fn orgs_of(&self, who: Account) -> Vec<String> {
+        self.with(|w| w.of(who).iter().map(|(o, _)| o.slug.clone()).collect())
+    }
+
+    /// The members of `slug`: account ids and roles, in the order they came.
+    pub(super) fn members(&self, slug: &str) -> Vec<(String, String)> {
+        self.with(|w| {
+            w.orgs
+                .iter()
+                .find(|o| o.slug == slug)
+                .map(|o| o.members.clone())
+                .unwrap_or_default()
+        })
+    }
+
+    /// The invitations sent to an address, in order.
+    pub(super) fn invitations(&self) -> Vec<Invitation> {
+        self.with(|w| w.invitations.clone())
+    }
+
+    /// How many invite links have been made.
+    pub(super) fn link_count(&self) -> usize {
+        self.with(|w| w.links.len())
     }
 }
 
 /// One request: its line, its headers (lower-cased names) and body.
-fn serve(stream: TcpStream, origin: &str, asked: &Mutex<Vec<String>>, made: &Mutex<Vec<Made>>) {
+fn serve(stream: TcpStream, origin: &str, asked: &Mutex<Vec<String>>, world: &Mutex<World>) {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
     if reader.read_line(&mut line).is_err() || line.is_empty() {
@@ -310,15 +477,20 @@ fn serve(stream: TcpStream, origin: &str, asked: &Mutex<Vec<String>>, made: &Mut
     let _ = reader.read_exact(&mut body);
     let mut parts = line.split_whitespace();
     let (method, target) = (parts.next().unwrap_or(""), parts.next().unwrap_or("/"));
-    if let Ok(mut a) = asked.lock() {
-        a.push(format!("{method} {target}"));
-    }
     let bearer = headers
         .iter()
         .find(|(k, _)| k == "authorization")
         .map(|(_, v)| v.as_str());
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
-    let reply = answer(method, path, query, bearer, &body, origin, made);
+    if let Ok(mut a) = asked.lock() {
+        // Who asked, by account (never the token).
+        let by = Account::by_token(bearer).map_or("-", |a| a.id);
+        a.push(format!("{method} {path} {by}"));
+    }
+    let reply = match world.lock() {
+        Ok(mut w) => answer(method, path, query, bearer, &body, origin, &mut w),
+        Err(_) => json_reply(500, &json!({})),
+    };
     let mut stream = reader.into_inner();
     let _ = stream.write_all(&reply);
 }
@@ -331,59 +503,74 @@ fn answer(
     bearer: Option<&str>,
     body: &[u8],
     origin: &str,
-    made: &Mutex<Vec<Made>>,
+    w: &mut World,
 ) -> Vec<u8> {
     let auth = json!({ "issuer": origin, "client_id": "drive" });
-    let signed_in = bearer == Some(&format!("Bearer {TOKEN}"));
-    match (method, path) {
-        ("GET", "/orgs") if signed_in => {
-            // The account's orgs: its own, and every one it has made since.
-            let mut orgs = vec![ORG.to_string()];
-            if let Ok(m) = made.lock() {
-                orgs.extend(m.iter().filter(|m| m.owner == WHO).map(|m| m.slug.clone()));
-            }
+    let who = Account::by_token(bearer);
+    match (method, path, who) {
+        // The account's orgs: those it is a member of, by slug.
+        ("GET", "/orgs", Some(who)) => {
+            let orgs: Vec<&str> = w.of(who).iter().map(|(o, _)| o.slug.as_str()).collect();
             json_reply(
                 200,
-                &json!({ "auth": auth, "signed_in": true, "who": WHO, "orgs": orgs, "default": "" }),
+                &json!({ "auth": auth, "signed_in": true, "who": who.email, "orgs": orgs, "default": "" }),
             )
         }
-        ("GET", "/orgs") => json_reply(
+        ("GET", "/orgs", None) => json_reply(
             200,
             &json!({ "auth": auth, "signed_in": false, "orgs": [], "default": "" }),
         ),
-        // The account server: the person is signed in there already, and
-        // it sends them straight back with a code.
-        ("GET", "/oauth2/authorize") => {
+        // The account server: the person is signed in there already (as
+        // `browser`), and it sends them straight back with a code.
+        ("GET", "/oauth2/authorize", _) => {
             let redirect = param(query, "redirect_uri").unwrap_or_default();
             let state = param(query, "state").unwrap_or_default();
-            let to = format!("{redirect}?code={CODE}&state={}", encode(&state));
+            let code = format!("{CODE}-{}", w.browser.id);
+            let to = format!("{redirect}?code={code}&state={}", encode(&state));
             format!("HTTP/1.1 302 Found\r\nLocation: {to}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                 .into_bytes()
         }
-        ("POST", "/oauth2/token") => json_reply(
-            200,
-            &json!({
-                "access_token": TOKEN, "refresh_token": "first-run-refresh",
-                "token_type": "Bearer", "expires_in": 3600,
-            }),
-        ),
-        // The account server's org create, as since auth#4: the bearer is
-        // a first-party app's access token (here, the one it issued) or a
-        // session; anything else is a 401. A slug some org has is a 400.
-        // The account it signs in is the new org's owner.
-        ("POST", "/auth/organization/create") if !signed_in => json_reply(
+        // A code, or a refresh, traded for that account's tokens.
+        ("POST", "/oauth2/token", _) => {
+            let form = String::from_utf8_lossy(body);
+            let of = |prefix: &str, field: &str| {
+                let v = param(&form, field)?;
+                Account::by(|a| v == format!("{prefix}-{}", a.id))
+            };
+            match of(CODE, "code").or_else(|| of("first-run-refresh", "refresh_token")) {
+                Some(a) => json_reply(
+                    200,
+                    &json!({
+                        "access_token": a.token(), "refresh_token": format!("first-run-refresh-{}", a.id),
+                        "token_type": "Bearer", "expires_in": 3600,
+                    }),
+                ),
+                None => json_reply(400, &json!({ "error": "invalid_grant" })),
+            }
+        }
+        // The account server's organization calls, as since auth#4/#5:
+        // the bearer is a first-party app's access token (here, the one it
+        // issued) or a session; anything else is a 401.
+        (_, p, None) if p.starts_with("/auth/organization/") => json_reply(
             401,
             &json!({ "code": "unauthorized", "message": "invalid session" }),
         ),
-        ("POST", "/auth/organization/create") => create_org(body, made),
+        (_, p, Some(who)) if p.starts_with("/auth/organization/") => {
+            let v: Value = serde_json::from_slice(body).unwrap_or_default();
+            let (status, v) = organization(&p["/auth/organization/".len()..], who, &v, w);
+            json_reply(status, &v)
+        }
         // The org's files are for its members only, as on Drive's node:
         // read with the account's sign-in or not at all.
-        ("GET", _) if !signed_in && (path == "/search" || path.starts_with("/fetch/")) => {
+        ("GET", _, None) if path == "/search" || path.starts_with("/fetch/") => {
             json_reply(401, &json!({ "error": "sign in" }))
         }
-        // The org's index: its one setlist file.
-        ("GET", "/search") if param(query, "exts").is_some_and(|e| e.split(',').any(|x| x == "setlist")) => {
-            let results = if param(query, "space").as_deref() == Some(ORG) {
+        // The org's index: its one setlist file, for its members.
+        ("GET", "/search", Some(who))
+            if param(query, "exts").is_some_and(|e| e.split(',').any(|x| x == "setlist")) =>
+        {
+            let space = param(query, "space").unwrap_or_default();
+            let results = if space == ORG && w.role(who, ORG).is_some() {
                 json!([{
                     "location": LOCATION, "location_name": "Ada's Mac", "device": "dev-ada",
                     "device_name": "Ada's Mac", "online": true, "path": SET_PATH,
@@ -394,8 +581,14 @@ fn answer(
             };
             json_reply(200, &json!({ "results": results }))
         }
-        ("GET", "/search") => json_reply(200, &json!({ "results": [] })),
-        ("GET", p) if p == format!("/fetch/{ORG}/{LOCATION}") && param(query, "path").as_deref() == Some(SET_PATH) => {
+        ("GET", "/search", _) => json_reply(200, &json!({ "results": [] })),
+        ("GET", p, Some(who))
+            if p == format!("/fetch/{ORG}/{LOCATION}")
+                && param(query, "path").as_deref() == Some(SET_PATH) =>
+        {
+            if w.role(who, ORG).is_none() {
+                return json_reply(403, &json!({ "error": "not a member" }));
+            }
             format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{SET_TEXT}",
                 SET_TEXT.len()
@@ -406,36 +599,223 @@ fn answer(
     }
 }
 
+/// `/auth/organization/<call>` for `who`, each with auth's own check
+/// (`r[auth.jwt.first-party-access]`): inviting and removing need an owner
+/// or an admin, the list a member, joining the invitation or link. The
+/// statuses and words are auth's.
+fn organization(call: &str, who: Account, v: &Value, w: &mut World) -> (u16, Value) {
+    let forbidden = || {
+        (
+            403,
+            json!({ "code": "forbidden", "message": "insufficient organization permissions" }),
+        )
+    };
+    let bad_credentials = || {
+        (
+            401,
+            json!({ "code": "unauthorized", "message": "invalid credentials" }),
+        )
+    };
+    let manages = |w: &World, org: &str| {
+        w.role(who, org)
+            .is_some_and(|r| r.split(',').any(|r| ["owner", "admin"].contains(&r.trim())))
+    };
+    let already_in = || {
+        (
+            400,
+            json!({ "code": "invalid_input", "message": "organization member already exists" }),
+        )
+    };
+    let admit = |w: &mut World, org: &str| -> Result<(), (u16, Value)> {
+        let o = w.org_mut(org).ok_or_else(bad_credentials)?;
+        if o.members.iter().any(|(m, _)| m == who.id) {
+            return Err(already_in());
+        }
+        o.members.push((who.id.into(), "member".into()));
+        Ok(())
+    };
+    match call {
+        "create" => create_org(who, v, w),
+        "list" => (
+            200,
+            Value::Array(
+                w.of(who)
+                    .iter()
+                    .map(|(o, r)| {
+                        json!({
+                            "organization": { "id": o.id, "slug": o.slug, "name": o.name },
+                            "membership": { "role": r, "user_id": who.id },
+                        })
+                    })
+                    .collect(),
+            ),
+        ),
+        "members" => {
+            let org = v["organization_id"].as_str().unwrap_or_default();
+            if w.role(who, org).is_none() {
+                return forbidden();
+            }
+            let Some(o) = w.orgs.iter().find(|o| o.id == org) else {
+                return forbidden();
+            };
+            let people = o
+                .members
+                .iter()
+                .filter_map(|(m, role)| {
+                    let a = Account::by(|a| a.id == m)?;
+                    Some(json!({
+                        "member": { "role": role, "user_id": a.id },
+                        "user": { "id": a.id, "name": a.name, "email": a.email },
+                    }))
+                })
+                .collect();
+            (200, Value::Array(people))
+        }
+        "invite-member" => {
+            let i = &v["invite"];
+            let org = i["organization_id"].as_str().unwrap_or_default();
+            let Some(email) = i["email"].as_str() else {
+                return (400, json!({ "code": "invalid_input", "message": "email" }));
+            };
+            if !manages(w, org) {
+                return forbidden();
+            }
+            let n = w.invitations.len() + 1;
+            let inv = Invitation {
+                id: format!("inv-{n}"),
+                org: org.into(),
+                email: email.into(),
+                secret: format!("invitation-secret-{n}"),
+                accepted: false,
+            };
+            let answer = json!({
+                "invitation": { "id": inv.id, "organization_id": org, "email": email, "status": "pending" },
+                "token": inv.secret,
+            });
+            w.invitations.push(inv);
+            (200, answer)
+        }
+        "invite-link" => {
+            let org = v["link"]["organization_id"].as_str().unwrap_or_default();
+            if !manages(w, org) {
+                return forbidden();
+            }
+            let secret = format!("link-secret-{}", w.links.len() + 1);
+            w.links.push((secret.clone(), org.into()));
+            (
+                200,
+                json!({ "link": { "id": format!("link-{}", w.links.len()), "organization_id": org }, "token": secret }),
+            )
+        }
+        // A made-up link is answered as a bad sign-in is, as auth does.
+        "join" => {
+            let secret = v["link_token"].as_str().unwrap_or_default();
+            let Some(org) = w
+                .links
+                .iter()
+                .find(|(s, _)| s == secret)
+                .map(|(_, o)| o.clone())
+            else {
+                return bad_credentials();
+            };
+            match admit(w, &org) {
+                Ok(()) => (200, json!({ "organization_id": org, "role": "member" })),
+                Err(e) => e,
+            }
+        }
+        "accept-invitation" => {
+            let (id, secret) = (
+                v["invitation_id"].as_str().unwrap_or_default(),
+                v["invitation_token"].as_str().unwrap_or_default(),
+            );
+            let Some(at) = w
+                .invitations
+                .iter()
+                .position(|i| i.id == id && i.secret == secret)
+            else {
+                return bad_credentials();
+            };
+            let org = w.invitations[at].org.clone();
+            if w.role(who, &org).is_some() {
+                return already_in();
+            }
+            if w.invitations[at].accepted {
+                return (
+                    400,
+                    json!({ "code": "invalid_input", "message": "invitation is not pending" }),
+                );
+            }
+            match admit(w, &org) {
+                Ok(()) => {
+                    w.invitations[at].accepted = true;
+                    (200, Value::Null)
+                }
+                Err(e) => e,
+            }
+        }
+        // Someone not in it is answered as bad credentials, as auth does;
+        // the last owner stays.
+        "remove-member" => {
+            let (org, gone) = (
+                v["organization_id"].as_str().unwrap_or_default(),
+                v["user_id"].as_str().unwrap_or_default(),
+            );
+            if !manages(w, org) {
+                return forbidden();
+            }
+            let Some(o) = w.org_mut(org) else {
+                return forbidden();
+            };
+            let Some(at) = o.members.iter().position(|(m, _)| m == gone) else {
+                return bad_credentials();
+            };
+            let owners = o.members.iter().filter(|(_, r)| r == "owner").count();
+            if o.members[at].1 == "owner" && owners == 1 {
+                return (
+                    400,
+                    json!({ "code": "invalid_input", "message": "cannot remove the last organization owner" }),
+                );
+            }
+            o.members.remove(at);
+            (200, json!({ "removed": gone }))
+        }
+        _ => (404, json!({})),
+    }
+}
+
 /// `POST /auth/organization/create` for the signed-in account: the org
 /// made, the account its owner, or the slug refused as taken.
-fn create_org(body: &[u8], made: &Mutex<Vec<Made>>) -> Vec<u8> {
-    let v: Value = serde_json::from_slice(body).unwrap_or_default();
+fn create_org(who: Account, v: &Value, w: &mut World) -> (u16, Value) {
     let org = &v["organization"];
     let (Some(name), Some(slug)) = (org["name"].as_str(), org["slug"].as_str()) else {
-        return json_reply(
+        return (
             400,
-            &json!({ "code": "invalid_input", "message": "organization name and slug" }),
+            json!({ "code": "invalid_input", "message": "organization name and slug" }),
         );
     };
-    let Ok(mut m) = made.lock() else {
-        return json_reply(500, &json!({}));
-    };
-    if slug == ORG || m.iter().any(|m| m.slug == slug) {
-        return json_reply(
+    if w.orgs.iter().any(|o| o.slug == slug) {
+        return (
             400,
-            &json!({ "code": "invalid_input", "message": "organization slug already exists" }),
+            json!({ "code": "invalid_input", "message": "organization slug already exists" }),
         );
     }
-    m.push(Made {
+    let id = format!("org-{slug}");
+    w.orgs.push(Org {
+        id: id.clone(),
+        slug: slug.into(),
+        name: name.into(),
+        members: vec![(who.id.into(), "owner".into())],
+    });
+    w.made.push(Made {
         slug: slug.to_string(),
         name: name.to_string(),
-        owner: WHO.to_string(),
+        owner: who.email.to_string(),
     });
-    json_reply(
+    (
         200,
-        &json!({
-            "organization": { "id": format!("org-{}", m.len()), "name": name, "slug": slug },
-            "membership": { "role": "owner", "user": WHO },
+        json!({
+            "organization": { "id": id, "name": name, "slug": slug },
+            "membership": { "role": "owner", "user": who.email },
         }),
     )
 }
@@ -448,6 +828,7 @@ fn json_reply(status: u16, v: &Value) -> Vec<u8> {
             200 => "OK",
             400 => "Bad Request",
             401 => "Unauthorized",
+            403 => "Forbidden",
             500 => "Internal Server Error",
             _ => "Not Found",
         },

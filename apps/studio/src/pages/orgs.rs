@@ -132,6 +132,7 @@ pub fn JoinOrg(#[props(default)] done: Option<EventHandler<()>>) -> Element {
                 match crate::org_members::join_here(&pasted).await {
                     Ok(joined) => {
                         crate::org_members::joined(app, &joined);
+                        app.switch_org(&joined.slug);
                         app.say(format!("You are in {}", orgs::org_name(&joined.slug)));
                         link.set(String::new());
                         if let Some(done) = done {
