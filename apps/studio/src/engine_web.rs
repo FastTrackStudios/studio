@@ -344,6 +344,7 @@ pub fn EnginePlayer() -> Element {
                 };
                 match opening {
                     Ok(song) => {
+                        crate::chart_generated::remember(&place, &song);
                         let len = song.span.1.max(0.0);
                         opened.borrow_mut().insert(k, (song.project.clone(), len));
                         // Still the song on screen: shown, and played if asked.

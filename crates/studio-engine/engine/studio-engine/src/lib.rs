@@ -253,6 +253,7 @@ pub use engine_edit::take_rank;
 pub use engine_runtime::client::song_bars;
 pub use engine_runtime::client::song_chart;
 pub use engine_runtime::client::song_model;
+pub mod session_timing;
 #[cfg(feature = "native")]
 pub mod timeline_actions;
 pub use daw_view::wave_detail;

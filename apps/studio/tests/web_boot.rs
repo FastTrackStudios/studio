@@ -84,6 +84,75 @@ fn the_web_build_opens_and_plays_a_fixture_session() {
     );
 }
 
+/// The fixture has sections (Intro, Verse 1, Chorus 1) and no `.kf`: its
+/// chart page shows the chart Keyflow generates from them, as the desktop's
+/// pane and `SESSION_CHART` do (studio#742), and lights the bar the
+/// playhead is in.
+#[test]
+#[ignore = "needs the web build and a WebDriver: `just test-web-boot`"]
+fn the_chart_page_shows_a_generated_chart_and_follows_the_playhead() {
+    let dist = PathBuf::from(
+        std::env::var_os("STUDIO_WEB_DIST")
+            .expect("STUDIO_WEB_DIST: the web build's public folder"),
+    );
+    let sessions = tempfile::tempdir().expect("a folder for the session");
+    stage_session(&sessions.path().join("multitrack-click"));
+    let site = Server::start(dist, sessions.path().to_path_buf());
+
+    let driver = Driver::start();
+    let session = driver.new_session();
+    session.navigate(&format!(
+        "{}/now/chart?session=/sessions/multitrack-click",
+        site.origin
+    ));
+
+    // The generated chart engraved, a time on every bar.
+    let bars = session.wait_for(Duration::from_secs(90), "the generated chart", |s| {
+        if s.state("data-state") == "failed" {
+            panic!(
+                "the session did not open in the page: {}",
+                s.state("data-why")
+            );
+        }
+        let bars = s.bars();
+        (!bars.is_empty()).then_some(bars)
+    });
+    let line = session.script("return document.querySelector('.chartnow')?.innerText || '';");
+    assert!(
+        line.contains("The generated chart"),
+        "the page does not say the chart is generated: {line}"
+    );
+    // 120 bpm in 4/4, two seconds a bar: the Intro's two bars a count-in
+    // (no measure numbers), then Verse 1's four (measures 1 to 4) and
+    // Chorus 1's two (5 and 6), each bar at its time in the recording.
+    let times: Vec<f64> = bars.iter().map(|(at, _)| *at).collect();
+    let numbers: Vec<u32> = bars.iter().map(|(_, bar)| *bar).collect();
+    assert_eq!(
+        numbers,
+        (1..=8).collect::<Vec<_>>(),
+        "the chart's bars: {bars:?}"
+    );
+    for (i, at) in times.iter().enumerate() {
+        let want = 2.0 * i as f64;
+        assert!(
+            (at - want).abs() < 0.05,
+            "bar {} is at {at}s, not {want}s: {bars:?}",
+            i + 1
+        );
+    }
+
+    // Played, the lit bar follows the playhead past the first bars.
+    session.click("button.npb[aria-label='Play']");
+    session.wait_for(Duration::from_secs(30), "the chart to follow", |s| {
+        let lit = s.script(
+            "return document.querySelector('#nowchart .kf-bar[aria-current]')?.getAttribute('data-at') || '';",
+        );
+        let at: f64 = s.state("data-at").parse().unwrap_or(0.0);
+        let lit: f64 = lit.parse().ok()?;
+        (at > 4.5 && lit >= 4.0 && lit <= at).then_some(())
+    });
+}
+
 /// The fixture session staged into `dir`: its project, each track's
 /// recording as a proxy with its page index, and the folder's `files.json`.
 fn stage_session(dir: &Path) {
@@ -413,6 +482,28 @@ impl Session<'_> {
         .as_str()
         .unwrap_or_default()
         .to_owned()
+    }
+
+    /// What `script` returns, as text.
+    fn script(&self, script: &str) -> String {
+        self.call(
+            "POST",
+            "/execute/sync",
+            Some(&json!({ "script": script, "args": [] })),
+        )
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
+    }
+
+    /// The chart page's bars as it times them: each `kf-bar`'s time
+    /// (seconds) and its bar, in playing order.
+    fn bars(&self) -> Vec<(f64, u32)> {
+        let listed = self.script(
+            "return JSON.stringify([...document.querySelectorAll('#nowchart .kf-bar')] \
+               .map(b => [parseFloat(b.getAttribute('data-at')), parseInt(b.getAttribute('data-bar'))]));",
+        );
+        serde_json::from_str(&listed).unwrap_or_default()
     }
 
     /// What the page shows and what went wrong in it, for a failure.
