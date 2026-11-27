@@ -8,7 +8,7 @@
     reason = "a test fails loudly"
 )]
 
-use room::{Live, Rooms};
+use room::{Live, Pass, Rooms};
 
 #[test]
 fn a_room_made_once_is_found_again_by_its_link() {
@@ -60,6 +60,8 @@ fn going_live_and_ending_keep_the_link() {
         leader: "Cody".to_owned(),
         endpoint: "abc".to_owned(),
         addrs: vec!["127.0.0.1:4433".to_owned()],
+        relays: vec!["https://relay.example/".to_owned()],
+        pass: Pass::mint(),
     };
     rooms.set_live(&made.id, Some(live.clone())).unwrap();
     let now = rooms.find(&made.link()).unwrap();
@@ -107,4 +109,41 @@ fn the_link_in_the_apps_scheme_is_the_same_room() {
     // Anything else in that scheme names no room.
     assert!(room::parse_link("fasttrackstudio://set/adult-jam").is_err());
     assert!(room::parse_link("fasttrackstudio://join/").is_err());
+}
+
+#[test]
+fn a_pass_opens_only_with_itself() {
+    let pass = Pass::mint();
+    assert!(pass.matches(pass.expose()));
+    assert!(!pass.matches(Pass::mint().expose()));
+    assert!(!pass.matches(""));
+    assert!(!pass.matches(pass.expose().get(1..).unwrap()));
+    // No pass opens nothing, not even an empty one.
+    assert!(!Pass::default().matches(""));
+}
+
+#[test]
+fn a_pass_is_never_printed() {
+    let pass = Pass::mint();
+    let live = Live {
+        leader: "Cody".to_owned(),
+        endpoint: "abc".to_owned(),
+        addrs: Vec::new(),
+        relays: Vec::new(),
+        pass: pass.clone(),
+    };
+    assert!(!format!("{live:?}").contains(pass.expose()));
+}
+
+#[test]
+fn a_room_file_from_before_passes_still_reads() {
+    let dir = tempfile::tempdir().unwrap();
+    let rooms = Rooms::at(dir.path());
+    let made = rooms.create("Adult Jam", "rockstars").unwrap();
+    let old = r#"{"id":"ID","name":"Adult Jam","org":"rockstars","live":{"leader":"Cody","endpoint":"abc","addrs":[]}}"#
+        .replace("ID", made.id.as_str());
+    std::fs::write(dir.path().join(format!("{}.room", made.id)), old).unwrap();
+    let live = rooms.find(made.id.as_str()).unwrap().live.unwrap();
+    assert!(live.pass.is_empty());
+    assert!(live.relays.is_empty());
 }

@@ -595,6 +595,11 @@ pub fn host(name: String) -> eyre::Result<String> {
 pub struct RoomSet {
     pub set: String,
     pub projects: Vec<String>,
+    /// The room it is shared in, and the room's pass: the set is served
+    /// behind the room's door (`room::gate`), and joined presenting the
+    /// pass. `None`: served to anyone with its ticket, as a set shared
+    /// outside a room is.
+    pub door: Option<(::room::RoomId, ::room::Pass)>,
 }
 
 #[cfg(feature = "native")]
@@ -707,7 +712,18 @@ fn host_inner(name: String, room: Option<RoomSet>) -> eyre::Result<(String, Vec<
         let addrs = reachable_at(&endpoint);
         let router = host.mount(architect::LayerRouter::new());
         let serving = endpoint.clone();
-        tokio::spawn(async move { architect::iroh_link::serve_router(&serving, router).await });
+        // A room's set is behind the room's door: only who presents the
+        // room's pass edits it.
+        match room
+            .as_ref()
+            .and_then(|r| r.door.as_ref())
+            .map(|(id, pass)| ::room::gate::Door::for_live_set(id, pass))
+        {
+            Some(door) => tokio::spawn(async move { door.serve(&serving, router).await }),
+            None => tokio::spawn(async move {
+                architect::iroh_link::serve_router(&serving, router).await;
+            }),
+        };
 
         let me = format!("host-{}", &endpoint.id().to_string()[..8]);
         let presence: Arc<dyn PresenceSink> = Arc::new(host.own_presence().await?);
@@ -796,20 +812,30 @@ fn join_inner(
                 .await
                 .map_err(|e| eyre::eyre!("iroh connect: {e}"))
         };
+        // A room's set opens with the room's pass, on every call.
+        let presents = ::room::net::Presents(
+            room.as_ref()
+                .and_then(|(_, r)| r.door.as_ref())
+                .map(|(_, pass)| pass.clone())
+                .unwrap_or_default(),
+        );
         let sync = vox_core::initiator_on(dial(&endpoint).await?)
             .establish::<live_doc::DocSyncClient>()
             .await
-            .map_err(|e| eyre::eyre!("session sync handshake: {e:?}"))?;
+            .map_err(|e| eyre::eyre!("session sync handshake: {e:?}"))?
+            .with_middleware(presents.clone());
         let presence_client = vox_core::initiator_on(dial(&endpoint).await?)
             .establish::<live_doc::DocPresenceClient>()
             .await
-            .map_err(|e| eyre::eyre!("session presence handshake: {e:?}"))?;
+            .map_err(|e| eyre::eyre!("session presence handshake: {e:?}"))?
+            .with_middleware(presents.clone());
         // The host's clock is the session's: pinged from here on.
         let clock = SharedClock::follow(
             vox_core::initiator_on(dial(&endpoint).await?)
                 .establish::<engine_sync::clock::SessionClockClient>()
                 .await
-                .map_err(|e| eyre::eyre!("session clock handshake: {e:?}"))?,
+                .map_err(|e| eyre::eyre!("session clock handshake: {e:?}"))?
+                .with_middleware(presents),
         );
 
         let mut peer = SetPeer::new(id);

@@ -11,11 +11,21 @@
 //! ([`RoomPeer::attaches`] counts them).
 //!
 //! The transport under it is the caller's ([`Attach`]): iroh between
-//! devices (engine-collab's `room`), an in-process link in tests.
+//! devices ([`attach_to`], which a desktop's engine and a browser's page
+//! both join by), an in-process link in tests.
+//!
+//! Every call a member makes to the leader presents the room's pass
+//! ([`Presents`]): the leader's door refuses one that does not
+//! (`crate::gate`).
+//!
+//! It builds for the browser too: a page is a member as a desktop is, its
+//! endpoint relay-only ([`bind_in_browser`]).
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+use architect::iroh_link::iroh;
 
 use live_doc::{
     DocPresenceClient, DocPresenceDispatcher, DocSyncClient, DocSyncDispatcher, Hosts,
@@ -24,7 +34,7 @@ use live_doc::{
 use loro::LoroValue;
 use session_sync::transport::{KEY, SharedTransport};
 
-use crate::record::RoomId;
+use crate::record::{Live, Pass, RoomId};
 use crate::state::{RoomDoc, here_key};
 
 /// How long a person's presence outlives their last word.
@@ -225,6 +235,9 @@ pub struct RoomPeer {
     doc: RoomDoc,
     presence: PresencePeer,
     attaches: Arc<AtomicUsize>,
+    /// Why the last attachment ended, or could not be made (the leader's
+    /// door refusing it, say); cleared once one is held.
+    error: Arc<Mutex<Option<String>>>,
     stop: tokio::sync::watch::Sender<bool>,
 }
 
@@ -238,8 +251,9 @@ impl RoomPeer {
         let (presence, mut driver) = PresencePeer::new(id.doc_id(), PRESENCE_TIMEOUT_MS);
         presence.set(&here_key(me), here(name));
         let attaches = Arc::new(AtomicUsize::new(0));
+        let error = Arc::new(Mutex::new(None));
         let (stop, mut stopped) = tokio::sync::watch::channel(false);
-        let counted = Arc::clone(&attaches);
+        let (counted, said) = (Arc::clone(&attaches), Arc::clone(&error));
         architect::platform::spawn(async move {
             let mut wait = FIRST_WAIT;
             loop {
@@ -247,15 +261,24 @@ impl RoomPeer {
                 let session = async {
                     let (sync, presence) = attach().await?;
                     counted.fetch_add(1, Ordering::SeqCst);
+                    // Held this long, it works: what went wrong before is
+                    // no longer so.
+                    let held = async {
+                        architect::platform::sleep(HELD).await;
+                        *lock(&said) = None;
+                        std::future::pending::<()>().await;
+                    };
                     tokio::select! {
                         res = synced.run(&sync) => res.map_err(|e| eyre::eyre!("the room's doc: {e}")),
                         res = driver.run(&presence) => res.map_err(|e| eyre::eyre!("the room's presence: {e}")),
+                        () = held => Ok(()),
                     }
                 };
                 tokio::select! {
                     res = session => {
                         if let Err(e) = res {
                             tracing::debug!(room.error = %e, "room: the attachment ended; attaching again");
+                            *lock(&said) = Some(format!("{e:#}"));
                         }
                     }
                     _ = stopped.wait_for(|s| *s) => return,
@@ -274,8 +297,16 @@ impl RoomPeer {
             doc,
             presence,
             attaches,
+            error,
             stop,
         }
+    }
+
+    /// Why the last attachment to the leader ended or was not made, until
+    /// one holds again: the leader refusing this member, a leader gone.
+    #[must_use]
+    pub fn last_error(&self) -> Option<String> {
+        lock(&self.error).clone()
     }
 
     /// The member's replica of the room's doc.
@@ -303,6 +334,117 @@ impl Drop for RoomPeer {
     fn drop(&mut self) {
         let _ = self.stop.send(true);
     }
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// A member's calls to the leader, each presenting the room's pass as its
+/// `authorization` bearer: what the leader's door admits it by.
+#[derive(Clone)]
+pub struct Presents(pub Pass);
+
+impl vox::ClientMiddleware for Presents {
+    fn pre<'a>(
+        &'a self,
+        _context: &'a vox::ClientContext<'a>,
+        request: &'a mut vox::ClientRequest<'_, 'a>,
+    ) -> vox::BoxMiddlewareFuture<'a> {
+        if !self.0.is_empty() {
+            request.push_string_metadata(
+                architect::permissions_gate::AUTHORIZATION_METADATA_KEY,
+                format!("Bearer {}", self.0.expose()),
+            );
+        }
+        Box::pin(async {})
+    }
+}
+
+/// Where to dial the leader `live` says: its endpoint, at its addresses
+/// and through its relays.
+///
+/// # Errors
+///
+/// The leader's endpoint is not an endpoint id.
+pub fn leader_addr(live: &Live) -> Result<iroh::EndpointAddr, String> {
+    let leader: iroh::EndpointId = live
+        .endpoint
+        .parse()
+        .map_err(|e| format!("the leader's endpoint: {e}"))?;
+    let mut addr = iroh::EndpointAddr::new(leader);
+    for a in &live.addrs {
+        match a.parse() {
+            Ok(socket) => addr = addr.with_ip_addr(socket),
+            Err(e) => {
+                tracing::debug!(room.error = %e, "room: an address of the leader's that is none")
+            }
+        }
+    }
+    for r in &live.relays {
+        match r.parse() {
+            Ok(relay) => addr = addr.with_relay_url(relay),
+            Err(e) => {
+                tracing::debug!(room.error = %e, "room: a relay of the leader's that is none")
+            }
+        }
+    }
+    Ok(addr)
+}
+
+/// What says where the leader is now: the room's file read again (a
+/// leader back after a restart is at new addresses, with a new pass), or
+/// `None` when it cannot be read.
+pub type Find =
+    Arc<dyn Fn() -> architect::platform::BoxFuture<'static, Option<Live>> + Send + Sync>;
+
+/// A member's attachments to the leader, over iroh from `endpoint`: each
+/// one finds the leader again (`find`, else `joined`, where it was when
+/// the member joined), dials it, and presents the room's pass on every
+/// call.
+#[must_use]
+pub fn attach_to(endpoint: iroh::Endpoint, joined: Live, find: Find) -> Attach {
+    Arc::new(move || {
+        let (endpoint, joined, find) = (endpoint.clone(), joined.clone(), Arc::clone(&find));
+        Box::pin(async move {
+            let live = find().await.unwrap_or(joined);
+            let addr = leader_addr(&live).map_err(|e| eyre::eyre!(e))?;
+            let presents = Presents(live.pass);
+            let dial = async || {
+                architect::iroh_link::connect(&endpoint, addr.clone())
+                    .await
+                    .map_err(|e| eyre::eyre!("iroh connect: {e}"))
+            };
+            let sync = vox_core::initiator_on(dial().await?)
+                .establish::<DocSyncClient>()
+                .await
+                .map_err(|e| eyre::eyre!("the room's doc: {e:?}"))?
+                .with_middleware(presents.clone());
+            let presence = vox_core::initiator_on(dial().await?)
+                .establish::<DocPresenceClient>()
+                .await
+                .map_err(|e| eyre::eyre!("the room's presence: {e:?}"))?
+                .with_middleware(presents);
+            Ok((sync, presence))
+        })
+    })
+}
+
+/// A member's endpoint in a browser: n0's relays and lookup, the only way
+/// a page reaches a device (it has no sockets of its own). Each page's is
+/// new.
+///
+/// # Errors
+///
+/// The endpoint could not be bound (no relay reached).
+#[cfg(target_arch = "wasm32")]
+pub async fn bind_in_browser() -> Result<iroh::Endpoint, String> {
+    architect::iroh_link::bind_endpoint_with(
+        iroh::SecretKey::generate(),
+        architect::iroh_link::PeerLookup::N0,
+    )
+    .await
+    .map_err(|e| format!("iroh: {e}"))
 }
 
 /// An attachment that lasted this long worked: the next wait starts short.

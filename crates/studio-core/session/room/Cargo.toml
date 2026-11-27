@@ -11,9 +11,10 @@ description = "A room: an organization's lasting place to play together, its one
 
 [features]
 default = ["net"]
-# The room over vox (`net`): its leader hosts the room's doc and presence,
-# a member follows them on one held-open connection.
-net = ["dep:architect", "dep:eyre", "dep:tokio"]
+# The room over vox (`net`): its leader hosts the room's doc and presence
+# behind its door (`gate`), a member follows them on one held-open
+# connection, over iroh from a desktop or a browser.
+net = ["dep:architect", "dep:architect-permissions", "dep:eyre", "dep:tokio", "dep:vox", "dep:vox-core", "session-sync/net"]
 
 [dependencies]
 # The room's shared state (`state`): one Loro doc, and the presence its
@@ -28,7 +29,14 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-architect = { workspace = true, features = ["vox", "platform", "local"], optional = true }
+# `iroh`: a member dials the leader, natively and in a browser (relay-only
+# there); serving is native.
+architect = { workspace = true, features = ["vox", "platform", "local", "iroh"], optional = true }
+# The leader's door (`gate`): who presented the room's pass.
+architect-permissions = { workspace = true, optional = true }
+# A member's calls carrying the pass (`net::Presents`), and its dial.
+vox = { workspace = true, optional = true }
+vox-core = { workspace = true, optional = true }
 eyre = { workspace = true, optional = true }
 # The member's loop: its stop and its `select!` (no runtime: the
 # platform's, as live-doc).
@@ -38,7 +46,9 @@ tokio = { version = "1", default-features = false, features = ["sync", "macros"]
 uuid = { workspace = true, features = ["js"] }
 
 [dev-dependencies]
-architect = { workspace = true, features = ["vox", "platform", "local"] }
+architect = { workspace = true, features = ["vox", "platform", "local", "iroh"] }
+architect-permissions = { workspace = true }
+vox = { workspace = true }
 live-doc = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread", "time"] }
