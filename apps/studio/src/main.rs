@@ -277,7 +277,7 @@ fn main() {
         }
         // `--join <link>`: into that room as soon as the engine is up.
         if let Some(link) = room_link::link_in(&std::env::args().collect::<Vec<_>>()) {
-            room_link::join(link);
+            room_link::join(link, room_link::member_name());
         }
     }
     // Warnings and up: Loro's encoder logs every block at info.
@@ -301,7 +301,7 @@ fn main() {
         // A room's link the app is opened with (`fasttrackstudio://join/…`,
         // the URL type ios/build.sh declares) joins that room: before the
         // delegate is registered, so the link it was launched by is seen.
-        studio_shell::ios_scene::on_link(room_link::opened);
+        studio_shell::ios_scene::on_link(room_link::link_opened);
         studio_shell::ios_scene::register(studio_shell::ios_scene::Opening::AsHeld);
     }
     // Drawn by Blitz on a desktop: the window has no system frame, the

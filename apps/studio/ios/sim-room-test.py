@@ -28,6 +28,11 @@ What it does, in order:
    setlist; the leader sees it in the room; it follows the leader's song,
    playhead and stop; and when the leader loads the second setlist the
    phone moves to it on the same connection (`attaches` stays 1).
+6. Studio is launched again with the link (`--join <link>`), cold: it
+   joins before its engine is up, and opens what the leader has loaded.
+
+How long the phone took from the link to the leader's setlist open is
+in `room.json` (`join_s`).
 
 On failure the app's and the leader's output and a screenshot are left
 in --out; the checks go to `<out>/room.json` either way.
@@ -183,6 +188,7 @@ class Leader:
 class Checks:
     def __init__(self):
         self.rows = []
+        self.join_s = None
 
     def add(self, name, ok, said):
         self.rows.append({"name": name, "ok": bool(ok), "said": str(said)})
@@ -238,13 +244,14 @@ def play_from(run, at):
         raise Failed(f"asked to play from {at} s, it did not: {got}")
 
 
-def room(leader, phone, setlists, studio, home, checks):
+def room(leader, phone, setlists, studio, home, checks, made_room):
     lead = leader.run
     member = phone.engine
     first, second = setlists
 
     made = lead("ROOM_CREATE", {"name": "Adult Jam", "org": "rockstars"})
     link = made.get("link", "")
+    made_room.append(made.get("id", ""))
     if not checks.add("made", link.startswith("https://fasttrackstudio.app/join/adult-jam-"), made):
         return
     lead("ROOM_LEAD", {"room": link, "name": "Cody"})
@@ -260,16 +267,20 @@ def room(leader, phone, setlists, studio, home, checks):
 
     # The link, opened on the phone in the app's scheme: nothing else.
     in_app = "fasttrackstudio://join/" + link.rsplit("/", 1)[-1]
+    began = time.monotonic()
     sim.simctl(phone.dev_set, "openurl", phone.udid, in_app)
     ok, got = until(FOLLOW_WAIT, lambda: member("ROOM"),
                     lambda v: isinstance(v, dict) and v.get("role") == "member")
     if not checks.add("the link joins the phone to the room", ok, got):
         return
     ok, got = until(FOLLOW_WAIT, lambda: open_titles(member), lambda v: v == leader_first)
-    checks.add("the phone opens the leader's setlist", ok, f"leader {leader_first}, phone {got}")
+    checks.join_s = round(time.monotonic() - began, 2)
+    checks.add("the phone opens the leader's setlist", ok,
+               f"leader {leader_first}, phone {got}, {checks.join_s} s from the link")
+    # The room shows the phone by the device's own word (room_link::member_name).
+    people = sorted(["Cody", "iPhone"])
     ok, got = until(FOLLOW_WAIT, lambda: lead("ROOM"),
-                    lambda v: isinstance(v, dict) and "Cody" in (v.get("people") or [])
-                    and any(p != "Cody" for p in v.get("people") or []))
+                    lambda v: isinstance(v, dict) and sorted(v.get("people") or []) == people)
     checks.add("the leader sees the phone in the room", ok, (got or {}).get("people", got))
 
     lead("SESSION_SONG", {"to": "2"})
@@ -305,12 +316,46 @@ def room(leader, phone, setlists, studio, home, checks):
                before.get("attaches") == 1 and after.get("attaches") == 1 and after.get("load") == 2,
                f"attaches {before.get('attaches')} then {after.get('attaches')}, load {after.get('load')}")
 
+    # Launched by the link, cold: the join is asked for before the engine
+    # in the app is up.
+    phone.relaunch(["--join", link])
+    ok, got = until(sim.UP_WAIT, lambda: phone.engine("ROOM"),
+                    lambda v: isinstance(v, dict) and v.get("role") == "member")
+    if not checks.add("launched with the link, the phone joins", ok, got):
+        return
+    ok, got = until(FOLLOW_WAIT, lambda: open_titles(phone.engine), lambda v: v == leader_second)
+    checks.add("and opens what the leader has loaded", ok, f"leader {leader_second}, phone {got}")
+
 
 class Phone:
-    def __init__(self, dev_set, udid, mcp):
+    """The app in the simulator, read through its MCP door."""
+
+    def __init__(self, dev_set, udid, bundle, data, app_log):
         self.dev_set = dev_set
         self.udid = udid
-        self.mcp = mcp
+        self.bundle = bundle
+        self.data = data
+        self.app_log = app_log
+        self.mcp = None
+
+    def launch(self, args=()):
+        # The door a run before left is not this run's.
+        for root, _dirs, files in os.walk(self.data):
+            if os.path.basename(root) == "fts":
+                for name in files:
+                    if name.endswith("-mcp.json"):
+                        os.remove(os.path.join(root, name))
+        env = dict(os.environ, SIMCTL_CHILD_FTS_MCP="1")
+        subprocess.run(
+            ["xcrun", "simctl", "--set", self.dev_set, "launch", "--terminate-running-process",
+             f"--stdout={self.app_log}", f"--stderr={self.app_log}", self.udid, self.bundle, *args],
+            check=True, env=env, capture_output=True, text=True,
+        )
+        log(f"launched {self.bundle} {' '.join(args)}; waiting for its MCP door")
+        door = sim.wait_for("the app's MCP door", sim.UP_WAIT, lambda: sim.find_door(self.data))
+        self.mcp = sim.Mcp(door["url"], door.get("token"))
+
+    relaunch = launch
 
     def engine(self, action, args=None):
         return self.mcp.engine(action, args)
@@ -343,6 +388,7 @@ def main():
     udid = None
     leader = None
     checks = Checks()
+    made_room = []
     try:
         setlists = stage(studio)
         leader = Leader(engine, os.path.join(studio, "Rooms"), out)
@@ -354,25 +400,25 @@ def main():
         # The app's own Studio folder (src/storage.rs: no Drive mount on a
         # phone), where its engine keeps and finds rooms.
         home = os.path.join(data, "Library", "Application Support", "fasttrackstudio", "Studio")
-        env = dict(os.environ, SIMCTL_CHILD_FTS_MCP="1")
-        subprocess.run(
-            ["xcrun", "simctl", "--set", dev_set, "launch", "--terminate-running-process",
-             f"--stdout={app_log}", f"--stderr={app_log}", udid, bundle],
-            check=True, env=env, capture_output=True, text=True,
-        )
-        log(f"launched {bundle}; waiting for its MCP door")
-        door = sim.wait_for("the app's MCP door", sim.UP_WAIT, lambda: sim.find_door(data))
-        mcp = sim.Mcp(door["url"], door.get("token"))
-        sim.wait_for("the engine in the app", sim.UP_WAIT, lambda: mcp.engine("SESSION_TRANSPORT") is not None)
-        room(leader.mcp, Phone(dev_set, udid, mcp), setlists, studio, home, checks)
+        phone = Phone(dev_set, udid, bundle, data, app_log)
+        phone.launch()
+        sim.wait_for("the engine in the app", sim.UP_WAIT, lambda: phone.engine("SESSION_TRANSPORT") is not None)
+        room(leader.mcp, phone, setlists, studio, home, checks, made_room)
     except (Failed, subprocess.CalledProcessError, OSError) as e:
         checks.add("ran to the end", False, e)
     finally:
         ok = checks.ok()
         with open(os.path.join(out, "room.json"), "w") as f:
-            json.dump({"test": "room-ios", "ok": ok, "checks": checks.rows}, f, indent=2)
+            json.dump({"test": "room-ios", "ok": ok, "join_s": checks.join_s, "checks": checks.rows}, f, indent=2)
         if leader:
             leader.stop()
+        # The endpoint key the leader kept for the room (engine-collab's
+        # `key_file`, in this machine's data folder): the room was the test's.
+        for room_id in filter(None, made_room):
+            key = os.path.join(os.path.expanduser("~"), "Library", "Application Support",
+                               "fasttrackstudio", "rooms", f"{room_id}.key")
+            if os.path.isfile(key):
+                os.remove(key)
         if udid:
             if not ok:
                 sim.simctl(dev_set, "io", udid, "screenshot", os.path.join(out, "screen.png"), check=False)

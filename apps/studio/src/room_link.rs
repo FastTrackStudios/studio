@@ -48,8 +48,9 @@ pub fn rooms_dir(home: Option<&Path>) -> Option<PathBuf> {
 }
 
 /// What the room shows this device as: the device's own word on a phone or
-/// tablet ("iPhone", "iPad"), "Studio" elsewhere.
-fn member_name() -> String {
+/// tablet ("iPhone", "iPad"), "Studio" elsewhere. On the main thread: UIKit
+/// is asked.
+pub fn member_name() -> String {
     #[cfg(target_os = "ios")]
     let name = studio_shell::ios_scene::device_name();
     #[cfg(not(target_os = "ios"))]
@@ -57,79 +58,32 @@ fn member_name() -> String {
     name.to_owned()
 }
 
-/// Join the room `link` names, off the UI thread: the engine is linked to
-/// (or started) first, as playing does. How it went is the
-/// `studio.room.join` span's; `ROOM` (the engine's) says how following
-/// goes.
-pub fn join(link: String) {
+/// Join the room `link` names as `name` ([`member_name`]), off the UI
+/// thread: the engine is linked to (or started) first, as playing does.
+/// How it went is the `studio.room.join` span's (`engine::join_room`);
+/// `ROOM` (the engine's) says how following goes. A link that names no
+/// room is not this module's and is left alone.
+pub fn join(link: String, name: String) {
     if !is_room_link(&link) {
-        tracing::warn!("room: Studio was given a link that names no room");
         return;
     }
     let spawned = std::thread::Builder::new()
         .name("studio-room-join".to_owned())
         .spawn(move || {
-            if let Err(e) = crate::engine::join_room(&link, &member_name()) {
-                tracing::warn!(room.error = %e, "room: could not join the room");
-            }
+            // The outcome and its error are the span's.
+            let _ = crate::engine::join_room(&link, &name);
         });
     if let Err(e) = spawned {
-        tracing::warn!(room.error = %e, "room: no thread to join the room on");
+        tracing::error!(room.error = %e, "room: no thread to join the room on");
     }
 }
 
-/// studio-shell's handler for a link the app is opened with.
+/// studio-shell's handler for a link the app is opened with (on the main
+/// thread).
 #[cfg(target_os = "ios")]
-pub fn opened(link: &str) {
-    if is_room_link(link) {
-        join(link.to_owned());
-    }
+pub fn link_opened(link: &str) {
+    join(link.to_owned(), member_name());
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn args(list: &[&str]) -> Vec<String> {
-        list.iter().map(|s| (*s).to_owned()).collect()
-    }
-
-    #[test]
-    fn a_link_given_at_launch() {
-        let link = "https://fasttrackstudio.app/join/adult-jam-3f9a1c";
-        assert_eq!(
-            link_in(&args(&["Studio", "--join", link])).as_deref(),
-            Some(link)
-        );
-        assert_eq!(
-            link_in(&args(&["Studio", &format!("--join={link}")])).as_deref(),
-            Some(link)
-        );
-        assert_eq!(
-            link_in(&args(&["Studio", "--crash-test", "--join", link])).as_deref(),
-            Some(link)
-        );
-        // The program's own name is never the link, nor an empty one.
-        assert_eq!(link_in(&args(&["--join"])), None);
-        assert_eq!(link_in(&args(&["Studio", "--join"])), None);
-        assert_eq!(link_in(&args(&["Studio", "--join", " "])), None);
-        assert_eq!(link_in(&args(&["Studio", "--version"])), None);
-    }
-
-    #[test]
-    fn a_rooms_link_in_either_scheme_and_nothing_else() {
-        assert!(is_room_link(
-            "https://fasttrackstudio.app/join/adult-jam-3f9a1c"
-        ));
-        assert!(is_room_link("fasttrackstudio://join/adult-jam-3f9a1c"));
-        assert!(!is_room_link("fasttrackstudio://set/adult-jam-3f9a1c"));
-        assert!(!is_room_link("https://example.com/join/adult-jam"));
-    }
-
-    #[test]
-    fn rooms_are_kept_in_the_apps_studio_folder() {
-        let home = Path::new("/data/Library/Application Support/fasttrackstudio/Studio");
-        assert_eq!(rooms_dir(Some(home)), Some(home.join("Rooms")));
-        assert_eq!(rooms_dir(None), None);
-    }
-}
+mod tests;
