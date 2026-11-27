@@ -167,6 +167,34 @@ mod imp {
         "Where this person is on the way from signing in to an open setlist, as Home shows it: `step` (`no-organization`, `no-setlist` or `ready`), the org Studio is in (`here`), and each org's setlists (`orgs: [{org, name, setlists: [{title, route}]}]`), each opened by STUDIO_NAVIGATE with its `route`."
     );
     meta!(
+        ORG_MEMBERS,
+        "STUDIO_ORG_MEMBERS",
+        "An organization's members",
+        "Orgs",
+        "Who is in org `org` (one of STUDIO_ORGS'; the org Studio is in when left out), from the account server, by account: each one's `user` (account id), `name`, `email` and `role` (owner, admin or member). Also the asker's own `role` there and whether they `manage` it (invite and remove)."
+    );
+    meta!(
+        ORG_INVITE,
+        "STUDIO_ORG_INVITE",
+        "Invite someone",
+        "Orgs",
+        "Invites someone into org `org` (the org Studio is in when left out) as a member: to `email` when given, else by a link anyone who has it may follow. Answers the `link` to send them; whoever opens it accepts with any account (or pastes it into STUDIO_ORG_JOIN). Only an owner or an admin invites."
+    );
+    meta!(
+        ORG_JOIN,
+        "STUDIO_ORG_JOIN",
+        "Join an organization",
+        "Orgs",
+        "Joins the organization an invitation `link` (from STUDIO_ORG_INVITE, or the email) invites into, as the account signed in here. Studio is then in it, and STUDIO_ORGS lists it. Answers its `org` and the `role` given."
+    );
+    meta!(
+        ORG_REMOVE,
+        "STUDIO_ORG_REMOVE",
+        "Remove a member",
+        "Orgs",
+        "Removes the member whose account is `user` (from STUDIO_ORG_MEMBERS) from org `org` (the org Studio is in when left out): their access to it ends. Only an owner or an admin removes; the last owner stays."
+    );
+    meta!(
         SETLIST_FILES,
         "STUDIO_SETLIST_FILES",
         "Setlist files in Drive",
@@ -396,6 +424,28 @@ mod imp {
         slug: Option<String>,
     }
     #[derive(Facet)]
+    struct OrgOfArgs {
+        #[facet(default)]
+        org: Option<String>,
+    }
+    #[derive(Facet)]
+    struct OrgInviteArgs {
+        #[facet(default)]
+        org: Option<String>,
+        #[facet(default)]
+        email: Option<String>,
+    }
+    #[derive(Facet)]
+    struct OrgJoinArgs {
+        link: String,
+    }
+    #[derive(Facet)]
+    struct OrgRemoveArgs {
+        #[facet(default)]
+        org: Option<String>,
+        user: String,
+    }
+    #[derive(Facet)]
     struct FileArgs {
         space: String,
         location: String,
@@ -604,6 +654,10 @@ mod imp {
             direct(&list, &ACCOUNT, R, account);
             direct(&list, &SIGN_IN, M, sign_in);
             forward::<()>(&list, &FIRST_RUN, R, false);
+            forward::<OrgOfArgs>(&list, &ORG_MEMBERS, R, true);
+            forward::<OrgInviteArgs>(&list, &ORG_INVITE, M, true);
+            forward::<OrgJoinArgs>(&list, &ORG_JOIN, M, true);
+            forward::<OrgRemoveArgs>(&list, &ORG_REMOVE, Effect::Destructive, true);
             forward::<()>(&list, &SETLIST_FILES, R, false);
             forward::<FileArgs>(&list, &SETLIST_FILE_OPEN, M, true);
             forward::<()>(&list, &NOW_PLAYING, R, false);
@@ -781,6 +835,14 @@ mod imp {
                         });
                         continue;
                     }
+                    if [ORG_MEMBERS.id, ORG_INVITE.id, ORG_JOIN.id, ORG_REMOVE.id]
+                        .contains(&call.id)
+                    {
+                        spawn(async move {
+                            let _ = call.answer.send(org_people(app, call.id, &call.args).await);
+                        });
+                        continue;
+                    }
                     let Some((route, index, library)) = held.borrow().clone() else {
                         let _ = call.answer.send(Err("the app is starting".into()));
                         continue;
@@ -801,6 +863,57 @@ mod imp {
             .map_err(|e| e.to_string())?;
         crate::org_create::joined(app, &made);
         Ok(json!({ "org": made.org, "name": made.name, "role": made.role }))
+    }
+
+    /// STUDIO_ORG_MEMBERS, _INVITE, _JOIN and _REMOVE: an org's people,
+    /// at the issuer, as the account signed in here.
+    async fn org_people(
+        app: crate::state::AppState,
+        id: &str,
+        raw: &[u8],
+    ) -> Result<Value, String> {
+        use crate::org_members as m;
+        let here = |org: Option<String>| {
+            org.filter(|o| !o.trim().is_empty())
+                .unwrap_or_else(|| app.here.peek().clone())
+        };
+        let refused = |e: m::Refused| e.to_string();
+        match id {
+            "STUDIO_ORG_MEMBERS" => {
+                let a: OrgOfArgs = args(raw)?;
+                let slug = here(a.org);
+                let (org, people) = m::members_here(&slug).await.map_err(refused)?;
+                Ok(json!({
+                    "org": slug,
+                    "role": org.role,
+                    "manage": org.manages(),
+                    "members": people.iter().map(|p| json!({
+                        "user": p.user, "name": p.name, "email": p.email, "role": p.role,
+                    })).collect::<Vec<_>>(),
+                }))
+            }
+            "STUDIO_ORG_INVITE" => {
+                let a: OrgInviteArgs = args(raw)?;
+                let slug = here(a.org);
+                let made = m::invite_here(&slug, a.email.as_deref())
+                    .await
+                    .map_err(refused)?;
+                Ok(json!({ "org": slug, "link": made.link, "email": made.email }))
+            }
+            "STUDIO_ORG_JOIN" => {
+                let a: OrgJoinArgs = args(raw)?;
+                let joined = m::join_here(&a.link).await.map_err(refused)?;
+                m::joined(app, &joined);
+                Ok(json!({ "org": joined.slug, "role": joined.role }))
+            }
+            "STUDIO_ORG_REMOVE" => {
+                let a: OrgRemoveArgs = args(raw)?;
+                let slug = here(a.org);
+                m::remove_here(&slug, &a.user).await.map_err(refused)?;
+                Ok(json!({ "org": slug, "removed": a.user }))
+            }
+            _ => Err(format!("{id} is not an org's people action")),
+        }
     }
 
     fn args<T: Facet<'static>>(bytes: &[u8]) -> Result<T, String> {

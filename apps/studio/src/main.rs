@@ -27,6 +27,8 @@ mod live_sync;
 mod new_session;
 #[cfg(any(feature = "drive", test))]
 mod org_create;
+#[cfg(any(feature = "drive", test))]
+mod org_members;
 mod orgs;
 mod pages;
 mod pieces;

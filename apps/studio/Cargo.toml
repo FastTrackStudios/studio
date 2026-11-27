@@ -239,7 +239,7 @@ studio-shell.workspace = true
 # song_ids' tests write one-file songs.
 session-format = { workspace = true, features = ["read", "store"] }
 uuid = { workspace = true }
-# org_create's tests: a new org made through the real issuer's routes
+# org_create's and org_members' tests: orgs and their people through the real issuer's routes
 # (FastTrackStudios/auth's organization service over HTTP, in-memory).
 auth = { workspace = true, features = ["backend-db", "axum"] }
 auth-proto = { workspace = true, features = ["http", "vox"] }
@@ -248,6 +248,10 @@ reqwest.workspace = true
 sea-orm.workspace = true
 sea-orm-migration.workspace = true
 serde_json = "1"
+# org_members' tests sign people in as Studio does (an OIDC code flow
+# with PKCE), for a first-party access token rather than a session.
+base64.workspace = true
+sha2.workspace = true
 tokio = { version = "1", features = ["macros", "rt", "net"] }
 # The browser boot test (tests/it/web_boot.rs): the fixture session's proxies
 # encoded where it runs, served from a folder of its own.
