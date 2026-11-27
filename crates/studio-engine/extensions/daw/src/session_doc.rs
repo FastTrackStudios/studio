@@ -575,8 +575,8 @@ static FOLLOWED: architect::action::ActionMeta = architect::action::ActionMeta {
 /// call finds it there), so an engine without a window answers what the
 /// chart and the lighting follow over its own MCP.
 pub fn register(list: &architect::action::ActionList) {
-    use architect::action::{ActionError, Effect, RawJson};
-    match list.register(&FOLLOWED, Effect::ReadOnly, |(): ()| {
+    use architect::action::{ActionCaller, ActionError, Effect, RawJson};
+    match list.register_with(&FOLLOWED, Effect::ReadOnly, |_: &ActionCaller, (): ()| {
         Ok::<_, String>(RawJson::from(state().to_string()))
     }) {
         Ok(()) | Err(ActionError::Duplicate(_)) => {}
