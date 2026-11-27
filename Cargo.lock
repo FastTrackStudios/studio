@@ -8831,6 +8831,7 @@ dependencies = [
  "library-sync",
  "live-doc",
  "live-proto",
+ "room",
  "serde_json",
  "task-dial",
  "tokio",
@@ -21323,6 +21324,24 @@ dependencies = [
  "serde_derive",
  "typeid",
  "unicode-ident",
+]
+
+[[package]]
+name = "room"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "eyre",
+ "live-doc",
+ "loro",
+ "serde",
+ "serde_json",
+ "session-sync",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
