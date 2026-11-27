@@ -1085,8 +1085,53 @@ fn open(found: &Found, path: &Path, title: &str) -> Result<(), String> {
         span.fail(e.clone());
         return Err(e);
     }
+    let result = settle(found, began);
+    span.set(
+        "engine.open_ms",
+        u64::try_from(began.elapsed().as_millis()).unwrap_or(u64::MAX),
+    );
+    match &result {
+        Ok(()) => span.set("engine.outcome", "opened"),
+        Err(e) => {
+            span.set("engine.outcome", "failed");
+            span.fail(e.clone());
+        }
+    }
+    result
+}
+
+/// Makes a new session in the engine (`SESSION_NEW` with `args`: from
+/// scratch, from a folder of stems or from a `.RPP`) and waits until it is
+/// open. Links to the engine first (or starts it), as playing does. Its
+/// `SONG_INFO`. Blocks: call it off the UI thread.
+pub fn new_session(args: Value) -> Result<Value, String> {
+    let mut span = Span::root("studio.engine.new_session");
+    let found = match linked() {
+        Some(f) => f,
+        None => choose(Mode::from_env(), &mut span)?,
+    };
+    span.set("engine.pid", found.pid);
+    if let Some(from) = args.get("from").and_then(Value::as_str) {
+        span.set("session.from", from);
+    }
+    let began = Instant::now();
+    let made = run(&found, "SESSION_NEW", args)
+        .and_then(|_| settle(&found, began))
+        .and_then(|()| run(&found, "SONG_INFO", Value::Null));
+    match &made {
+        Ok(_) => span.set("engine.outcome", "made"),
+        Err(e) => {
+            span.set("engine.outcome", "failed");
+            span.fail(e.clone());
+        }
+    }
+    made
+}
+
+/// Waits until the open the engine began at `began` is done.
+fn settle(found: &Found, began: Instant) -> Result<(), String> {
     let mut seen_opening = false;
-    let result = loop {
+    loop {
         std::thread::sleep(Duration::from_millis(150));
         let state = run(&found, "SESSION_OPENING", Value::Null)?;
         match state.get("state").and_then(Value::as_str) {
@@ -1104,19 +1149,7 @@ fn open(found: &Found, path: &Path, title: &str) -> Result<(), String> {
         if began.elapsed() > OPEN_WAIT {
             break Err(format!("still opening after {} s", OPEN_WAIT.as_secs()));
         }
-    };
-    span.set(
-        "engine.open_ms",
-        u64::try_from(began.elapsed().as_millis()).unwrap_or(u64::MAX),
-    );
-    match &result {
-        Ok(()) => span.set("engine.outcome", "opened"),
-        Err(e) => {
-            span.set("engine.outcome", "failed");
-            span.fail(e.clone());
-        }
     }
-    result
 }
 
 fn play(found: &Found, title: &str, from: f64) {

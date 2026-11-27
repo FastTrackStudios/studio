@@ -314,6 +314,13 @@ fn OwnSongs(tag: String) -> Element {
                     }
                 }
                 NewSong { lib: lib.clone(), tag: base }
+                button {
+                    class: "fopt",
+                    aria_label: "New session: from scratch, a folder of stems or a REAPER project",
+                    onclick: move |_| app.open(Sheet::NewSession),
+                    Icon { name: I::Plus, size: 14 }
+                    " New session…"
+                }
                 div { class: "libcount",
                     span { "{count}" }
                     span { class: "elegend",

@@ -22,6 +22,7 @@ mod icons;
 mod instance;
 mod keys;
 mod live_sync;
+mod new_session;
 #[cfg(any(feature = "drive", test))]
 mod org_create;
 mod orgs;
