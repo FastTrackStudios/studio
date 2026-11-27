@@ -13,7 +13,10 @@
 #   (a keychain of its own lets codesign work over SSH with nobody logged in).
 #
 # SKIP_BUILD=1 signs and uploads the .app already built (iterating on the
-# signing). STUDIO_OTLP_ENDPOINT and STUDIO_OTLP_TOKEN, when set, are baked
+# signing). UPLOAD=0 is the dry run: everything up to the upload, then App
+# Store Connect validates the IPA and nothing is uploaded. IPA_OUT=<path>
+# keeps a copy of the IPA. The release workflow runs this (desktop.yml, job
+# `testflight`; a build-only run with UPLOAD=0). STUDIO_OTLP_ENDPOINT and STUDIO_OTLP_TOKEN, when set, are baked
 # into the build (studio-otel): where the phones send their spans and crash
 # reports.
 set -euo pipefail
@@ -154,6 +157,21 @@ cp -R "$APP" "$work/Payload/"
 IPA="$work/Studio.ipa"
 # ditto, not zip: it keeps the _CodeSignature/CodeResources link altool needs.
 ( cd "$work" && ditto -c -k --sequesterRsrc --keepParent Payload "$IPA" )
+
+if [ -n "${IPA_OUT:-}" ]; then
+    mkdir -p "$(dirname "$IPA_OUT")"
+    cp "$IPA" "$IPA_OUT"
+    echo "IPA kept at $IPA_OUT"
+fi
+
+if [ "${UPLOAD:-1}" = 0 ]; then
+    # The dry run: App Store Connect checks the signed IPA as it would an
+    # upload (signature, profile, Info.plist, SDK), and nothing is uploaded.
+    echo "=== validating with App Store Connect (UPLOAD=0: no upload) ==="
+    xcrun altool --validate-app -t ios -f "$IPA" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+    echo "=== DONE: build $BUILD_NO ($BUNDLE $MARKETING_VER) signed and validated; not uploaded ==="
+    exit 0
+fi
 
 echo "=== uploading to TestFlight ==="
 xcrun altool --upload-app -t ios -f "$IPA" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"

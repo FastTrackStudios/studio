@@ -1,6 +1,8 @@
-//! `desktop` — the Studio desktop installers on the release tag: a signed,
+//! `desktop` — Studio's native builds on the release tag: a signed,
 //! notarized macOS `.dmg` and a Linux AppImage, attached to the ONE GitHub
-//! Release of `studio-vX.Y.Z`. scripts/install.sh installs them (README, "Install").
+//! Release of `studio-vX.Y.Z` (scripts/install.sh installs them, README,
+//! "Install"), and the iPhone and iPad app uploaded to TestFlight and handed
+//! to its testers (testflight.rs: jobs `testflight`, `testers`, `record`).
 //!
 //! ```text
 //!   `just release` pushes studio-vX.Y.Z --> this and the release publish
@@ -9,7 +11,8 @@
 //!   tag's, commit on main or release/*, `CI passed` green, Release exists) --> macos (airlock) and linux
 //!   (THEBATTLESHIP, `thebattleship-release`) build in parallel and upload
 //!   workflow artifacts --> publish (hosted) checks them and attaches them
-//!   to the Release.
+//!   to the Release. Beside them, from the same resolve: testflight
+//!   (airlock) --> testers (airlock) and record (hosted).
 //! ```
 //!
 //! The signing identity and the notarization key never leave their machine:
@@ -26,10 +29,12 @@
 //! ```text
 //!   mode publish     (default) the above, for an existing tag (a re-run)
 //!   mode validate    resolve only: the tag is a sound release
-//!   mode build-only  build, sign, notarize and smoke-test from ANY ref (a
-//!                    branch, a sha), keep the installers as workflow
-//!                    artifacts, touch no Release: how a change to the
-//!                    installers is proven before there is a tag
+//!   mode build-only  build, sign, notarize and smoke-test a commit on main
+//!                    or release/*, keep the installers as workflow
+//!                    artifacts, touch no Release; the iOS app is built,
+//!                    signed and validated by App Store Connect, not
+//!                    uploaded: how a change to the installers or the
+//!                    TestFlight build is proven before there is a tag
 //! ```
 //!
 //! Never a pull_request, so no fork or PR reaches the runners.
@@ -70,6 +75,9 @@ workflow_dispatch:
     .job("macos", macos())
     .job("linux", linux())
     .job("publish", publish()?)
+    // The iOS app to TestFlight and its testers (testflight.rs): from the
+    // same resolve, beside the installers, never holding them up.
+    .jobs(crate::testflight::jobs()?)
     // SHA256SUMS over the whole Release, signed (sums.rs): after the
     // installers are on it.
     .jobs(crate::sums::jobs(
@@ -178,7 +186,7 @@ echo "sha=$sha" >> "$GITHUB_OUTPUT"
 /// organization's OTLP ingest (task-server's authenticated `/otlp`, the
 /// org variable and secret Task's own builds use). Both empty, the build
 /// sends nothing.
-const SHIPPED_COLLECTOR: &[(&str, &str)] = &[
+pub const SHIPPED_COLLECTOR: &[(&str, &str)] = &[
     ("STUDIO_OTLP_ENDPOINT", "${{ vars.TASK_OTLP_ENDPOINT }}"),
     ("STUDIO_OTLP_TOKEN", "${{ secrets.TASK_OTLP_TOKEN }}"),
 ];

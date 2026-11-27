@@ -29,6 +29,7 @@ mod release_dry_run;
 mod release_queue;
 mod steps;
 mod sums;
+mod testflight;
 mod web;
 
 use anyhow::{Context, Result, bail};
