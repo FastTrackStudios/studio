@@ -689,9 +689,17 @@ fn signed_out_the_root_is_the_landing_page() {
         (s.script("return location.pathname;") == "/issuer/oauth2/authorize").then_some(())
     });
 
-    // Open in browser: the app, whose boot signs in at the same issuer.
+    // Open in browser: the app, whose sign-in screen goes on to the same
+    // issuer.
     session.navigate(&page);
     session.click("[data-action='open-in-browser']");
+    session.wait_for(Duration::from_secs(30), "the app's sign-in screen", |s| {
+        (s.script(
+            "const b = [...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Continue'); \
+             if (b) { b.click(); return 'pressed'; } return '';",
+        ) == "pressed")
+            .then_some(())
+    });
     session.wait_for(Duration::from_secs(30), "the app to sign in", |s| {
         (s.script("return location.pathname;") == "/issuer/oauth2/authorize").then_some(())
     });
@@ -1656,6 +1664,11 @@ impl Session<'_> {
                 Some(&json!({ "using": "css selector", "value": css })),
             )
             .ok()?;
+            // Not there yet: the driver answers an error object, whose
+            // first value is its name, not an element's id.
+            if answer["value"].get("error").is_some() {
+                return None;
+            }
             let element = answer["value"]
                 .as_object()?
                 .values()
