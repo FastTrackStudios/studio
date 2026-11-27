@@ -230,6 +230,7 @@ fn a_setlist_for_no_room_is_refused() {
         title: "Sunday".to_owned(),
     };
     assert!(rooms.set_setlist(&nobody, setlist).is_err());
+}
 
 /// A live room as its leader writes it.
 fn live_with(pass: Pass) -> Live {
