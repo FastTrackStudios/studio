@@ -130,6 +130,12 @@ test-web-boot *ARGS:
     fi
     cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --test web_boot --run-ignored only --no-fail-fast {{ARGS}}
 
+# Seam 1 for the first run (studio#699): a fresh install's Studio signs in, sees its orgs and opens a setlist, all over
+# its MCP, against a Drive node and account server of the test's (apps/studio/tests/first_run.rs). It opens Studio's
+# window, so run it in a desktop session. STUDIO_APP names another Studio to test (a dx build); extra arguments go to nextest
+test-first-run *ARGS:
+    cargo nextest run --cargo-profile desktop-dev --target {{host}} -p studio-app --features native --test first_run --run-ignored only --no-fail-fast {{ARGS}}
+
 # The PR gate on this machine: the static gates, then check and tests for what `cargo rail plan` says the change affects (the pre-push hook runs it)
 ci-local BASE="":
     bash scripts/ci-local.sh {{BASE}}

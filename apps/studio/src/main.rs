@@ -16,6 +16,8 @@ mod engine;
 // The session's views: the real extensions, hosted (natively).
 mod files;
 mod files_live;
+// From signing in to an open setlist on a fresh install (studio#699).
+mod first_run;
 #[cfg(feature = "native")]
 mod hosted;
 mod icons;
@@ -249,6 +251,12 @@ fn main() {
         {
             std::env::set_var("FTS_DAW_ENGINE_DIR", dir);
         }
+        // A fresh install names no Drive node: FastTrack's, which signs in
+        // through the account server (`first_run`). Anything that names
+        // one (DRIVE_NODE, the Drive agent, a node on this computer) wins.
+        if let Some(node) = first_run::node_to_name() {
+            std::env::set_var("DRIVE_NODE", node);
+        }
         // Its private line on a port of its own, whichever side starts it:
         // another engine on the default port must not leave it unreachable.
         if std::env::var_os("FTS_MCP_PORT").is_none()
@@ -390,6 +398,11 @@ fn LauncherApp() -> Element {
 #[component]
 fn App() -> Element {
     use_context_provider(state::AppState::new);
+    // The Action List's doors from the start, Drive's sign-in screen
+    // included: an agent can ask who this is and sign in (STUDIO_ACCOUNT,
+    // STUDIO_SIGN_IN) before the app's pages exist.
+    #[cfg(feature = "native")]
+    use_hook(actions::open_doors_once);
     // iOS: winit's window, handed to the app's scene (studio-shell's
     // `ios_scene`); a second window's handover is a no-op.
     #[cfg(all(feature = "native", target_os = "ios"))]

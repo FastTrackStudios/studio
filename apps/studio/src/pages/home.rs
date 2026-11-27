@@ -70,6 +70,7 @@ pub fn Home() -> Element {
             } }
             div { class: "body",
                 div { class: "hdate", "{date}" }
+                YourOrgs {}
                 if let Some(f) = next {
                     NextUp { face: f }
                 }
@@ -120,6 +121,106 @@ pub fn Home() -> Element {
                     ]
                     {
                         ShelfItem { key: "{open}", open, title, kind }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The first run's way in (studio#699): each org this person is in, with
+/// its setlists one tap from open; in none, a new one (or the invitation
+/// someone sent). Only with Drive, whose orgs are the account's.
+#[cfg(feature = "drive")]
+#[component]
+fn YourOrgs() -> Element {
+    use crate::first_run::{self, Step};
+    let app = use_app();
+    let index = crate::sets::use_index();
+    let orgs = (app.orgs)();
+    let here = (app.here)();
+    let sets: Vec<(String, String)> = index.faces().into_iter().map(|f| (f.id, f.title)).collect();
+    let files = (app.drive_sets)().unwrap_or_default();
+    let listed = first_run::offers(&orgs, &here, &sets, &files);
+    let count = listed.iter().map(|o| o.setlists.len()).sum();
+    match first_run::step(false, &orgs, count) {
+        Step::SignIn => rsx! {},
+        Step::NoOrganization => rsx! {
+            div { class: "dayhead", "Welcome to Studio" }
+            p { class: "lede",
+                "You are not in an organization yet. Make one for your band, church or school, or open the invitation someone sent you."
+            }
+            crate::pages::orgs::NewOrg {}
+        },
+        Step::NoSetlist | Step::Ready => rsx! {
+            div { class: "dayhead", "Your organizations" }
+            for o in listed {
+                OrgSetlists { key: "{o.org}", org: o }
+            }
+        },
+    }
+}
+
+#[cfg(not(feature = "drive"))]
+#[component]
+fn YourOrgs() -> Element {
+    rsx! {}
+}
+
+/// One org and its setlists, each opening where it is kept.
+#[cfg(feature = "drive")]
+#[component]
+fn OrgSetlists(org: crate::first_run::OrgSetlists) -> Element {
+    let name = crate::orgs::org_name(&org.org);
+    let none = org.setlists.is_empty();
+    let count = org.setlists.len();
+    rsx! {
+        div { class: "agenda",
+            div { class: "ag",
+                crate::pages::orgs::OrgMark { org: org.org.clone(), size: 28 }
+                span { class: "mid",
+                    span { class: "t1", "{name}" }
+                    span { class: "s1",
+                        if none {
+                            "No setlists yet"
+                        } else {
+                            "{count} setlists"
+                        }
+                    }
+                }
+            }
+            for s in org.setlists {
+                button {
+                    key: "{s.open}",
+                    class: "ag",
+                    onclick: {
+                        let to = s.open.clone();
+                        move |_| {
+                            navigator().push(to.clone());
+                        }
+                    },
+                    span { class: "cal tpl",
+                        Icon { name: I::Setlist, size: 18 }
+                    }
+                    span { class: "mid",
+                        span { class: "t1", "{s.title}" }
+                    }
+                    span { class: "chev",
+                        Icon { name: I::ChevRight, size: 16 }
+                    }
+                }
+            }
+            if none {
+                button {
+                    class: "ag",
+                    onclick: move |_| {
+                        navigator().push(Route::Setlists {});
+                    },
+                    span { class: "mid",
+                        span { class: "t1", "Make a setlist" }
+                    }
+                    span { class: "chev",
+                        Icon { name: I::ChevRight, size: 16 }
                     }
                 }
             }
