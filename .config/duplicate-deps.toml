@@ -49,6 +49,12 @@
 # which pins its own generations: sha3 0.12 and keccak 0.2, chacha20 0.9
 # (chacha20poly1305), constant_time_eq 0.3 (totp-rs), and through webauthn-rs
 # base64 0.21 and pastey 0.1. Test builds of studio-app only.
+#
+# 2026-11-27 (studio#749): a room on a LAN with no internet turns on
+# architect's `iroh-lan` (engine-collab), whose mDNS lookup is
+# iroh-mdns-address-lookup -> swarm-discovery -> acto 0.8, and every acto
+# release pins smol_str ^0.1: a third smol_str (0.1.24) beside Blitz's 0.3
+# and Bevy's 0.2. Drop it when acto moves off 0.1.
 
 [allowed]
 aes = 2  # 0.8.4, 0.9.2
@@ -228,7 +234,7 @@ siphasher = 2  # 0.3.11, 1.0.3
 skrifa = 5  # 0.22.3, 0.26.6, 0.42.1, 0.44.0, 0.47.0
 smallvec = 2  # 1.16.4, 2.0.0-alpha.10
 smithay-client-toolkit = 3  # 0.19.2, 0.20.0, 0.21.1
-smol_str = 2  # 0.2.2, 0.3.2
+smol_str = 3  # 0.1.24, 0.2.2, 0.3.2
 socket2 = 2  # 0.5.10, 0.6.5
 spin = 3  # 0.10.1, 0.12.3, 0.9.9
 spki = 2  # 0.7.3, 0.8.0

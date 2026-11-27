@@ -1373,8 +1373,12 @@ impl Driver {
         let browser = if self.gecko {
             json!({ "moz:firefoxOptions": { "args": ["-headless"] } })
         } else {
+            // `--no-zygote`: Chrome's zygote calls capset(2) even with
+            // `--no-sandbox`, and the CI runners' systemd units deny it
+            // (SystemCallFilter), killing every renderer ("tab crashed").
             let mut options = json!({
-                "args": ["--headless=new", "--no-sandbox", "--window-size=1280,800",
+                "args": ["--headless=new", "--no-sandbox", "--no-zygote",
+                         "--disable-dev-shm-usage", "--window-size=1280,800",
                          "--autoplay-policy=no-user-gesture-required"]
             });
             if let Some(screen) = screen {

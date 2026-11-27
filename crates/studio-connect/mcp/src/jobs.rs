@@ -117,6 +117,15 @@ impl Job {
 
     /// Stop it: its waiting ends now, and its children's.
     pub fn cancel(&self) {
+        // Cancelled first: stopping the work wakes its thread, which then
+        // finishes with the error the cut call gave, and `finish` keeps
+        // only the first ending. The other way round the job read "failed".
+        {
+            let mut s = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+            if matches!(s.0, State::Running) {
+                *s = (State::Cancelled, Some(self.started.elapsed()));
+            }
+        }
         self.cancel.cancel();
         let children: Vec<Arc<Self>> = self
             .children
@@ -127,12 +136,6 @@ impl Job {
             .collect();
         for c in children {
             c.cancel();
-        }
-        {
-            let mut s = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-            if matches!(s.0, State::Running) {
-                *s = (State::Cancelled, Some(self.started.elapsed()));
-            }
         }
         self.changed.notify_all();
     }

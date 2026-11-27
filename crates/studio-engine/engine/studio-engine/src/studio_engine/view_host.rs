@@ -138,10 +138,14 @@ pub fn start() {
             .name("view-live".into())
             .spawn(follow_live);
         // A recording pass that ends has its takes selected and the ranks
-        // pressed while it ran written on them, window or none.
+        // pressed while it ran written on them, window or none. Inside the
+        // engine's runtime: settling reaches code that spawns tasks, which
+        // panicked "no reactor running" on a bare thread.
+        let handle = runtime.handle().clone();
         let _ = std::thread::Builder::new()
             .name("take-settle".into())
-            .spawn(|| {
+            .spawn(move || {
+                let _runtime = handle.enter();
                 loop {
                     std::thread::sleep(std::time::Duration::from_millis(250));
                     crate::take_rank::settle_open();

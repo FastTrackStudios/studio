@@ -149,9 +149,16 @@ unsafe fn fault_pc(context: *mut libc::c_void) -> usize {
     }
 }
 
+/// The report's bytes. Static, not on the handler's stack: the handler
+/// runs on the thread's alternate signal stack (`SA_ONSTACK`), which std
+/// makes about 8 KiB on Linux, and an 8 KiB buffer there faulted inside
+/// the handler, so the worker died with no report. One crash per process
+/// (`SA_RESETHAND`), so one buffer.
+static mut REPORT: [u8; 8192] = [0; 8192];
+
 /// A fixed buffer the handler writes its report into.
 struct Out {
-    buf: [u8; 8192],
+    buf: &'static mut [u8; 8192],
     len: usize,
 }
 
@@ -199,7 +206,9 @@ impl Out {
 
 extern "C" fn on_fatal(sig: libc::c_int, _info: *mut libc::siginfo_t, context: *mut libc::c_void) {
     let mut out = Out {
-        buf: [0; 8192],
+        // SAFETY: only this handler touches REPORT, and it runs once
+        // (SA_RESETHAND).
+        buf: unsafe { &mut *(&raw mut REPORT) },
         len: 0,
     };
     out.push(b"signal=");

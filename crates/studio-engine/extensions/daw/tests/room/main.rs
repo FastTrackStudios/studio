@@ -853,11 +853,22 @@ fn no_route_out() -> (bool, String) {
     (tcp.is_err() && udp.is_err(), said)
 }
 
+/// Whether this process may make a user and network namespace.
+fn namespaces_allowed() -> bool {
+    std::process::Command::new("unshare")
+        .args(["--user", "--map-root-user", "--net", "true"])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
 /// The same room on a network with no route out (studio#715): this test
 /// runs itself again inside a user and network namespace of its own
 /// (`unshare`), where the leader's and the member's engines have only a
 /// local network between them. They still make, lead, join and follow.
-/// Linux only: elsewhere there is no network namespace to make.
+/// Linux only: elsewhere there is no network namespace to make. Where a
+/// sandbox forbids user namespaces (the CI runners' systemd units,
+/// `RestrictNamespaces=yes`) it says so and passes without running.
 #[test]
 #[cfg_attr(
     not(target_os = "linux"),
@@ -866,6 +877,13 @@ fn no_route_out() -> (bool, String) {
 fn a_room_plays_on_a_network_with_no_route_out() {
     const NAME: &str = "a_room_plays_on_a_network_with_no_route_out";
     if std::env::var_os(NO_ROUTE_OUT).is_none() {
+        if !namespaces_allowed() {
+            eprintln!(
+                "skipped: this sandbox forbids user namespaces (unshare --user --net), so \
+                 there is no network of the test's own to make"
+            );
+            return;
+        }
         let exe = std::env::current_exe().expect("the test's own path");
         let status = std::process::Command::new("unshare")
             .args(["--user", "--map-root-user", "--net", "--", "sh", "-c"])
