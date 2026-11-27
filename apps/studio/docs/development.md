@@ -51,9 +51,8 @@ same package name.
 cd apps/studio && dx build --platform web --release --base-path studio
 ```
 
-**The engine in the page.** In a browser, on a page whose address asks
-for it (`?session=<url>`, or `?engine=1` for a setlist's songs), Now
-Playing's session folder opens in the engine running in the page (`src/engine_web.rs` over
+**The engine in the page.** In a browser, Now Playing's session folder
+opens in the engine running in the page (`src/engine_web.rs` over
 `studio_engine::web_engine`: daw-standalone in-process, out through an
 AudioWorklet, the first-party FX built in). Its files come by range from
 Drive, and the page streams their proxies (`Media/Proxy/<stem>.ogg` with

@@ -295,6 +295,10 @@ fn main() {
     // (`--base-path studio`), and `/studio` from the root of
     // fasttrackstudio.app, whose front hands `/studio/api` to the node
     // (door.rs).
+    // The page's address as it loaded: the router replaces it with the
+    // route it shows, and `?session=` goes with it.
+    #[cfg(feature = "web")]
+    engine_web::remember_address();
     #[cfg(feature = "web")]
     drive_dioxus::mount::set(door::node_mount(
         &dioxus::cli_config::web_base_path().unwrap_or_default(),
