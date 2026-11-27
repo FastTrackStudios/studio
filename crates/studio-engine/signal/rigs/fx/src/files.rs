@@ -544,6 +544,9 @@ pub fn arrived() -> usize {
 static HEARD: AtomicU32 = AtomicU32::new(0);
 /// The loudest a kit voice on streamed samples has put out.
 static KIT_HEARD: AtomicU32 = AtomicU32::new(0);
+/// The loudest a whole signal rig (`FTS Signal Rig`) on streamed files has
+/// put out.
+static SIGNAL_RIG_HEARD: AtomicU32 = AtomicU32::new(0);
 
 /// A rig playing streamed files says how loud it was ([`Status::heard`]).
 pub(crate) fn note_heard(peak: f32) {
@@ -554,6 +557,16 @@ pub(crate) fn note_heard(peak: f32) {
 /// ([`Status::kit_heard`]).
 pub(crate) fn note_heard_kit(peak: f32) {
     KIT_HEARD.fetch_max(peak.abs().to_bits(), Ordering::Relaxed);
+}
+
+/// A whole signal rig playing streamed files says how loud it was
+/// ([`Status::signal_rig_heard`]).
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    allow(dead_code, reason = "a desktop's whole rig reads from disk")
+)]
+pub(crate) fn note_heard_signal_rig(peak: f32) {
+    SIGNAL_RIG_HEARD.fetch_max(peak.abs().to_bits(), Ordering::Relaxed);
 }
 
 /// What the page's rigs are doing, for the page to show (and its boot test
@@ -570,6 +583,8 @@ pub struct Status {
     pub heard: f32,
     /// The loudest a kit voice on streamed samples has played.
     pub kit_heard: f32,
+    /// The loudest a whole signal rig on streamed files has played.
+    pub signal_rig_heard: f32,
 }
 
 /// The rigs' [`Status`].
@@ -581,6 +596,7 @@ pub fn status() -> Status {
         home_files: signal_rig_host::store::memory::len(),
         heard: f32::from_bits(HEARD.load(Ordering::Relaxed)),
         kit_heard: f32::from_bits(KIT_HEARD.load(Ordering::Relaxed)),
+        signal_rig_heard: f32::from_bits(SIGNAL_RIG_HEARD.load(Ordering::Relaxed)),
     }
 }
 

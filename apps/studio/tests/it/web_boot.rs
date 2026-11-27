@@ -31,6 +31,14 @@
 //! test checks the kit was heard, and that the page read the pack by range:
 //! its header, its index and the close mic's samples, never the room's.
 //!
+//! The guitar track plays through signal's whole rig (`FTS Signal Rig`), as
+//! a desktop saved it: the guitar, its profile and its patch. The profile
+//! (`guitar/profiles/web-test.styx`, two patches on one capture) is the
+//! store's guitar home, with its own empty compositions and drive presets
+//! (a home without them plays signal's shipped ones, and their captures).
+//! The page builds its patches in its own engine, with no rig service, and
+//! the test checks the rig was heard.
+//!
 //! It needs the web build (`STUDIO_WEB_DIST`, its `public` folder) and a
 //! W3C WebDriver (`WEBDRIVER`: chromedriver or geckodriver, started here;
 //! `CHROME_BIN` names the browser chromedriver drives). `just test-web-boot`
@@ -165,6 +173,14 @@ fn the_web_build_opens_and_plays_a_fixture_session() {
         "the room mic's samples, which the kit does not play, were fetched: {spans:?}"
     );
 
+    // The whole guitar rig: its profile from the store's guitar home, its
+    // patches built in the page with the streamed capture, and heard.
+    session.wait_for(Duration::from_secs(30), "the guitar rig to sound", |s| {
+        let heard: f32 = s.state("data-rig-signal-heard").parse().unwrap_or(0.0);
+        (s.state("data-rig-wanted") == "0" && s.state("data-rig-waiting") == "0" && heard > 1e-4)
+            .then_some(())
+    });
+
     let asked = RIG_GETS.load(std::sync::atomic::Ordering::Relaxed);
     assert!(asked >= 3, "the page asked the rig store for {asked} files");
 
@@ -244,6 +260,13 @@ fn stage_rig_store(dir: &Path) {
     let here = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/web_boot/rig-store");
     copy_dir(&here, dir);
     std::fs::write(dir.join("bass/models/Test Cab.wav"), cab_ir()).expect("the cab IR is written");
+    // The guitar's home plays the bass's capture: one file, in both.
+    std::fs::create_dir_all(dir.join("guitar/models")).expect("the guitar's models");
+    std::fs::copy(
+        dir.join("bass/models/Test LSTM.nam"),
+        dir.join("guitar/models/Test LSTM.nam"),
+    )
+    .expect("the guitar's capture");
     let pack = dir.join(KIT_PACK);
     std::fs::create_dir_all(pack.parent().expect("the packs' folder")).expect("the packs' folder");
     std::fs::write(&pack, kit_pack().0).expect("the kit's pack is written");
@@ -707,6 +730,7 @@ fn stage_session(dir: &Path) {
         ("click", click(120.0)),
         ("bass", tone(55.0, -12.0)),
         ("keys", tone(440.0, -18.0)),
+        ("guitar", tone(196.0, -12.0)),
     ] {
         let ogg = proxies.join(format!("{stem}.ogg"));
         let bytes = fts_sample::cache::encode_ogg_vorbis(&samples, 1, RATE, 0.4)
@@ -1334,7 +1358,7 @@ impl Session<'_> {
             }
             if began.elapsed() > within {
                 panic!(
-                    "waited {within:?} for {what}; the page's engine says state={} why={} at={} loud={}; its rigs: store={} home={} fetched={} cached={} missing={} wanted={} waiting={} heard={}; the page: {}",
+                    "waited {within:?} for {what}; the page's engine says state={} why={} at={} loud={}; its rigs: store={} home={} fetched={} cached={} missing={} wanted={} ({}) waiting={} heard={}; the page: {}",
                     self.state("data-state"),
                     self.state("data-why"),
                     self.state("data-at"),
@@ -1345,6 +1369,7 @@ impl Session<'_> {
                     self.state("data-rig-cached"),
                     self.state("data-rig-missing"),
                     self.state("data-rig-wanted"),
+                    self.state("data-rig-wanted-keys"),
                     self.state("data-rig-waiting"),
                     self.state("data-rig-heard"),
                     self.page(),

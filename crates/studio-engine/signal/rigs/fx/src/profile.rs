@@ -20,6 +20,10 @@
 //! The Scene parameter is stepped, 0..1 along the profile's scenes, its
 //! choices their names: automated, a lane of it switches the bass's sound
 //! section by section.
+//!
+//! The guitar's profiles build the same way ([`ProfileRig::build_in`]):
+//! in a page that is `FTS Signal Rig`, the whole guitar or bass rig, its
+//! patches the scenes (`crate::signal_rig`).
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -27,6 +31,8 @@ use std::sync::OnceLock;
 use daw_standalone::plugin::{PluginError, PluginEvents, PluginInstance};
 use sampler::rig::{RigBlock, prepare_chain};
 use sampler::rig_profile::RigProfile;
+
+use guitar::instrument::Instrument;
 
 /// A switch's crossfade, seconds.
 pub const FADE_SECS: f64 = 0.008;
@@ -45,50 +51,106 @@ const MAX_RINGING: usize = 4;
 pub struct Library {
     pub dir: PathBuf,
     pub profiles: Vec<RigProfile>,
+    /// Each profile's song patches (a song's own, `PatchDef::song`), by the
+    /// profile's name: signal's rig lists them only while that song is up.
+    pub song_patches: Vec<(String, Vec<String>)>,
+}
+
+impl Library {
+    /// Whether `patch` of the profile `profile` is a song's own.
+    #[must_use]
+    pub fn is_song_patch(&self, profile: &str, patch: &str) -> bool {
+        self.song_patches.iter().any(|(p, names)| {
+            p.eq_ignore_ascii_case(profile) && names.iter().any(|n| n.eq_ignore_ascii_case(patch))
+        })
+    }
 }
 
 /// Where Session keeps its copy of the bass library (`FTS_BASS_RIG_DIR`
 /// overrides — a test's own folder).
 #[must_use]
 pub fn library_dir() -> PathBuf {
-    // A page's: the bass home it streams from the rig store.
+    library_dir_of(Instrument::Bass)
+}
+
+/// Where Session keeps its copy of `instrument`'s library: in a page, the
+/// home it streams from the rig store; on a desktop `<config>/fts/<id>-rig`
+/// (`FTS_BASS_RIG_DIR` overrides the bass's).
+#[must_use]
+pub fn library_dir_of(instrument: Instrument) -> PathBuf {
     if cfg!(target_arch = "wasm32") {
-        return crate::files::home(guitar::instrument::Instrument::Bass);
+        return crate::files::home(instrument);
     }
-    if let Some(dir) = std::env::var_os("FTS_BASS_RIG_DIR").filter(|d| !d.is_empty()) {
+    if instrument == Instrument::Bass
+        && let Some(dir) = std::env::var_os("FTS_BASS_RIG_DIR").filter(|d| !d.is_empty())
+    {
         return PathBuf::from(dir);
     }
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("fts")
-        .join("bass-rig")
+        .join(format!("{}-rig", instrument.id()))
 }
 
-/// The library, read once per process — seeded from signal's shipped bass
-/// defaults the first time.
+/// The bass library ([`library_of`]).
 #[must_use]
 pub fn library() -> &'static Library {
-    static LIBRARY: OnceLock<Library> = OnceLock::new();
-    LIBRARY.get_or_init(|| {
-        let dir = library_dir();
-        // The bass's library in Session's own folder — a home of its own,
-        // so a guitar rig beside it keeps its own, and the process's
-        // instrument and library are left as they are.
-        let home = guitar::RigHome::new(guitar::instrument::Instrument::Bass, &dir);
+    library_of(Instrument::Bass)
+}
+
+/// `instrument`'s library, read once per process — seeded from signal's
+/// shipped defaults the first time.
+#[must_use]
+pub fn library_of(instrument: Instrument) -> &'static Library {
+    static BASS: OnceLock<Library> = OnceLock::new();
+    static GUITAR: OnceLock<Library> = OnceLock::new();
+    let once = match instrument {
+        Instrument::Bass => &BASS,
+        Instrument::Guitar => &GUITAR,
+    };
+    once.get_or_init(|| {
+        let dir = library_dir_of(instrument);
+        // The instrument's library in Session's own folder — a home of its
+        // own, so the other's keeps its own, and the process's instrument
+        // and library are left as they are.
+        let home = guitar::RigHome::new(instrument, &dir);
         let library = home.load_or_bootstrap();
         let profiles = library
             .profiles
             .iter()
             .map(|def| guitar::nodes::profile_from_library_in(&home, def, &library.drive_presets))
             .collect();
-        Library { dir, profiles }
+        let song_patches = library
+            .profiles
+            .iter()
+            .map(|def| {
+                let names = def
+                    .patches
+                    .iter()
+                    .filter(|p| !p.song.is_empty())
+                    .map(|p| p.name.clone())
+                    .collect();
+                (def.name.clone(), names)
+            })
+            .collect();
+        Library {
+            dir,
+            profiles,
+            song_patches,
+        }
     })
 }
 
-/// The profile called `name` (any case), or the library's first.
+/// The bass profile called `name` ([`profile_in`]).
 #[must_use]
 pub fn profile(name: &str) -> Option<&'static RigProfile> {
-    let profiles = &library().profiles;
+    profile_in(Instrument::Bass, name)
+}
+
+/// `instrument`'s profile called `name` (any case), or its library's first.
+#[must_use]
+pub fn profile_in(instrument: Instrument, name: &str) -> Option<&'static RigProfile> {
+    let profiles = &library_of(instrument).profiles;
     profiles
         .iter()
         .find(|p| p.name.eq_ignore_ascii_case(name.trim()))
@@ -130,11 +192,10 @@ fn resolved(path: &str, dir: &Path) -> String {
 
 /// A block of a scene, its capture, IR and plugin found in the library —
 /// in a page, by their keys in the rig store ([`crate::files::located`]).
-fn located_block(block: &RigBlock, dir: &Path) -> RigBlock {
-    let bass = guitar::instrument::Instrument::Bass;
+fn located_block(block: &RigBlock, dir: &Path, instrument: Instrument) -> RigBlock {
     let mut b = block.clone();
-    b.nam = crate::files::located(&resolved(&b.nam, dir), bass);
-    b.ir = crate::files::located(&resolved(&b.ir, dir), bass);
+    b.nam = crate::files::located(&resolved(&b.nam, dir), instrument);
+    b.ir = crate::files::located(&resolved(&b.ir, dir), instrument);
     b.plugin = resolved(&b.plugin, dir);
     b
 }
@@ -144,16 +205,22 @@ fn located_block(block: &RigBlock, dir: &Path) -> RigBlock {
 /// can sound.
 #[must_use]
 pub fn files_of(name: &str) -> Vec<String> {
-    let Some(found) = profile(name) else {
+    files_in(Instrument::Bass, name)
+}
+
+/// [`files_of`] for `instrument`'s profile called `name`.
+#[must_use]
+pub fn files_in(instrument: Instrument, name: &str) -> Vec<String> {
+    let Some(found) = profile_in(instrument, name) else {
         return Vec::new();
     };
-    let dir = &library().dir;
+    let dir = &library_of(instrument).dir;
     let mut files: Vec<String> = found
         .patches
         .iter()
         .flat_map(|patch| patch.chain.iter())
         .filter(|b| b.has_backend() && !b.bypassed)
-        .map(|b| located_block(b, dir))
+        .map(|b| located_block(b, dir, instrument))
         .flat_map(|b| {
             let (is_nam, is_ir) = (b.is_nam(), b.is_cab_ir());
             let nam = is_nam.then_some(b.nam);
@@ -183,7 +250,7 @@ impl Chain {
     #[must_use]
     pub fn build(
         patch: &sampler::rig_profile::RigPatch,
-        dir: &Path,
+        (dir, instrument): (&Path, Instrument),
         sample_rate: f64,
         block_size: u32,
     ) -> Self {
@@ -191,7 +258,7 @@ impl Chain {
             .chain
             .iter()
             .filter(|b| b.has_backend() && !b.bypassed)
-            .map(|b| located_block(b, dir))
+            .map(|b| located_block(b, dir, instrument))
             .collect();
         let ids: Vec<String> = (0..blocks.len())
             .map(|i| format!("{}#{i}", patch.name))
@@ -200,13 +267,13 @@ impl Chain {
         let mut built = match prepare_chain(&blocks, &ids, rate) {
             Ok(chain) => chain.into_blocks().into_iter().map(|(_, b)| b).collect(),
             Err(why) => {
-                tracing::warn!(rig.scene = %patch.name, why, "bass rig: a scene would not build");
+                tracing::warn!(rig.scene = %patch.name, why, "signal rig: a scene would not build");
                 Vec::new()
             }
         };
         for block in &mut built {
             if let Err(why) = block.prepare(sample_rate, block_size) {
-                tracing::warn!(rig.scene = %patch.name, why = %why, "bass rig: a block would not prepare");
+                tracing::warn!(rig.scene = %patch.name, why = %why, "signal rig: a block would not prepare");
             }
         }
         let gain = |db: f32| 10_f32.powf(db / 20.0);
@@ -295,7 +362,7 @@ fn run(
     Ok(in_b)
 }
 
-/// A signal bass profile, every scene loaded, one playing.
+/// A signal profile (bass or guitar), every scene loaded, one playing.
 pub struct ProfileRig {
     pub profile: String,
     pub chains: Vec<Chain>,
@@ -311,15 +378,48 @@ pub struct ProfileRig {
 }
 
 impl ProfileRig {
-    /// `profile` (by name), every scene built, `scene` playing.
+    /// The bass `profile` (by name), every scene built, `scene` playing.
     #[must_use]
     pub fn build(profile: &str, scene: usize, sample_rate: f64, block_size: u32) -> Option<Self> {
-        let found = self::profile(profile)?;
-        let dir = &library().dir;
+        Self::build_in(Instrument::Bass, profile, scene, sample_rate, block_size)
+    }
+
+    /// `instrument`'s `profile` (by name), every scene (its patches) built,
+    /// `scene` playing.
+    #[must_use]
+    pub fn build_in(
+        instrument: Instrument,
+        profile: &str,
+        scene: usize,
+        sample_rate: f64,
+        block_size: u32,
+    ) -> Option<Self> {
+        Self::build_listed(
+            instrument,
+            profile,
+            &|_| true,
+            scene,
+            (sample_rate, block_size),
+        )
+    }
+
+    /// [`build_in`](Self::build_in) with only the patches `listed` keeps
+    /// (by name), `scene` counted among those.
+    #[must_use]
+    pub fn build_listed(
+        instrument: Instrument,
+        profile: &str,
+        listed: &dyn Fn(&str) -> bool,
+        scene: usize,
+        (sample_rate, block_size): (f64, u32),
+    ) -> Option<Self> {
+        let found = profile_in(instrument, profile)?;
+        let dir = &library_of(instrument).dir;
         let chains: Vec<Chain> = found
             .patches
             .iter()
-            .map(|patch| Chain::build(patch, dir, sample_rate, block_size))
+            .filter(|patch| listed(&patch.name))
+            .map(|patch| Chain::build(patch, (dir, instrument), sample_rate, block_size))
             .collect();
         let frames = usize::try_from(block_size).unwrap_or(4_096).max(1);
         Some(Self {

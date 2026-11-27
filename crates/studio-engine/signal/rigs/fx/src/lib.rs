@@ -23,19 +23,23 @@
 //! preset, which pieces and mics. That is what a session saves, and what
 //! prepare writes when it builds the rig.
 //!
-//! **In a browser** the bass rig and the kit voice run in the page's
-//! engine, their files streamed in from the rig store ([`files`]): the bass
-//! rig's captures, IRs and home, the kit's preset, engines and the samples
-//! it plays, read out of their packs by range. The whole guitar rig is the
-//! desktop's for now: it runs signal's rig service.
+//! **In a browser** all three run in the page's engine, their files
+//! streamed in from the rig store ([`files`]): the rigs' captures, IRs and
+//! homes, the kit's preset, engines and the samples it plays, read out of
+//! their packs by range. There the whole rig is its profile built in the
+//! page (`signal_rig_page.rs`), with no rig service and no thread.
 
 pub mod bass;
 pub mod files;
 pub mod kit;
 pub mod profile;
 pub mod rig;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg_attr(target_arch = "wasm32", path = "signal_rig_page.rs")]
 pub mod signal_rig;
+/// The page's whole rig, built natively too so its tests run on a desktop.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[allow(dead_code, reason = "natively only its tests use it")]
+mod signal_rig_page;
 
 /// signal's rig crate, for what drives a rig from outside: its service's
 /// calls, its homes and instruments.
@@ -54,11 +58,8 @@ pub const SIGNAL_RIG: &str = "FTS Signal Rig";
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SignalFx;
 
-/// The FX this build runs: in a browser, the bass rig and the kit voice.
-#[cfg(not(target_arch = "wasm32"))]
+/// The FX this build runs: every one, in a page too.
 const RUNS: [&str; 3] = [BASS_RIG, KIT_MIC, SIGNAL_RIG];
-#[cfg(target_arch = "wasm32")]
-const RUNS: [&str; 2] = [BASS_RIG, KIT_MIC];
 
 impl SignalFx {
     fn bare(name: &str) -> Option<&'static str> {
@@ -82,7 +83,6 @@ impl FxFactory for SignalFx {
         match Self::bare(name_or_ident)? {
             BASS_RIG => Some(Box::new(rig::Rig::new(sample_rate))),
             KIT_MIC => Some(Box::new(kit::KitMic::new(sample_rate))),
-            #[cfg(not(target_arch = "wasm32"))]
             SIGNAL_RIG => Some(Box::new(signal_rig::SignalRig::new(sample_rate))),
             _ => None,
         }
