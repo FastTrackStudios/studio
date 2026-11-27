@@ -313,7 +313,7 @@ fn a_plugin_state_is_kept_once_however_many_mixes_hold_it() {
 fn kept_states(daw: &Standalone, ctx: &ProjectContext) -> std::collections::BTreeSet<String> {
     daw_proto::ExtState::keys_project(daw, ctx.clone(), engine_core::mix_states::SECTION)
         .into_iter()
-        .filter_map(|k| k.strip_prefix("state:").map(str::to_owned))
+        .filter_map(|k| engine_core::mix_states::hash_of_key(&k).map(str::to_owned))
         .collect()
 }
 

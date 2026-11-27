@@ -877,6 +877,8 @@ fn save_mix(
     key: &str,
     mix: &Mix,
 ) -> Result<(), String> {
+    // No save sweeps the states between their keeping and the mix naming them.
+    let _writing = engine_core::mix_states::writing();
     let text = crate::mix_snapshot::encode_mix(daw, project, mix)?;
     set(daw, project, key, &text)
 }

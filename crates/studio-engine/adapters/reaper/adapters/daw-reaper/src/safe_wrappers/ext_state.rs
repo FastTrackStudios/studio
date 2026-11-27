@@ -80,7 +80,11 @@ const MAX_PROJ_EXT_STATE_KEY: usize = 4096;
 
 /// The keys set in a project-scoped section (`EnumProjExtState`, its
 /// values not read).
-pub fn proj_ext_state_keys(low: &ReaperLow, project: ProjectContext, section: &CString) -> Vec<String> {
+pub fn proj_ext_state_keys(
+    low: &ReaperLow,
+    project: ProjectContext,
+    section: &CString,
+) -> Vec<String> {
     let mut keys = Vec::new();
     let mut buf = vec![0 as std::os::raw::c_char; MAX_PROJ_EXT_STATE_KEY];
     let size = i32::try_from(buf.len()).unwrap_or(i32::MAX);

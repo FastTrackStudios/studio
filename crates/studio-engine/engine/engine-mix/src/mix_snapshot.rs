@@ -459,7 +459,8 @@ fn key(name: &str) -> String {
 }
 
 /// `mix` as it is kept: each plugin state stored once, under its hash, and
-/// named in the mix by it (`@<hash>`).
+/// named in the mix by it (`@<hash>`). Call it holding
+/// `engine_core::mix_states::writing` until the mix is written.
 ///
 /// A song's 54 snapshots held 280 MB of plugin state, 8 MB of it unique: a
 /// snapshot repeats every FX's state, most of them unchanged since the
@@ -609,6 +610,8 @@ fn snapshot_with(
     }
     let label = format!("Mix snapshot {name}");
     daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
+    // No save sweeps the states between their keeping and the mix naming them.
+    let writing = engine_core::mix_states::writing();
     let kept = encode_mix(daw, project, &mix).and_then(|text| {
         daw_proto::ExtState::set_project(daw, project.clone(), SECTION, &key(name), &text)
             .and_then(|()| {
@@ -623,6 +626,7 @@ fn snapshot_with(
             .map(|()| text.len())
             .map_err(|e| e.to_string())
     });
+    drop(writing);
     daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
     let kept_bytes = kept?;
     set_head(daw, project, name.trim());

@@ -8,6 +8,7 @@
 //! song is saved, `crate::project_file::save`) drops them.
 
 use std::collections::HashSet;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use daw_proto::{ExtState, ProjectContext};
 
@@ -15,7 +16,7 @@ use daw_proto::{ExtState, ProjectContext};
 pub const SECTION: &str = "fts.mix";
 
 /// The prefix of a kept plugin state's key.
-const STATE: &str = "state:";
+const STATE_PREFIX: &str = "state:";
 
 /// How many hex digits a state's hash has (128 bits).
 pub const HASH_LEN: usize = 32;
@@ -23,7 +24,24 @@ pub const HASH_LEN: usize = 32;
 /// A plugin state, kept once in the section by what it is: `state:<hash>`.
 #[must_use]
 pub fn state_key(hash: &str) -> String {
-    format!("{STATE}{hash}")
+    format!("{STATE_PREFIX}{hash}")
+}
+
+/// The hash a section key keeps a plugin state under, if it keeps one.
+#[must_use]
+pub fn hash_of_key(key: &str) -> Option<&str> {
+    key.strip_prefix(STATE_PREFIX)
+}
+
+/// Held while a mix is kept (its states stored, then the mix naming
+/// them) and while [`sweep`] runs, so a sweep never falls between the
+/// two and drops a state the mix is about to name.
+static WRITING: Mutex<()> = Mutex::new(());
+
+/// Hold off [`sweep`] until the guard goes: take it before storing a
+/// mix's states, drop it once the mix that names them is written.
+pub fn writing() -> MutexGuard<'static, ()> {
+    WRITING.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Every hash `text` names as a kept state: `@` and [`HASH_LEN`] hex
@@ -44,52 +62,47 @@ fn named_in(text: &str, into: &mut HashSet<String>) {
     }
 }
 
-/// Drop every plugin state in the song's mix section that no mix in it
-/// names. The hashes dropped, sorted.
-///
-/// Anything else kept in the section (a snapshot, a variant group, the
-/// head) may name a state; only `state:` keys are ever dropped.
-pub fn sweep<D: ExtState + ?Sized>(daw: &D, project: &ProjectContext) -> Vec<String> {
-    let keys = daw.keys_project(project.clone(), SECTION);
+/// The kept hashes (`state:` keys among `keys`) that no other key's value
+/// names, sorted. `value` reads a key's value.
+fn unnamed(keys: &[String], value: impl Fn(&str) -> Option<String>) -> Vec<String> {
     let mut named = HashSet::new();
     let mut kept = Vec::new();
     for key in keys {
-        match key.strip_prefix(STATE) {
+        match hash_of_key(key) {
             Some(hash) => kept.push(hash.to_owned()),
             None => {
-                if let Some(text) = daw.get_project(project.clone(), SECTION, &key) {
+                if let Some(text) = value(key) {
                     named_in(&text, &mut named);
                 }
             }
         }
     }
-    let mut dropped: Vec<String> = kept
-        .into_iter()
-        .filter(|hash| !named.contains(hash))
-        .filter(|hash| {
-            daw.delete_project(project.clone(), SECTION, &state_key(hash))
-                .is_ok()
-        })
-        .collect();
-    dropped.sort();
-    dropped
+    kept.retain(|hash| !named.contains(hash));
+    kept.sort();
+    kept
+}
+
+/// Drop every plugin state in the song's mix section that no mix in it
+/// names. The hashes dropped, sorted.
+///
+/// Anything else kept in the section (a snapshot, a variant, a group's
+/// base, the head) may name a state; only `state:` keys are ever dropped.
+///
+/// # Errors
+/// A state would not be deleted (those before it are gone).
+pub fn sweep<D: ExtState + ?Sized>(
+    daw: &D,
+    project: &ProjectContext,
+) -> Result<Vec<String>, String> {
+    let _writing = writing();
+    let keys = daw.keys_project(project.clone(), SECTION);
+    let dropped = unnamed(&keys, |key| daw.get_project(project.clone(), SECTION, key));
+    for hash in &dropped {
+        daw.delete_project(project.clone(), SECTION, &state_key(hash))
+            .map_err(|e| format!("plugin state {hash}: {e}"))?;
+    }
+    Ok(dropped)
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::HashSet;
-
-    use super::named_in;
-
-    #[test]
-    fn a_mix_names_its_states_by_hash() {
-        let a = "0123456789abcdef0123456789abcdef";
-        let b = "fedcba9876543210fedcba9876543210";
-        let text = format!(
-            r#"{{"fx":[{{"state":"@{a}"}},{{"state":"@{b}"}},{{"state":"@{a}0"}},{{"state":"@short"}},{{"name":"x@y"}}]}}"#
-        );
-        let mut named = HashSet::new();
-        named_in(&text, &mut named);
-        assert_eq!(named, HashSet::from([a.to_owned(), b.to_owned()]));
-    }
-}
+mod tests;
