@@ -39,6 +39,74 @@ pub fn PersonMark(person: Person, #[props(default = 36)] size: u32) -> Element {
     }
 }
 
+// ── a new organization ──────────────────────────────────────────────────
+
+/// Create an organization: a name, and Create (or Enter). It is made at
+/// the account server, the account signed in here its owner, and Studio
+/// goes into it (`done` then runs: a sheet closes). What STUDIO_ORG_CREATE
+/// does.
+#[component]
+pub fn NewOrg(#[props(default)] done: Option<EventHandler<()>>) -> Element {
+    #[cfg(feature = "drive")]
+    {
+        let app = use_app();
+        let mut name = use_signal(String::new);
+        let mut busy = use_signal(|| false);
+        let mut said = use_signal(|| None::<String>);
+        let mut make = move || {
+            if busy() || name().trim().is_empty() {
+                return;
+            }
+            busy.set(true);
+            said.set(None);
+            let typed = name();
+            spawn(async move {
+                match crate::org_create::create_here(&typed, None).await {
+                    Ok(made) => {
+                        crate::org_create::joined(app, &made);
+                        name.set(String::new());
+                        if let Some(done) = done {
+                            done.call(());
+                        }
+                    }
+                    Err(why) => said.set(Some(format!("Not created: {why}."))),
+                }
+                busy.set(false);
+            });
+        };
+        rsx! {
+            div { class: "addrow",
+                input {
+                    class: "edtitle",
+                    placeholder: "New organization: its name",
+                    aria_label: "New organization's name",
+                    value: "{name}",
+                    oninput: move |e| name.set(e.value()),
+                    onkeydown: move |e: KeyboardEvent| {
+                        if e.key().to_string() == "Enter" {
+                            make();
+                        }
+                    },
+                }
+                button {
+                    class: "primary",
+                    disabled: busy() || name().trim().is_empty(),
+                    onclick: move |_| make(),
+                    if busy() { "Creating…" } else { "Create" }
+                }
+            }
+            if let Some(s) = said() {
+                div { class: "s1", role: "alert", "{s}" }
+            }
+        }
+    }
+    #[cfg(not(feature = "drive"))]
+    {
+        let _ = done;
+        rsx! {}
+    }
+}
+
 // ── All orgs ────────────────────────────────────────────────────────────
 
 #[component]
@@ -58,6 +126,7 @@ pub fn AllOrgs() -> Element {
                         OrgCard { key: "{o}", here: o == here, org: o }
                     }
                 }
+                NewOrg {}
             }
         }
     }

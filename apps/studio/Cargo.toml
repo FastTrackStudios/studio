@@ -212,3 +212,13 @@ studio-shell.workspace = true
 # song_ids' tests write one-file songs.
 session-format = { workspace = true, features = ["read", "store"] }
 uuid = { workspace = true }
+# org_create's tests: a new org made through the real issuer's routes
+# (FastTrackStudios/auth's organization service over HTTP, in-memory).
+auth = { workspace = true, features = ["backend-db", "axum"] }
+auth-proto = { workspace = true, features = ["http", "vox"] }
+axum.workspace = true
+reqwest.workspace = true
+sea-orm.workspace = true
+sea-orm-migration.workspace = true
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt", "net"] }

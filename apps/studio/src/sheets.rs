@@ -743,6 +743,8 @@ fn OrgSheet() -> Element {
                     }
                 }
             }
+            div { class: "md" }
+            crate::pages::orgs::NewOrg { done: move |()| app.close() }
         }
     }
 }
