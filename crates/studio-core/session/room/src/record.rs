@@ -16,6 +16,16 @@
 //! ([`Room::setlist`]), and keeps it when the room stops being live: the
 //! same link, opened while nobody leads, opens that setlist for each
 //! person on their own, to practise ([`Room::opens`], studio#714).
+//!
+//! **Guests** (studio#713) have no account in the organization, so they
+//! cannot read its Rooms folder. While the room is live its leader also
+//! writes the room's [`Lobby`] (`<Rooms>/Lobby/<room>.lobby`): where the
+//! leader is and the guests' own [`Pass`], which lets a guest follow and
+//! not edit. It never holds the members' pass. What reaches it from the
+//! link (the site, studio#705) is the lobby's to be published by; a guest
+//! only ever asks [`Rooms::lobby`]. The room's file keeps the guests who
+//! have come ([`Guest`]), each by the endpoint its device proved, so a
+//! guest is the same guest every time they come back.
 
 use std::path::{Path, PathBuf};
 
@@ -173,6 +183,9 @@ pub struct Room {
     /// room stops being live: what the link opens to practise then.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub setlist: Option<Loaded>,
+    /// The guests who have come, in the order they first came.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub guests: Vec<Guest>,
 }
 
 /// What opening a room's link does now.
@@ -184,6 +197,41 @@ pub enum Opens<'a> {
     Practice(&'a Loaded),
     /// Nobody leads it, and nobody has loaded anything into it yet.
     Nothing,
+}
+
+/// Someone who came to a room as a guest (no account in its
+/// organization), known by the endpoint their device proved to the
+/// leader's door: the same device is the same guest every visit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Guest {
+    /// The endpoint (an iroh endpoint id) their device keeps.
+    pub id: String,
+    /// What the room calls them ([`guest_name`]).
+    pub name: String,
+    /// How many times they have come.
+    pub visits: u64,
+    /// When they first came, and last, in milliseconds since the epoch.
+    pub first: u64,
+    pub last: u64,
+}
+
+/// What a room calls the guest whose device is endpoint `id`: the same
+/// on the guest's page and the leader's, and every time they come.
+#[must_use]
+pub fn guest_name(id: &str) -> String {
+    format!("Guest {}", id.chars().take(6).collect::<String>())
+}
+
+/// What anyone who has a live room's link may read: the room's name and
+/// where its leader is, with the guests' pass in place of the members'.
+/// A guest presenting it may follow the leader and is let do nothing
+/// else (`gate`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lobby {
+    pub id: RoomId,
+    pub name: String,
+    /// Where the leader is; its pass is the guests'.
+    pub live: Live,
 }
 
 impl Room {
@@ -327,6 +375,7 @@ impl Rooms {
                     org: org.to_owned(),
                     live: None,
                     setlist: None,
+                    guests: Vec::new(),
                 };
             }
         };
@@ -387,14 +436,19 @@ impl Rooms {
     }
 
     /// Say where the room's leader is (`Some`), or that it is not live.
+    /// A room no longer live has no lobby either.
     ///
     /// # Errors
     ///
     /// No such room, or its file cannot be written.
     pub fn set_live(&self, id: &RoomId, live: Option<Live>) -> Result<Room, Error> {
         let mut room = self.find(id.as_str())?;
+        let closing = live.is_none();
         room.live = live;
         self.write(&room)?;
+        if closing {
+            self.close_lobby(id)?;
+        }
         Ok(room)
     }
 
@@ -411,23 +465,117 @@ impl Rooms {
         Ok(room)
     }
 
-    /// Write `room` whole: to a file beside it first, then moved over, so
-    /// a reader never sees half of one.
-    fn write(&self, room: &Room) -> Result<(), Error> {
-        let io = |path: &Path| {
-            let path = path.to_path_buf();
-            move |source| Error::Io { path, source }
-        };
-        std::fs::create_dir_all(&self.dir).map_err(io(&self.dir))?;
-        let path = self.file(&room.id);
-        let next = self.dir.join(format!(".{}.room.{}", room.id, suffix()));
-        let text = serde_json::to_string_pretty(room).map_err(|source| Error::Bad {
-            path: path.clone(),
-            source,
-        })?;
-        std::fs::write(&next, format!("{text}\n")).map_err(io(&next))?;
-        std::fs::rename(&next, &path).map_err(io(&path))
+    /// The folder lobbies are kept in.
+    fn lobbies(&self) -> PathBuf {
+        self.dir.join("Lobby")
     }
+
+    fn lobby_file(&self, id: &RoomId) -> PathBuf {
+        self.lobbies().join(format!("{id}.lobby"))
+    }
+
+    /// Open live room `room`'s lobby to guests, who present `guests`: where
+    /// its leader is, never the members' pass.
+    ///
+    /// # Errors
+    ///
+    /// The room is not live, or the lobby cannot be written.
+    pub fn open_lobby(&self, room: &Room, guests: &Pass) -> Result<Lobby, Error> {
+        let mut live = room.live.clone().ok_or(Error::Missing("a leader"))?;
+        live.pass = guests.clone();
+        let lobby = Lobby {
+            id: room.id.clone(),
+            name: room.name.clone(),
+            live,
+        };
+        write_whole(&self.lobbies(), &self.lobby_file(&room.id), &lobby)?;
+        Ok(lobby)
+    }
+
+    /// Room `id`'s lobby gone: it is not live.
+    fn close_lobby(&self, id: &RoomId) -> Result<(), Error> {
+        let path = self.lobby_file(id);
+        match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(source) => Err(Error::Io { path, source }),
+        }
+    }
+
+    /// The lobby of the room `link` names: what a guest joins by.
+    ///
+    /// # Errors
+    ///
+    /// Not a room's link, the room is not live here (no lobby), or its
+    /// lobby is unreadable.
+    pub fn lobby(&self, link: &str) -> Result<Lobby, Error> {
+        let id = parse_link(link)?;
+        let path = self.lobby_file(&id);
+        match std::fs::read(&path) {
+            Ok(bytes) => {
+                serde_json::from_slice(&bytes).map_err(|source| Error::Bad { path, source })
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(Error::NoRoom(id)),
+            Err(source) => Err(Error::Io { path, source }),
+        }
+    }
+
+    /// The guest whose device is endpoint `guest` came to room `id` at
+    /// `now_ms`: known again when they have come before (one more visit),
+    /// else added. The guest as the room now knows them.
+    ///
+    /// # Errors
+    ///
+    /// No such room, or its file cannot be written.
+    pub fn guest_came(&self, id: &RoomId, guest: &str, now_ms: u64) -> Result<Guest, Error> {
+        let mut room = self.find(id.as_str())?;
+        let known = match room.guests.iter_mut().find(|g| g.id == guest) {
+            Some(known) => {
+                known.visits = known.visits.saturating_add(1);
+                known.last = now_ms;
+                known.clone()
+            }
+            None => {
+                let new = Guest {
+                    id: guest.to_owned(),
+                    name: guest_name(guest),
+                    visits: 1,
+                    first: now_ms,
+                    last: now_ms,
+                };
+                room.guests.push(new.clone());
+                new
+            }
+        };
+        self.write(&room)?;
+        Ok(known)
+    }
+
+    /// Write `room` whole.
+    fn write(&self, room: &Room) -> Result<(), Error> {
+        write_whole(&self.dir, &self.file(&room.id), room)
+    }
+}
+
+/// Write `value` to `path` (in `dir`) whole: to a file beside it first,
+/// then moved over, so a reader never sees half of one.
+fn write_whole(dir: &Path, path: &Path, value: &impl Serialize) -> Result<(), Error> {
+    let io = |path: &Path| {
+        let path = path.to_path_buf();
+        move |source| Error::Io { path, source }
+    };
+    std::fs::create_dir_all(dir).map_err(io(dir))?;
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let next = dir.join(format!(".{name}.{}", suffix()));
+    let text = serde_json::to_string_pretty(value).map_err(|source| Error::Bad {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    std::fs::write(&next, format!("{text}\n")).map_err(io(&next))?;
+    std::fs::rename(&next, path).map_err(io(path))
 }
 
 /// `name` as the readable part of an id: lower case, words joined by dashes.

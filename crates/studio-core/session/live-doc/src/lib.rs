@@ -29,7 +29,7 @@ pub use sync::{
 };
 // Hosting is a native thing (a desktop): a browser only joins.
 #[cfg(not(target_arch = "wasm32"))]
-pub use sync::{DocSyncHost, Hosts, PresenceHost};
+pub use sync::{DocSyncHost, FollowsOnly, Hosts, PresenceHost};
 
 /// A lock, taken even when a holder panicked: what it guards is plain
 /// data that a panic leaves whole.

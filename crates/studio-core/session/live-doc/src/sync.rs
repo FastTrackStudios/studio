@@ -249,9 +249,11 @@ impl DocSyncHost {
     }
 
     /// The joiner's edits into the doc and out to everyone, until its
-    /// connection closes.
-    async fn pump(&self, mut up: vox::Rx<SyncUp>) {
+    /// connection closes. A joiner that only follows (`writes` false) has
+    /// each one dropped: it reads the doc and changes nothing in it.
+    async fn pump(&self, mut up: vox::Rx<SyncUp>, writes: bool) {
         let mut parts: Vec<u8> = Vec::new();
+        let mut dropped = 0usize;
         while let Ok(Some(frame)) = up.recv().await {
             let mut owned: Option<SyncUp> = None;
             let _ = frame.map(|f| owned = Some(f));
@@ -263,6 +265,13 @@ impl DocSyncHost {
                 Some(SyncUp::Update(bytes)) => whole(&mut parts, bytes),
                 None => continue,
             };
+            if !writes {
+                dropped = dropped.saturating_add(1);
+                if dropped == 1 {
+                    tracing::warn!(sync.doc = %self.doc_id, sync.bytes = bytes.len(), "live-doc: a joiner that only follows sent an update; dropped, as every one after it is");
+                }
+                continue;
+            }
             if let Err(e) = self.doc.import(&bytes) {
                 tracing::warn!(sync.doc = %self.doc_id, sync.bytes = bytes.len(), sync.error = %e, "live-doc: dropping an update that would not import");
                 continue;
@@ -301,6 +310,23 @@ impl DocSync for DocSyncHost {
         up: vox::Rx<SyncUp>,
         down: vox::Tx<SyncDown>,
     ) -> Result<(), SyncError> {
+        self.attach(doc_id, from, up, down, true).await
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl DocSyncHost {
+    /// One joiner's session: what [`DocSync::sync`] does, the joiner's
+    /// updates taken in only when it `writes`. One that does not follows
+    /// the doc as everyone else does, and changes nothing in it.
+    async fn attach(
+        &self,
+        doc_id: Uuid,
+        from: Vec<u8>,
+        up: vox::Rx<SyncUp>,
+        down: vox::Tx<SyncDown>,
+        writes: bool,
+    ) -> Result<(), SyncError> {
         if doc_id != self.doc_id {
             return Err(SyncError::UnknownDoc);
         }
@@ -323,6 +349,7 @@ impl DocSync for DocSyncHost {
             sync.doc = %doc_id,
             sync.fresh = from.is_none(),
             sync.parts = parts.len(),
+            sync.writes = writes,
             "live-doc: a joiner attached"
         );
         for part in parts {
@@ -338,7 +365,7 @@ impl DocSync for DocSyncHost {
             return Ok(());
         }
         tokio::select! {
-            () = self.pump(up) => {}
+            () = self.pump(up, writes) => {}
             () = self.forward(queue, &down) => {}
         }
         Ok(())
@@ -503,7 +530,13 @@ pub struct Hosts {
     docs: Arc<Mutex<HashMap<Uuid, DocSyncHost>>>,
     presence: Arc<Mutex<HashMap<Uuid, PresenceHost>>>,
     timeout_ms: i64,
+    /// Whether the joiner attaching now only follows ([`Self::follow_only_when`]).
+    follows_only: Option<FollowsOnly>,
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Asked as a joiner attaches, on its call: whether it only follows.
+pub type FollowsOnly = Arc<dyn Fn() -> bool + Send + Sync>;
 
 #[cfg(not(target_arch = "wasm32"))]
 impl Hosts {
@@ -514,7 +547,18 @@ impl Hosts {
             docs: Arc::default(),
             presence: Arc::default(),
             timeout_ms,
+            follows_only: None,
         }
+    }
+
+    /// Ask `when` as each joiner attaches, on its call (where a gate in
+    /// front has said who is calling): a joiner it says only follows reads
+    /// every doc and has each update it sends dropped. A guest in a room,
+    /// say, who plays along and edits nothing.
+    #[must_use]
+    pub fn follow_only_when(mut self, when: FollowsOnly) -> Self {
+        self.follows_only = Some(when);
+        self
     }
 
     /// Serve `doc` under `doc_id`; the host made for it.
@@ -558,7 +602,10 @@ impl DocSync for Hosts {
         up: vox::Rx<SyncUp>,
         down: vox::Tx<SyncDown>,
     ) -> Result<(), SyncError> {
-        self.doc(doc_id).sync(doc_id, from, up, down).await
+        let writes = !self.follows_only.as_ref().is_some_and(|only| only());
+        self.doc(doc_id)
+            .attach(doc_id, from, up, down, writes)
+            .await
     }
 }
 
