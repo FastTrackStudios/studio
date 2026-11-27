@@ -695,8 +695,7 @@ pub async fn open_with(
             None => HashMap::new(),
         }
     };
-    let (fetched, library, ()) =
-        futures_util::future::join3(song, samples, open_rig_store()).await;
+    let (fetched, library, ()) = futures_util::future::join3(song, samples, open_rig_store()).await;
     let fetched = fetched?;
     let fetched_ms = ms();
     progress(Progress::Opening {
