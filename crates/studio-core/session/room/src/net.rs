@@ -20,12 +20,18 @@
 //!
 //! It builds for the browser too: a page is a member as a desktop is, its
 //! endpoint relay-only ([`bind_in_browser`]).
+//!
+//! A guest (studio#713) joins the same way ([`RoomPeer::join_as_guest`]),
+//! presenting the guests' pass from the room's lobby: they follow, and
+//! the leader's doc takes none of their updates. Their device keeps its
+//! endpoint's key, so the leader knows them again each time they come.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use architect::iroh_link::iroh;
+/// The iroh a member dials by: its endpoints and keys.
+pub use architect::iroh_link::iroh;
 
 use live_doc::{DocPresenceClient, DocSyncClient, PresencePeer, SyncedDoc};
 #[cfg(not(target_arch = "wasm32"))]
@@ -51,12 +57,19 @@ pub type Attach = Arc<
         + Sync,
 >;
 
-/// What a person says about themselves in the room: their name, and the
-/// load they have opened (a member, once it has: what the leader sees it
-/// follow).
-fn here(name: &str, opened: Option<u64>) -> LoroValue {
+/// What kind of someone is in the room, as they say.
+const GUEST_KIND: &str = "guest";
+const AGENT_KIND: &str = "agent";
+
+/// What a person says about themselves in the room: their name, whether
+/// they are a guest, and the load they have opened (a member, once it
+/// has: what the leader sees it follow).
+fn here(name: &str, guest: bool, opened: Option<u64>) -> LoroValue {
     let mut map = std::collections::HashMap::new();
     map.insert("name".to_owned(), LoroValue::from(name));
+    if guest {
+        map.insert("kind".to_owned(), LoroValue::from(GUEST_KIND));
+    }
     if let Some(load) = opened.and_then(|l| i64::try_from(l).ok()) {
         map.insert("opened".to_owned(), LoroValue::I64(load));
     }
@@ -68,7 +81,7 @@ fn here(name: &str, opened: Option<u64>) -> LoroValue {
 fn agent_here(name: &str) -> LoroValue {
     let mut map = std::collections::HashMap::new();
     map.insert("name".to_owned(), LoroValue::from(name));
-    map.insert("kind".to_owned(), LoroValue::from("agent"));
+    map.insert("kind".to_owned(), LoroValue::from(AGENT_KIND));
     LoroValue::from(map)
 }
 
@@ -105,9 +118,53 @@ pub struct Person {
     pub name: String,
     /// An agent working through someone's MCP.
     pub agent: bool,
+    /// A guest: no account in the room's organization, following and
+    /// editing nothing.
+    pub guest: bool,
     /// The load they have opened: a member following the leader says so
     /// once what the leader loaded is open on their device.
     pub opened: Option<u64>,
+}
+
+/// Who a guest whose device is endpoint `endpoint` is in the room's
+/// presence: the one peer a guest may write as (the leader's host keeps
+/// none of their presence under any other).
+#[must_use]
+pub fn guest_peer(endpoint: &str) -> String {
+    format!("{GUEST_PEER}{endpoint}")
+}
+
+const GUEST_PEER: &str = "guest-";
+
+/// The person `value`, said under presence key `key`. A guest's entry is
+/// theirs whatever it claims: named by their endpoint, a guest, no agent.
+fn person(key: &str, value: &LoroValue) -> Option<Person> {
+    let peer = key.strip_suffix("/here")?;
+    let LoroValue::Map(m) = value else {
+        return None;
+    };
+    let opened = match m.get("opened") {
+        Some(LoroValue::I64(n)) => u64::try_from(*n).ok(),
+        _ => None,
+    };
+    if let Some(endpoint) = peer.strip_prefix(GUEST_PEER) {
+        return Some(Person {
+            name: crate::guest_name(endpoint),
+            agent: false,
+            guest: true,
+            opened,
+        });
+    }
+    let kind = |k: &str| matches!(m.get("kind"), Some(LoroValue::String(s)) if &**s == k);
+    match m.get("name") {
+        Some(LoroValue::String(name)) => Some(Person {
+            name: name.to_string(),
+            agent: kind(AGENT_KIND),
+            guest: kind(GUEST_KIND),
+            opened,
+        }),
+        _ => None,
+    }
 }
 
 /// Everyone in the room, from `presence`, sorted by name.
@@ -115,22 +172,8 @@ pub struct Person {
 pub fn here_now(presence: &PresencePeer) -> Vec<Person> {
     let mut people: Vec<Person> = presence
         .states()
-        .into_iter()
-        .filter(|(k, _)| k.ends_with("/here"))
-        .filter_map(|(_, v)| match v {
-            LoroValue::Map(m) => match m.get("name") {
-                Some(LoroValue::String(s)) => Some(Person {
-                    name: s.to_string(),
-                    agent: matches!(m.get("kind"), Some(LoroValue::String(k)) if &**k == "agent"),
-                    opened: match m.get("opened") {
-                        Some(LoroValue::I64(n)) => u64::try_from(*n).ok(),
-                        _ => None,
-                    },
-                }),
-                _ => None,
-            },
-            _ => None,
-        })
+        .iter()
+        .filter_map(|(k, v)| person(k, v))
         .collect();
     people.sort_by(|a, b| a.name.cmp(&b.name));
     people
@@ -187,10 +230,12 @@ pub struct RoomHost {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl RoomHost {
-    /// Host room `id`, nothing loaded yet.
+    /// Host room `id`, nothing loaded yet. A guest attaching through the
+    /// leader's door follows the doc and changes nothing in it, and writes
+    /// only their own presence ([`crate::gate::joiner`]).
     #[must_use]
     pub fn new(id: &RoomId) -> Self {
-        let hosts = Hosts::new(PRESENCE_TIMEOUT_MS);
+        let hosts = Hosts::new(PRESENCE_TIMEOUT_MS).joiners(Arc::new(crate::gate::joiner));
         let doc = RoomDoc::new();
         // The doc's host stays in `hosts`, which the dispatchers serve.
         let _host = hosts.add(id.doc_id(), doc.loro().clone());
@@ -248,7 +293,7 @@ impl RoomHost {
         );
         let client: DocPresenceClient = server.establish().await?;
         let (peer, mut driver) = PresencePeer::new(self.id, PRESENCE_TIMEOUT_MS);
-        peer.set(&here_key(me), here(name, None));
+        peer.set(&here_key(me), here(name, false, None));
         let mut stopped = self.stop.subscribe();
         architect::platform::spawn(async move {
             let _server = server;
@@ -270,9 +315,11 @@ impl RoomHost {
 pub struct RoomPeer {
     doc: RoomDoc,
     presence: PresencePeer,
-    /// Who this member is in the room's presence, and their name.
+    /// Who this member is in the room's presence, their name, and
+    /// whether they are a guest.
     me: String,
     name: String,
+    guest: bool,
     attaches: Arc<AtomicUsize>,
     /// Why the last attachment ended, or could not be made (the leader's
     /// door refusing it, say); cleared once one is held.
@@ -285,10 +332,29 @@ impl RoomPeer {
     /// once; the doc fills as the attachment comes up.
     #[must_use]
     pub fn join(id: &RoomId, me: &str, name: &str, attach: Attach) -> Self {
+        Self::enter(id, me, name, false, attach)
+    }
+
+    /// Join room `id` as the guest whose device is endpoint `endpoint`
+    /// (what `attach` dials from), through `attach`, which presents the
+    /// guests' pass (the room's lobby's). The room calls them by
+    /// [`crate::guest_name`], the same every time they come.
+    #[must_use]
+    pub fn join_as_guest(id: &RoomId, endpoint: &str, attach: Attach) -> Self {
+        Self::enter(
+            id,
+            &guest_peer(endpoint),
+            &crate::guest_name(endpoint),
+            true,
+            attach,
+        )
+    }
+
+    fn enter(id: &RoomId, me: &str, name: &str, guest: bool, attach: Attach) -> Self {
         let doc = RoomDoc::new();
         let mut synced = SyncedDoc::new(id.doc_id(), doc.loro().clone());
         let (presence, mut driver) = PresencePeer::new(id.doc_id(), PRESENCE_TIMEOUT_MS);
-        presence.set(&here_key(me), here(name, None));
+        presence.set(&here_key(me), here(name, guest, None));
         let attaches = Arc::new(AtomicUsize::new(0));
         let error = Arc::new(Mutex::new(None));
         let (stop, mut stopped) = tokio::sync::watch::channel(false);
@@ -337,6 +403,7 @@ impl RoomPeer {
             presence,
             me: me.to_owned(),
             name: name.to_owned(),
+            guest,
             attaches,
             error,
             stop,
@@ -346,8 +413,16 @@ impl RoomPeer {
     /// Say in the room that this member has opened load `load`: what the
     /// leader (and its MCP) sees it follow.
     pub fn opened(&self, load: u64) {
-        self.presence
-            .set(&here_key(&self.me), here(&self.name, Some(load)));
+        self.presence.set(
+            &here_key(&self.me),
+            here(&self.name, self.guest, Some(load)),
+        );
+    }
+
+    /// Who this member is in the room's presence.
+    #[must_use]
+    pub fn me(&self) -> &str {
+        &self.me
     }
 
     /// Why the last attachment to the leader ended or was not made, until
@@ -488,12 +563,20 @@ pub fn attach_to(endpoint: iroh::Endpoint, joined: Live, find: Find) -> Attach {
 /// The endpoint could not be bound (no relay reached).
 #[cfg(target_arch = "wasm32")]
 pub async fn bind_in_browser() -> Result<iroh::Endpoint, String> {
-    architect::iroh_link::bind_endpoint_with(
-        iroh::SecretKey::generate(),
-        architect::iroh_link::PeerLookup::N0,
-    )
-    .await
-    .map_err(|e| format!("iroh: {e}"))
+    bind_in_browser_as(iroh::SecretKey::generate()).await
+}
+
+/// [`bind_in_browser`] as the endpoint `key` is: a guest's page binds the
+/// key its device keeps, so the leader knows them again.
+///
+/// # Errors
+///
+/// The endpoint could not be bound (no relay reached).
+#[cfg(target_arch = "wasm32")]
+pub async fn bind_in_browser_as(key: iroh::SecretKey) -> Result<iroh::Endpoint, String> {
+    architect::iroh_link::bind_endpoint_with(key, architect::iroh_link::PeerLookup::N0)
+        .await
+        .map_err(|e| format!("iroh: {e}"))
 }
 
 /// An attachment that lasted this long worked: the next wait starts short.

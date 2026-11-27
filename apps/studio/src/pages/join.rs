@@ -66,6 +66,10 @@ fn InThePage(room: String) -> Element {
         "member" if s.loaded.is_empty() => {
             format!("In the room. {} has loaded nothing yet.", s.leader)
         }
+        "member" if s.role == "guest" => format!(
+            "Following {} as a guest ({}): {}. A guest plays along and edits nothing.",
+            s.leader, s.me, s.loaded
+        ),
         "member" => format!("Following {}: {}", s.leader, s.loaded),
         "practising" => format!("Nobody leads it now: {} is open to practise on your own.", s.loaded),
         "failed" => format!("Could not join: {}", s.why),

@@ -148,6 +148,29 @@ pub const MAX_FRAME: usize = 16 * 1024 * 1024;
 // ── Host ────────────────────────────────────────────────────────────────
 
 #[cfg(not(target_arch = "wasm32"))]
+/// Who is attaching, as a host sees them: what they may change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Joiner {
+    /// Edits the doc with everyone, and writes any presence.
+    Editor,
+    /// Follows: reads every doc and changes nothing in one (each update it
+    /// sends is dropped), and writes only its own presence, the keys that
+    /// begin with `own` (anything else it sends is dropped).
+    Follower { own: String },
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Joiner {
+    const fn edits(&self) -> bool {
+        matches!(self, Self::Editor)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Asked as a joiner attaches, on its call: who they are.
+pub type JoinerOf = Arc<dyn Fn() -> Joiner + Send + Sync>;
+
+#[cfg(not(target_arch = "wasm32"))]
 /// What goes to every joiner: an update, shared rather than copied.
 type Out = Arc<Vec<u8>>;
 
@@ -249,9 +272,11 @@ impl DocSyncHost {
     }
 
     /// The joiner's edits into the doc and out to everyone, until its
-    /// connection closes.
-    async fn pump(&self, mut up: vox::Rx<SyncUp>) {
+    /// connection closes. A [`Joiner::Follower`] has each one dropped: it
+    /// reads the doc and changes nothing in it.
+    async fn pump(&self, mut up: vox::Rx<SyncUp>, joiner: &Joiner) {
         let mut parts: Vec<u8> = Vec::new();
+        let mut dropped = 0usize;
         while let Ok(Some(frame)) = up.recv().await {
             let mut owned: Option<SyncUp> = None;
             let _ = frame.map(|f| owned = Some(f));
@@ -263,6 +288,13 @@ impl DocSyncHost {
                 Some(SyncUp::Update(bytes)) => whole(&mut parts, bytes),
                 None => continue,
             };
+            if !joiner.edits() {
+                dropped = dropped.saturating_add(1);
+                if dropped == 1 {
+                    tracing::warn!(sync.doc = %self.doc_id, sync.bytes = bytes.len(), "live-doc: a joiner that only follows sent an update; dropped, as every one after it is");
+                }
+                continue;
+            }
             if let Err(e) = self.doc.import(&bytes) {
                 tracing::warn!(sync.doc = %self.doc_id, sync.bytes = bytes.len(), sync.error = %e, "live-doc: dropping an update that would not import");
                 continue;
@@ -301,6 +333,23 @@ impl DocSync for DocSyncHost {
         up: vox::Rx<SyncUp>,
         down: vox::Tx<SyncDown>,
     ) -> Result<(), SyncError> {
+        self.attach(doc_id, from, up, down, &Joiner::Editor).await
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl DocSyncHost {
+    /// One joiner's session: what [`DocSync::sync`] does, the joiner's
+    /// updates taken in only from an editor. A follower follows the doc as
+    /// everyone else does, and changes nothing in it.
+    async fn attach(
+        &self,
+        doc_id: Uuid,
+        from: Vec<u8>,
+        up: vox::Rx<SyncUp>,
+        down: vox::Tx<SyncDown>,
+        joiner: &Joiner,
+    ) -> Result<(), SyncError> {
         if doc_id != self.doc_id {
             return Err(SyncError::UnknownDoc);
         }
@@ -323,6 +372,7 @@ impl DocSync for DocSyncHost {
             sync.doc = %doc_id,
             sync.fresh = from.is_none(),
             sync.parts = parts.len(),
+            sync.edits = joiner.edits(),
             "live-doc: a joiner attached"
         );
         for part in parts {
@@ -338,7 +388,7 @@ impl DocSync for DocSyncHost {
             return Ok(());
         }
         tokio::select! {
-            () = self.pump(up) => {}
+            () = self.pump(up, joiner) => {}
             () = self.forward(queue, &down) => {}
         }
         Ok(())
@@ -402,6 +452,9 @@ impl Drop for SessionGuard {
 pub struct PresenceHost {
     doc_id: Uuid,
     store: EphemeralStore,
+    /// How long an entry outlives its last write: a follower's updates are
+    /// read in a store of their own first, with the same.
+    timeout_ms: i64,
     hub: architect::PubSub<Vec<u8>>,
     sessions: Arc<AtomicUsize>,
     /// The clock it serves: [`crate::clock_ms`] unless given another.
@@ -426,6 +479,7 @@ impl PresenceHost {
         Self {
             doc_id,
             store,
+            timeout_ms,
             hub,
             sessions: Arc::default(),
             clock: Arc::new(crate::clock_ms),
@@ -459,8 +513,27 @@ impl DocPresence for PresenceHost {
     async fn presence(
         &self,
         doc_id: Uuid,
+        up: vox::Rx<Vec<u8>>,
+        down: vox::Tx<Vec<u8>>,
+    ) -> Result<(), SyncError> {
+        self.attach(doc_id, up, down, &Joiner::Editor).await
+    }
+
+    fn now(&self) -> impl Future<Output = f64> + Send {
+        std::future::ready((self.clock)())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl PresenceHost {
+    /// One peer's presence session: what [`DocPresence::presence`] does,
+    /// a follower's updates kept only for its own keys.
+    async fn attach(
+        &self,
+        doc_id: Uuid,
         mut up: vox::Rx<Vec<u8>>,
         down: vox::Tx<Vec<u8>>,
+        joiner: &Joiner,
     ) -> Result<(), SyncError> {
         if doc_id != self.doc_id {
             return Err(SyncError::UnknownDoc);
@@ -475,17 +548,39 @@ impl DocPresence for PresenceHost {
             let mut owned: Option<Vec<u8>> = None;
             let _ = update.map(|u| owned = Some(u));
             let Some(bytes) = owned else { continue };
-            if let Err(e) = self.store.apply(&bytes) {
-                tracing::warn!(sync.doc = %self.doc_id, sync.error = %e, "live-doc: dropping a presence update that would not apply");
-                continue;
+            match joiner {
+                Joiner::Editor => {
+                    if let Err(e) = self.store.apply(&bytes) {
+                        tracing::warn!(sync.doc = %self.doc_id, sync.error = %e, "live-doc: dropping a presence update that would not apply");
+                        continue;
+                    }
+                    self.hub.publish(bytes);
+                }
+                Joiner::Follower { own } => self.keep_own(&bytes, own),
             }
-            self.hub.publish(bytes);
         }
         Ok(())
     }
 
-    fn now(&self) -> impl Future<Output = f64> + Send {
-        std::future::ready((self.clock)())
+    /// A follower's presence update, kept only for the keys it owns (that
+    /// begin with `own`): read in a store of its own, each owned entry set
+    /// here (which goes out to everyone), anything else dropped. What it
+    /// deletes goes when it times out.
+    fn keep_own(&self, bytes: &[u8], own: &str) {
+        let theirs = EphemeralStore::new(self.timeout_ms);
+        if let Err(e) = theirs.apply(bytes) {
+            tracing::warn!(sync.doc = %self.doc_id, sync.error = %e, "live-doc: dropping a presence update that would not apply");
+            return;
+        }
+        for key in theirs.keys() {
+            match theirs.get(&key) {
+                Some(value) if key.starts_with(own) => self.store.set(&key, value),
+                Some(_) => {
+                    tracing::debug!(sync.doc = %self.doc_id, sync.key = %key, "live-doc: a follower wrote presence not its own; dropped")
+                }
+                None => {}
+            }
+        }
     }
 }
 
@@ -503,6 +598,8 @@ pub struct Hosts {
     docs: Arc<Mutex<HashMap<Uuid, DocSyncHost>>>,
     presence: Arc<Mutex<HashMap<Uuid, PresenceHost>>>,
     timeout_ms: i64,
+    /// Who the joiner attaching now is ([`Self::joiners`]).
+    joiner_of: Option<JoinerOf>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -514,7 +611,23 @@ impl Hosts {
             docs: Arc::default(),
             presence: Arc::default(),
             timeout_ms,
+            joiner_of: None,
         }
+    }
+
+    /// Ask `who` as each joiner attaches, on its call (where a gate in
+    /// front has said who is calling): a [`Joiner::Follower`] reads every
+    /// doc and changes none, and writes only its own presence. A guest in
+    /// a room, say, who plays along and edits nothing. Unasked, everyone
+    /// is an editor.
+    #[must_use]
+    pub fn joiners(mut self, who: JoinerOf) -> Self {
+        self.joiner_of = Some(who);
+        self
+    }
+
+    fn joiner(&self) -> Joiner {
+        self.joiner_of.as_ref().map_or(Joiner::Editor, |who| who())
     }
 
     /// Serve `doc` under `doc_id`; the host made for it.
@@ -558,7 +671,10 @@ impl DocSync for Hosts {
         up: vox::Rx<SyncUp>,
         down: vox::Tx<SyncDown>,
     ) -> Result<(), SyncError> {
-        self.doc(doc_id).sync(doc_id, from, up, down).await
+        let joiner = self.joiner();
+        self.doc(doc_id)
+            .attach(doc_id, from, up, down, &joiner)
+            .await
     }
 }
 
@@ -570,7 +686,10 @@ impl DocPresence for Hosts {
         up: vox::Rx<Vec<u8>>,
         down: vox::Tx<Vec<u8>>,
     ) -> Result<(), SyncError> {
-        self.presence(doc_id).presence(doc_id, up, down).await
+        let joiner = self.joiner();
+        self.presence(doc_id)
+            .attach(doc_id, up, down, &joiner)
+            .await
     }
 
     fn now(&self) -> impl Future<Output = f64> + Send {

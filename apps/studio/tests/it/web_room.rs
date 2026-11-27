@@ -29,6 +29,16 @@
 //! that setlist there on its person's own, to practise. It dials nobody,
 //! and plays when its person presses Play, with the leader stopped.
 //!
+//! Another test has a guest join (studio#713): someone with no account
+//! in the room's organization, whose page can read the room's lobby and
+//! the songs, never the room's file (`/sessions/guest`, standing in for
+//! what the site serves anyone with the link, studio#705). It checks that
+//! the guest follows the leader as a guest and that the leader's `ROOM`
+//! knows them as one. Coming back from the same browser is the same guest,
+//! one more visit, and another browser is another guest. That the room's
+//! doc takes none of a guest's edits, and the live set refuses guests, is
+//! the room crate's door test (`room/tests/net.rs`), over real iroh.
+//!
 //! The page reaches the leader through n0's relays (a page has no direct
 //! path to a device), so the test needs the internet. It needs the web
 //! build (`STUDIO_WEB_DIST`), a W3C WebDriver (`WEBDRIVER`, `CHROME_BIN`)
@@ -314,6 +324,162 @@ fn a_room_nobody_leads_opens_its_setlist_to_practise() {
         gone["room"].is_null(),
         "the leader is still in the room: {gone}"
     );
+}
+
+#[test]
+#[ignore = "needs the web build, a WebDriver, the engine and the internet: `just test-web-room`"]
+fn a_guest_joins_by_the_link_follows_and_comes_back_the_same_guest() {
+    let dist = PathBuf::from(
+        std::env::var_os("STUDIO_WEB_DIST")
+            .expect("STUDIO_WEB_DIST: the web build's public folder"),
+    );
+    let engine_bin = PathBuf::from(
+        std::env::var_os("STUDIO_ENGINE_BIN")
+            .expect("STUDIO_ENGINE_BIN: the engine (daw-extension)"),
+    );
+    let site = tempfile::tempdir().expect("a folder for the site");
+    let studio = site.path().join("studio");
+    let (first, _) = stage_studio(&studio);
+
+    let leader = Leader::start(&engine_bin, &studio.join("Rooms"));
+    let made = leader.run(
+        "ROOM_CREATE",
+        &json!({"name": "Adult Jam", "org": "fixtures"}),
+    );
+    let id = made["id"].as_str().expect("the room's id").to_owned();
+    leader.run("ROOM_LEAD", &json!({"room": id, "name": "Leader"}));
+    leader.run("ROOM_LOAD", &json!({"path": first}));
+    leader.settled();
+    let _key = KeyCleanup(id.clone());
+    let lobby = std::fs::read_to_string(studio.join(format!("Rooms/Lobby/{id}.lobby")))
+        .expect("leading opened the room's lobby");
+    let room_file =
+        std::fs::read_to_string(studio.join(format!("Rooms/{id}.room"))).expect("the room's file");
+    let members: Value = serde_json::from_str(&room_file).expect("the room's file is JSON");
+    let members = members["live"]["pass"].as_str().expect("the members' pass");
+    assert!(
+        !lobby.contains(members),
+        "the lobby holds the members' pass"
+    );
+    guest_view(&studio, &site.path().join("guest"));
+
+    let web = Server::start(dist, site.path().to_path_buf());
+    let driver = Driver::start();
+    let link = format!("{}/join/{id}?studio=/sessions/guest", web.origin);
+
+    // 1. A guest: in the room from the link, following, known to the leader
+    //    as a guest.
+    let page = driver.new_session();
+    let me = join_as_guest(&page, &link);
+    assert!(me.starts_with("Guest "), "the guest is called {me}");
+    let seen = until(
+        FOLLOW_WAIT,
+        || leader.room(),
+        |r| guest_here(r, &me).is_some_and(|p| p["opened"] == json!(1)),
+    );
+    let here =
+        guest_here(&seen, &me).unwrap_or_else(|| panic!("the leader's ROOM has no {me}: {seen}"));
+    assert_eq!(here["guest"], json!(true), "{seen}");
+    let names: Vec<String> = guests(&seen).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, vec![me.clone()], "{seen}");
+    assert_eq!(seen["refused"], json!(0), "the guest was refused: {seen}");
+
+    // 2. The guest follows the leader's change of song.
+    leader.run("SESSION_SONG", &json!({"to": "2"}));
+    room_wait(&page, FOLLOW_WAIT, "the guest to follow the song", |p| {
+        room(p, "data-here-song") == "2"
+    });
+
+    // 3. Back from the same browser: the same guest, one more visit (more,
+    //    if a relay dropped a connection on the way and it attached again).
+    let again = join_as_guest(&page, &link);
+    assert_eq!(again, me, "the same browser came back as another guest");
+    let back = |r: &Value| {
+        let all = guests(r);
+        matches!(all.as_slice(), [(name, visits)] if *name == me && *visits >= 2)
+    };
+    let seen = until(FOLLOW_WAIT, || leader.room(), back);
+    assert!(
+        back(&seen),
+        "the leader did not know the guest again: {seen}"
+    );
+
+    // 4. Another browser is another guest.
+    let other = driver.new_session();
+    let theirs = join_as_guest(&other, &link);
+    assert_ne!(theirs, me, "two browsers are one guest");
+    let seen = until(FOLLOW_WAIT, || leader.room(), |r| guests(r).len() == 2);
+    let names: Vec<String> = guests(&seen).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, vec![me.clone(), theirs.clone()], "{seen}");
+    assert_eq!(seen["refused"], json!(0), "{seen}");
+}
+
+/// A guest's view of the Studio folder in `guest`: the songs, the
+/// setlists and the room's lobby, and not the room's file (what the site
+/// serves anyone with the link; a guest cannot read the organization's
+/// Rooms folder).
+fn guest_view(studio: &Path, guest: &Path) {
+    let lobby = guest.join("Rooms");
+    std::fs::create_dir_all(&lobby).expect("the guest's folders");
+    for (from, to) in [
+        (studio.join("sessions"), guest.join("sessions")),
+        (studio.join("Setlists"), guest.join("Setlists")),
+        (studio.join("Rooms/Lobby"), lobby.join("Lobby")),
+    ] {
+        std::os::unix::fs::symlink(&from, &to)
+            .unwrap_or_else(|e| panic!("{} into the guest's view: {e}", from.display()));
+    }
+}
+
+/// Open the room's `link` in `page` and press Join, with no account: once
+/// the page is in the room as a guest with the leader's setlist open, what
+/// the room calls it.
+fn join_as_guest(page: &Session<'_>, link: &str) -> String {
+    page.navigate(link);
+    page.wait_for(Duration::from_secs(60), "the room's page", |p| {
+        (p.script_with(
+            "return String(!!document.getElementById('room-join'));",
+            json!([]),
+        ) == "true")
+            .then_some(())
+    });
+    page.click("#room-join");
+    room_wait(
+        page,
+        FOLLOW_WAIT,
+        "the guest to open the leader's setlist",
+        |p| {
+            room(p, "data-state") == "member"
+                && room(p, "data-role") == "guest"
+                && !room(p, "data-opened").is_empty()
+        },
+    );
+    room(page, "data-me")
+}
+
+/// The guest `name` in the leader's `ROOM`'s `here`.
+fn guest_here<'a>(room: &'a Value, name: &str) -> Option<&'a Value> {
+    room["here"]
+        .as_array()?
+        .iter()
+        .find(|p| p["name"] == json!(name))
+}
+
+/// The leader's `ROOM`'s guests, each by name, with their visits.
+fn guests(room: &Value) -> Vec<(String, u64)> {
+    room["guests"]
+        .as_array()
+        .map(|all| {
+            all.iter()
+                .map(|g| {
+                    (
+                        g["name"].as_str().unwrap_or_default().to_owned(),
+                        g["visits"].as_u64().unwrap_or_default(),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// An attribute of the page's room state (`#studio-room`).

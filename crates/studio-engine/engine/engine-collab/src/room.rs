@@ -20,6 +20,14 @@
 //!   the organization's people can read in its Rooms folder. The live set
 //!   the room edits together is behind the same door. `ROOM` says how many
 //!   calls it refused (`refused`).
+//! - **Guests** (studio#713). Leading also opens the room's lobby
+//!   (`room::Rooms::open_lobby`): where the leader is, with a guests' pass
+//!   of its own (new each time), for anyone with the link. A guest
+//!   presenting it follows and plays along, and edits nothing: the room's
+//!   doc takes none of a guest's updates, and the live set refuses them.
+//!   Each guest who comes is entered in the room's file by the endpoint
+//!   their device proved (`room::Rooms::guest_came`), so `ROOM`'s `guests`
+//!   knows a guest who comes back as the same one.
 //! - **Following.** `ROOM_JOIN` finds the room by its link, dials its
 //!   leader once (presenting the pass), and follows: each load the doc gains is opened here
 //!   (through the engine's `open_path`, as `SESSION_OPEN` would), and the
@@ -64,7 +72,7 @@ use engine_sync::transport as session_transport;
 use facet::Facet;
 use room::gate::Door;
 use room::net::{Find, RoomHost, RoomPeer};
-use room::{Live, Loaded, Opens, Pass, Room, RoomId, Rooms, Share};
+use room::{Guest, Live, Loaded, Opens, Pass, Room, RoomId, Rooms, Share};
 use serde_json::{Value, json};
 use session_transport::{KEY, LocalTransport, SharedTransport, TransportSync};
 
@@ -382,7 +390,9 @@ fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
     // A new pass each time this device leads: whoever has left the
     // organization since holds one that opens nothing.
     let pass = Pass::mint();
-    let door = Door::for_room(&id, &pass);
+    // The guests' own, as new: it lets them follow, and nothing else.
+    let guests = Pass::mint();
+    let door = Door::for_room(&id, &pass, &guests);
     let (host, presence, endpoint, (addrs, relays)) = on_runtime({
         let (me, name, door) = (me.clone(), name.clone(), door.clone());
         async move {
@@ -410,6 +420,11 @@ fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
     let room = rooms
         .set_live(&room.id, Some(live))
         .map_err(|e| e.to_string())?;
+    // A room whose lobby did not open is still the organization's to play
+    // in: only its guests are kept out.
+    if let Err(e) = rooms.open_lobby(&room, &guests) {
+        tracing::warn!(room.error = %e, "room: the lobby did not open; no guests");
+    }
     let (stop, stopped) = tokio::sync::watch::channel(false);
     let seen = Arc::new(Mutex::new(Seen::default()));
     let runtime = crate::open::runtime().ok_or("the engine is not up")?;
@@ -419,6 +434,8 @@ fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
             presence: presence.clone(),
             room: room.id.clone(),
             pass,
+            door: door.clone(),
+            rooms: rooms.clone(),
             me,
             name: name.clone(),
         },
@@ -449,8 +466,33 @@ struct Leading {
     room: RoomId,
     /// The room's pass: the live set it edits together opens with it too.
     pass: Pass,
+    /// Its door, whose guests' arrivals go into the room's file.
+    door: Door,
+    rooms: Rooms,
     me: String,
     name: String,
+}
+
+/// Now, in milliseconds since the epoch: when a guest came.
+fn epoch_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+}
+
+/// The guests `door` let in since last asked, each entered in the room's
+/// file: a new one added, one who came before known again.
+fn enter_guests(door: &Door, rooms: &Rooms, room: &RoomId) {
+    for endpoint in door.take_arrivals() {
+        match rooms.guest_came(room, &endpoint, epoch_ms()) {
+            Ok(guest) => tracing::info!(
+                room.guest = %guest.name,
+                room.visits = guest.visits,
+                "room: a guest came"
+            ),
+            Err(e) => tracing::warn!(room.error = %e, "room: a guest came and was not entered"),
+        }
+    }
 }
 
 /// The leader's task: this engine's transport into the room's presence
@@ -466,6 +508,8 @@ async fn lead_task(
         presence,
         room,
         pass,
+        door,
+        rooms,
         me,
         name,
     } = leading;
@@ -509,11 +553,16 @@ async fn lead_task(
             });
         }
         show_agents(&presence, &me, &mut agents);
+        enter_guests(&door, &rooms, &room);
         tokio::select! {
             () = architect::platform::sleep(TICK) => {}
             _ = stopped.wait_for(|s| *s) => return,
         }
     }
+}
+
+fn guest_json(guest: &Guest) -> Value {
+    json!({ "id": guest.id, "name": guest.name, "visits": guest.visits, "first": guest.first, "last": guest.last })
 }
 
 /// Load what is at `path` into the room this engine leads.
@@ -836,7 +885,7 @@ fn status() -> Value {
         "agents": room::net::agents(&presence),
         "here": room::net::here_now(&presence)
             .into_iter()
-            .map(|p| json!({ "name": p.name, "agent": p.agent, "opened": p.opened }))
+            .map(|p| json!({ "name": p.name, "agent": p.agent, "guest": p.guest, "opened": p.opened }))
             .collect::<Vec<_>>(),
         "edits": edits,
         "editing": editing.is_some(),
@@ -851,6 +900,15 @@ fn status() -> Value {
         Role::Leader { host, door, .. } => vec![
             ("members", json!(host.members())),
             ("refused", json!(door.refused())),
+            (
+                "guests",
+                json!(
+                    rooms()
+                        .and_then(|r| r.find(active.room.id.as_str()).map_err(|e| e.to_string()))
+                        .map(|r| r.guests.iter().map(guest_json).collect::<Vec<_>>())
+                        .unwrap_or_default()
+                ),
+            ),
         ],
         Role::Member { peer } => vec![
             ("attaches", json!(peer.attaches())),
@@ -890,7 +948,7 @@ static LEAD: ActionMeta = crate::actions::meta(
     "ROOM_LEAD",
     "room_lead",
     "Lead a room",
-    "Lead room `room` (its link or id) as `name` (left out: Leader): this engine hosts it behind its door, and its file says where its leader is and the pass the door opens to (new each time), so the organization's people can ROOM_JOIN by the link, from a desktop, a phone or a browser. A room has one leader: one another device leads is refused unless `take` (true: lead it instead, e.g. after that device went away without leaving). Then ROOM_LOAD what everyone plays; this engine's transport is the room's.",
+    "Lead room `room` (its link or id) as `name` (left out: Leader): this engine hosts it behind its door, and its file says where its leader is and the pass the door opens to (new each time), so the organization's people can ROOM_JOIN by the link, from a desktop, a phone or a browser. It also opens the room's lobby to guests (no account: they follow and edit nothing), with a guests' pass of its own. A room has one leader: one another device leads is refused unless `take` (true: lead it instead, e.g. after that device went away without leaving). Then ROOM_LOAD what everyone plays; this engine's transport is the room's.",
     "Room",
     "",
 );
@@ -917,7 +975,7 @@ static STATUS: ActionMeta = crate::actions::meta(
     "ROOM",
     "room",
     "The room",
-    "The room this engine is in: `room` (id, name, org, link; null when in none), `role` (leader or member), `name`, `loaded` (kind, path, title) and `load` (which load it is), `people` (everyone here, by name, agents working through anyone's MCP included), `agents` (the agents among them), `here` (each one: `name`, `agent`, and `opened`, the load a member has opened, so a leader sees each member follow, a browser's or a phone's too), `edits` (the load whose set this engine edits together with the room: everyone's edits to it reach everyone; null until it is shared and joined) and `editing` (a share or join under way), `transport` (the leader's: playing, position, song number), `error`. A leader's `members` (attached now) and `refused` (calls its door turned away: any without the room's pass, which only the organization's people can read); a member's `attaches` (how many times it connected to the leader: 1 unless a connection was lost) and `opened` (the load it opened). Read-only.",
+    "The room this engine is in: `room` (id, name, org, link; null when in none), `role` (leader or member), `name`, `loaded` (kind, path, title) and `load` (which load it is), `people` (everyone here, by name, agents working through anyone's MCP included), `agents` (the agents among them), `here` (each one: `name`, `agent`, `guest` (no account in the organization: follows, edits nothing), and `opened`, the load a member has opened, so a leader sees each member follow, a browser's or a phone's too), `edits` (the load whose set this engine edits together with the room: everyone's edits to it reach everyone; null until it is shared and joined) and `editing` (a share or join under way), `transport` (the leader's: playing, position, song number), `error`. A leader's `members` (attached now), `refused` (calls its door turned away: any without the room's pass, which only the organization's people can read, or a guest's at anything but following) and `guests` (every guest who has come: `id`, the endpoint their device proved; `name`; `visits`; `first` and `last`, ms since the epoch: a guest who comes back is the same one, one more visit); a member's `attaches` (how many times it connected to the leader: 1 unless a connection was lost) and `opened` (the load it opened). Read-only.",
     "Room",
     "",
 );

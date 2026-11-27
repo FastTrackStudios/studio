@@ -231,3 +231,91 @@ fn a_setlist_for_no_room_is_refused() {
     };
     assert!(rooms.set_setlist(&nobody, setlist).is_err());
 }
+
+/// A live room as its leader writes it.
+fn live_with(pass: Pass) -> Live {
+    Live {
+        leader: "Cody".to_owned(),
+        endpoint: "abc".to_owned(),
+        addrs: vec!["127.0.0.1:4433".to_owned()],
+        relays: vec!["https://relay.example/".to_owned()],
+        pass,
+    }
+}
+
+/// The lobby (studio#713): what a guest with the link reads. It says where
+/// the leader is with the guests' pass, never the members', and closes when
+/// the room stops being live.
+#[test]
+fn the_lobby_holds_the_guests_pass_and_closes_with_the_room() {
+    let dir = tempfile::tempdir().unwrap();
+    let rooms = Rooms::at(dir.path());
+    let made = rooms.create("Adult Jam", "rockstars").unwrap();
+    let (members, guests) = (Pass::mint(), Pass::mint());
+    let live = rooms
+        .set_live(&made.id, Some(live_with(members.clone())))
+        .unwrap();
+    rooms.open_lobby(&live, &guests).unwrap();
+
+    let lobby = rooms.lobby(&made.link()).unwrap();
+    assert_eq!(lobby.id, made.id);
+    assert_eq!(lobby.name, "Adult Jam");
+    assert_eq!(lobby.live.endpoint, "abc");
+    assert_eq!(lobby.live.relays, vec!["https://relay.example/"]);
+    assert_eq!(lobby.live.pass, guests);
+    let text =
+        std::fs::read_to_string(dir.path().join(format!("Lobby/{}.lobby", made.id))).unwrap();
+    assert!(
+        !text.contains(members.expose()),
+        "the lobby holds the members' pass"
+    );
+    assert_eq!(
+        rooms.list().unwrap().len(),
+        1,
+        "the lobby is listed as a room"
+    );
+
+    rooms.set_live(&made.id, None).unwrap();
+    assert!(matches!(
+        rooms.lobby(&made.link()),
+        Err(room::Error::NoRoom(_))
+    ));
+}
+
+#[test]
+fn a_room_that_is_not_live_opens_no_lobby() {
+    let dir = tempfile::tempdir().unwrap();
+    let rooms = Rooms::at(dir.path());
+    let made = rooms.create("Adult Jam", "rockstars").unwrap();
+    assert!(rooms.open_lobby(&made, &Pass::mint()).is_err());
+    assert!(rooms.lobby(&made.link()).is_err());
+}
+
+/// A guest is known by their device's endpoint: coming back is one more
+/// visit of the same guest, under the same name, and another device is
+/// another guest. Leading the room again keeps them.
+#[test]
+fn a_guest_who_comes_back_is_the_same_guest() {
+    let dir = tempfile::tempdir().unwrap();
+    let rooms = Rooms::at(dir.path());
+    let made = rooms.create("Adult Jam", "rockstars").unwrap();
+    let ada = "3f9a1c7d0e";
+    let first = rooms.guest_came(&made.id, ada, 1_000).unwrap();
+    assert_eq!(first.name, room::guest_name(ada));
+    assert_eq!(first.name, "Guest 3f9a1c");
+    assert_eq!(first.visits, 1);
+
+    rooms
+        .set_live(&made.id, Some(live_with(Pass::mint())))
+        .unwrap();
+    let again = rooms.guest_came(&made.id, ada, 2_000).unwrap();
+    assert_eq!(again.name, first.name);
+    assert_eq!((again.visits, again.first, again.last), (2, 1_000, 2_000));
+
+    rooms.guest_came(&made.id, "b0b0b0b0", 3_000).unwrap();
+    rooms.set_live(&made.id, None).unwrap();
+    let guests = rooms.find(&made.link()).unwrap().guests;
+    let names: Vec<&str> = guests.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(names, vec!["Guest 3f9a1c", "Guest b0b0b0"]);
+    assert_eq!(guests.first().map(|g| g.visits), Some(2));
+}

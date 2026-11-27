@@ -39,6 +39,10 @@ fn a_room_file_says_its_studio_folder() {
         room_file("/sessions/studio", "adult-jam-3f9a1c"),
         "/sessions/studio/Rooms/adult-jam-3f9a1c.room"
     );
+    assert_eq!(
+        lobby_file("/sessions/guest", "adult-jam-3f9a1c"),
+        "/sessions/guest/Rooms/Lobby/adult-jam-3f9a1c.lobby"
+    );
 }
 
 #[test]

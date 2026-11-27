@@ -43,6 +43,7 @@ pub mod gate;
 pub mod net;
 
 pub use record::{
-    APP_JOIN_BASE, Error, Live, Opens, Pass, Room, RoomId, Rooms, link_of, parse_link,
+    APP_JOIN_BASE, Error, Guest, Live, Lobby, Opens, Pass, Room, RoomId, Rooms, guest_name,
+    link_of, parse_link,
 };
 pub use state::{Kind, Loaded, RoomDoc, Share};

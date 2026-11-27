@@ -28,6 +28,18 @@
 //!   its file: `room::Room::opens`) in the page, on this person's own: no
 //!   leader is dialled, and the page's transport is its own.
 //!
+//! - **As a guest** (studio#713). Someone with no account in the room's
+//!   organization cannot read its Rooms folder. Where the room's file is
+//!   not there to read, the page reads the room's lobby instead
+//!   (`<Studio>/Rooms/Lobby/<room>.lobby`, `room::Lobby`): where the leader
+//!   is, with the guests' pass. It joins as a guest
+//!   (`RoomPeer::join_as_guest`): it follows and plays along, and the
+//!   leader takes none of its edits. Its endpoint's key is kept in this
+//!   browser ([`GUEST_KEY`]), so the leader knows it as the same guest
+//!   each time it comes back. A Studio folder at a link that has the lobby
+//!   and the songs, and not the room's file, is a guest's view of it; the
+//!   site serving that view to anyone with the link is studio#705's.
+//!
 //! The page joins when its person presses Join on the link's page
 //! (`crate::pages::join`): the press is the gesture a browser needs before
 //! it plays any sound. What the membership is doing is written to a
@@ -38,8 +50,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dioxus::prelude::*;
-use room::net::{Find, RoomPeer};
-use room::{Kind, Loaded, Opens, Room, RoomId};
+use room::net::{Find, RoomPeer, iroh};
+use room::{Kind, Loaded, Lobby, Opens, Room, RoomId};
 use session_sync::transport::{Command, LocalTransport, TransportSync};
 use studio_engine::web_engine;
 
@@ -60,8 +72,13 @@ pub static SHOWN: GlobalSignal<Shown> = Signal::global(Shown::default);
 /// The hidden element the membership's state is written to.
 pub const STATE_ID: &str = "studio-room";
 
-/// What the room shows a browser as.
+/// What the room shows a browser as (a member's: a guest is shown as
+/// `room::guest_name` says).
 const NAME: &str = "Browser";
+
+/// Where this browser keeps the key of the endpoint it is a guest by: the
+/// same guest every time it comes back.
+pub const GUEST_KEY: &str = "studio-room-guest-key";
 
 /// How often the membership looks at the room and the page's engine.
 const TICK_MS: u64 = 50;
@@ -99,9 +116,14 @@ fn spaces(app: AppState) -> Vec<String> {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Shown {
     /// `idle`, `finding`, `joining` (the leader not reached, or refusing:
-    /// `why` says), `member`, `practising` (nobody leads it: its setlist
-    /// open here alone) or `failed`.
+    /// `why` says), `member` (in the room, a guest too), `practising`
+    /// (nobody leads it: its setlist open here alone) or `failed`.
     pub state: &'static str,
+    /// `member` or `guest` (no account in the organization: following,
+    /// editing nothing), once it is known; and what the room calls this
+    /// page.
+    pub role: &'static str,
+    pub me: String,
     /// Why it failed, or the last thing that went wrong while a member.
     pub why: String,
     pub room: String,
@@ -201,14 +223,51 @@ async fn read_room(home: &Home, id: &RoomId) -> Result<Room, String> {
     serde_json::from_slice(&bytes).map_err(|e| format!("the room's file: {e}"))
 }
 
-/// Room `id`, and where it is: at the link the page's address names, else
-/// in Drive, in one of `spaces` (this person's organizations).
-async fn find(id: &RoomId, spaces: &[String]) -> Result<(Room, Home), String> {
+/// Room `id`'s lobby, read from `home`: what a guest joins by.
+async fn read_lobby(home: &Home, id: &RoomId) -> Result<Lobby, String> {
+    let bytes = home
+        .read(&room_paths::lobby_file(home.studio(), id.as_str()))
+        .await?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("the room's lobby: {e}"))
+}
+
+/// What the page found to join by: the room's file (a member's), or its
+/// lobby (a guest's).
+#[derive(Clone)]
+enum Found {
+    Member(Room),
+    Guest(Lobby),
+}
+
+impl Found {
+    fn name(&self) -> &str {
+        match self {
+            Self::Member(room) => &room.name,
+            Self::Guest(lobby) => &lobby.name,
+        }
+    }
+}
+
+/// Room `id`, and where it is: at the link the page's address names (its
+/// file, else its lobby: a guest's view), else in Drive, in one of
+/// `spaces` (this person's organizations).
+async fn find(id: &RoomId, spaces: &[String]) -> Result<(Found, Home), String> {
     if let Some(linked) = crate::engine_web::linked_in_address("studio") {
         let home = Home::Link {
             studio: linked.folder,
         };
-        return Ok((read_room(&home, id).await?, home));
+        let found = match read_room(&home, id).await {
+            Ok(room) => Found::Member(room),
+            Err(member) => match read_lobby(&home, id).await {
+                Ok(lobby) => Found::Guest(lobby),
+                Err(guest) => {
+                    return Err(format!(
+                        "{member}; as a guest, {guest} (a room nobody leads has no lobby)"
+                    ));
+                }
+            },
+        };
+        return Ok((found, home));
     }
     let file = format!("{id}.room");
     for space in spaces {
@@ -223,7 +282,7 @@ async fn find(id: &RoomId, spaces: &[String]) -> Result<(Room, Home), String> {
                 studio,
             };
             match read_room(&home, id).await {
-                Ok(room) => return Ok((room, home)),
+                Ok(room) => return Ok((Found::Member(room), home)),
                 Err(e) => {
                     tracing::debug!(room.error = %e, "room: a copy of the room's file did not read")
                 }
@@ -343,8 +402,51 @@ fn failed(run: u64, why: String) {
     });
 }
 
+/// This browser's guest key: the one it keeps ([`GUEST_KEY`]), else a new
+/// one, kept from now on. With nowhere to keep it (storage off), a new one
+/// each time: the leader then meets a new guest each visit.
+fn guest_key() -> iroh::SecretKey {
+    let store = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
+    let kept = store
+        .as_ref()
+        .and_then(|s| s.get_item(GUEST_KEY).ok().flatten())
+        .and_then(|text| key_from_hex(&text));
+    if let Some(key) = kept {
+        return key;
+    }
+    let key = iroh::SecretKey::generate();
+    if let Some(store) = store
+        && store.set_item(GUEST_KEY, &key_to_hex(&key)).is_err()
+    {
+        tracing::warn!("room: this browser keeps no guest key; the room will not know it again");
+    }
+    key
+}
+
+fn key_to_hex(key: &iroh::SecretKey) -> String {
+    use std::fmt::Write as _;
+    key.to_bytes()
+        .iter()
+        .fold(String::with_capacity(64), |mut hex, b| {
+            let _ = write!(hex, "{b:02x}");
+            hex
+        })
+}
+
+fn key_from_hex(text: &str) -> Option<iroh::SecretKey> {
+    let digits = text.trim().as_bytes();
+    let mut bytes = [0u8; 32];
+    if digits.len() != bytes.len().saturating_mul(2) {
+        return None;
+    }
+    for (b, pair) in bytes.iter_mut().zip(digits.chunks_exact(2)) {
+        *b = u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok()?;
+    }
+    Some(iroh::SecretKey::from_bytes(&bytes))
+}
+
 /// Room `id` found, looked for again a moment apart while it is not.
-async fn find_soon(app: AppState, run: u64, id: &RoomId) -> Result<(Room, Home), String> {
+async fn find_soon(app: AppState, run: u64, id: &RoomId) -> Result<(Found, Home), String> {
     let mut tries = 0;
     loop {
         let found = find(id, &spaces(app)).await;
@@ -363,55 +465,81 @@ async fn membership(app: AppState, id: RoomId, run: u64) {
         room: id.to_string(),
         ..Shown::default()
     };
-    let (room, home) = match find_soon(app, run, &id).await {
+    let (found, home) = match find_soon(app, run, &id).await {
         Ok(found) => found,
         Err(e) => return failed(run, e),
     };
-    let live = match room.opens() {
-        Opens::Leader(live) => live.clone(),
-        Opens::Practice(setlist) => return practise(app, run, &room, &home, setlist).await,
-        Opens::Nothing => {
-            return failed(
-                run,
-                format!(
-                    "{} is not live, and has no setlist yet: nobody has led it",
-                    room.name
-                ),
-            );
-        }
+    let live = match &found {
+        // A lobby is open only while someone leads the room.
+        Found::Guest(lobby) => lobby.live.clone(),
+        Found::Member(room) => match room.opens() {
+            Opens::Leader(live) => live.clone(),
+            Opens::Practice(setlist) => return practise(app, run, room, &home, setlist).await,
+            Opens::Nothing => {
+                return failed(
+                    run,
+                    format!(
+                        "{} is not live, and has no setlist yet: nobody has led it",
+                        room.name
+                    ),
+                );
+            }
+        },
     };
     if !current(run) {
         return;
     }
+    let guest = matches!(found, Found::Guest(_));
     SHOWN.with_mut(|s| {
         s.state = "joining";
-        s.name.clone_from(&room.name);
+        s.role = if guest { "guest" } else { "member" };
+        s.name = found.name().to_owned();
         s.leader.clone_from(&live.leader);
     });
-    let endpoint = match room::net::bind_in_browser().await {
+    // A guest is the endpoint this browser keeps; a member's is new each
+    // time (the organization knows them by their account).
+    let bound = if guest {
+        room::net::bind_in_browser_as(guest_key()).await
+    } else {
+        room::net::bind_in_browser().await
+    };
+    let endpoint = match bound {
         Ok(endpoint) => endpoint,
         Err(e) => return failed(run, e),
     };
     if !current(run) {
         return;
     }
-    let me = format!("browser-{}", short(&endpoint.id().to_string()));
+    let endpoint_id = endpoint.id().to_string();
     // Where the leader is now, each time the page attaches: a leader back
-    // after a restart is at new addresses, with a new pass.
+    // after a restart is at new addresses, with new passes.
     let find_again: Find = {
         let (home, id) = (home.clone(), id.clone());
         Arc::new(move || {
             let (home, id) = (home.clone(), id.clone());
-            Box::pin(async move { read_room(&home, &id).await.ok().and_then(|r| r.live) })
+            Box::pin(async move {
+                if guest {
+                    read_lobby(&home, &id).await.ok().map(|l| l.live)
+                } else {
+                    read_room(&home, &id).await.ok().and_then(|r| r.live)
+                }
+            })
         })
     };
-    let peer = RoomPeer::join(
-        &room.id,
-        &me,
-        NAME,
-        room::net::attach_to(endpoint, live, find_again),
-    );
-    tracing::info!(room.id = %room.id, room.role = "member", room.member = "browser", "room: the page joined");
+    let attach = room::net::attach_to(endpoint, live, find_again);
+    let (peer, name) = if guest {
+        (
+            RoomPeer::join_as_guest(&id, &endpoint_id, attach),
+            room::guest_name(&endpoint_id),
+        )
+    } else {
+        let me = format!("browser-{}", short(&endpoint_id));
+        (RoomPeer::join(&id, &me, NAME, attach), NAME.to_owned())
+    };
+    SHOWN.with_mut(|s| s.me.clone_from(&name));
+    let role = SHOWN.peek().role;
+    tracing::info!(room.id = %id, room.role = role, room.member = "browser", "room: the page joined");
+    let me = peer.me().to_owned();
     follow(app, run, &id, &home, &peer, &me).await;
 }
 
@@ -543,6 +671,8 @@ async fn follow(app: AppState, run: u64, id: &RoomId, home: &Home, peer: &RoomPe
             state,
             why,
             room: id.to_string(),
+            role: SHOWN.peek().role,
+            me: SHOWN.peek().me.clone(),
             name: SHOWN.peek().name.clone(),
             leader: SHOWN.peek().leader.clone(),
             loaded: loaded
@@ -599,6 +729,8 @@ pub fn RoomMember() -> Element {
             "data-state": if s.state.is_empty() { "idle" } else { s.state },
             "data-why": "{s.why}",
             "data-room": "{s.room}",
+            "data-role": "{s.role}",
+            "data-me": "{s.me}",
             "data-leader": "{s.leader}",
             "data-loaded": "{s.loaded}",
             "data-load": "{load}",
