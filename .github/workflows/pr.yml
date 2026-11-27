@@ -215,8 +215,10 @@ jobs:
         target = os.environ.get("CARGO_TARGET_DIR") or "target"
         sha = os.environ["GITHUB_SHA"][:12]
         rows = []
-        for f in sorted(glob.glob(f"{target}/**/fixtures/*.json", recursive=True)
-                        + glob.glob(f"{target}/**/room/room.json", recursive=True)):
+        # <target>/<profile>/ or <target>/<triple>/<profile>/: report::profile_dir.
+        found = [g for up in ("*", "*/*") for g in (glob.glob(f"{target}/{up}/fixtures/*.json")
+                                                    + glob.glob(f"{target}/{up}/room/room.json"))]
+        for f in sorted(found):
             try:
                 record = json.load(open(f))
             except (OSError, ValueError):
