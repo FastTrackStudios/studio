@@ -90,6 +90,7 @@ impl PartialEq for Song {
 #[component]
 fn Root(song: Song, got: Got) -> Element {
     use_context_provider(|| song.0.clone());
+    use_context_provider(|| song.0.song());
     use_context_provider(|| Signal::new(engine_domain::modes::Mode::Live));
     use_context_provider(|| arrangement_view::panel::StartCompact(true));
     let engine: arrangement_view::panel::Engine = Rc::new(|_| {});
