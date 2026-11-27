@@ -182,9 +182,11 @@ fn settled_songs() -> Option<Vec<String>> {
     )
 }
 
-/// Share or join load `load`'s set off the room's task (it waits on the
-/// engine): `work` says how it went, and `done` does what follows it.
-/// What finishes after the room was left is left too.
+/// Share or join load `load`'s set off the room's task, on a thread of
+/// its own: `work` blocks on the engine's runtime (`collab`'s host and
+/// join do), which a runtime thread must not. What finishes after this
+/// engine left every room is left too; one in a room again keeps what
+/// that room's own task made.
 fn edit_in_background(
     seen: &Arc<Mutex<Seen>>,
     load: u64,
@@ -198,7 +200,9 @@ fn edit_in_background(
         .spawn(move || {
             let done = work();
             if *stopped.borrow() {
-                crate::collab::leave();
+                if lock(&ACTIVE).is_none() {
+                    crate::collab::leave();
+                }
                 return;
             }
             let mut seen = lock(&noted);
@@ -450,6 +454,11 @@ async fn lead_task(
             edit_in_background(&seen, load, &stopped, move || {
                 let (ticket, addrs) =
                     crate::collab::host_for_room(name, set).map_err(|e| e.to_string())?;
+                // Another load came while this one was shared: that one is
+                // shared next, never this one under its number.
+                if host.doc().loaded().map(|(_, n)| n) != Some(load) {
+                    return Err(format!("load {load} was replaced while it was shared"));
+                }
                 host.doc()
                     .share(&Share {
                         load,

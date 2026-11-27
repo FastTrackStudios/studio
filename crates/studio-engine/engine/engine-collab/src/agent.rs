@@ -211,12 +211,12 @@ async fn agent_run(a: Value) -> Result<Vec<u8>, ActionError> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("Agent");
-    crate::room::agent_worked(agent);
     if crate::actions::list().info(&id).is_none() {
         return Ok(refusal(&id, ActionError::Unknown(id.clone()))
             .to_string()
             .into_bytes());
     }
+    crate::room::agent_worked(agent);
     let step = a
         .get("step")
         .and_then(Value::as_str)
