@@ -220,12 +220,15 @@ async fn probe_chart(client: &SetlistServiceClient, stream: &SetlistServiceStrea
     // the active-indices stream (the ~10 Hz cursor stream every backend
     // serves), then map them exactly like the browser pane does:
     // `chart seconds = count_in + progress × song duration` →
-    // `ChartCursor::compute_at_time`. The highlighted measure must sit at
+    // `ChartCursor::compute_at_played_time` over the chart's bars as
+    // played. The highlighted measure must sit at
     // or past the measure we sought, and advance while playing.
     let song0 = client.song(0).await.expect("song(0) rpc");
     let count_in = song0.count_in_seconds.unwrap_or(0.0);
     let duration = song0.duration();
     assert!(duration > 0.0, "song 0 must have a duration");
+    let bars =
+        keyflow::text::bar_times::bar_times(&parsed, keyflow::text::bar_times::BarClock::at(0.0));
 
     client.play().await.expect("play");
     let (dtx, mut drx) = vox::channel::<ActiveIndices>();
@@ -244,7 +247,7 @@ async fn probe_chart(client: &SetlistServiceClient, stream: &SetlistServiceStrea
                     continue;
                 };
                 let chart_seconds = count_in + p.clamp(0.0, 1.0) * duration;
-                if let Some(state) = cursor.compute_at_time(&layout, chart_seconds) {
+                if let Some(state) = cursor.compute_at_played_time(&layout, &bars, chart_seconds) {
                     live_measures.push(state.measure);
                 }
             }

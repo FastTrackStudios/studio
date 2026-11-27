@@ -136,13 +136,8 @@ impl Pane {
             width: LAYOUT_WIDTH_PT,
         };
         let layout = self.engine.layout_chart_with_config(&chart, &mode, &config);
-        // Bar 1 where the layout put it (the count-in's beats come before).
-        let downbeat = layout
-            .beat_positions
-            .iter()
-            .find(|b| b.absolute_tick >= 0)
-            .map_or(0.0, |b| b.time_start);
-        let bars = bar_times(&chart, BarClock::at(downbeat));
+        // On the layout's own clock: bar 1 at 0 s, the count-in before it.
+        let bars = bar_times(&chart, BarClock::at(0.0));
 
         let (w, h) = (
             layout.total_width.max(LAYOUT_WIDTH_PT),
