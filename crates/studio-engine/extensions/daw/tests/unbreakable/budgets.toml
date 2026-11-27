@@ -15,8 +15,17 @@ hint_below = 0.8
 # skill's log): song.open 28.6 s, first play to first audio 70 ms, the
 # first LISTEN 3.3–3.5 s, LISTEN_AB 1.0–1.6 s replayed, whole-song
 # MIX_RENDER 55 s.
+#
+# `open` is Alpha 1's session-open target (studio#726, for #717): the
+# tidied, shallow-folded song (#725) opened in 4.73–4.99 s on airlock
+# (M4 mini, 3 runs on 2026-11-27, one at load 44), from 57.2 s before
+# the fold. 7 s leaves ~1.5× for a slower machine (THEBATTLESHIP ran the
+# open 1.3× airlock's) and fails past 8.75 s, so a song that loses its
+# fold (back to a long Loro checkout) fails at once. On airlock the open
+# asks to be tightened (4.7 s is under 0.8 of 7 s): keep the headroom
+# until a slower machine has run it.
 [unbreakable.budget_ms]
-open = 28600
+open = 7000
 first_audio = 70
 first_listen = 3500
 listen_ab = 1600
