@@ -148,7 +148,7 @@ fn already_kept(list: &[(Song, Place)]) -> bool {
 /// caches, one after the other.
 #[cfg(feature = "web")]
 async fn download(
-    _name: &str,
+    name: &str,
     list: &[(Song, Place)],
     mut progress: Signal<Progress>,
 ) -> Result<String, String> {
@@ -157,6 +157,9 @@ async fn download(
         return Err("none of its songs has a session folder".to_owned());
     }
     let of = songs.len();
+    let mut span = crate::trace::Span::root("studio.offline.keep");
+    span.set("studio.set", name);
+    span.set("studio.set.songs", of as u64);
     let mut bytes = 0u64;
     let mut failed = Vec::new();
     for (i, (song, place)) in songs.iter().enumerate() {
@@ -169,13 +172,16 @@ async fn download(
         });
         match crate::engine_web::keep_offline(place).await {
             Ok(n) => bytes += n,
-            Err(e) => {
-                tracing::warn!(song.title = %song.title, error = %e, "offline: a song was not kept");
-                failed.push(format!("{} ({e})", song.title));
-            }
+            Err(e) => failed.push(format!("{} ({e})", song.title)),
         }
     }
+    span.set("studio.offline.bytes", bytes);
+    span.set("studio.offline.kept", (of - failed.len()) as u64);
+    if !failed.is_empty() {
+        span.set("studio.offline.not_kept", failed.join("; "));
+    }
     if failed.len() == of {
+        span.fail("no song was kept");
         return Err(failed.join("; "));
     }
     let mut said = format!(
@@ -223,21 +229,29 @@ async fn download(
         });
     }
     let home = crate::storage::home().ok_or("Studio has no home folder on this device")?;
+    let setlists =
+        crate::storage::setlists().ok_or("Studio has no setlists folder on this device")?;
     let folder_name = file_name(name);
     let to = home.join("Offline").join(&folder_name);
     let (tx, rx) = std::sync::mpsc::channel::<Result<serde_json::Value, String>>();
     let (set_name, wanted) = (name.to_owned(), songs.clone());
+    // The thread sees it through, the setlist naming the copies included:
+    // the page may be left while it runs.
     std::thread::Builder::new()
         .name("studio-offline".into())
         .spawn(move || {
             let step = tx.clone();
             let done = crate::engine::download_setlist(&set_name, &wanted, &to, &|state| {
                 let _ = step.send(Ok(state.clone()));
-            });
-            let _ = tx.send(done.map(|mut state| {
+            })
+            .and_then(|mut state| {
+                let lines = setlist_lines(&state, &folder_name)?;
+                let file = setlists.join(format!("{} (offline).setlist", file_name(&set_name)));
+                write_setlist(&file, &set_name, &lines)?;
                 state["done"] = serde_json::Value::Bool(true);
-                state
-            }));
+                Ok(state)
+            });
+            let _ = tx.send(done);
         })
         .map_err(|e| format!("no thread to download on: {e}"))?;
     let finished = loop {
@@ -262,11 +276,6 @@ async fn download(
             None => {}
         }
     }?;
-    let lines = setlist_lines(&finished, &folder_name)?;
-    let file = crate::storage::setlists()
-        .ok_or("Studio has no setlists folder on this device")?
-        .join(format!("{} (offline).setlist", file_name(name)));
-    write_setlist(&file, name, &lines)?;
     let songs_down = finished["downloaded"].as_array().map_or(0, Vec::len);
     let bytes: u64 = finished["downloaded"]
         .as_array()
@@ -325,7 +334,9 @@ fn write_setlist(file: &std::path::Path, name: &str, lines: &[String]) -> Result
     if let Some(dir) = file.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
-    let mut text = format!("# {name}, downloaded to play with no internet.\n");
+    // A blank line after it: a comment directly above a song names an act
+    // (`setfile`).
+    let mut text = format!("# {name}, downloaded to play with no internet.\n\n");
     for line in lines {
         text.push_str(line);
         text.push('\n');

@@ -308,11 +308,13 @@ fn listing_version(files: &[(String, u64, String, i64)]) -> String {
 /// no network: its folder listed (the service worker keeps the listing),
 /// its small files kept in the page's cache, and every proxy of it — the
 /// reference, its preview and each stem — fetched whole into the cache.
-/// Marked kept ([`is_kept`]). The proxies' bytes now in the cache.
+/// Marked kept ([`is_kept`]) once every block of every proxy is in the
+/// cache. The proxies' bytes now in the cache.
 ///
 /// # Errors
 ///
-/// The folder did not list, or the song would not mirror.
+/// The folder did not list, the song would not mirror, or not all of its
+/// proxies came down.
 pub async fn keep_offline(place: &Place) -> Result<u64, String> {
     use studio_engine::song_stream::{Heard, Keep, Listen, mirror};
     let source: Arc<dyn SongSource> = Arc::new(SessionFolder::new(place.clone()));
@@ -324,8 +326,20 @@ pub async fn keep_offline(place: &Place) -> Result<u64, String> {
     .map_err(|e| e.to_string())?
     .with_listen(Listen::Full);
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    for heard in [Heard::Preview, Heard::Reference, Heard::Stems] {
+    let all = [Heard::Preview, Heard::Reference, Heard::Stems];
+    for heard in all {
         song.warm(heard, None, Arc::clone(&stop)).await;
+    }
+    // Kept only when every block landed: a cache that was full, or a
+    // connection that dropped, leaves a song that would be silent offline.
+    for heard in all {
+        if !song.is_warm(heard).await {
+            remember_kept(place, false);
+            return Err(
+                "not all of its audio came down (the connection dropped, or the browser's storage is full)"
+                    .to_owned(),
+            );
+        }
     }
     let bytes: u64 = song.proxies().values().map(|(_, size)| size).sum();
     remember_kept(place, true);

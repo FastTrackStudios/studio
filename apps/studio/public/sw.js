@@ -1,21 +1,24 @@
 // Studio's service worker (studio#716): the web app opens again with no
 // network.
 //
-// - The page's own files (its HTML, script, wasm, styles, fonts) are kept
-//   in a cache of their own: the page names them once it has loaded
-//   (`keep`, from `register_service_worker` in src/main.rs), and every
-//   same-origin GET it makes is answered from the network first and kept.
-// - With no network, a request is answered from what was kept: the page
-//   itself (whatever its query), its files, and what it last read through
-//   the node (a setlist file, a folder's listing, a link's `files.json`).
-// - A ranged request (`Range:`) is never touched: a song's proxies and its
-//   small files are the page's own to keep (Cache Storage, `song_stream`'s
-//   `CachedFetch` and its docs), downloaded for offline from the setlist.
+// What it keeps, and only that:
+// - the page itself (a navigation, and any route of its router: whatever
+//   its query, answered offline by the page it kept);
+// - the page's own files: its script, wasm, styles, fonts and pictures, by
+//   their extension;
+// - a session folder's listing at a link (`files.json`), which a song kept
+//   for offline opens by.
+//
+// Everything else passes through untouched: Drive's node (signed-in
+// replies are never kept here), ranged requests, and a song's files — its
+// small files and proxies are the engine's to keep (Cache Storage,
+// `song_stream`'s `CachedFetch` and docs), downloaded for offline from the
+// setlist.
 
 const SHELL = "studio-shell-v1";
 
-// What a song is made of, never kept here: the engine's caches keep it.
-const SONG_FILES = /\.(ogg|oga|wav|wave|flac|mp3|aif|aiff|idx|session|sessionpeaks|reapeaks|kf|rpp)$/i;
+// The page's own files, by extension.
+const PAGE_FILES = /\.(html|js|mjs|wasm|css|woff2?|ttf|otf|png|jpe?g|svg|ico|webp|json)$/i;
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -40,15 +43,46 @@ self.addEventListener("message", (event) => {
   }
 });
 
-function sameOrigin(url) {
-  return new URL(url, self.location.href).origin === self.location.origin;
+// Whether `url` is one of the files kept here: the page's own (under the
+// worker's scope, not its node's API), or a link's folder listing.
+function kept(url) {
+  const u = new URL(url, self.location.href);
+  if (u.origin !== self.location.origin || !u.href.startsWith(self.registration.scope)) {
+    return false;
+  }
+  const path = u.pathname;
+  if (path.includes("/studio/api/") || path.startsWith("/_dioxus")) {
+    return false;
+  }
+  if (path.endsWith("/files.json")) {
+    return true;
+  }
+  // A link's session folder (`/sessions/…`, `?session=`) holds a song's
+  // files: never the page's.
+  if (path.includes("/sessions/")) {
+    return false;
+  }
+  // A route (`/`, `/sets/…`): the page itself, which its router draws.
+  if (!/\.[a-z0-9]+$/i.test(path)) {
+    return true;
+  }
+  return PAGE_FILES.test(path);
+}
+
+// A reply that may be kept: whole, and not one its server says not to.
+function keepable(response) {
+  const control = (response.headers.get("cache-control") || "").toLowerCase();
+  return (
+    response.status === 200 &&
+    !response.headers.has("content-range") &&
+    !control.includes("no-store") &&
+    !control.includes("private")
+  );
 }
 
 async function keepAll(urls) {
   const cache = await caches.open(SHELL);
-  const wanted = [...new Set(urls)].filter(
-    (u) => sameOrigin(u) && !SONG_FILES.test(new URL(u).pathname),
-  );
+  const wanted = [...new Set(urls)].filter(kept);
   await Promise.all(
     wanted.map(async (url) => {
       if (await cache.match(url)) {
@@ -56,7 +90,7 @@ async function keepAll(urls) {
       }
       try {
         const response = await fetch(url, { cache: "no-cache" });
-        if (response.status === 200) {
+        if (keepable(response)) {
           await cache.put(url, response);
         }
       } catch (_) {
@@ -68,33 +102,33 @@ async function keepAll(urls) {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-  if (
-    request.method !== "GET" ||
-    request.headers.has("range") ||
-    !sameOrigin(request.url)
-  ) {
+  if (request.method !== "GET" || request.headers.has("range")) {
     return;
   }
-  event.respondWith(networkFirst(request));
+  const navigation = request.mode === "navigate";
+  if (!navigation && !kept(request.url)) {
+    return;
+  }
+  event.respondWith(networkFirst(request, navigation));
 });
 
-async function networkFirst(request) {
+async function networkFirst(request, navigation) {
   const cache = await caches.open(SHELL);
   try {
     const response = await fetch(request);
-    if (response.status === 200 && !response.headers.has("content-range")) {
+    if (keepable(response)) {
       cache.put(request, response.clone()).catch(() => {});
     }
     return response;
   } catch (error) {
-    const kept =
+    const hit =
       (await cache.match(request)) ||
-      (request.mode === "navigate"
+      (navigation
         ? (await cache.match(request, { ignoreSearch: true })) ||
           (await cache.match(self.registration.scope))
         : undefined);
-    if (kept) {
-      return kept;
+    if (hit) {
+      return hit;
     }
     throw error;
   }
