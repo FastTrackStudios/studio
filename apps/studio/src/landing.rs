@@ -5,8 +5,10 @@
 //!
 //! It is the web build's alone (the component is compiled only with the
 //! `web` feature): the desktop and iOS builds open straight into the app.
-//! The door (`door::Gate`) decides who sees it; this module is what it
-//! shows.
+//! The door (`door::Gate`) shows it to a signed-out visitor at any path;
+//! `/landing` shows it signed in too (`door::LandingPage`), its two ways in
+//! (Open in browser, Sign in) then one, Open Studio. This module is what
+//! it shows.
 //!
 //! The downloads are read from Studio's GitHub Releases when the page
 //! opens (the browser asks GitHub's API; `?releases=<url>` names another
@@ -320,10 +322,18 @@ mod web {
         dioxus::cli_config::web_base_path().unwrap_or_default()
     }
 
-    /// The landing page, signing in through `issuer`. `open` takes the
-    /// visitor into the app in this browser.
+    /// Sign in through `issuer`, coming back to `/home` from the root or
+    /// `/landing`, or to the link that sent the visitor here.
+    fn sign_in(issuer: &auth::Issuer) {
+        crate::door::enter_app();
+        auth::begin(issuer);
+    }
+
+    /// The landing page. Signed out, signing in through `issuer`; signed
+    /// in (`None`), its one way in is Open Studio. `open` takes the visitor
+    /// into the app in this browser.
     #[component]
-    pub fn Landing(issuer: auth::Issuer, open: EventHandler<()>) -> Element {
+    pub fn Landing(issuer: Option<auth::Issuer>, open: EventHandler<()>) -> Element {
         let mut downloads = use_signal(unread);
         use_future(move || async move {
             let headers = [("accept", "application/vnd.github+json")];
@@ -333,10 +343,9 @@ mod web {
         });
         // A room's link opened signed out: that room, to join.
         let room = room_on_path(&drive_dioxus::env::pathname(), &base());
-        let sign_in = {
-            let issuer = issuer.clone();
-            move |_| auth::begin(&issuer)
-        };
+        let signed_in = issuer.is_none();
+        let header_sign_in = issuer.clone();
+        let room = room.zip(issuer.clone());
         let shots = format!("{}/landing", base().trim_end_matches('/'));
         let buttons: Vec<_> = downloads()
             .into_iter()
@@ -360,10 +369,17 @@ mod web {
             main { class: "landing", "data-landing": "",
                 header { class: "lhead",
                     span { class: "lbrand", span { class: "lmark", "S" } "Studio" }
-                    button { class: "lsignin", "data-action": "sign-in", onclick: sign_in.clone(), "Sign in" }
+                    if let Some(issuer) = header_sign_in {
+                        button {
+                            class: "lsignin",
+                            "data-action": "sign-in",
+                            onclick: move |_| sign_in(&issuer),
+                            "Sign in"
+                        }
+                    }
                 }
-                if let Some(room) = room {
-                    RoomDoor { room, issuer: issuer.clone() }
+                if let Some((room, issuer)) = room {
+                    RoomDoor { room, issuer }
                 }
                 section { class: "lhero",
                     h1 { "Every song in the set, ready to play." }
@@ -371,11 +387,20 @@ mod web {
                         "Studio keeps your band's, church's or school's setlists, charts and sessions in one place, and plays them on every screen: macOS, Linux, iPhone, iPad and the browser."
                     }
                     div { class: "lways",
-                        button {
-                            class: "lprimary",
-                            "data-action": "open-in-browser",
-                            onclick: move |_| open.call(()),
-                            "Open in browser"
+                        if signed_in {
+                            button {
+                                class: "lprimary",
+                                "data-action": "open-studio",
+                                onclick: move |_| open.call(()),
+                                "Open Studio"
+                            }
+                        } else {
+                            button {
+                                class: "lprimary",
+                                "data-action": "open-in-browser",
+                                onclick: move |_| open.call(()),
+                                "Open in browser"
+                            }
                         }
                         JoinForm {}
                     }
@@ -500,7 +525,7 @@ mod web {
                     button {
                         class: "lprimary",
                         "data-action": "sign-in-to-join",
-                        onclick: move |_| auth::begin(&issuer),
+                        onclick: move |_| sign_in(&issuer),
                         "Sign in to join"
                     }
                     a { class: "lsecondary", href: "{app}", "Open in Studio" }

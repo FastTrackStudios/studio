@@ -91,6 +91,7 @@ mod telemetry;
 
 use dioxus::prelude::*;
 
+use door::LandingPage;
 use pages::drive_set::{DriveSet, NowChart};
 use pages::home::Home;
 use pages::join::JoinRoom;
@@ -114,12 +115,21 @@ const FONT: &str = "https://fonts.googleapis.com/css2?family=Instrument+Sans:wdt
 /// (`Shell`: the four tabs are its roots, the rest pushed over them) and
 /// the session (`SessionShell`: a set open for playing, the whole window).
 /// Both under `Root`, which keeps playback and the Action List across them.
+///
+/// Each tab has its own path (`/home`, `/records`, `/setlists`,
+/// `/signal`); `/` is replaced by `/home` (the router puts the canonical
+/// path in the address bar in place, so Back does not loop). `/landing`
+/// is the web build's landing page, signed in (`door::LandingPage`); the
+/// desktop and iOS builds go home from it.
 #[derive(Clone, Debug, PartialEq, Routable)]
 #[rustfmt::skip]
 pub enum Route {
+    #[redirect("/", || Route::Home {})]
+    #[route("/landing")]
+    LandingPage {},
     #[layout(Root)]
     #[layout(Shell)]
-        #[route("/")]
+        #[route("/home")]
         Home {},
         #[route("/records")]
         Records {},
@@ -189,7 +199,8 @@ impl Route {
             Route::Home {} => Tab::Home,
             Route::Records {} | Route::Album { .. } | Route::TrackPage { .. } => Tab::Records,
             Route::Signal {} => Tab::Signal,
-            Route::AllOrgs {}
+            Route::LandingPage {}
+            | Route::AllOrgs {}
             | Route::People {}
             | Route::OrgSettings {}
             | Route::JoinRoom { .. } => Tab::Home,
