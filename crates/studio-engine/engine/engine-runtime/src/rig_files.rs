@@ -93,6 +93,13 @@ pub struct Status {
     pub rigs: files::Status,
 }
 
+/// The first `count` keys the page's rigs still want, for the page to
+/// show what a rig waits on (a store that lacks them).
+#[must_use]
+pub fn wanted_keys(count: usize) -> Vec<String> {
+    files::wanted().into_iter().take(count).collect()
+}
+
 /// The rig store's and the rigs' [`Status`].
 #[must_use]
 pub fn status() -> Status {

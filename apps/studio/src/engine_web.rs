@@ -571,6 +571,11 @@ fn write_state(up: &Up) {
         ("data-rig-waiting", rigs.rigs.waiting.to_string()),
         ("data-rig-heard", format!("{:.4}", rigs.rigs.heard)),
         ("data-rig-kit-heard", format!("{:.4}", rigs.rigs.kit_heard)),
+        // The first of the files still wanted: what a rig waits on.
+        (
+            "data-rig-wanted-keys",
+            studio_engine::rig_files::wanted_keys(8).join(" | "),
+        ),
         (
             "data-rig-signal-heard",
             format!("{:.4}", rigs.rigs.signal_rig_heard),

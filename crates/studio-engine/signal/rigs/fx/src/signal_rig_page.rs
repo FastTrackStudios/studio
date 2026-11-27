@@ -116,6 +116,17 @@ impl SignalRig {
     /// Build what the state says with what has arrived, and wait for the
     /// rest — on the page's thread, never in a block.
     fn build(&mut self) {
+        let instrument = self.state.instrument();
+        let named = self.state.profile_name();
+        let library = &profile::library_of(instrument).profiles;
+        if !named.is_empty() && !library.iter().any(|p| p.name.eq_ignore_ascii_case(named)) {
+            let have: Vec<&str> = library.iter().map(|p| p.name.as_str()).collect();
+            tracing::warn!(
+                rig.profile = named,
+                rig.profiles = ?have,
+                "signal rig: its library has no such profile; it plays the first"
+            );
+        }
         self.rig = built(&self.state, self.sample_rate, self.block_size);
         if let Some(rig) = &self.rig {
             self.state.profile = Some(rig.profile.clone());

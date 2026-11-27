@@ -34,8 +34,10 @@
 //! The guitar track plays through signal's whole rig (`FTS Signal Rig`), as
 //! a desktop saved it: the guitar, its profile and its patch. The profile
 //! (`guitar/profiles/web-test.styx`, two patches on one capture) is the
-//! store's guitar home; the page builds its patches in its own engine, with
-//! no rig service, and the test checks the rig was heard.
+//! store's guitar home, with its own empty compositions and drive presets
+//! (a home without them plays signal's shipped ones, and their captures).
+//! The page builds its patches in its own engine, with no rig service, and
+//! the test checks the rig was heard.
 //!
 //! It needs the web build (`STUDIO_WEB_DIST`, its `public` folder) and a
 //! W3C WebDriver (`WEBDRIVER`: chromedriver or geckodriver, started here;
@@ -1356,7 +1358,7 @@ impl Session<'_> {
             }
             if began.elapsed() > within {
                 panic!(
-                    "waited {within:?} for {what}; the page's engine says state={} why={} at={} loud={}; its rigs: store={} home={} fetched={} cached={} missing={} wanted={} waiting={} heard={}; the page: {}",
+                    "waited {within:?} for {what}; the page's engine says state={} why={} at={} loud={}; its rigs: store={} home={} fetched={} cached={} missing={} wanted={} ({}) waiting={} heard={}; the page: {}",
                     self.state("data-state"),
                     self.state("data-why"),
                     self.state("data-at"),
@@ -1367,6 +1369,7 @@ impl Session<'_> {
                     self.state("data-rig-cached"),
                     self.state("data-rig-missing"),
                     self.state("data-rig-wanted"),
+                    self.state("data-rig-wanted-keys"),
                     self.state("data-rig-waiting"),
                     self.state("data-rig-heard"),
                     self.page(),
