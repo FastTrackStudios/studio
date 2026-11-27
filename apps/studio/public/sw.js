@@ -3,7 +3,11 @@
 //
 // What it keeps, and only that:
 // - the page itself (a navigation, and any route of its router: whatever
-//   its query, answered offline by the page it kept);
+//   its path or query, answered offline by the page it kept). Every route
+//   is the same page (`index.html`), so it is kept under the worker's
+//   scope too (`/`), whichever route it was opened at: the router puts
+//   `/home` in the address for `/`, and a reload of `/?session=…` offline
+//   still finds it;
 // - the page's own files: its script, wasm, styles, fonts and pictures, by
 //   their extension;
 // - a session folder's listing at a link (`files.json`), which a song kept
@@ -69,6 +73,11 @@ function kept(url) {
   return PAGE_FILES.test(path);
 }
 
+// Whether `url` is one of the router's routes (the page), not a file.
+function isRoute(url) {
+  return !/\.[a-z0-9]+$/i.test(new URL(url, self.location.href).pathname);
+}
+
 // A reply that may be kept: whole, and not one its server says not to.
 function keepable(response) {
   const control = (response.headers.get("cache-control") || "").toLowerCase();
@@ -82,7 +91,9 @@ function keepable(response) {
 
 async function keepAll(urls) {
   const cache = await caches.open(SHELL);
-  const wanted = [...new Set(urls)].filter(kept);
+  // The page, under the scope as well as the route it is at.
+  const page = urls.find((u) => kept(u) && isRoute(u));
+  const wanted = [...new Set(page ? urls.concat(self.registration.scope) : urls)].filter(kept);
   await Promise.all(
     wanted.map(async (url) => {
       if (await cache.match(url)) {
@@ -118,6 +129,10 @@ async function networkFirst(request, navigation) {
     const response = await fetch(request);
     if (keepable(response)) {
       cache.put(request, response.clone()).catch(() => {});
+      // A route is the page: kept as the scope's too, for every route.
+      if (navigation && kept(request.url) && isRoute(request.url)) {
+        cache.put(self.registration.scope, response.clone()).catch(() => {});
+      }
     }
     return response;
   } catch (error) {
