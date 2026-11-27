@@ -336,6 +336,64 @@ mod door {
             Some("Setlists/Sunday.setlist".to_owned()),
             "the leader took a guest's edit"
         );
+        // A guest's own client, made to write what is not theirs: the
+        // leader's transport, the leader's own entry, and their own entry
+        // claiming to be someone else. The leader keeps none of it; their
+        // own entry stays theirs, named by their endpoint.
+        let me = key.public().to_string();
+        let forged = room::lead::entry(
+            None,
+            &session_sync::transport::LocalTransport {
+                playing: true,
+                position: 30.0,
+                song: Some("9".to_owned()),
+            },
+            live_doc::clock_ms(),
+            "guest",
+        )
+        .unwrap();
+        let said = |name: &str, kind: &str, opened: i64| {
+            let mut m = std::collections::HashMap::new();
+            m.insert("name".to_owned(), loro::LoroValue::from(name));
+            m.insert("kind".to_owned(), loro::LoroValue::from(kind));
+            m.insert("opened".to_owned(), loro::LoroValue::I64(opened));
+            loro::LoroValue::from(m)
+        };
+        let presence = first.presence();
+        presence.set(session_sync::transport::KEY, forged.encode());
+        presence.set(
+            &room::state::here_key("leader"),
+            said("Mallory", "agent", 0),
+        );
+        presence.set(
+            &room::state::here_key(&room::net::guest_peer(&me)),
+            said("Cody", "agent", 7),
+        );
+        eventually("the leader reads the guest's own entry", || {
+            room::net::here_now(&leader)
+                .iter()
+                .any(|p| p.guest && p.opened == Some(7))
+        })
+        .await;
+        assert!(
+            room::net::transport(&leader).is_none(),
+            "a guest wrote the room's transport"
+        );
+        let people = room::net::here_now(&leader);
+        assert!(
+            people
+                .iter()
+                .any(|p| p.name == "Cody" && !p.guest && !p.agent),
+            "a guest rewrote the leader's entry: {people:?}"
+        );
+        assert!(
+            people
+                .iter()
+                .any(|p| p.name == name && p.guest && !p.agent && p.opened == Some(7)),
+            "a guest's entry said someone else: {people:?}"
+        );
+        assert!(!people.iter().any(|p| p.name == "Mallory"), "{people:?}");
+
         // A member's edit, sent after it the same way, goes through: the
         // guest's was dropped, not slow.
         let alex = member(&id, "alex", live_at(&serving, pass.clone())).await;

@@ -13,8 +13,9 @@
 //! - **Guests** present the guests' pass, which the room's lobby holds for
 //!   anyone with the link (`crate::record::Lobby`). A guest follows and
 //!   plays along, and edits nothing: the room's doc takes none of a
-//!   guest's updates ([`follows_only`], which the leader's doc host asks),
-//!   and the live set its members edit together refuses a guest outright.
+//!   guest's updates, the room's presence only their own entry ([`joiner`],
+//!   which the leader's host asks), and the live set its members edit
+//!   together refuses a guest outright.
 //!   A guest is known by the endpoint their connection proved, never by
 //!   anything they say, so the same device is the same guest every time it
 //!   comes ([`Door::take_arrivals`]).
@@ -253,13 +254,22 @@ fn guest_endpoint(who: &Principal) -> Option<&str> {
     }
 }
 
-/// Whether the call running now is a room's guest's: what the leader's
-/// doc host asks as a joiner attaches, so a guest's updates are dropped
-/// (`live_doc::Hosts::follow_only_when`). Outside any gate (the leader's
-/// own, in-process), nobody's.
+/// Who the call running now is to the leader's host
+/// (`live_doc::Hosts::joiners`): a room's guest follows, changing nothing
+/// in the room's doc and writing only their own presence (under
+/// [`crate::net::guest_peer`]); anyone else the door let in edits. Outside
+/// any gate (the leader's own, in-process), an editor.
 #[must_use]
-pub fn follows_only() -> bool {
-    architect::permissions_gate::caller().is_some_and(|who| guest_endpoint(&who).is_some())
+pub fn joiner() -> live_doc::Joiner {
+    match architect::permissions_gate::caller()
+        .as_ref()
+        .and_then(guest_endpoint)
+    {
+        Some(endpoint) => live_doc::Joiner::Follower {
+            own: format!("{}/", crate::net::guest_peer(endpoint)),
+        },
+        None => live_doc::Joiner::Editor,
+    }
 }
 
 /// A call is a member when it presents the room's pass, a guest when it

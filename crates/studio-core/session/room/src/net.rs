@@ -126,28 +126,54 @@ pub struct Person {
     pub opened: Option<u64>,
 }
 
+/// Who a guest whose device is endpoint `endpoint` is in the room's
+/// presence: the one peer a guest may write as (the leader's host keeps
+/// none of their presence under any other).
+#[must_use]
+pub fn guest_peer(endpoint: &str) -> String {
+    format!("{GUEST_PEER}{endpoint}")
+}
+
+const GUEST_PEER: &str = "guest-";
+
+/// The person `value`, said under presence key `key`. A guest's entry is
+/// theirs whatever it claims: named by their endpoint, a guest, no agent.
+fn person(key: &str, value: &LoroValue) -> Option<Person> {
+    let peer = key.strip_suffix("/here")?;
+    let LoroValue::Map(m) = value else {
+        return None;
+    };
+    let opened = match m.get("opened") {
+        Some(LoroValue::I64(n)) => u64::try_from(*n).ok(),
+        _ => None,
+    };
+    if let Some(endpoint) = peer.strip_prefix(GUEST_PEER) {
+        return Some(Person {
+            name: crate::guest_name(endpoint),
+            agent: false,
+            guest: true,
+            opened,
+        });
+    }
+    let kind = |k: &str| matches!(m.get("kind"), Some(LoroValue::String(s)) if &**s == k);
+    match m.get("name") {
+        Some(LoroValue::String(name)) => Some(Person {
+            name: name.to_string(),
+            agent: kind(AGENT_KIND),
+            guest: kind(GUEST_KIND),
+            opened,
+        }),
+        _ => None,
+    }
+}
+
 /// Everyone in the room, from `presence`, sorted by name.
 #[must_use]
 pub fn here_now(presence: &PresencePeer) -> Vec<Person> {
     let mut people: Vec<Person> = presence
         .states()
-        .into_iter()
-        .filter(|(k, _)| k.ends_with("/here"))
-        .filter_map(|(_, v)| match v {
-            LoroValue::Map(m) => match m.get("name") {
-                Some(LoroValue::String(s)) => Some(Person {
-                    name: s.to_string(),
-                    agent: matches!(m.get("kind"), Some(LoroValue::String(k)) if &**k == AGENT_KIND),
-                    guest: matches!(m.get("kind"), Some(LoroValue::String(k)) if &**k == GUEST_KIND),
-                    opened: match m.get("opened") {
-                        Some(LoroValue::I64(n)) => u64::try_from(*n).ok(),
-                        _ => None,
-                    },
-                }),
-                _ => None,
-            },
-            _ => None,
-        })
+        .iter()
+        .filter_map(|(k, v)| person(k, v))
         .collect();
     people.sort_by(|a, b| a.name.cmp(&b.name));
     people
@@ -205,12 +231,11 @@ pub struct RoomHost {
 #[cfg(not(target_arch = "wasm32"))]
 impl RoomHost {
     /// Host room `id`, nothing loaded yet. A guest attaching through the
-    /// leader's door follows the doc and changes nothing in it
-    /// ([`crate::gate::follows_only`]).
+    /// leader's door follows the doc and changes nothing in it, and writes
+    /// only their own presence ([`crate::gate::joiner`]).
     #[must_use]
     pub fn new(id: &RoomId) -> Self {
-        let hosts =
-            Hosts::new(PRESENCE_TIMEOUT_MS).follow_only_when(Arc::new(crate::gate::follows_only));
+        let hosts = Hosts::new(PRESENCE_TIMEOUT_MS).joiners(Arc::new(crate::gate::joiner));
         let doc = RoomDoc::new();
         // The doc's host stays in `hosts`, which the dispatchers serve.
         let _host = hosts.add(id.doc_id(), doc.loro().clone());
@@ -316,8 +341,13 @@ impl RoomPeer {
     /// [`crate::guest_name`], the same every time they come.
     #[must_use]
     pub fn join_as_guest(id: &RoomId, endpoint: &str, attach: Attach) -> Self {
-        let me = format!("guest-{}", endpoint.chars().take(16).collect::<String>());
-        Self::enter(id, &me, &crate::guest_name(endpoint), true, attach)
+        Self::enter(
+            id,
+            &guest_peer(endpoint),
+            &crate::guest_name(endpoint),
+            true,
+            attach,
+        )
     }
 
     fn enter(id: &RoomId, me: &str, name: &str, guest: bool, attach: Attach) -> Self {

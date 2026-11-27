@@ -424,7 +424,13 @@ fn guest_key() -> iroh::SecretKey {
 }
 
 fn key_to_hex(key: &iroh::SecretKey) -> String {
-    key.to_bytes().iter().map(|b| format!("{b:02x}")).collect()
+    use std::fmt::Write as _;
+    key.to_bytes()
+        .iter()
+        .fold(String::with_capacity(64), |mut hex, b| {
+            let _ = write!(hex, "{b:02x}");
+            hex
+        })
 }
 
 fn key_from_hex(text: &str) -> Option<iroh::SecretKey> {
