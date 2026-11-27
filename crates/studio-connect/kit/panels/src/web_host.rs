@@ -642,8 +642,7 @@ pub fn open_hosted(source: crate::web_engine::WebSource, guide: Option<String>) 
         .await;
         match opened {
             Ok((engine, setlist)) => {
-                HOSTED_SONGS.with(|s| *s.borrow_mut() = setlist);
-                set_hosted(HostedState::Open(engine));
+                host_opened(engine, setlist);
                 let Some(mut arrivals) = crate::web_engine::take_arrivals() else {
                     return;
                 };

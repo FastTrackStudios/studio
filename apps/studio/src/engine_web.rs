@@ -342,6 +342,14 @@ pub fn EnginePlayer() -> Element {
             if let Some((project, len)) = opened.borrow().get(&k).cloned() {
                 web_engine::switch_song(&project);
                 web_host::hosted_show(&project);
+                // Back on a song opened before: its length, which a pick
+                // (`session::go_to`) cleared.
+                app.np.with_mut(|n| {
+                    if let Some(n) = n {
+                        n.dur = len;
+                        n.source = crate::state::Source::Ready;
+                    }
+                });
                 up.set(Up::Ready { project, len });
                 return;
             }
