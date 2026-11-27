@@ -96,6 +96,8 @@ tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 # Collaboration (collab.rs, native): hosting/joining over iroh, and the
 # chart editor's remote edits and carets.
 architect = { workspace = true, optional = true, features = ["vox", "platform", "action-list", "local"] }
+# The engine's door in front of its `/vox` and iroh lanes (`gate`).
+architect-permissions = { workspace = true, optional = true }
 # The engine serving windows on its Unix socket (`engine_host`).
 vox-stream = { workspace = true, optional = true }
 vox-core = { workspace = true, optional = true }
@@ -213,7 +215,7 @@ vox = []
 signal = ["engine-listen/signal", "engine-edit/signal", "engine-mix/signal", "engine-project/signal", "engine-collab/signal", "native", "engine-core/signal", "dep:signal-fx", "engine-runtime/signal"]
 # The desktop engine: the in-process engine with its audio device,
 # threads, the built-in FX.
-native = ["dep:signal-clap", "engine-listen/native", "engine-edit/native", "engine-mix/native", "engine-project/native", "engine-collab/native", "engine-core/native", "engine-runtime/native", "daw-view/native", "daw-view/local", "daw-standalone/midi-input", "daw-standalone/clap-host", "dep:base64", "dep:vox-stream", "tokio?/net", "tokio?/signal", "architect/host", "engine-runtime/builtin", "dep:chrono", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry", "dep:realfft", "dep:resvg", "dep:architect-mcp", "dep:dirs", "dep:tokio", "dep:tracing-subscriber", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:rayon", "dep:rhythm-hits", "dep:session-format", "session-format/store", "dep:futures-util", "engine-domain/net", "dep:architect", "architect/iroh", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "dep:blake3", "dep:auth-client", "dep:fts-account", "dep:reqwest", "vox", "dep:architect-extensions", "dep:architect-settings", "dep:semver"]
+native = ["dep:signal-clap", "engine-listen/native", "engine-edit/native", "engine-mix/native", "engine-project/native", "engine-collab/native", "engine-core/native", "engine-runtime/native", "daw-view/native", "daw-view/local", "daw-standalone/midi-input", "daw-standalone/clap-host", "dep:base64", "dep:vox-stream", "tokio?/net", "tokio?/signal", "architect/host", "engine-runtime/builtin", "dep:chrono", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry", "dep:realfft", "dep:resvg", "dep:architect-mcp", "dep:dirs", "dep:tokio", "dep:tracing-subscriber", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:rayon", "dep:rhythm-hits", "dep:session-format", "session-format/store", "dep:futures-util", "engine-domain/net", "dep:architect", "architect/iroh", "dep:architect-permissions", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "dep:blake3", "dep:auth-client", "dep:fts-account", "dep:reqwest", "vox", "dep:architect-extensions", "dep:architect-settings", "dep:semver"]
 # A show recorded as one Live set, split into its songs (src/show.rs,
 # the `show-split` bin): the Live-set reader and the .als → .RPP converter.
 show = ["engine-listen/show", "engine-edit/show", "engine-mix/show", "engine-project/show", "engine-collab/show", "native", "engine-core/show", "dep:ableton", "studio/convert-ableton"]
@@ -284,6 +286,9 @@ path = "src/bin/chain-probe.rs"
 required-features = ["native"]
 
 [dev-dependencies]
+# The engine's door dialled as a client would (`tests/it/gate.rs`):
+# a WebSocket that presents a bearer at its handshake.
+architect = { workspace = true, features = ["connect"] }
 # The mix's song of known signals (`mix_variants_match_tests`).
 engine-mix = { workspace = true, features = ["test-support"] }
 # A CLAP plugin and host built in memory, for the host-actions/1 bridge

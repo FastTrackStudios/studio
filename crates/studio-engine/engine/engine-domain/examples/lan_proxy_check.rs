@@ -7,6 +7,11 @@
 //! Run with `engine-host --engine` (Recording Mode, connected to a
 //! real REAPER) already up on the default port:
 //!   cargo run --example lan_proxy_check -p session
+//!
+//! The engine now refuses a `/vox` connection without its token
+//! (studio#362), and this dials without one: it is refused until it
+//! presents `~/.config/fts/engine-token` as `Authorization: Bearer` at the
+//! handshake (as `engine-host`'s `setlist_probe` does).
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {

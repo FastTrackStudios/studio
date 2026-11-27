@@ -131,6 +131,13 @@ impl Pass {
         Self(format!("{}{}", a.simple(), b.simple()))
     }
 
+    /// A pass as it was handed over: the one a shared set's ticket
+    /// carries (`fts-session:<endpoint>/<set>/<pass>`).
+    #[must_use]
+    pub fn presented(pass: impl Into<String>) -> Self {
+        Self(pass.into())
+    }
+
     /// No pass: a room's file from before passes, or not live.
     #[must_use]
     pub const fn is_empty(&self) -> bool {

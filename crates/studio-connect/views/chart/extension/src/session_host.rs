@@ -10,7 +10,9 @@
 //! - `KEYFLOW_SESSION_SERVE {id, bind}`: serves that session to other app
 //!   instances: its live sync (`live-doc`'s `DocSyncHost` on this file's
 //!   document), its presence, and the session clock, over vox on a
-//!   WebSocket (`EngineHost`, `/vox`).
+//!   WebSocket (`EngineHost`, `/vox`). Ungated, so on loopback unless
+//!   `bind` names another address: whoever reaches it edits the session
+//!   (studio#362).
 //! - `KEYFLOW_SESSION_JOIN {url, id, path}`: joins a served session: a
 //!   `.session` of the same lineage at `path`, synced durably, its
 //!   presence, and the host's clock estimated.
@@ -172,7 +174,8 @@ async fn open(args: Json) -> Result<Json, String> {
 
 async fn serve(args: Json) -> Result<Json, String> {
     let id = id_of(&args)?;
-    let bind = text(&args, "bind").unwrap_or_else(|_| "0.0.0.0:4142".into());
+    // Loopback unless asked: what is served here is ungated (see above).
+    let bind = text(&args, "bind").unwrap_or_else(|_| "127.0.0.1:4142".into());
     // A session file this copy holds is served whole (its content too); a
     // vault document's content travels through the node and the org, so
     // only its transport is served here: presence and the host's clock.
@@ -202,6 +205,7 @@ async fn serve(args: Json) -> Result<Json, String> {
     );
     let port = bind.rsplit(':').next().unwrap_or("4142").to_owned();
     tokio::spawn(async move {
+        // Ungated: the caller chose `bind` (loopback by default).
         let _ = EngineHost::ungated(router, bind).serve().await;
     });
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
@@ -614,6 +618,7 @@ mod tests {
         );
         let bind = format!("127.0.0.1:{port}");
         tokio::spawn(async move {
+            // Ungated: a test's, on loopback.
             let _ = EngineHost::ungated(router, bind).serve().await;
         });
         let url = format!("ws://127.0.0.1:{port}/vox");

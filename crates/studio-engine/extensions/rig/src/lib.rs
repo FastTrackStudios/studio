@@ -145,8 +145,9 @@ async fn serve() -> Result<(), String> {
         .map_err(|e| format!("no loopback port: {e}"))?;
     let addr = listener.local_addr().map_err(|e| e.to_string())?;
     let url = format!("ws://{addr}/vox");
-    // Loopback only, and only this machine's processes reach it: ungated,
-    // as the headless engine is (studio#362).
+    // Ungated: bound to loopback on a port the OS picks, and handed only
+    // to this process's own windows, so only this machine reaches it
+    // (studio#362).
     let app = EngineHost::ungated(router, addr.to_string()).into_app();
     let autostart = autostart();
     if autostart {

@@ -167,6 +167,56 @@ async fn app_endpoint() -> Result<iroh::Endpoint, String> {
     Ok(CELL.get_or_init(|| ep).clone())
 }
 
+/// The engine's token, which its `/vox` admits a connection by
+/// (`studio_engine::gate`, studio#362): `FTS_ENGINE_TOKEN`, else the file
+/// the engine keeps it in for this user, `<config>/fts/engine-token`.
+/// `None` on a machine where no engine has run: the dial is then refused,
+/// as anyone's without the token is.
+#[cfg(not(target_arch = "wasm32"))]
+fn engine_token() -> Option<String> {
+    if let Some(token) = std::env::var("FTS_ENGINE_TOKEN")
+        .ok()
+        .filter(|t| !t.is_empty())
+    {
+        return Some(token);
+    }
+    let config = std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|d| !d.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config"))
+        })?;
+    std::fs::read_to_string(config.join("fts").join("engine-token"))
+        .ok()
+        .map(|t| t.trim().to_owned())
+        .filter(|t| !t.is_empty())
+}
+
+/// A WebSocket link to the engine at `url`, presenting its token at the
+/// handshake (`Authorization: Bearer`) when this machine has it.
+#[cfg(not(target_arch = "wasm32"))]
+async fn ws_link(
+    url: &str,
+) -> std::io::Result<vox_websocket::WsLink<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>
+{
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
+    let mut request = url.into_client_request().map_err(std::io::Error::other)?;
+    if let Some(value) = engine_token().and_then(|t| format!("Bearer {t}").parse().ok()) {
+        request.headers_mut().insert("authorization", value);
+    }
+    let (ws, _response) = tokio_tungstenite::connect_async(request)
+        .await
+        .map_err(std::io::Error::other)?;
+    Ok(vox_websocket::WsLink::new(ws))
+}
+
+/// In a browser a page cannot set the handshake's headers: it dials as it
+/// is, and an engine's `/vox` admits it only with the token.
+#[cfg(target_arch = "wasm32")]
+async fn ws_link(url: &str) -> std::io::Result<vox_websocket::WsLink> {
+    vox_websocket::WsLink::connect(url).await
+}
+
 /// Establish one typed client over its own link (a vox caller is
 /// service-bound once constructed, so sibling services don't share one).
 pub(crate) async fn establish<C: vox_core::FromVoxLane>(target: &EngineTarget) -> Option<C> {
@@ -183,7 +233,7 @@ pub(crate) async fn establish_verbose<C: vox_core::FromVoxLane>(
 ) -> Result<C, String> {
     match target {
         EngineTarget::Ws(url) => {
-            let link = vox_websocket::WsLink::connect(url)
+            let link = ws_link(url)
                 .await
                 .map_err(|e| format!("ws connect {url}: {e:?}"))?;
             vox_core::initiator_on(link)
@@ -350,7 +400,7 @@ pub async fn connect_engine_daw_from(
     let dial = async {
         let connection = match addr {
             EngineAddr::Ws(url) => {
-                let link = vox_websocket::WsLink::connect(url)
+                let link = ws_link(url)
                     .await
                     .map_err(|e| eyre::eyre!("ws connect {url}: {e:?}"))?;
                 vox_core::initiator_on(link).establish_connection().await

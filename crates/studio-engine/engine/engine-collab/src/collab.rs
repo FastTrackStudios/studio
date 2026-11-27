@@ -32,7 +32,11 @@
 //!   engine on the shared transport.
 //!
 //! Hosting serves the set over iroh; joining dials it. The ticket
-//! (`fts-session:<endpoint id>/<set uuid>`) is what you hand someone. A
+//! (`fts-session:<endpoint id>/<set uuid>/<pass>`) is what you hand
+//! someone. The set is served behind a door (`room::gate`): a peer is let
+//! in only with the pass, minted each time the set is shared, which the
+//! ticket carries (a room's set opens with the room's pass instead), so
+//! knowing the host's endpoint is not enough (studio#362). A
 //! joiner opens the same setlist first — the media is read from its own
 //! copy — and each of its songs is then made to match the host's. A
 //! browser has no way into a set yet: that is a room's (studio#711).
@@ -597,8 +601,9 @@ pub struct RoomSet {
     pub projects: Vec<String>,
     /// The room it is shared in, and the room's pass: the set is served
     /// behind the room's door (`room::gate`), and joined presenting the
-    /// pass. `None`: served to anyone with its ticket, as a set shared
-    /// outside a room is.
+    /// pass. `None`: served behind a door of its own, to anyone who has
+    /// its ticket (which carries the pass), as a set shared outside a
+    /// room is.
     pub door: Option<(::room::RoomId, ::room::Pass)>,
 }
 
@@ -699,7 +704,21 @@ fn host_inner(name: String, room: Option<RoomSet>) -> eyre::Result<(String, Vec<
         let endpoint = architect::iroh_link::bind_endpoint(secret_key())
             .await
             .map_err(|e| eyre::eyre!("iroh: {e}"))?;
-        let ticket = format!("fts-session:{}/{id}", endpoint.id());
+        // Who may come in: a room's members by the room's pass; outside a
+        // room, whoever holds the ticket, by the pass minted for it.
+        let (door, ticket) = match room.as_ref().and_then(|r| r.door.as_ref()) {
+            Some((room, pass)) => (
+                ::room::gate::Door::for_live_set(room, pass),
+                format!("fts-session:{}/{id}", endpoint.id()),
+            ),
+            None => {
+                let pass = ::room::Pass::mint();
+                let share = ::room::RoomId::parse(&format!("share-{id}"))
+                    .map_err(|e| eyre::eyre!("the share's door: {e}"))?;
+                let ticket = format!("fts-session:{}/{id}/{}", endpoint.id(), pass.expose());
+                (::room::gate::Door::for_live_set(&share, &pass), ticket)
+            }
+        };
         // Its addresses on this machine's networks, once it has read them
         // (a moment after binding), so a room's member on the same network
         // dials it there.
@@ -712,18 +731,8 @@ fn host_inner(name: String, room: Option<RoomSet>) -> eyre::Result<(String, Vec<
         let addrs = reachable_at(&endpoint);
         let router = host.mount(architect::LayerRouter::new());
         let serving = endpoint.clone();
-        // A room's set is behind the room's door: only who presents the
-        // room's pass edits it.
-        match room
-            .as_ref()
-            .and_then(|r| r.door.as_ref())
-            .map(|(id, pass)| ::room::gate::Door::for_live_set(id, pass))
-        {
-            Some(door) => tokio::spawn(async move { door.serve(&serving, router).await }),
-            None => tokio::spawn(async move {
-                architect::iroh_link::serve_router(&serving, router).await;
-            }),
-        };
+        // Only who presents the pass edits it.
+        architect::platform::spawn(async move { door.serve(&serving, router).await });
 
         let me = format!("host-{}", &endpoint.id().to_string()[..8]);
         let presence: Arc<dyn PresenceSink> = Arc::new(host.own_presence().await?);
@@ -782,7 +791,7 @@ fn join_inner(
     room: Option<(Vec<String>, RoomSet)>,
 ) -> eyre::Result<()> {
     let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
-    let (endpoint_id, id) = parse_ticket(ticket)?;
+    let (endpoint_id, id, ticket_pass) = parse_ticket(ticket)?;
     let mut at = architect::iroh_link::iroh::EndpointAddr::new(endpoint_id);
     for addr in room.iter().flat_map(|(addrs, _)| addrs) {
         match addr.parse() {
@@ -812,11 +821,13 @@ fn join_inner(
                 .await
                 .map_err(|e| eyre::eyre!("iroh connect: {e}"))
         };
-        // A room's set opens with the room's pass, on every call.
+        // A room's set opens with the room's pass, any other with the
+        // ticket's, on every call.
         let presents = ::room::net::Presents(
             room.as_ref()
                 .and_then(|(_, r)| r.door.as_ref())
                 .map(|(_, pass)| pass.clone())
+                .or(ticket_pass)
                 .unwrap_or_default(),
         );
         let sync = vox_core::initiator_on(dial(&endpoint).await?)
@@ -896,20 +907,35 @@ fn join_inner(
     Ok(())
 }
 
+/// A ticket's host endpoint, set and pass
+/// (`fts-session:<endpoint>/<set>[/<pass>]`; a room's set has no pass of
+/// its own: it opens with the room's).
 #[cfg(feature = "native")]
-fn parse_ticket(ticket: &str) -> eyre::Result<(architect::iroh_link::iroh::EndpointId, Uuid)> {
+fn parse_ticket(
+    ticket: &str,
+) -> eyre::Result<(
+    architect::iroh_link::iroh::EndpointId,
+    Uuid,
+    Option<::room::Pass>,
+)> {
     let rest = ticket
         .trim()
         .strip_prefix("fts-session:")
         .ok_or_else(|| eyre::eyre!("not a session ticket"))?;
-    let (endpoint, id) = rest
+    let (endpoint, rest) = rest
         .split_once('/')
         .ok_or_else(|| eyre::eyre!("not a session ticket"))?;
+    let (id, pass) = match rest.split_once('/') {
+        Some((id, pass)) if !pass.is_empty() => (id, Some(::room::Pass::presented(pass))),
+        Some((id, _)) => (id, None),
+        None => (rest, None),
+    };
     Ok((
         endpoint
             .parse()
             .map_err(|e| eyre::eyre!("endpoint id: {e}"))?,
         id.parse().map_err(|e| eyre::eyre!("session id: {e}"))?,
+        pass,
     ))
 }
 
@@ -1823,6 +1849,25 @@ impl Outbox {
     }
 }
 
+/// Write `text` to `path`, readable by this user only.
+#[cfg(feature = "native")]
+fn write_private(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    std::io::Write::write_all(&mut options.open(path)?, text.as_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
+}
+
 /// Where an env-started host leaves its ticket (`FTS_COLLAB_TICKET`, else
 /// the temp dir's `fts-session-ticket`).
 #[cfg(feature = "native")]
@@ -1868,7 +1913,9 @@ fn from_env(name: &str) {
         match host(name.to_owned()) {
             Ok(ticket) => {
                 let path = ticket_path();
-                if let Err(e) = std::fs::write(&path, &ticket) {
+                // The ticket carries the set's pass: readable by this user
+                // only.
+                if let Err(e) = write_private(&path, &ticket) {
                     tracing::warn!(collab.ticket_error = %e, "collab: the ticket was not written");
                 }
                 tracing::info!(collab.ticket_file = %path.display(), "collab: hosting");

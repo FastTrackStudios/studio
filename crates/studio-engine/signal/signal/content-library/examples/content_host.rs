@@ -22,7 +22,8 @@ async fn main() {
     let root = args
         .next()
         .unwrap_or_else(|| "/run/media/AudioHaven/Signal/Libraries".into());
-    let addr = args.next().unwrap_or_else(|| "0.0.0.0:4141".into());
+    // Loopback unless given an address: it is served ungated (below).
+    let addr = args.next().unwrap_or_else(|| "127.0.0.1:4141".into());
     let config = std::env::var_os("XDG_CONFIG_HOME")
         .map(std::path::PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
@@ -40,7 +41,9 @@ async fn main() {
     }
     let host = ContentLibraryBackend::with_roots(roots);
     tracing::info!(%addr, "content host: ws://{addr}/vox");
-    // Ungated as before: no PermissionsGate on this engine yet (FastTrackStudios/studio#362).
+    // Ungated: a developer's example, serving the libraries it is pointed
+    // at to whoever reaches `addr`, which is loopback unless the developer
+    // names another (studio#362). Nothing ships it.
     architect::host::EngineHost::ungated(host.router(), addr)
         .serve()
         .await;

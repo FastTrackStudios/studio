@@ -1213,7 +1213,7 @@ params = '{"type":"object","properties":{"path":{"type":"string"},"chart":{"type
 [[actions]]
 id = "KEYFLOW_SESSION_SERVE"
 name = "Session: share with other app instances"
-description = "Serves open session `id` (document sync, presence, the session clock) over vox on a WebSocket at `bind` (default 0.0.0.0:4142)."
+description = "Serves open session `id` (document sync, presence, the session clock) over vox on a WebSocket at `bind` (default 127.0.0.1:4142: ungated, so another machine reaches it only when `bind` says so)."
 group = "Session"
 effect = "mutating"
 params = '{"type":"object","properties":{"id":{"type":"string"},"bind":{"type":"string"}},"required":["id"]}'

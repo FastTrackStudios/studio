@@ -12,30 +12,36 @@
 //! REAPER. Recording Mode serves only `reaper_lan_proxy`'s setlist (that
 //! module's doc says why it is a proxy rather than a re-mounted router).
 //!
-//! Two transports, one router — architect's [`EngineHost`], the same host
-//! `studio-desktop --engine` serves on:
+//! Two transports, one router, both behind the engine's door
+//! (`studio_engine::gate`, studio#362):
 //!
-//! - WebSocket `ws://0.0.0.0:<port>/vox` (default 4040) — binds every
-//!   interface, since the point is reachability from other devices.
+//! - WebSocket `ws://127.0.0.1:<port>/vox` (default 4040), or every
+//!   interface with `--lan` (a phone or another machine on the network). A
+//!   connection is admitted only when it presents the engine's token at
+//!   its handshake; a client on this machine reads it with
+//!   `studio_engine::gate::local_token`.
 //! - iroh — an endpoint whose secret key persists under
 //!   `~/.config/fts/studio-engine-iroh.key` (`$XDG_CONFIG_HOME` honoured),
 //!   so its endpoint id, and the `fts-engine:<id>` connect string logged at
 //!   start-up, survive restarts. Native peers dial it across NATs with no
-//!   port forwarding.
+//!   port forwarding. A peer is admitted only when the endpoint id its
+//!   handshake proved is one of the engine's devices
+//!   (`~/.config/fts/engine-peers.json`, or `--admit ID`).
 //!
-//! Arguments (after `--engine`): `--port N`, `--project PATH` (`.rpp` or
-//! `.session`), `--setlist PATH` (a setlist note, or a folder of song
-//! folders), `--no-iroh`, `--iroh-key PATH`. See [`EngineArgs`].
+//! Arguments (after `--engine`): `--port N`, `--lan`, `--project PATH`
+//! (`.rpp` or `.session`), `--setlist PATH` (a setlist note, or a folder of
+//! song folders), `--no-iroh`, `--iroh-key PATH`, `--admit ID` (any number).
+//! See [`EngineArgs`].
 
 use std::path::PathBuf;
 
-use architect::host::EngineHost;
 use architect::iroh_link::{self, iroh};
 use axum::Router;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use daw::LayerRouter;
 use daw::Services as _;
+use studio_engine::gate::EngineGate;
 
 const DEFAULT_PORT: u16 = 4040;
 
@@ -47,6 +53,11 @@ const IROH_KEY_FILE: &str = "studio-engine-iroh.key";
 pub struct EngineArgs {
     /// `--port N`: the WebSocket port (default 4040).
     pub port: Option<u16>,
+    /// `--lan`: serve the WebSocket on every interface, not only loopback.
+    pub lan: bool,
+    /// `--admit ID` (any number): iroh endpoints admitted besides the ones
+    /// in `engine-peers.json`.
+    pub admit: Vec<String>,
     /// `--project PATH` / `--setlist PATH`: what to open before serving.
     pub open: Option<OpenTarget>,
     /// `--no-iroh`: serve the WebSocket only.
@@ -79,8 +90,15 @@ impl EngineArgs {
         let open = value("--project")
             .map(|p| OpenTarget::Project(PathBuf::from(p)))
             .or_else(|| value("--setlist").map(|p| OpenTarget::Setlist(PathBuf::from(p))));
+        let admit = args
+            .windows(2)
+            .filter(|w| w[0] == "--admit" && !w[1].starts_with("--"))
+            .map(|w| w[1].clone())
+            .collect();
         Self {
             port: value("--port").and_then(|p| p.parse().ok()),
+            lan: args.iter().any(|a| a == "--lan"),
+            admit,
             open,
             no_iroh: args.iter().any(|a| a == "--no-iroh"),
             iroh_key: value("--iroh-key").map(PathBuf::from),
@@ -128,24 +146,6 @@ fn placeholder_page() -> Router {
     Router::new().route("/", get(index_handler))
 }
 
-/// Serve `router` over `/vox` (+ `/health` and a placeholder `/`) on an
-/// already-bound listener, until the listener fails.
-pub async fn serve_ws(listener: tokio::net::TcpListener, router: LayerRouter) -> eyre::Result<()> {
-    // Ungated as before: no PermissionsGate on this engine yet (FastTrackStudios/studio#362).
-    let app = EngineHost::ungated(router, String::new())
-        .plugin(placeholder_page())
-        .into_app();
-    axum::serve(listener, app)
-        .await
-        .map_err(|e| eyre::eyre!("engine server: {e}"))
-}
-
-/// Serve `router` on an iroh endpoint — each accepted bi-stream is one vox
-/// connection — until the endpoint closes.
-pub async fn serve_iroh(endpoint: &iroh::Endpoint, router: LayerRouter) {
-    iroh_link::serve_router(endpoint, router).await;
-}
-
 /// Where the engine's iroh identity lives by default:
 /// `<$XDG_CONFIG_HOME or ~/.config>/fts/studio-engine-iroh.key`.
 pub fn default_iroh_key_path() -> Option<PathBuf> {
@@ -166,8 +166,9 @@ pub async fn bind_iroh(key_path: &std::path::Path) -> eyre::Result<iroh::Endpoin
         .map_err(|e| eyre::eyre!("iroh bind: {e}"))
 }
 
-/// Serve the running engine's router over the WebSocket on `args.port`
-/// (default 4040, every interface) and, unless `--no-iroh`, over iroh.
+/// Serve the running engine's router behind its door, over the WebSocket
+/// on `args.port` (default 4040; loopback, every interface with `--lan`)
+/// and, unless `--no-iroh`, over iroh.
 ///
 /// The caller boots the engine first (`studio_engine::bootstrap_blocking`
 /// or `reaper_engine::bootstrap_blocking`) — each manages its own runtime
@@ -182,23 +183,29 @@ pub async fn run(args: &EngineArgs) -> eyre::Result<()> {
     })?;
     let serves_daw = crate::live_engine::engine().is_some();
     let port = args.port.unwrap_or(DEFAULT_PORT);
+    let bind = if args.lan { "0.0.0.0" } else { "127.0.0.1" };
+    let gate = EngineGate::load().map_err(|e| eyre::eyre!("the engine's token: {e}"))?;
+    for endpoint in &args.admit {
+        gate.admit(endpoint.clone());
+    }
 
-    // Ungated as before: no PermissionsGate on this engine yet (FastTrackStudios/studio#362).
-    let mut host =
-        EngineHost::ungated(router, format!("0.0.0.0:{port}")).plugin(placeholder_page());
-    // The connect string is the endpoint id, which the key alone settles —
-    // so it is known (and logged) before the host binds the endpoint.
+    let host = gate
+        .host(router.clone(), format!("{bind}:{port}"))
+        .plugin(placeholder_page());
     let mut connect = None;
     if !args.no_iroh {
         match args.iroh_key.clone().or_else(default_iroh_key_path) {
-            Some(path) => match iroh_link::load_or_create_secret_key(&path) {
-                Ok(key) => {
-                    connect = Some(crate::remote::EngineAddr::connect_string(&key.public()));
-                    host = host.iroh(path, None);
+            Some(path) => match bind_iroh(&path).await {
+                Ok(endpoint) => {
+                    connect = Some(crate::remote::EngineAddr::connect_string(&endpoint.id()));
+                    let gate = gate.clone();
+                    architect::platform::spawn(async move {
+                        gate.serve_iroh(&endpoint, router).await;
+                    });
                 }
                 Err(e) => tracing::warn!(
                     error = %e,
-                    "--engine: iroh key {} unavailable; serving WebSocket only",
+                    "--engine: iroh on {} unavailable; serving WebSocket only",
                     path.display()
                 ),
             },
@@ -209,16 +216,16 @@ pub async fn run(args: &EngineArgs) -> eyre::Result<()> {
     }
 
     tracing::info!(
-        engine.ws = %format!("ws://0.0.0.0:{port}/vox"),
-        engine.lan = ?lan_addresses(port),
+        engine.ws = %format!("ws://{bind}:{port}/vox"),
+        engine.lan = ?if args.lan { lan_addresses(port) } else { Vec::new() },
         engine.iroh_connect = connect.as_deref().unwrap_or("off"),
         engine.serves_daw = serves_daw,
-        "engine-host --engine: serving (open http://<lan addr> on another device; \
-         dial the iroh connect string from a native Session)"
+        "engine-host --engine: serving behind the engine's door (a client presents \
+         the engine's token; an iroh peer must be one of its devices: --admit ID)"
     );
     host.serve()
         .await
-        .map_err(|e| eyre::eyre!("engine server on 0.0.0.0:{port}: {e}"))
+        .map_err(|e| eyre::eyre!("engine server on {bind}:{port}: {e}"))
 }
 
 /// Every non-loopback IPv4 address this machine has, each paired with

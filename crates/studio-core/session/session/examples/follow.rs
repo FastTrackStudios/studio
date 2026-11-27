@@ -94,6 +94,8 @@ async fn lead(bind: &str) {
     );
     let bind = bind.to_owned();
     tokio::spawn(async move {
+        // Ungated: a measurement tool's presence and clock, nothing else,
+        // on the address its user names (loopback by default).
         EngineHost::ungated(router, bind)
             .serve()
             .await
@@ -206,7 +208,7 @@ async fn follow(url: &str, seconds: f64) {
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
-        Some("lead") => lead(args.get(2).map_or("0.0.0.0:4141", String::as_str)).await,
+        Some("lead") => lead(args.get(2).map_or("127.0.0.1:4141", String::as_str)).await,
         Some("follow") => {
             let url = args
                 .get(2)

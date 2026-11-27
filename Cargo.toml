@@ -319,6 +319,9 @@ vox-phon = { version = "0.10.0-rc.5" }
 vox-stream = { version = "0.10.0-rc.5" }
 vox-core = { version = "0.10.0-rc.5" }
 vox-websocket = { version = "0.10.0-rc.5" }
+# The WebSocket under vox-websocket's native link, for a dial that presents
+# a bearer at its handshake (engine-host's `remote`: the engine's token).
+tokio-tungstenite = { version = "0.29" }
 iroh = { version = "1" }
 # Files CAS chunk store (issue #256): streaming FastCDC content-defined
 # chunking, blake3 content addressing, iroh-blobs as the local blob store.
