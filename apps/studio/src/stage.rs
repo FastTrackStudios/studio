@@ -6,7 +6,7 @@
 //!   (as tall as it is), the arrangement with the mixer beside it on a
 //!   wide display (the mixer 1070 points wide) or under it (0.62) when
 //!   narrower;
-//! - **lighting**, "Lighting — <set>": Ignition's room (0.8) with its cue
+//! - **lighting**, "Lighting — <set>": Ignition's visualizer (0.8) with its cue
 //!   list to the right;
 //! - **chart**: Keyflow's chart, its note-input toolbar on its pane (0.67),
 //!   over the lyrics.

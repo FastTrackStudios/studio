@@ -128,7 +128,7 @@ that its spans arrive and that `--crash-test` arrives as a `crash` span.
 - **Songs and setlists** are plain files in the Studio folder
   ([storage.md](storage.md)). Drive syncs them when it is installed, and is
   never required.
-- **Ignition's room and cue list** currently read their show from the
+- **Ignition's visualizer and cue list** currently read their show from the
   environment Studio starts with. FastTrackStudios/Ignition#64 replaces
   this with settings and the song's session.
 
@@ -195,7 +195,7 @@ STUDIO_EXT_DEV_END  {"folder": "<the same folder>"}                 # back to th
 
   Keyflow and Ignition have one. Studio's own extensions don't yet (#671).
 - A process copy's Dioxus views need app-shell's remote views (FastTrackStudios/app-shell#35); until then its pane says it is drawn by its process.
-- GPU process views (`kind = "process"`, like Ignition's room) draw either way.
+- GPU process views (`kind = "process"`, like Ignition's visualizer) draw either way.
 
 When the work is done, merge it in its repository, bump Studio's pin, and
 end the override: the linked copy runs again, at full speed.

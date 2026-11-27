@@ -6,7 +6,7 @@
 //! `DocPresence::now`), and joins that presence as peer `lead`.
 //! [`Leader::publish`] then puts the transport there as `lead/play`,
 //! stamped in the host's clock (`Here::play_now`): Keyflow's chart,
-//! Ignition's room and cue list, and any `sync::Tracker` follow it
+//! Ignition's visualizer and cue list, and any `sync::Tracker` follow it
 //! (`crate::doc::transport_of`). The host's own audio clock stays the
 //! truth: publish on every move (play, stop, seek, rate) and now and then
 //! while playing, as a playhead deck is re-anchored.

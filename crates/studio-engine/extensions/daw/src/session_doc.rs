@@ -23,9 +23,15 @@
 //! - **Led:** `session::lead::Leader` serves its presence and the host's
 //!   clock and joins as `lead`; every move of the engine's transport is
 //!   published there as `lead/play` (`publish`), the same moves the app's
-//!   playhead deck gets. Keyflow's chart, Ignition's room and its cue list
-//!   follow it (`KEYFLOW_SESSION_FOLLOW`, `IGNITION_SESSION_VIZ`, from
-//!   `DAW_STATE`'s `session`).
+//!   playhead deck gets. Keyflow's chart, Ignition's visualizer and its
+//!   cue list follow it (`KEYFLOW_SESSION_FOLLOW`, `IGNITION_SESSION_VIZ`,
+//!   from `DAW_STATE`'s `session`, which `SESSION_FOLLOWED` answers on the
+//!   engine's own MCP).
+//! - **In a room** a member's engine opens what the leader loaded and keeps
+//!   its transport on the leader's (`engine_collab::room`). The moves it
+//!   makes following are the engine's moves all the same, published here,
+//!   so a member's chart and lighting follow the room's session with no
+//!   room of their own (studio#720).
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -552,8 +558,34 @@ pub fn doc_of(song: &str) -> Option<(fts_session::doc::SessionDoc, Option<PathBu
         .map(|o| (o.file.file().session().clone(), o.source.clone()))
 }
 
-/// The open session, for `DAW_STATE`: where it is, its id, where its
-/// transport is led from.
+static FOLLOWED: architect::action::ActionMeta = architect::action::ActionMeta {
+    id: "SESSION_FOLLOWED",
+    trait_name: "",
+    method_name: "followed",
+    display_name: "The session followed",
+    description: "The session document this engine has open for the current song, the one Keyflow's chart and Ignition's lighting follow (the app hands it to KEYFLOW_SESSION_FOLLOW and IGNITION_SESSION_VIZ, as DAW_STATE's `session`): its `path`, `id`, the `url` its transport is led from (the lighting's clock) and `chart` (a `.kf` beside the song). In a room a member's is the session the leader has open, opened here, its transport kept on the leader's, so the lighting follows the room. Read-only.",
+    category: "View",
+    group: "",
+    shortcut: "",
+    toggleable: false,
+    undo: false,
+};
+
+/// Puts `SESSION_FOLLOWED` in the engine's Action List (once: a second
+/// call finds it there), so an engine without a window answers what the
+/// chart and the lighting follow over its own MCP.
+pub fn register(list: &architect::action::ActionList) {
+    use architect::action::{ActionCaller, ActionError, Effect, RawJson};
+    match list.register_with(&FOLLOWED, Effect::ReadOnly, |_: &ActionCaller, (): ()| {
+        Ok::<_, String>(RawJson::from(state().to_string()))
+    }) {
+        Ok(()) | Err(ActionError::Duplicate(_)) => {}
+        Err(e) => tracing::error!(error = %e, "daw: SESSION_FOLLOWED did not register"),
+    }
+}
+
+/// The open session, for `DAW_STATE` and `SESSION_FOLLOWED`: where it
+/// is, its id, where its transport is led from.
 #[must_use]
 pub fn state() -> Json {
     let (path, id, chart) = OPEN
