@@ -23,7 +23,6 @@
 "keyflow-extension" = "none"
 "keyflow-session" = "none"
 "kit-sheet" = "none"
-"library-sync" = "none"
 "nam-plugin" = "none"
 "plugin-ui" = "none"
 "preset-browser" = "none"

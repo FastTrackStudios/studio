@@ -849,7 +849,6 @@ pub async fn add_song(song: HostedSong) -> eyre::Result<crate::setlist::Song> {
             web.order.push(project.clone());
         }
     });
-    crate::collab::song_opened(&project);
     tracing::info!(song.title = %song.name, "web: a hosted song opened");
     Ok(song)
 }
