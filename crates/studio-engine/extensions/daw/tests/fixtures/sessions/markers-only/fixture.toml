@@ -4,12 +4,21 @@ about = "a session with only markers"
 
 [[chart]]
 at = 3.0
-source = "markers"
+source = "session"
 bar = 2
 section = "Verse 1"
 
 [[chart]]
 at = 10.5
-source = "markers"
+source = "session"
 bar = 6
 section = "Bridge"
+
+# No chart: Keyflow's chart generated from the markers, numbered as the
+# arrangement counts its bars.
+[shown]
+source = "generated"
+sections = [
+  { name = "Verse 1", first_bar = 1, bars = 4 },
+  { name = "Bridge", first_bar = 5, bars = 2 },
+]

@@ -46,3 +46,7 @@ bar = 7
 written = 5
 pass = 1
 section = "CH"
+
+# A written chart is kept: the chart shown is its .kf, as written.
+[shown]
+source = "chart"

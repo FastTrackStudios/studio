@@ -409,6 +409,8 @@ pub struct Followed {
     pub id: String,
     pub url: String,
     pub path: String,
+    /// The chart written beside the song (its `.kf`), when there is one.
+    pub chart: Option<String>,
 }
 
 async fn run(id: &str, args: serde_json::Value) -> Result<serde_json::Value, String> {
@@ -572,6 +574,7 @@ pub fn use_follow_session(ui: ExtensionUi, layout: Signal<Workspace>) -> Signal<
                         id: text("id")?,
                         url: text("url")?,
                         path: text("path")?,
+                        chart: text("chart"),
                     })
                 });
             if now.is_some() && now != *followed.peek() {
@@ -640,15 +643,28 @@ async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
     let mut span = crate::trace::Span::root("studio.session.follow");
     span.set("studio.session.doc", f.id.clone());
     // The chart draws the session itself (its sections, tempo map and
-    // markers, Keyflow's typed items): it is told only which session, and
-    // the song's title to head it with.
+    // markers, Keyflow's typed items): it is told which session, the
+    // song's title to head it with, and the chart written beside the song
+    // (its `.kf`), typed into a session nobody has charted yet. A session
+    // with neither shows the chart generated from its markers (studio#693).
     let title = current_song_title().await.unwrap_or_default();
-    match run(
-        "KEYFLOW_SESSION_FOLLOW",
-        serde_json::json!({ "url": f.url, "id": f.id, "title": title }),
-    )
-    .await
+    let mut args = serde_json::json!({ "url": f.url, "id": f.id, "title": title });
+    if let Some(chart) = &f.chart {
+        args["chart_path"] = serde_json::Value::String(chart.clone());
+        span.set("studio.follow.chart_path", chart.clone());
+    }
+    // A written chart that does not fit the session's own structure is not
+    // typed into it (`seed_error`): the session is followed all the same.
+    let followed = run("KEYFLOW_SESSION_FOLLOW", args).await;
+    if let Some(e) = followed
+        .as_ref()
+        .ok()
+        .and_then(|r| r.get("seed_error"))
+        .and_then(serde_json::Value::as_str)
     {
+        span.set("studio.follow.seed", e.to_owned());
+    }
+    match followed {
         Ok(_) => span.set("studio.follow.chart", "ok"),
         Err(e) => span.set("studio.follow.chart", e),
     }

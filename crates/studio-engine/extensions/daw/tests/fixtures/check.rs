@@ -134,6 +134,135 @@ pub fn session(engine: &Engine, fixture: &Fixture, out: &mut Checks) {
             Err(why) => out.failed(name, why),
         }
     }
+    if let Some(want) = &fixture.shown {
+        shown(mcp, fixture, want, out);
+    }
+}
+
+/// How long the song's session may take to open after the song has (the
+/// engine opens it on its next tick).
+const SHOWN_WAIT: Duration = Duration::from_secs(10);
+
+/// The chart the session shows (`SESSION_CHART`): whose it is, its
+/// sections and measure numbers, a written one kept as written, and,
+/// played from each `[[chart]]` point, the playhead in that chart: the
+/// bar `SESSION_CHART_AT` follows lies in the shown chart's section of
+/// the same name (studio#693).
+fn shown(mcp: &Mcp, fixture: &Fixture, want: &crate::fixture::Shown, out: &mut Checks) {
+    let chart = match chart_shown(mcp) {
+        Ok(chart) => chart,
+        Err(why) => return out.failed("chart shown", why),
+    };
+    let sections: Vec<(String, i64, i64)> = chart["sections"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|s| {
+            (
+                s["name"].as_str().unwrap_or_default().to_owned(),
+                s["first_bar"].as_i64().unwrap_or(-1),
+                s["bars"].as_i64().unwrap_or(-1),
+            )
+        })
+        .collect();
+    let said = format!(
+        "{} chart, sections {}",
+        chart["source"],
+        sections
+            .iter()
+            .map(|(n, first, bars)| format!("{n} bars {first}-{}", first + bars - 1))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let ok = chart["source"] == json!(want.source)
+        && (want.sections.is_empty() || sections == want.sections);
+    out.add(
+        "chart shown",
+        ok,
+        if ok {
+            said
+        } else {
+            format!(
+                "{said}: wanted a {} chart with {:?}",
+                want.source, want.sections
+            )
+        },
+    );
+    if want.source == "chart"
+        && let Some(written) = fixture.written_chart()
+    {
+        out.add(
+            "written chart kept",
+            chart["text"].as_str() == Some(written.as_str()),
+            if chart["text"].as_str() == Some(written.as_str()) {
+                "the chart shown is the .kf as written".to_owned()
+            } else {
+                format!("the chart shown is not the .kf: {}", chart["text"])
+            },
+        );
+    }
+    if want.source != "generated" {
+        return;
+    }
+    let text = chart["text"].as_str().unwrap_or_default();
+    out.add(
+        "generated chart",
+        text.lines().any(|l| l.starts_with("\\title"))
+            && !sections.is_empty()
+            && sections.iter().all(|(_, _, bars)| *bars > 0),
+        format!("{} lines of Keyflow", text.lines().count()),
+    );
+    for point in &fixture.chart {
+        let name = format!("generated chart follows {}s", point.at);
+        match at_playhead(mcp, point.at) {
+            Ok(answer) => {
+                let bar = answer["bar"].as_i64().unwrap_or(-1);
+                let section = sections
+                    .iter()
+                    .find(|(_, first, bars)| (*first..first + bars).contains(&bar));
+                let ok = section.is_some_and(|(n, _, _)| answer["section"] == json!(n));
+                out.add(
+                    name,
+                    ok,
+                    format!(
+                        "playhead {} s: bar {bar}, {} (the chart's section there: {})",
+                        answer["at"],
+                        answer["section"],
+                        section.map_or("none", |s| s.0.as_str())
+                    ),
+                );
+            }
+            Err(why) => out.failed(name, why),
+        }
+    }
+}
+
+/// `SESSION_CHART`, asked again while the song's session is still opening.
+fn chart_shown(mcp: &Mcp) -> Result<Value, String> {
+    let began = Instant::now();
+    loop {
+        match mcp.run("SESSION_CHART", &json!({})) {
+            Ok(chart) => return Ok(chart),
+            Err(why) if why.contains("not open yet") && began.elapsed() < SHOWN_WAIT => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(why) => return Err(why),
+        }
+    }
+}
+
+/// Play from `at` for a moment and ask where the chart is at the playhead.
+fn at_playhead(mcp: &Mcp, at: f64) -> Result<Value, String> {
+    play_from(mcp, at)?;
+    std::thread::sleep(Duration::from_millis(300));
+    let answer = mcp.run("SESSION_CHART_AT", &json!({}));
+    stop(mcp)?;
+    let answer = answer?;
+    if answer["at"].as_f64().is_some_and(|t| t > at) {
+        Ok(answer)
+    } else {
+        Err(format!("the playhead did not move: {answer}"))
+    }
 }
 
 /// The song's click: a track named for it, heard over the first bars.

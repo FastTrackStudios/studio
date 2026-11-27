@@ -32,8 +32,12 @@
 //!
 //! [[chart]]                 # where the chart must be at a time
 //! at = 4.5                  # seconds
-//! source = "chart"          # chart (its .kf, the default) or markers
+//! source = "chart"          # chart (its .kf, the default) or session
 //! bar = 3                   # as played; `written`, `pass`, `section` too
+//!
+//! [shown]                   # the chart the session shows (SESSION_CHART)
+//! source = "generated"      # chart (written: kept as its .kf) or generated
+//! sections = [{ name = "Verse 1", first_bar = 1, bars = 4 }]
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -58,6 +62,18 @@ pub struct Fixture {
     /// Where each of them ends, seconds (unchecked when empty).
     pub section_ends: Vec<f64>,
     pub arrangements: Vec<Arrangement>,
+    /// The chart it must show, when its `fixture.toml` says.
+    pub shown: Option<Shown>,
+}
+
+/// The chart a session must show (`SESSION_CHART`): whose it is, and its
+/// sections as it numbers their bars.
+#[derive(Debug)]
+pub struct Shown {
+    /// `chart` (written) or `generated` (from the markers).
+    pub source: String,
+    /// Each section's name, first bar and bars (unchecked when empty).
+    pub sections: Vec<(String, i64, i64)>,
 }
 
 /// Another arrangement of the song: a branch of its project file, made by
@@ -198,7 +214,33 @@ impl Fixture {
                 })
             })
             .collect::<Result<_, String>>()?;
+        let shown = table
+            .get("shown")
+            .and_then(toml::Value::as_table)
+            .map(|t| {
+                let sections = t
+                    .get("sections")
+                    .and_then(toml::Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(toml::Value::as_table)
+                    .map(|s| {
+                        let int = |key: &str| {
+                            s.get(key)
+                                .and_then(toml::Value::as_integer)
+                                .ok_or_else(|| format!("shown.sections: `{key}`"))
+                        };
+                        Ok((text_of(s, "name")?, int("first_bar")?, int("bars")?))
+                    })
+                    .collect::<Result<_, String>>()?;
+                Ok::<_, String>(Shown {
+                    source: text_of(t, "source")?,
+                    sections,
+                })
+            })
+            .transpose()?;
         Ok(Self {
+            shown,
             sections: names(&table, "sections"),
             section_ends: table
                 .get("section_ends")
@@ -246,6 +288,26 @@ impl Fixture {
             write_wav(&path, &render(&media.sound, media.seconds))?;
         }
         song_in(&to)
+    }
+}
+
+impl Fixture {
+    /// The chart written beside the session (its one `.kf`), when it has one.
+    #[must_use]
+    pub fn written_chart(&self) -> Option<String> {
+        let dir = root().join("sessions").join(&self.name);
+        let mut charts = std::fs::read_dir(&dir)
+            .ok()?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "kf"));
+        let one = charts.next()?;
+        // Two charts are none, as the engine finds a song's chart.
+        charts
+            .next()
+            .is_none()
+            .then(|| std::fs::read_to_string(one).ok())
+            .flatten()
     }
 }
 

@@ -210,7 +210,7 @@ pub(crate) static CHART_AT: ActionMeta = meta(
     "SESSION_CHART_AT",
     "chart_at",
     "Where the chart is",
-    "Where the current song's chart is at `at` seconds (left out: the playhead), as a chart following the playhead shows it: the `bar` as played (1 the first after the count-in; a repeat's second pass is the next bars along), the `written` bar it plays and its `pass`, its `section`, and the bar's `start` and `end`. From the song's Keyflow chart (the `.kf` beside it: `source` chart); a song with none counts its bars and names its sections from its markers (`source` markers, no `written` or `pass`). No `bar` in a count-in or past the end. Read-only.",
+    "Where the current song's chart is at `at` seconds (left out: the playhead), as a chart following the playhead shows it: the `bar` as played (1 the first after the count-in; a repeat's second pass is the next bars along), the `written` bar it plays and its `pass`, its `section`, and the bar's `start` and `end`. From the song's Keyflow chart (the `.kf` beside it: `source` chart); a song with no `.kf` follows the chart its session shows (`source` session, no `written` or `pass`): its bars counted from the tempo map and its sections its markers', as the chart drawn in the session's bars numbers and heads them, the one Keyflow generates from the markers when nobody has charted it (SESSION_CHART shows which). No `bar` in a count-in or past the end. Read-only.",
     "View",
     "",
 );
@@ -319,14 +319,16 @@ fn from_chart(
     }
 }
 
-/// The answer from the markers, for a song with no chart: `bar` the one the
-/// tempo map counts at `at` (`span` its start and end), the section the
-/// regions name; nothing past the last section.
+/// The answer for a song with no chart file, on the chart its session
+/// shows (generated from its markers when nobody has charted it,
+/// studio#693): `bar` the one the tempo map counts at `at` (`span` its
+/// start and end), the section the regions name, as that chart numbers and
+/// heads them; nothing past the last section.
 fn from_markers(at: f64, bar: i32, span: (f64, f64), sections: &[SectionOut]) -> ChartAtOut {
     let inside = at < sections.iter().map(|s| s.end).fold(0.0, f64::max);
     ChartAtOut {
         at,
-        source: "markers".to_owned(),
+        source: "session".to_owned(),
         bar: u32::try_from(bar).ok().filter(|b| inside && *b > 0),
         written: None,
         pass: None,
