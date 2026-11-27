@@ -215,14 +215,6 @@ enum Opening {
     Failed(String),
 }
 
-/// Something loaded in the background.
-#[derive(Clone, PartialEq)]
-pub(super) enum Load<T> {
-    Waiting,
-    Ready(T),
-    Failed(String),
-}
-
 /// `work` on a thread of its own; its answer, awaited.
 pub(super) async fn off_thread<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
