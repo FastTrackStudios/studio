@@ -546,6 +546,157 @@ fn the_chart_page_shows_a_generated_chart_and_follows_the_playhead() {
     });
 }
 
+/// studio#706: signed out, the root of the site is the landing page. Its
+/// download buttons point at the newest release's files (pre-releases
+/// count: Studio's alpha is one), read from a release list as GitHub's API
+/// gives it (here this test's, `?releases=`); Join a room takes a room's
+/// link to the room link flow (`/join/<room>`), Sign in and Open in browser
+/// go to the issuer. At phone width it fits and its buttons are a finger's
+/// size.
+#[test]
+#[ignore = "needs the web build and a WebDriver: `just test-web-boot`"]
+fn signed_out_the_root_is_the_landing_page() {
+    let dist = PathBuf::from(
+        std::env::var_os("STUDIO_WEB_DIST")
+            .expect("STUDIO_WEB_DIST: the web build's public folder"),
+    );
+    let sessions = tempfile::tempdir().expect("a folder for the release list");
+    let release = |tag: &str, version: &str, body: &str| {
+        let asset = |name: String| json!({ "name": name, "browser_download_url": format!("https://github.com/FastTrackStudios/studio/releases/download/{tag}/{name}") });
+        json!({
+            "tag_name": tag, "draft": false, "prerelease": true, "body": body,
+            "html_url": format!("https://github.com/FastTrackStudios/studio/releases/tag/{tag}"),
+            "assets": [
+                asset(format!("Studio-{version}-macos-arm64.dmg")),
+                asset(format!("Studio-{version}-linux-x86_64.AppImage")),
+                asset("SHA256SUMS".into()),
+            ],
+        })
+    };
+    let releases = json!([
+        release("studio-v26.11.9", "26.11.9", ""),
+        release(
+            "studio-v26.12.1",
+            "26.12.1",
+            "iPhone and iPad: https://testflight.apple.com/join/Test1234"
+        ),
+        release("v26.11.5", "26.11.5", ""),
+    ]);
+    std::fs::write(sessions.path().join("releases.json"), releases.to_string())
+        .expect("the release list");
+    let site = Server::signed_out(dist, sessions.path().to_path_buf());
+    let page = format!("{0}/?releases={0}/sessions/releases.json", site.origin);
+
+    let driver = Driver::start();
+    let session = driver.new_session_at(Some(PHONE));
+    session.navigate(&page);
+
+    // The landing page, not the app: what Studio is and the ways in.
+    session.wait_for(Duration::from_secs(90), "the landing page", |s| {
+        (s.count("[data-landing]") == 1).then_some(())
+    });
+    let text = session.script("return document.querySelector('[data-landing]').innerText;");
+    for part in [
+        "Setlists",
+        "Charts",
+        "Rooms",
+        "Mixing",
+        "Open in browser",
+        "Sign in",
+        "Join a room",
+    ] {
+        assert!(
+            text.contains(part),
+            "the landing page does not say {part:?}: {text}"
+        );
+    }
+    assert_eq!(
+        session.count("[data-landing] .lshot img[src*='/landing/']"),
+        4,
+        "the landing page shows the app's four screens: {}",
+        session.page()
+    );
+
+    // Every download from the newest release that has it.
+    let href = |platform: &str| {
+        session.script_with(
+            "return document.querySelector(`a[data-download='${arguments[0]}']`)?.getAttribute('href') || '';",
+            json!([platform]),
+        )
+    };
+    session.wait_for(
+        Duration::from_secs(30),
+        "the downloads read from the release list",
+        |_| {
+            href("macos")
+                .ends_with("Studio-26.12.1-macos-arm64.dmg")
+                .then_some(())
+        },
+    );
+    assert!(
+        href("linux").ends_with("/studio-v26.12.1/Studio-26.12.1-linux-x86_64.AppImage"),
+        "Linux: {}",
+        href("linux")
+    );
+    assert_eq!(href("ios"), "https://testflight.apple.com/join/Test1234");
+
+    session.fits(
+        "the landing page",
+        &[
+            ".lhero h1",
+            "a.ldownload",
+            "[data-action='open-in-browser']",
+            "[data-action='join-room']",
+        ],
+    );
+    session.taps(
+        "the landing page",
+        &[
+            "a.ldownload",
+            "[data-action='open-in-browser']",
+            "[data-action='join-room']",
+            "[data-action='sign-in']",
+        ],
+    );
+
+    // Join a room: what is not a room's link is said so, a room's link
+    // goes to the room link flow, which (signed out) offers that room.
+    session.click("[data-action='join-room']");
+    session.type_into("form[data-join] input", "Adult Jam");
+    session.click("form[data-join] button[type='submit']");
+    session.find("form[data-join] .lwrong");
+    session.clear("form[data-join] input");
+    session.type_into(
+        "form[data-join] input",
+        "https://fasttrackstudio.app/join/adult-jam",
+    );
+    session.click("form[data-join] button[type='submit']");
+    session.wait_for(Duration::from_secs(30), "the room link flow", |s| {
+        (s.script("return location.pathname;") == "/join/adult-jam"
+            && s.count("[data-room='adult-jam']") == 1)
+            .then_some(())
+    });
+    assert_eq!(
+        session.count("[data-room='adult-jam'] a[href='fasttrackstudio://join/adult-jam']"),
+        1,
+        "the room opens in Studio by its app link: {}",
+        session.page()
+    );
+
+    // Sign in goes to the issuer the node names, and comes back here.
+    session.click("[data-action='sign-in']");
+    session.wait_for(Duration::from_secs(30), "the issuer's sign-in", |s| {
+        (s.script("return location.pathname;") == "/issuer/oauth2/authorize").then_some(())
+    });
+
+    // Open in browser: the app, whose boot signs in at the same issuer.
+    session.navigate(&page);
+    session.click("[data-action='open-in-browser']");
+    session.wait_for(Duration::from_secs(30), "the app to sign in", |s| {
+        (s.script("return location.pathname;") == "/issuer/oauth2/authorize").then_some(())
+    });
+}
+
 /// A screen the app is laid out for, in CSS pixels.
 #[derive(Clone, Copy, Debug)]
 struct Screen {
@@ -903,10 +1054,29 @@ struct Server {
 
 impl Server {
     fn start(dist: PathBuf, sessions: PathBuf) -> Self {
+        Self::start_as(dist, sessions, false)
+    }
+
+    /// The same, as a node that wants a sign-in: its `/orgs` says signed
+    /// out and names an issuer on this server (`/issuer`), as
+    /// fasttrackstudio.app's node does for a visitor with no account.
+    fn signed_out(dist: PathBuf, sessions: PathBuf) -> Self {
+        Self::start_as(dist, sessions, true)
+    }
+
+    fn start_as(dist: PathBuf, sessions: PathBuf, signed_out: bool) -> Self {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
         let listener = TcpListener::bind("127.0.0.1:0").expect("the server's port");
         let origin = format!("http://{}", listener.local_addr().expect("its address"));
+        let orgs: Option<Arc<str>> = signed_out.then(|| {
+            json!({
+                "signed_in": false,
+                "auth": { "issuer": format!("{origin}/issuer"), "client_id": "studio-web" },
+            })
+            .to_string()
+            .into()
+        });
         let cut = Arc::new(AtomicBool::new(false));
         let refused = Arc::new(AtomicUsize::new(0));
         {
@@ -918,9 +1088,9 @@ impl Server {
                         let _ = stream.shutdown(std::net::Shutdown::Both);
                         continue;
                     }
-                    let (dist, sessions) = (dist.clone(), sessions.clone());
+                    let (dist, sessions, orgs) = (dist.clone(), sessions.clone(), orgs.clone());
                     std::thread::spawn(move || {
-                        let _ = serve(stream, &dist, &sessions);
+                        let _ = serve(stream, &dist, &sessions, orgs.as_deref());
                     });
                 }
             });
@@ -1006,7 +1176,14 @@ impl Drop for Node {
     }
 }
 
-fn serve(stream: TcpStream, dist: &Path, sessions: &Path) -> std::io::Result<()> {
+/// `orgs`: what the node's `/orgs` answers (`/studio/api/orgs`); `None`,
+/// the page's fallback, which the app reads as a node that lets it in.
+fn serve(
+    stream: TcpStream,
+    dist: &Path,
+    sessions: &Path,
+    orgs: Option<&str>,
+) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut line = String::new();
     reader.read_line(&mut line)?;
@@ -1040,6 +1217,14 @@ fn serve(stream: TcpStream, dist: &Path, sessions: &Path) -> std::io::Result<()>
         return out.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
     }
     let path = percent_decode(target.split('?').next().unwrap_or("/"));
+    if let (Some(orgs), "/studio/api/orgs") = (orgs, path.as_str()) {
+        let mut out = stream;
+        return write!(
+            out,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{orgs}",
+            orgs.len()
+        );
+    }
     if path
         .strip_prefix(&format!("/sessions/{RIG_STORE}/"))
         .is_some_and(|rest| rest != "files.json")
@@ -1070,6 +1255,7 @@ fn serve(stream: TcpStream, dist: &Path, sessions: &Path) -> std::io::Result<()>
         Some("css") => "text/css",
         Some("json") => "application/json",
         Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
         Some("ogg") => "audio/ogg",
         _ => "application/octet-stream",
     };
@@ -1445,6 +1631,12 @@ impl Session<'_> {
             &format!("/element/{found}/value"),
             Some(&json!({ "text": text })),
         );
+    }
+
+    /// Wait for `css` to be there, then empty it.
+    fn clear(&self, css: &str) {
+        let found = self.find(css);
+        self.call("POST", &format!("/element/{found}/clear"), Some(&json!({})));
     }
 
     /// Wait for `css` to be there, then click it.

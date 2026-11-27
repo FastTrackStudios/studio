@@ -129,6 +129,7 @@ fn title_of(route: &Route, index: &crate::sets::Index) -> String {
         Route::AllOrgs {} => "All orgs".into(),
         Route::People {} => "People".into(),
         Route::OrgSettings {} => "Organization".into(),
+        Route::JoinRoom { .. } => "Room".into(),
     }
 }
 

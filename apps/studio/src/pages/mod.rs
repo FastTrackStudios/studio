@@ -3,6 +3,7 @@
 pub mod drive_set;
 pub mod files;
 pub mod home;
+pub mod join;
 pub mod library;
 pub mod live;
 pub mod orgs;
