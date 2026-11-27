@@ -81,6 +81,14 @@ impl Book {
         });
     }
 
+    /// The name of the group being made, if one is: what each step read
+    /// meanwhile is called in the song's doc, so every device that has
+    /// the song sees it as the agent's (`Agent: tighten snare`).
+    #[must_use]
+    pub fn open_name(&self) -> Option<&str> {
+        self.open.as_ref().map(|g| g.name.as_str())
+    }
+
     /// Whether the group `name` is being made.
     #[must_use]
     pub fn is_open(&self, name: &str) -> bool {

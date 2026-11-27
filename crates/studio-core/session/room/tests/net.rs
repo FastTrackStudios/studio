@@ -110,3 +110,32 @@ async fn a_member_follows_every_load_on_one_attachment() {
     assert_eq!(dials.load(Ordering::SeqCst), 1);
     assert_eq!(host.members(), 1);
 }
+
+/// An agent working through a member's MCP is in the room as a person is:
+/// the leader lists it among the people, and as an agent, until it goes.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_through_a_member_is_in_the_room() {
+    let id = RoomId::parse("adult-jam-3f9a1c").unwrap();
+    let host = RoomHost::new(&id);
+    let leader = host.own_presence("leader", "Cody").await.unwrap();
+    let member = RoomPeer::join(
+        &id,
+        "member-1",
+        "Alex",
+        attach(&host, Arc::new(AtomicUsize::new(0))),
+    );
+
+    room::net::agent_arrived(&member.presence(), "member-1", "Claude");
+    eventually("the leader sees the agent", || {
+        room::net::agents(&leader) == vec!["Claude"]
+    })
+    .await;
+    assert_eq!(room::net::people(&leader), vec!["Alex", "Claude", "Cody"]);
+
+    room::net::agent_left(&member.presence(), "member-1", "Claude");
+    eventually("the agent is gone from the leader's room", || {
+        room::net::agents(&leader).is_empty()
+    })
+    .await;
+    assert_eq!(room::net::people(&leader), vec!["Alex", "Cody"]);
+}

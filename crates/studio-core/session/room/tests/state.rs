@@ -72,3 +72,32 @@ fn a_loaded_path_means_the_same_file_on_every_device() {
         Path::new("/srv/songs/Washed.RPP")
     );
 }
+
+#[test]
+fn a_member_reads_where_the_leader_shares_each_load() {
+    let leader = RoomDoc::new();
+    let member = RoomDoc::new();
+    assert_eq!(member.shared(), None);
+
+    let share = room::Share {
+        load: 1,
+        ticket: "fts-session:abc/6a1f0c3e-8d2b-4f5a-9e7c-1b3d5f7a9c2e".to_owned(),
+        addrs: vec![
+            "192.168.1.20:41000".to_owned(),
+            "127.0.0.1:41000".to_owned(),
+        ],
+    };
+    leader.share(&share).unwrap();
+    sync(&leader, &member);
+    assert_eq!(member.shared(), Some(share));
+
+    // The next load's share replaces it.
+    let next = room::Share {
+        load: 2,
+        ticket: "fts-session:def/6a1f0c3e-8d2b-4f5a-9e7c-1b3d5f7a9c2f".to_owned(),
+        addrs: Vec::new(),
+    };
+    leader.share(&next).unwrap();
+    sync(&leader, &member);
+    assert_eq!(member.shared(), Some(next));
+}

@@ -194,6 +194,42 @@ impl SessionDoc {
         self.doc.oplog_vv()
     }
 
+    /// The names of the steps this replica gained after `since`, each once,
+    /// oldest first: what each commit was named where it was made (an
+    /// agent's step, `Agent: tighten snare`, by the name the agent gave it).
+    /// A commit made with no name is left out.
+    #[must_use]
+    pub fn messages_since(&self, since: &VersionVector) -> Vec<String> {
+        let mut found: Vec<(u32, String)> = Vec::new();
+        for (peer, end) in self.doc.oplog_vv().iter() {
+            let mut counter = since.get(peer).copied().unwrap_or(0);
+            while counter < *end {
+                let Some(change) = self.doc.get_change(loro::ID::new(*peer, counter)) else {
+                    break;
+                };
+                if let Some(message) = change.message.as_deref().filter(|m| !m.is_empty()) {
+                    found.push((change.lamport, message.to_owned()));
+                }
+                let next = change
+                    .id
+                    .counter
+                    .saturating_add(i32::try_from(change.len).unwrap_or(i32::MAX));
+                if next <= counter {
+                    break;
+                }
+                counter = next;
+            }
+        }
+        found.sort_by_key(|(lamport, _)| *lamport);
+        let mut names: Vec<String> = Vec::new();
+        for (_, message) in found {
+            if !names.contains(&message) {
+                names.push(message);
+            }
+        }
+        names
+    }
+
     /// Merge a snapshot or updates from elsewhere.
     ///
     /// # Errors

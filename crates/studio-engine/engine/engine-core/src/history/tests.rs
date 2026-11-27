@@ -300,3 +300,40 @@ fn a_step_from_before_the_last_open_is_gone_back_to_from_the_archive() {
     project_file::restore(&reopened, MomentRef::Seq(wanted)).expect("gone back, from the archive");
     assert_eq!(volume(&daw, &reopened), Some(0.6));
 }
+
+/// An agent's steps are named for its undo step in the song's history
+/// (and in its doc, which every device in a room shares): the person's
+/// step before it keeps its own name.
+#[test]
+fn an_agents_steps_are_named_for_it() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let daw = Standalone::new();
+    song_in(&daw, "named", &dir.path().join("Song.session"), 0.5);
+    step(&daw, "named", 0.6);
+    assert!(project_file::group_begin("named", "Agent: tighten snare"));
+    step(&daw, "named", 0.7);
+    step(&daw, "named", 0.8);
+    assert_eq!(
+        project_file::group_end("named", "Agent: tighten snare"),
+        Some(2)
+    );
+    step(&daw, "named", 0.9);
+
+    let labels: Vec<String> = steps("named").into_iter().map(|(_, l, _)| l).collect();
+    assert_eq!(
+        labels.get(..4),
+        Some(
+            &[
+                "Set volume".to_owned(),
+                "Agent: tighten snare".to_owned(),
+                "Agent: tighten snare".to_owned(),
+                "Set volume".to_owned(),
+            ][..]
+        ),
+        "{labels:?}"
+    );
+    project_file::undo(&daw, "named").expect("undone");
+    let undone = project_file::undo(&daw, "named").expect("undone");
+    assert_eq!(undone, Undone::Step("Agent: tighten snare".into()));
+    assert_eq!(volume(&daw, "named"), Some(0.6));
+}

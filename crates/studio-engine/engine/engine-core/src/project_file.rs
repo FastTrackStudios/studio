@@ -282,7 +282,8 @@ fn watch_remote(guid: &str, doc: &engine_sync::loro::LoroDoc) -> engine_sync::lo
             };
             match open.bridge.remote_changed().await {
                 Ok(changes) => {
-                    if let Err(e) = append(open, REMOTE_LABEL) {
+                    let label = remote_label(&open.bridge.doc().messages_since(&open.saved));
+                    if let Err(e) = append(open, &label) {
                         tracing::warn!(project.guid = %guid, why = %e, "another device's edit was not written to the song's file");
                     }
                     drop(songs);
@@ -328,8 +329,20 @@ where
     subscription
 }
 
-/// What an edit that reached a song from elsewhere is named in its file.
+/// What an edit that reached a song from elsewhere is named in its file
+/// when it came with no name.
 const REMOTE_LABEL: &str = "Remote edits";
+
+/// What the edits that reached a song from elsewhere are named in its
+/// history: the steps they were where they were made (`Agent: tighten
+/// snare`; `Set volume`), or [`REMOTE_LABEL`] when they came unnamed.
+fn remote_label(names: &[String]) -> String {
+    if names.is_empty() {
+        REMOTE_LABEL.to_owned()
+    } else {
+        names.join("; ")
+    }
+}
 
 /// How many updates a branch keeps before a save folds them into one
 /// snapshot ([`Store::compact`]) whatever else happens. An open replays
@@ -1235,7 +1248,11 @@ pub fn steps_pending() -> usize {
 /// the song is open from one.
 pub fn record(project_guid: &str, label: &str, action: Option<&str>) -> Result<(), String> {
     let guid = project_guid.to_owned();
-    let label = label.to_owned();
+    // A step made while an agent's undo step is open is named for it, in
+    // the doc too: every device with the song (a room's members) reads it
+    // as the agent's step.
+    let label =
+        with_book(&guid, |b| b.open_name().map(str::to_owned)).unwrap_or_else(|| label.to_owned());
     let action = action.map(str::to_owned);
     // On the project file's runtime, still under the step's span.
     run(tracing::Instrument::in_current_span(async move {

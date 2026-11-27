@@ -46,22 +46,81 @@ fn here(name: &str) -> LoroValue {
     LoroValue::from(map)
 }
 
-/// Everyone in the room, by name, sorted: what `presence` holds.
+/// What an agent working through a member's MCP says about itself in
+/// the room: its name, and that it is an agent.
+fn agent_here(name: &str) -> LoroValue {
+    let mut map = std::collections::HashMap::new();
+    map.insert("name".to_owned(), LoroValue::from(name));
+    map.insert("kind".to_owned(), LoroValue::from("agent"));
+    LoroValue::from(map)
+}
+
+/// The presence key agent `name` is here under, written by the member
+/// whose MCP it works through (`by`): one entry per agent per member.
 #[must_use]
-pub fn people(presence: &PresencePeer) -> Vec<String> {
-    let mut names: Vec<String> = presence
+pub fn agent_key(by: &str, name: &str) -> String {
+    let slug: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    here_key(&format!("{by}~agent-{slug}"))
+}
+
+/// Say in `presence` that agent `name` is here, through member `by`.
+pub fn agent_arrived(presence: &PresencePeer, by: &str, name: &str) {
+    presence.set(&agent_key(by, name), agent_here(name));
+}
+
+/// Say in `presence` that agent `name`, through member `by`, has gone.
+pub fn agent_left(presence: &PresencePeer, by: &str, name: &str) {
+    presence.delete(&agent_key(by, name));
+}
+
+/// Who is here, from `presence`: each one's name, and whether they are an
+/// agent.
+fn here_entries(presence: &PresencePeer) -> Vec<(String, bool)> {
+    presence
         .states()
         .into_iter()
         .filter(|(k, _)| k.ends_with("/here"))
         .filter_map(|(_, v)| match v {
             LoroValue::Map(m) => match m.get("name") {
-                Some(LoroValue::String(s)) => Some(s.to_string()),
+                Some(LoroValue::String(s)) => Some((
+                    s.to_string(),
+                    matches!(m.get("kind"), Some(LoroValue::String(k)) if &**k == "agent"),
+                )),
                 _ => None,
             },
             _ => None,
         })
+        .collect()
+}
+
+/// Everyone in the room, by name, sorted: what `presence` holds. An
+/// agent is in it as a person is.
+#[must_use]
+pub fn people(presence: &PresencePeer) -> Vec<String> {
+    let mut names: Vec<String> = here_entries(presence).into_iter().map(|(n, _)| n).collect();
+    names.sort();
+    names
+}
+
+/// The agents in the room, by name, sorted.
+#[must_use]
+pub fn agents(presence: &PresencePeer) -> Vec<String> {
+    let mut names: Vec<String> = here_entries(presence)
+        .into_iter()
+        .filter(|(_, agent)| *agent)
+        .map(|(n, _)| n)
         .collect();
     names.sort();
+    names.dedup();
     names
 }
 
