@@ -19,7 +19,7 @@ static RUN: ActionMeta = crate::actions::meta(
     "AGENT_RUN",
     "agent_run",
     "Run an action for an agent",
-    "Run the action `id` with `args` (its own JSON) as an agent's call: its edits are noted as the agent's in the song's journal (SESSION_CHANGES), apart from the person's. `if_revision`: run it only if the song is still at that revision (what every answer of Studio's MCP says) — when it has moved on, nothing runs and the answer is `{ok: false, code: \"stale\", revision, since, changes}`, the edits since and who made them. `step`: the name of an undo step (`Agent: tighten snare`) this call's edits join, with every other call naming it until AGENT_STEP_END — SESSION_UNDO then takes them all back at once (a song open from its project file). Answers `{ok: true, answer, revision, edit, step}` (`edit`: whether this call moved the song on), or `{ok: false, code, error}` (`stale`, `bad_args` with `takes`, `unknown`, `failed`, `denied`, `disabled`, `confirm` with `ticket`).",
+    "Run the action `id` with `args` (its own JSON) as an agent's call: its edits are noted as the agent's in the song's journal (SESSION_CHANGES), apart from the person's. `if_revision`: run it only if the song is still at that revision (what every answer of Studio's MCP says) — when it has moved on, nothing runs and the answer is `{ok: false, code: \"stale\", revision, since, changes}`, the edits since and who made them. `step`: the name of an undo step (`Agent: tighten snare`) this call's edits join, with every other call naming it until AGENT_STEP_END — SESSION_UNDO then takes them all back at once (a song open from its project file); its edits are named for it in the song's doc, so every device in a room shows them as that step. `agent`: who is calling (`Claude`; left out: Agent) — in a room, it is listed among the people (ROOM's `agents`) while it works. Answers `{ok: true, answer, revision, edit, step}` (`edit`: whether this call moved the song on), or `{ok: false, code, error}` (`stale`, `bad_args` with `takes`, `unknown`, `failed`, `denied`, `disabled`, `confirm` with `ticket`).",
     "Agent",
     "",
 );
@@ -60,6 +60,7 @@ struct RunDoc {
     args: Option<String>,
     if_revision: Option<u64>,
     step: Option<String>,
+    agent: Option<String>,
 }
 
 #[derive(Facet)]
@@ -204,6 +205,13 @@ async fn agent_run(a: Value) -> Result<Vec<u8>, ActionError> {
             return Ok(stale.to_string().into_bytes());
         }
     }
+    let agent = a
+        .get("agent")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("Agent");
+    crate::room::agent_worked(agent);
     if crate::actions::list().info(&id).is_none() {
         return Ok(refusal(&id, ActionError::Unknown(id.clone()))
             .to_string()

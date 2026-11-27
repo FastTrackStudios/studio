@@ -13,7 +13,10 @@
 //!   ([`Live`]).
 //! - [`state`]: what the room shares while it is live, on live-doc: one
 //!   Loro doc with what is loaded ([`Loaded`]), and its presence, which
-//!   carries who is here and the leader's transport.
+//!   carries who is here (people, and the agents editing through a
+//!   member's MCP) and the leader's transport. The doc also says where the
+//!   leader shares what it loaded ([`Share`]), so everyone's edits to it
+//!   merge.
 //! - [`lead`]: the leader's transport, as the entry everyone follows
 //!   ([`lead::entry`]); members follow it with session-sync's
 //!   `TransportSync`, as a live session playing together does.
@@ -32,4 +35,4 @@ pub mod state;
 pub mod net;
 
 pub use record::{APP_JOIN_BASE, Error, Live, Room, RoomId, Rooms, link_of, parse_link};
-pub use state::{Kind, Loaded, RoomDoc};
+pub use state::{Kind, Loaded, RoomDoc, Share};

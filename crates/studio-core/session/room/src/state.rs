@@ -5,6 +5,12 @@
 //! (`seq`), so a member opens each load once, the same setlist loaded
 //! again included. Only the leader writes it.
 //!
+//! **The share** ([`Share`]), in the same doc: where the leader shares the
+//! set it loaded so everyone edits it together (engine-collab's live set,
+//! served over iroh), and which load it is for. A member joins it once it
+//! has opened that load, and the edits of everyone in the room merge
+//! through it. Only the leader writes it.
+//!
 //! **The presence**, under the room's id too: each person writes who they
 //! are under [`here_key`], and the leader writes the transport everyone
 //! follows under session-sync's `transport::KEY`. It is ephemeral, as a
@@ -16,6 +22,9 @@ use loro::{LoroDoc, LoroValue};
 
 /// The doc's root map.
 const ROOM: &str = "room";
+
+/// The share's root map.
+const SHARE: &str = "share";
 
 /// What is loaded: a setlist, or a lone session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,6 +151,61 @@ impl RoomDoc {
             seq,
         ))
     }
+
+    /// Say where load `share.load` is shared: the leader's.
+    ///
+    /// # Errors
+    ///
+    /// Loro refused the write.
+    pub fn share(&self, share: &Share) -> Result<(), loro::LoroError> {
+        let map = self.doc.get_map(SHARE);
+        map.insert("load", i64::try_from(share.load).unwrap_or(i64::MAX))?;
+        map.insert("ticket", share.ticket.as_str())?;
+        map.insert("addrs", share.addrs.join("\n").as_str())?;
+        self.doc.commit();
+        Ok(())
+    }
+
+    /// Where the leader shares what it loaded, once it does. A share for
+    /// an earlier load stays until the leader shares the next.
+    #[must_use]
+    pub fn shared(&self) -> Option<Share> {
+        let LoroValue::Map(map) = self.doc.get_map(SHARE).get_value() else {
+            return None;
+        };
+        let text = |k: &str| match map.get(k)? {
+            LoroValue::String(s) => Some(s.to_string()),
+            _ => None,
+        };
+        let load = match map.get("load")? {
+            LoroValue::I64(n) => u64::try_from(*n).ok()?,
+            _ => return None,
+        };
+        Some(Share {
+            load,
+            ticket: text("ticket")?,
+            addrs: text("addrs")
+                .unwrap_or_default()
+                .split('\n')
+                .filter(|a| !a.is_empty())
+                .map(str::to_owned)
+                .collect(),
+        })
+    }
+}
+
+/// Where the leader shares what it loaded, for everyone in the room to
+/// edit it together.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Share {
+    /// The load it shares ([`RoomDoc::loaded`]'s count): a member joins
+    /// it only once it has opened that load.
+    pub load: u64,
+    /// The live set's ticket (`fts-session:<endpoint>/<set>`).
+    pub ticket: String,
+    /// The addresses the leader's live set is served at, so a member on
+    /// the same network dials it directly.
+    pub addrs: Vec<String>,
 }
 
 /// The presence key person `peer` says who they are under.

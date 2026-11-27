@@ -584,15 +584,86 @@ fn secret_key() -> architect::iroh_link::iroh::SecretKey {
 /// # Errors
 /// When nothing is open, the engine cannot be read, or iroh cannot bind.
 pub fn host(name: String) -> eyre::Result<String> {
-    record(host_inner(name))
+    record(host_inner(name, None)).map(|(ticket, _)| ticket)
+}
+
+/// The set a room shares: the name both its ends know it by, and its
+/// songs, as this engine's projects of them (by guid). Nothing else this
+/// engine keeps (an earlier load's songs) is shared.
+#[cfg(feature = "native")]
+#[derive(Clone, Debug)]
+pub struct RoomSet {
+    pub set: String,
+    pub projects: Vec<String>,
 }
 
 #[cfg(feature = "native")]
-fn host_inner(name: String) -> eyre::Result<String> {
+impl RoomSet {
+    fn pick(
+        &self,
+        open: Vec<(daw_control::Project, MediaRoot, String, std::path::PathBuf)>,
+    ) -> Vec<(daw_control::Project, MediaRoot, String, std::path::PathBuf)> {
+        open.into_iter()
+            .filter(|(project, ..)| self.projects.iter().any(|p| p == project.guid()))
+            .collect()
+    }
+}
+
+#[cfg(feature = "native")]
+/// Share the set a room loaded, for everyone in it to edit together:
+/// the ticket, and the addresses it is served at (a member on the same
+/// network dials them directly).
+///
+/// # Errors
+/// As [`host`].
+pub fn host_for_room(name: String, room: RoomSet) -> eyre::Result<(String, Vec<String>)> {
+    record(host_inner(name, Some(room)))
+}
+
+#[cfg(feature = "native")]
+/// The addresses a peer dials `endpoint` at: what it knows of itself, and
+/// its sockets on this machine (an unspecified one as loopback).
+#[must_use]
+pub fn reachable_at(endpoint: &architect::iroh_link::iroh::Endpoint) -> Vec<String> {
+    let mut addrs: Vec<String> = endpoint
+        .addr()
+        .ip_addrs()
+        .map(ToString::to_string)
+        .collect();
+    for socket in endpoint.bound_sockets() {
+        let socket = if socket.ip().is_unspecified() {
+            let ip: std::net::IpAddr = if socket.is_ipv4() {
+                std::net::Ipv4Addr::LOCALHOST.into()
+            } else {
+                std::net::Ipv6Addr::LOCALHOST.into()
+            };
+            std::net::SocketAddr::new(ip, socket.port())
+        } else {
+            socket
+        };
+        let socket = socket.to_string();
+        if !addrs.contains(&socket) {
+            addrs.push(socket);
+        }
+    }
+    addrs
+}
+
+#[cfg(feature = "native")]
+fn host_inner(name: String, room: Option<RoomSet>) -> eyre::Result<(String, Vec<String>)> {
     let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
-    let (ticket, live) = runtime.block_on(async move {
+    let (ticket, addrs, live) = runtime.block_on(async move {
         let open = open_songs().await?;
-        let set = set_key(&open);
+        let (open, set) = match &room {
+            Some(room) => (room.pick(open), room.set.clone()),
+            None => {
+                let set = set_key(&open);
+                (open, set)
+            }
+        };
+        if open.is_empty() {
+            eyre::bail!("nothing open to share");
+        }
         let id = session_id(&set);
         if let Ok(mut live) = LIVE.lock() {
             drop(stop(live.take()));
@@ -624,6 +695,16 @@ fn host_inner(name: String) -> eyre::Result<String> {
             .await
             .map_err(|e| eyre::eyre!("iroh: {e}"))?;
         let ticket = format!("fts-session:{}/{id}", endpoint.id());
+        // Its addresses on this machine's networks, once it has read them
+        // (a moment after binding), so a room's member on the same network
+        // dials it there.
+        let began = web_time::Instant::now();
+        while endpoint.addr().ip_addrs().next().is_none()
+            && began.elapsed() < Duration::from_secs(2)
+        {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let addrs = reachable_at(&endpoint);
         let router = host.mount(architect::LayerRouter::new());
         let serving = endpoint.clone();
         tokio::spawn(async move { architect::iroh_link::serve_router(&serving, router).await });
@@ -640,13 +721,17 @@ fn host_inner(name: String) -> eyre::Result<String> {
             Some(Box::new((host, endpoint))),
             None,
         );
-        Ok::<_, eyre::Report>((ticket.clone(), started.into_live(ticket, true, presence)))
+        Ok::<_, eyre::Report>((
+            ticket.clone(),
+            addrs,
+            started.into_live(ticket, true, presence),
+        ))
     })?;
     if let Ok(mut slot) = LIVE.lock() {
         *slot = Some(live);
     }
     tracing::info!(collab.role = "host", "collab: sharing the set");
-    Ok(ticket)
+    Ok((ticket, addrs))
 }
 
 #[cfg(feature = "native")]
@@ -655,16 +740,51 @@ fn host_inner(name: String) -> eyre::Result<String> {
 /// # Errors
 /// On a malformed ticket, a different set open, or a failed dial.
 pub fn join(ticket: &str, name: String) -> eyre::Result<()> {
-    record(join_inner(ticket, name))
+    record(join_inner(ticket, name, None))
 }
 
 #[cfg(feature = "native")]
-fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
+/// Join the set a room's leader shares ([`host_for_room`]), at the
+/// addresses it is served at: this engine's copy of `room`'s songs edited
+/// together with everyone's in the room.
+///
+/// # Errors
+/// As [`join`].
+pub fn join_for_room(
+    ticket: &str,
+    addrs: &[String],
+    name: String,
+    room: RoomSet,
+) -> eyre::Result<()> {
+    record(join_inner(ticket, name, Some((addrs.to_vec(), room))))
+}
+
+#[cfg(feature = "native")]
+fn join_inner(
+    ticket: &str,
+    name: String,
+    room: Option<(Vec<String>, RoomSet)>,
+) -> eyre::Result<()> {
     let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
     let (endpoint_id, id) = parse_ticket(ticket)?;
+    let mut at = architect::iroh_link::iroh::EndpointAddr::new(endpoint_id);
+    for addr in room.iter().flat_map(|(addrs, _)| addrs) {
+        match addr.parse() {
+            Ok(socket) => at = at.with_ip_addr(socket),
+            Err(e) => {
+                tracing::debug!(collab.error = %e, "collab: an address of the host's that is none")
+            }
+        }
+    }
     let live = runtime.block_on(async move {
         let open = open_songs().await?;
-        let set = set_key(&open);
+        let (open, set) = match &room {
+            Some((_, room)) => (room.pick(open), room.set.clone()),
+            None => {
+                let set = set_key(&open);
+                (open, set)
+            }
+        };
         if session_id(&set) != id {
             eyre::bail!("open the same setlist first — this ticket is for another one");
         }
@@ -672,7 +792,7 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
             .await
             .map_err(|e| eyre::eyre!("iroh: {e}"))?;
         let dial = async |endpoint: &architect::iroh_link::iroh::Endpoint| {
-            architect::iroh_link::connect(endpoint, endpoint_id)
+            architect::iroh_link::connect(endpoint, at.clone())
                 .await
                 .map_err(|e| eyre::eyre!("iroh connect: {e}"))
         };

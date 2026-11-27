@@ -177,3 +177,38 @@ fn an_edit_to_a_take_marker_whose_key_has_a_slash_is_read_back() {
         touched.take_markers
     );
 }
+
+/// What another device's commits were named reaches this replica with
+/// them: the steps it gained, by name, each once, oldest first.
+#[test]
+fn a_replica_reads_the_names_of_the_steps_it_gained() {
+    let theirs = SessionDoc::new();
+    let ours = SessionDoc::new();
+    theirs.write(&with_items(1), ORIGIN_LOCAL).expect("written");
+    ours.import(
+        &theirs.updates_since(&ours.version()).expect("updates"),
+        "remote",
+    )
+    .expect("imported");
+    let since = ours.version();
+    assert!(ours.messages_since(&since).is_empty(), "nothing new yet");
+
+    let one = with_items(1);
+    let two = with_items(2);
+    let three = with_items(3);
+    theirs
+        .write_step(&one, &two, ORIGIN_LOCAL, "Agent: tighten snare")
+        .expect("a step");
+    theirs
+        .write_step(&two, &three, ORIGIN_LOCAL, "Agent: tighten snare")
+        .expect("a step");
+    theirs
+        .write_step(&three, &one, ORIGIN_LOCAL, "Set volume")
+        .expect("a step");
+    ours.import(&theirs.updates_since(&since).expect("updates"), "remote")
+        .expect("imported");
+    assert_eq!(
+        ours.messages_since(&since),
+        vec!["Agent: tighten snare".to_owned(), "Set volume".to_owned()]
+    );
+}

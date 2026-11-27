@@ -545,5 +545,15 @@ fn a_real_song_tidied_and_folded() {
         mb(size(&path)),
         mb(u64::try_from(shallow_bytes).unwrap_or(u64::MAX)),
         mb(size(&archive_path)),
+#[test]
+fn edits_from_elsewhere_are_named_as_they_were_made() {
+    assert_eq!(super::remote_label(&[]), "Remote edits");
+    assert_eq!(
+        super::remote_label(&["Agent: tighten snare".to_owned()]),
+        "Agent: tighten snare"
+    );
+    assert_eq!(
+        super::remote_label(&["Agent: a".to_owned(), "Set volume".to_owned()]),
+        "Agent: a; Set volume"
     );
 }
