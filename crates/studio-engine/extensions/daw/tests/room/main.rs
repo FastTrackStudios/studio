@@ -19,6 +19,12 @@
 //! timed and held to its budget in `../fixtures/speed.toml`; a time over
 //! it fails the test, and the times go in the record's `times`, which CI
 //! reports.
+//!
+//! Then the same room on a network with no route out (studio#715): the
+//! test runs again inside a user and network namespace of its own
+//! (`unshare`), where the two engines have loopback and one local network
+//! and nothing else (no relay, no DNS). Its checks go to
+//! `room/room-no-route-out.json`.
 
 #[path = "../unbreakable/budgets.rs"]
 #[allow(
@@ -400,12 +406,14 @@ fn room(
     );
 }
 
-/// The leader and a member in one room.
-#[test]
-fn a_member_follows_the_leader_through_each_load() {
+/// Play the room (`room`) with a leader and a member, each its own
+/// engine, after the checks already in `checks`; the record goes to
+/// `<profile>/room/<record>.json`.
+fn play_the_room(record: &str, mut checks: Checks) {
     let studio = report::profile_dir()
         .join("room")
         .join("runs")
+        .join(record)
         .join("studio");
     let _ = std::fs::remove_dir_all(&studio);
     std::fs::create_dir_all(&studio).unwrap_or_else(|e| panic!("{}: {e}", studio.display()));
@@ -414,21 +422,22 @@ fn a_member_follows_the_leader_through_each_load() {
     let env = [("FTS_ROOMS_DIR", rooms.as_os_str())];
     let spans = otlp::Receiver::start();
     let start = |who: &str| {
-        let instance = format!("room-{who}-{}", std::process::id());
+        let instance = format!("{record}-{who}-{}", std::process::id());
         Engine::start_with(&engine_bin(), &spans.endpoint, &instance, &env)
             .unwrap_or_else(|e| panic!("the {who}'s engine: {e}"))
     };
     let (mut leader, mut member) = (start("leader"), start("member"));
-    let mut checks = Checks::default();
     let mut times = Times::new("join");
-    room(
-        &leader,
-        &member,
-        &studio,
-        (&first, &second),
-        &mut checks,
-        &mut times,
-    );
+    if checks.ok() {
+        room(
+            &leader,
+            &member,
+            &studio,
+            (&first, &second),
+            &mut checks,
+            &mut times,
+        );
+    }
 
     let tails = format!(
         "--- the leader's last lines ---\n{}\n--- the member's last lines ---\n{}",
@@ -437,17 +446,17 @@ fn a_member_follows_the_leader_through_each_load() {
     );
     leader.stop();
     member.stop();
-    let record = json!({
-        "test": "room",
+    let json = json!({
+        "test": record,
         "commit": report::commit(),
         "ok": checks.ok(),
         "checks": checks.json(),
         "times": times.json(),
     });
     let dir = report::profile_dir().join("room");
-    let _ = std::fs::write(dir.join("room.json"), format!("{record:#}\n"));
+    let _ = std::fs::write(dir.join(format!("{record}.json")), format!("{json:#}\n"));
     let mut out = format!(
-        "\n=== room: {} ===\n",
+        "\n=== {record}: {} ===\n",
         if checks.ok() { "pass" } else { "FAIL" }
     );
     for c in &checks.0 {
@@ -459,5 +468,81 @@ fn a_member_follows_the_leader_through_each_load() {
         ));
     }
     eprintln!("{out}");
-    assert!(checks.ok(), "the room failed:\n{out}\n{tails}");
+    assert!(checks.ok(), "{record} failed:\n{out}\n{tails}");
+}
+
+/// The leader and a member in one room.
+#[test]
+fn a_member_follows_the_leader_through_each_load() {
+    play_the_room("room", Checks::default());
+}
+
+/// Set when this test binary runs inside the namespace
+/// [`a_room_plays_on_a_network_with_no_route_out`] makes.
+const NO_ROUTE_OUT: &str = "FTS_ROOM_NO_ROUTE_OUT";
+
+/// The network inside that namespace: loopback, and one local network
+/// (`lan0`, a dummy interface) with no route anywhere else, so there is
+/// no internet, no relay and no DNS.
+const LOCAL_NETWORK: &str = "set -e
+ip link set lo up
+ip link add lan0 type dummy
+ip addr add 10.77.0.1/24 dev lan0
+ip link set lan0 multicast on up
+exec \"$@\"";
+
+/// What there is to reach outside the local network: nothing, if each
+/// of these fails.
+fn no_route_out() -> (bool, String) {
+    let tcp = std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([1, 1, 1, 1], 443)),
+        Duration::from_secs(2),
+    );
+    let udp = std::net::UdpSocket::bind("0.0.0.0:0")
+        .and_then(|s| s.connect(std::net::SocketAddr::from(([8, 8, 8, 8], 53))));
+    let said = format!(
+        "1.1.1.1:443 over TCP: {}; 8.8.8.8:53 over UDP: {}",
+        tcp.as_ref()
+            .map_or_else(ToString::to_string, |_| "reached".to_owned()),
+        udp.as_ref()
+            .map_or_else(ToString::to_string, |()| "routed".to_owned()),
+    );
+    (tcp.is_err() && udp.is_err(), said)
+}
+
+/// The same room on a network with no route out (studio#715): this test
+/// runs itself again inside a user and network namespace of its own
+/// (`unshare`), where the leader's and the member's engines have only a
+/// local network between them. They still make, lead, join and follow.
+#[test]
+fn a_room_plays_on_a_network_with_no_route_out() {
+    const NAME: &str = "a_room_plays_on_a_network_with_no_route_out";
+    if std::env::var_os(NO_ROUTE_OUT).is_none() {
+        let exe = std::env::current_exe().expect("the test's own path");
+        let status = std::process::Command::new("unshare")
+            .args(["--user", "--map-root-user", "--net", "--", "sh", "-c"])
+            .arg(LOCAL_NETWORK)
+            .arg("sh")
+            .arg(&exe)
+            .args([NAME, "--exact", "--nocapture", "--test-threads", "1"])
+            .env(NO_ROUTE_OUT, "1")
+            .status()
+            .unwrap_or_else(|e| {
+                panic!("unshare (util-linux, in the dev shell) to make a network of its own: {e}")
+            });
+        assert!(
+            status.success(),
+            "the room on a network with no route out failed ({status}); its checks are above \
+             and in {}",
+            report::profile_dir()
+                .join("room")
+                .join("room-no-route-out.json")
+                .display()
+        );
+        return;
+    }
+    let mut checks = Checks::default();
+    let (ok, said) = no_route_out();
+    checks.add("no route out", ok, said);
+    play_the_room("room-no-route-out", checks);
 }

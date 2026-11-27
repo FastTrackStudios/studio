@@ -19,6 +19,13 @@
 //!   loading another setlist is a change to the doc, never a new
 //!   connection (`ROOM`'s `attaches` stays 1).
 //!
+//! - **On the local network.** Both ends bind their endpoint with
+//!   n0's lookup and the local network's (`PeerLookup::N0AndLan`), and
+//!   the leader writes the addresses it has on this machine's networks
+//!   into the room's file: a member on the same network dials the leader
+//!   there, or finds it by its id over mDNS, with no internet (no relay,
+//!   no DNS). A network that allows no multicast binds n0's alone.
+//!
 //! The media is each device's own: a loaded path inside the Studio folder
 //! travels relative to it, so the same setlist opens on every device that
 //! has it (as joining a shared set does). Editing the open session
@@ -93,6 +100,11 @@ fn on_runtime<T: Send + 'static>(
         .map_err(|_| "the room's work panicked".to_owned())?
 }
 
+/// How long a new leader's endpoint has to read its own addresses (it
+/// reads the machine's interfaces as it starts) before the room's file
+/// says where to reach it.
+const ADDRS_WAIT: Duration = Duration::from_secs(2);
+
 /// The first eight letters of an id: enough to tell peers apart.
 fn short(id: &str) -> String {
     id.chars().take(8).collect()
@@ -124,6 +136,22 @@ fn local_transport() -> LocalTransport {
     }
 }
 
+/// An endpoint for a room: found by its id through n0 and on the local
+/// network, so a room plays between devices on one network with no
+/// internet. A network with no multicast (no mDNS) binds n0's alone.
+async fn bind(key: iroh::SecretKey) -> Result<iroh::Endpoint, String> {
+    use architect::iroh_link::{PeerLookup, bind_endpoint_with};
+    match bind_endpoint_with(key.clone(), PeerLookup::N0AndLan).await {
+        Ok(endpoint) => Ok(endpoint),
+        Err(e) => {
+            tracing::warn!(room.error = %e, "room: no lookup on the local network; n0's alone");
+            bind_endpoint_with(key, PeerLookup::N0)
+                .await
+                .map_err(|e| format!("iroh: {e}"))
+        }
+    }
+}
+
 /// The addresses a member dials this endpoint at: what it knows of
 /// itself, and its sockets on this machine.
 fn addrs_of(endpoint: &iroh::Endpoint) -> Vec<String> {
@@ -149,6 +177,17 @@ fn addrs_of(endpoint: &iroh::Endpoint) -> Vec<String> {
         }
     }
     addrs
+}
+
+/// [`addrs_of`] once the endpoint has read its own addresses on this
+/// machine's networks, or [`ADDRS_WAIT`] has passed: what a member on
+/// the local network dials with nothing to look the leader up in.
+async fn settled_addrs(endpoint: &iroh::Endpoint) -> Vec<String> {
+    let began = architect::platform::now();
+    while endpoint.addr().ip_addrs().next().is_none() && began.elapsed() < ADDRS_WAIT {
+        architect::platform::sleep(Duration::from_millis(20)).await;
+    }
+    addrs_of(endpoint)
 }
 
 /// Leave the room this engine is in: a leader's room stops being live.
@@ -192,12 +231,10 @@ fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
     leave();
     let id = room.id.clone();
     let me = format!("leader-{}", short(&key.public().to_string()));
-    let (host, presence, endpoint) = on_runtime({
+    let (host, presence, endpoint, addrs) = on_runtime({
         let (me, name) = (me.clone(), name.clone());
         async move {
-            let endpoint = architect::iroh_link::bind_endpoint(key)
-                .await
-                .map_err(|e| format!("iroh: {e}"))?;
+            let endpoint = bind(key).await?;
             let host = RoomHost::new(&id);
             let router = host.mount(architect::LayerRouter::new());
             let serving = endpoint.clone();
@@ -208,13 +245,15 @@ fn lead(link: &str, name: String, take: bool) -> Result<Value, String> {
                 .own_presence(&me, &name)
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok((host, presence, endpoint))
+            let addrs = settled_addrs(&endpoint).await;
+            Ok((host, presence, endpoint, addrs))
         }
     })?;
+    tracing::debug!(room.addrs = ?addrs, "room: the leader's addresses");
     let live = Live {
         leader: name.clone(),
         endpoint: endpoint.id().to_string(),
-        addrs: addrs_of(&endpoint),
+        addrs,
     };
     let room = rooms
         .set_live(&room.id, Some(live))
@@ -318,11 +357,7 @@ fn join(link: &str, name: String) -> Result<Value, String> {
         .ok_or_else(|| format!("{} is not live: nobody leads it now", room.name))?;
     let joined_at = leader_addr(&live)?;
     leave();
-    let endpoint = on_runtime(async move {
-        architect::iroh_link::bind_endpoint(iroh::SecretKey::generate())
-            .await
-            .map_err(|e| format!("iroh: {e}"))
-    })?;
+    let endpoint = on_runtime(bind(iroh::SecretKey::generate()))?;
     let me = format!("member-{}", short(&endpoint.id().to_string()));
     let dialing = endpoint.clone();
     let (finding, id) = (rooms.clone(), room.id.clone());
