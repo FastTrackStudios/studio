@@ -546,13 +546,14 @@ fn the_chart_page_shows_a_generated_chart_and_follows_the_playhead() {
     });
 }
 
-/// studio#706: signed out, the root of the site is the landing page. Its
+/// studio#706: signed out, the root of the site is the landing page (and
+/// so is any other path, `/home` included). Its
 /// download buttons point at the newest release's files (pre-releases
 /// count: Studio's alpha is one), read from a release list as GitHub's API
 /// gives it (here this test's, `?releases=`); Join a room takes a room's
 /// link to the room link flow (`/join/<room>`), Sign in and Open in browser
-/// go to the issuer. At phone width it fits and its buttons are a finger's
-/// size.
+/// go to the issuer, each going into the app at `/home`. At phone width it
+/// fits and its buttons are a finger's size.
 #[test]
 #[ignore = "needs the web build and a WebDriver: `just test-web-boot`"]
 fn signed_out_the_root_is_the_landing_page() {
@@ -683,16 +684,34 @@ fn signed_out_the_root_is_the_landing_page() {
         session.page()
     );
 
-    // Sign in goes to the issuer the node names, and comes back here.
+    // Sign in goes to the issuer the node names, and comes back to the
+    // app's home: from the root, `/home`.
+    session.navigate(&page);
     session.click("[data-action='sign-in']");
     session.wait_for(Duration::from_secs(30), "the issuer's sign-in", |s| {
         (s.script("return location.pathname;") == "/issuer/oauth2/authorize").then_some(())
     });
+    assert_eq!(
+        session.script(
+            "return new URL(JSON.parse(localStorage.getItem('drive:auth-pending')).return_to).pathname;"
+        ),
+        "/home",
+        "signing in from the root comes back to /home"
+    );
 
-    // Open in browser: the app, whose sign-in screen goes on to the same
-    // issuer.
+    // Signed out, the app's home is the landing page too.
+    session.navigate(&format!("{}/home", site.origin));
+    session.wait_for(Duration::from_secs(90), "the landing page at /home", |s| {
+        (s.count("[data-landing] [data-action='sign-in']") == 1).then_some(())
+    });
+
+    // Open in browser: the app at `/home`, whose sign-in screen goes on to
+    // the same issuer.
     session.navigate(&page);
     session.click("[data-action='open-in-browser']");
+    session.wait_for(Duration::from_secs(30), "the app at /home", |s| {
+        (s.script("return location.pathname;") == "/home").then_some(())
+    });
     session.wait_for(Duration::from_secs(30), "the app's sign-in screen", |s| {
         (s.script(
             "const b = [...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Continue'); \
@@ -703,6 +722,123 @@ fn signed_out_the_root_is_the_landing_page() {
     session.wait_for(Duration::from_secs(30), "the app to sign in", |s| {
         (s.script("return location.pathname;") == "/issuer/oauth2/authorize").then_some(())
     });
+}
+
+/// Signed in, the root is the app's home (`/home`, the address replaced so
+/// Back does not loop), and `/landing` still shows the landing page, its
+/// one way in Open Studio. Signing in from `/landing` comes back to
+/// `/home`.
+#[test]
+#[ignore = "needs the web build and a WebDriver: `just test-web-boot`"]
+fn signed_in_the_root_is_home_and_landing_opens_studio() {
+    let dist = PathBuf::from(
+        std::env::var_os("STUDIO_WEB_DIST")
+            .expect("STUDIO_WEB_DIST: the web build's public folder"),
+    );
+    let sessions = tempfile::tempdir().expect("a folder for the server");
+    let site = Server::with_issuer(dist, sessions.path().to_path_buf());
+    let driver = Driver::start();
+    let session = driver.new_session_at(Some(PHONE));
+    let path = |s: &Session<'_>| s.script("return location.pathname;");
+
+    // Signed out at /landing: Sign in, which comes back to /home, the app.
+    session.navigate(&format!("{}/landing", site.origin));
+    session.wait_for(Duration::from_secs(90), "the landing page", |s| {
+        (s.count("[data-landing] [data-action='sign-in']") == 1).then_some(())
+    });
+    session.click("[data-action='sign-in']");
+    session.wait_for(Duration::from_secs(60), "signed in, at /home", |s| {
+        (path(s) == "/home" && s.count("[data-landing]") == 0).then_some(())
+    });
+    assert!(
+        session
+            .script("return localStorage.getItem('drive:auth') || '';")
+            .contains(TOKEN),
+        "the issuer's token is kept"
+    );
+
+    // The root, signed in: /home, in place of `/` (no history entry of
+    // its own for Back to land on and be sent forward again).
+    let before: usize = session
+        .script("return String(history.length);")
+        .parse()
+        .unwrap_or(0);
+    session.navigate(&format!("{}/", site.origin));
+    session.wait_for(Duration::from_secs(60), "the root to be /home", |s| {
+        (path(s) == "/home" && s.count("[data-landing]") == 0).then_some(())
+    });
+    let after: usize = session
+        .script("return String(history.length);")
+        .parse()
+        .unwrap_or(0);
+    assert_eq!(
+        after,
+        before + 1,
+        "/ was replaced by /home, not pushed over"
+    );
+
+    // /landing, signed in: the landing page, one way in (Open Studio).
+    session.navigate(&format!("{}/landing", site.origin));
+    session.wait_for(
+        Duration::from_secs(60),
+        "the landing page, signed in",
+        |s| (s.count("[data-landing] [data-action='open-studio']") == 1).then_some(()),
+    );
+    let text = session.script("return document.querySelector('[data-landing]').innerText;");
+    assert!(text.contains("Open Studio"), "no Open Studio: {text}");
+    assert_eq!(
+        session.count("[data-action='sign-in']"),
+        0,
+        "signed in, no Sign in: {text}"
+    );
+    assert_eq!(
+        session.count("[data-action='open-in-browser']"),
+        0,
+        "signed in, no Open in browser: {text}"
+    );
+    session.click("[data-action='open-studio']");
+    session.wait_for(Duration::from_secs(30), "Open Studio to go home", |s| {
+        (path(s) == "/home" && s.count("[data-landing]") == 0).then_some(())
+    });
+    // Back: the landing page again, in the page.
+    session.script("history.back(); return '';");
+    session.wait_for(Duration::from_secs(30), "Back to the landing page", |s| {
+        (path(s) == "/landing" && s.count("[data-action='open-studio']") == 1).then_some(())
+    });
+}
+
+/// A deep link survives signing in: a room's link opened signed out offers
+/// the room on the landing page, and signing in there comes back to that
+/// link, the room's page in the app.
+#[test]
+#[ignore = "needs the web build and a WebDriver: `just test-web-boot`"]
+fn a_deep_link_survives_signing_in() {
+    let dist = PathBuf::from(
+        std::env::var_os("STUDIO_WEB_DIST")
+            .expect("STUDIO_WEB_DIST: the web build's public folder"),
+    );
+    let sessions = tempfile::tempdir().expect("a folder for the server");
+    let site = Server::with_issuer(dist, sessions.path().to_path_buf());
+    let driver = Driver::start();
+    let session = driver.new_session_at(Some(PHONE));
+
+    session.navigate(&format!("{}/join/adult-jam", site.origin));
+    session.wait_for(
+        Duration::from_secs(90),
+        "the room on the landing page",
+        |s| (s.count("[data-landing] [data-room='adult-jam']") == 1).then_some(()),
+    );
+    session.click("[data-action='sign-in-to-join']");
+    session.wait_for(
+        Duration::from_secs(60),
+        "back at the room's link, signed in",
+        |s| {
+            (s.script("return location.pathname;") == "/join/adult-jam"
+                && s.count("[data-landing]") == 0
+                && s.count("[data-room='adult-jam']") == 1)
+                .then_some(())
+        },
+    );
 }
 
 /// A screen the app is laid out for, in CSS pixels.
@@ -1062,17 +1198,25 @@ pub(super) struct Server {
 
 impl Server {
     pub(super) fn start(dist: PathBuf, sessions: PathBuf) -> Self {
-        Self::start_as(dist, sessions, false)
+        Self::start_as(dist, sessions, false, false)
     }
 
     /// The same, as a node that wants a sign-in: its `/orgs` says signed
     /// out and names an issuer on this server (`/issuer`), as
     /// fasttrackstudio.app's node does for a visitor with no account.
     fn signed_out(dist: PathBuf, sessions: PathBuf) -> Self {
-        Self::start_as(dist, sessions, true)
+        Self::start_as(dist, sessions, true, false)
     }
 
-    fn start_as(dist: PathBuf, sessions: PathBuf, signed_out: bool) -> Self {
+    /// Signed out as [`Server::signed_out`], with an issuer that signs
+    /// anyone in at once: its `/oauth2/authorize` comes straight back to
+    /// the page's callback with a code, its `/oauth2/token` trades it for
+    /// [`TOKEN`], and the node lets in a call that carries it.
+    fn with_issuer(dist: PathBuf, sessions: PathBuf) -> Self {
+        Self::start_as(dist, sessions, true, true)
+    }
+
+    fn start_as(dist: PathBuf, sessions: PathBuf, signed_out: bool, issuer: bool) -> Self {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
         let listener = TcpListener::bind("127.0.0.1:0").expect("the server's port");
@@ -1098,7 +1242,7 @@ impl Server {
                     }
                     let (dist, sessions, orgs) = (dist.clone(), sessions.clone(), orgs.clone());
                     std::thread::spawn(move || {
-                        let _ = serve(stream, &dist, &sessions, orgs.as_deref());
+                        let _ = serve(stream, &dist, &sessions, orgs.as_deref(), issuer);
                     });
                 }
             });
@@ -1184,20 +1328,26 @@ impl Drop for Node {
     }
 }
 
+/// The access token [`Server::with_issuer`]'s issuer gives.
+const TOKEN: &str = "web-boot-token";
+
 /// `orgs`: what the node's `/orgs` answers (`/studio/api/orgs`); `None`,
 /// the page's fallback, which the app reads as a node that lets it in.
+/// `issuer`: `/issuer` signs anyone in ([`Server::with_issuer`]), and a
+/// call carrying its token is let in.
 fn serve(
     stream: TcpStream,
     dist: &Path,
     sessions: &Path,
     orgs: Option<&str>,
+    issuer: bool,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut line = String::new();
     reader.read_line(&mut line)?;
     let method = line.split_whitespace().next().unwrap_or("GET").to_owned();
     let target = line.split_whitespace().nth(1).unwrap_or("/").to_owned();
-    let (mut range, mut length) = (None, 0usize);
+    let (mut range, mut length, mut bearer) = (None, 0usize, false);
     loop {
         let mut header = String::new();
         if reader.read_line(&mut header)? == 0 || header.trim().is_empty() {
@@ -1208,8 +1358,44 @@ fn serve(
                 range = parse_range(value.trim());
             } else if name.eq_ignore_ascii_case("content-length") {
                 length = value.trim().parse().unwrap_or(0);
+            } else if name.eq_ignore_ascii_case("authorization") {
+                bearer = value.trim() == format!("Bearer {TOKEN}");
             }
         }
+    }
+    let path = percent_decode(target.split('?').next().unwrap_or("/"));
+    // The issuer: signing in comes straight back with a code, and the code
+    // is traded for the token.
+    if issuer && path == "/issuer/oauth2/authorize" {
+        let query = target.split_once('?').map_or("", |(_, q)| q);
+        let param = |name: &str| {
+            query.split('&').find_map(|kv| {
+                let (k, v) = kv.split_once('=')?;
+                (k == name).then(|| percent_decode(&v.replace('+', " ")))
+            })
+        };
+        let back = format!(
+            "{}?code=web-boot-code&state={}",
+            param("redirect_uri").unwrap_or_default(),
+            param("state").unwrap_or_default()
+        );
+        let mut out = stream;
+        return write!(
+            out,
+            "HTTP/1.1 302 Found\r\nLocation: {back}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+    }
+    if issuer && method == "POST" && path == "/issuer/oauth2/token" {
+        let mut body = vec![0u8; length];
+        reader.read_exact(&mut body)?;
+        let tokens = json!({ "access_token": TOKEN, "token_type": "Bearer", "expires_in": 3600 })
+            .to_string();
+        let mut out = stream;
+        return write!(
+            out,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{tokens}",
+            tokens.len()
+        );
     }
     // A post is the page's telemetry: its crash reports kept, the rest let go.
     if method != "GET" {
@@ -1224,7 +1410,8 @@ fn serve(
         let mut out = stream;
         return out.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
     }
-    let path = percent_decode(target.split('?').next().unwrap_or("/"));
+    // Signed in through the issuer, the node lets the call in.
+    let orgs = orgs.filter(|_| !(issuer && bearer));
     if let (Some(orgs), "/studio/api/orgs") = (orgs, path.as_str()) {
         let mut out = stream;
         return write!(

@@ -1,9 +1,26 @@
 # The web build at fasttrackstudio.app
 
 Studio's web app is served at the root of `fasttrackstudio.app` from the
-VPS (`architect-vps`, FastTrackStudios/infra). A signed-in visitor gets
-the app. A signed-out visitor gets the stand-in page (`src/door.rs`)
-until the landing page (studio#706) replaces it.
+VPS (`architect-vps`, FastTrackStudios/infra). A signed-out visitor gets
+the landing page (studio#706, `src/landing.rs`) at any path; a signed-in
+one gets the app (`src/door.rs`).
+
+## The app's paths
+
+The app lives under real paths, each its router's (`Route` in
+`src/main.rs`). The front serves `index.html` for every one of them (the
+"anything else" row below), so none needs its own rule.
+
+| Path | Signed in | Signed out |
+|---|---|---|
+| `/` | replaced by `/home` (in place: Back does not loop) | the landing page |
+| `/landing` | the landing page, its one way in **Open Studio** (to `/home`) | the landing page |
+| `/home` (Home), `/records`, `/setlists`, `/signal`, `/orgs`, `/people`, `/org`, `/library`, `/set/<id>`, `/set/<id>/chart`, `/now/chart`, `/session/<view>`, … | that page | the landing page |
+| `/join/<room>` | the room's page | the landing page, offering that room |
+
+Going in from the landing page (Open in browser, Sign in) lands on
+`/home` from `/` or `/landing`, and on the link itself from any other
+path: a room's link, or any deep link, survives signing in.
 
 ## What ships, and from where
 
@@ -77,8 +94,8 @@ serves the old landing page. The cutover, in order:
    Keep them DNS-only (grey cloud), as `drive` and `architect` are, so
    Caddy's ACME challenge reaches the VPS. Then `just cert-now
    fasttrackstudio.app`.
-5. **Check:** signed out, `/` shows the stand-in. Signing in comes back
-   to `/` with the app. `/studio/api/health` answers 200. A set syncs live
+5. **Check:** signed out, `/` shows the landing page. Signing in comes
+   back to `/home` with the app. `/studio/api/health` answers 200. A set syncs live
    in two browsers.
 6. **Retire the old site:** take `fasttrackstudio.app`/`www` off the
    cluster's `fts-www` Argo Application. Archive the repo once #706's

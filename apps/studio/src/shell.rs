@@ -106,7 +106,7 @@ pub(crate) fn theme() -> Theme {
 /// A page's title, for the desktop's top bar.
 fn title_of(route: &Route, index: &crate::sets::Index) -> String {
     match route {
-        Route::Home {} => "Home".into(),
+        Route::Home {} | Route::LandingPage {} => "Home".into(),
         Route::Records {} | Route::Album { .. } | Route::TrackPage { .. } => "Records".into(),
         Route::Setlists {} | Route::Every {} => "Setlists".into(),
         Route::Series { id } => index.series_of(id).map_or("Setlists".into(), |s| s.name),
