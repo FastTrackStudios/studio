@@ -108,7 +108,11 @@ fn download(run: &Path) {
             &json!({"path": folder.display().to_string()}),
         ) {
             Ok(rows) => {
-                let row = &rows[0];
+                let row = rows
+                    .as_array()
+                    .and_then(|r| r.first())
+                    .cloned()
+                    .unwrap_or(Value::Null);
                 let proxies = row["proxies_made"].as_u64().unwrap_or(0)
                     + row["proxies_current"].as_u64().unwrap_or(0);
                 checks.add(
@@ -230,7 +234,7 @@ fn played_offline(run: &Path) {
         checks.add("no route out", ok, said);
     }
     let link = plan["link"].as_str().unwrap_or_default();
-    let answers = reqwest_free_get(link);
+    let answers = link_answers(link);
     checks.add(
         "the link is gone",
         answers.is_err(),
@@ -329,7 +333,7 @@ fn no_route_out() -> (bool, String) {
 
 /// Whether `url`'s listing answers: a plain HTTP GET of
 /// `<link>_files.json`.
-fn reqwest_free_get(url: &str) -> Result<String, String> {
+fn link_answers(url: &str) -> Result<String, String> {
     let rest = url
         .strip_prefix("http://")
         .ok_or_else(|| format!("{url}: not http"))?;

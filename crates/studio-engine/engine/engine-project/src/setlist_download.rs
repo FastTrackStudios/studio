@@ -25,6 +25,7 @@ use std::sync::{Arc, Mutex};
 use architect::action::{ActionList, ActionMeta, Effect};
 use engine_runtime::source::{Listing, Pending, SongSource};
 use facet::Facet;
+use tracing::Instrument as _;
 
 use crate::song_stream::Offline;
 
@@ -199,20 +200,23 @@ impl SongSource for Named {
     }
 }
 
-/// A name for a folder or file on any device's disk.
+/// A name for a folder or file on any device's disk: letters, digits and
+/// `-`, anything else `_` — the rule the mirror names a song's folder by
+/// (its label, `engine_runtime::song_stream`), so two names are the same
+/// folder exactly when they are the same name here.
 fn file_name(text: &str) -> String {
     let name: String = text
         .trim()
         .chars()
         .map(|c| {
-            if c.is_alphanumeric() || matches!(c, '-' | '_' | ' ' | '.') {
+            if c.is_alphanumeric() || c == '-' {
                 c
             } else {
                 '_'
             }
         })
         .collect();
-    let name = name.trim_matches(|c: char| c == '.' || c.is_whitespace());
+    let name = name.trim_matches('_');
     if name.is_empty() {
         "Setlist".to_owned()
     } else {
@@ -226,14 +230,14 @@ fn folder_names(titles: &[String]) -> Vec<String> {
     let mut names: Vec<String> = Vec::with_capacity(titles.len());
     for (i, title) in titles.iter().enumerate() {
         let base = if title.trim().is_empty() {
-            format!("Song {}", i + 1)
+            format!("Song_{}", i + 1)
         } else {
             file_name(title)
         };
         let mut name = base.clone();
         let mut n = 2;
         while names.iter().any(|taken| taken.eq_ignore_ascii_case(&name)) {
-            name = format!("{base} {n}");
+            name = format!("{base}_{n}");
             n += 1;
         }
         names.push(name);
@@ -372,6 +376,7 @@ pub async fn download(
     });
     std::fs::create_dir_all(to)?;
     let mut downloaded = Vec::with_capacity(set.songs.len());
+    let mut written = Vec::with_capacity(set.songs.len());
     for (i, (song, folder)) in set.songs.into_iter().zip(&folders).enumerate() {
         let title = song.title.clone();
         let number = u32::try_from(i + 1).unwrap_or(u32::MAX);
@@ -389,7 +394,6 @@ pub async fn download(
             bytes = tracing::field::Empty,
             files = tracing::field::Empty,
         );
-        let _entered = span.enter();
         let source: Arc<dyn SongSource> = Arc::new(Named {
             name: folder.clone(),
             inner: Arc::new(song),
@@ -400,21 +404,29 @@ pub async fn download(
                 s.total = total;
             });
         };
-        let base = crate::song_stream::download(Arc::clone(&source), to, kept.offline(), &progress)
-            .await
-            .map_err(|e| eyre::eyre!("{title}: {e}"))?;
-        if kept == Kept::Full {
-            fetch_the_rest(&*source, &base, &progress)
-                .await
-                .map_err(|e| eyre::eyre!("{title}: {e}"))?;
+        let base = async {
+            let base =
+                crate::song_stream::download(Arc::clone(&source), to, kept.offline(), &progress)
+                    .await?;
+            if kept == Kept::Full {
+                fetch_the_rest(&*source, &base, &progress).await?;
+            }
+            eyre::Ok(base)
         }
+        .instrument(span.clone())
+        .await
+        .map_err(|e| eyre::eyre!("{title}: {e}"))?;
+        written.push(base.strip_prefix(to).map_or_else(
+            |_| base.display().to_string(),
+            |r| r.to_string_lossy().into_owned(),
+        ));
         let here = on_disk(&title, &base);
         span.record("bytes", here.bytes);
         span.record("files", here.files);
         downloaded.push(here);
     }
     let setlist = to.join(format!("{}.setlist", file_name(&name)));
-    std::fs::write(&setlist, setlist_text(&name, from, &folders))?;
+    std::fs::write(&setlist, setlist_text(&name, from, &written))?;
     Ok((setlist, downloaded))
 }
 
@@ -437,6 +449,14 @@ fn default_folder(from: &str) -> PathBuf {
         .map(|(_, code)| code)
         .unwrap_or_else(|_| "setlist".to_owned());
     root.join(file_name(&code))
+}
+
+/// A share link's host, for telemetry: the link itself is a capability.
+fn host_of(link: &str) -> String {
+    engine_runtime::link::listing_url(link)
+        .ok()
+        .and_then(|(url, _)| url.host_str().map(str::to_owned))
+        .unwrap_or_default()
 }
 
 /// Start a download in the background.
@@ -473,7 +493,7 @@ fn start(arg: DownloadArg) -> Result<String, String> {
         .spawn(move || {
             let span = tracing::info_span!(
                 "setlist_download",
-                from = %link,
+                host = %host_of(&link),
                 to = %into.display(),
                 keep = kept.name(),
                 songs = tracing::field::Empty,
@@ -484,7 +504,12 @@ fn start(arg: DownloadArg) -> Result<String, String> {
                 .enable_all()
                 .build()
                 .map_err(eyre::Report::from)
-                .and_then(|rt| rt.block_on(download(&link, &into, kept)));
+                .and_then(|rt| {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        rt.block_on(download(&link, &into, kept))
+                    }))
+                    .unwrap_or_else(|_| Err(eyre::eyre!("the download panicked")))
+                });
             match outcome {
                 Ok((setlist, songs)) => {
                     span.record("songs", songs.len());
@@ -596,16 +621,24 @@ mod tests {
 
     #[test]
     fn each_song_gets_a_folder_of_its_own_by_its_title() {
-        let titles =
-            ["Silent Night", "O Holy Night", "silent night", "", "A/B: C"].map(str::to_owned);
+        let titles = [
+            "Silent Night",
+            "O Holy Night",
+            "silent night",
+            "",
+            "A/B: C",
+            "A_B_ C",
+        ]
+        .map(str::to_owned);
         assert_eq!(
             folder_names(&titles),
             [
-                "Silent Night",
-                "O Holy Night",
-                "silent night 2",
-                "Song 4",
-                "A_B_ C"
+                "Silent_Night",
+                "O_Holy_Night",
+                "silent_night_2",
+                "Song_4",
+                "A_B__C",
+                "A_B__C_2",
             ]
         );
     }
