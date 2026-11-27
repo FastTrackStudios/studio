@@ -26,6 +26,8 @@ pub mod session_new;
 #[cfg(feature = "native")]
 mod set_open;
 pub mod setlist;
+#[cfg(feature = "native")]
+pub mod setlist_download;
 #[cfg(feature = "show")]
 pub mod show;
 #[cfg(feature = "native")]
@@ -61,6 +63,7 @@ pub mod studio_engine {
 #[cfg(feature = "native")]
 pub fn register(list: &ActionList) -> Result<(), ActionError> {
     session_new::register(list)?;
+    setlist_download::register(list)?;
     instrument_tracks::register(list)?;
     organize_edit::register(list)?;
     Ok(())
