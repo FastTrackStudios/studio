@@ -141,6 +141,8 @@ pub struct Routes {
     /// Set when something has landed, so the window redraws rather than
     /// comparing a map every frame.
     fresh: Arc<std::sync::atomic::AtomicBool>,
+    /// The song's tracks, `(guid, name)`, once read ([`Routes::tracks`]).
+    tracks: Arc<Mutex<Option<Vec<(String, String)>>>>,
 }
 
 impl Routes {
@@ -220,9 +222,6 @@ impl Routes {
     ///
     /// Spawns and returns; the window keeps drawing.
     pub fn fetch(&self, wanted: Vec<String>) {
-        let Some(runtime) = crate::open::runtime() else {
-            return;
-        };
         let missing: Vec<String> = {
             let Ok(known) = self.known.lock() else { return };
             wanted
@@ -230,31 +229,89 @@ impl Routes {
                 .filter(|guid| !known.contains_key(guid))
                 .collect()
         };
-        if missing.is_empty() {
+        self.read_in(missing);
+    }
+
+    /// Read these tracks' routing again, held or not, keeping what is held
+    /// until the new read lands: what a panel open on a track does to
+    /// follow changes made elsewhere, without blanking while it reads.
+    pub fn reread(&self, guids: Vec<String>) {
+        self.read_in(guids);
+    }
+
+    /// The song's tracks as `(guid, name)`, in order, once read
+    /// ([`Self::fetch_tracks`]): where a send can go.
+    #[must_use]
+    pub fn tracks(&self) -> Option<Vec<(String, String)>> {
+        self.tracks.lock().ok()?.clone()
+    }
+
+    /// Read the song's tracks ([`Self::tracks`]). Spawns and returns.
+    pub fn fetch_tracks(&self) {
+        let tracks = Arc::clone(&self.tracks);
+        let fresh = Arc::clone(&self.fresh);
+        spawn_on_engine("studio-engine-route-tracks", async move {
+            let Some(daw) = daw::rpc::Daw::try_get() else {
+                return;
+            };
+            let Ok(project) = daw.current_project().await else {
+                return;
+            };
+            let Ok(all) = project.tracks().all().await else {
+                return;
+            };
+            let named = all.into_iter().map(|t| (t.guid, t.name)).collect();
+            if let Ok(mut held) = tracks.lock() {
+                *held = Some(named);
+            }
+            fresh.store(true, std::sync::atomic::Ordering::Relaxed);
+        });
+    }
+
+    /// Read `guids`' routing into the cache, off the caller.
+    fn read_in(&self, guids: Vec<String>) {
+        if guids.is_empty() {
             return;
         }
         let known = Arc::clone(&self.known);
         let fresh = Arc::clone(&self.fresh);
-        std::thread::Builder::new()
-            .name("studio-engine-routes".into())
-            .spawn(move || {
-                runtime.block_on(async move {
-                    let Some(daw) = daw::rpc::Daw::try_get() else {
-                        return;
-                    };
-                    let Ok(project) = daw.current_project().await else {
-                        return;
-                    };
-                    for guid in missing {
-                        let wiring = read(&project, &guid).await;
-                        let Ok(mut known) = known.lock() else { return };
-                        known.insert(guid, wiring);
-                        fresh.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-                });
-            })
-            .ok();
+        spawn_on_engine("studio-engine-routes", async move {
+            let Some(daw) = daw::rpc::Daw::try_get() else {
+                return;
+            };
+            let Ok(project) = daw.current_project().await else {
+                return;
+            };
+            for guid in guids {
+                let wiring = read(&project, &guid).await;
+                let Ok(mut known) = known.lock() else { return };
+                known.insert(guid, wiring);
+                fresh.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        });
     }
+}
+
+/// Run `work` where the facade can be awaited: a thread of its own on the
+/// engine's runtime in a native window. Nothing runs with no runtime.
+#[cfg(feature = "native")]
+fn spawn_on_engine(name: &str, work: impl std::future::Future<Output = ()> + Send + 'static) {
+    let Some(runtime) = crate::open::runtime() else {
+        return;
+    };
+    std::thread::Builder::new()
+        .name(name.to_owned())
+        .spawn(move || runtime.block_on(work))
+        .ok();
+}
+
+/// A page's: on its event loop, where the engine in the page answers.
+#[cfg(not(feature = "native"))]
+fn spawn_on_engine(_name: &str, work: impl std::future::Future<Output = ()> + 'static) {
+    #[cfg(feature = "web")]
+    wasm_bindgen_futures::spawn_local(work);
+    #[cfg(not(feature = "web"))]
+    drop(work);
 }
 
 /// The cache half of [`Routes::apply`], with no lock and no thread.

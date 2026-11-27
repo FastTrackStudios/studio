@@ -9947,6 +9947,12 @@ impl Shared {
                 return;
             }
             let mut out = Vec::new();
+            // A page's Action List has no `FX_SET`/`FX_ENABLE` (the
+            // engine in the page carries the window's own actions): its
+            // live edits above are the whole change, in the same step.
+            #[cfg(not(feature = "native"))]
+            let _ = &gesture.moved;
+            #[cfg(feature = "native")]
             for ((track, fx), (params, on)) in gesture.moved {
                 if !params.is_empty() {
                     let set: serde_json::Map<String, serde_json::Value> = params

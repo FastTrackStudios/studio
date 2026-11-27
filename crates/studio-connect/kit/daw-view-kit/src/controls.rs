@@ -221,11 +221,15 @@ pub fn click(control: Control, guid: &str, from: &daw_proto::Track, add: bool) -
         // Clicking the name selects the track; DOUBLE-clicking renames
         // it, which is a different gesture and a different edit.
         Control::Name => Some(select(guid, add)),
-        // The routing widget opens the panel, which is the window's
-        // and not an edit at all — see `crate::routing`. The parent
-        // send it used to toggle is the panel's first row, where it
-        // sits beside the sends it shares a button with.
-        Control::Routing => None,
+        // The routing widget opens the track's routing close-up
+        // (`SESSION_CLOSEUP {routing}`: its sends, receives and hardware
+        // outputs), which is the window's and not an edit — so nothing
+        // to show before it: `Done` is a barrier no strip predicts.
+        Control::Routing => Some(Press {
+            id: "SESSION_CLOSEUP",
+            args: serde_json::json!({ "track": guid, "routing": true, "name": from.name }),
+            preview: Edit::Done(0),
+        }),
         // The FX button opens a chain window, and there is no chain and
         // no window — see `tone::placeholder` and `bin/chain-probe`.
         // Binding it to something else would be a button that does the

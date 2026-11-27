@@ -46,6 +46,9 @@ pub enum Closeup {
         name: String,
         block: String,
     },
+    /// A track's routing: its sends, receives and hardware outputs
+    /// (`crate::routing`).
+    Routing { guid: String, name: String },
 }
 
 impl Closeup {
@@ -54,7 +57,9 @@ impl Closeup {
     #[must_use]
     pub fn subject(&self) -> &str {
         match self {
-            Self::Rack { name, .. } | Self::SignalBlock { name, .. } => name,
+            Self::Rack { name, .. }
+            | Self::SignalBlock { name, .. }
+            | Self::Routing { name, .. } => name,
         }
     }
 }
@@ -143,6 +148,9 @@ impl CloseupHandle {
             }
             Closeup::SignalBlock { guid, name, block } => {
                 serde_json::json!({ "track": guid, "block": block, "name": name })
+            }
+            Closeup::Routing { guid, name } => {
+                serde_json::json!({ "track": guid, "routing": true, "name": name })
             }
         };
         let _ = crate::press::press(crate::mixer_actions::CLOSEUP.id, &args);
@@ -265,6 +273,8 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                 })
                 .unwrap_or_default()
         }
+        // A track's routing is one page.
+        Closeup::Routing { .. } => Vec::new(),
     };
     let tab_style = move |on: bool| {
         let shape = if landscape {
@@ -355,6 +365,9 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                     match shown {
                         Closeup::Rack { guid, which, .. } => rsx! {
                             RackCloseup { key: "{guid}-{which:?}", guid, which }
+                        },
+                        Closeup::Routing { guid, .. } => rsx! {
+                            crate::routing::RoutingCloseup { key: "routing-{guid}", track: guid }
                         },
                         Closeup::SignalBlock { guid, block, .. } => rsx! {
                             crate::signal::closeup::SignalBlockCloseup {

@@ -3856,9 +3856,19 @@ impl ArrangementWidget {
                 self.open_automation_menu(spot.row);
                 return;
             }
-            // The rack and the routing panel are surfaces this widget
-            // does not own yet. Left alone rather than guessed at.
-            C::Fx | C::Routing | C::Volume | C::Pan => return,
+            // The routing widget opens the track's routing close-up, as
+            // the mixer strip's does (`SESSION_CLOSEUP {routing}`).
+            C::Routing => {
+                let name = track.name.clone();
+                let _ = self.press_control(
+                    "SESSION_CLOSEUP",
+                    &serde_json::json!({ "track": guid, "routing": true, "name": name }),
+                );
+                return;
+            }
+            // The rack is a surface this widget does not own yet. Left
+            // alone rather than guessed at.
+            C::Fx | C::Volume | C::Pan => return,
         };
         // Shown before it is true.
         //
