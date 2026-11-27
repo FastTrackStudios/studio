@@ -782,6 +782,21 @@ pub struct ArrangementWidget {
     /// ([`crate::automation_menu`]).
     #[cfg(feature = "native")]
     menu: Option<crate::popup::Popup<crate::automation_menu::Pick>>,
+    /// A press on the ruler's TEMPO lane, until it lets go
+    /// ([`crate::tempo_edit`]).
+    tempo_drag: Option<crate::tempo_edit::Drag>,
+    /// The engine's tempo map, followed: a change made anywhere (an
+    /// action, a member, the engine) reads the song back and cuts the
+    /// ruler and grid again (studio#97).
+    tempo_watch: Option<crate::engine::TempoWatch>,
+    /// When the watch was last started: tried again at most once a second
+    /// while the engine is not up.
+    tempo_watch_at: web_time::Instant,
+    /// A tempo change's menu, open over the window: the change it is for.
+    tempo_menu: Option<(
+        crate::popup::Popup<crate::tempo_edit::Pick>,
+        daw_ui::studio::project::TempoChange,
+    )>,
     /// What the widget wants done to the session, for the window to
     /// pick up and hand to the engine.
     ///
@@ -967,6 +982,10 @@ impl ArrangementWidget {
             press_answer: None,
             #[cfg(feature = "native")]
             menu: None,
+            tempo_drag: None,
+            tempo_watch: crate::engine::TempoWatch::start(),
+            tempo_watch_at: web_time::Instant::now(),
+            tempo_menu: None,
             edits: Rc::new(RefCell::new(Vec::new())),
             controls: None,
             was: at_rest,
@@ -3577,6 +3596,121 @@ impl ArrangementWidget {
         self.dirty.set(true);
     }
 
+    /// A press on the ruler's TEMPO lane taken: a change held, or one about
+    /// to be made. Not while editing, when the lane is the GRID lane.
+    fn tempo_pressed(&mut self, x: f64, y: f64) -> bool {
+        if self.editing.get() {
+            return false;
+        }
+        let view = self.viewport(self.size.0, self.size.1);
+        let Some(lane) = crate::tempo_edit::Lane::of(view) else {
+            return false;
+        };
+        let at = self.tempo_time(x, view);
+        let Some(drag) = crate::tempo_edit::Drag::press(self.scene.tempo(), &lane, (x, y), at)
+        else {
+            return false;
+        };
+        self.tempo_drag = Some(drag);
+        self.dirty.set(true);
+        true
+    }
+
+    /// The time under `x` on the tempo lane, on the grid when the window
+    /// snaps.
+    fn tempo_time(&self, x: f64, view: Viewport) -> f64 {
+        let at = self.seconds_at(x, view);
+        if !crate::options::SNAP.get() {
+            return at;
+        }
+        let (grid, map) = self.snap_grid(view);
+        let regions = crate::grid_in_force::current();
+        let snap = timeline::snap::Snap {
+            grid: timeline::snap::Snapper {
+                grid: &grid,
+                regions: regions.as_ref(),
+                map: &map,
+            },
+            on: true,
+            magnets: &[],
+            reach: 0.0,
+        };
+        snap.at(at)
+    }
+
+    /// The tempo lane's press, the pointer at `(x, y)`.
+    fn tempo_moved(&mut self, x: f64, y: f64, fine: bool) -> bool {
+        let view = self.viewport(self.size.0, self.size.1);
+        let at = self.tempo_time(x, view);
+        let Some(drag) = self.tempo_drag.as_mut() else {
+            return false;
+        };
+        let changed = drag.moved((x, y), at, fine);
+        if changed {
+            self.dirty.set(true);
+        }
+        changed
+    }
+
+    /// The tempo lane's press let go: a change made, moved or retimed (one
+    /// step, `ARRANGE_TEMPO`), or a change's menu opened.
+    fn tempo_released(&mut self) -> bool {
+        let Some(drag) = self.tempo_drag.take() else {
+            return false;
+        };
+        match drag.released() {
+            crate::tempo_edit::Release::Edits(edits) => self.tempo_commit(edits),
+            crate::tempo_edit::Release::Menu(index) => {
+                let Some(change) = self.scene.tempo().get(index).copied() else {
+                    return true;
+                };
+                let view = self.viewport(self.size.0, self.size.1);
+                let Some(lane) = crate::tempo_edit::Lane::of(view) else {
+                    return true;
+                };
+                let choices = crate::tempo_edit::menu(&change, index == 0);
+                let at = (lane.x_of(change.at).max(lane.left), lane.bottom + 2.0);
+                self.tempo_menu = Some((
+                    crate::popup::Popup::open(&self.font, choices, at, self.size),
+                    change,
+                ));
+            }
+            crate::tempo_edit::Release::Nothing => {}
+        }
+        self.dirty.set(true);
+        true
+    }
+
+    /// A press while a tempo change's menu is open: a choice taken, or the
+    /// menu closed.
+    fn tempo_menu_pressed(&mut self, x: f64, y: f64) -> bool {
+        let Some((menu, change)) = self.tempo_menu.take() else {
+            return false;
+        };
+        if let Some(pick) = menu.take(x, y) {
+            self.tempo_commit(crate::tempo_edit::picked(&change, pick));
+        }
+        self.dirty.set(true);
+        true
+    }
+
+    /// Tempo edits drawn at once and committed as one step: the window's
+    /// tempo map as they leave it (until the song is read back), the
+    /// ruler and grid cut again from it.
+    fn tempo_commit(&mut self, edits: Vec<crate::engine::Edit>) {
+        if edits.is_empty() {
+            return;
+        }
+        for edit in &edits {
+            crate::tempo_edit::predict(&mut self.project.tempo, edit);
+        }
+        if let Some((_, raw)) = self.replan.as_ref() {
+            raw.borrow_mut().tempo.clone_from(&self.project.tempo);
+        }
+        self.recut();
+        self.commit_edits(Some(crate::tempo_edit::LABEL), edits);
+    }
+
     /// A take volume drag let go (or lost): the curve as drawn committed,
     /// one undo step (`ARRANGE_TAKE_VOLUME`).
     fn take_released(&mut self) -> bool {
@@ -5268,6 +5402,17 @@ impl ArrangementWidget {
             }
             let _ = self.apply_actions(crate::window_queue::take_window());
         }
+        // Following the tempo map from the first frame the engine is up,
+        // and again if it went.
+        if !self
+            .tempo_watch
+            .as_ref()
+            .is_some_and(crate::engine::TempoWatch::is_live)
+            && self.tempo_watch_at.elapsed() >= std::time::Duration::from_secs(1)
+        {
+            self.tempo_watch_at = web_time::Instant::now();
+            self.tempo_watch = crate::engine::TempoWatch::start();
+        }
         self.marks_seen.set(crate::marks_strip::version());
         self.poi_seen.set(crate::poi::version());
         self.settle_stage();
@@ -5790,6 +5935,12 @@ impl ArrangementWidget {
                 if let Some(menu) = self.menu.as_mut() {
                     return menu.hover_at(x, y);
                 }
+                if let Some((menu, _)) = self.tempo_menu.as_mut() {
+                    return menu.hover_at(x, y);
+                }
+                if self.tempo_drag.is_some() {
+                    return self.tempo_moved(x, y, e.mods.contains(Modifiers::SHIFT));
+                }
                 if self.take_drag.is_some() {
                     self.take_moved(x, y);
                     return true;
@@ -5852,6 +6003,9 @@ impl ArrangementWidget {
                 // An open menu takes every press: a choice, or closing it.
                 #[cfg(feature = "native")]
                 if self.menu_pressed(x, y) {
+                    return true;
+                }
+                if self.tempo_menu_pressed(x, y) || self.tempo_pressed(x, y) {
                     return true;
                 }
                 // An automation lane takes its own presses: its header in
@@ -5987,7 +6141,7 @@ impl ArrangementWidget {
             }
             UiEvent::PointerUp(e) => {
                 let (x, y) = at(e);
-                if self.take_released() {
+                if self.take_released() || self.tempo_released() {
                     return true;
                 }
                 if let Some(drag) = self.lane_drag.take() {
@@ -6055,6 +6209,8 @@ impl ArrangementWidget {
                 if let Some(drag) = self.lane_drag.take() {
                     self.lane_ended(&drag, None);
                 }
+                // A lost press on the tempo lane changes nothing.
+                self.tempo_drag = None;
                 // A lost release ends a drag where it got to.
                 self.take_released();
                 if let Some(turn) = self.turning.take() {
@@ -6434,6 +6590,10 @@ impl ArrangementWidget {
                 (0.0, 0.0),
                 self.scene.tempo(),
             );
+            if let (Some(drag), Some(lane)) = (&self.tempo_drag, crate::tempo_edit::Lane::of(view))
+            {
+                crate::tempo_edit::paint_ghost(&mut out, &self.palette, &self.font, &lane, drag);
+            }
         }
         // The song's own shape over the timeline: the section bands and
         // the marker flags, and the lines they drop through the lanes.
@@ -6621,6 +6781,9 @@ impl ArrangementWidget {
         // The automation menu, over everything.
         #[cfg(feature = "native")]
         if let Some(menu) = &self.menu {
+            menu.paint(&mut out, &self.palette, &self.font);
+        }
+        if let Some((menu, _)) = &self.tempo_menu {
             menu.paint(&mut out, &self.palette, &self.font);
         }
         // The edit cursor and the time selection, over the lanes and

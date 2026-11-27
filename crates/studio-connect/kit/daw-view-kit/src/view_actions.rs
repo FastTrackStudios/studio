@@ -15,7 +15,7 @@ pub static OPTION: ActionMeta = meta(
     "SESSION_OPTION",
     "option",
     "Editing option",
-    "Turn one of the arrangement's editing options on or off — `option`: `snap` (to the grid), `grid` (its lines), `ripple` (later items follow an edit, per track), `razor` (the razor tool), `auto_crossfade` (overlapping items crossfade), `lock` (drags scroll and move nothing); `on` true or false, the other way when left out. The main toolbar's switches. Says whether it is on now.",
+    "Turn one of the arrangement's editing options on or off — `option`: `snap` (to the grid), `grid` (its lines), `ripple` (later items follow an edit, per track), `razor` (the razor tool), `auto_crossfade` (overlapping items crossfade), `lock` (drags scroll and move nothing), `tempo_lane` (the ruler's TEMPO lane on a touchscreen's slim ruler, where the tempo and meter are set; a full ruler always has it); `on` true or false, the other way when left out. The main toolbar's switches. Says whether it is on now.",
     "Options",
     "",
 );
@@ -92,9 +92,14 @@ pub fn pending<T>(asks: &std::sync::Mutex<Asks<T>>, seen: u64) -> bool {
 /// The first registration the list refuses (a duplicate id).
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&OPTION, Effect::Mutating, |a: OptionArg| {
+        if a.option == "tempo_lane" {
+            let on = a.on.unwrap_or_else(|| !crate::ruler_layout::tempo_shown());
+            crate::ruler_layout::show_tempo(on);
+            return Ok(format!("tempo_lane: {}", if on { "on" } else { "off" }));
+        }
         let (name, option) = crate::options::named(&a.option).ok_or_else(|| {
             format!(
-                "no option {:?}: snap, grid, ripple, razor, auto_crossfade or lock (grouping is SESSION_GROUPING)",
+                "no option {:?}: snap, grid, ripple, razor, auto_crossfade, lock or tempo_lane (grouping is SESSION_GROUPING)",
                 a.option
             )
         })?;

@@ -231,5 +231,45 @@ fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
         Ok(())
     })?;
     crate::shared_actions::register_together(list)?;
+    list.register_async(&daw_view::actions::UNDO, Effect::Mutating, |(): ()| {
+        step(true)
+    })?;
+    list.register_async(&daw_view::actions::REDO, Effect::Mutating, |(): ()| {
+        step(false)
+    })?;
+    // The Editor's write-back: a take's notes, through the engine in the page.
+    daw_view::notes_actions::register(list)?;
     crate::arrange_actions::register(list)
+}
+
+/// `SESSION_UNDO` (`back`) or `SESSION_REDO` in the page: the engine in
+/// the page takes its last step back (or does it again), and the window
+/// reads the song back — the tempo map with the rest. Says what it did.
+async fn step(back: bool) -> Result<String, String> {
+    let song = song().await?;
+    let label = if back {
+        song.last_undo_label().await
+    } else {
+        song.last_redo_label().await
+    }
+    .ok()
+    .flatten()
+    .unwrap_or_else(|| "a step".to_owned());
+    let done = if back {
+        song.undo().await
+    } else {
+        song.redo().await
+    }
+    .map_err(|e| e.to_string())?;
+    daw_view::actions::undone_there();
+    if !done {
+        return Ok(if back {
+            "nothing to undo"
+        } else {
+            "nothing to redo"
+        }
+        .to_owned());
+    }
+    daw_view::song::request_resync();
+    Ok(format!("{} {label}", if back { "undid" } else { "redid" }))
 }

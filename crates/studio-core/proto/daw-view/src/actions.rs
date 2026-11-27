@@ -170,7 +170,7 @@ pub static SAVE: ActionMeta = meta(
     "",
 );
 
-#[cfg(feature = "native")]
+/// On every list: the desktop's engine, and the page's (`studio_engine::web_actions`).
 pub static UNDO: ActionMeta = meta(
     "SESSION_UNDO",
     "session_undo",
@@ -180,7 +180,7 @@ pub static UNDO: ActionMeta = meta(
     "",
 );
 
-#[cfg(feature = "native")]
+/// On every list: the desktop's engine, and the page's (`studio_engine::web_actions`).
 pub static REDO: ActionMeta = meta(
     "SESSION_REDO",
     "session_redo",

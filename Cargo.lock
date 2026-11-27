@@ -16049,6 +16049,8 @@ dependencies = [
  "timeline",
  "tracing",
  "vello",
+ "wasm-bindgen-futures",
+ "web-sys",
  "web-time",
 ]
 

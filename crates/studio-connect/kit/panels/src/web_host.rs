@@ -698,6 +698,10 @@ pub enum HostedPanel {
     Arrangement,
     /// The mixer alone, filling the view.
     Mixer,
+    /// The Editor: the expression editor on the item picked in the
+    /// arrangement (else the selected track's first MIDI item), its edits
+    /// written back to the engine in the page (`NOTES_WRITE`).
+    Editor,
 }
 
 /// One panel of the page's engine, in a host's own view: the song the
@@ -756,6 +760,7 @@ fn HostedNote(text: String) -> Element {
 fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Element {
     use engine_domain::modes::Mode;
     use_hook(crate::web_audio::unlock_on_first_gesture);
+    use_hook(install_editor);
     let mode = use_signal(|| Mode::Live);
     use_context_provider(|| mode);
     crate::shows::provide(mode);
@@ -837,6 +842,7 @@ fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Eleme
     let which = match panel {
         HostedPanel::Arrangement => "arrangement",
         HostedPanel::Mixer => "mixer",
+        HostedPanel::Editor => "editor",
     };
     // What the panel was handed of the song: its tracks and items, for a
     // test (or a person's inspector) to read off the page.
@@ -887,10 +893,14 @@ fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Eleme
                     WithSong {
                         key: "{song.project}",
                         session: song.session.clone(),
-                        DawPanels {
-                            key: "{which}",
-                            engine: engine.clone(),
-                            mixer_only: panel == HostedPanel::Mixer,
+                        if panel == HostedPanel::Editor {
+                            midi_editor::editor_view::EditorPanel {}
+                        } else {
+                            DawPanels {
+                                key: "{which}",
+                                engine: engine.clone(),
+                                mixer_only: panel == HostedPanel::Mixer,
+                            }
                         }
                     }
                 }
@@ -929,6 +939,18 @@ impl daw_view_kit::page_engine::PageEngine for Page {
 
     fn position(&self) -> f64 {
         self.0.position()
+    }
+}
+
+/// Make the expression editor the page's (`midi_editor::install`, as the
+/// desktop does at start): an item clicked in the arrangement opens there.
+/// Once.
+fn install_editor() {
+    thread_local! {
+        static DONE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    if !DONE.with(|d| d.replace(true)) {
+        midi_editor::install();
     }
 }
 

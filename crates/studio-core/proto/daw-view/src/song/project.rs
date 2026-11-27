@@ -285,49 +285,7 @@ pub async fn fetch_of(project: daw_control::Project) -> Option<Project> {
         .collect();
 
     let bpm = project.transport().get_tempo().await.unwrap_or(120.0);
-    // Every tempo point, so the ruler can count bars through a change
-    // rather than through one nominal tempo. A project with none still
-    // has a tempo — the seeded point below is what the transport just
-    // said — because a ruler with no grid is not a ruler.
-    let mut tempo: Vec<TempoChange> = project
-        .tempo_map()
-        .points()
-        .await
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|point| {
-            let at = point.position.time.as_ref()?.as_seconds();
-            Some(TempoChange {
-                at,
-                bpm: point.bpm,
-                beats_per_bar: point
-                    .time_signature
-                    .as_ref()
-                    .map_or(4, |sig| sig.numerator.max(1)),
-                beat_unit: point
-                    .time_signature
-                    .as_ref()
-                    .map_or(4, |sig| sig.denominator.max(1)),
-            })
-        })
-        .collect();
-    tempo.sort_by(|a, b| a.at.total_cmp(&b.at));
-    if tempo.first().is_none_or(|first| first.at > 0.0) {
-        let (num, den) = project
-            .tempo_map()
-            .time_signature_at(0.0)
-            .await
-            .unwrap_or((4, 4));
-        tempo.insert(
-            0,
-            TempoChange {
-                at: 0.0,
-                bpm,
-                beats_per_bar: u32::try_from(num.max(1)).unwrap_or(4),
-                beat_unit: u32::try_from(den.max(1)).unwrap_or(4),
-            },
-        );
-    }
+    let tempo = tempo_of(&project, bpm).await;
 
     Some(Project {
         tracks,
@@ -346,6 +304,61 @@ pub async fn fetch_of(project: daw_control::Project) -> Option<Project> {
         names,
         midi,
     })
+}
+
+/// The project's tempo map as the window holds it ([`Project::tempo`]):
+/// every point, so the ruler can count bars through a change rather than
+/// through one nominal tempo (`bpm`, the transport's). A project with none
+/// still has a tempo — a change at zero, what the transport says —
+/// because a ruler with no grid is not a ruler.
+pub async fn tempo_of(project: &daw_control::Project, bpm: f64) -> Vec<TempoChange> {
+    let map = project.tempo_map();
+    let points = map.points().await.unwrap_or_default();
+    let (num, den) = map.time_signature_at(0.0).await.unwrap_or((4, 4));
+    let meter = (
+        u32::try_from(num.max(1)).unwrap_or(4),
+        u32::try_from(den.max(1)).unwrap_or(4),
+    );
+    tempo_changes(&points, (bpm, meter))
+}
+
+/// The tempo changes `points` make, in order, from a song that starts at
+/// `first` (its tempo and meter) when no point is at zero.
+///
+/// A point that sets no meter keeps the one before it, as the engine counts
+/// it: a tempo change in a 3/4 song is still in 3/4.
+#[must_use]
+pub fn tempo_changes(
+    points: &[daw_proto::TempoPoint],
+    (bpm, meter): (f64, (u32, u32)),
+) -> Vec<TempoChange> {
+    let mut timed: Vec<(f64, &daw_proto::TempoPoint)> = points
+        .iter()
+        .filter_map(|point| Some((point.position.time.as_ref()?.as_seconds(), point)))
+        .collect();
+    timed.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut out = Vec::with_capacity(timed.len() + 1);
+    if timed.first().is_none_or(|(at, _)| *at > 0.0) {
+        out.push(TempoChange {
+            at: 0.0,
+            bpm,
+            beats_per_bar: meter.0,
+            beat_unit: meter.1,
+        });
+    }
+    let mut now = meter;
+    for (at, point) in timed {
+        if let Some(sig) = point.time_signature.as_ref() {
+            now = (sig.numerator.max(1), sig.denominator.max(1));
+        }
+        out.push(TempoChange {
+            at,
+            bpm: point.bpm,
+            beats_per_bar: now.0,
+            beat_unit: now.1,
+        });
+    }
+    out
 }
 
 /// Wait for the backend, then read the project.
@@ -380,4 +393,47 @@ pub fn on_playing_lane(track: &daw_proto::Track, item: &Item) -> bool {
         || item
             .fixed_lane
             .is_none_or(|lane| lane < 64 && track.lane_play_mask & (1_u64 << lane) != 0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn point(at: f64, bpm: f64, meter: Option<(u32, u32)>) -> daw_proto::TempoPoint {
+        let mut p = daw_proto::TempoPoint::from_seconds(at, bpm);
+        p.time_signature = meter.map(|(n, d)| daw_proto::TimeSignature::new(n, d));
+        p
+    }
+
+    #[test]
+    fn a_song_with_no_points_is_one_change_at_zero() {
+        let got = tempo_changes(&[], (100.0, (6, 8)));
+        assert_eq!(
+            got,
+            vec![TempoChange {
+                at: 0.0,
+                bpm: 100.0,
+                beats_per_bar: 6,
+                beat_unit: 8
+            }]
+        );
+    }
+
+    #[test]
+    fn a_change_that_sets_no_meter_keeps_the_one_before_it() {
+        let got = tempo_changes(
+            &[
+                point(8.0, 90.0, None),
+                point(4.0, 120.0, Some((3, 4))),
+                point(0.0, 120.0, None),
+            ],
+            (120.0, (4, 4)),
+        );
+        let meters: Vec<(f64, u32, u32)> = got
+            .iter()
+            .map(|c| (c.at, c.beats_per_bar, c.beat_unit))
+            .collect();
+        assert_eq!(meters, vec![(0.0, 4, 4), (4.0, 3, 4), (8.0, 3, 4)]);
+        assert!((got[2].bpm - 90.0).abs() < 1e-9);
+    }
 }

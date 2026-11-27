@@ -17,8 +17,8 @@
 //! across a switch back to the launcher and in again.
 //!
 //! In a browser the session's views are tabs over its stage
-//! ([`WEB_VIEWS`]). The arrangement and the mixer are the same panels the
-//! desktop's extensions draw, over the engine in the page
+//! ([`WEB_VIEWS`]). The arrangement, the mixer and the editor are the same
+//! panels the desktop draws, over the engine in the page
 //! (`studio_panels::web_host::HostedView`, fed by `crate::engine_web`).
 
 use dioxus::prelude::*;
@@ -131,9 +131,16 @@ pub fn screenset(name: &str) -> Result<(&'static str, View), String> {
 }
 
 /// The session's views in a browser, as its tabs: the overview, the
-/// chart, and the arrangement and the mixer over the page's engine.
+/// chart, and the arrangement, the mixer and the editor over the page's
+/// engine.
 #[cfg_attr(feature = "native", allow(dead_code))]
-pub const WEB_VIEWS: [View; 4] = [View::Overview, View::Chart, View::Arrangement, View::Mixer];
+pub const WEB_VIEWS: [View; 5] = [
+    View::Overview,
+    View::Chart,
+    View::Arrangement,
+    View::Mixer,
+    View::Editor,
+];
 
 /// Where a view of the session is.
 pub fn route(view: View) -> Route {
@@ -348,13 +355,15 @@ pub fn page(slug: String) -> Element {
         // The page's engine's own panels: its song's tracks, items,
         // sections, automation and takes; every strip's fader, pan, mute,
         // solo, sends, FX and Signal blocks.
+        // And the Editor: the expression editor on the item the arrangement
+        // picked, written back to the engine in the page.
         #[cfg(feature = "web")]
-        View::Arrangement | View::Mixer => {
+        View::Arrangement | View::Mixer | View::Editor => {
             use studio_panels::web_host::{HostedPanel, HostedView};
-            let panel = if v == View::Mixer {
-                HostedPanel::Mixer
-            } else {
-                HostedPanel::Arrangement
+            let panel = match v {
+                View::Mixer => HostedPanel::Mixer,
+                View::Editor => HostedPanel::Editor,
+                _ => HostedPanel::Arrangement,
             };
             return rsx! {
                 div { class: "sessview panes",
@@ -371,7 +380,7 @@ pub fn page(slug: String) -> Element {
                     if cfg!(feature = "native") {
                         "Not in this Studio yet."
                     } else {
-                        "This view is the desktop app's for now; the overview, the chart, the arrangement and the mixer are here."
+                        "This view is the desktop app's for now; the overview, the chart, the arrangement, the mixer and the editor are here."
                     }
                 }
             }

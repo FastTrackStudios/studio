@@ -92,6 +92,19 @@ pub enum ArrangeEdit {
     RegionBounds { id: u32, from: f64, to: f64 },
     /// Region `id`, gone.
     RegionRemove { id: u32 },
+    /// The tempo from `at` seconds: `bpm` quarter notes a minute (the
+    /// change there, or one made there).
+    TempoSet { at: f64, bpm: f64 },
+    /// The tempo change at `from` moved to `to` (never the song's first).
+    TempoMove { from: f64, to: f64 },
+    /// The tempo change at `at`, gone (never the song's first).
+    TempoRemove { at: f64 },
+    /// The meter from `at`: `numerator`/`denominator` (`3`/`4`).
+    MeterSet {
+        at: f64,
+        numerator: u32,
+        denominator: u32,
+    },
     /// The item's take volume curve, whole.
     TakeVolume {
         item: String,
@@ -297,6 +310,17 @@ impl ArrangeEdit {
                 to: *to,
             },
             Edit::RemoveRegion(_, id) => Self::RegionRemove { id: *id },
+            Edit::SetTempo(_, at, bpm) => Self::TempoSet { at: *at, bpm: *bpm },
+            Edit::MoveTempo(_, from, to) => Self::TempoMove {
+                from: *from,
+                to: *to,
+            },
+            Edit::RemoveTempo(_, at) => Self::TempoRemove { at: *at },
+            Edit::SetMeter(_, at, numerator, denominator) => Self::MeterSet {
+                at: *at,
+                numerator: *numerator,
+                denominator: *denominator,
+            },
             Edit::SetTakeVolume(g, points) => Self::TakeVolume {
                 item: item(g),
                 points: points_of(points),
@@ -396,6 +420,14 @@ impl ArrangeEdit {
             Self::RegionAdd { from, to, lane } => Edit::AddRegion(none(), *from, *to, *lane),
             Self::RegionBounds { id, from, to } => Edit::SetRegionBounds(none(), *id, *from, *to),
             Self::RegionRemove { id } => Edit::RemoveRegion(none(), *id),
+            Self::TempoSet { at, bpm } => Edit::SetTempo(none(), *at, *bpm),
+            Self::TempoMove { from, to } => Edit::MoveTempo(none(), *from, *to),
+            Self::TempoRemove { at } => Edit::RemoveTempo(none(), *at),
+            Self::MeterSet {
+                at,
+                numerator,
+                denominator,
+            } => Edit::SetMeter(none(), *at, *numerator, *denominator),
             Self::TakeVolume { item, points } => {
                 Edit::SetTakeVolume(item.clone(), envelope_points(points))
             }
@@ -485,6 +517,16 @@ impl ArrangeEdit {
             Self::RegionAdd { from, to, .. } | Self::RegionBounds { from, to, .. } => {
                 all(&[*from, *to])
             }
+            // A tempo is a number of quarter notes a minute, and none is
+            // not one.
+            Self::TempoSet { at, bpm } => at.is_finite() && bpm.is_finite() && *bpm > 0.0,
+            Self::TempoMove { from, to } => all(&[*from, *to]),
+            Self::TempoRemove { at } => at.is_finite(),
+            Self::MeterSet {
+                at,
+                numerator,
+                denominator,
+            } => at.is_finite() && *numerator > 0 && *denominator > 0,
             Self::TakeVolume { points, .. }
             | Self::Envelope { points, .. }
             | Self::ItemCurve { points, .. } => {
@@ -545,7 +587,7 @@ macro_rules! gesture {
             $display,
             concat!(
                 $what,
-                " `edits`: the gesture's edits, in order (each one of `move`, `trim`, `slip`, `fade_in`, `fade_out`, `lane`, `volume`, `stretch`, `snap_offset`, `split`, `copy`, `delete`, `select`, `deselect`, `select_all`, `deselect_all`, `marker_add`, `marker_move`, `marker_remove`, `region_add`, `region_bounds`, `region_remove`, `take_volume`, and on an automation lane `envelope`, `item_curve`, `item_move`, `item_add`, `item_bounds`, `item_delete`, `lane_show`, `lane_mode`, `lane_height` (each with `track` and its `envelope`); items by GUID, `into` the name the window gives the item a split or a copy makes); `label` names the undo step they make together. Says how many edits it made and, in `made`, the engine's GUID for each item named by `into`. To edit items by hand prefer ITEMS_SET, ITEM_SPLIT, ITEMS_DELETE."
+                " `edits`: the gesture's edits, in order (each one of `move`, `trim`, `slip`, `fade_in`, `fade_out`, `lane`, `volume`, `stretch`, `snap_offset`, `split`, `copy`, `delete`, `select`, `deselect`, `select_all`, `deselect_all`, `marker_add`, `marker_move`, `marker_remove`, `region_add`, `region_bounds`, `region_remove`, `tempo_set`, `tempo_move`, `tempo_remove`, `meter_set` (times in seconds), `take_volume`, and on an automation lane `envelope`, `item_curve`, `item_move`, `item_add`, `item_bounds`, `item_delete`, `lane_show`, `lane_mode`, `lane_height` (each with `track` and its `envelope`); items by GUID, `into` the name the window gives the item a split or a copy makes); `label` names the undo step they make together. Says how many edits it made and, in `made`, the engine's GUID for each item named by `into`. To edit items by hand prefer ITEMS_SET, ITEM_SPLIT, ITEMS_DELETE."
             ),
             "Arrange",
             "",
@@ -610,6 +652,13 @@ gesture!(
     "What a drag of a marker or a region's edge on the ruler commits, or a mark made or removed there."
 );
 gesture!(
+    TEMPO,
+    "ARRANGE_TEMPO",
+    "arrange_tempo",
+    "Edit the tempo map",
+    "What a gesture on the ruler's tempo lane commits: a tempo change made (a click on the lane), moved (dragged across it), its tempo set (dragged up or down) or its meter set (from its menu), or taken away."
+);
+gesture!(
     ITEM_VOLUME,
     "ARRANGE_ITEM_VOLUME",
     "arrange_item_volume",
@@ -660,7 +709,7 @@ gesture!(
 );
 
 /// Every gesture action.
-pub static GESTURES: [&ActionMeta; 15] = [
+pub static GESTURES: [&ActionMeta; 16] = [
     &AUTOMATION_POINTS,
     &AUTOMATION_ITEMS,
     &AUTOMATION_LANE,
@@ -672,6 +721,7 @@ pub static GESTURES: [&ActionMeta; 15] = [
     &COPY,
     &DELETE,
     &MARKERS,
+    &TEMPO,
     &ITEM_VOLUME,
     &TAKE_VOLUME,
     &SELECT,
@@ -712,6 +762,10 @@ pub fn gesture_id(edits: &[ArrangeEdit]) -> &'static str {
             | E::RegionAdd { .. }
             | E::RegionBounds { .. }
             | E::RegionRemove { .. } => MARKERS.id,
+            E::TempoSet { .. }
+            | E::TempoMove { .. }
+            | E::TempoRemove { .. }
+            | E::MeterSet { .. } => TEMPO.id,
             E::Volume { .. } => ITEM_VOLUME.id,
             E::TakeVolume { .. } => TAKE_VOLUME.id,
             E::Envelope { .. } => AUTOMATION_POINTS.id,
@@ -791,6 +845,8 @@ async fn carry_out(arg: GestureArg) -> Result<Carried, String> {
         #[cfg(feature = "native")]
         crate::body::body().view_changed(None, crate::view::Change::Items);
     }
+    // A tempo edit needs no read-back asked for here: every window follows
+    // the engine's tempo map itself (`crate::engine::TempoWatch`).
     Ok(carried)
 }
 
@@ -856,6 +912,10 @@ mod tests {
             Edit::AddRegion(String::new(), 1.0, 2.0, 0),
             Edit::SetRegionBounds(String::new(), 2, 1.0, 3.0),
             Edit::RemoveRegion(String::new(), 2),
+            Edit::SetTempo(String::new(), 4.0, 96.0),
+            Edit::MoveTempo(String::new(), 4.0, 6.0),
+            Edit::RemoveTempo(String::new(), 6.0),
+            Edit::SetMeter(String::new(), 8.0, 3, 4),
             Edit::SetTakeVolume(
                 g(),
                 vec![EnvelopePoint {
@@ -957,6 +1017,13 @@ mod tests {
         assert_eq!(
             of(vec![Edit::SetLaneHeight(g(), e(), 60)]),
             Some(AUTOMATION_LANE.id)
+        );
+        assert_eq!(
+            of(vec![
+                Edit::SetTempo(String::new(), 2.0, 90.0),
+                Edit::SetMeter(String::new(), 2.0, 3, 4)
+            ]),
+            Some(TEMPO.id)
         );
         assert_eq!(of(vec![Edit::ToggleMute(g())]), None);
         assert_eq!(of(vec![]), None);

@@ -58,6 +58,7 @@ mod otlp;
 mod report;
 mod routing;
 mod speed;
+mod tempo;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -250,6 +251,34 @@ fn a_send_is_controlled_in_every_parameter() {
         Err(why) => checks.failed("opens", why),
     }
     finish(name, "a send in every parameter over MCP", engine, &checks);
+}
+
+/// The tempo and the meter set from the window's actions over MCP, the
+/// bars and beats read back, undone and redone; and a tempo set elsewhere
+/// read back with no reopening (studio#98, studio#97; `tempo.rs`).
+#[test]
+fn the_tempo_and_meter_are_set_from_the_window() {
+    let name = "tempo";
+    let fixture = drums::fixture();
+    let song = fixture
+        .stage(&run_dir(name))
+        .unwrap_or_else(|e| panic!("staging drum-kit: {e}"));
+    let (engine, _spans) = engine(name);
+    let mut checks = Checks::default();
+    match check::open(&engine, &song) {
+        Ok(_) => {
+            if let Err(why) = tempo::from_the_window(&engine.mcp, &mut checks) {
+                checks.failed("tempo", why);
+            }
+        }
+        Err(why) => checks.failed("opens", why),
+    }
+    finish(
+        name,
+        "the tempo and meter from the window over MCP",
+        engine,
+        &checks,
+    );
 }
 
 /// A setlist downloaded from its share link, as a desktop keeps it and as

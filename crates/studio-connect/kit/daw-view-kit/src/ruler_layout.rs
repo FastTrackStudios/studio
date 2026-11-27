@@ -143,10 +143,26 @@ pub fn lane_shown(row: usize) -> bool {
     !slim() || row == SECTIONS_ROW
 }
 
-/// The TEMPO lane's height: nothing on a slim ruler.
+/// The TEMPO lane on a slim ruler: asked for (`SESSION_OPTION`'s
+/// `tempo_lane`), so a touchscreen can set the tempo and the meter too.
+static TEMPO_ON_SLIM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Show or hide the TEMPO lane on a slim ruler (a full ruler always has
+/// it).
+pub fn show_tempo(on: bool) {
+    TEMPO_ON_SLIM.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the ruler shows the TEMPO lane.
+#[must_use]
+pub fn tempo_shown() -> bool {
+    !slim() || TEMPO_ON_SLIM.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The TEMPO lane's height: nothing on a slim ruler, unless asked for.
 #[must_use]
 pub fn tempo_h() -> f64 {
-    if slim() { 0.0 } else { TEMPO_H }
+    if tempo_shown() { TEMPO_H } else { 0.0 }
 }
 
 /// A stretch on a grid of its own (a Grid region of the edited track's):

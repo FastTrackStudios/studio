@@ -40,7 +40,7 @@ pub mod kit_gate;
 pub mod lanes;
 pub mod leveler;
 pub mod midi;
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 pub mod notes_actions;
 pub mod num;
 pub mod open;

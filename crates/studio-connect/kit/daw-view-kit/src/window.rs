@@ -232,12 +232,10 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::Save => (crate::actions::SAVE.id, String::new()),
         #[cfg(not(feature = "native"))]
         Action::Save => return None,
-        #[cfg(feature = "native")]
+        // The desktop's engine's, or the page's (its own undo, through the
+        // engine in the page).
         Action::Undo => (crate::actions::UNDO.id, String::new()),
-        #[cfg(feature = "native")]
         Action::Redo => (crate::actions::REDO.id, String::new()),
-        #[cfg(not(feature = "native"))]
-        Action::Undo | Action::Redo => return None,
         Action::ToggleSnap => (
             crate::view_actions::OPTION.id,
             r#"{"option":"snap"}"#.to_owned(),

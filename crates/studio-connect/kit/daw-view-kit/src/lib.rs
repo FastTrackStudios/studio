@@ -10,6 +10,8 @@
 
 #[cfg(any(feature = "native", feature = "web"))]
 pub use daw_view::arrange_actions;
+#[cfg(any(feature = "native", feature = "web"))]
+pub use daw_view::notes_actions;
 /// The views' contract (`daw-view`), under the paths the views were
 /// written against (`crate::engine`, `crate::view`, …).
 pub use daw_view::{
@@ -19,7 +21,7 @@ pub use daw_view::{
     wave_detail, window_queue,
 };
 #[cfg(feature = "native")]
-pub use daw_view::{notes_actions, page, view_client, wave_pool};
+pub use daw_view::{page, view_client, wave_pool};
 pub mod animate;
 pub mod app;
 pub mod art;
