@@ -36,6 +36,10 @@ pub mod profile;
 pub mod rig;
 #[cfg_attr(target_arch = "wasm32", path = "signal_rig_page.rs")]
 pub mod signal_rig;
+/// The page's whole rig, built natively too so its tests run on a desktop.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[allow(dead_code, reason = "natively only its tests use it")]
+mod signal_rig_page;
 
 /// signal's rig crate, for what drives a rig from outside: its service's
 /// calls, its homes and instruments.

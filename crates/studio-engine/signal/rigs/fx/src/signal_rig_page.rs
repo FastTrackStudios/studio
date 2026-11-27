@@ -12,7 +12,11 @@
 //!
 //! The state and the Patch parameter are the desktop's, so a song saved on
 //! a desktop plays here, its Patch automation meaning the same thing: the
-//! patch at that step of the profile's.
+//! patch at that step of the profile's own (a song's patches are listed
+//! only while that song is up, and no song is up in a page).
+//!
+//! Not here: the stacks and their footswitches, and the window and the
+//! actions that drive a desktop's rig service. A page plays the patches.
 
 use std::sync::Arc;
 
@@ -49,20 +53,35 @@ impl RigState {
         Instrument::from_id(&self.instrument)
     }
 
-    /// The patch the state names among the profile's, else its default.
-    fn patch_index(&self) -> usize {
-        let Some(found) = profile::profile_in(self.instrument(), self.profile_name()) else {
-            return 0;
+    /// The profile's own patches, by name, in order: what the desktop's
+    /// rig lists with no song up, and what the Patch parameter steps along.
+    fn listed(&self) -> Vec<String> {
+        let instrument = self.instrument();
+        let Some(found) = profile::profile_in(instrument, self.profile_name()) else {
+            return Vec::new();
         };
+        let library = profile::library_of(instrument);
+        found
+            .patches
+            .iter()
+            .filter(|p| !library.is_song_patch(&found.name, &p.name))
+            .map(|p| p.name.clone())
+            .collect()
+    }
+
+    /// The patch the state names among the listed, else the profile's
+    /// default, else the first.
+    fn patch_index(&self) -> usize {
+        let listed = self.listed();
+        let at = |name: &str| listed.iter().position(|n| n.eq_ignore_ascii_case(name));
+        let default = profile::profile_in(self.instrument(), self.profile_name())
+            .and_then(|p| p.patches.get(p.default_patch))
+            .map(|p| p.name.clone());
         self.patch
             .as_deref()
-            .and_then(|n| {
-                found
-                    .patches
-                    .iter()
-                    .position(|p| p.name.eq_ignore_ascii_case(n))
-            })
-            .unwrap_or(found.default_patch)
+            .and_then(at)
+            .or_else(|| default.as_deref().and_then(at))
+            .unwrap_or(0)
     }
 
     fn profile_name(&self) -> &str {
@@ -83,14 +102,15 @@ pub struct SignalRig {
     streamed: bool,
 }
 
-/// `state`'s profile, every patch built, the one it names playing.
+/// `state`'s profile, every listed patch built, the one it names playing.
 fn built(state: &RigState, sample_rate: f64, block_size: u32) -> Option<ProfileRig> {
-    ProfileRig::build_in(
+    let listed = state.listed();
+    ProfileRig::build_listed(
         state.instrument(),
         state.profile_name(),
+        &|name| listed.iter().any(|n| n.eq_ignore_ascii_case(name)),
         state.patch_index(),
-        sample_rate,
-        block_size,
+        (sample_rate, block_size),
     )
 }
 
@@ -153,14 +173,19 @@ impl SignalRig {
             return;
         };
         let Some(mut rig) = slot.take() else { return };
+        self.arriving = None;
+        // A rebuild that made nothing keeps what plays.
+        if rig.is_none() {
+            slot.retire(rig);
+            return;
+        }
         // The patch playing now carries over (a switch made while waiting).
         if let (Some(new), Some(old)) = (&mut rig, &self.rig) {
             new.switch(old.scene());
         }
         std::mem::swap(&mut self.rig, &mut rig);
         slot.retire(rig);
-        self.arriving = None;
-        self.streamed = self.rig.is_some();
+        self.streamed = true;
     }
 
     /// The profile's patches, by name, in order: the Patch parameter's
@@ -169,9 +194,7 @@ impl SignalRig {
         if let Some(rig) = &self.rig {
             return rig.scenes();
         }
-        profile::profile_in(self.state.instrument(), self.state.profile_name())
-            .map(|p| p.patches.iter().map(|s| s.name.clone()).collect())
-            .unwrap_or_default()
+        self.state.listed()
     }
 }
 
@@ -233,8 +256,10 @@ impl PluginInstance for SignalRig {
             .collect()
     }
 
+    /// None reported, as the desktop's rig reports none: a patch switch
+    /// does not move the track's compensation.
     fn latency(&mut self) -> u32 {
-        self.rig.as_mut().map_or(0, ProfileRig::latency)
+        0
     }
 
     fn prepare(&mut self, sample_rate: f64, block_size: u32) -> Result<(), PluginError> {
@@ -306,5 +331,41 @@ impl PluginInstance for SignalRig {
 
     fn deactivate(&mut self) {
         self.prepared = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_desktops_state_comes_back_as_it_went_in() {
+        let saved = br#"{"id":"rig-1","instrument":"guitar","profile":"Worship","patch":"Lead"}"#;
+        let mut rig = SignalRig::new(48_000.0);
+        rig.load_state(saved).expect("the state loads");
+        let back: RigState =
+            serde_json::from_slice(&rig.save_state().expect("it saves")).expect("it reads");
+        assert_eq!(
+            back,
+            RigState {
+                id: "rig-1".to_owned(),
+                instrument: "guitar".to_owned(),
+                profile: Some("Worship".to_owned()),
+                patch: Some("Lead".to_owned()),
+            }
+        );
+    }
+
+    #[test]
+    fn a_state_with_no_id_keeps_the_rigs_own() {
+        let mut rig = SignalRig::new(48_000.0);
+        rig.load_state(br#"{"id":"rig-1","instrument":"bass"}"#)
+            .expect("the state loads");
+        rig.load_state(br#"{"instrument":"bass","patch":"Drive"}"#)
+            .expect("the state loads");
+        let back: RigState =
+            serde_json::from_slice(&rig.save_state().expect("it saves")).expect("it reads");
+        assert_eq!(back.id, "rig-1");
+        assert_eq!(back.patch.as_deref(), Some("Drive"));
     }
 }

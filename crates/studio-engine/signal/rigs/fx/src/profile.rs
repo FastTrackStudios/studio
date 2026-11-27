@@ -51,6 +51,19 @@ const MAX_RINGING: usize = 4;
 pub struct Library {
     pub dir: PathBuf,
     pub profiles: Vec<RigProfile>,
+    /// Each profile's song patches (a song's own, `PatchDef::song`), by the
+    /// profile's name: signal's rig lists them only while that song is up.
+    pub song_patches: Vec<(String, Vec<String>)>,
+}
+
+impl Library {
+    /// Whether `patch` of the profile `profile` is a song's own.
+    #[must_use]
+    pub fn is_song_patch(&self, profile: &str, patch: &str) -> bool {
+        self.song_patches.iter().any(|(p, names)| {
+            p.eq_ignore_ascii_case(profile) && names.iter().any(|n| n.eq_ignore_ascii_case(patch))
+        })
+    }
 }
 
 /// Where Session keeps its copy of the bass library (`FTS_BASS_RIG_DIR`
@@ -107,7 +120,24 @@ pub fn library_of(instrument: Instrument) -> &'static Library {
             .iter()
             .map(|def| guitar::nodes::profile_from_library_in(&home, def, &library.drive_presets))
             .collect();
-        Library { dir, profiles }
+        let song_patches = library
+            .profiles
+            .iter()
+            .map(|def| {
+                let names = def
+                    .patches
+                    .iter()
+                    .filter(|p| !p.song.is_empty())
+                    .map(|p| p.name.clone())
+                    .collect();
+                (def.name.clone(), names)
+            })
+            .collect();
+        Library {
+            dir,
+            profiles,
+            song_patches,
+        }
     })
 }
 
@@ -364,11 +394,31 @@ impl ProfileRig {
         sample_rate: f64,
         block_size: u32,
     ) -> Option<Self> {
+        Self::build_listed(
+            instrument,
+            profile,
+            &|_| true,
+            scene,
+            (sample_rate, block_size),
+        )
+    }
+
+    /// [`build_in`](Self::build_in) with only the patches `listed` keeps
+    /// (by name), `scene` counted among those.
+    #[must_use]
+    pub fn build_listed(
+        instrument: Instrument,
+        profile: &str,
+        listed: &dyn Fn(&str) -> bool,
+        scene: usize,
+        (sample_rate, block_size): (f64, u32),
+    ) -> Option<Self> {
         let found = profile_in(instrument, profile)?;
         let dir = &library_of(instrument).dir;
         let chains: Vec<Chain> = found
             .patches
             .iter()
+            .filter(|patch| listed(&patch.name))
             .map(|patch| Chain::build(patch, (dir, instrument), sample_rate, block_size))
             .collect();
         let frames = usize::try_from(block_size).unwrap_or(4_096).max(1);
