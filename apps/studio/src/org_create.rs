@@ -49,6 +49,9 @@ pub enum Refused {
     Taken(String),
     /// Not signed in (or the issuer no longer takes the sign-in).
     SignIn,
+    /// The issuer does not let this app trade its sign-in for a session
+    /// (its client wants `issue_sessions` at the account server).
+    NotAllowed,
     /// The issuer could not be reached, or said something else.
     Issuer(String),
 }
@@ -60,6 +63,10 @@ impl std::fmt::Display for Refused {
             Refused::NoSlug => write!(f, "the name needs a letter or a digit"),
             Refused::Taken(slug) => write!(f, "there is already an organization called {slug}"),
             Refused::SignIn => write!(f, "sign in to create an organization"),
+            Refused::NotAllowed => write!(
+                f,
+                "the account server does not let this app create organizations yet"
+            ),
             Refused::Issuer(why) => write!(f, "the account server: {why}"),
         }
     }
@@ -181,7 +188,8 @@ pub async fn session_for(
                 .map(str::to_string)
                 .ok_or_else(|| Refused::Issuer("it gave no session".into()))
         }
-        400 | 401 | 403 => Err(Refused::SignIn),
+        403 => Err(Refused::NotAllowed),
+        400 | 401 => Err(Refused::SignIn),
         _ => Err(Refused::Issuer(why(status, &text))),
     }
 }
@@ -245,6 +253,7 @@ pub use here::{create_here, joined};
 /// new org taken into the app.
 #[cfg(feature = "drive")]
 mod here {
+    use dioxus::prelude::*;
     use drive_dioxus::auth;
 
     use super::{Created, Fetch, Refused, Request, create, draft, session_for};
@@ -271,18 +280,36 @@ mod here {
             .iter()
             .map(|b| ("authorization", b.as_str()))
             .collect();
-        let (_, orgs) = auth::fetch("GET", "/orgs", &headers, None)
-            .await
-            .ok_or_else(|| Refused::Issuer("Drive did not answer".into()))?;
+        let orgs = match auth::fetch("GET", "/orgs", &headers, None).await {
+            Some((200, v)) => v,
+            Some((401 | 403, _)) => return Err(Refused::SignIn),
+            Some((status, _)) => return Err(Refused::Issuer(format!("Drive answered {status}"))),
+            None => return Err(Refused::Issuer("Drive did not answer".into())),
+        };
         let issuer: auth::Issuer = serde_json::from_value(orgs["auth"].clone())
             .map_err(|_| Refused::Issuer("this Drive names no account server".into()))?;
-        // Refreshed now whatever its age: only a token issued moments ago
-        // is traded for a session.
-        let token = auth::fresh_token(f64::INFINITY)
-            .await
-            .ok_or(Refused::SignIn)?;
-        let session = session_for(&DriveFetch, &issuer.issuer, &issuer.client_id, &token).await?;
+        let session = session_here(&issuer).await?;
         create(&DriveFetch, &issuer.issuer, &session, &d).await
+    }
+
+    /// An issuer session for the account signed in here. Only a token
+    /// issued moments ago is traded, so the one held is tried first and,
+    /// refused, refreshed once and tried again: not refreshed on every
+    /// Create (Drive signs out of every app here when a refresh fails).
+    async fn session_here(issuer: &auth::Issuer) -> Result<String, Refused> {
+        let trade = |token: String| async move {
+            session_for(&DriveFetch, &issuer.issuer, &issuer.client_id, &token).await
+        };
+        let held = auth::token().ok_or(Refused::SignIn)?;
+        match trade(held).await {
+            Err(Refused::SignIn) => {
+                let fresh = auth::fresh_token(f64::INFINITY)
+                    .await
+                    .ok_or(Refused::SignIn)?;
+                trade(fresh).await
+            }
+            other => other,
+        }
     }
 
     /// The new org, one of this person's now: listed (the switcher, All
@@ -293,6 +320,7 @@ mod here {
         let mut list = orgs.peek().clone();
         list.push(made.org.clone());
         orgs.set(crate::orgs::ordered(list));
+        crate::orgs::remember_name(&made.org, &made.name);
         let name = made.name.clone();
         crate::songs::backing::create(
             &crate::orgs::qualified(&made.org, crate::orgs::ORG_DOC),

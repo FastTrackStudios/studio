@@ -213,3 +213,15 @@ async fn a_refused_trade_asks_for_a_sign_in() {
         Err(Refused::SignIn)
     );
 }
+
+#[tokio::test]
+async fn an_app_the_issuer_does_not_let_trade_is_told_so_not_sent_to_sign_in() {
+    let fetch = Once {
+        answer: (403, r#"{"error":"access_denied"}"#),
+        seen: RefCell::new(None),
+    };
+    assert_eq!(
+        session_for(&fetch, "https://auth.example", "drive", "fresh").await,
+        Err(Refused::NotAllowed)
+    );
+}
