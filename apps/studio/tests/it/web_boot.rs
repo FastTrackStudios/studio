@@ -378,8 +378,10 @@ fn cab_ir() -> Vec<u8> {
 /// songs (`engine_web::keep_offline`: its listing and small files in the
 /// page's caches, every proxy fetched whole). Its service worker keeps the
 /// page itself (`public/sw.js`). Then the server is cut — every connection
-/// closed unanswered — and the page reloaded: it comes back from the
+/// closed unanswered — and the page opened again: it comes back from the
 /// service worker, the session opens from what was kept, and Play is heard.
+/// (The page's address is opened again rather than reloaded: the router
+/// drops the query from the address once the page is up.)
 #[test]
 #[ignore = "needs the web build and a WebDriver: `just test-web-boot`"]
 fn a_kept_session_opens_and_plays_with_the_network_off() {
@@ -398,10 +400,11 @@ fn a_kept_session_opens_and_plays_with_the_network_off() {
 
     let driver = Driver::start();
     let session = driver.new_session();
-    session.navigate(&format!(
-        "{}/?session=/sessions/multitrack-click&keep=1",
-        site.origin
-    ));
+    // The session's address, opened again once the network is off: the
+    // router puts its own route in the address once the page is up and
+    // drops the query, so a reload would come back with no session.
+    let page = format!("{}/?session=/sessions/multitrack-click&keep=1", site.origin);
+    session.navigate(&page);
 
     // Online: open, then kept on this device.
     let kept = session.wait_for(Duration::from_secs(120), "the session to be kept", |s| {
@@ -427,9 +430,9 @@ fn a_kept_session_opens_and_plays_with_the_network_off() {
         (s.script(script) == "kept").then_some(())
     });
 
-    // The network off, the page again.
+    // The network off, the page again: from its service worker.
     site.cut();
-    session.refresh();
+    session.navigate(&page);
     let ready = session.wait_for(
         Duration::from_secs(90),
         "the kept session to open with the network off",
@@ -1256,11 +1259,6 @@ impl Session<'_> {
             ),
         );
         self.call("POST", "/url", Some(&json!({ "url": url })));
-    }
-
-    /// Reload the page.
-    fn refresh(&self) {
-        self.call("POST", "/refresh", Some(&json!({})));
     }
 
     /// An attribute of the page's engine state element (`#studio-engine`).
