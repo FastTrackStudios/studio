@@ -11,10 +11,17 @@
 //! nothing when it is not live. That is the seam a directory kept by the
 //! organization's server takes over later; a member only ever asks
 //! [`Rooms::find`].
+//!
+//! **Its setlist.** The file also keeps what the room's leader last loaded
+//! ([`Room::setlist`]), and keeps it when the room stops being live: the
+//! same link, opened while nobody leads, opens that setlist for each
+//! person on their own, to practise ([`Room::opens`], studio#714).
 
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+use crate::state::Loaded;
 
 /// Where a room's link points.
 pub const JOIN_BASE: &str = "https://fasttrackstudio.app/join/";
@@ -161,6 +168,22 @@ pub struct Room {
     /// Where its leader is, while it is live.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live: Option<Live>,
+    /// Its setlist: what its leader last loaded (a setlist, or a lone
+    /// session), kept relative to the Studio folder. It stays when the
+    /// room stops being live: what the link opens to practise then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setlist: Option<Loaded>,
+}
+
+/// What opening a room's link does now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Opens<'a> {
+    /// Someone leads it: follow them.
+    Leader(&'a Live),
+    /// Nobody leads it: open its setlist on your own, to practise.
+    Practice(&'a Loaded),
+    /// Nobody leads it, and nobody has loaded anything into it yet.
+    Nothing,
 }
 
 impl Room {
@@ -168,6 +191,17 @@ impl Room {
     #[must_use]
     pub fn link(&self) -> String {
         link_of(&self.id)
+    }
+
+    /// What opening its link does now: follow its leader while it is
+    /// live, else practise its setlist alone.
+    #[must_use]
+    pub fn opens(&self) -> Opens<'_> {
+        match (&self.live, &self.setlist) {
+            (Some(live), _) => Opens::Leader(live),
+            (None, Some(setlist)) => Opens::Practice(setlist),
+            (None, None) => Opens::Nothing,
+        }
     }
 }
 
@@ -292,6 +326,7 @@ impl Rooms {
                     name: name.to_owned(),
                     org: org.to_owned(),
                     live: None,
+                    setlist: None,
                 };
             }
         };
@@ -359,6 +394,19 @@ impl Rooms {
     pub fn set_live(&self, id: &RoomId, live: Option<Live>) -> Result<Room, Error> {
         let mut room = self.find(id.as_str())?;
         room.live = live;
+        self.write(&room)?;
+        Ok(room)
+    }
+
+    /// Keep `setlist` as the room's ([`Room::setlist`]): what its leader
+    /// loaded, which the link opens to practise while nobody leads.
+    ///
+    /// # Errors
+    ///
+    /// No such room, or its file cannot be written.
+    pub fn set_setlist(&self, id: &RoomId, setlist: Loaded) -> Result<Room, Error> {
+        let mut room = self.find(id.as_str())?;
+        room.setlist = Some(setlist);
         self.write(&room)?;
         Ok(room)
     }

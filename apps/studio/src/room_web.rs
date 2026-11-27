@@ -23,6 +23,10 @@
 //!   member has opened. The transport follows the leader's with
 //!   session-sync's `TransportSync`, the song by its number in the set, as
 //!   the desktop's engine does (engine-collab's `room`).
+//! - **Practising** (studio#714). When nobody leads the room, the same
+//!   link opens the room's setlist (what its leader last loaded, kept in
+//!   its file: `room::Room::opens`) in the page, on this person's own: no
+//!   leader is dialled, and the page's transport is its own.
 //!
 //! The page joins when its person presses Join on the link's page
 //! (`crate::pages::join`): the press is the gesture a browser needs before
@@ -35,7 +39,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use dioxus::prelude::*;
 use room::net::{Find, RoomPeer};
-use room::{Kind, Loaded, Room, RoomId};
+use room::{Kind, Loaded, Opens, Room, RoomId};
 use session_sync::transport::{Command, LocalTransport, TransportSync};
 use studio_engine::web_engine;
 
@@ -95,7 +99,8 @@ fn spaces(app: AppState) -> Vec<String> {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Shown {
     /// `idle`, `finding`, `joining` (the leader not reached, or refusing:
-    /// `why` says), `member` or `failed`.
+    /// `why` says), `member`, `practising` (nobody leads it: its setlist
+    /// open here alone) or `failed`.
     pub state: &'static str,
     /// Why it failed, or the last thing that went wrong while a member.
     pub why: String,
@@ -362,12 +367,18 @@ async fn membership(app: AppState, id: RoomId, run: u64) {
         Ok(found) => found,
         Err(e) => return failed(run, e),
     };
-    let Some(live) = room.live.clone() else {
-        // Practising alone in a room nobody leads is studio#714's.
-        return failed(
-            run,
-            format!("{} is not live: nobody leads it now", room.name),
-        );
+    let live = match room.opens() {
+        Opens::Leader(live) => live.clone(),
+        Opens::Practice(setlist) => return practise(app, run, &room, &home, setlist).await,
+        Opens::Nothing => {
+            return failed(
+                run,
+                format!(
+                    "{} is not live, and has no setlist yet: nobody has led it",
+                    room.name
+                ),
+            );
+        }
     };
     if !current(run) {
         return;
@@ -402,6 +413,40 @@ async fn membership(app: AppState, id: RoomId, run: u64) {
     );
     tracing::info!(room.id = %room.id, room.role = "member", room.member = "browser", "room: the page joined");
     follow(app, run, &id, &home, &peer, &me).await;
+}
+
+/// Open `room`'s setlist in the page, alone, to practise: nobody leads
+/// it, so nobody is dialled and the page's transport is its own.
+async fn practise(app: AppState, run: u64, room: &Room, home: &Home, setlist: &Loaded) {
+    if !current(run) {
+        return;
+    }
+    SHOWN.with_mut(|s| {
+        s.name.clone_from(&room.name);
+        s.loaded.clone_from(&setlist.title);
+    });
+    let list = match songs_of(home, setlist, &spaces(app)).await {
+        Ok(list) if !list.is_empty() => list,
+        Ok(_) => return failed(run, format!("{} has no songs here", setlist.title)),
+        Err(e) => return failed(run, format!("{} did not open here: {e}", setlist.title)),
+    };
+    if !current(run) {
+        return;
+    }
+    let mut np = app.np;
+    np.set(Some(NowPlaying::of_places(
+        list,
+        setlist.title.clone(),
+        0,
+        false,
+    )));
+    tracing::info!(
+        room.id = %room.id,
+        room.role = "practice",
+        room.loaded = %setlist.title,
+        "room: nobody leads it; practising its setlist"
+    );
+    SHOWN.with_mut(|s| s.state = "practising");
 }
 
 /// What a member's page keeps between ticks.

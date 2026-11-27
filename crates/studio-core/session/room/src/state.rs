@@ -19,6 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use loro::{LoroDoc, LoroValue};
+use serde::{Deserialize, Serialize};
 
 /// The doc's root map.
 const ROOM: &str = "room";
@@ -27,7 +28,8 @@ const ROOM: &str = "room";
 const SHARE: &str = "share";
 
 /// What is loaded: a setlist, or a lone session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Kind {
     Setlist,
     Session,
@@ -43,14 +45,16 @@ impl Kind {
     }
 }
 
-/// What the leader has loaded into the room.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// What the leader has loaded into the room. The room's file keeps the
+/// last one (`Room::setlist`), for when nobody leads it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Loaded {
     pub kind: Kind,
     /// The file, relative to the Studio folder when it is inside it (it
     /// means the same file on every device), else as it is.
     pub path: String,
     /// What the room shows it as.
+    #[serde(default)]
     pub title: String,
 }
 
