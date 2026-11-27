@@ -255,7 +255,9 @@ fn screens(screen: Screen) {
     );
     let sessions = tempfile::tempdir().expect("a folder for the session");
     stage_session(&sessions.path().join("multitrack-click"));
-    let site = Server::start(dist, sessions.path().to_path_buf());
+    // A set is a Drive document, opened once its node answers: the page is
+    // served by a real node, as it is in use.
+    let site = Node::start(&dist, sessions.path());
     let driver = Driver::start();
     let session = driver.new_session_at(Some(screen));
     let shots = Shots::new(screen);
@@ -272,7 +274,11 @@ fn building_a_set(session: &Session<'_>, origin: &str, shots: &Shots) {
     });
     session.fits(
         "the set's page",
-        &[".erow", "button.tool[aria-label='Add songs']"],
+        &[
+            ".erow",
+            "button.tool[aria-label='Add songs']",
+            ".hfacts .loc",
+        ],
     );
     shots.take(session, "setlist");
 
@@ -558,6 +564,70 @@ impl Server {
             }
         });
         Self { origin }
+    }
+}
+
+/// A Drive node of this test's (`DRIVE_NODE_BIN`, else `drive-node` on the
+/// PATH), open (no issuer), serving the web build at the root and the
+/// sessions under `/sessions/`; stopped when dropped. Its org is the one
+/// the built-in sets are in.
+struct Node {
+    child: Child,
+    origin: String,
+    _data: tempfile::TempDir,
+}
+
+impl Node {
+    fn start(dist: &Path, sessions: &Path) -> Self {
+        let program = std::env::var("DRIVE_NODE_BIN").unwrap_or_else(|_| "drive-node".into());
+        let data = tempfile::tempdir().expect("the node's data");
+        let listen = format!("127.0.0.1:{}", free_port());
+        let child = Command::new(&program)
+            .args(["--listen", &listen])
+            .arg("--data")
+            .arg(data.path())
+            .arg("--app")
+            .arg(format!("/={}", dist.display()))
+            // The page at the root calls its node under `/studio/api`
+            // (`door::node_mount`), as fasttrackstudio.app's front
+            // proxies it: the node answers there for an app at `/studio`.
+            .arg("--app")
+            .arg(format!("/studio={}", dist.display()))
+            .arg("--app")
+            .arg(format!("/sessions={}", sessions.display()))
+            .args(["--org", "crossroads-church", "--no-backfill", "--no-iroh"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap_or_else(|e| panic!("{program} did not start: {e}"));
+        let node = Self {
+            child,
+            origin: format!("http://{listen}"),
+            _data: data,
+        };
+        let began = Instant::now();
+        while !TcpStream::connect(&listen).is_ok_and(|mut s| {
+            s.write_all(b"GET /health HTTP/1.1\r\nHost: node\r\nConnection: close\r\n\r\n")
+                .is_ok()
+                && {
+                    let mut answer = String::new();
+                    s.read_to_string(&mut answer).is_ok() && answer.ends_with("ok")
+                }
+        }) {
+            assert!(
+                began.elapsed() < Duration::from_secs(30),
+                "{program} never answered on {listen}"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        node
+    }
+}
+
+impl Drop for Node {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
@@ -862,7 +932,7 @@ impl Session<'_> {
     /// past either edge.
     fn fits(&self, place: &str, parts: &[&str]) {
         let found = self.script_with(
-            "const w = innerWidth, out = [];              const doc = document.scrollingElement || document.documentElement;              if (doc.scrollWidth > w + 1) out.push(`the page scrolls sideways (${doc.scrollWidth} > ${w})`);              for (const css of arguments[0]) {                const all = [...document.querySelectorAll(css)].filter(e => e.getClientRects().length && e.offsetWidth > 0);                if (!all.length) out.push(`no ${css}`);                for (const e of all) { const r = e.getBoundingClientRect();                  if (r.left < -1 || r.right > w + 1)                    out.push(`${css} at ${Math.round(r.left)}..${Math.round(r.right)} of ${w}: ${(e.innerText || '').trim().slice(0, 40)}`); }              }              return JSON.stringify(out.slice(0, 12));",
+            "const w = innerWidth, out = [];              const doc = document.scrollingElement || document.documentElement;              if (doc.scrollWidth > w + 1) out.push(`the page scrolls sideways (${doc.scrollWidth} > ${w})`);              for (const css of arguments[0]) {                const all = [...document.querySelectorAll(css)].filter(e => e.getClientRects().length && e.getBoundingClientRect().width > 0);                if (!all.length) out.push(`no ${css}`);                for (const e of all) { const r = e.getBoundingClientRect();                  if (r.left < -1 || r.right > w + 1)                    out.push(`${css} at ${Math.round(r.left)}..${Math.round(r.right)} of ${w}: ${(e.innerText || '').trim().slice(0, 40)}`); }              }              return JSON.stringify(out.slice(0, 12));",
             json!([parts]),
         );
         let wrong: Vec<String> = serde_json::from_str(&found).unwrap_or_default();

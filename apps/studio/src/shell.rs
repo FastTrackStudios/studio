@@ -760,6 +760,24 @@ fn Transport() -> Element {
     }
 }
 
+/// Who this is, at the sidebar's foot: the mark alone on the rail (an
+/// iPad's folded sidebar has no room for the words).
+#[component]
+fn SideAccount(mark: String, hue: u32, name: String, line: String) -> Element {
+    let rail = app_shell::ui::use_sidebar_mode() == app_shell::ui::SidebarMode::Rail;
+    rsx! {
+        div { class: "sideacct", title: if rail { "{name} · {line}" } else { "" },
+            span { class: "avatar", style: "--h:{hue}", "{mark}" }
+            if !rail {
+                span { class: "who",
+                    b { "{name}" }
+                    span { "{line}" }
+                }
+            }
+        }
+    }
+}
+
 /// The sidebar (a phone's drawer): the org switcher, Studio's places,
 /// the org's people and settings, the weekly events, the shows, the
 /// loaded rig, and who is signed in.
@@ -827,20 +845,17 @@ fn StudioSidebar(route: Route) -> Element {
                 }
             },
             footer: rsx! {
-                div { class: "sideacct",
-                    span { class: "avatar", style: "--h:{me_hue}", "{me_mark}" }
-                    span { class: "who",
-                        b { "{me_name}" }
-                        span {
-                            if who.is_empty() {
-                                "Not signed in"
-                            } else if me.is_some() {
-                                "Signed in · you, in this org"
-                            } else {
-                                "Signed in"
-                            }
-                        }
-                    }
+                SideAccount {
+                    mark: me_mark,
+                    hue: me_hue,
+                    name: me_name,
+                    line: if who.is_empty() {
+                        "Not signed in"
+                    } else if me.is_some() {
+                        "Signed in · you, in this org"
+                    } else {
+                        "Signed in"
+                    },
                 }
             },
             SidebarSection { title: "Studio",

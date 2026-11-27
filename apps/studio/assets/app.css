@@ -358,3 +358,10 @@
 .content[data-form="phone"] .kfpaper { padding: 6px 4px; border-radius: 8px; }
 .content[data-form="phone"] .chartnowhead b { font-size: 18px; }
 .content[data-form="phone"] .chartnow .pline { font-size: 13px; }
+/* A set's when and where beside its art: the place shrinks and ends in an
+   ellipsis before it runs off a phone's edge. */
+.hero2 .htxt, .hfacts, .when2 { min-width: 0; max-width: 100%; }
+.loc { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.loc > span { min-width: 0; overflow: hidden; }
+.loc b, .loc small { display: block; overflow: hidden; text-overflow: ellipsis; }
+.sideacct { min-width: 0; }
