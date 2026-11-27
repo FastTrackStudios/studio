@@ -147,7 +147,12 @@ jobs:
       run: |
         devenv shell -- bash -euo pipefail -s <<'EOF'
         pkgs=()
-        for p in ${CHECK_PACKAGES:-}; do pkgs+=(-p "$p"); done
+        # A member can share its name with a registry crate (vendor/wasm-streams-0.4 is
+        # `wasm-streams` 0.4, beside 0.5 from crates.io): `-p name` is then ambiguous,
+        # so pass each member as `name@version`.
+        declare -A spec=()
+        while read -r n v; do spec[$n]="$n@$v"; done < <(cargo metadata --no-deps --format-version 1 --offline 2>/dev/null | python3 -c 'import json,sys; [print(p["name"], p["version"]) for p in json.load(sys.stdin)["packages"]]')
+        for p in ${CHECK_PACKAGES:-}; do pkgs+=(-p "${spec[$p]:-$p}"); done
         if [ "${#pkgs[@]}" = 0 ]; then cargo check --workspace; else cargo check "${pkgs[@]}"; fi
         EOF
     - name: Assets (studio-assets, rig-models, mic-models)
@@ -176,9 +181,14 @@ jobs:
       run: |
         devenv shell -- bash -euo pipefail -s <<'EOF'
         pkgs=()
+        # A member can share its name with a registry crate (vendor/wasm-streams-0.4 is
+        # `wasm-streams` 0.4, beside 0.5 from crates.io): `-p name` is then ambiguous,
+        # so pass each member as `name@version`.
+        declare -A spec=()
+        while read -r n v; do spec[$n]="$n@$v"; done < <(cargo metadata --no-deps --format-version 1 --offline 2>/dev/null | python3 -c 'import json,sys; [print(p["name"], p["version"]) for p in json.load(sys.stdin)["packages"]]')
         sel=" ${TEST_PACKAGES:-} "
         while read -r p; do
-          if [ "$sel" = "  " ] || [[ "$sel" == *" $p "* ]]; then pkgs+=(-p "$p"); fi
+          if [ "$sel" = "  " ] || [[ "$sel" == *" $p "* ]]; then pkgs+=(-p "${spec[$p]:-$p}"); fi
         done < <(python3 scripts/boundaries.py packages all --tested)
         if [ "${#pkgs[@]}" = 0 ]; then echo "no tested package affected"; exit 0; fi
         cargo nextest run "${pkgs[@]}" --no-fail-fast --no-tests=pass
