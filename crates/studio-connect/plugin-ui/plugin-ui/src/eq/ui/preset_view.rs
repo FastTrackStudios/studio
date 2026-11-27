@@ -21,10 +21,7 @@ use crate::eq::ui::params::{EqStageParams, EqStageRef, EqUiState, NUM_BANDS};
 /// Where the EQ's presets live.
 #[must_use]
 pub fn preset_library_root() -> std::path::PathBuf {
-    preset_browser::ui::library_root(
-        "FTS_EQ_PRESETS",
-        "/run/media/AudioHaven/Signal/Libraries/Presets/FTS-EQ",
-    )
+    preset_browser::ui::library_root("FTS_EQ_PRESETS", "Libraries/Presets/FTS-EQ")
 }
 
 /// The EQ's library: every bank under the root, as one list.

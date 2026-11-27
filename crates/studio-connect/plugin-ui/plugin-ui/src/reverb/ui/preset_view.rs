@@ -17,10 +17,7 @@ use preset_browser::PresetBrowser;
 /// Where the reverb's presets live.
 #[must_use]
 pub fn preset_library_root() -> std::path::PathBuf {
-    preset_browser::ui::library_root(
-        "FTS_REVERB_PRESETS",
-        "/run/media/AudioHaven/Signal/Libraries/Presets/FTS-Reverb",
-    )
+    preset_browser::ui::library_root("FTS_REVERB_PRESETS", "Libraries/Presets/FTS-Reverb")
 }
 
 /// The reverb's library: every bank under the root, as one list.

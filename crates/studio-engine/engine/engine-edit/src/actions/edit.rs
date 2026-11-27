@@ -765,7 +765,9 @@ pub(crate) struct SamplesOut {
 
 /// The kit samples blend in unless told otherwise.
 #[cfg(feature = "signal")]
-pub(crate) const DEFAULT_KIT: &str = "/run/media/AudioHaven/Signal/Libraries/Drum Kits/GGD Modern and Massive 2/Presets/Heavy Thwacky.signalpreset";
+/// In the Signal home (`utils::home`), the same on every machine.
+pub(crate) const DEFAULT_KIT: &str =
+    "Libraries/Drum Kits/GGD Modern and Massive 2/Presets/Heavy Thwacky.signalpreset";
 
 #[cfg(feature = "signal")]
 pub(crate) static SAMPLES_ALIGN: ActionMeta = meta(
@@ -808,7 +810,8 @@ pub(crate) fn register_samples_align(
 ) -> Result<(), architect::action::ActionError> {
     list.register(&SAMPLES_ALIGN, Effect::Mutating, |a: SamplesArg| {
         let (daw, project) = song()?;
-        let preset = std::path::PathBuf::from(a.preset.as_deref().unwrap_or(DEFAULT_KIT));
+        let preset = utils::home::locate(a.preset.as_deref().unwrap_or(DEFAULT_KIT))
+            .map_err(|e| e.to_string())?;
         if !preset.exists() {
             return Err(format!("no kit preset at {}", preset.display()));
         }
@@ -857,7 +860,8 @@ pub(crate) fn register_samples_align(
 pub(crate) fn register_samples(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&SAMPLES, Effect::Mutating, |a: SamplesArg| {
         let (daw, project) = song()?;
-        let preset = std::path::PathBuf::from(a.preset.as_deref().unwrap_or(DEFAULT_KIT));
+        let preset = utils::home::locate(a.preset.as_deref().unwrap_or(DEFAULT_KIT))
+            .map_err(|e| e.to_string())?;
         if !preset.exists() {
             return Err(format!("no kit preset at {}", preset.display()));
         }

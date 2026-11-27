@@ -67,3 +67,17 @@ pub fn stem(key: &str) -> String {
     let file = key.rsplit(['/', '\\']).next().unwrap_or(key);
     file.rsplit_once('.').map_or(file, |(s, _)| s).to_string()
 }
+
+/// The file on this computer a rig file's `path` names: a path in the
+/// Signal home (`NAM_models/x.nam`, or an old disk's
+/// `/run/media/AudioHaven/Signal/…`) is found in this machine's Signal home
+/// (`utils::home::locate`); anything else is itself.
+///
+/// # Errors
+///
+/// `NotFound`, saying to pin it, for a file of the Signal home that Drive
+/// has not brought to this computer yet.
+pub fn on_disk(path: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+    utils::home::locate(&path.to_string_lossy())
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e.to_string()))
+}

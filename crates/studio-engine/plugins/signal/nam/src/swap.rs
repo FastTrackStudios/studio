@@ -93,7 +93,12 @@ fn loader(
         // more — the retired model is usually the one being replaced.
         while retired.try_recv().is_ok() {}
 
-        match NamModel::load(&path) {
+        // A capture in the Signal home (an old disk's path too) is found in
+        // this machine's, or said to be not in Drive here yet.
+        let read = sampler::assets::on_disk(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|p| NamModel::load(&p).map_err(|e| e.to_string()));
+        match read {
             Ok(mut model) => {
                 // Primed here so the audio thread can play it immediately;
                 // `reset` allocates and prewarms the receptive field.

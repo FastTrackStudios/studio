@@ -77,7 +77,10 @@ pub fn located(path: &str, instrument: Instrument) -> String {
     }
     let home = home(instrument);
     let given = Path::new(path);
-    if !path.starts_with('/') && !path.contains(":\\") {
+    // A path in the Signal home (`NAM_models/Amp.nam`) is a desktop's path:
+    // the file of its name in the home's folder.
+    let in_signal = utils::home::in_signal(path, None).is_some();
+    if !in_signal && !path.starts_with('/') && !path.contains(":\\") {
         return home.join(given).to_string_lossy().into_owned();
     }
     // A desktop's path, either way its slashes lean.
@@ -114,7 +117,10 @@ pub(crate) fn kit_key(path: &str) -> String {
         return path.to_owned();
     }
     let drive = path.as_bytes().get(1) == Some(&b':');
-    if !path.starts_with(['/', '\\']) && !drive {
+    // A path in the Signal home (`Libraries/Drum Kits/…`) is a desktop's
+    // path: what follows its `Drum Kits` folder.
+    let in_signal = utils::home::in_signal(path, None).is_some();
+    if !in_signal && !path.starts_with(['/', '\\']) && !drive {
         return joined(&kits, path);
     }
     let parts: Vec<&str> = path.split(['/', '\\']).filter(|p| !p.is_empty()).collect();
@@ -612,6 +618,22 @@ mod tests {
         );
         assert_eq!(store_path("/rigs/"), None);
         assert_eq!(store_path("/Users/x/Amp.nam"), None);
+    }
+
+    #[test]
+    fn a_signal_home_path_is_the_same_key_as_the_old_disks() {
+        assert_eq!(
+            kit_key(
+                "Libraries/Drum Kits/GGD Modern and Massive 2/Presets/Heavy Thwacky.signalpreset"
+            ),
+            kit_key(
+                "/run/media/AudioHaven/Signal/Libraries/Drum Kits/GGD Modern and Massive 2/Presets/Heavy Thwacky.signalpreset"
+            ),
+        );
+        assert_eq!(
+            kit_key("Libraries/Drum Kits/GGD/Presets/A.signalpreset"),
+            "/rigs/drums/GGD/Presets/A.signalpreset"
+        );
     }
 
     #[test]

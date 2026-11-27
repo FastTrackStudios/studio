@@ -24,8 +24,9 @@ pub struct Patch {
     pub output_db: f64,
 }
 
-/// Where the captures are.
-const NAM: &str = "/run/media/AudioHaven/Signal/NAM_models";
+/// Where the captures are: their folder in the Signal home
+/// (`utils::home`), the same on every machine.
+const NAM: &str = "NAM_models";
 
 /// The DP3X bass preamp, dimed: grit that keeps the low end.
 const DP3X: &str = "Jason Z Tech21 dUg DP3X bass preamp pedal all dimed no shift.nam";
@@ -92,7 +93,7 @@ impl Patch {
         [self.drive, self.amp, self.cab]
             .into_iter()
             .flatten()
-            .all(|f| std::path::Path::new(NAM).join(f).exists())
+            .all(|f| utils::home::locate(&format!("{NAM}/{f}")).is_ok())
     }
 }
 

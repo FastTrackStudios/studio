@@ -29,10 +29,7 @@ use plugin_core::editor::param_adapter::param_handle;
 /// Where the compressor's presets live.
 #[must_use]
 pub fn preset_library_root() -> std::path::PathBuf {
-    preset_browser::ui::library_root(
-        "FTS_COMP_PRESETS",
-        "/run/media/AudioHaven/Signal/Libraries/Presets/FTS-Comp",
-    )
+    preset_browser::ui::library_root("FTS_COMP_PRESETS", "Libraries/Presets/FTS-Comp")
 }
 
 /// The compressor's library: every bank under the root, as one list.

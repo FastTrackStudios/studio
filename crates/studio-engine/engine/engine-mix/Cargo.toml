@@ -13,6 +13,8 @@ description = "The mix: its state, snapshots, variants, chains and sends, the FX
 # Action List's collector (`actions::register_all`).
 
 [dependencies]
+# The Signal home: rig files by their place in it (`utils::home`).
+utils = { workspace = true }
 engine-core = { workspace = true }
 architect = { workspace = true, features = ["action-list"] }
 # The window's halves the mix reads (`automation`, `midi`).

@@ -13,6 +13,8 @@ description = "Editing a song's data: the hits and their MIDI, placing them, dru
 # Action List's collector (`actions::register_all`).
 
 [dependencies]
+# The Signal home: rig files by their place in it (`utils::home`).
+utils = { workspace = true }
 engine-core = { workspace = true }
 architect = { workspace = true, features = ["action-list"] }
 daw = { workspace = true }
