@@ -434,13 +434,20 @@ async fn follow(app: AppState, run: u64, id: &RoomId, home: &Home, peer: &RoomPe
             match songs_of(home, &loaded, &spaces(app)).await {
                 Ok(list) if !list.is_empty() => {
                     tracing::info!(room.loaded = %loaded.title, room.load = load, "room: opening what the leader loaded");
+                    let mut next = NowPlaying::of_places(list, loaded.title.clone(), 0, false);
+                    // A load that starts on the song already on screen: the
+                    // page's engine has it open, and opens nothing again (it
+                    // opens when the song on screen changes), so it stays
+                    // ready.
+                    if let Some(now) = app.np.peek().as_ref()
+                        && now.place().is_some()
+                        && now.place() == next.place()
+                    {
+                        next.source = now.source.clone();
+                        next.dur = now.dur;
+                    }
                     let mut np = app.np;
-                    np.set(Some(NowPlaying::of_places(
-                        list,
-                        loaded.title.clone(),
-                        0,
-                        false,
-                    )));
+                    np.set(Some(next));
                     f.put = Some(load);
                     f.failed_at = None;
                     f.load_error = None;
