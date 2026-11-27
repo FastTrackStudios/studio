@@ -81,17 +81,25 @@ pub fn room_file(studio: &str, id: &str) -> String {
     under(studio, &format!("Rooms/{id}.room"))
 }
 
-/// The song folder a setlist's line names, the setlist being at
-/// `setlist` (its path): the line's path, relative to the setlist's
-/// folder, without the arrangement it may name (`… @Live`). `None` for a
-/// line that names a song by title alone (`= Title`).
+/// The song folder a setlist's line names by path, the setlist being at
+/// `setlist` (its path): the line's path (read as `crate::setfile::song`
+/// reads it, the arrangement it may name left out), relative to the
+/// setlist's folder. `None` for a line that names a song by its session's
+/// id (found in Drive's indexes, `crate::drive_sets`, not by path) or by
+/// its title alone.
 pub fn song_of_line(setlist: &str, line: &str) -> Option<String> {
-    let line = line.trim();
-    if line.is_empty() || line.starts_with('=') {
-        return None;
+    match crate::setfile::song(line.trim()) {
+        crate::setfile::Song::Path(path) if !path.trim().is_empty() => {
+            Some(song_folder(&under(&folder_of(setlist), path.trim())))
+        }
+        _ => None,
     }
-    let path = line.split(" @").next().unwrap_or(line).trim();
-    Some(song_folder(&under(&folder_of(setlist), path)))
+}
+
+/// Whether a path a room loaded is outside the Studio folder (kept as the
+/// leader's device has it): a member reading by path cannot open it.
+pub fn outside_studio(loaded: &str) -> bool {
+    loaded.starts_with('/') || loaded.contains(":\\") || loaded.contains(":/")
 }
 
 #[cfg(test)]

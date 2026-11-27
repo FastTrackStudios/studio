@@ -66,5 +66,20 @@ fn a_setlists_lines_are_relative_to_it() {
         Some("/sessions/studio/Songs/Hymn")
     );
     assert_eq!(song_of_line(setlist, "= Amazing Grace"), None);
+    assert_eq!(
+        song_of_line(
+            setlist,
+            "3f2a1b4c-0d9e-4f8a-b7c6-5e4d3c2b1a09 Amazing Grace"
+        ),
+        None,
+        "a line by session id is found in Drive, not by path"
+    );
     assert_eq!(song_of_line(setlist, "  "), None);
+}
+
+#[test]
+fn a_path_outside_the_studio_folder_is_said() {
+    assert!(outside_studio("/Users/someone/Songs/Hymn.RPP"));
+    assert!(outside_studio("C:\\Songs\\Hymn.RPP"));
+    assert!(!outside_studio("Setlists/first.setlist"));
 }

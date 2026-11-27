@@ -196,6 +196,11 @@ fn a_browser_joins_a_desktop_hosted_room_and_follows_the_leader() {
         "a refused page is in the room: {seen}"
     );
     assert_ne!(room(&forger, "data-opened"), "2");
+    assert_ne!(
+        room(&forger, "data-state"),
+        "member",
+        "a refused page says it is in the room"
+    );
     // The member is still in, and still on one connection.
     assert_eq!(room(&page, "data-attaches"), "1");
 }

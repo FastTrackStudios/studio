@@ -31,6 +31,7 @@
 //! (`tests/it/web_room.rs`).
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use dioxus::prelude::*;
 use room::net::{Find, RoomPeer};
@@ -64,10 +65,37 @@ const TICK_MS: u64 = 50;
 /// How long after a load that did not open here it is tried again.
 const RETRY_MS: f64 = 3000.0;
 
+/// How many times the room's file is looked for, a moment apart (the
+/// person's organizations may still be arriving from Drive).
+const FIND_TRIES: u32 = 5;
+const FIND_WAIT_MS: u64 = 2000;
+
+/// Which membership is the page's: each Join, and each Leave, makes a new
+/// one, and one that is no longer current stops and says nothing more.
+static CURRENT: AtomicU64 = AtomicU64::new(0);
+
+/// Whether membership `run` is still the page's.
+fn current(run: u64) -> bool {
+    CURRENT.load(Ordering::SeqCst) == run
+}
+
+/// The spaces to look for a room in: the org Studio is in, then each other
+/// of this person's.
+fn spaces(app: AppState) -> Vec<String> {
+    let mut spaces = vec![app.here.peek().clone()];
+    for org in app.orgs.peek().iter() {
+        if !spaces.contains(org) {
+            spaces.push(org.clone());
+        }
+    }
+    spaces
+}
+
 /// A membership's state.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Shown {
-    /// `idle`, `finding`, `joining`, `member` or `failed`.
+    /// `idle`, `finding`, `joining` (the leader not reached, or refusing:
+    /// `why` says), `member` or `failed`.
     pub state: &'static str,
     /// Why it failed, or the last thing that went wrong while a member.
     pub why: String,
@@ -209,6 +237,12 @@ async fn songs_of(
     loaded: &Loaded,
     spaces: &[String],
 ) -> Result<Vec<(Song, Place)>, String> {
+    if room_paths::outside_studio(&loaded.path) {
+        return Err(format!(
+            "{} is outside the Studio folder on the leader's device",
+            loaded.path
+        ));
+    }
     let path = room_paths::under(home.studio(), &loaded.path);
     match (loaded.kind, home) {
         (
@@ -293,7 +327,10 @@ fn short(id: &str) -> String {
     id.chars().take(8).collect()
 }
 
-fn failed(why: String) {
+fn failed(run: u64, why: String) {
+    if !current(run) {
+        return;
+    }
     tracing::warn!(room.error = %why, "room: the page did not join");
     SHOWN.with_mut(|s| {
         s.state = "failed";
@@ -301,21 +338,40 @@ fn failed(why: String) {
     });
 }
 
-/// Be in room `id` for as long as the page asks ([`JOIN`]).
-async fn membership(app: AppState, id: RoomId, spaces: Vec<String>) {
+/// Room `id` found, looked for again a moment apart while it is not.
+async fn find_soon(app: AppState, run: u64, id: &RoomId) -> Result<(Room, Home), String> {
+    let mut tries = 0;
+    loop {
+        let found = find(id, &spaces(app)).await;
+        tries += 1;
+        if found.is_ok() || tries >= FIND_TRIES || !current(run) {
+            return found;
+        }
+        crate::state::sleep_ms(FIND_WAIT_MS).await;
+    }
+}
+
+/// Be in room `id` as membership `run`, for as long as it is the page's.
+async fn membership(app: AppState, id: RoomId, run: u64) {
     *SHOWN.write() = Shown {
         state: "finding",
         room: id.to_string(),
         ..Shown::default()
     };
-    let (room, home) = match find(&id, &spaces).await {
+    let (room, home) = match find_soon(app, run, &id).await {
         Ok(found) => found,
-        Err(e) => return failed(e),
+        Err(e) => return failed(run, e),
     };
     let Some(live) = room.live.clone() else {
         // Practising alone in a room nobody leads is studio#714's.
-        return failed(format!("{} is not live: nobody leads it now", room.name));
+        return failed(
+            run,
+            format!("{} is not live: nobody leads it now", room.name),
+        );
     };
+    if !current(run) {
+        return;
+    }
     SHOWN.with_mut(|s| {
         s.state = "joining";
         s.name.clone_from(&room.name);
@@ -323,8 +379,11 @@ async fn membership(app: AppState, id: RoomId, spaces: Vec<String>) {
     });
     let endpoint = match room::net::bind_in_browser().await {
         Ok(endpoint) => endpoint,
-        Err(e) => return failed(e),
+        Err(e) => return failed(run, e),
     };
+    if !current(run) {
+        return;
+    }
     let me = format!("browser-{}", short(&endpoint.id().to_string()));
     // Where the leader is now, each time the page attaches: a leader back
     // after a restart is at new addresses, with a new pass.
@@ -342,7 +401,7 @@ async fn membership(app: AppState, id: RoomId, spaces: Vec<String>) {
         room::net::attach_to(endpoint, live, find_again),
     );
     tracing::info!(room.id = %room.id, room.role = "member", room.member = "browser", "room: the page joined");
-    follow(app, &id, &home, &peer, &me, &spaces).await;
+    follow(app, run, &id, &home, &peer, &me).await;
 }
 
 /// What a member's page keeps between ticks.
@@ -350,35 +409,29 @@ struct Following {
     /// The load put into Now Playing, and the one open in the engine.
     put: Option<u64>,
     opened: Option<u64>,
-    /// When a load last failed to open here.
+    /// When a load last failed to open here, and why.
     failed_at: Option<f64>,
+    load_error: Option<String>,
     sync: TransportSync,
 }
 
 /// The member's loop: each load into Now Playing, the transport kept on
 /// the leader's, until the page leaves the room.
-async fn follow(
-    app: AppState,
-    id: &RoomId,
-    home: &Home,
-    peer: &RoomPeer,
-    me: &str,
-    spaces: &[String],
-) {
+async fn follow(app: AppState, run: u64, id: &RoomId, home: &Home, peer: &RoomPeer, me: &str) {
     let mut f = Following {
         put: None,
         opened: None,
         failed_at: None,
+        load_error: None,
         sync: TransportSync::new(me),
     };
-    while JOIN.peek().as_ref() == Some(id) {
-        let mut why = peer.last_error();
+    while current(run) {
         if let Some((loaded, load)) = peer.doc().loaded()
             && f.put != Some(load)
             && f.failed_at
                 .is_none_or(|at| js_sys::Date::now() - at >= RETRY_MS)
         {
-            match songs_of(home, &loaded, spaces).await {
+            match songs_of(home, &loaded, &spaces(app)).await {
                 Ok(list) if !list.is_empty() => {
                     tracing::info!(room.loaded = %loaded.title, room.load = load, "room: opening what the leader loaded");
                     let mut np = app.np;
@@ -390,17 +443,18 @@ async fn follow(
                     )));
                     f.put = Some(load);
                     f.failed_at = None;
+                    f.load_error = None;
                     // What is in force carries over: the follower starts
                     // again on the new set.
                     f.sync = TransportSync::new(me);
                 }
                 Ok(_) => {
                     f.failed_at = Some(js_sys::Date::now());
-                    why = Some(format!("{} has no songs here", loaded.title));
+                    f.load_error = Some(format!("{} has no songs here", loaded.title));
                 }
                 Err(e) => {
                     f.failed_at = Some(js_sys::Date::now());
-                    why = Some(format!("{} did not open here: {e}", loaded.title));
+                    f.load_error = Some(format!("{} did not open here: {e}", loaded.title));
                 }
             }
         }
@@ -421,11 +475,22 @@ async fn follow(
                 obey(app, command);
             }
         }
+        if !current(run) {
+            break;
+        }
         let loaded = peer.doc().loaded();
-        let current = f.sync.current().cloned();
+        let attached = peer.last_error();
+        // Never reached, or refused by the leader's door: not in the room.
+        let state = if loaded.is_none() && attached.is_some() {
+            "joining"
+        } else {
+            "member"
+        };
+        let why = f.load_error.clone().or(attached).unwrap_or_default();
+        let in_force = f.sync.current().cloned();
         let shown = Shown {
-            state: "member",
-            why: why.unwrap_or_default(),
+            state,
+            why,
             room: id.to_string(),
             name: SHOWN.peek().name.clone(),
             leader: SHOWN.peek().leader.clone(),
@@ -437,11 +502,11 @@ async fn follow(
             opened: f.opened,
             attaches: peer.attaches(),
             people: room::net::people(&presence),
-            song: current
+            song: in_force
                 .as_ref()
                 .and_then(|t| t.song.clone())
                 .unwrap_or_default(),
-            playing: current.is_some_and(|t| t.playing),
+            playing: in_force.is_some_and(|t| t.playing),
             here_song: local(app).song.unwrap_or_default(),
         };
         if *SHOWN.peek() != shown {
@@ -449,7 +514,9 @@ async fn follow(
         }
         crate::state::sleep_ms(TICK_MS).await;
     }
-    *SHOWN.write() = Shown::default();
+    if current(run) {
+        *SHOWN.write() = Shown::default();
+    }
     tracing::info!(room.id = %id, "room: the page left");
 }
 
@@ -460,16 +527,15 @@ pub fn RoomMember() -> Element {
     let app = use_app();
     let wanted = JOIN();
     use_effect(use_reactive!(|wanted| {
-        let Some(id) = wanted else {
-            return;
-        };
-        let mut spaces = vec![app.here.peek().clone()];
-        for org in app.orgs.peek().iter() {
-            if !spaces.contains(org) {
-                spaces.push(org.clone());
+        // A Join or a Leave: whatever membership ran is no longer the
+        // page's.
+        let run = CURRENT.fetch_add(1, Ordering::SeqCst).saturating_add(1);
+        match wanted {
+            Some(id) => {
+                spawn(membership(app, id, run));
             }
+            None => *SHOWN.write() = Shown::default(),
         }
-        spawn(membership(app, id, spaces));
     }));
     let s = SHOWN();
     let people = s.people.join(", ");
