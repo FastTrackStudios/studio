@@ -786,13 +786,10 @@ pub fn build(preset: &Preset, opts: &BuildOptions<'_>) -> (Graph, BuildReport) {
                 match index_of(k) {
                     Some(j) => Some((b, j)),
                     None => {
-                        // Another port's lane: its hits, over the session.
-                        match preset
-                            .lanes
-                            .iter()
-                            .position(|l| l.name == k)
-                            .and_then(|p| u16::try_from(p).ok())
-                        {
+                        // Another port's lane, its hits over the session; or
+                        // a track no lane of the preset runs, its hits as
+                        // the host places them.
+                        match preset.key_piece(k) {
                             Some(piece) => remote_keys.push((i, b, piece)),
                             None => report.warnings.push(alloc::format!(
                                 "{}/{}: no lane {k} to key on",

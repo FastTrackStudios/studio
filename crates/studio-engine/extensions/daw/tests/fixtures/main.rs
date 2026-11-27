@@ -22,6 +22,7 @@
 //! generated, never committed.
 
 mod check;
+mod drums;
 #[path = "../unbreakable/engine.rs"]
 #[allow(
     dead_code,
@@ -161,6 +162,7 @@ macro_rules! sessions {
 sessions! {
     arrangements => "arrangements",
     chart_repeats => "chart-repeats",
+    drum_kit => "drum-kit",
     markers_only => "markers-only",
     multitrack_click => "multitrack-click",
     same_name => "same-name",
@@ -175,6 +177,27 @@ fn every_fixture_session_has_its_test() {
         listed,
         "a folder in tests/fixtures/sessions needs its line in `sessions!`"
     );
+}
+
+/// An agent redoes a drum mix over MCP (studio#696): the `drum-kit`
+/// fixture aligned, leveled, gated from its hit markers, locked at −23
+/// LUFS and toned through Signal, each step measured; then changed by
+/// hand as the mixer window changes it (`drums.rs`).
+#[test]
+fn agent_mixes_the_drums() {
+    let name = "drum-mix";
+    let fixture = drums::fixture();
+    let run = run_dir(name);
+    let song = fixture
+        .stage(&run)
+        .unwrap_or_else(|e| panic!("staging drum-kit: {e}"));
+    let (engine, _spans) = engine(name);
+    let mut checks = Checks::default();
+    match check::open(&engine, &song) {
+        Ok(_) => drums::mix(&engine, &run, &mut checks),
+        Err(why) => checks.failed("opens", why),
+    }
+    finish(name, "an agent mixes the drums over MCP", engine, &checks);
 }
 
 /// The fixture setlist, opened and moved through: by `SESSION_SONG`, then

@@ -740,3 +740,66 @@ fn a_partial_render_in_a_long_gap_of_placed_hits_is_the_full_one() {
         "a partial render in the gap is {worst:.1} dBFS off the full one"
     );
 }
+
+/// A gate on a track of its own (one instance on the kick's folder, no
+/// kit around it), keyed by the kick's trigger track: a lane no instance
+/// of its preset runs. It plays the hits the host placed for that track —
+/// open on each, shut on the bleed between — rather than gating on its
+/// own input, which the bleed keeps open.
+#[test]
+fn a_gate_keyed_by_a_track_outside_its_preset_plays_the_placed_hits() {
+    let mut preset = Preset::passthrough();
+    preset.lanes[0].blocks = vec![
+        signal_core::state::BlockSpec::signal("gate", "gate")
+            .phase(signal_core::state::Phase::Rescue)
+            .algorithm("drum")
+            .key(TRIG),
+    ];
+    let piece = preset
+        .key_piece(TRIG)
+        .expect("a key outside the preset is a piece of its own");
+    let factories: [&dyn BlockFactory; 1] = [&BuiltinFactory];
+    let (g, report) = graph::build(
+        &preset,
+        &BuildOptions {
+            sample_rate: SR,
+            max_block: MAX,
+            port: None,
+            factories: &factories,
+            host: &NoHost,
+        },
+    );
+    assert!(
+        report.warnings.is_empty(),
+        "the key is followed: {:?}",
+        report.warnings
+    );
+    assert_eq!(g.remote_keys(), 1, "keyed by the host's hits");
+    let (mut controller, mut kick) = signal_core::processor_pair();
+    let _ = kick.install(g);
+    let _ = controller.send(signal_core::engine::Command::PlannedHits {
+        piece,
+        hits: vec![(24_000_u64, 1.0_f32), (96_000, 1.0)].into_boxed_slice(),
+    });
+    // The kick, and bleed loud enough to open a gate keyed by its input.
+    let input = hits(24_000, 72_000, 0.8, noise(FRAMES, 0.3, 9));
+    let mut out = vec![0.0_f32; FRAMES];
+    let mut at = 0;
+    while at < FRAMES {
+        let end = (at + MAX).min(FRAMES);
+        let mut l = input[at..end].to_vec();
+        let mut r = l.clone();
+        kick.set_position(at as u64);
+        kick.process(&mut [&mut l, &mut r], 2, end - at, &[], &[]);
+        out[at..end].copy_from_slice(&l);
+        at = end;
+    }
+    controller.collect();
+    let between = peak(&out[60_000..90_000]);
+    assert!(peak(&out[24_000..26_000]) > 0.3, "the first hit plays");
+    assert!(peak(&out[96_000..98_000]) > 0.3, "the second hit plays");
+    assert!(
+        between < 0.01,
+        "the bleed between the hits is shut: peak {between:.3}"
+    );
+}

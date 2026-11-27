@@ -63,7 +63,7 @@ static ADD: ActionMeta = meta(
     "FX_ADD",
     "fx_add",
     "Add an FX",
-    "Put an FX on `track`: one of the FTS processors (`fx`: `FTS Mic`, `FTS EQ`, `FTS Comp`, …), or a CLAP plugin by its bundle (`fx`: a path to a `.clap`, or a bundle's name in ~/.clap or the CLAP search path — `Signal Dev`, `DragonflyRoomReverb.clap`) — at place `at` in its chain (1 is first; the end when not given) — on, or bypassed with `on: false` — and `set` its parameters as FX_SET does, in the plugin's own words (a CLAP's through its own text-to-value). Says its place and what each setting now reads. One undo step.",
+    "Put an FX on `track`: one of the FTS processors (`fx`: `FTS Mic`, `FTS EQ`, `FTS Comp`, …), Signal (`Signal Dev`: built into the engine, nothing installed), or a CLAP plugin by its bundle (`fx`: a path to a `.clap`, or a bundle's name in ~/.clap or the CLAP search path — `Signal Dev`, `DragonflyRoomReverb.clap`) — at place `at` in its chain (1 is first; the end when not given) — on, or bypassed with `on: false` — and `set` its parameters as FX_SET does, in the plugin's own words (a CLAP's through its own text-to-value). Says its place and what each setting now reads. One undo step.",
     "FX",
     "",
 );
@@ -750,16 +750,24 @@ pub fn slot_named(
     }
 }
 
-/// What `fx` names to add: one of the FTS processors (by its name), or a
-/// CLAP bundle (its path, or its name in the CLAP folders).
+/// What `fx` names to add: one of the FTS processors (by its name), a
+/// CLAP compiled into this engine (Signal: `Signal Dev`, found with no
+/// bundle installed), or a CLAP bundle (its path, or its name in the CLAP
+/// folders).
 enum Addable {
     Builtin(String),
+    BuiltinClap(String),
     Clap(std::path::PathBuf),
 }
 
 fn addable(fx: &str) -> Result<Addable, String> {
     if daw_standalone::plugin::FxFactory::provides(&builtin::engine::BuiltinFx, fx) {
         return Ok(Addable::Builtin(fx.to_owned()));
+    }
+    // Before the folders: the engine's own build wins over an installed
+    // bundle of the same plugin, as a song's FX does when it loads.
+    if daw_standalone::plugin::builtin_clap(fx).is_some() {
+        return Ok(Addable::BuiltinClap(fx.trim().to_owned()));
     }
     crate::clap_fx::bundle(fx).map(Addable::Clap).ok_or_else(|| {
         format!(
@@ -806,6 +814,10 @@ fn add(
                 },
             )
             .ok_or_else(|| format!("{} could not be added", a.fx))
+        }
+        Addable::BuiltinClap(name) => {
+            span.record("fx.kind", "builtin-clap");
+            crate::clap_fx::add_builtin(daw, project, &context, name, index)
         }
         Addable::Clap(bundle) => {
             span.record("fx.kind", "clap");

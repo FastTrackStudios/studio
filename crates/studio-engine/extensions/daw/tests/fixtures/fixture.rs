@@ -10,10 +10,26 @@
 //!
 //! [[media]]                 # a recording to generate
 //! file = "Media/bass.wav"   # where, from the session's folder
-//! kind = "tone"             # tone (a sine at `hz`, `db` dBFS) or click (`bpm`)
-//! hz = 55
+//! kind = "tone"             # tone (a sine at `hz`, `db` dBFS), click (`bpm`),
+//! hz = 55                   # drum (`voices`) or trigger (`piece`)
 //! db = -12
 //! seconds = 16
+//!
+//! [[piece]]                 # a drum, for `drum` and `trigger` recordings
+//! name = "kick"             # what a voice or a trigger names it by
+//! hz = 55                   # its body (a kick's falls from twice this)
+//! decay_ms = 160            # its ring, to 1/e
+//! noise = 0.1               # how much of it is noise (a snare's wires), 0..1
+//! bpm = 120                 # where it is hit: these beats of 4/4 bars
+//! beats = [1, 3]
+//! bars = 8
+//! levels_db = [0, -6]       # each stroke's level, in turn (the drummer)
+//!
+//! [[media]]                 # a mic on the kit: what of each piece it hears
+//! file = "Media/kick-in.wav"
+//! kind = "drum"
+//! seconds = 16
+//! voices = [{ piece = "kick", db = -6 }, { piece = "snare", db = -30, delay_ms = 1.5, invert = false }]
 //!
 //! [[listen]]                # a track that must be heard at a level
 //! track = "Bass"            # as LISTEN names it (a name, a path, a tail)
@@ -64,6 +80,8 @@ pub struct Fixture {
     pub arrangements: Vec<Arrangement>,
     /// The chart it must show, when its `fixture.toml` says.
     pub shown: Option<Shown>,
+    /// The drums its `drum` and `trigger` recordings play.
+    pub pieces: Vec<Piece>,
 }
 
 /// The chart a session must show (`SESSION_CHART`): whose it is, and its
@@ -74,6 +92,26 @@ pub struct Shown {
     pub source: String,
     /// Each section's name, first bar and bars (unchecked when empty).
     pub sections: Vec<(String, i64, i64)>,
+}
+
+/// A drum, as a `drum` or `trigger` recording plays it.
+#[derive(Debug, Clone)]
+pub struct Piece {
+    pub name: String,
+    pub hz: f64,
+    pub decay_ms: f64,
+    pub noise: f64,
+    /// Each stroke: when (seconds) and how loud (dB, 0 the loudest).
+    pub strokes: Vec<(f64, f64)>,
+}
+
+/// What of a piece a mic hears.
+#[derive(Debug, Clone)]
+pub struct Voice {
+    pub piece: String,
+    pub db: f64,
+    pub delay_ms: f64,
+    pub invert: bool,
 }
 
 /// Another arrangement of the song: a branch of its project file, made by
@@ -95,8 +133,21 @@ pub struct Media {
 
 #[derive(Debug)]
 pub enum Sound {
-    Tone { hz: f64, db: f64 },
-    Click { bpm: f64 },
+    Tone {
+        hz: f64,
+        db: f64,
+    },
+    Click {
+        bpm: f64,
+    },
+    /// A mic on the kit: each of its voices, added.
+    Drum {
+        voices: Vec<Voice>,
+    },
+    /// A piece's trigger: one short spike a stroke, at the stroke's level.
+    Trigger {
+        piece: String,
+    },
 }
 
 /// A track that must be heard at a level.
@@ -156,7 +207,34 @@ impl Fixture {
                     "click" => Sound::Click {
                         bpm: number(m, "bpm")?,
                     },
-                    other => return Err(format!("media: no kind {other:?} (tone, click)")),
+                    "drum" => Sound::Drum {
+                        voices: m
+                            .get("voices")
+                            .and_then(toml::Value::as_array)
+                            .ok_or("media: a drum's `voices`")?
+                            .iter()
+                            .map(|v| {
+                                let v = v.as_table().ok_or("a voice: a table")?;
+                                Ok(Voice {
+                                    piece: text_of(v, "piece")?,
+                                    db: number(v, "db")?,
+                                    delay_ms: number(v, "delay_ms").unwrap_or(0.0),
+                                    invert: v
+                                        .get("invert")
+                                        .and_then(toml::Value::as_bool)
+                                        .unwrap_or(false),
+                                })
+                            })
+                            .collect::<Result<_, String>>()?,
+                    },
+                    "trigger" => Sound::Trigger {
+                        piece: text_of(m, "piece")?,
+                    },
+                    other => {
+                        return Err(format!(
+                            "media: no kind {other:?} (tone, click, drum, trigger)"
+                        ));
+                    }
                 };
                 Ok(Media {
                     file: text_of(m, "file")?,
@@ -239,8 +317,13 @@ impl Fixture {
                 })
             })
             .transpose()?;
+        let pieces = rows("piece")
+            .iter()
+            .map(piece_of)
+            .collect::<Result<_, String>>()?;
         Ok(Self {
             shown,
+            pieces,
             sections: names(&table, "sections"),
             section_ends: table
                 .get("section_ends")
@@ -280,7 +363,7 @@ impl Fixture {
         let from = root().join("sessions").join(&self.name);
         let to = run.join("sessions").join(&self.name);
         copy_dir(&from, &to)?;
-        generate(&to, &self.media)?;
+        generate(&to, &self.media, &self.pieces)?;
         song_in(&to)
     }
 }
@@ -310,13 +393,13 @@ impl Fixture {
 /// # Errors
 ///
 /// A folder could not be made or a file written.
-pub fn generate(dir: &Path, media: &[Media]) -> Result<(), String> {
+pub fn generate(dir: &Path, media: &[Media], pieces: &[Piece]) -> Result<(), String> {
     for media in media {
         let path = dir.join(&media.file);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
-        write_wav(&path, &render(&media.sound, media.seconds))?;
+        write_wav(&path, &render(&media.sound, media.seconds, pieces)?)?;
     }
     Ok(())
 }
@@ -383,6 +466,45 @@ fn names(t: &toml::Table, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// A `[[piece]]`: its sound and its strokes, beat by beat.
+fn piece_of(p: &toml::Table) -> Result<Piece, String> {
+    let bpm = number(p, "bpm")?;
+    let bars = number(p, "bars")?;
+    let beats = p
+        .get("beats")
+        .and_then(toml::Value::as_array)
+        .ok_or("piece: `beats`, the beats of a bar it is hit on")?
+        .iter()
+        .map(|b| b.as_float().or_else(|| b.as_integer().map(|i| i as f64)))
+        .collect::<Option<Vec<f64>>>()
+        .ok_or("piece: `beats` are numbers")?;
+    let levels: Vec<f64> = p
+        .get("levels_db")
+        .and_then(toml::Value::as_array)
+        .map(|l| {
+            l.iter()
+                .filter_map(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
+                .collect()
+        })
+        .unwrap_or_else(|| vec![0.0]);
+    let beat = 60.0 / bpm;
+    let strokes = (0..bars as usize)
+        .flat_map(|bar| {
+            beats
+                .iter()
+                .map(move |b| (bar as f64 * 4.0 + b - 1.0) * beat)
+        })
+        .zip(levels.iter().copied().cycle())
+        .collect();
+    Ok(Piece {
+        name: text_of(p, "name")?,
+        hz: number(p, "hz")?,
+        decay_ms: number(p, "decay_ms")?,
+        noise: number(p, "noise").unwrap_or(0.0),
+        strokes,
+    })
+}
+
 fn number(t: &toml::Table, key: &str) -> Result<f64, String> {
     match t.get(key) {
         Some(toml::Value::Float(f)) => Ok(*f),
@@ -395,8 +517,92 @@ fn number(t: &toml::Table, key: &str) -> Result<f64, String> {
 const RATE: u32 = 48_000;
 
 /// The samples of `sound` over `seconds`.
-fn render(sound: &Sound, seconds: f64) -> Vec<f32> {
+fn render(sound: &Sound, seconds: f64, pieces: &[Piece]) -> Result<Vec<f32>, String> {
     let n = (seconds * f64::from(RATE)) as usize;
+    let piece = |name: &str| {
+        pieces
+            .iter()
+            .find(|p| p.name == name)
+            .ok_or_else(|| format!("no [[piece]] {name:?}"))
+    };
+    match sound {
+        Sound::Drum { voices } => {
+            let mut out = vec![0.0_f64; n];
+            for v in voices {
+                let p = piece(&v.piece)?;
+                let gain = 10_f64.powf(v.db / 20.0) * if v.invert { -1.0 } else { 1.0 };
+                for &(at, level_db) in &p.strokes {
+                    let start = ((at + v.delay_ms / 1e3) * f64::from(RATE)).round() as usize;
+                    let stroke = gain * 10_f64.powf(level_db / 20.0);
+                    let mut noise = Noise::new(start as u64 + p.name.len() as u64);
+                    for (i, s) in out.iter_mut().skip(start).enumerate() {
+                        let t = i as f64 / f64::from(RATE);
+                        if t > p.decay_ms * 8.0 / 1e3 {
+                            break;
+                        }
+                        *s += stroke * hit(p, t, &mut noise);
+                    }
+                }
+            }
+            Ok(out.into_iter().map(|s| s as f32).collect())
+        }
+        Sound::Trigger { piece: name } => {
+            let p = piece(name)?;
+            let mut out = vec![0.0_f32; n];
+            for &(at, level_db) in &p.strokes {
+                let start = (at * f64::from(RATE)).round() as usize;
+                let peak = 0.9 * 10_f64.powf(level_db / 20.0);
+                // A piezo's spike: up in a sample, gone in a few ms.
+                for (i, s) in out
+                    .iter_mut()
+                    .skip(start)
+                    .take(RATE as usize / 200)
+                    .enumerate()
+                {
+                    *s = (peak * (-(i as f64) / 24.0).exp()) as f32;
+                }
+            }
+            Ok(out)
+        }
+        Sound::Tone { .. } | Sound::Click { .. } => Ok(steady(sound, n)),
+    }
+}
+
+/// One stroke of `p`, `t` seconds after it: its body (a sine falling to
+/// its pitch, as a struck head does), a click on the attack, and its
+/// noise.
+fn hit(p: &Piece, t: f64, noise: &mut Noise) -> f64 {
+    let ring = (-t * 1e3 / p.decay_ms).exp();
+    // The pitch falls from twice the body to it over the first 20 ms; the
+    // phase is the frequency's integral.
+    let fall = 0.02;
+    let phase = p.hz * (t + fall * (1.0 - (-t / fall).exp()));
+    let body = (std::f64::consts::TAU * phase).sin();
+    let click = (-t * 1e3 / 1.5).exp() * noise.next();
+    let wires = (-t * 1e3 / (p.decay_ms * 0.8)).exp() * noise.next();
+    ring * body * (1.0 - p.noise) + 0.3 * click + p.noise * wires
+}
+
+/// A small, seeded noise: the same samples every run.
+struct Noise(u64);
+
+impl Noise {
+    fn new(seed: u64) -> Self {
+        Self(seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1))
+    }
+
+    /// The next sample, -1..1.
+    fn next(&mut self) -> f64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        (self.0 >> 11) as f64 / (1_u64 << 53) as f64 * 2.0 - 1.0
+    }
+}
+
+/// A tone's or a click's samples, `n` of them.
+fn steady(sound: &Sound, n: usize) -> Vec<f32> {
     (0..n)
         .map(|i| {
             let t = i as f64 / f64::from(RATE);
@@ -421,6 +627,7 @@ fn render(sound: &Sound, seconds: f64) -> Vec<f32> {
                         0.0
                     }
                 }
+                Sound::Drum { .. } | Sound::Trigger { .. } => 0.0,
             };
             s as f32
         })
