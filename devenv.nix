@@ -145,6 +145,11 @@ in
     # Xvfb + xvfb-run: virtual display for the REAPER integration tests.
     xorg.xorgserver
     xvfb-run
+    # unshare and ip: the room's test on a network with no route out
+    # (daw-extension's tests/room) runs its engines in a namespace of
+    # their own with only a local network.
+    util-linux
+    iproute2
     # cargo-sweep reclaims stale target/ artifacts (`just sweep`).
     cargo-sweep
     # dx's AppImage bundler (`dx bundle --package-types appimage`) shells out
