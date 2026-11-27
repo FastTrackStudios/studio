@@ -144,6 +144,12 @@ add_to = lambda do |g|
   end
   res = api(:post, "/v1/betaGroups/#{g["id"]}/relationships/builds",
             { data: [{ type: "builds", id: build_id }] }, soft: true)
+  # A re-run of this job finds the build in the group already: that is done,
+  # not a failure, and the review submission after it must still run.
+  if res["_error"] == "409"
+    puts "'#{name}' has build #{BUILD_NO} already"
+    return true
+  end
   if res["_error"]
     warn_gh("could not add build #{BUILD_NO} to TestFlight group '#{name}': #{reason(res)}")
     return false
@@ -177,7 +183,13 @@ if state
   puts "Beta App Review: #{state}"
   exit 0
 end
-detail = api(:get, "/v1/apps/#{app_id}/betaAppReviewDetail", nil, soft: true).dig("data", "attributes") || {}
+detail_res = api(:get, "/v1/apps/#{app_id}/betaAppReviewDetail", nil, soft: true)
+if detail_res["_error"]
+  warn_gh("could not read the app's Beta App Review details (#{detail_res["_error"]}): #{reason(detail_res)}; " \
+          "build #{BUILD_NO} is not submitted, so external testers do not get it yet")
+  exit 0
+end
+detail = detail_res.dig("data", "attributes") || {}
 unset = %w[contactFirstName contactLastName contactEmail contactPhone].select { |k| detail[k].to_s.empty? }
 unless unset.empty?
   warn_gh("build #{BUNDLE_ID} #{BUILD_NO} is not submitted for Beta App Review, so external testers do not get it yet: " \

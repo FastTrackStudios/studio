@@ -1,6 +1,6 @@
 ---
 "studio-app" = "minor"
-"xtask-workflows" = "minor"
+"xtask-workflows" = "none"
 ---
 
-The release tag uploads Studio for iPhone and iPad to TestFlight and hands each build to its testers: internal testers at once, the external Testers group through Beta App Review.
+Added: every release reaches iPhone and iPad through TestFlight, so testers get each new build without reinstalling; internal testers at once, the external Testers group after Apple's beta review (studio)
