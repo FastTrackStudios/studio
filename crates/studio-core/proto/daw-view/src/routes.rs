@@ -141,8 +141,24 @@ pub struct Routes {
     /// Set when something has landed, so the window redraws rather than
     /// comparing a map every frame.
     fresh: Arc<std::sync::atomic::AtomicBool>,
-    /// The song's tracks, `(guid, name)`, once read ([`Routes::tracks`]).
-    tracks: Arc<Mutex<Option<Vec<(String, String)>>>>,
+    /// The song's tracks, once read ([`Routes::tracks`]).
+    tracks: Arc<Mutex<Option<Vec<RouteTrack>>>>,
+    /// When the window last predicted into each track's routing: a read
+    /// begun before that lands without overwriting it.
+    touched: Arc<Mutex<HashMap<String, web_time::Instant>>>,
+    /// A [`Routes::reread`] is out: another waits for it rather than
+    /// piling up behind a slow engine.
+    reading: Arc<std::sync::atomic::AtomicBool>,
+}
+
+/// A track as a routing panel needs it: where a send can go, and what is
+/// inside what (a folder's tracks feed it, so a send from the folder to
+/// one of them feeds back).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RouteTrack {
+    pub guid: String,
+    pub name: String,
+    pub parent: Option<String>,
 }
 
 impl Routes {
@@ -198,6 +214,38 @@ impl Routes {
             change(route);
             self.fresh.store(true, std::sync::atomic::Ordering::Relaxed);
         }
+        drop(known);
+        self.touch(guid);
+    }
+
+    /// Take one of a track's routes out before the engine confirms it,
+    /// numbering the ones after it down as the engine will: the panel
+    /// keeps showing the rest while the read that settles it is out.
+    pub fn predict_removed(&self, guid: &str, at: At) {
+        let Ok(mut known) = self.known.lock() else {
+            return;
+        };
+        if let Some(wiring) = known.get_mut(guid) {
+            let list = match at.kind {
+                RouteType::Send => &mut wiring.sends,
+                RouteType::Receive => &mut wiring.receives,
+                RouteType::HardwareOutput => &mut wiring.hardware,
+            };
+            list.retain(|r| r.index != at.index);
+            for later in list.iter_mut().filter(|r| r.index > at.index) {
+                later.index -= 1;
+            }
+            self.fresh.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        drop(known);
+        self.touch(guid);
+    }
+
+    /// The window changed `guid`'s routing now.
+    fn touch(&self, guid: &str) {
+        if let Ok(mut touched) = self.touched.lock() {
+            touched.insert(guid.to_owned(), web_time::Instant::now());
+        }
     }
 
     /// Apply one routing event from the bus.
@@ -229,20 +277,24 @@ impl Routes {
                 .filter(|guid| !known.contains_key(guid))
                 .collect()
         };
-        self.read_in(missing);
+        self.read_in(missing, false);
     }
 
     /// Read these tracks' routing again, held or not, keeping what is held
     /// until the new read lands: what a panel open on a track does to
     /// follow changes made elsewhere, without blanking while it reads.
+    /// One at a time: called again while one is out, it does nothing.
     pub fn reread(&self, guids: Vec<String>) {
-        self.read_in(guids);
+        if self.reading.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            return;
+        }
+        self.read_in(guids, true);
     }
 
-    /// The song's tracks as `(guid, name)`, in order, once read
-    /// ([`Self::fetch_tracks`]): where a send can go.
+    /// The song's tracks, in order, once read ([`Self::fetch_tracks`]):
+    /// where a send can go.
     #[must_use]
-    pub fn tracks(&self) -> Option<Vec<(String, String)>> {
+    pub fn tracks(&self) -> Option<Vec<RouteTrack>> {
         self.tracks.lock().ok()?.clone()
     }
 
@@ -260,7 +312,14 @@ impl Routes {
             let Ok(all) = project.tracks().all().await else {
                 return;
             };
-            let named = all.into_iter().map(|t| (t.guid, t.name)).collect();
+            let named = all
+                .into_iter()
+                .map(|t| RouteTrack {
+                    guid: t.guid,
+                    name: t.name,
+                    parent: t.parent_guid,
+                })
+                .collect();
             if let Ok(mut held) = tracks.lock() {
                 *held = Some(named);
             }
@@ -269,13 +328,30 @@ impl Routes {
     }
 
     /// Read `guids`' routing into the cache, off the caller.
-    fn read_in(&self, guids: Vec<String>) {
+    /// `rereading`: this is [`Self::reread`]'s, whose flag it lets go.
+    fn read_in(&self, guids: Vec<String>, rereading: bool) {
+        let reading = rereading.then(|| Arc::clone(&self.reading));
         if guids.is_empty() {
+            if let Some(reading) = reading {
+                reading.store(false, std::sync::atomic::Ordering::Release);
+            }
             return;
         }
         let known = Arc::clone(&self.known);
         let fresh = Arc::clone(&self.fresh);
+        let touched = Arc::clone(&self.touched);
         spawn_on_engine("studio-engine-routes", async move {
+            // However it ends, the next reread may go.
+            struct Done(Option<Arc<std::sync::atomic::AtomicBool>>);
+            impl Drop for Done {
+                fn drop(&mut self) {
+                    if let Some(reading) = &self.0 {
+                        reading.store(false, std::sync::atomic::Ordering::Release);
+                    }
+                }
+            }
+            let _done = Done(reading);
+            let began = web_time::Instant::now();
             let Some(daw) = daw::rpc::Daw::try_get() else {
                 return;
             };
@@ -284,6 +360,17 @@ impl Routes {
             };
             for guid in guids {
                 let wiring = read(&project, &guid).await;
+                // Predicted into since this read began: the prediction is
+                // newer than what the engine said, and the next read
+                // settles it.
+                let stale = touched
+                    .lock()
+                    .ok()
+                    .and_then(|t| t.get(&guid).copied())
+                    .is_some_and(|at| at > began);
+                if stale {
+                    continue;
+                }
                 let Ok(mut known) = known.lock() else { return };
                 known.insert(guid, wiring);
                 fresh.store(true, std::sync::atomic::Ordering::Relaxed);

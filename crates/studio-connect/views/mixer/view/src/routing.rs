@@ -26,7 +26,7 @@ use fts_audio_ui::ParamHandle;
 use fts_audio_ui::controls::HSlider;
 
 use crate::engine::Edit;
-use crate::routes::{At, Routes, Wiring};
+use crate::routes::{At, RouteTrack, Routes, Wiring};
 
 /// How often what is shown is read from the engine again while open.
 const REREAD: std::time::Duration = std::time::Duration::from_millis(500);
@@ -37,6 +37,10 @@ const OWN_EDIT: std::time::Duration = std::time::Duration::from_millis(400);
 
 /// How often the panel looks for what has landed and sends what it made.
 const TICK: std::time::Duration = std::time::Duration::from_millis(30);
+
+/// How long a send asked for is kept off the "send to" list: long enough
+/// for the reads after it to show it.
+const PENDING: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// The lowest level the slider reaches above silence, in dB.
 pub const FLOOR_DB: f64 = -60.0;
@@ -157,7 +161,7 @@ pub const fn next_tap(mode: SendMode) -> SendMode {
 /// What a route is called on `mine`'s panel: the track at its other end,
 /// by name where `tracks` knows it, or the hardware output it plays to.
 #[must_use]
-pub fn route_name(route: &TrackRoute, mine: &str, tracks: &[(String, String)]) -> String {
+pub fn route_name(route: &TrackRoute, mine: &str, tracks: &[RouteTrack]) -> String {
     if route.route_type == RouteType::HardwareOutput {
         return route.hw_output_name.clone().unwrap_or_else(|| {
             let first = route.hw_output_index.unwrap_or(0).saturating_mul(2) + 1;
@@ -169,8 +173,8 @@ pub fn route_name(route: &TrackRoute, mine: &str, tracks: &[(String, String)]) -
     };
     tracks
         .iter()
-        .find(|(guid, _)| guid == far)
-        .map(|(_, name)| name.clone())
+        .find(|t| t.guid == far)
+        .map(|t| t.name.clone())
         .or_else(|| {
             (route.route_type == RouteType::Send)
                 .then(|| route.dest_track_name.clone())
@@ -180,25 +184,67 @@ pub fn route_name(route: &TrackRoute, mine: &str, tracks: &[(String, String)]) -
 }
 
 /// The tracks `mine` can send to: every other track, in the song's order,
-/// less the ones it already sends to. (A second send to the same track is
-/// the engine's to make by action; the panel offers one.)
+/// less the ones it already sends to (`pending` too: asked for, not yet
+/// read back) and the ones that feed it — a track that sends to it, and
+/// the tracks inside it, which a folder sums — since a send to one of
+/// those feeds back. (A second send to the same track is the engine's to
+/// make by action; the panel offers one.)
 #[must_use]
-pub fn send_targets(
-    tracks: &[(String, String)],
+pub fn send_targets<'a>(
+    tracks: &'a [RouteTrack],
     mine: &str,
     wiring: &Wiring,
-) -> Vec<(String, String)> {
+    pending: &std::collections::HashSet<String>,
+) -> Vec<&'a RouteTrack> {
+    let inside = |guid: &str| {
+        // Walk up from `guid`: `mine` above it means `guid` is inside.
+        let mut at = tracks.iter().find(|t| t.guid == guid);
+        let mut steps = 0;
+        while let Some(t) = at {
+            match t.parent.as_deref() {
+                Some(up) if up == mine => return true,
+                Some(up) if steps < tracks.len() => {
+                    at = tracks.iter().find(|p| p.guid == up);
+                    steps += 1;
+                }
+                _ => return false,
+            }
+        }
+        false
+    };
     tracks
         .iter()
-        .filter(|(guid, _)| guid != mine)
-        .filter(|(guid, _)| {
+        .filter(|t| t.guid != mine && !pending.contains(&t.guid))
+        .filter(|t| {
             !wiring
                 .sends
                 .iter()
-                .any(|s| s.dest_track_guid.as_deref() == Some(guid.as_str()))
+                .any(|s| s.dest_track_guid.as_deref() == Some(t.guid.as_str()))
         })
-        .cloned()
+        .filter(|t| {
+            !wiring
+                .receives
+                .iter()
+                .any(|r| crate::routes::partner(r, mine) == Some(t.guid.as_str()))
+        })
+        .filter(|t| !inside(&t.guid))
         .collect()
+}
+
+/// The edit that adds a send from `from` to `to`. A desktop's or an iPad's
+/// runs `SEND_ADD`, which the engine refuses where the send would feed back
+/// by a longer way round than [`send_targets`] can see; a page's list has
+/// no `SEND_ADD`, so the page sends the window's own edit.
+fn add_send(from: &str, to: &str) -> Edit {
+    #[cfg(feature = "native")]
+    {
+        let args = serde_json::json!({ "from": from, "to": to });
+        Edit::Run("SEND_ADD".to_owned(), args.to_string())
+    }
+    #[cfg(not(feature = "native"))]
+    {
+        Edit::AddSend(from.to_owned(), to.to_owned())
+    }
 }
 
 /// A position as the slider takes it.
@@ -242,25 +288,31 @@ impl Outbox {
 pub fn RoutingCloseup(track: String) -> Element {
     let routes = use_hook(Routes::default);
     let outbox = use_hook(Outbox::default);
+    let applier = use_hook(|| std::rc::Rc::new(crate::engine::Applier::start()));
+    let mut pending = use_signal(std::collections::HashMap::<String, web_time::Instant>::new);
     let mut tick = use_signal(|| 0_u64);
+    // Closed with edits still queued (a typed level's end among them):
+    // sent, so no undo step is left open.
+    {
+        let (outbox, applier) = (outbox.clone(), std::rc::Rc::clone(&applier));
+        use_drop(move || send_all(&outbox, &applier));
+    }
     {
         let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.clone());
+        let applier = std::rc::Rc::clone(&applier);
         use_future(move || {
             let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.clone());
+            let applier = std::rc::Rc::clone(&applier);
             async move {
-                let applier = crate::engine::Applier::start();
                 routes.fetch(vec![track.clone()]);
                 routes.fetch_tracks();
                 let mut read_at = web_time::Instant::now();
                 loop {
                     crate::pause(TICK).await;
-                    if let Some(applier) = &applier {
-                        for edit in outbox.take() {
-                            applier.send(edit);
-                        }
-                    }
+                    send_all(&outbox, &applier);
                     if read_at.elapsed() >= REREAD && !outbox.recent() {
                         routes.reread(vec![track.clone()]);
+                        routes.fetch_tracks();
                         read_at = web_time::Instant::now();
                     }
                     if routes.take_fresh() {
@@ -307,19 +359,37 @@ pub fn RoutingCloseup(track: String) -> Element {
             }
         }
     };
-    let targets = send_targets(&tracks, &track, &wiring);
+    // A send asked for within PENDING is not offered again; past it, the
+    // reads that followed say whether it was made.
+    let asked: std::collections::HashSet<String> = pending
+        .peek()
+        .iter()
+        .filter(|(_, at)| at.elapsed() < PENDING)
+        .map(|(guid, _)| guid.clone())
+        .collect();
+    let targets: Vec<(String, String)> = send_targets(&tracks, &track, &wiring, &asked)
+        .into_iter()
+        .map(|t| (t.guid.clone(), t.name.clone()))
+        .collect();
     let add = {
-        let (outbox, routes, track) = (outbox.clone(), routes.clone(), track.clone());
+        let (outbox, track) = (outbox.clone(), track.clone());
         targets.into_iter().map(move |(guid, name)| {
-            let (outbox, routes, track) = (outbox.clone(), routes.clone(), track.clone());
+            let (outbox, track) = (outbox.clone(), track.clone());
             rsx! {
                 button {
                     key: "{guid}",
                     style: "{BUTTON}",
                     onclick: move |_| {
-                        outbox.push(Edit::AddSend(track.clone(), guid.clone()));
-                        // Both ends change; read them when it has landed.
-                        routes.forget(&guid);
+                        // Offered once: taken off the list until the read
+                        // that shows the send lands.
+                        let fresh = pending
+                            .peek()
+                            .get(&guid)
+                            .is_none_or(|at| at.elapsed() >= PENDING);
+                        if fresh {
+                            pending.write().insert(guid.clone(), web_time::Instant::now());
+                            outbox.push(add_send(&track, &guid));
+                        }
                     },
                     "+ {name}"
                 }
@@ -340,6 +410,16 @@ pub fn RoutingCloseup(track: String) -> Element {
                     div { style: "display:flex; flex-direction:row; flex-wrap:wrap; gap:6px;", {add} }
                 }
             }
+        }
+    }
+}
+
+/// Send what the panel's controls made, in order.
+fn send_all(outbox: &Outbox, applier: &Option<crate::engine::Applier>) {
+    let edits = outbox.take();
+    if let Some(applier) = applier {
+        for edit in edits {
+            applier.send(edit);
         }
     }
 }
@@ -400,8 +480,10 @@ fn RouteRow(
         let (routes, outbox, track) = (routes.clone(), outbox.clone(), track.clone());
         move |_| {
             outbox.push(Edit::RemoveRoute(track.clone(), at));
-            // Every route after it renumbers, at both ends: read again.
-            routes.forget(&track);
+            // Every route after it renumbers: shown so now, and the next
+            // read settles both ends.
+            routes.predict_removed(&track, at);
+            tick += 1;
         }
     };
     let mute_look = if muted {
@@ -584,12 +666,17 @@ mod tests {
         assert_eq!(tap_word(next_tap(SendMode::PostFader)), "Pre-fader");
     }
 
+    fn track(guid: &str, name: &str, parent: Option<&str>) -> RouteTrack {
+        RouteTrack {
+            guid: guid.to_owned(),
+            name: name.to_owned(),
+            parent: parent.map(str::to_owned),
+        }
+    }
+
     #[test]
     fn a_route_is_named_for_its_far_end() {
-        let tracks = vec![
-            ("a".to_owned(), "Vox".to_owned()),
-            ("b".to_owned(), "Verb".to_owned()),
-        ];
+        let tracks = vec![track("a", "Vox", None), track("b", "Verb", None)];
         let send = route(RouteType::Send, 0, "a", Some("b"));
         assert_eq!(route_name(&send, "a", &tracks), "Verb");
         let receive = route(RouteType::Receive, 0, "a", Some("b"));
@@ -599,21 +686,43 @@ mod tests {
         assert_eq!(route_name(&out, "a", &tracks), "Out 3/4");
     }
 
+    fn offered(tracks: &[RouteTrack], mine: &str, wiring: &Wiring) -> Vec<String> {
+        send_targets(tracks, mine, wiring, &std::collections::HashSet::new())
+            .into_iter()
+            .map(|t| t.name.clone())
+            .collect()
+    }
+
     #[test]
     fn a_send_is_offered_to_every_other_track_not_yet_sent_to() {
         let tracks = vec![
-            ("a".to_owned(), "Vox".to_owned()),
-            ("b".to_owned(), "Verb".to_owned()),
-            ("c".to_owned(), "Delay".to_owned()),
+            track("a", "Vox", None),
+            track("b", "Verb", None),
+            track("c", "Delay", None),
         ];
         let wiring = Wiring {
             sends: vec![route(RouteType::Send, 0, "a", Some("b"))],
             ..Wiring::default()
         };
-        let offered: Vec<String> = send_targets(&tracks, "a", &wiring)
-            .into_iter()
-            .map(|(_, name)| name)
-            .collect();
-        assert_eq!(offered, ["Delay"]);
+        assert_eq!(offered(&tracks, "a", &wiring), ["Delay"]);
+        let pending = std::iter::once("c".to_owned()).collect();
+        assert!(send_targets(&tracks, "a", &wiring, &pending).is_empty());
+    }
+
+    #[test]
+    fn no_send_is_offered_to_what_feeds_the_track() {
+        // Drums holds Kick, which holds In; Verb sends to Drums.
+        let tracks = vec![
+            track("d", "Drums", None),
+            track("k", "Kick", Some("d")),
+            track("i", "In", Some("k")),
+            track("v", "Verb", None),
+            track("o", "OH", None),
+        ];
+        let wiring = Wiring {
+            receives: vec![route(RouteType::Receive, 0, "v", Some("d"))],
+            ..Wiring::default()
+        };
+        assert_eq!(offered(&tracks, "d", &wiring), ["OH"]);
     }
 }

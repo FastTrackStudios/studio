@@ -10039,19 +10039,27 @@ pub struct Store {
     /// coming back ([`Self::changed`] lets them pass): read again under a
     /// knob being turned, the row would fight the hand turning it.
     own: std::collections::HashMap<String, web_time::Instant>,
-    /// A page's chain reads still out, by track ([`Self::sync_tracks`]).
+    /// A page's chain reads still out, by track ([`Self::sync_tracks`]):
+    /// each read's ticket, and the track's edit count when it was asked.
     #[cfg(all(feature = "web", not(feature = "native")))]
-    asked: std::collections::HashSet<String>,
+    asked: std::collections::HashMap<String, (u64, u64)>,
+    /// The last ticket a page's read was given.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    tickets: u64,
+    /// How many times each track has been edited ([`Self::edit`]): a read
+    /// asked for before the last edit is older than the window's settings.
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    edits: std::collections::HashMap<String, u64>,
     /// What those reads answered (the chain, the tempo), for the next
     /// [`Self::sync_tracks`] to put in.
     #[cfg(all(feature = "web", not(feature = "native")))]
     arriving: std::sync::Arc<std::sync::Mutex<Vec<ChainRead>>>,
 }
 
-/// One track's chain as a page's read answered it: the track, its
-/// processors, the tempo a note-valued time is read against.
+/// One track's chain as a page's read answered it: the track, the read's
+/// ticket, its processors, the tempo a note-valued time is read against.
 #[cfg(all(feature = "web", not(feature = "native")))]
-type ChainRead = (String, Vec<crate::tone_read::EngineFx>, f64);
+type ChainRead = (String, u64, Vec<crate::tone_read::EngineFx>, f64);
 
 /// How long after the window's own edit to a track the engine's news of
 /// it is taken to be that edit.
@@ -10128,27 +10136,45 @@ impl Store {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
-        for (guid, chain, bpm) in arrived {
+        for (guid, ticket, chain, bpm) in arrived {
+            // Only the read still asked for: one the engine's news
+            // replaced ([`Self::changed`]) answers about an older chain.
+            let Some(&(asked, edits)) = self.asked.get(&guid) else {
+                continue;
+            };
+            if asked != ticket {
+                continue;
+            }
             self.asked.remove(&guid);
-            // Edited while the read was out: the window's settings are
-            // newer than what the engine answered.
-            if !self.dirty.contains(&guid) {
+            // Edited while the read was out, or the window's own edits
+            // still coming back: the window's settings are newer than
+            // what the engine answered. Asked again when next shown.
+            let edited = self.edits.get(&guid).copied().unwrap_or(0) != edits;
+            let echo = self
+                .own
+                .get(&guid)
+                .is_some_and(|until| web_time::Instant::now() < *until);
+            if !edited && !echo {
                 self.sync(&guid, &chain, bpm);
             }
         }
         for guid in guids {
             if self.read.contains(&guid)
                 || !self.by_guid.contains_key(&guid)
-                || !self.asked.insert(guid.clone())
+                || self.asked.contains_key(&guid)
             {
                 continue;
             }
+            self.tickets = self.tickets.wrapping_add(1);
+            let ticket = self.tickets;
+            let edits = self.edits.get(&guid).copied().unwrap_or(0);
+            self.asked.insert(guid.clone(), (ticket, edits));
             let into = std::sync::Arc::clone(&self.arriving);
             wasm_bindgen_futures::spawn_local(async move {
                 let (chain, bpm) = crate::tone_read::read_chain(guid.clone()).await;
                 into.lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push((guid, chain, bpm));
+                    .push((guid, ticket, chain, bpm));
             });
         }
     }
@@ -10188,6 +10214,10 @@ impl Store {
             .is_some_and(|until| web_time::Instant::now() < *until);
         if !self.dirty.contains(guid) && !echo {
             self.read.remove(guid);
+            // A page's read already out answers about the chain before
+            // this change: let it go, and ask again.
+            #[cfg(all(feature = "web", not(feature = "native")))]
+            self.asked.remove(guid);
         }
     }
 
@@ -10200,6 +10230,11 @@ impl Store {
     /// The same, to change. Marked for the next [`Self::flush`].
     pub fn edit(&mut self, guid: &str) -> Option<&mut Tone> {
         let tone = self.by_guid.get_mut(guid)?;
+        #[cfg(all(feature = "web", not(feature = "native")))]
+        {
+            let count = self.edits.entry(guid.to_owned()).or_default();
+            *count = count.wrapping_add(1);
+        }
         #[cfg(any(feature = "native", feature = "web"))]
         if !self.sent.contains_key(guid) {
             // What the chain has before this edit: the baseline a flush
