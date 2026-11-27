@@ -24,19 +24,20 @@ trace spans."*
 ## Adding fields
 
 `tracing`'s macros take a **static** field list — you cannot add a field
-the macro did not declare. That is what `architect_telemetry::wide` is for:
+the macro did not declare. On a span you open, declare the field
+(`tracing::field::Empty`) and `record` it once known. On a span opened
+elsewhere (architect's per-RPC span), use `studio_otel::set`:
 
 ```rust
-use architect_telemetry::wide;
-
-wide::set("auth.principal_kind", "anonymous");
-wide::set("auth.user_id", user_id.clone());
-wide::set_display("perm.resource", &resource);  // any Display
+studio_otel::set("auth.principal_kind", "anonymous");
+studio_otel::set("auth.user_id", user_id.clone());
+studio_otel::set("perm.resource", resource.to_string());  // any Display
 ```
 
 It writes a dynamic attribute onto the current OTel span, and is a no-op
-when no OTel layer is installed — so call it from library code without
-gating the call site.
+when no OTel layer is installed (and in a browser page) — so call it from
+library code without gating the call site. Studio uses plain `tracing` +
+OpenTelemetry; architect-telemetry is gone from the workspace.
 
 ## Where to enrich
 
@@ -110,7 +111,7 @@ delete, and it applies to *scaffolding* too, not just committed code:
    the regression. `eprintln!` output proves nothing once the terminal
    scrolls.
 2. **Query the span.** If the code already runs under a request span,
-   the answer is usually a missing `wide::set` field away — add the
+   the answer is usually a missing `studio_otel::set` field away — add the
    field, keep it, and read it in Tempo/`--no-capture` test output.
    That field is *useful forever*; a print statement is noise you must
    remember to remove.

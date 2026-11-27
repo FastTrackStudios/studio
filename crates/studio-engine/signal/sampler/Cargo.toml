@@ -15,7 +15,7 @@ default = ["vox"]
 # (document_timeline): the track's timeline as a TrackDocument.
 host-timeline = ["dep:daw-clap-ext"]
 jack = ["audio/io", "audio/jack", "cpal/jack", "signal-rig-host/jack"]
-library = ["dep:architect-telemetry", "dep:facet-json", "dep:tokio", "dep:vox", "dep:walkdir", "architect/vox"]
+library = ["dep:studio-otel", "dep:facet-json", "dep:tokio", "dep:vox", "dep:walkdir", "architect/vox"]
 pipewire = []
 vox = ["architect/vox", "dep:vox", "dep:vox-types"]
 
@@ -25,7 +25,6 @@ utils.workspace = true
 # BS.1770 loudness (crate::loudness re-exports it).
 dsp-core = { workspace = true, features = ["audio"] }
 architect = { workspace = true }
-architect-telemetry = { workspace = true, optional = true }
 base64 = { workspace = true }
 builtin = { workspace = true }
 daw = { workspace = true, features = ["standalone-decode"] }
@@ -48,6 +47,8 @@ sha2 = { workspace = true }
 signal-plugin-host = { workspace = true }
 signal-proto = { workspace = true }
 signal-rig-host = { workspace = true }
+# Wide-event fields on the per-RPC span (`library`).
+studio-otel = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 tracing = { workspace = true }

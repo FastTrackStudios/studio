@@ -4052,7 +4052,7 @@ impl KeysRigSvc for KeysRigBackend {
         //
         // The audio thread contributes nothing here but relaxed atomic loads;
         // all of these are counters it bumped, read from this (ordinary)
-        // thread. `wide::set` is a no-op when no OTel layer is installed, so
+        // thread. `studio_otel::set` is a no-op when no OTel layer is installed, so
         // this costs nothing when nobody is collecting.
         //
         // `audio.gap_frames` is the field worth watching: it counts output
@@ -4061,21 +4061,20 @@ impl KeysRigSvc for KeysRigBackend {
         // (`audio.over_budget`, `audio.xruns`) stay at zero through it,
         // because the callback IS on time — it is just rendering silence.
         {
-            use architect_telemetry::wide;
             let g = sampler::engine::output_glitches();
-            wide::set("rig", "keys");
-            wide::set("audio.running", running);
-            wide::set("audio.voices", i64::from(voices));
-            wide::set("audio.block_frames", i64::from(rt.block_frames));
-            wide::set("audio.render_mean_ms", f64::from(rt.mean_render_ms));
-            wide::set("audio.render_peak_ms", f64::from(rt.peak_render_ms));
-            wide::set("audio.xruns", rt.xruns.cast_signed());
-            wide::set("audio.over_budget", rt.over_budget.cast_signed());
-            wide::set("audio.blocks", rt.blocks.cast_signed());
-            wide::set("audio.gap_frames", g.gap_frames as i64);
-            wide::set("audio.click_frames", g.click_frames as i64);
-            wide::set("audio.nonfinite_frames", g.nonfinite_frames as i64);
-            wide::set(
+            studio_otel::set("rig", "keys");
+            studio_otel::set("audio.running", running);
+            studio_otel::set("audio.voices", i64::from(voices));
+            studio_otel::set("audio.block_frames", i64::from(rt.block_frames));
+            studio_otel::set("audio.render_mean_ms", f64::from(rt.mean_render_ms));
+            studio_otel::set("audio.render_peak_ms", f64::from(rt.peak_render_ms));
+            studio_otel::set("audio.xruns", rt.xruns.cast_signed());
+            studio_otel::set("audio.over_budget", rt.over_budget.cast_signed());
+            studio_otel::set("audio.blocks", rt.blocks.cast_signed());
+            studio_otel::set("audio.gap_frames", g.gap_frames as i64);
+            studio_otel::set("audio.click_frames", g.click_frames as i64);
+            studio_otel::set("audio.nonfinite_frames", g.nonfinite_frames as i64);
+            studio_otel::set(
                 "audio.notes_dropped",
                 sampler::engine::notes_dropped() as i64,
             );
@@ -4163,10 +4162,10 @@ impl KeysRigSvc for KeysRigBackend {
         // Wide event: enrich architect's per-RPC span — a browser boot that
         // fetched an empty or wrong program names its profile here.
         if let Some(profile) = self.inner.state.lock().ok().map(|s| s.profile.name.clone()) {
-            architect_telemetry::wide::set("keys.profile", profile);
+            studio_otel::set("keys.profile", profile);
         }
-        architect_telemetry::wide::set("keys.pack_count", packs.len() as i64);
-        architect_telemetry::wide::set("keys.lane_count", lanes.len() as i64);
+        studio_otel::set("keys.pack_count", packs.len() as i64);
+        studio_otel::set("keys.lane_count", lanes.len() as i64);
         KeysLaneProgram {
             program_json,
             packs,

@@ -53,14 +53,9 @@ pub fn with_directives(filter: tracing_subscriber::EnvFilter) -> tracing_subscri
         })
 }
 
-/// Set `key` to `value` on the current span's exported attributes: a
-/// field of the wide event known only where it is computed (a span may
-/// only record fields it declared; this adds any). Nothing when no span is
-/// exported.
-pub fn set(key: impl Into<opentelemetry::Key>, value: impl Into<opentelemetry::Value>) {
-    use tracing_opentelemetry::OpenTelemetrySpanExt as _;
-    tracing::Span::current().set_attribute(key, value);
-}
+/// Set a field on the current span's exported attributes: Studio's one
+/// [`studio_otel::set`].
+pub use studio_otel::set;
 
 /// One unit of work, as [`SpanRing`] kept it.
 #[derive(Clone, Debug, PartialEq)]

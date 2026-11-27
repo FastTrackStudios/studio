@@ -131,8 +131,9 @@ those repos and `assets.txt`, never into git here.
 ## Logging
 
 Load the `logging-best-practices` skill (`.claude/skills/`) before writing
-any log or debug output. The span is the wide event: enrich it with
-`architect_telemetry::wide::set`. Never commit `println!`, `eprintln!` or
+any log or debug output. The span is the wide event: declare its fields and
+`record` them, or add one to a span opened elsewhere with
+`studio_otel::set`. Never commit `println!`, `eprintln!` or
 `dbg!` in library or server code. Reproduce a bug in a failing test
 instead.
 
