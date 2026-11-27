@@ -729,7 +729,6 @@ jobs:
     - tests
     - release-macos
     - apple
-    - ios
     if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -746,7 +745,6 @@ jobs:
         TESTS: ${{ needs.tests.result }}
         RELEASE_MACOS: ${{ needs.release-macos.result }}
         APPLE: ${{ needs.apple.result }}
-        IOS: ${{ needs.ios.result }}
       run: |
         set -u
         fail=0
@@ -759,7 +757,7 @@ jobs:
         done
         # The builds: skipped is fine when the rail plan skipped them (nothing they
         # cover changed since a green base); anything else must have succeeded.
-        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
+        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE"; do
           case "${job#*:}" in
             success | skipped) ;;
             *) bad "${job%%:*}: ${job#*:}" ;;

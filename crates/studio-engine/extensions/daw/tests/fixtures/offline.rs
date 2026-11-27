@@ -60,7 +60,7 @@ pub fn a_downloaded_setlist_plays_with_the_network_off(test: &str) {
     }
     let run = crate::run_dir("offline-setlist");
     download(&run);
-    if cfg!(target_os = "linux") {
+    if cfg!(target_os = "linux") && namespaces_allowed() {
         let exe = std::env::current_exe().expect("the test's own path");
         let status = std::process::Command::new("unshare")
             .args(["--user", "--map-root-user", "--net", "--", "sh", "-c"])
@@ -83,10 +83,28 @@ pub fn a_downloaded_setlist_plays_with_the_network_off(test: &str) {
                 .display()
         );
     } else {
-        // No network namespace here: the link's server is gone and its
+        // No network namespace here (not Linux, or a sandbox that forbids
+        // user namespaces, as the CI runners' systemd units do with
+        // `RestrictNamespaces=yes`): the link's server is gone and its
         // files deleted, which is what the device would find offline.
+        if cfg!(target_os = "linux") {
+            eprintln!(
+                "offline-setlist: user namespaces are not allowed here, so the network stays \
+                 on; the link's server is gone and its source deleted instead"
+            );
+        }
         played_offline(&run);
     }
+}
+
+/// Whether this process may make a user and network namespace. A sandbox
+/// such as systemd's `RestrictNamespaces=yes` (the CI runners) refuses it.
+fn namespaces_allowed() -> bool {
+    std::process::Command::new("unshare")
+        .args(["--user", "--map-root-user", "--net", "true"])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
 }
 
 /// Stage, prepare, share and download the setlist both ways; write what

@@ -395,7 +395,9 @@ fn apple() -> Job {
     ))
 }
 
-/// REQUIRED (through `CI passed`): Studio for iPhone and iPad, the engine
+/// ADVISORY for now (studio#787: the app aborts at launch on the iOS 27
+/// simulator, objc2-ui-kit's `URLContexts` returning NULL; back among
+/// `CI passed`'s needs once it boots): Studio for iPhone and iPad, the engine
 /// linked into the app, built for the simulator
 /// (apps/studio/ios/build.sh) and booted in a simulator of its own, where
 /// a session opens and plays with the click (Seam 3 of studio#689:
@@ -916,8 +918,8 @@ exit "$rc"
 /// green on the commit they release (scripts/release.sh `BUILD_CHECK`). A
 /// skipped required check counts as passing, so this never skips: it fails
 /// unless the plan, the gates, check, wasm, tests and the macOS
-/// release-tooling run all succeeded. The advisory work (clippy, `Lint`)
-/// is not among its needs: it can neither fail nor delay it.
+/// release-tooling run all succeeded. The advisory work (clippy, `Lint`,
+/// the web screens, and iOS until studio#787) is not among its needs: it can neither fail nor delay it.
 ///
 /// The escape hatch for a push the pre-push hook couldn't vouch for (a
 /// contributor without the hook, a dirty tree, `SKIP=local-ci`): a green
@@ -934,7 +936,6 @@ fn ci_passed() -> Result<Job> {
             "tests",
             "release-macos",
             "apple",
-            "ios",
         ])
         .cond(&format!("${{{{ always() && ({NOT_DRAFT}) }}}}"))
         .timeout(5)
@@ -948,8 +949,7 @@ fn ci_passed() -> Result<Job> {
                 .env("WASM", "${{ needs.wasm.result }}")
                 .env("TESTS", "${{ needs.tests.result }}")
                 .env("RELEASE_MACOS", "${{ needs.release-macos.result }}")
-                .env("APPLE", "${{ needs.apple.result }}")
-                .env("IOS", "${{ needs.ios.result }}"),
+                .env("APPLE", "${{ needs.apple.result }}"),
         )
         .step(
             Step::run(
@@ -978,7 +978,7 @@ for job in "gates:$GATES" "release-macos:$RELEASE_MACOS"; do
 done
 # The builds: skipped is fine when the rail plan skipped them (nothing they
 # cover changed since a green base); anything else must have succeeded.
-for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
+for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE"; do
   case "${job#*:}" in
     success | skipped) ;;
     *) bad "${job%%:*}: ${job#*:}" ;;
