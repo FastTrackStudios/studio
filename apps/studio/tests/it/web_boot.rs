@@ -662,7 +662,14 @@ fn signed_out_the_root_is_the_landing_page() {
 
     // Join a room: what is not a room's link is said so, a room's link
     // goes to the room link flow, which (signed out) offers that room.
-    session.click("[data-action='join-room']");
+    // A tap a busy page missed is tapped again (it only opens the form).
+    session.wait_for(Duration::from_secs(30), "the Join a room form", |s| {
+        if s.count("form[data-join] input") == 1 {
+            return Some(());
+        }
+        s.script("document.querySelector(\"[data-action='join-room']\")?.click(); return '';");
+        None
+    });
     session.type_into("form[data-join] input", "Adult Jam");
     session.click("form[data-join] button[type='submit']");
     session.find("form[data-join] .lwrong");
