@@ -39,12 +39,12 @@ live-doc = {path = "crates/studio-core/session/live-doc"}
 # A room: an organization's lasting place to play together (ADR 0003).
 room = {path = "crates/studio-core/session/room"}
 studio-proto = {path = "crates/studio-core/proto/studio-proto"}
-drive-dioxus = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
-drive-client = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
-drive-spine = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
-drive-files = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8", default-features = false }
-drive-sidecars = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
-drive-local = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+drive-dioxus = { git = "https://github.com/FastTrackStudios/drive", rev = "2d07bee" }
+drive-client = { git = "https://github.com/FastTrackStudios/drive", rev = "2d07bee" }
+drive-spine = { git = "https://github.com/FastTrackStudios/drive", rev = "2d07bee" }
+drive-files = { git = "https://github.com/FastTrackStudios/drive", rev = "2d07bee", default-features = false }
+drive-sidecars = { git = "https://github.com/FastTrackStudios/drive", rev = "2d07bee" }
+drive-local = { git = "https://github.com/FastTrackStudios/drive", rev = "2d07bee" }
 # FastTrackStudios/session's `session` (the session primitive: its document
 # file, its fts.session service, its transport led as presence), as the
 # `daw` extension uses it; renamed because Studio's own `features/session`
