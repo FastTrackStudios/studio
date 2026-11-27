@@ -43,6 +43,7 @@ mod fixture;
 #[path = "../unbreakable/mcp.rs"]
 mod mcp;
 mod new_session;
+mod offline;
 #[path = "../unbreakable/otlp.rs"]
 #[allow(
     dead_code,
@@ -225,6 +226,16 @@ fn agent_mixes_the_drums() {
         Err(why) => checks.failed("opens", why),
     }
     finish(name, "an agent mixes the drums over MCP", engine, &checks);
+}
+
+/// A setlist downloaded from its share link, as a desktop keeps it and as
+/// a phone keeps it, opens and plays with the network off (studio#716,
+/// `offline.rs`).
+#[test]
+fn a_downloaded_setlist_plays_with_the_network_off() {
+    offline::a_downloaded_setlist_plays_with_the_network_off(
+        "a_downloaded_setlist_plays_with_the_network_off",
+    );
 }
 
 /// The fixture setlist, opened and moved through: by `SESSION_SONG`, then
