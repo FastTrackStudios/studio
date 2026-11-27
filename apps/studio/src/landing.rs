@@ -285,7 +285,9 @@ pub const POINTS: [(&str, &str); 4] = [
 ];
 
 /// The real app's screens (made by the web build's screen tests,
-/// `just test-web-screens`), kept in `public/landing/`: what each shows.
+/// `just test-web-screens`, from `target/web-shots`: `phone-entry`,
+/// `phone-chart`, `ipad-arrangement`, `ipad-mixer`), kept in
+/// `public/landing/`: what each shows. One not there yet is hidden.
 pub const SCREENS: [(&str, &str); 4] = [
     ("setlist.png", "A setlist's running order on a phone"),
     ("chart.png", "A song's chart following the playhead"),
@@ -389,7 +391,14 @@ mod web {
                 section { class: "lscreens", aria_label: "Screens from Studio",
                     for (file, what) in SCREENS {
                         figure { class: "lshot", key: "{file}",
-                            img { src: "{shots}/{file}", alt: "{what}", "loading": "lazy" }
+                            // A screen not yet in `public/landing/` is left
+                            // out, not shown broken.
+                            img {
+                                src: "{shots}/{file}",
+                                alt: "{what}",
+                                "loading": "lazy",
+                                "onerror": "this.closest('figure').hidden = true",
+                            }
                             figcaption { "{what}" }
                         }
                     }
