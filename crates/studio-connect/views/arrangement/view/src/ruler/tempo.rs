@@ -22,7 +22,7 @@ pub fn tempo(
     changes: &[daw_ui::studio::project::TempoChange],
 ) {
     const SIZE: f32 = 8.0;
-    if slim() {
+    if !tempo_shown() {
         return;
     }
     let (ox, oy) = origin;
@@ -117,7 +117,7 @@ pub fn grid_lane(
     (figures, parts): (&[GridRegion], &[GridRegion]),
 ) {
     const SIZE: f32 = 8.0;
-    if slim() {
+    if !tempo_shown() {
         return;
     }
     let (ox, oy) = origin;

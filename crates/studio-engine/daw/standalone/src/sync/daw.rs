@@ -641,12 +641,20 @@ journaled_maps!(deltas_struct);
 
 /// What a project holds besides its journaled maps, as an undo step found
 /// or left it: small — the tracks, what extensions keep on them, the
-/// counters — so it is copied whole.
+/// tempo map, the counters — so it is copied whole.
 pub struct EditSnapshot {
     tracks: Vec<Track>,
     /// What extensions keep on each track (its markers and regions, a
     /// leveled vocal's lanes): an edit to them is undone with the rest.
     track_ext_state: HashMap<(String, String, String), String>,
+    /// The tempo map: its points, and the project's own tempo and meter
+    /// (what the song plays at before the first point). A tempo or meter
+    /// set from the ruler is undone with the rest of its step.
+    tempo: (
+        Vec<daw_proto::TempoPoint>,
+        daw_proto::Tempo,
+        daw_proto::TimeSignature,
+    ),
     next_item_counter: u64,
     next_take_counter: u64,
 }
@@ -657,16 +665,33 @@ impl EditSnapshot {
         Self {
             tracks: p.tracks.clone(),
             track_ext_state: p.track_ext_state.clone(),
+            tempo: (
+                p.tempo_points.clone(),
+                p.transport.tempo,
+                p.transport.time_signature,
+            ),
             next_item_counter: p.next_item_counter,
             next_take_counter: p.next_take_counter,
         }
     }
 
-    pub fn restore(&self, p: &mut ProjectState) {
+    /// Put the project back as this snapshot found it. Whether its tempo
+    /// map changed (the engine's playing map has to follow it then).
+    pub fn restore(&self, p: &mut ProjectState) -> bool {
         p.tracks.clone_from(&self.tracks);
         p.track_ext_state.clone_from(&self.track_ext_state);
+        let (points, tempo, meter) = &self.tempo;
+        let moved = p.tempo_points != *points
+            || p.transport.tempo != *tempo
+            || p.transport.time_signature != *meter;
+        if moved {
+            p.tempo_points.clone_from(points);
+            p.transport.tempo = *tempo;
+            p.transport.time_signature = *meter;
+        }
         p.next_item_counter = self.next_item_counter;
         p.next_take_counter = self.next_take_counter;
+        moved
     }
 }
 
@@ -685,22 +710,22 @@ pub struct UndoStep {
 }
 
 impl UndoStep {
-    /// Put the project back to one side of this step.
-    pub fn put_back(&self, p: &mut ProjectState, side: crate::journal::Side) {
+    /// Put the project back to one side of this step. Whether its tempo
+    /// map changed.
+    pub fn put_back(&self, p: &mut ProjectState, side: crate::journal::Side) -> bool {
         p.put_back(&self.deltas, side);
         #[cfg(any(feature = "audio", feature = "decode"))]
         p.audio_sources.put_back(&self.audio, side);
-        match side {
+        let tempo = match side {
             crate::journal::Side::Before => self.before.restore(p),
             crate::journal::Side::After => {
-                if let Some(after) = &self.after {
-                    after.restore(p);
-                }
+                self.after.as_ref().is_some_and(|after| after.restore(p))
             }
-        }
+        };
         // The renderer caches against the revision; a restore is a
         // mutation like any other.
         p.revision = p.revision.wrapping_add(1);
+        tempo
     }
 }
 

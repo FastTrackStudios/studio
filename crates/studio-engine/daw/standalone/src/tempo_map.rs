@@ -72,6 +72,21 @@ fn publish_tempo_map_event(daw: &Standalone, project_guid: &str, event: TempoMap
     daw.tempo_map_events.publish(event);
 }
 
+/// The project's tempo map put back by an undo or a redo: played as it now
+/// is, and said to whoever follows it (a window's ruler, a peer).
+pub(crate) fn restored(daw: &Standalone, guid: &str) {
+    refresh_dynamic_tempo(daw, guid);
+    if let Ok((bpm, points)) =
+        daw.with_project(guid, |p| (p.transport.tempo.bpm(), p.tempo_points.clone()))
+    {
+        // No points: the project's own tempo, which the refresh leaves be.
+        if points.is_empty() {
+            daw.transport_engine_for(guid).shared.set_tempo_bpm(bpm);
+        }
+        publish_tempo_map_event(daw, guid, TempoMapEvent::MapChanged(points));
+    }
+}
+
 impl daw_proto::tempo_map::TempoMapStreamSource for Standalone {
     fn events_hub(&self) -> &architect::PubSub<TempoMapStreamEvent> {
         &self.tempo_map_events

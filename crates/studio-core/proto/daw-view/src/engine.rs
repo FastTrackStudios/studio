@@ -202,6 +202,19 @@ pub enum Edit {
     /// What tempo mapping writes. The guid is empty: a tempo belongs to
     /// the project, not to a track.
     SetTempo(String, f64, f64),
+    /// Move the tempo change at a time (the first field after the empty
+    /// guid) to another (the second). The song's first change, at zero,
+    /// stays where it is: it is the song's own tempo.
+    ///
+    /// By time rather than by the engine's point number, as `SetTempo`
+    /// is: the ruler holds the changes by when they are, and a number
+    /// shifts every time a point is added before it.
+    MoveTempo(String, f64, f64),
+    /// Take away the tempo change at a time (not the song's first).
+    RemoveTempo(String, f64),
+    /// Set the meter from a time: the change there takes it, or one is
+    /// made there at the tempo the song has then.
+    SetMeter(String, f64, u32, u32),
     /// An ITEM's fade-in: its length in seconds and its shape. The guid
     /// is the item's, not a track's.
     SetFadeIn(String, f64, daw_proto::item::FadeShape),
@@ -400,6 +413,9 @@ impl Edit {
             | Self::RenameRegion(g, ..)
             | Self::RemoveRegion(g, ..)
             | Self::SetTempo(g, ..)
+            | Self::MoveTempo(g, ..)
+            | Self::RemoveTempo(g, ..)
+            | Self::SetMeter(g, ..)
             | Self::SetFadeIn(g, ..)
             | Self::SetFadeOut(g, ..)
             | Self::SelectItem(g, _)
@@ -439,6 +455,9 @@ impl Edit {
         matches!(
             self,
             Self::SetTempo(..)
+                | Self::MoveTempo(..)
+                | Self::RemoveTempo(..)
+                | Self::SetMeter(..)
                 | Self::AddMarker(..)
                 | Self::MoveMarker(..)
                 | Self::RenameMarker(..)
@@ -447,6 +466,16 @@ impl Edit {
                 | Self::SetRegionBounds(..)
                 | Self::RenameRegion(..)
                 | Self::RemoveRegion(..)
+        )
+    }
+
+    /// Whether this edit changes the tempo map: every bar line after it
+    /// moves.
+    #[must_use]
+    pub const fn is_tempo(&self) -> bool {
+        matches!(
+            self,
+            Self::SetTempo(..) | Self::MoveTempo(..) | Self::RemoveTempo(..) | Self::SetMeter(..)
         )
     }
 
@@ -1881,6 +1910,9 @@ async fn apply(edit: &Edit) {
             Edit::RenameRegion(_, id, name) => regions.rename(*id, name).await,
             Edit::RemoveRegion(_, id) => regions.remove(*id).await,
             Edit::SetTempo(_, at, bpm) => set_tempo(&project, *at, *bpm).await,
+            Edit::MoveTempo(_, from, to) => move_tempo(&project, *from, *to).await,
+            Edit::RemoveTempo(_, at) => remove_tempo(&project, *at).await,
+            Edit::SetMeter(_, at, top, bottom) => set_meter(&project, *at, (*top, *bottom)).await,
             _ => Ok(()),
         };
         if let Err(error) = outcome {
@@ -2024,6 +2056,9 @@ async fn apply(edit: &Edit) {
         | Edit::RenameRegion(..)
         | Edit::RemoveRegion(..)
         | Edit::SetTempo(..)
+        | Edit::MoveTempo(..)
+        | Edit::RemoveTempo(..)
+        | Edit::SetMeter(..)
         // Already handled above, where they needed no track either.
         | Edit::BeginUndo(_)
         | Edit::EndUndo(_)
@@ -2046,23 +2081,87 @@ async fn apply(edit: &Edit) {
 /// map full of pairs — and pairs mean a bar that is two tempos, which
 /// is a bar with no tempo at all.
 async fn set_tempo(project: &daw_control::Project, at: f64, bpm: f64) -> daw_control::Result<()> {
-    const SAME_POINT: f64 = 0.001;
     let map = project.tempo_map();
-    let existing = map.points().await.unwrap_or_default();
-    let found = existing.iter().position(|point| {
-        point
-            .position
-            .time
-            .as_ref()
-            .is_some_and(|t| (t.as_seconds() - at).abs() < SAME_POINT)
-    });
-    match found {
-        Some(index) => {
-            map.set_tempo_at(u32::try_from(index).unwrap_or(0), bpm)
-                .await
-        }
+    match tempo_point_at(&map, at).await {
+        Some(index) => map.set_tempo_at(index, bpm).await,
         None => map.add_point(at.max(0.0), bpm).await.map(|_| ()),
     }
+}
+
+/// How close two times are to be one tempo change: a millisecond (see
+/// [`set_tempo`]).
+const SAME_POINT: f64 = 0.001;
+
+/// The engine's number for the tempo point at `at`, if it has one there.
+async fn tempo_point_at(map: &daw_control::TempoMap, at: f64) -> Option<u32> {
+    let existing = map.points().await.unwrap_or_default();
+    existing
+        .iter()
+        .position(|point| {
+            point
+                .position
+                .time
+                .as_ref()
+                .is_some_and(|t| (t.as_seconds() - at).abs() < SAME_POINT)
+        })
+        .and_then(|index| u32::try_from(index).ok())
+}
+
+/// Move the tempo change at `from` to `to`. Neither end may be the song's
+/// start: the change there is the song's own tempo, and a change dragged
+/// onto it would take its place.
+async fn move_tempo(project: &daw_control::Project, from: f64, to: f64) -> daw_control::Result<()> {
+    if from < SAME_POINT || to < SAME_POINT {
+        return Ok(());
+    }
+    let map = project.tempo_map();
+    match tempo_point_at(&map, from).await {
+        Some(index) => map.move_point(index, to).await,
+        None => Ok(()),
+    }
+}
+
+/// Take away the tempo change at `at`, unless it is the song's first.
+async fn remove_tempo(project: &daw_control::Project, at: f64) -> daw_control::Result<()> {
+    if at < SAME_POINT {
+        return Ok(());
+    }
+    let map = project.tempo_map();
+    match tempo_point_at(&map, at).await {
+        Some(index) => map.remove_point(index).await,
+        None => Ok(()),
+    }
+}
+
+/// The meter `top`/`bottom` from `at`: on the change there, or on one made
+/// there at the tempo the song has then (so the tempo does not move).
+async fn set_meter(
+    project: &daw_control::Project,
+    at: f64,
+    (top, bottom): (u32, u32),
+) -> daw_control::Result<()> {
+    let (Ok(top), Ok(bottom)) = (i32::try_from(top.max(1)), i32::try_from(bottom.max(1))) else {
+        return Ok(());
+    };
+    let map = project.tempo_map();
+    let at = at.max(0.0);
+    let index = match tempo_point_at(&map, at).await {
+        Some(index) => index,
+        None => {
+            let bpm = map.tempo_at(at).await?;
+            map.add_point(at, bpm).await?;
+            match tempo_point_at(&map, at).await {
+                Some(index) => index,
+                None => return Ok(()),
+            }
+        }
+    };
+    map.set_time_signature_at(index, top, bottom).await?;
+    // The song's first meter is the project's too, as the first tempo is.
+    if at < SAME_POINT {
+        map.set_default_time_signature(top, bottom).await?;
+    }
+    Ok(())
 }
 
 /// Two times, in order, with a floor at zero.
@@ -2264,6 +2363,105 @@ impl FxWatch {
     /// The tracks whose chains changed since the last frame.
     pub fn drain(&self) -> impl Iterator<Item = String> + '_ {
         self.changes.try_iter()
+    }
+
+    /// Is this subscription still connected?
+    #[must_use]
+    pub fn is_live(&self) -> bool {
+        self.alive.is_live()
+    }
+}
+
+/// The song's tempo map, followed: whenever it changes in the engine —
+/// whoever changed it: this window's ruler, an action over MCP, a member of
+/// the room, the engine's own tempo mapping — the window reads the song
+/// back ([`crate::song::request_resync_here`]), so its bar lines, grid and
+/// ruler are cut again from the map as it now is, with no reload
+/// (studio#97). Alive while it is held.
+pub struct TempoWatch {
+    alive: Alive,
+}
+
+/// The tempo map's filter on the cross-domain bus.
+fn tempo_events() -> daw_proto::event_bus::BusFilter {
+    daw_proto::event_bus::BusFilter {
+        tempo_map: true,
+        ..daw_proto::event_bus::BusFilter::default()
+    }
+}
+
+/// Whether a bus event is the tempo map's.
+fn is_tempo(event: &daw_proto::event_bus::DawEvent) -> bool {
+    matches!(event, daw_proto::event_bus::DawEvent::TempoMap(_))
+}
+
+/// How long the tempo map stays still before the window reads it back: a
+/// whole map rewritten (`TEMPO_MAP_SET`, a point a bar) is two events a
+/// point, and a big song read back is not cheap.
+const TEMPO_SETTLE: std::time::Duration = std::time::Duration::from_millis(60);
+
+/// Follow the tempo map until the engine goes: each change, once it has
+/// settled, read back.
+async fn follow_tempo(daw: &daw::rpc::Daw) {
+    let Ok(mut stream) = daw.events().subscribe(tempo_events()).await else {
+        return;
+    };
+    while let Ok(Some(event)) = stream.recv().await {
+        if !is_tempo(event.get()) {
+            continue;
+        }
+        loop {
+            match architect::platform::timeout(TEMPO_SETTLE, stream.recv()).await {
+                Ok(Ok(Some(_))) => {}
+                // The engine went: what it said last is still read back.
+                Ok(_) => {
+                    crate::song::request_resync_here();
+                    return;
+                }
+                Err(_) => break,
+            }
+        }
+        crate::song::request_resync_here();
+    }
+}
+
+impl TempoWatch {
+    /// Subscribe. `None` if the facade is not up.
+    ///
+    /// The browser: a task on the page's event loop, as [`FxWatch`]'s.
+    #[cfg(not(feature = "native"))]
+    #[must_use]
+    pub fn start() -> Option<Self> {
+        let daw = daw::rpc::Daw::try_get()?;
+        let alive = Alive::new();
+        let mine = alive.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let _end = scopeguard(move || mine.ended());
+            follow_tempo(&daw).await;
+        });
+        Some(Self { alive })
+    }
+
+    /// Subscribe. `None` if the facade is not up.
+    #[cfg(feature = "native")]
+    #[must_use]
+    pub fn start() -> Option<Self> {
+        let runtime = crate::open::runtime()?;
+        let alive = Alive::new();
+        let mine = alive.clone();
+        std::thread::Builder::new()
+            .name("studio-engine-tempo".into())
+            .spawn(move || {
+                runtime.block_on(async move {
+                    let _end = scopeguard(move || mine.ended());
+                    let Some(daw) = daw::rpc::Daw::try_get() else {
+                        return;
+                    };
+                    follow_tempo(&daw).await;
+                });
+            })
+            .ok()?;
+        Some(Self { alive })
     }
 
     /// Is this subscription still connected?
