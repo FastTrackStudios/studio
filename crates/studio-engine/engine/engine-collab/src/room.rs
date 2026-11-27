@@ -541,9 +541,21 @@ fn load(path: &str) -> Result<Value, String> {
     let loaded = Loaded::of_path(&path, rooms.studio_root());
     host.doc().load(&loaded).map_err(|e| e.to_string())?;
     // The room's setlist from now on: what its link opens to practise
-    // once nobody leads it. Everyone in the room has it already.
-    if let Err(e) = rooms.set_setlist(&id, loaded.clone()) {
-        tracing::warn!(room.error = %e, "room: could not keep what was loaded as the room's setlist");
+    // once nobody leads it. Only one inside the Studio folder, which means
+    // the same file on every device.
+    if Path::new(&loaded.path).is_relative() {
+        match rooms.set_setlist(&id, loaded.clone()) {
+            Ok(room) => {
+                if let Some(active) = lock(&ACTIVE).as_mut()
+                    && active.room.id == room.id
+                {
+                    active.room = room;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(room.error = %e, "room: could not keep what was loaded as the room's setlist");
+            }
+        }
     }
     tracing::info!(room.loaded = %loaded.title, room.kind = loaded.kind.as_str(), "room: loaded");
     Ok(json!({ "loaded": loaded_json(&loaded) }))
@@ -612,11 +624,20 @@ fn join(link: &str, name: String) -> Result<Value, String> {
 /// there is no one to follow, and this engine's transport is its own. The
 /// room this engine was in, it leaves.
 fn practise(rooms: &Rooms, room: &Room, setlist: &Loaded) -> Result<Value, String> {
-    leave();
+    let path = setlist.resolve(rooms.studio_root());
+    if !path.exists() {
+        return Err(format!(
+            "{}'s setlist, {}, is not on this device: {}",
+            room.name,
+            setlist.title,
+            path.display()
+        ));
+    }
     let open = crate::assembly::get()
         .ok_or("no engine installed")?
         .open_path;
-    open(setlist.resolve(rooms.studio_root()))?;
+    leave();
+    open(path)?;
     tracing::info!(
         room.id = %room.id,
         room.role = "practice",
@@ -770,7 +791,7 @@ fn obey(command: session_transport::Command) {
 }
 
 fn loaded_json(loaded: &Loaded) -> Value {
-    json!({ "kind": loaded.kind.as_str(), "path": loaded.path, "title": loaded.title })
+    serde_json::to_value(loaded).unwrap_or_default()
 }
 
 fn room_json(room: &Room) -> Value {
