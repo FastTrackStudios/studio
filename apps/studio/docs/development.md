@@ -61,6 +61,7 @@ process, and Studio drives it over the in-memory link instead of loopback
 ```bash
 apps/studio/ios/build.sh sim                       # a debug .app for the simulator
 python3 -I apps/studio/ios/sim-test.py --app <it>  # Seam 3: a session opens and plays with the click
+python3 -I apps/studio/ios/sim-room-test.py --app <it> --engine <daw-extension>  # Seam 2: it joins a room and follows
 apps/studio/ios/build.sh device                    # a release .app for a phone
 apps/studio/ios/deploy-iphone.sh                   # onto a phone on the cable
 MARKETING_VER=<x.y.z> apps/studio/ios/deploy-testflight.sh  # to TestFlight
@@ -70,6 +71,19 @@ The simulator test boots its own simulator, opens a song it writes into
 the app's container, and drives the engine through the app's MCP door,
 which an iOS build opens only when launched with `FTS_MCP=1`. CI runs it
 on airlock after every merge (`ios` in checks.yml).
+
+**Rooms on a phone.** A room's link opens Studio in the app's own scheme,
+`fasttrackstudio://join/<room>` (the URL type `build.sh` declares;
+studio-shell's `ios_scene::on_link`), and Studio joins it
+(`src/room_link.rs`); `Studio --join <link>` does the same at launch on
+any native build. The engine linked into the app keeps and finds rooms in
+the app's own Studio folder (`<home>/Rooms`, `FTS_ROOMS_DIR`), beside
+the setlists a room loads. The room simulator test leads a room from a
+desktop engine, copies the Studio folder into the app's container (as
+Drive carries it to a device), opens the link on the simulator, and reads
+both sides over MCP: the phone opens the leader's setlist, follows its
+song, playhead and stop, shows in the leader's room, and moves to the
+next setlist without reconnecting.
 
 A phone starts with no environment, so it reaches a collector only when
 the build bakes one in (`STUDIO_OTLP_ENDPOINT` and `STUDIO_OTLP_TOKEN` at

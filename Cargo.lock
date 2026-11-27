@@ -24379,6 +24379,7 @@ dependencies = [
  "opentelemetry",
  "raw-window-handle 0.6.2",
  "reqwest 0.12.28",
+ "room",
  "sea-orm",
  "sea-orm-migration",
  "serde_json",

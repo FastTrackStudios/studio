@@ -397,7 +397,10 @@ fn apple() -> Job {
 /// linked into the app, built for the simulator
 /// (apps/studio/ios/build.sh) and booted in a simulator of its own, where
 /// a session opens and plays with the click (Seam 3 of studio#689:
-/// apps/studio/ios/sim-test.py, driven over the app's MCP door). On
+/// apps/studio/ios/sim-test.py, driven over the app's MCP door), and where
+/// the app joins a room from its link and follows a desktop engine leading
+/// it (Seam 2 with the phone, studio#712: apps/studio/ios/sim-room-test.py,
+/// both read over MCP). On
 /// airlock, the only Mac with Xcode and its simulators; the simulators'
 /// device set goes under the runner's temp dir, deleted after.
 fn ios() -> Job {
@@ -417,7 +420,7 @@ fn ios() -> Job {
     )
     .step(Step::uses("devenv CLI", "./.github/actions/devenv"))
     .step(Step::run(
-        "iOS: the app for the simulator; a session opens and plays with the click",
+        "iOS: the app for the simulator; a session opens and plays with the click; it joins a room and follows its leader",
         IOS,
     ))
     .step(
@@ -433,10 +436,15 @@ fn ios() -> Job {
     )
 }
 
-/// The build prints the .app's path last; the test boots it.
+/// The build prints the .app's path last; the tests boot it. The room's
+/// leader is the desktop engine, built here.
 const IOS: &str = r#"app="$(bash apps/studio/ios/build.sh sim | tail -1)"
 python3 -I apps/studio/ios/sim-test.py --app "$app" \
   --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out"
+bash scripts/dev-shell.sh -c 'cargo build -p daw-extension'
+python3 -I apps/studio/ios/sim-room-test.py --app "$app" \
+  --engine "${CARGO_TARGET_DIR:-target}/debug/daw-extension" \
+  --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out/room"
 "#;
 
 /// The .dmg's app linked as scripts/desktop/macos.sh links it (zlib from the
