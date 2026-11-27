@@ -1,6 +1,8 @@
 //! Setlists that are files in Drive (`<Set>.setlist`, beside the songs'
 //! session folders): found in an org's indexes, read, and each song tied
-//! to its session folder and its chart (`.kf`, wherever Drive has one).
+//! to its session folder and its chart: the one its session keeps, else
+//! (a song whose chart has not moved into its session) its `.kf`,
+//! wherever Drive has one.
 //! The file stays the set; Studio reads it each time it is opened.
 //!
 //! Natively, Studio's own folder (`storage::setlists`) has setlist files
@@ -20,6 +22,28 @@ thread_local! {
     static CHARTS: RefCell<HashMap<String, Vec<Hit>>> = RefCell::new(HashMap::new());
     /// Each setlist file as read, so opening it again is instant.
     static READ: RefCell<HashMap<String, FileSet>> = RefCell::new(HashMap::new());
+    /// Whether each session file read keeps a chart, by its version.
+    static KEEPS_CHART: RefCell<HashMap<String, bool>> = RefCell::new(HashMap::new());
+}
+
+/// The song's session file in its folder's listing, when it keeps a chart
+/// (`session_file::chart`): read to see, once for each version of it.
+async fn session_chart(span: &crate::trace::Span, listing: &[Hit]) -> Option<Hit> {
+    let file = crate::reference::session_of(listing)?;
+    let version = format!(
+        "{}/{}/{}@{}+{}",
+        file.space, file.location, file.path, file.mtime, file.size
+    );
+    if let Some(keeps) = KEEPS_CHART.with(|k| k.borrow().get(&version).copied()) {
+        return keeps.then(|| file.clone());
+    }
+    let keeps = match web::bytes_in(Some(span), "GET", &web::file_url(file), None).await {
+        Ok((200 | 206, b)) => crate::session_file::chart(&b).is_some(),
+        // Not read now (its computer is off): asked again next time.
+        _ => return None,
+    };
+    KEEPS_CHART.with(|k| k.borrow_mut().insert(version, keeps));
+    keeps.then(|| file.clone())
 }
 
 /// The setlist files in one space's indexes, by name.
@@ -353,6 +377,17 @@ async fn read(
             }
         )),
     );
+    // The chart each song's session keeps, for a song as recorded (an
+    // arrangement follows its own chart, never the song's).
+    let kept = futures_util::future::join_all(listed.iter().zip(&lines).map(
+        |((hits, _), (_, line))| async move {
+            match setfile::arrangement(line).1 {
+                Some(_) => None,
+                None => session_chart(span, hits).await,
+            }
+        },
+    ))
+    .await;
     let location_name = siblings
         .first()
         .map(|h| h.location_name.clone())
@@ -365,7 +400,9 @@ async fn read(
             songs: Vec::new(),
         })
         .collect();
-    for (((a, line), place), (hits, arranged)) in lines.into_iter().zip(places).zip(listed) {
+    for ((((a, line), place), (hits, arranged)), session) in
+        lines.into_iter().zip(places).zip(listed).zip(kept)
+    {
         let hint = match setfile::song(line) {
             setfile::Song::Id { hint, .. } | setfile::Song::Title(hint) => hint.to_string(),
             setfile::Song::Path(p) => setfile::title_of(&setfile::folder(path, p), &[]),
@@ -381,6 +418,7 @@ async fn read(
                         "",
                         &hint,
                         arrangement.as_deref(),
+                        None,
                         &[],
                         &[],
                         &charts,
@@ -400,11 +438,13 @@ async fn read(
         };
         acts[a].songs.push(FileSong {
             place: Place {
-                // The arrangement's chart when it plays one, else the song's own.
+                // The arrangement's chart when it plays one, else the song's
+                // own: the one its session keeps, else its `.kf`.
                 chart: crate::reference::place_chart(
                     &folder,
                     &title,
                     arrangement.as_deref(),
+                    session.as_ref(),
                     &hits,
                     &arranged,
                     &charts,

@@ -149,13 +149,8 @@ async fn timeline(reference: &Hit, bpm: f64) -> Timeline {
     }
     let files = web::list(&reference.space, &reference.location, folder).await;
     // The old pair's `.fts-session` while the folder has one; else the
-    // song's one file, whose session is a part of it (`session_file`
-    // tells the two apart by their bytes).
-    let Some(file) = files
-        .iter()
-        .find(|h| h.name.ends_with(".fts-session"))
-        .or_else(|| files.iter().find(|h| h.name.ends_with(".session")))
-    else {
+    // song's one file, whose session is a part of it.
+    let Some(file) = crate::reference::session_of(&files) else {
         return Timeline::default();
     };
     let t = match web::bytes("GET", &web::file_url(file), None).await {

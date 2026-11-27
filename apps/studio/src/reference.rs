@@ -111,21 +111,35 @@ pub fn arrangement_dir(folder: &str, arrangement: &str) -> String {
     format!("{folder}/Arrangements/{arrangement}")
 }
 
+/// The song's session file in its folder's listing: the old pair's
+/// `.fts-session` while the folder has one, else the song's one
+/// `.session` (`crate::session_file` tells the two apart by their bytes).
+pub fn session_of(listing: &[Hit]) -> Option<&Hit> {
+    let file = |ext: &str| listing.iter().find(|h| !h.dir && h.name.ends_with(ext));
+    file(".fts-session").or_else(|| file(".session"))
+}
+
 /// The chart a set's place follows.
+///
+/// The song as recorded follows the chart its session keeps (`session`:
+/// its session file, when that holds one, `crate::session_file::chart`),
+/// where each song's chart moved from its `.kf`. A song not moved yet
+/// follows its `.kf`: one in `own` (its folder's listing), else one named
+/// like its folder, else like its `title`. With neither, the chart
+/// generated from its session shows.
 ///
 /// A place that plays an arrangement follows that arrangement's: a `.kf`
 /// in its folder ([`arrangement_dir`]; `arranged` is that folder's
 /// listing, else one Drive found there among `charts`), else one named
 /// like the song and the arrangement ("Know Me (Extended)"). Never the
-/// song's own, which is another form, often in another key: with none,
-/// the chart generated from the arrangement's session shows.
-///
-/// The song as recorded follows its own (a `.kf` in `own`, its folder's
-/// listing), else one named like its folder, else like its `title`.
+/// song's own, which is another form, often in another key (so never the
+/// chart the song's session keeps on its `main` branch either): with
+/// none, the chart generated from the arrangement's session shows.
 pub fn place_chart(
     folder: &str,
     title: &str,
     arrangement: Option<&str>,
+    session: Option<&Hit>,
     own: &[Hit],
     arranged: &[Hit],
     charts: &[Hit],
@@ -133,9 +147,8 @@ pub fn place_chart(
     let kf = |h: &&Hit| !h.dir && h.name.ends_with(".kf");
     let name = folder.rsplit('/').next().filter(|n| !n.is_empty());
     let Some(arrangement) = arrangement else {
-        return own
-            .iter()
-            .find(kf)
+        return session
+            .or_else(|| own.iter().find(kf))
             .or_else(|| name.and_then(|n| pick_chart(n, charts)))
             .or_else(|| pick_chart(title, charts))
             .cloned();
@@ -213,9 +226,59 @@ mod tests {
         assert_eq!(got("sleeptalker"), None);
     }
 
+    /// #624: a song whose chart moved into its session follows that one,
+    /// with no `.kf` anywhere; a place that plays an arrangement still
+    /// follows the arrangement's own, never the song's.
+    #[test]
+    fn a_place_follows_the_chart_its_session_keeps() {
+        let file = |path: &str| Hit {
+            name: path.rsplit('/').next().unwrap().into(),
+            path: path.into(),
+            online: true,
+            ..Default::default()
+        };
+        let folder = "Studio/Songs/Fire - JT Wright";
+        let listing = vec![
+            file("Studio/Songs/Fire - JT Wright/Fire.session"),
+            file("Studio/Songs/Fire - JT Wright/Fire.session.log"),
+            Hit {
+                dir: true,
+                ..file("Studio/Songs/Fire - JT Wright/Media")
+            },
+        ];
+        let session = session_of(&listing);
+        assert_eq!(
+            session.map(|h| h.name.as_str()),
+            Some("Fire.session"),
+            "the song's one file, not its log"
+        );
+        // A `.kf` of the same name elsewhere is not the song's chart now.
+        let charts = vec![file("Projects/JT's Senior Recital/charts/08 Fire.kf")];
+        let got = |arr: Option<&str>| {
+            place_chart(folder, "Fire", arr, session, &listing, &[], &charts).map(|h| h.path)
+        };
+        assert_eq!(
+            got(None).as_deref(),
+            Some("Studio/Songs/Fire - JT Wright/Fire.session")
+        );
+        // An arrangement with no chart of its own: none (its generated
+        // chart shows), not the song's.
+        assert_eq!(got(Some("Acoustic")), None);
+        // The old pair's document is the session while a folder has one.
+        let pair = vec![
+            file("Songs/Intro/Intro.session"),
+            file("Songs/Intro/Intro.fts-session"),
+        ];
+        assert_eq!(
+            session_of(&pair).map(|h| h.name.as_str()),
+            Some("Intro.fts-session")
+        );
+    }
+
     /// #624: a set's place that plays an arrangement follows that
     /// arrangement's chart, never the song's own (another form, often
-    /// another key).
+    /// another key). A song whose session keeps no chart (one not moved
+    /// from its `.kf` yet) follows its `.kf`: the fallback.
     #[test]
     fn a_place_that_plays_an_arrangement_follows_its_chart() {
         let kf = |path: &str| Hit {
@@ -236,7 +299,7 @@ mod tests {
             kf("Projects/Recital/charts/10 Know Me (Acoustic).kf"),
         ];
         let got = |arr: Option<&str>, arranged: &[Hit]| {
-            place_chart(folder, "Know Me", arr, &own, arranged, &charts).map(|h| h.path)
+            place_chart(folder, "Know Me", arr, None, &own, arranged, &charts).map(|h| h.path)
         };
         // The song as recorded: its own chart.
         assert_eq!(
@@ -263,7 +326,7 @@ mod tests {
         assert_eq!(got(Some("Shortened"), &[]), None);
         // A song with no session found: by its title and the arrangement.
         assert_eq!(
-            place_chart("", "Know Me", Some("Acoustic"), &[], &[], &charts)
+            place_chart("", "Know Me", Some("Acoustic"), None, &[], &[], &charts)
                 .map(|h| h.path)
                 .as_deref(),
             Some("Projects/Recital/charts/10 Know Me (Acoustic).kf")
