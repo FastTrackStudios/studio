@@ -7,6 +7,9 @@
 //!
 //! Colors use `[u8; 4]` RGBA to avoid depending on any rendering framework.
 
+use keyflow_lang::text::bar_times::BarTime;
+
+use super::playback::bar_ticks;
 use super::types::{BeatPosition, ChartLayoutResult};
 
 // ============================================================================
@@ -239,6 +242,60 @@ impl ChartCursor {
         let beat = layout.beat_at_time(time)?;
         let cursor_x = beat.x_at_time(time);
         Some(self.state_at(layout, beat, cursor_x))
+    }
+
+    /// Compute cursor state at `time` on the clock of `bars`: the chart's
+    /// bars **as played** (`keyflow_lang::text::bar_times`), a repeat as
+    /// many times as it says, endings on their own passes.
+    ///
+    /// [`Self::compute_at_time`] reads the layout's own `time_start` /
+    /// `time_end`, which is the chart written out once: each drawn bar
+    /// once, in written order. From the first repeat on that clock is
+    /// behind the music, and past the written end it has no bar at all.
+    /// Here the bar comes from `bars`, and only where it is drawn (its
+    /// beat slots, for x) from the layout, so a repeated bar is found
+    /// again on its second pass at the same place in it.
+    ///
+    /// Before the first played bar (a count-in, at negative time) it is
+    /// the layout's own clock, which is where the count-in's beats are.
+    /// `None` after the last bar ends, and in a bar the layout did not
+    /// draw (a folded section).
+    #[must_use]
+    pub fn compute_at_played_time(
+        &self,
+        layout: &ChartLayoutResult,
+        bars: &[BarTime],
+        time: f64,
+    ) -> Option<CursorState> {
+        if bars.first().is_none_or(|first| time < first.start) {
+            return self.compute_at_time(layout, time);
+        }
+        // Playing order is time order: the last bar that has started.
+        let bar = &bars[bars.partition_point(|b| b.start <= time).checked_sub(1)?];
+        if time >= bar.end {
+            return None;
+        }
+        // The bar's beat slots (not the count-in's, which share its
+        // measure index and carry negative ticks).
+        let slots = || {
+            layout
+                .beat_positions
+                .iter()
+                .filter(|b| b.absolute_tick >= 0 && b.measure == bar.bar)
+        };
+        let first = slots().next()?;
+        let progress = ((time - bar.start) / (bar.end - bar.start)).clamp(0.0, 1.0);
+        let tick = progress * f64::from(bar_ticks(first.time_signature));
+        let beat = slots()
+            .filter(|b| f64::from(b.tick) <= tick)
+            .max_by_key(|b| b.tick)
+            .unwrap_or(first);
+        let within = if beat.duration_ticks > 0 {
+            ((tick - f64::from(beat.tick)) / f64::from(beat.duration_ticks)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        Some(self.state_at(layout, beat, beat.width.mul_add(within, beat.x)))
     }
 
     /// The cursor state for a beat already located, at `cursor_x`.
@@ -732,6 +789,118 @@ mod tests {
         let state = cursor.compute(&layout, -1920).unwrap();
         assert_eq!(state.measure, 0);
         assert!((state.cursor_x - 50.0).abs() < 0.01);
+    }
+
+    /// `src` laid out on the Page preset, and its bars as played on the
+    /// chart's own clock (bar 1 at 0 s).
+    fn played(src: &str) -> (ChartLayoutResult, Vec<BarTime>) {
+        use crate::api::pipeline::{ChartPipeline, Preset, PresetOptions};
+        use keyflow_lang::text::bar_times::{BarClock, bar_times};
+
+        let chart = keyflow_lang::text::chart::parse_chart(src).expect("parses");
+        let pipeline = ChartPipeline::shared().expect("pipeline");
+        let (mode, config) =
+            ChartPipeline::resolve_preset(Preset::Page, PresetOptions::for_screen(612.0, 1.0));
+        let layout = pipeline.layout_with_config(&chart, &mode, &config);
+        let bars = bar_times(&chart, BarClock::at(0.0));
+        (layout, bars)
+    }
+
+    /// Two bars repeated, then a last bar, at 120 bpm (a bar is 2 s). As
+    /// played: bar 0 at 0 s, bar 1 at 2 s, bar 0 again at 4 s, bar 1 again
+    /// at 6 s, bar 2 at 8 s, the end at 10 s. Written once through it is
+    /// 6 s long.
+    const REPEAT: &str = "Repeat - Test\n#C 120bpm 4/4\n\nVS 3\n|: C_4 G_4 C_4 G_4 | F_1 :| C_1\n";
+
+    #[test]
+    fn the_cursor_goes_back_with_a_repeat() {
+        let cursor = ChartCursor::new(CursorConfig::playback());
+        let (layout, bars) = played(REPEAT);
+        let at = |t: f64| {
+            cursor
+                .compute_at_played_time(&layout, &bars, t)
+                .map(|s| (s.measure, (s.cursor_x * 1000.0).round() / 1000.0))
+        };
+        let measure = |t: f64| at(t).map(|(m, _)| m);
+
+        // The first pass, as before.
+        assert_eq!(measure(0.0), Some(0));
+        assert_eq!(measure(1.0), Some(0));
+        assert_eq!(measure(3.0), Some(1));
+        // The second pass: back on the repeated bars, not ahead of them
+        // the way the layout's written-once clock is.
+        let written = |t: f64| cursor.compute_at_time(&layout, t).map(|s| s.measure);
+        assert_eq!(written(5.0), Some(2), "the one-pass clock, a pass ahead");
+        assert_eq!(written(8.0), None, "and nowhere past the written end");
+        assert_eq!(measure(4.0), Some(0));
+        assert_eq!(measure(5.0), Some(0));
+        assert_eq!(measure(7.0), Some(1));
+        // The same place in the bar on either pass.
+        assert_eq!(at(1.25), at(5.25));
+        assert_eq!(at(2.5), at(6.5));
+        // Past the written end (6 s): the bar after the repeat.
+        assert_eq!(measure(8.0), Some(2));
+        assert_eq!(measure(9.9), Some(2));
+        // After the last bar ends, no cursor.
+        assert_eq!(measure(10.0), None);
+        assert_eq!(measure(1.0e6), None);
+    }
+
+    #[test]
+    fn the_cursor_glides_across_the_bar_as_played() {
+        let cursor = ChartCursor::new(CursorConfig::playback());
+        let (layout, bars) = played(REPEAT);
+        let x = |t: f64| {
+            cursor
+                .compute_at_played_time(&layout, &bars, t)
+                .expect("a cursor")
+                .cursor_x
+        };
+        // Bar 0's four quarters: each beat's slot, and halfway through one.
+        let slots: Vec<_> = layout
+            .beat_positions
+            .iter()
+            .filter(|b| b.absolute_tick >= 0 && b.measure == 0)
+            .collect();
+        assert_eq!(slots.len(), 4);
+        for (slot, t) in slots.iter().zip([4.0, 4.5, 5.0, 5.5]) {
+            assert!((x(t) - slot.x).abs() < 1e-6, "the second pass at {t}");
+            assert!((x(t + 0.25) - (slot.x + slot.width / 2.0)).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn a_pickup_bar_is_its_own_short_bar() {
+        // One beat of pickup, then two bars of 4/4: bar 1 starts at 0.5 s.
+        let src = "Pickup - Test\n#C 120bpm 4/4\n\nVS 3\n!T1/4 G_4\n!T4/4 C_1\nF_1\n";
+        let cursor = ChartCursor::new(CursorConfig::playback());
+        let (layout, bars) = played(src);
+        let measure = |t: f64| {
+            cursor
+                .compute_at_played_time(&layout, &bars, t)
+                .map(|s| s.measure)
+        };
+        assert_eq!(measure(0.25), Some(0), "the pickup");
+        assert_eq!(measure(0.5), Some(1));
+        assert_eq!(measure(2.4), Some(1));
+        assert_eq!(measure(2.5), Some(2));
+        assert_eq!(measure(4.5), None);
+    }
+
+    #[test]
+    fn before_bar_one_it_is_the_layouts_own_clock() {
+        // The count-in's beats, in the header, are on the layout's clock
+        // only (negative time): the played bars start at bar 1.
+        let cursor = ChartCursor::default();
+        let layout = test_layout();
+        let mut count_in = layout.clone();
+        count_in.beat_positions[0].absolute_tick = -1920;
+        count_in.beat_positions[0].time_start = -2.0;
+        count_in.beat_positions[0].time_end = -1.5;
+        let state = cursor
+            .compute_at_played_time(&count_in, &[], -1.75)
+            .expect("the count-in beat");
+        assert!((state.cursor_x - 125.0).abs() < 0.01);
     }
 
     #[test]

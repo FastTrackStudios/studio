@@ -219,3 +219,40 @@ fn there_is_no_cursor_before_bar_one_or_after_the_end() {
         assert!(view.playhead_event(secs).is_none());
     }
 }
+
+#[test]
+fn every_lookup_follows_the_bars_as_played_through_a_repeat() {
+    // Two bars repeated, then a last bar, at 120 bpm: bar 0 again at 4 s,
+    // bar 1 again at 6 s, bar 2 from 8 s to 10 s. Written once it is 6 s.
+    let src = "Repeat - Test\n#C 120bpm 4/4\n\nVS 3\n|: C_4 G_4 C_4 G_4 | F_1 :| C_1\n";
+    let chart = keyflow_lang::text::chart::parse_chart(src).expect("parses");
+    for style in [PlayheadStyle::Stepped, PlayheadStyle::Smooth] {
+        let mut view = ChartView::new().unwrap();
+        view.set_playhead_style(style);
+        view.paint(
+            &mut anyrender::Scene::new(),
+            &chart,
+            7,
+            816.0,
+            1.0,
+            1.0,
+            (0.0, 0.0),
+            None,
+        );
+        let bar = |t: f64| view.playhead_box(t).map(|(m, _)| m);
+        for (t, want) in [
+            (1.0, Some(0)),
+            (5.0, Some(0)),
+            (7.0, Some(1)),
+            (9.0, Some(2)),
+        ] {
+            assert_eq!(bar(t), want, "{style:?} at {t}");
+        }
+        assert_eq!(bar(10.5), None, "{style:?} after the end");
+        // The panel's page and band: the same on either pass, and still
+        // there past the written end.
+        assert_eq!(view.cursor_at_time(5.0), view.cursor_at_time(1.0));
+        assert_eq!(view.page_number_at_time(9.0), Some(1));
+        assert!(view.cursor_y_pt(9.0).is_some());
+    }
+}

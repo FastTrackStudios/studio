@@ -113,8 +113,7 @@ impl PlaybackTrack {
             let Some(first) = beats.first() else {
                 continue;
             };
-            let (n, d) = first.time_signature;
-            let bar_ticks = (i32::from(n.max(1)) * (1920 / i32::from(d.max(1)))).max(1);
+            let bar_ticks = bar_ticks(first.time_signature);
             let span = bar.end - bar.start;
             let at = |tick: i32| bar.start + span * f64::from(tick) / f64::from(bar_ticks);
             let simile = similes.iter().any(|&(x, y)| {
@@ -176,6 +175,12 @@ impl PlaybackTrack {
     pub fn at(&self, time: f64) -> Option<&PlaybackEvent> {
         self.index_at(time).map(|i| &self.events[i])
     }
+}
+
+/// How many ticks (480 a quarter) a bar in `(numerator, denominator)`
+/// lasts: what a beat's `tick` in its bar counts up to. At least 1.
+pub(super) fn bar_ticks((n, d): (u8, u8)) -> i32 {
+    (i32::from(n.max(1)) * (1920 / i32::from(d.max(1)))).max(1)
 }
 
 /// A repeat-bar sign's width, in staff spaces.

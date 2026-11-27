@@ -55,7 +55,7 @@ use peniko::{Color, Fill};
 
 use crate::Chart;
 use crate::api::pipeline::{ChartPipeline, Preset, PresetOptions};
-use crate::engraver::layout::chart::cursor::{ChartCursor, CursorConfig};
+use crate::engraver::layout::chart::cursor::{ChartCursor, CursorConfig, CursorState};
 use crate::engraver::layout::chart::playback::{PlaybackEvent, PlaybackTrack};
 use crate::engraver::layout::chart::{
     ChartLayoutConfig, ChartLayoutEngine, ChartLayoutResult, LayoutMode,
@@ -65,7 +65,7 @@ use crate::engraver::renderer::scene_renderer::SceneRenderBuilder;
 use crate::engraver::renderer::theme::{ArtworkLayer, ChartTheme, InkMap};
 use crate::engraver::scene::SceneNode;
 use crate::engraver::style::MStyle;
-use keyflow_lang::text::bar_times::BarClock;
+use keyflow_lang::text::bar_times::{BarClock, BarTime, bar_times};
 
 /// 96 CSS px per 72pt inch — the engraver's own scale between points (its
 /// layout unit) and pixels. Matches keyflow-ui's `DPI_SCALE`.
@@ -175,12 +175,14 @@ impl LayoutJob {
         let layout = self
             .engine
             .layout_chart_with_config(&self.chart, &self.mode, &self.config);
-        let track = PlaybackTrack::new(&layout, &self.chart, BarClock::at(0.0));
+        let bars = bar_times(&self.chart, BarClock::at(0.0));
+        let track = PlaybackTrack::from_bars(&layout, &bars);
         PreparedLayout {
             key: self.key,
             layout_key: self.layout_key,
             spatium: self.config.spatium,
             layout,
+            bars,
             track,
         }
     }
@@ -198,6 +200,8 @@ pub struct PreparedLayout {
     layout_key: u64,
     spatium: f64,
     layout: ChartLayoutResult,
+    /// The chart's bars as played, on its own clock.
+    bars: Vec<BarTime>,
     /// The layout's rhythmic events in playing order, for the cursor.
     track: PlaybackTrack,
 }
@@ -348,9 +352,21 @@ struct Cached {
     /// keyflow-ui's `chart_renderer.rs`, which is the reference this
     /// followed.
     spatium: f64,
+    /// The chart's bars as played (`bar_times`, bar 1 at 0 s): the clock
+    /// every time lookup goes by, so a repeat's second pass finds its bars
+    /// again rather than the layout's one written pass.
+    bars: Vec<BarTime>,
     /// The layout's rhythmic events in playing order: what the stepped
     /// playback cursor sits on.
     track: PlaybackTrack,
+}
+
+impl Cached {
+    /// The smooth cursor at `playhead_secs` (chart time), on the bars as
+    /// played.
+    fn cursor_state(&self, cursor: &ChartCursor, playhead_secs: f64) -> Option<CursorState> {
+        cursor.compute_at_played_time(&self.layout, &self.bars, playhead_secs)
+    }
 }
 
 impl ChartView {
@@ -507,6 +523,7 @@ impl ChartView {
             layout_key: prepared.layout_key,
             layout: prepared.layout,
             spatium: prepared.spatium,
+            bars: prepared.bars,
             track: prepared.track,
         });
         self.generation = self.generation.wrapping_add(1);
@@ -557,12 +574,14 @@ impl ChartView {
         if self.needs_layout(key) {
             let (mode, config) = self.layout_params();
             let layout = self.pipeline.layout_with_config(chart, &mode, &config);
-            let track = PlaybackTrack::new(&layout, chart, BarClock::at(0.0));
+            let bars = bar_times(chart, BarClock::at(0.0));
+            let track = PlaybackTrack::from_bars(&layout, &bars);
             self.cached = Some(Cached {
                 key,
                 layout_key: self.theme.layout_key(),
                 layout,
                 spatium: config.spatium,
+                bars,
                 track,
             });
             self.generation = self.generation.wrapping_add(1);
@@ -833,7 +852,7 @@ impl ChartView {
                 true
             }
             PlayheadStyle::Smooth => {
-                let Some(state) = self.cursor.compute_at_time(&cached.layout, playhead_secs) else {
+                let Some(state) = cached.cursor_state(&self.cursor, playhead_secs) else {
                     return false;
                 };
                 // The SMuFL font, for a cursor that highlights a notehead
@@ -900,7 +919,7 @@ impl ChartView {
                 (x0 - h, h.mul_add(-2.5, y0), x1 + h, h.mul_add(1.75, y0)),
             ));
         }
-        let state = self.cursor.compute_at_time(&cached.layout, playhead_secs)?;
+        let state = cached.cursor_state(&self.cursor, playhead_secs)?;
         let h = state.cursor_height;
         Some((
             state.measure,
@@ -976,7 +995,7 @@ impl ChartView {
     #[must_use]
     pub fn cursor_y_pt(&self, playhead_secs: f64) -> Option<f64> {
         let cached = self.cached.as_ref()?;
-        let state = self.cursor.compute_at_time(&cached.layout, playhead_secs)?;
+        let state = cached.cursor_state(&self.cursor, playhead_secs)?;
         Some(state.cursor_y)
     }
 
@@ -992,7 +1011,7 @@ impl ChartView {
     #[must_use]
     pub fn page_number_at_time(&self, playhead_secs: f64) -> Option<u32> {
         let cached = self.cached.as_ref()?;
-        let state = self.cursor.compute_at_time(&cached.layout, playhead_secs)?;
+        let state = cached.cursor_state(&self.cursor, playhead_secs)?;
         Some(state.page)
     }
 
@@ -1005,7 +1024,7 @@ impl ChartView {
     #[must_use]
     pub fn cursor_at_time(&self, playhead_secs: f64) -> Option<(u32, f64, f64)> {
         let cached = self.cached.as_ref()?;
-        let state = self.cursor.compute_at_time(&cached.layout, playhead_secs)?;
+        let state = cached.cursor_state(&self.cursor, playhead_secs)?;
         Some((state.page, state.cursor_y, state.cursor_height))
     }
 
