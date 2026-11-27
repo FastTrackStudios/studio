@@ -2341,7 +2341,10 @@ impl SignalPcmPack {
         self.entries.keys().map(|p| p.as_path())
     }
 
-    pub(crate) fn entry_for_path(&self, path: &Path) -> Option<&PackEntry> {
+    /// The entry `path` names: itself, else the entry its last components
+    /// name (a zone's path relative or absolute finds the same one). Where
+    /// a sample is in the pack: what a page fetches of it.
+    pub fn entry_for_path(&self, path: &Path) -> Option<&PackEntry> {
         if let Some(entry) = self.entries.get(path) {
             return Some(entry);
         }

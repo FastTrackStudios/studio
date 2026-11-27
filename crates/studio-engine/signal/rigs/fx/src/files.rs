@@ -23,10 +23,23 @@
 //! 3. The rig takes its new chain at its next block ([`Slot::take`]) and
 //!    hands back the old one, which is dropped on the page's thread too.
 //!
+//! A rig whose files name more files (a kit's preset its engines, an
+//! engine its pack) waits in stages ([`wait_for`]): each time what it
+//! waits for arrives, it says what it wants next, until it can be built.
+//!
 //! The home (its `.styx` files) is small text and is installed before a
 //! rig reads it ([`install_text`]).
+//!
+//! ## Packs, by range
+//!
+//! A `.signalpack` is the one format a rig reads in part. Its key names a
+//! span of it ([`range_key`]: `…/Kick.signalpack#0+64`), the page fetches
+//! only that span, and [`pack`] opens the pack over the spans that have
+//! come: its header, then its index (which says where every sample is),
+//! then only the samples a kit plays (the mics it wants), never the whole
+//! pack.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -77,6 +90,41 @@ pub fn located(path: &str, instrument: Instrument) -> String {
     home.join(folder).join(file).to_string_lossy().into_owned()
 }
 
+/// The store's folder of drum kits, laid out as a desktop's `Drum Kits`:
+/// `drums/<library>/Presets/…`, `…/Engines/…`, `…/Packs/…`.
+pub const KITS: &str = "drums";
+
+/// The key a kit's preset `path` is known by: on a desktop, the path. In a
+/// page a key stays as it is, a relative path is under [`KITS`], and a
+/// desktop's path is the same file in the store's kits: what follows its
+/// `Drum Kits` folder, else its library, folder and name
+/// (`…/GGD Modern and Massive 2/Presets/Heavy Thwacky.signalpreset`).
+#[must_use]
+pub fn kit_located(path: &str) -> String {
+    if cfg!(not(target_arch = "wasm32")) {
+        return path.to_owned();
+    }
+    kit_key(path)
+}
+
+/// [`kit_located`]'s mapping, on every target.
+pub(crate) fn kit_key(path: &str) -> String {
+    let kits = format!("{ROOT}/{KITS}");
+    if path.is_empty() || path.starts_with(ROOT) {
+        return path.to_owned();
+    }
+    let drive = path.as_bytes().get(1) == Some(&b':');
+    if !path.starts_with(['/', '\\']) && !drive {
+        return joined(&kits, path);
+    }
+    let parts: Vec<&str> = path.split(['/', '\\']).filter(|p| !p.is_empty()).collect();
+    let after = parts
+        .iter()
+        .position(|p| p.eq_ignore_ascii_case("Drum Kits"))
+        .map_or_else(|| parts.len().saturating_sub(3), |at| at + 1);
+    joined(&kits, &parts.get(after..).unwrap_or_default().join("/"))
+}
+
 /// Where `key` is in the store (`bass/models/Amp.nam`), when it is a key.
 #[must_use]
 pub fn store_path(key: &str) -> Option<&str> {
@@ -91,9 +139,212 @@ pub fn bytes(key: &str) -> Option<Arc<[u8]>> {
     sampler::assets::get(key)
 }
 
+/// Whether `key` has been installed.
+#[must_use]
+pub fn has(key: &str) -> bool {
+    sampler::assets::contains(key)
+}
+
 /// Keep `bytes` as `key`'s: what a rig reads before it would touch a disk.
+/// A span of a pack ([`range_key`]) is kept for the pack to read it.
 pub fn install(key: impl Into<String>, bytes: impl Into<Arc<[u8]>>) {
-    sampler::assets::install(key.into(), bytes);
+    let key = key.into();
+    if let (whole, Some((start, len))) = range_of(&key) {
+        lock(spans())
+            .entry(whole.to_owned())
+            .or_default()
+            .insert((start, len));
+    }
+    sampler::assets::install(key, bytes);
+}
+
+/// The key of `len` bytes at `start` of the file `key`: what a page
+/// fetches of a pack.
+#[must_use]
+pub fn range_key(key: &str, start: u64, len: u64) -> String {
+    format!("{key}#{start}+{len}")
+}
+
+/// `key` split into its file's key and the span it names, if it names one
+/// ([`range_key`]).
+#[must_use]
+pub fn range_of(key: &str) -> (&str, Option<(u64, u64)>) {
+    let Some((whole, span)) = key.rsplit_once('#') else {
+        return (key, None);
+    };
+    let parsed = span
+        .split_once('+')
+        .and_then(|(s, l)| Some((s.parse().ok()?, l.parse().ok()?)));
+    match parsed {
+        Some(span) => (whole, Some(span)),
+        None => (key, None),
+    }
+}
+
+/// The spans installed of each pack, by its key.
+fn spans() -> &'static Mutex<HashMap<String, BTreeSet<(u64, u64)>>> {
+    static SPANS: OnceLock<Mutex<HashMap<String, BTreeSet<(u64, u64)>>>> = OnceLock::new();
+    SPANS.get_or_init(Mutex::default)
+}
+
+/// The packs opened over their spans, by the id their reader knows them by.
+fn opened() -> &'static Mutex<Vec<String>> {
+    static OPENED: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+    OPENED.get_or_init(Mutex::default)
+}
+
+/// `dst.len()` bytes at `offset` of the pack `id`, from a span installed
+/// that holds them all. Whether they were there.
+fn read_span(id: u32, offset: u64, dst: &mut [u8]) -> bool {
+    let Some(key) = lock(opened()).get(id as usize).cloned() else {
+        return false;
+    };
+    let want = dst.len() as u64;
+    let span = lock(spans()).get(&key).and_then(|spans| {
+        spans
+            .iter()
+            .find(|&&(start, len)| start <= offset && offset + want <= start + len)
+            .copied()
+    });
+    let Some((start, len)) = span else {
+        return false;
+    };
+    let Some(bytes) = sampler::assets::get(&range_key(&key, start, len)) else {
+        return false;
+    };
+    let Ok(at) = usize::try_from(offset - start) else {
+        return false;
+    };
+    match bytes.get(at..at + dst.len()) {
+        Some(found) => {
+            dst.copy_from_slice(found);
+            true
+        }
+        None => false,
+    }
+}
+
+/// The pack at `key`, opened over the spans of it that have arrived: its
+/// header and index first, wanted (as [`range_key`]s) until they are in.
+/// Its samples are read as spans too ([`entries_of`]).
+///
+/// # Errors
+///
+/// [`Need::Keys`] while the header or the index is still to come;
+/// [`Need::Failed`] for a file that is not a pack.
+pub fn pack(key: &str) -> Result<sampler::SignalPcmPack, Need> {
+    use sampler::engine::cache::{PackFileHeader, SignalPcmPack, set_external_pack_reader};
+    let head = range_key(key, 0, PackFileHeader::LEN as u64);
+    let Some(raw) = bytes(&head) else {
+        return Err(Need::Keys(vec![head]));
+    };
+    let raw: [u8; PackFileHeader::LEN] = raw
+        .get(..PackFileHeader::LEN)
+        .and_then(|b| b.try_into().ok())
+        .ok_or_else(|| Need::Failed(format!("{key}: shorter than a pack's header")))?;
+    let header = PackFileHeader::parse(raw).map_err(|e| Need::Failed(format!("{key}: {e}")))?;
+    let index = range_key(key, header.index_offset(), header.index_len());
+    if !has(&index) {
+        return Err(Need::Keys(vec![index]));
+    }
+    // One reader for every pack opened so. Only the first set in a process
+    // counts: a pack opened under someone else's would read their bytes.
+    static OURS: OnceLock<bool> = OnceLock::new();
+    if !*OURS.get_or_init(|| set_external_pack_reader(Box::new(read_span))) {
+        return Err(Need::Failed(
+            "another pack reader is installed; packs cannot be read by range".to_owned(),
+        ));
+    }
+    let id = {
+        let mut opened = lock(opened());
+        let at = opened.iter().position(|k| k == key).unwrap_or_else(|| {
+            opened.push(key.to_owned());
+            opened.len() - 1
+        });
+        u32::try_from(at).map_err(|_| Need::Failed("too many packs".to_owned()))?
+    };
+    // The index is the last thing in a pack: its end is the pack's.
+    let len = header.index_offset() + header.index_len();
+    SignalPcmPack::open_external(id, len).map_err(|e| Need::Failed(format!("{key}: {e}")))
+}
+
+/// The keys of the samples `paths` names in the pack at `key` (opened,
+/// [`pack`]): one span each.
+#[must_use]
+pub fn entries_of<'a>(
+    key: &str,
+    pack: &sampler::SignalPcmPack,
+    paths: impl Iterator<Item = &'a Path>,
+) -> Vec<String> {
+    let mut keys: Vec<String> = paths
+        .filter_map(|p| pack.entry_for_path(p))
+        .map(|e| range_key(key, e.offset(), e.bytes()))
+        .collect();
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
+/// What a rig waiting in stages still needs ([`wait_for`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Need {
+    /// These keys, to be fetched and installed.
+    Keys(Vec<String>),
+    /// Nothing that can come: the rig plays without it.
+    Failed(String),
+}
+
+impl Need {
+    /// The keys of both: what is needed from either.
+    #[must_use]
+    pub fn and(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Keys(mut a), Self::Keys(b)) => {
+                a.extend(b);
+                Self::Keys(a)
+            }
+            (Self::Failed(why), _) | (_, Self::Failed(why)) => Self::Failed(why),
+        }
+    }
+}
+
+/// The text of the file `key`, once installed.
+///
+/// # Errors
+///
+/// [`Need::Keys`] until it is.
+pub fn text(key: &str) -> Result<String, Need> {
+    bytes(key)
+        .map(|b| String::from_utf8_lossy(&b).into_owned())
+        .ok_or_else(|| Need::Keys(vec![key.to_owned()]))
+}
+
+/// `path` joined to `dir` and its `..`s taken out, as a key: where a
+/// file's relative path from another lands (`/rigs/drums/Kit/Presets` +
+/// `../Engines/Kick.signalengine`).
+#[must_use]
+pub fn joined(dir: &str, path: &str) -> String {
+    let mut parts: Vec<&str> = if path.starts_with('/') {
+        Vec::new()
+    } else {
+        dir.split('/').filter(|p| !p.is_empty()).collect()
+    };
+    for part in path.split(['/', '\\']) {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            p => parts.push(p),
+        }
+    }
+    format!("/{}", parts.join("/"))
+}
+
+/// The folder of the key `key`.
+#[must_use]
+pub fn dir_of(key: &str) -> &str {
+    key.rsplit_once('/').map_or("", |(d, _)| d)
 }
 
 /// Keep `text` as the home file `key` (`/rigs/bass/drive-presets.styx`).
@@ -118,9 +369,8 @@ pub fn wanted() -> Vec<String> {
     let keys: BTreeSet<String> = live()
         .iter()
         .filter(|p| p.waiting())
-        .flat_map(|p| p.keys().iter())
+        .flat_map(|p| p.keys())
         .filter(|k| !sampler::assets::contains(k))
-        .cloned()
         .collect();
     keys.into_iter().collect()
 }
@@ -128,7 +378,7 @@ pub fn wanted() -> Vec<String> {
 /// A rig's chain, made again once its files are in.
 trait Pending: Send + Sync {
     /// The files it waits for.
-    fn keys(&self) -> &[String];
+    fn keys(&self) -> Vec<String>;
     /// Whether it is still to be made.
     fn waiting(&self) -> bool;
     /// Build, if every file is in and it has not been built. Whether it was.
@@ -140,12 +390,16 @@ trait Pending: Send + Sync {
 /// Where a rig's new chain waits for it: made by [`arrived`], taken by the
 /// rig on the audio thread ([`take`](Self::take)).
 pub struct Slot<T> {
-    keys: Vec<String>,
-    make: Box<dyn Fn() -> T + Send + Sync>,
+    /// What it waits for now: a staged rig's next files once these come.
+    keys: Mutex<Vec<String>>,
+    make: Box<dyn Fn() -> Result<T, Need> + Send + Sync>,
     /// The new chain, then (once taken) the old one, to drop here.
     held: Mutex<Option<T>>,
     stage: AtomicU8,
 }
+
+/// The most stages a rig is let go through at once.
+const STAGES: usize = 8;
 
 const WAITING: u8 = 0;
 const BUILT: u8 = 1;
@@ -175,8 +429,8 @@ impl<T: Send> Slot<T> {
 }
 
 impl<T: Send> Pending for Slot<T> {
-    fn keys(&self) -> &[String] {
-        &self.keys
+    fn keys(&self) -> Vec<String> {
+        lock(&self.keys).clone()
     }
 
     fn waiting(&self) -> bool {
@@ -185,14 +439,45 @@ impl<T: Send> Pending for Slot<T> {
 
     fn build_if_ready(&self) -> bool {
         if self.stage.load(Ordering::Acquire) != WAITING
-            || !self.keys.iter().all(|k| sampler::assets::contains(k))
+            || !self.keys().iter().all(|k| sampler::assets::contains(k))
         {
             return false;
         }
-        let built = (self.make)();
-        *lock(&self.held) = Some(built);
-        self.stage.store(BUILT, Ordering::Release);
-        true
+        // A stage whose files are in already (another rig fetched them)
+        // goes straight on to the next; a rig has a few stages, never many.
+        for _ in 0..STAGES {
+            match (self.make)() {
+                Ok(built) => {
+                    *lock(&self.held) = Some(built);
+                    self.stage.store(BUILT, Ordering::Release);
+                    return true;
+                }
+                // The next stage: what these files named.
+                Err(Need::Keys(next)) => {
+                    let ready = next.iter().all(|k| sampler::assets::contains(k));
+                    *lock(&self.keys) = next;
+                    if !ready {
+                        return false;
+                    }
+                }
+                Err(Need::Failed(why)) => {
+                    tracing::warn!(
+                        why,
+                        "a rig's files would not build it; it plays without them"
+                    );
+                    lock(&self.keys).clear();
+                    self.stage.store(TAKEN, Ordering::Release);
+                    return false;
+                }
+            }
+        }
+        tracing::warn!(
+            stages = STAGES,
+            "a rig's files named more stages than any rig has; it plays without them"
+        );
+        lock(&self.keys).clear();
+        self.stage.store(TAKEN, Ordering::Release);
+        false
     }
 
     fn done(&self) -> bool {
@@ -212,8 +497,25 @@ pub fn wait<T: Send + 'static>(
     keys: Vec<String>,
     make: impl Fn() -> T + Send + Sync + 'static,
 ) -> Arc<Slot<T>> {
+    let first = keys.clone();
+    wait_for(first, move || {
+        if keys.iter().all(|k| sampler::assets::contains(k)) {
+            Ok(make())
+        } else {
+            Err(Need::Keys(keys.clone()))
+        }
+    })
+}
+
+/// Make a rig's chain with `make` once it can be, in stages: `keys` first,
+/// then whatever `make` says it [`Need`]s once they are in, until it makes
+/// one. The rig keeps the slot and takes what it holds ([`Slot::take`]).
+pub fn wait_for<T: Send + 'static>(
+    keys: Vec<String>,
+    make: impl Fn() -> Result<T, Need> + Send + Sync + 'static,
+) -> Arc<Slot<T>> {
     let slot = Arc::new(Slot {
-        keys,
+        keys: Mutex::new(keys),
         make: Box::new(make),
         held: Mutex::new(None),
         stage: AtomicU8::new(WAITING),
@@ -240,11 +542,18 @@ pub fn arrived() -> usize {
 
 /// The loudest a rig built from streamed files has put out (linear peak).
 static HEARD: AtomicU32 = AtomicU32::new(0);
+/// The loudest a kit voice on streamed samples has put out.
+static KIT_HEARD: AtomicU32 = AtomicU32::new(0);
 
-/// A rig playing streamed files says how loud it was ([`heard`]).
+/// A rig playing streamed files says how loud it was ([`Status::heard`]).
 pub(crate) fn note_heard(peak: f32) {
-    let bits = peak.abs().to_bits();
-    HEARD.fetch_max(bits, Ordering::Relaxed);
+    HEARD.fetch_max(peak.abs().to_bits(), Ordering::Relaxed);
+}
+
+/// A kit voice playing streamed samples says how loud it was
+/// ([`Status::kit_heard`]).
+pub(crate) fn note_heard_kit(peak: f32) {
+    KIT_HEARD.fetch_max(peak.abs().to_bits(), Ordering::Relaxed);
 }
 
 /// What the page's rigs are doing, for the page to show (and its boot test
@@ -259,6 +568,8 @@ pub struct Status {
     pub home_files: usize,
     /// The loudest a rig on streamed files has played (linear peak).
     pub heard: f32,
+    /// The loudest a kit voice on streamed samples has played.
+    pub kit_heard: f32,
 }
 
 /// The rigs' [`Status`].
@@ -269,6 +580,7 @@ pub fn status() -> Status {
         waiting: live().iter().filter(|p| p.waiting()).count(),
         home_files: signal_rig_host::store::memory::len(),
         heard: f32::from_bits(HEARD.load(Ordering::Relaxed)),
+        kit_heard: f32::from_bits(KIT_HEARD.load(Ordering::Relaxed)),
     }
 }
 

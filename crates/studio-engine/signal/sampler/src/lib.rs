@@ -123,6 +123,7 @@ pub mod gapless;
 pub mod input_stage;
 pub mod instrument;
 pub mod keys_rig;
+pub mod kit_routing;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod kit_tracks;
 pub mod lane_health;

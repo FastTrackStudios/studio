@@ -83,8 +83,17 @@ impl EngineSpec {
     ///
     /// Returns an error if the file cannot be read or parsed.
     pub fn from_file(path: &Path) -> Result<Self, SamplerError> {
-        let text = std::fs::read_to_string(path)?;
-        facet_styx::from_str(&text).map_err(|e| SamplerError::SpecParse(e.to_string()))
+        Self::parse(&std::fs::read_to_string(path)?)
+    }
+
+    /// The spec in `text`, a file's contents however they arrived (a page
+    /// reads it from the rig store).
+    ///
+    /// # Errors
+    ///
+    /// The text is not a valid spec.
+    pub fn parse(text: &str) -> Result<Self, SamplerError> {
+        facet_styx::from_str(text).map_err(|e| SamplerError::SpecParse(e.to_string()))
     }
 }
 
