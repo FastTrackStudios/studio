@@ -24238,6 +24238,7 @@ dependencies = [
  "js-sys",
  "keyflow",
  "keyflow-extension",
+ "keyflow-session",
  "loro",
  "midi-editor",
  "mixer-view",

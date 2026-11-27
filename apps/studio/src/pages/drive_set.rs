@@ -258,7 +258,15 @@ pub fn ChartView() -> Element {
     let title = n.song().map(|s| s.title.to_string()).unwrap_or_default();
     let (now, _) = n.secs();
     let section = n.timeline.at(now).map(|s| s.name.clone());
-    let chart = n.place().and_then(|p| p.chart.clone());
+    // A chart found beside the song (a `.kf`) is its own; a song with none
+    // shows the one Keyflow generates from its session's markers, once the
+    // page's engine has opened it.
+    let chart = n.place().and_then(|p| {
+        p.chart
+            .clone()
+            .map(Shown::Written)
+            .or_else(|| crate::chart_generated::of(p).map(Shown::Generated))
+    });
     let sections = n.timeline.sections.clone();
     rsx! {
         div { class: "chartnow",
@@ -274,20 +282,39 @@ pub fn ChartView() -> Element {
                 }
             }
             match chart {
-                Some(c) => rsx! {
-                    ChartFollow { chart: c, sections }
+                Some(chart) => rsx! {
+                    ChartFollow { chart, sections }
                 },
                 None => rsx! {
-                    p { class: "pline", "No chart for this song yet: Studio looks for a Keyflow chart (.kf) named like its session folder." }
+                    p { class: "pline", "No chart for this song yet: Studio looks for a Keyflow chart (.kf) named like its session folder, and makes one from the session's sections once it opens." }
                 },
             }
         }
     }
 }
 
+/// The chart a song shows: its own, written (a `.kf` beside it), or the one
+/// generated from its session's markers when it has none.
+#[derive(Clone, Debug, PartialEq)]
+enum Shown {
+    Written(crate::files::Hit),
+    Generated(crate::chart_generated::Generated),
+}
+
+impl Shown {
+    /// What the page calls it.
+    #[cfg_attr(not(feature = "drive"), allow(dead_code))]
+    fn name(&self) -> &str {
+        match self {
+            Self::Written(hit) => &hit.name,
+            Self::Generated(_) => "The generated chart",
+        }
+    }
+}
+
 #[cfg(not(feature = "drive"))]
 #[component]
-fn ChartFollow(chart: crate::files::Hit, sections: Vec<crate::session_file::Section>) -> Element {
+fn ChartFollow(chart: Shown, sections: Vec<crate::session_file::Section>) -> Element {
     let _ = (chart, sections);
     rsx! {}
 }
@@ -332,16 +359,27 @@ while (true) {
 
 #[cfg(feature = "drive")]
 #[component]
-fn ChartFollow(chart: crate::files::Hit, sections: Vec<crate::session_file::Section>) -> Element {
+fn ChartFollow(chart: Shown, sections: Vec<crate::session_file::Section>) -> Element {
     use crate::files_live::web;
 
     let app = use_app();
+    let name = chart.name().to_owned();
     let engraved = use_resource(use_reactive!(|chart, sections| async move {
         let mut span = crate::trace::Span::root("studio.chart.show");
-        span.set("studio.chart", chart.name.clone());
-        let text = match web::bytes_in(Some(&span), "GET", &web::file_url(&chart), None).await? {
-            (200 | 206, b) => String::from_utf8_lossy(&b).into_owned(),
-            (code, _) => return Err(format!("its computer answered {code}")),
+        span.set("studio.chart", chart.name().to_owned());
+        // A generated chart's bars are timed to the session it came from.
+        let (text, sections) = match chart {
+            Shown::Written(hit) => {
+                span.set("studio.chart.source", "chart");
+                match web::bytes_in(Some(&span), "GET", &web::file_url(&hit), None).await? {
+                    (200 | 206, b) => (String::from_utf8_lossy(&b).into_owned(), sections),
+                    (code, _) => return Err(format!("its computer answered {code}")),
+                }
+            }
+            Shown::Generated(g) => {
+                span.set("studio.chart.source", "generated");
+                (g.text, g.sections)
+            }
         };
         let mut engraving = span.child("studio.chart.engrave");
         let e = crate::chart_sync::engrave(&text, &sections);
@@ -376,20 +414,23 @@ fn ChartFollow(chart: crate::files::Hit, sections: Vec<crate::session_file::Sect
     }
     let body = match engraved() {
         None => rsx! {
-            p { class: "pline", "Engraving {chart.name}…" }
+            p { class: "pline", "Engraving {name}…" }
         },
         Some(Err(e)) => rsx! {
-            p { class: "pline", "Could not show {chart.name}: {e}" }
+            p { class: "pline", "Could not show {name}: {e}" }
         },
         Some(Ok(e)) => {
-            let how = match e.timing {
-                crate::chart_sync::Timing::Sections => "Bars timed to the session's sections",
-                crate::chart_sync::Timing::Tempo => {
+            let how = match (&chart, e.timing) {
+                (Shown::Generated(_), _) => {
+                    "Made from the session's sections and markers: no chords until someone writes them"
+                }
+                (_, crate::chart_sync::Timing::Sections) => "Bars timed to the session's sections",
+                (_, crate::chart_sync::Timing::Tempo) => {
                     "Bars timed by the chart's tempo (its form differs from the session's sections)"
                 }
             };
             rsx! {
-                p { class: "pline", "{chart.name} · {how}" }
+                p { class: "pline", "{name} · {how}" }
                 for note in e.notes.iter() {
                     p { class: "pline chartnote", "{note}" }
                 }

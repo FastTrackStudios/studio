@@ -47,6 +47,9 @@ mod trace;
 // The browser build engraves charts and reads setlist files from Drive.
 #[cfg_attr(not(feature = "drive"), allow(dead_code))]
 mod chart_sync;
+// The chart a song with no chart shows, generated from its session (web).
+#[cfg_attr(not(feature = "web"), allow(dead_code))]
+mod chart_generated;
 #[cfg_attr(not(feature = "web"), allow(dead_code))]
 mod reference;
 #[cfg(feature = "native")]

@@ -73,6 +73,10 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 # Charts: a song's .kf parsed and engraved to SVG in the page, each bar
 # timed to the recording (CPU-only `svg` tier: no wgpu, builds for wasm).
 keyflow = { workspace = true, features = ["text", "svg"] }
+# A song with no chart of its own: the chart Keyflow generates from its
+# session's markers, composed in the page as the desktop composes it
+# (src/chart_generated.rs, web).
+keyflow-session = { workspace = true, optional = true }
 # The Action List and its doors (native): what agents drive the app with
 # (src/actions.rs).
 architect = { workspace = true, optional = true, features = ["action-list"] }
@@ -132,7 +136,7 @@ default = []
 # Drive's code (the live sets, setlist files, songs' files), in every
 # build that has a renderer.
 drive = ["dep:drive-dioxus", "dep:drive-client", "dep:tracing"]
-web = ["dioxus/web", "drive", "dep:js-sys", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:studio-engine", "dep:eyre", "dep:console_error_panic_hook"]
+web = ["dioxus/web", "drive", "dep:js-sys", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:studio-engine", "dep:eyre", "dep:console_error_panic_hook", "dep:keyflow-session"]
 desktop = ["dioxus/desktop", "local"]
 # The same app drawn by Blitz (the GPU renderer Signal's panes and the
 # engine's views use), on a desktop and on iOS: what the one app runs on
