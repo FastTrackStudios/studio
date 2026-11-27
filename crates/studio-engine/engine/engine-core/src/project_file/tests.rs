@@ -395,3 +395,147 @@ fn an_alternative_saved_into_its_own_file_saves_to_itself() {
         "the song as recorded is as it was"
     );
 }
+
+/// A song an older build wrote: a deleted item's map left whole, a mix
+/// snapshot with its plugin state inline. Opened, it is tidied once.
+#[test]
+fn an_older_song_is_tidied_once_as_it_opens() {
+    use engine_sync::model::{ItemState, SessionModel};
+    use session_format::store::Store;
+
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let path = dir.path().join("Old.session");
+    let state = "UExVR0lO".repeat(500);
+    {
+        let store = Store::open(&path).expect("a new file");
+        let doc = SessionDoc::new();
+        let mut model = SessionModel::default();
+        for i in 0..3 {
+            model.items.insert(
+                format!("item-{i}"),
+                ItemState {
+                    track: "kick".into(),
+                    length: 1.0,
+                    ..ItemState::default()
+                },
+            );
+        }
+        model.project.ext.insert(
+            crate::mix_states::SECTION.to_owned(),
+            [(
+                "snapshot:A".to_owned(),
+                format!(r#"{{"fx":[{{"guid":"a","state":"{state}"}}]}}"#),
+            )]
+            .into(),
+        );
+        doc.write(&model, engine_sync::ORIGIN_LOCAL)
+            .expect("written");
+        // Deleted the old way: the key only.
+        doc.loro()
+            .get_map("items")
+            .delete("item-2")
+            .expect("deleted");
+        doc.loro().commit();
+        store.compact(MAIN, doc.loro()).expect("saved");
+    }
+
+    let (store, loaded, _) = super::open_branch(&path, MAIN).expect("opened");
+    assert_eq!(
+        engine_sync::doc::clear_deleted_entities(&loaded).expect("looked"),
+        0,
+        "the deleted item is cleared"
+    );
+    let ext = SessionDoc::from_loro(loaded.clone()).read().project.ext;
+    let mix = &ext[crate::mix_states::SECTION];
+    let hash = crate::mix_states::hash(&state);
+    assert_eq!(mix[&crate::mix_states::state_key(&hash)], state);
+    assert!(mix["snapshot:A"].contains(&format!("\"@{hash}\"")));
+    let steps = store
+        .lock()
+        .expect("the store")
+        .steps(MAIN)
+        .expect("steps")
+        .len();
+    drop(store);
+
+    let (store, again, _) = super::open_branch(&path, MAIN).expect("opened again");
+    assert_eq!(again.get_deep_value(), loaded.get_deep_value());
+    assert_eq!(
+        store
+            .lock()
+            .expect("the store")
+            .steps(MAIN)
+            .expect("steps")
+            .len(),
+        steps,
+        "tidied once"
+    );
+}
+
+/// A real song tidied and folded, measured: run by hand on a copy, never in
+/// CI. `STUDIO_FOLD_SONG` names its `.session`; the file is changed (the
+/// tidy's step written, its history before the open archived beside it and
+/// the branch made shallow), so back the song up first.
+///
+/// `cargo nextest run -p engine-core --run-ignored only -E
+/// 'test(a_real_song_tidied_and_folded)' --no-capture`
+#[test]
+#[ignore = "a measurement on a real song, by hand"]
+fn a_real_song_tidied_and_folded() {
+    use session_format::store::Store;
+
+    let Some(path) = std::env::var_os("STUDIO_FOLD_SONG") else {
+        return;
+    };
+    let path = std::path::PathBuf::from(path);
+    let size = |p: &Path| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+    let file_before = size(&path);
+
+    let opened = Instant::now();
+    let (store, doc, uncompacted) = super::open_branch(&path, MAIN).expect("opened, tidied");
+    let open_ms = opened.elapsed().as_millis();
+    let opened_at = doc.oplog_frontiers();
+    let store = store.lock().expect("the store");
+    let archive_path = store.archive_path(&path).expect("its archive's path");
+    if let Some(folder) = archive_path.parent() {
+        std::fs::create_dir_all(folder).expect("the archive's folder");
+    }
+    let archive = Store::open(&archive_path).expect("its archive");
+
+    let folded = Instant::now();
+    let taken = store
+        .take_shallow(MAIN, &doc, &opened_at, &archive)
+        .expect("a shallow snapshot");
+    store
+        .write_snapshot(taken.pack().expect("packed"))
+        .expect("written");
+    store.checkpoint().expect("checkpointed");
+    archive.checkpoint().expect("archive checkpointed");
+    let fold_ms = folded.elapsed().as_millis();
+    let shallow_bytes = doc
+        .export(engine_sync::loro::ExportMode::shallow_snapshot(&opened_at))
+        .expect("exported")
+        .len();
+    drop(store);
+
+    let reopened = Instant::now();
+    let (_store, again, _) = super::open_branch(&path, MAIN).expect("reopened");
+    let reopen_ms = reopened.elapsed().as_millis();
+    assert_eq!(
+        again.get_deep_value(),
+        doc.get_deep_value(),
+        "the song as it was"
+    );
+
+    let mb = |b: u64| format!("{}.{}", b / 1_000_000, b / 100_000 % 10);
+    println!(
+        "fold {}: file {} MB -> {} MB; shallow snapshot {} MB; \
+         archive {} MB; {uncompacted} steps uncompacted; open+tidy {open_ms} ms, \
+         fold {fold_ms} ms, reopen {reopen_ms} ms",
+        path.display(),
+        mb(file_before),
+        mb(size(&path)),
+        mb(u64::try_from(shallow_bytes).unwrap_or(u64::MAX)),
+        mb(size(&archive_path)),
+    );
+}

@@ -39,6 +39,8 @@ pub mod history;
 #[cfg(feature = "native")]
 pub mod history_marks;
 #[cfg(feature = "native")]
+pub mod mix_states;
+#[cfg(feature = "native")]
 pub mod open;
 pub mod open_core;
 pub mod prepare;
