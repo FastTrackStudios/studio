@@ -706,8 +706,11 @@ jobs:
         python3 -I apps/studio/ios/sim-test.py --app "$app" \
           --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out"
         bash scripts/dev-shell.sh -c 'cargo build -p daw-extension'
+        python3 -m venv "$RUNNER_TEMP/idb"
+        "$RUNNER_TEMP/idb/bin/pip" install --quiet --disable-pip-version-check fb-idb
         python3 -I apps/studio/ios/sim-room-test.py --app "$app" \
           --engine "${CARGO_TARGET_DIR:-target}/debug/daw-extension" \
+          --idb "$RUNNER_TEMP/idb/bin/idb" \
           --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out/room"
     - name: Keep the app's output on failure
       if: ${{ failure() }}
@@ -729,6 +732,7 @@ jobs:
     - tests
     - release-macos
     - apple
+    - ios
     if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -745,6 +749,7 @@ jobs:
         TESTS: ${{ needs.tests.result }}
         RELEASE_MACOS: ${{ needs.release-macos.result }}
         APPLE: ${{ needs.apple.result }}
+        IOS: ${{ needs.ios.result }}
       run: |
         set -u
         fail=0
@@ -757,7 +762,7 @@ jobs:
         done
         # The builds: skipped is fine when the rail plan skipped them (nothing they
         # cover changed since a green base); anything else must have succeeded.
-        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE"; do
+        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
           case "${job#*:}" in
             success | skipped) ;;
             *) bad "${job%%:*}: ${job#*:}" ;;

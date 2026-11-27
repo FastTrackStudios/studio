@@ -395,18 +395,18 @@ fn apple() -> Job {
     ))
 }
 
-/// ADVISORY for now (studio#787: the app aborts at launch on the iOS 27
-/// simulator, objc2-ui-kit's `URLContexts` returning NULL; back among
-/// `CI passed`'s needs once it boots): Studio for iPhone and iPad, the engine
+/// REQUIRED (through `CI passed`): Studio for iPhone and iPad, the engine
 /// linked into the app, built for the simulator
 /// (apps/studio/ios/build.sh) and booted in a simulator of its own, where
 /// a session opens and plays with the click (Seam 3 of studio#689:
 /// apps/studio/ios/sim-test.py, driven over the app's MCP door), and where
 /// the app joins a room from its link and follows a desktop engine leading
 /// it (Seam 2 with the phone, studio#712: apps/studio/ios/sim-room-test.py,
-/// both read over MCP). On
-/// airlock, the only Mac with Xcode and its simulators; the simulators'
-/// device set goes under the runner's temp dir, deleted after.
+/// both read over MCP; iOS asks before it opens the link, and the test taps
+/// Open through idb: Homebrew's `idb_companion` on airlock, and the `idb`
+/// client installed into the runner's temp dir). On airlock, the only Mac
+/// with Xcode and its simulators; the simulators' device set goes under the
+/// runner's temp dir, deleted after.
 fn ios() -> Job {
     Job::new(RunsOn::Labels(&[
         "self-hosted",
@@ -446,8 +446,11 @@ const IOS: &str = r#"app="$(bash apps/studio/ios/build.sh sim | tail -1)"
 python3 -I apps/studio/ios/sim-test.py --app "$app" \
   --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out"
 bash scripts/dev-shell.sh -c 'cargo build -p daw-extension'
+python3 -m venv "$RUNNER_TEMP/idb"
+"$RUNNER_TEMP/idb/bin/pip" install --quiet --disable-pip-version-check fb-idb
 python3 -I apps/studio/ios/sim-room-test.py --app "$app" \
   --engine "${CARGO_TARGET_DIR:-target}/debug/daw-extension" \
+  --idb "$RUNNER_TEMP/idb/bin/idb" \
   --set "$RUNNER_TEMP/ios-sim-devices" --out "$RUNNER_TEMP/ios-sim-out/room"
 "#;
 
@@ -919,7 +922,7 @@ exit "$rc"
 /// skipped required check counts as passing, so this never skips: it fails
 /// unless the plan, the gates, check, wasm, tests and the macOS
 /// release-tooling run all succeeded. The advisory work (clippy, `Lint`,
-/// the web screens, and iOS until studio#787) is not among its needs: it can neither fail nor delay it.
+/// the web screens) is not among its needs: it can neither fail nor delay it.
 ///
 /// The escape hatch for a push the pre-push hook couldn't vouch for (a
 /// contributor without the hook, a dirty tree, `SKIP=local-ci`): a green
@@ -936,6 +939,7 @@ fn ci_passed() -> Result<Job> {
             "tests",
             "release-macos",
             "apple",
+            "ios",
         ])
         .cond(&format!("${{{{ always() && ({NOT_DRAFT}) }}}}"))
         .timeout(5)
@@ -949,7 +953,8 @@ fn ci_passed() -> Result<Job> {
                 .env("WASM", "${{ needs.wasm.result }}")
                 .env("TESTS", "${{ needs.tests.result }}")
                 .env("RELEASE_MACOS", "${{ needs.release-macos.result }}")
-                .env("APPLE", "${{ needs.apple.result }}"),
+                .env("APPLE", "${{ needs.apple.result }}")
+                .env("IOS", "${{ needs.ios.result }}"),
         )
         .step(
             Step::run(
@@ -978,7 +983,7 @@ for job in "gates:$GATES" "release-macos:$RELEASE_MACOS"; do
 done
 # The builds: skipped is fine when the rail plan skipped them (nothing they
 # cover changed since a green base); anything else must have succeeded.
-for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE"; do
+for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "apple:$APPLE" "ios:$IOS"; do
   case "${job#*:}" in
     success | skipped) ;;
     *) bad "${job%%:*}: ${job#*:}" ;;
