@@ -3,12 +3,11 @@
 //! list of orgs of its own, so once the issuer has it, it is simply one
 //! more of this person's orgs (the switcher, All organizations).
 //!
-//! The issuer creates an org only for a *session* (an OIDC access token is
-//! refused for every change to an org), so the app trades its own access
-//! token, freshly issued, for one (RFC 8693, `/oauth2/token`): the issuer
-//! allows that for a first-party client with `issue_sessions`, within five
-//! minutes of the token's issue, once per token. Then
-//! `POST /auth/organization/create` with that session as its bearer.
+//! The app's own sign-in is enough: the issuer takes a first-party app's
+//! OIDC access token (Studio holds Drive's `drive` client's) in place of a
+//! session for creating an org, the one org write it takes one for
+//! (`r[auth.jwt.first-party-access]`, FastTrackStudios/auth#4). So it is
+//! `POST /auth/organization/create` with that token as its bearer.
 //!
 //! Everything here is plain requests and answers over a [`Fetch`], so it
 //! is the same in a browser and natively, and tested against the real
@@ -49,8 +48,8 @@ pub enum Refused {
     Taken(String),
     /// Not signed in (or the issuer no longer takes the sign-in).
     SignIn,
-    /// The issuer does not let this app trade its sign-in for a session
-    /// (its client wants `issue_sessions` at the account server).
+    /// The issuer does not let this app's sign-in create an org (its
+    /// client is not first-party there, or the issuer predates auth#4).
     NotAllowed,
     /// The issuer could not be reached, or said something else.
     Issuer(String),
@@ -118,24 +117,6 @@ pub fn draft(name: &str, slug: Option<&str>) -> Result<Draft, Refused> {
     })
 }
 
-/// RFC 8693's names, as the issuer takes them.
-const TOKEN_EXCHANGE: &str = "urn:ietf:params:oauth:grant-type:token-exchange";
-const ACCESS_TOKEN: &str = "urn:ietf:params:oauth:token-type:access_token";
-const SESSION_TOKEN: &str = "urn:fasttrackstudio:params:oauth:token-type:session";
-
-fn form_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                out.push(b as char);
-            }
-            _ => out.push_str(&format!("%{b:02X}")),
-        }
-    }
-    out
-}
-
 fn base(issuer: &str) -> &str {
     issuer.trim_end_matches('/')
 }
@@ -151,54 +132,12 @@ fn why(status: u16, body: &str) -> String {
         .map_or_else(|| format!("status {status}"), str::to_string)
 }
 
-/// Trade `access_token` (issued to `client_id` moments ago) for an issuer
-/// session.
-pub async fn session_for(
-    fetch: &impl Fetch,
-    issuer: &str,
-    client_id: &str,
-    access_token: &str,
-) -> Result<String, Refused> {
-    let body = format!(
-        "grant_type={}&client_id={}&subject_token={}&subject_token_type={}&requested_token_type={}",
-        form_encode(TOKEN_EXCHANGE),
-        form_encode(client_id),
-        form_encode(access_token),
-        form_encode(ACCESS_TOKEN),
-        form_encode(SESSION_TOKEN),
-    );
-    let (status, text) = fetch
-        .send(Request {
-            method: "POST",
-            url: format!("{}/oauth2/token", base(issuer)),
-            headers: vec![(
-                "content-type",
-                "application/x-www-form-urlencoded".to_string(),
-            )],
-            body,
-        })
-        .await
-        .ok_or_else(|| Refused::Issuer("unreachable".into()))?;
-    match status {
-        200 => {
-            let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
-            v["access_token"]
-                .as_str()
-                .filter(|t| !t.is_empty())
-                .map(str::to_string)
-                .ok_or_else(|| Refused::Issuer("it gave no session".into()))
-        }
-        403 => Err(Refused::NotAllowed),
-        400 | 401 => Err(Refused::SignIn),
-        _ => Err(Refused::Issuer(why(status, &text))),
-    }
-}
-
-/// Make `draft` at `issuer` as the account of `session`, its owner.
+/// Make `draft` at `issuer` as the account `token` signs in (a session,
+/// or a first-party app's access token), its owner.
 pub async fn create(
     fetch: &impl Fetch,
     issuer: &str,
-    session: &str,
+    token: &str,
     draft: &Draft,
 ) -> Result<Created, Refused> {
     let body = serde_json::json!({
@@ -215,7 +154,7 @@ pub async fn create(
             url: format!("{}/auth/organization/create", base(issuer)),
             headers: vec![
                 ("content-type", "application/json".to_string()),
-                ("authorization", format!("Bearer {session}")),
+                ("authorization", format!("Bearer {token}")),
             ],
             body: body.to_string(),
         })
@@ -235,6 +174,7 @@ pub async fn create(
             }
         }
         401 => Err(Refused::SignIn),
+        403 => Err(Refused::NotAllowed),
         _ => {
             let message = why(status, &text);
             if message.contains("slug already exists") {
@@ -256,7 +196,7 @@ mod here {
     use dioxus::prelude::*;
     use drive_dioxus::auth;
 
-    use super::{Created, Fetch, Refused, Request, create, draft, session_for};
+    use super::{Created, Fetch, Refused, Request, create, draft};
     use crate::state::AppState;
 
     /// Drive's fetch: the browser's, or reqwest natively.
@@ -288,25 +228,20 @@ mod here {
         };
         let issuer: auth::Issuer = serde_json::from_value(orgs["auth"].clone())
             .map_err(|_| Refused::Issuer("this Drive names no account server".into()))?;
-        let session = session_here(&issuer).await?;
-        create(&DriveFetch, &issuer.issuer, &session, &d).await
-    }
-
-    /// An issuer session for the account signed in here. Only a token
-    /// issued moments ago is traded, so the one held is tried first and,
-    /// refused, refreshed once and tried again: not refreshed on every
-    /// Create (Drive signs out of every app here when a refresh fails).
-    async fn session_here(issuer: &auth::Issuer) -> Result<String, Refused> {
-        let trade = |token: String| async move {
-            session_for(&DriveFetch, &issuer.issuer, &issuer.client_id, &token).await
+        let made = |token: String| {
+            let (issuer, d) = (&issuer, &d);
+            async move { create(&DriveFetch, &issuer.issuer, &token, d).await }
         };
+        // The token held is tried first and, refused as a sign-in,
+        // refreshed once and tried again: not refreshed on every Create
+        // (Drive signs out of every app here when a refresh fails).
         let held = auth::token().ok_or(Refused::SignIn)?;
-        match trade(held).await {
+        match made(held).await {
             Err(Refused::SignIn) => {
                 let fresh = auth::fresh_token(f64::INFINITY)
                     .await
                     .ok_or(Refused::SignIn)?;
-                trade(fresh).await
+                made(fresh).await
             }
             other => other,
         }

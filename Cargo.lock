@@ -2036,7 +2036,7 @@ dependencies = [
 [[package]]
 name = "auth"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=36b877c96ce2875a299e1931ef4851587d99997e#36b877c96ce2875a299e1931ef4851587d99997e"
+source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
 dependencies = [
  "argon2",
  "async-trait",
@@ -2078,7 +2078,7 @@ dependencies = [
 [[package]]
 name = "auth-client"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=36b877c96ce2875a299e1931ef4851587d99997e#36b877c96ce2875a299e1931ef4851587d99997e"
+source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
 dependencies = [
  "base64 0.22.1",
  "libc",
@@ -2096,7 +2096,7 @@ dependencies = [
 [[package]]
 name = "auth-db"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=36b877c96ce2875a299e1931ef4851587d99997e#36b877c96ce2875a299e1931ef4851587d99997e"
+source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
 dependencies = [
  "auth-proto",
  "chrono",
@@ -2110,7 +2110,7 @@ dependencies = [
 [[package]]
 name = "auth-macros"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=36b877c96ce2875a299e1931ef4851587d99997e#36b877c96ce2875a299e1931ef4851587d99997e"
+source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -2121,7 +2121,7 @@ dependencies = [
 [[package]]
 name = "auth-proto"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/auth?rev=36b877c96ce2875a299e1931ef4851587d99997e#36b877c96ce2875a299e1931ef4851587d99997e"
+source = "git+https://github.com/FastTrackStudios/auth?rev=8f00043463bc90489ad979dbd94f936f11809375#8f00043463bc90489ad979dbd94f936f11809375"
 dependencies = [
  "auth-macros",
  "axum",

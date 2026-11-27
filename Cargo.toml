@@ -374,12 +374,12 @@ architect-permissions = { git = "https://github.com/FastTrackStudios/architect",
 architect-permissions-proto = { git = "https://github.com/FastTrackStudios/architect", rev = "7e366566fba79c27b832b9cfeeffd5bd08fdf0f3" }
 # Auth is FastTrackStudios/auth (out of architect since architect#995),
 # every crate of it at one rev.
-architect-auth = { git = "https://github.com/FastTrackStudios/auth", rev = "36b877c96ce2875a299e1931ef4851587d99997e" }
-auth = { git = "https://github.com/FastTrackStudios/auth", rev = "36b877c96ce2875a299e1931ef4851587d99997e" }
-auth-proto = { git = "https://github.com/FastTrackStudios/auth", rev = "36b877c96ce2875a299e1931ef4851587d99997e" }
-auth-db = { git = "https://github.com/FastTrackStudios/auth", rev = "36b877c96ce2875a299e1931ef4851587d99997e" }
+architect-auth = { git = "https://github.com/FastTrackStudios/auth", rev = "8f00043463bc90489ad979dbd94f936f11809375" }
+auth = { git = "https://github.com/FastTrackStudios/auth", rev = "8f00043463bc90489ad979dbd94f936f11809375" }
+auth-proto = { git = "https://github.com/FastTrackStudios/auth", rev = "8f00043463bc90489ad979dbd94f936f11809375" }
+auth-db = { git = "https://github.com/FastTrackStudios/auth", rev = "8f00043463bc90489ad979dbd94f936f11809375" }
 # auth-client (`auth_client::device`, sign-in from another device).
-auth-client = { git = "https://github.com/FastTrackStudios/auth", rev = "36b877c96ce2875a299e1931ef4851587d99997e" }
+auth-client = { git = "https://github.com/FastTrackStudios/auth", rev = "8f00043463bc90489ad979dbd94f936f11809375" }
 # The Dioxus primitive library (was libs/ui/fts-ui, renamed on the split).
 architect-ui = { git = "https://github.com/FastTrackStudios/architect", rev = "7e366566fba79c27b832b9cfeeffd5bd08fdf0f3" }
 # Architect extensions: Studio's features are linked extensions, compiled
