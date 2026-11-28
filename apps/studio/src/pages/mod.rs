@@ -22,6 +22,25 @@ use crate::pieces::{DayTile, Progress};
 use crate::setlist::{Face, Info};
 use crate::state::{Booking, SetRef, Sheet, use_app};
 
+/// What a page says while Studio's home does not answer (its disk, or
+/// Drive's mount, is stuck), in place of waiting on it for ever.
+#[component]
+pub fn HomeNotAnswering() -> Element {
+    let at = crate::storage::home()
+        .map(|h| h.display().to_string())
+        .unwrap_or_default();
+    rsx! {
+        div { class: "empty", role: "alert",
+            p { "Studio's home isn't answering." }
+            p {
+                "Its folder "
+                code { "{at}" }
+                " has not answered for a while: its disk, or Drive's mount, may be stuck. Studio keeps trying, and shows what it finds as soon as it answers."
+            }
+        }
+    }
+}
+
 /// Where a set opens: its page in the org Studio is in, else its org's.
 pub fn set_route(owner: &str, id: &str, here: &str) -> Route {
     if owner == here {

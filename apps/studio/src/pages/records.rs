@@ -38,7 +38,9 @@ pub fn Records() -> Element {
         Page {
             Bar { title: "Records" }
             div { class: "body",
-                if records.is_none() {
+                if (app.home_stalled)() && list.is_empty() {
+                    super::HomeNotAnswering {}
+                } else if records.is_none() {
                     p { class: "empty", "Looking for records…" }
                 } else if list.is_empty() {
                     NoRecords {}
@@ -115,7 +117,9 @@ pub fn Album(id: String) -> Element {
             Page {
                 Bar { back: Route::Records {}, title: "Records" }
                 div { class: "body",
-                    if records.is_none() {
+                    if (app.home_stalled)() {
+                        super::HomeNotAnswering {}
+                    } else if records.is_none() {
                         p { class: "empty", "Looking for records…" }
                     } else {
                         p { class: "empty", "No record {id} in Studio's home." }

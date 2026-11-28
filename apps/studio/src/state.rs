@@ -391,6 +391,9 @@ pub struct AppState {
     /// The records (`# kind: studio` files) in Studio's home and Drive,
     /// once read: the Records page, Home and the sidebar's count.
     pub records: Signal<Option<Vec<crate::records::Record>>>,
+    /// Studio's home on disk has not answered a read in [`HOME_WAIT_MS`]
+    /// (its disk, or Drive's mount, is stuck): the pages say so.
+    pub home_stalled: Signal<bool>,
     /// The engine, natively; and whether its transport drives Now
     /// Playing (else the timer does).
     pub engine: Signal<EngineStatus>,
@@ -446,6 +449,7 @@ impl AppState {
             sync: crate::live_sync::Sync::new(),
             drive_sets: Signal::new(None),
             records: Signal::new(None),
+            home_stalled: Signal::new(false),
             engine: Signal::new(EngineStatus::Off),
             engine_drives: Signal::new(false),
             shown_set: Signal::new(None),
@@ -579,6 +583,27 @@ pub fn use_app() -> AppState {
     use_context::<AppState>()
 }
 
+/// How long a read of Studio's home may take before the pages say it is
+/// not answering (the read goes on, and what it finds still shows).
+pub const HOME_WAIT_MS: u64 = 10_000;
+
+/// `f`'s answer, if it comes within `ms`; `None` when it did not (`f` is
+/// left as it is: awaiting it again picks up where it was).
+pub async fn within<F: std::future::Future + Unpin>(ms: u64, f: &mut F) -> Option<F::Output> {
+    use futures_util::future::{Either, select};
+    match select(f, Box::pin(sleep_ms(ms))).await {
+        Either::Left((v, _)) => Some(v),
+        Either::Right(_) => None,
+    }
+}
+
+/// A read of Studio's home, off the UI thread: its answer within
+/// [`HOME_WAIT_MS`], else `None` (a stuck disk or mount).
+pub async fn read_home<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    let mut read = Box::pin(off_thread(f));
+    within(HOME_WAIT_MS, &mut read).await.flatten()
+}
+
 /// Run `f` off the UI thread (a disk read: Drive's mount can stall), and
 /// wait for it. A browser has no disk and no threads: it runs `f` here.
 pub async fn off_thread<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
@@ -594,4 +619,22 @@ pub async fn sleep_ms(ms: u64) {
     gloo_timers::future::TimeoutFuture::new(ms as u32).await;
     #[cfg(not(target_arch = "wasm32"))]
     tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_read_that_takes_too_long_is_given_up_on_and_goes_on() {
+        let mut slow = Box::pin(async {
+            sleep_ms(200).await;
+            7
+        });
+        assert_eq!(within(20, &mut slow).await, None);
+        // The same read, awaited again, still answers.
+        assert_eq!(slow.await, 7);
+        let mut quick = Box::pin(async { 3 });
+        assert_eq!(within(1_000, &mut quick).await, Some(3));
+    }
 }

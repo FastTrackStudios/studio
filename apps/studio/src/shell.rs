@@ -234,14 +234,27 @@ pub fn Shell() -> Element {
             }
             loop {
                 let here = app.here.peek().clone();
-                // Read off the UI thread: Drive's mount can stall.
-                let found = crate::state::off_thread(move || {
+                // Read off the UI thread: Drive's mount can stall. One that
+                // takes too long is said on the pages, and waited out (not
+                // read again over it).
+                let mut read = Box::pin(crate::state::off_thread(move || {
                     (
                         crate::drive_sets::on_disk(&here),
                         crate::records::on_disk(&here),
                     )
-                })
-                .await;
+                }));
+                let mut stalled = app.home_stalled;
+                let found = match crate::state::within(crate::state::HOME_WAIT_MS, &mut read).await
+                {
+                    Some(found) => found,
+                    None => {
+                        stalled.set(true);
+                        read.await
+                    }
+                };
+                if *stalled.peek() {
+                    stalled.set(false);
+                }
                 if let Some(found) = found
                     && on_disk.peek().as_ref() != Some(&found)
                 {
