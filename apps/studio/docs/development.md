@@ -33,6 +33,17 @@ dx build --platform linux --renderer native --features native --no-default-featu
 - Studio starts the engine when a session opens, and the engine outlives the window.
 - Its log is `~/.cache/fts/studio-engine.log`.
 
+**The rig engine.**
+- The Rig window's engine is Signal's, `rig-extension`, a process of its own.
+  Studio finds it as it finds the engine (`FTS_RIG_ENGINE_BIN` first).
+- The rig starts its headphone mixer, `signal-phones`, from beside its own
+  program (`SIGNAL_PHONES_BIN` first). It does this only when the rig's
+  `phones_mixer` pref is on.
+- `just studio` builds both:
+  `cargo build -p rig-extension -p guitar --bin rig-extension --bin signal-phones`.
+- The release bundle ships all four programs side by side: `Studio`,
+  `daw-extension`, `rig-extension` and `signal-phones`.
+
 **Checks and tests:**
 
 ```bash

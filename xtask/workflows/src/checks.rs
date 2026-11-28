@@ -390,7 +390,7 @@ fn apple() -> Job {
     )
     .step(Step::uses("devenv CLI", "./.github/actions/devenv"))
     .step(Step::run(
-        "macOS: cargo build -p daw-extension; -p studio-app --features native (the .dmg's engine and app, linked), nothing from /nix/store",
+        "macOS: cargo build -p daw-extension; the rig; -p studio-app --features native (the .dmg's programs, linked), nothing from /nix/store",
         &in_shell(MACOS),
     ))
 }
@@ -457,11 +457,14 @@ python3 -I apps/studio/ios/sim-room-test.py --app "$app" \
 /// The .dmg's app linked as scripts/desktop/macos.sh links it (zlib from the
 /// macOS SDK: `macos-libs.sh config`), then its guard on a copy: a binary
 /// that links anything from /nix/store fails here, not at the tag (v26.11.2
-/// shipped no .dmg for nixpkgs' libz.dylib; studio#444).
+/// shipped no .dmg for nixpkgs' libz.dylib; studio#444). Every program the
+/// .dmg ships: the app, the engine, the rig engine and its headphone mixer
+/// (studio#820), each built as macos.sh builds it.
 const MACOS: &str = r#"libs="$(bash scripts/desktop/macos-libs.sh config)"
 cargo build -p daw-extension --config "$libs"
+cargo build -p rig-extension -p guitar --bin rig-extension --bin signal-phones --config "$libs"
 cargo build -p studio-app --no-default-features --features native --config "$libs"
-for built in Studio daw-extension; do
+for built in Studio daw-extension rig-extension signal-phones; do
   cp "${CARGO_TARGET_DIR:-target}/debug/$built" "$RUNNER_TEMP/$built"
   bash scripts/desktop/macos-libs.sh guard "$RUNNER_TEMP/$built"
 done

@@ -448,6 +448,8 @@ pub struct GuitarRigBackend {
     /// When the mixer was last started, so a mixer that dies at once is not
     /// restarted in a tight loop.
     phones_spawned: Arc<Mutex<Option<std::time::Instant>>>,
+    /// The `signal-phones` binary was missing and said so (once per absence).
+    phones_missing: Arc<crate::phones::MissingOnce>,
     /// The mixer as last published.
     phones_status: Arc<Mutex<crate::proto::PhonesMixer>>,
     /// Why the audio device did not open, in words (empty: it did, or no
@@ -694,6 +696,7 @@ impl GuitarRigBackend {
             phones_routing: Arc::default(),
             phones_mixer_on: Arc::default(),
             phones_spawned: Arc::default(),
+            phones_missing: Arc::default(),
             phones_status: Arc::default(),
             audio_error: Arc::default(),
             input_silenced: Arc::default(),
@@ -2606,12 +2609,13 @@ impl GuitarRigBackend {
             }
             *last = Some(std::time::Instant::now());
         }
-        let Some(bin) = crate::phones::find_binary() else {
+        let bin = crate::phones::find_binary();
+        if self.phones_missing.first_miss(bin.is_some()) {
             tracing::warn!(
                 "phones mixer: no signal-phones binary beside the app — the mix will not play"
             );
-            return;
-        };
+        }
+        let Some(bin) = bin else { return };
         match crate::phones::spawn(&bin, link.path(), &crate::phones::default_log_path()) {
             Ok(pid) => tracing::info!(pid, bin = %bin.display(), "phones mixer: started"),
             Err(e) => tracing::warn!("phones mixer: could not start {}: {e}", bin.display()),

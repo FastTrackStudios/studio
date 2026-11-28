@@ -5,7 +5,9 @@
 # Studio is apps/studio (the cargo package `studio-app`, its program
 # `Studio`, run as `studio`), drawn by Blitz (`--features native`), with
 # its engine beside it: `daw-extension`, which the app finds next to its
-# own program (apps/studio/docs/development.md, "The engine").
+# own program (apps/studio/docs/development.md, "The engine"). Beside them,
+# Signal's rig engine (`rig-extension`, the Rig window's) and its headphone
+# mixer (`signal-phones`, which the rig starts from beside its own program).
 #
 #   scripts/desktop/linux.sh     # -> target/desktop/Studio-<version>-linux-x86_64.AppImage
 #
@@ -50,6 +52,8 @@ app=studio
 crate=studio-app; built=Studio; bin=studio; title=Studio; features="--no-default-features --features native"
 # The engine: its crate and program, beside the app's in the bundle.
 engine_crate=daw-extension; engine_bin=daw-extension
+# The rig engine and its mixer: their crates and programs, beside the engine.
+rig_crates=(-p rig-extension -p guitar); rig_bins=(rig-extension signal-phones)
 # TODO(monorepo): Studio's own icon, in apps/studio, once it has one.
 icon=crates/studio-engine/engine/engine-host/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
 comment="Sets, charts, lighting and the DAW, in one app"
@@ -83,17 +87,25 @@ fi
 # ── Build ───────────────────────────────────────────────────────────────────
 BIN="${CARGO_TARGET_DIR:-$ROOT/target}/$PROFILE/$built"
 ENGINE="${CARGO_TARGET_DIR:-$ROOT/target}/$PROFILE/$engine_bin"
+RIG_BINS=()
+for b in "${rig_bins[@]}"; do RIG_BINS+=("${CARGO_TARGET_DIR:-$ROOT/target}/$PROFILE/$b"); done
 if [ "${SKIP_BUILD:-}" = 1 ]; then
-    echo "=== SKIP_BUILD=1: reusing $BIN and $ENGINE ==="
+    echo "=== SKIP_BUILD=1: reusing $BIN, $ENGINE and ${RIG_BINS[*]} ==="
 else
-    # Two builds: the app's --no-default-features is not the engine's.
-    echo "=== cargo build --profile $PROFILE -p $engine_crate; -p $crate $features ==="
+    # Three builds: the app's --no-default-features is not the engine's, and
+    # the rig's own invocation keeps cargo from unifying its features into
+    # the engine's (the Justfile's _rig-build, the same set).
+    echo "=== cargo build --profile $PROFILE -p $engine_crate; ${rig_crates[*]}; -p $crate $features ==="
     cargo build --profile "$PROFILE" -p "$engine_crate"
+    cargo build --profile "$PROFILE" "${rig_crates[@]}" "${rig_bins[@]/#/--bin=}"
     # shellcheck disable=SC2086
     cargo build --profile "$PROFILE" -p "$crate" $features
 fi
 [ -x "$BIN" ] || { echo "ERROR: the build produced no $BIN" >&2; exit 1; }
 [ -x "$ENGINE" ] || { echo "ERROR: the build produced no $ENGINE" >&2; exit 1; }
+for b in "${RIG_BINS[@]}"; do
+    [ -x "$b" ] || { echo "ERROR: the build produced no $b" >&2; exit 1; }
+done
 
 # ── The AppDir ──────────────────────────────────────────────────────────────
 WORK="$(mktemp -d -p "$OUT_DIR" .appdir.XXXXXX)"   # on the build disk, not /tmp
@@ -105,8 +117,14 @@ chmod u+w "$AD/usr/bin/$bin"
 # The engine beside the app.
 cp "$ENGINE" "$AD/usr/bin/$engine_bin"
 chmod u+w "$AD/usr/bin/$engine_bin"
+# The rig engine and its mixer, beside it.
+for b in "${RIG_BINS[@]}"; do
+    cp "$b" "$AD/usr/bin/"
+    chmod u+w "$AD/usr/bin/$(basename "$b")"
+done
 # Every program of the bundle.
 PROGRAMS=("$AD/usr/bin/$bin" "$AD/usr/bin/$engine_bin")
+for b in "${rig_bins[@]}"; do PROGRAMS+=("$AD/usr/bin/$b"); done
 
 # Not bundled: the user's graphics stack (driver-matched), and glibc itself.
 excluded() {
@@ -132,14 +150,14 @@ while read -r name arrow path _; do
     seen[$name]=1
     cp -L "$path" "$AD/usr/lib/$name"
     chmod u+w "$AD/usr/lib/$name"
-done < <(ldd "$BIN"; ldd "$ENGINE")
+done < <(for p in "$BIN" "$ENGINE" "${RIG_BINS[@]}"; do ldd "$p"; done)
 echo "=== bundled ${#seen[@]} libraries; taken from the host at run time: $(sort -u "$WORK/needed-excluded.txt" | tr '\n' ' ')==="
 
 # Nothing may point into /nix/store.
-# shellcheck disable=SC2016 # $ORIGIN is for the dynamic loader, not the shell
-patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/../lib' "$AD/usr/bin/$bin"
-# shellcheck disable=SC2016
-patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/../lib' "$AD/usr/bin/$engine_bin"
+for p in "${PROGRAMS[@]}"; do
+    # shellcheck disable=SC2016 # $ORIGIN is for the dynamic loader, not the shell
+    patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/../lib' "$p"
+done
 for f in "$AD"/usr/lib/*; do
     # shellcheck disable=SC2016
     patchelf --set-rpath '$ORIGIN' "$f" 2>/dev/null || true
