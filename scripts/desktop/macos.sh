@@ -48,7 +48,7 @@ app=studio
 # (`signal-phones`, which the rig starts from beside its own program).
 crate=studio-app; built=Studio; bin=Studio; title=Studio
 engine_crate=daw-extension; engine_bin=daw-extension
-rig_crates="-p rig-extension -p guitar"; rig_bins=(rig-extension signal-phones)
+rig_crates=(-p rig-extension -p guitar); rig_bins=(rig-extension signal-phones)
 features="--no-default-features --features native"
 # TODO(monorepo): Studio's own icon, in apps/studio, once it has one.
 icon=crates/studio-engine/engine/engine-host/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
@@ -112,10 +112,9 @@ else
     # Three builds: the app's --no-default-features is not the engine's, and
     # the rig's own invocation keeps cargo from unifying its features into
     # the engine's (the Justfile's _rig-build, the same set).
-    echo "=== cargo build --profile $PROFILE -p $engine_crate; $rig_crates; -p $crate $features (--config $libs) ==="
+    echo "=== cargo build --profile $PROFILE -p $engine_crate; ${rig_crates[*]}; -p $crate $features (--config $libs) ==="
     devenv shell -- cargo build --profile "$PROFILE" -p "$engine_crate" --config "$libs"
-    # shellcheck disable=SC2086
-    devenv shell -- cargo build --profile "$PROFILE" $rig_crates "${rig_bins[@]/#/--bin=}" --config "$libs"
+    devenv shell -- cargo build --profile "$PROFILE" "${rig_crates[@]}" "${rig_bins[@]/#/--bin=}" --config "$libs"
     # shellcheck disable=SC2086
     devenv shell -- cargo build --profile "$PROFILE" -p "$crate" $features --config "$libs"
 fi
@@ -184,7 +183,7 @@ plutil -lint "$APP/Contents/Info.plist" >/dev/null
 # ── Sign (hardened runtime: notarization requires it) ───────────────────────
 ENT="$SCRIPT_DIR/macos.entitlements"
 plutil -lint "$ENT" >/dev/null
-echo "=== signing (Developer ID + hardened runtime) ==="
+echo "=== signing ($SIGN_ID, hardened runtime) ==="
 find "$APP" \( -name '*.dylib' -o -name '*.so' -o -name '*.framework' \) -print0 \
     | while IFS= read -r -d '' f; do
         codesign --force ${SIGN_FLAGS[@]+"${SIGN_FLAGS[@]}"} --options runtime --sign "$SIGN_ID" "$f"

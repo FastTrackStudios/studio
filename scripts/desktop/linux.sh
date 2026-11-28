@@ -53,7 +53,7 @@ crate=studio-app; built=Studio; bin=studio; title=Studio; features="--no-default
 # The engine: its crate and program, beside the app's in the bundle.
 engine_crate=daw-extension; engine_bin=daw-extension
 # The rig engine and its mixer: their crates and programs, beside the engine.
-rig_crates="-p rig-extension -p guitar"; rig_bins=(rig-extension signal-phones)
+rig_crates=(-p rig-extension -p guitar); rig_bins=(rig-extension signal-phones)
 # TODO(monorepo): Studio's own icon, in apps/studio, once it has one.
 icon=crates/studio-engine/engine/engine-host/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
 comment="Sets, charts, lighting and the DAW, in one app"
@@ -95,10 +95,9 @@ else
     # Three builds: the app's --no-default-features is not the engine's, and
     # the rig's own invocation keeps cargo from unifying its features into
     # the engine's (the Justfile's _rig-build, the same set).
-    echo "=== cargo build --profile $PROFILE -p $engine_crate; $rig_crates; -p $crate $features ==="
+    echo "=== cargo build --profile $PROFILE -p $engine_crate; ${rig_crates[*]}; -p $crate $features ==="
     cargo build --profile "$PROFILE" -p "$engine_crate"
-    # shellcheck disable=SC2086
-    cargo build --profile "$PROFILE" $rig_crates "${rig_bins[@]/#/--bin=}"
+    cargo build --profile "$PROFILE" "${rig_crates[@]}" "${rig_bins[@]/#/--bin=}"
     # shellcheck disable=SC2086
     cargo build --profile "$PROFILE" -p "$crate" $features
 fi
