@@ -40,6 +40,7 @@ mod drums;
 )]
 mod engine;
 mod fixture;
+mod fx_chain;
 #[path = "../unbreakable/mcp.rs"]
 mod mcp;
 mod new_session;
@@ -276,6 +277,34 @@ fn the_tempo_and_meter_are_set_from_the_window() {
     finish(
         name,
         "the tempo and meter from the window over MCP",
+        engine,
+        &checks,
+    );
+}
+
+/// A track's FX chain edited as the window's chain close-up edits it, over
+/// MCP (studio#98, `fx_chain.rs`): on the `drum-kit` fixture, an FX added,
+/// moved, bypassed, a parameter set, read back, removed, and undone.
+#[test]
+fn an_fx_chain_is_edited_and_undone() {
+    let name = "fx-chain";
+    let fixture = drums::fixture();
+    let song = fixture
+        .stage(&run_dir(name))
+        .unwrap_or_else(|e| panic!("staging drum-kit: {e}"));
+    let (engine, _spans) = engine(name);
+    let mut checks = Checks::default();
+    match check::open(&engine, &song) {
+        Ok(_) => {
+            if let Err(why) = fx_chain::edited_and_undone(&engine.mcp, &mut checks) {
+                checks.failed("fx chain", why);
+            }
+        }
+        Err(why) => checks.failed("opens", why),
+    }
+    finish(
+        name,
+        "an FX chain edited and undone over MCP",
         engine,
         &checks,
     );

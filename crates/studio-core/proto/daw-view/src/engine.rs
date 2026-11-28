@@ -74,11 +74,22 @@ pub enum Edit {
     /// path is built. The routing widget's first lane says which.
     SetParentSend(String, bool),
     /// A parameter of an FX on a track's chain, found by its name
-    /// (`FTS Comp`): index and normalized value (0..1). What the strip's
-    /// Tone rack sends as it is turned (`tone::Store::flush`).
+    /// (`FTS Comp`) or its guid: index and normalized value (0..1). What
+    /// the strip's Tone rack sends as it is turned (`tone::Store::flush`),
+    /// and a plugin's generic panel (`fx_chain`).
     SetFxParam(String, String, u32, f64),
-    /// An FX on a track's chain switched on or bypassed, by its name.
+    /// An FX on a track's chain switched on or bypassed, by its name or
+    /// its guid.
     SetFxEnabled(String, String, bool),
+    /// Put the FX named (`FTS EQ`, `Signal Dev`) on the track's chain at
+    /// a place (0 is first; past the end is last). A page's way to do
+    /// what `FX_ADD` does on a desktop.
+    AddFx(String, String, u32),
+    /// Take the FX with this guid off the track's chain.
+    RemoveFx(String, String),
+    /// Move the FX with this guid to a place in the track's chain (0 is
+    /// first).
+    MoveFx(String, String, u32),
     /// Send this track to that one.
     ///
     /// Two guids, because a send is a relation and not a property: the
@@ -389,6 +400,9 @@ impl Edit {
             | Self::SetParentSend(g, _)
             | Self::SetFxParam(g, ..)
             | Self::SetFxEnabled(g, ..)
+            | Self::AddFx(g, ..)
+            | Self::RemoveFx(g, _)
+            | Self::MoveFx(g, ..)
             | Self::AddSend(g, _)
             | Self::RemoveRoute(g, _)
             | Self::SetRouteVolume(g, ..)
@@ -1961,13 +1975,22 @@ async fn apply(edit: &Edit) {
         Edit::SetLanePlays(_, mask) => track.set_lane_play_mask(*mask).await,
         Edit::SetInputMonitor(_, mode) => track.set_input_monitor(*mode).await,
         Edit::SetParentSend(_, enabled) => track.set_parent_send(*enabled).await,
-        Edit::SetFxParam(_, fx, index, value) => match track.fx_chain().by_name(fx).await {
+        Edit::SetFxParam(_, fx, index, value) => match fx_named(&track, fx).await {
             Ok(Some(fx)) => fx.param(*index).set(*value).await,
             other => other.map(|_| ()),
         },
-        Edit::SetFxEnabled(_, fx, enabled) => match track.fx_chain().by_name(fx).await {
+        Edit::SetFxEnabled(_, fx, enabled) => match fx_named(&track, fx).await {
             Ok(Some(fx)) if *enabled => fx.enable().await,
             Ok(Some(fx)) => fx.disable().await,
+            other => other.map(|_| ()),
+        },
+        Edit::AddFx(_, name, at) => track.fx_chain().add_at(name, *at).await.map(|_| ()),
+        Edit::RemoveFx(_, fx) => match track.fx_chain().by_guid(fx).await {
+            Ok(Some(fx)) => fx.remove().await,
+            other => other.map(|_| ()),
+        },
+        Edit::MoveFx(_, fx, at) => match track.fx_chain().by_guid(fx).await {
+            Ok(Some(fx)) => fx.move_to(*at).await,
             other => other.map(|_| ()),
         },
         // A send is addressed through the track that owns it, by the
@@ -2475,10 +2498,27 @@ impl TempoWatch {
     }
 }
 
+/// The FX `fx` names on `track`'s chain: by its name in the chain (what
+/// the racks send, `FTS Comp`), else by its guid (what a generic panel
+/// sends: a hosted plugin's chain name is its bundle's path, and two of
+/// one plugin are two FX).
+async fn fx_named(
+    track: &daw::rpc::TrackHandle,
+    fx: &str,
+) -> Result<Option<daw::rpc::FxHandle>, daw::rpc::Error> {
+    let chain = track.fx_chain();
+    match chain.by_name(fx).await? {
+        Some(found) => Ok(Some(found)),
+        None => chain.by_guid(fx).await,
+    }
+}
+
 /// One processor on a track's chain, as the engine has it: its name in
 /// the chain (`FTS Reverb`), whether it is on, its parameters.
 #[derive(Clone, Debug)]
 pub struct ChainFx {
+    /// What names it and no other.
+    pub guid: String,
     pub name: String,
     pub enabled: bool,
     pub params: Vec<daw_proto::fx::FxParameter>,
@@ -2507,12 +2547,42 @@ pub async fn track_chain(
             None => Vec::new(),
         };
         out.push(ChainFx {
+            guid: fx.guid,
             name: fx.name,
             enabled: fx.enabled,
             params,
         });
     }
     Ok(out)
+}
+
+/// `track`'s chain ([`track_chain`]) through the facade, wherever it runs
+/// (a desktop's engine runtime, a page's event loop): `None` when the
+/// facade is not up or did not answer — not the same as an empty chain.
+pub async fn chain_of(track: &str) -> Option<Vec<ChainFx>> {
+    let daw = daw::rpc::Daw::try_get()?;
+    match track_chain(daw, track).await {
+        Ok(chain) => Some(chain),
+        Err(error) => {
+            tracing::warn!(track, %error, "a track's chain did not come back");
+            None
+        }
+    }
+}
+
+/// The FX the engine can put on a chain, by name (`FTS EQ`, a hosted
+/// plugin's): empty when the facade is not up or did not answer.
+pub async fn installed_fx() -> Vec<String> {
+    let Some(daw) = daw::rpc::Daw::try_get() else {
+        return Vec::new();
+    };
+    match daw.installed_plugins().await {
+        Ok(list) => list.into_iter().map(|fx| fx.name).collect(),
+        Err(error) => {
+            tracing::warn!(%error, "the installed FX did not come back");
+            Vec::new()
+        }
+    }
 }
 
 /// A page's read of `track`'s chain ([`track_chain`]) and the song's

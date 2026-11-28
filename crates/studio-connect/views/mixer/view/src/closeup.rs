@@ -49,6 +49,14 @@ pub enum Closeup {
     /// A track's routing: its sends, receives and hardware outputs
     /// (`crate::routing`).
     Routing { guid: String, name: String },
+    /// A track's FX chain: every FX on it, added, removed, reordered and
+    /// bypassed; `fx` (an FX's guid) shows that one's parameters, the
+    /// generic panel any plugin has (`crate::fx_chain`).
+    Chain {
+        guid: String,
+        name: String,
+        fx: Option<String>,
+    },
 }
 
 impl Closeup {
@@ -59,7 +67,8 @@ impl Closeup {
         match self {
             Self::Rack { name, .. }
             | Self::SignalBlock { name, .. }
-            | Self::Routing { name, .. } => name,
+            | Self::Routing { name, .. }
+            | Self::Chain { name, .. } => name,
         }
     }
 }
@@ -152,6 +161,9 @@ impl CloseupHandle {
             Closeup::Routing { guid, name } => {
                 serde_json::json!({ "track": guid, "routing": true, "name": name })
             }
+            Closeup::Chain { guid, name, fx } => {
+                serde_json::json!({ "track": guid, "chain": true, "fx": fx, "name": name })
+            }
         };
         let _ = crate::press::press(crate::mixer_actions::CLOSEUP.id, &args);
         self.take_actions();
@@ -237,7 +249,7 @@ pub fn CloseupLayer(landscape: bool) -> Element {
             let store = closeups.tone.store.borrow();
             let chain = crate::tone::panels_for(fts_session::mix_phases::MixPhase::Tone);
             let panels = store.get(guid).map_or(chain, |tone| tone.panels(chain));
-            panels
+            let mut tabs: Vec<(Closeup, String, bool)> = panels
                 .iter()
                 .filter(|w| !w.name().is_empty())
                 .map(|&w| {
@@ -248,7 +260,16 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                     };
                     (to, w.name().to_owned(), w == *which)
                 })
-                .collect()
+                .collect();
+            // The whole chain, one tap away: where a touchscreen's strip,
+            // which has no FX button, adds, moves and removes its FX.
+            let chain = Closeup::Chain {
+                guid: guid.clone(),
+                name: name.clone(),
+                fx: None,
+            };
+            tabs.push((chain, "FX chain".to_owned(), false));
+            tabs
         }
         // A Signal block's tabs are the other blocks of its chain.
         Closeup::SignalBlock { guid, name, block } => {
@@ -275,6 +296,24 @@ pub fn CloseupLayer(landscape: bool) -> Element {
         }
         // A track's routing is one page.
         Closeup::Routing { .. } => Vec::new(),
+        // A chain's tabs: the chain, and the FX whose parameters are open.
+        Closeup::Chain { guid, name, fx } => {
+            let chain = Closeup::Chain {
+                guid: guid.clone(),
+                name: name.clone(),
+                fx: None,
+            };
+            let mut tabs = vec![(chain, "FX chain".to_owned(), fx.is_none())];
+            if let Some(fx) = fx {
+                let open = Closeup::Chain {
+                    guid: guid.clone(),
+                    name: name.clone(),
+                    fx: Some(fx.clone()),
+                };
+                tabs.push((open, "Parameters".to_owned(), true));
+            }
+            tabs
+        }
     };
     let tab_style = move |on: bool| {
         let shape = if landscape {
@@ -368,6 +407,14 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                         },
                         Closeup::Routing { guid, .. } => rsx! {
                             crate::routing::RoutingCloseup { key: "routing-{guid}", track: guid }
+                        },
+                        Closeup::Chain { guid, name, fx } => rsx! {
+                            crate::fx_chain::ChainCloseup {
+                                key: "chain-{guid}-{fx:?}",
+                                track: guid,
+                                name,
+                                fx,
+                            }
                         },
                         Closeup::SignalBlock { guid, block, .. } => rsx! {
                             crate::signal::closeup::SignalBlockCloseup {

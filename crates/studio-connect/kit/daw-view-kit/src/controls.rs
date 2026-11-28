@@ -230,11 +230,16 @@ pub fn click(control: Control, guid: &str, from: &daw_proto::Track, add: bool) -
             args: serde_json::json!({ "track": guid, "routing": true, "name": from.name }),
             preview: Edit::Done(0),
         }),
-        // The FX button opens a chain window, and there is no chain and
-        // no window — see `tone::placeholder` and `bin/chain-probe`.
-        // Binding it to something else would be a button that does the
-        // wrong thing rather than one that waits.
-        Control::Volume | Control::Pan | Control::Fx => None,
+        // The FX button opens the track's chain close-up
+        // (`SESSION_CLOSEUP {chain}`: every FX on it, added, removed,
+        // reordered and bypassed, and any plugin's parameters) — the
+        // window's, not an edit, as the routing widget's is.
+        Control::Fx => Some(Press {
+            id: "SESSION_CLOSEUP",
+            args: serde_json::json!({ "track": guid, "chain": true, "name": from.name }),
+            preview: Edit::Done(0),
+        }),
+        Control::Volume | Control::Pan => None,
         // Clearing a clip changes nothing about the track — it is the
         // window forgetting something, not the engine being told
         // something. Handled where the latch lives.

@@ -8,7 +8,8 @@ use daw::service::{Effects, FxChainContext, FxRef, FxTarget, ProjectContext};
 
 use crate::actions::resolve;
 
-/// `track`'s chain and the FX `which` names in it.
+/// `track`'s chain and the FX `which` names in it: its guid, its place
+/// (`#2`, from 1), or its name (any part of it, case aside).
 pub fn target(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
@@ -19,7 +20,10 @@ pub fn target(
     let context = FxChainContext::Track(guid);
     let chain = Effects::list(daw, project.clone(), context.clone());
     let which = which.trim();
-    let found = if let Some(place) = which.strip_prefix('#') {
+    // Its guid, as the window names an FX (two of one plugin are two FX).
+    let found = if let Some(fx) = chain.iter().find(|fx| fx.guid == which) {
+        Some(fx.clone())
+    } else if let Some(place) = which.strip_prefix('#') {
         let place: usize = place
             .parse()
             .map_err(|_| format!("{which:?} is not a place"))?;

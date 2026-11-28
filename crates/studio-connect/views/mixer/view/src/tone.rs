@@ -9904,6 +9904,31 @@ impl Shared {
                 Ok(mut store) => store.flush(),
                 Err(_) => return,
             };
+            self.moved(edits);
+        }
+    }
+
+    /// One parameter of the FX `fx` (its name or guid) on `track` set to
+    /// `value` (normalized) by a face that is not a rack's — a plugin's
+    /// generic panel (`crate::fx_chain`): live, inside the gesture's undo
+    /// step, and committed with the racks' at [`Self::commit`].
+    pub fn set_param(&self, track: &str, fx: &str, index: u32, value: f64) {
+        #[cfg(any(feature = "native", feature = "web"))]
+        self.moved(vec![crate::engine::Edit::SetFxParam(
+            track.to_owned(),
+            fx.to_owned(),
+            index,
+            value,
+        )]);
+        #[cfg(not(any(feature = "native", feature = "web")))]
+        let _ = (track, fx, index, value);
+    }
+
+    /// What a gesture moved: noted for [`Self::commit`] and sent live, its
+    /// undo step opened by the first of it.
+    #[cfg(any(feature = "native", feature = "web"))]
+    fn moved(&self, edits: Vec<crate::engine::Edit>) {
+        {
             if edits.is_empty() {
                 return;
             }
@@ -9989,7 +10014,8 @@ impl Shared {
     }
 
     /// Edits to the engine on the racks' worker, in order with theirs: the
-    /// routing close-up's live edits and its send actions (`crate::routing`).
+    /// routing close-up's live edits and its send actions (`crate::routing`),
+    /// and a chain's adds, removes, moves and switches (`crate::fx_chain`).
     pub fn send_edits(&self, edits: impl IntoIterator<Item = crate::engine::Edit>) {
         #[cfg(any(feature = "native", feature = "web"))]
         self.send(edits);
