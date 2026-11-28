@@ -65,8 +65,32 @@ pub async fn write(item: &str, content: MidiTakeContent) -> Result<(), String> {
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register_async(&NOTES_WRITE, Effect::Mutating, |a: NotesArg| async move {
         write(&a.item, a.content).await?;
+        // A desktop's list tells the engine, which tells every window; a
+        // page's views are all in the page, so it tells them itself.
         #[cfg(feature = "native")]
         crate::actions::list().changed("items", &a.item);
+        #[cfg(not(feature = "native"))]
+        announce_here(&a.item);
         Ok(())
     })
+}
+
+/// Tell this window's views that `item`'s take was written (#808): its
+/// items are read back, and its notes drawn again. A page's way to do
+/// what the engine's `changed("items")` does for a desktop's windows.
+pub fn announce_here(item: &str) {
+    crate::song::request_resync_items_here();
+    crate::midi::mark_stale_here(vec![item.to_owned()]);
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_written_take_is_read_back_and_drawn_again() {
+        let _ = crate::midi::take_stale();
+        let _ = crate::song::take_resync();
+        super::announce_here("item-1");
+        assert!(crate::song::resync_pending(), "the items are read back");
+        assert_eq!(crate::midi::take_stale(), vec!["item-1".to_owned()]);
+    }
 }

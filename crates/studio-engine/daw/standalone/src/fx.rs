@@ -684,6 +684,7 @@ impl Effects for Standalone {
                     is_toggle: false,
                     step_count: None,
                     step_labels: Vec::new(),
+                    range: None,
                 })
                 .collect()
         })
@@ -1206,6 +1207,58 @@ impl Effects for Standalone {
     }
 }
 
+impl Standalone {
+    /// Bring the plugins behind `project_guid`'s FX chains in line with an
+    /// undo or a redo that changed them (`restored`): an FX taken off
+    /// drops its plugin, an FX back on loads its plugin again (by its
+    /// name, as it was added; its stored parameters are the chain's), and
+    /// every chain that changed says so, as an edit to it would.
+    ///
+    /// A bundle plugin brought back starts from its own defaults beside
+    /// those parameters: what else it held went with it. A parameter an
+    /// undone step first stored goes back to unset, which a plugin that
+    /// keeps its own values does not hear until it is set again.
+    pub(crate) fn fx_put_back(&self, project_guid: &str, restored: crate::sync::Restored) {
+        for (key, fx_guid) in restored.fx_gone {
+            drop(self.plugin_instances.write().remove(&fx_guid));
+            self.publish_fx_event(
+                project_guid,
+                daw_proto::FxEvent::Removed {
+                    context: (&key).into(),
+                    fx_guid,
+                },
+            );
+        }
+        for (key, fx) in restored.fx_back {
+            let loaded = self.plugin_instances.read().contains_key(&fx.guid);
+            if !loaded && let Some(plugin) = instantiate(self, &fx.name) {
+                self.insert_plugin_instance(fx.guid.clone(), plugin);
+            }
+            self.publish_fx_event(
+                project_guid,
+                daw_proto::FxEvent::Added {
+                    context: (&key).into(),
+                    fx,
+                },
+            );
+        }
+        // What is stored is what plays; a plugin that holds its own
+        // values is told them again — and one the step first stored, now
+        // unset, its default (a knob's first move undone).
+        for (fx_guid, params) in restored.fx_params {
+            self.plugin_instances.with(&fx_guid, |plugin| {
+                for info in plugin.params() {
+                    let plain = params.get(&info.id).copied().unwrap_or(info.default);
+                    plugin.set_param_value(info.id, plain);
+                }
+            });
+        }
+        for key in restored.chains {
+            self.republish_fx_counts(project_guid, &(&key).into());
+        }
+    }
+}
+
 fn set_window_open(
     daw: &Standalone,
     project: ProjectContext,
@@ -1250,6 +1303,159 @@ fn param_ranges(
             .map(|info| (info.id, info.min, info.max))
             .collect()
     })
+}
+
+#[cfg(test)]
+mod undo_tests {
+    use daw_proto::fx::{Effects, FxChainContext, FxRef, FxTarget};
+    use daw_proto::{ProjectContext, Projects, Tracks};
+
+    /// A plugin that does nothing, and says how many of it are loaded.
+    struct Quiet;
+
+    impl crate::plugin::PluginInstance for Quiet {
+        fn descriptor(&self) -> crate::plugin::PluginDescriptor {
+            crate::plugin::PluginDescriptor::default()
+        }
+        fn params(&mut self) -> Vec<crate::plugin::PluginParamInfo> {
+            Vec::new()
+        }
+        fn param_value(&mut self, _: u32) -> Option<f64> {
+            None
+        }
+        fn value_to_text(&mut self, _: u32, _: f64) -> Option<String> {
+            None
+        }
+        fn text_to_value(&mut self, _: u32, _: &str) -> Option<f64> {
+            None
+        }
+        fn latency(&mut self) -> u32 {
+            0
+        }
+        fn prepare(&mut self, _: f64, _: u32) -> Result<(), crate::plugin::PluginError> {
+            Ok(())
+        }
+        fn is_prepared(&self) -> bool {
+            true
+        }
+        fn process_block(
+            &mut self,
+            in_l: &[f32],
+            in_r: &[f32],
+            out_l: &mut [f32],
+            out_r: &mut [f32],
+            _: &crate::plugin::PluginEvents<'_>,
+        ) -> Result<(), crate::plugin::PluginError> {
+            out_l.copy_from_slice(in_l);
+            out_r.copy_from_slice(in_r);
+            Ok(())
+        }
+        fn deactivate(&mut self) {}
+    }
+
+    struct Quiets;
+
+    impl crate::plugin::FxFactory for Quiets {
+        fn installed(&self) -> Vec<daw_proto::fx::InstalledFx> {
+            Vec::new()
+        }
+        fn provides(&self, name: &str) -> bool {
+            name == "Quiet"
+        }
+        fn create(&self, name: &str, _: f64) -> Option<Box<dyn crate::plugin::PluginInstance>> {
+            self.provides(name)
+                .then(|| Box::new(Quiet) as Box<dyn crate::plugin::PluginInstance>)
+        }
+    }
+
+    fn names(
+        daw: &crate::sync::Standalone,
+        ctx: &ProjectContext,
+        chain: &FxChainContext,
+    ) -> Vec<(String, bool)> {
+        Effects::list(daw, ctx.clone(), chain.clone())
+            .into_iter()
+            .map(|fx| (fx.name, fx.enabled))
+            .collect()
+    }
+
+    /// #808: a song with no project file undoes on the engine's own
+    /// history, which kept no FX chains — an FX added, moved, bypassed or
+    /// removed stayed so through an undo.
+    #[test]
+    fn an_fx_chain_is_undone_on_the_engines_own_history() {
+        let daw = crate::sync::Standalone::new();
+        daw.set_fx_factory(std::sync::Arc::new(Quiets));
+        let song = daw.seed_project(daw_proto::ProjectInfo {
+            guid: "fx-undo".into(),
+            name: "Fx undo".into(),
+            path: String::new(),
+        });
+        let ctx = ProjectContext::Project(song);
+        let track = Tracks::add(&daw, ctx.clone(), "Bass", None).expect("a track");
+        let chain = FxChainContext::Track(track);
+        let step = |label: &str, f: &dyn Fn()| {
+            Projects::begin_undo_block(&daw, ctx.clone(), label);
+            f();
+            Projects::end_undo_block(&daw, ctx.clone(), label, None);
+        };
+        let target = |guid: &str| FxTarget {
+            context: chain.clone(),
+            fx: FxRef::Guid(guid.to_owned()),
+        };
+
+        let first = std::cell::RefCell::new(String::new());
+        step("Add Synth", &|| {
+            Effects::add(&daw, ctx.clone(), chain.clone(), "Synth").expect("synthetic");
+        });
+        step("Add Quiet", &|| {
+            *first.borrow_mut() =
+                Effects::add(&daw, ctx.clone(), chain.clone(), "Quiet").expect("a plugin");
+        });
+        let quiet = first.borrow().clone();
+        assert!(daw.plugin_instances.read().contains_key(&quiet));
+        step("Move Quiet", &|| {
+            Effects::move_to(&daw, ctx.clone(), target(&quiet), 0).expect("moved");
+        });
+        step("Bypass Quiet", &|| {
+            Effects::set_enabled(&daw, ctx.clone(), target(&quiet), false).expect("bypassed");
+        });
+        step("Remove Quiet", &|| {
+            Effects::remove(&daw, ctx.clone(), target(&quiet)).expect("removed");
+        });
+        assert_eq!(names(&daw, &ctx, &chain), [("Synth".into(), true)]);
+        assert!(!daw.plugin_instances.read().contains_key(&quiet));
+
+        assert!(Projects::undo(&daw, ctx.clone()));
+        assert_eq!(
+            names(&daw, &ctx, &chain),
+            [("Quiet".into(), false), ("Synth".into(), true)],
+            "back first, bypassed"
+        );
+        assert!(
+            daw.plugin_instances.read().contains_key(&quiet),
+            "its plugin loaded again"
+        );
+        assert!(Projects::undo(&daw, ctx.clone()));
+        assert_eq!(
+            names(&daw, &ctx, &chain),
+            [("Quiet".into(), true), ("Synth".into(), true)]
+        );
+        assert!(Projects::undo(&daw, ctx.clone()));
+        assert_eq!(
+            names(&daw, &ctx, &chain),
+            [("Synth".into(), true), ("Quiet".into(), true)]
+        );
+        assert!(Projects::undo(&daw, ctx.clone()));
+        assert_eq!(names(&daw, &ctx, &chain), [("Synth".into(), true)]);
+        assert!(
+            !daw.plugin_instances.read().contains_key(&quiet),
+            "an add undone drops its plugin"
+        );
+        assert!(Projects::redo(&daw, ctx.clone()));
+        assert!(daw.plugin_instances.read().contains_key(&quiet));
+        assert_eq!(names(&daw, &ctx, &chain).len(), 2);
+    }
 }
 
 #[cfg(all(test, feature = "clap-host"))]

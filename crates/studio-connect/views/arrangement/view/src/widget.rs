@@ -3100,7 +3100,7 @@ impl ArrangementWidget {
         };
         drop(step);
         let step = tracing::info_span!("resync.previews").entered();
-        let unread = unread_midi(&fresh, &self.previews);
+        let unread = unread_midi(&fresh, &self.previews, &[]);
         if !unread.is_empty() {
             self.previews.fill_blocking(unread);
         }
@@ -3128,12 +3128,15 @@ impl ArrangementWidget {
     fn resync(&mut self) {
         let slot = Rc::clone(&self.read_back);
         let previews = self.previews.clone();
+        // The MIDI said written since (a page's `NOTES_WRITE`, #808): read
+        // again with the ones never read.
+        let stale = crate::midi::take_stale();
         wasm_bindgen_futures::spawn_local(async move {
             let Some(fresh) = daw_ui::studio::project::fetch().await else {
                 tracing::warn!("the session could not be read back from the engine");
                 return;
             };
-            let unread = unread_midi(&fresh, &previews);
+            let unread = unread_midi(&fresh, &previews, &stale);
             if !unread.is_empty() {
                 previews.fill(unread).await;
             }
@@ -4943,16 +4946,21 @@ impl ArrangementWidget {
     }
 }
 
-/// The MIDI items of `fresh` whose notes `previews` has not read.
+/// The MIDI items of `fresh` whose notes `previews` has not read, or that
+/// were said written since (`stale`).
 fn unread_midi(
     fresh: &daw_ui::studio::project::Project,
     previews: &crate::midi::Previews,
+    stale: &[String],
 ) -> Vec<(String, f64)> {
     fresh
         .items
         .values()
         .flatten()
-        .filter(|item| fresh.is_midi(&item.guid) && previews.get(&item.guid).is_none())
+        .filter(|item| {
+            fresh.is_midi(&item.guid)
+                && (previews.get(&item.guid).is_none() || stale.contains(&item.guid))
+        })
         .map(|item| (item.guid.clone(), item.length.as_seconds()))
         .collect()
 }

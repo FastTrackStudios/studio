@@ -23,6 +23,16 @@ pub enum FxChainKey {
     Monitoring,
 }
 
+impl From<&FxChainKey> for FxChainContext {
+    fn from(key: &FxChainKey) -> Self {
+        match key {
+            FxChainKey::Track(g) => Self::Track(g.clone()),
+            FxChainKey::Input(g) => Self::Input(g.clone()),
+            FxChainKey::Monitoring => Self::Monitoring,
+        }
+    }
+}
+
 impl From<&FxChainContext> for FxChainKey {
     fn from(ctx: &FxChainContext) -> Self {
         match ctx {
@@ -641,7 +651,7 @@ journaled_maps!(deltas_struct);
 
 /// What a project holds besides its journaled maps, as an undo step found
 /// or left it: small — the tracks, what extensions keep on them, the
-/// tempo map, the counters — so it is copied whole.
+/// tempo map, the FX chains, the counters — so it is copied whole.
 pub struct EditSnapshot {
     tracks: Vec<Track>,
     /// What extensions keep on each track (its markers and regions, a
@@ -655,8 +665,92 @@ pub struct EditSnapshot {
         daw_proto::Tempo,
         daw_proto::TimeSignature,
     ),
+    /// Every FX chain: its FX in order, each on or bypassed, its stored
+    /// parameters. An FX added, moved, switched, set or removed is undone
+    /// with the rest of its step, a song not yet saved to its project file
+    /// too (#808); the plugins behind it follow ([`Restored`]).
+    fx_chains: HashMap<FxChainKey, Vec<FxEntry>>,
     next_item_counter: u64,
     next_take_counter: u64,
+    next_fx_counter: u64,
+}
+
+/// What putting a snapshot back changed outside the project's own state:
+/// the map the engine plays, and the plugins behind the FX chains.
+#[derive(Debug, Default)]
+pub struct Restored {
+    /// The tempo map changed: the engine plays the one it went back to.
+    pub tempo: bool,
+    /// FX back on a chain: their plugins to load again.
+    pub fx_back: Vec<(FxChainKey, Fx)>,
+    /// FX gone from a chain (their guids): their plugins to drop.
+    pub fx_gone: Vec<(FxChainKey, String)>,
+    /// Every chain that changed at all: its counts said again.
+    pub chains: Vec<FxChainKey>,
+    /// The stored parameters of each FX whose parameters it changed (or
+    /// that came back), by its guid: what its plugin is set to again, as
+    /// a set would ([`crate::fx_params`]).
+    pub fx_params: Vec<(String, HashMap<u32, f64>)>,
+}
+
+/// Whether two chains are the same: the same FX in the same order, each
+/// switched the same way, holding the same parameters.
+fn same_chain(a: &[FxEntry], b: &[FxEntry]) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(x, y)| {
+            x.fx.guid == y.fx.guid && x.fx.enabled == y.fx.enabled && x.params == y.params
+        })
+}
+
+/// What going from the chains `now` to the chains `then` changes: the FX
+/// that come back, the FX that go, and every chain that differs.
+fn chains_moved(
+    now: &HashMap<FxChainKey, Vec<FxEntry>>,
+    then: &HashMap<FxChainKey, Vec<FxEntry>>,
+) -> Restored {
+    let mut out = Restored::default();
+    let keys: std::collections::HashSet<&FxChainKey> = now.keys().chain(then.keys()).collect();
+    for key in keys {
+        let (was, will) = (
+            now.get(key).map_or(&[][..], Vec::as_slice),
+            then.get(key).map_or(&[][..], Vec::as_slice),
+        );
+        if !same_chain(was, will) {
+            out.chains.push(key.clone());
+        }
+    }
+    let on = |chains: &HashMap<FxChainKey, Vec<FxEntry>>| -> std::collections::HashSet<String> {
+        chains
+            .values()
+            .flatten()
+            .map(|e| e.fx.guid.clone())
+            .collect()
+    };
+    let (on_now, on_then) = (on(now), on(then));
+    let held: HashMap<&str, &HashMap<u32, f64>> = now
+        .values()
+        .flatten()
+        .map(|e| (e.fx.guid.as_str(), &e.params))
+        .collect();
+    for e in then.values().flatten() {
+        if held
+            .get(e.fx.guid.as_str())
+            .is_none_or(|was| **was != e.params)
+        {
+            out.fx_params.push((e.fx.guid.clone(), e.params.clone()));
+        }
+    }
+    for (key, chain) in then {
+        for e in chain.iter().filter(|e| !on_now.contains(&e.fx.guid)) {
+            out.fx_back.push((key.clone(), e.fx.clone()));
+        }
+    }
+    for (key, chain) in now {
+        for e in chain.iter().filter(|e| !on_then.contains(&e.fx.guid)) {
+            out.fx_gone.push((key.clone(), e.fx.guid.clone()));
+        }
+    }
+    out
 }
 
 impl EditSnapshot {
@@ -670,14 +764,16 @@ impl EditSnapshot {
                 p.transport.tempo,
                 p.transport.time_signature,
             ),
+            fx_chains: p.fx_chains.clone(),
             next_item_counter: p.next_item_counter,
             next_take_counter: p.next_take_counter,
+            next_fx_counter: p.next_fx_counter,
         }
     }
 
-    /// Put the project back as this snapshot found it. Whether its tempo
-    /// map changed (the engine's playing map has to follow it then).
-    pub fn restore(&self, p: &mut ProjectState) -> bool {
+    /// Put the project back as this snapshot found it. What changed that
+    /// the engine has to follow: its playing map, its plugins.
+    pub fn restore(&self, p: &mut ProjectState) -> Restored {
         p.tracks.clone_from(&self.tracks);
         p.track_ext_state.clone_from(&self.track_ext_state);
         let (points, tempo, meter) = &self.tempo;
@@ -689,9 +785,15 @@ impl EditSnapshot {
             p.transport.tempo = *tempo;
             p.transport.time_signature = *meter;
         }
+        let mut restored = chains_moved(&p.fx_chains, &self.fx_chains);
+        if !restored.chains.is_empty() {
+            p.fx_chains.clone_from(&self.fx_chains);
+        }
+        restored.tempo = moved;
         p.next_item_counter = self.next_item_counter;
         p.next_take_counter = self.next_take_counter;
-        moved
+        p.next_fx_counter = self.next_fx_counter;
+        restored
     }
 }
 
@@ -710,22 +812,23 @@ pub struct UndoStep {
 }
 
 impl UndoStep {
-    /// Put the project back to one side of this step. Whether its tempo
-    /// map changed.
-    pub fn put_back(&self, p: &mut ProjectState, side: crate::journal::Side) -> bool {
+    /// Put the project back to one side of this step. What changed that
+    /// the engine has to follow ([`Restored`]).
+    pub fn put_back(&self, p: &mut ProjectState, side: crate::journal::Side) -> Restored {
         p.put_back(&self.deltas, side);
         #[cfg(any(feature = "audio", feature = "decode"))]
         p.audio_sources.put_back(&self.audio, side);
-        let tempo = match side {
+        let restored = match side {
             crate::journal::Side::Before => self.before.restore(p),
-            crate::journal::Side::After => {
-                self.after.as_ref().is_some_and(|after| after.restore(p))
-            }
+            crate::journal::Side::After => self
+                .after
+                .as_ref()
+                .map_or_else(Restored::default, |after| after.restore(p)),
         };
         // The renderer caches against the revision; a restore is a
         // mutation like any other.
         p.revision = p.revision.wrapping_add(1);
-        tempo
+        restored
     }
 }
 

@@ -32,6 +32,6 @@ mod stage;
 
 pub use daw::{
     EngineState, EnvelopeData, EnvelopeKey, FxChainKey, FxEntry, History, ItemChanges, ItemEntry,
-    ProjectCell, ProjectSlot, ProjectState, RulerLane, Standalone, TakeList, TrackExt,
+    ProjectCell, ProjectSlot, ProjectState, Restored, RulerLane, Standalone, TakeList, TrackExt,
 };
 pub use stage::Stage;

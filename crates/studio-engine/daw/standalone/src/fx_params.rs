@@ -69,6 +69,35 @@ impl SlotInfo {
     }
 }
 
+/// A live parameter's span in the plugin's own units (#808): its plain
+/// min and max, and the unit the plugin writes them in. A unit only when
+/// both ends say the same one (or one says none): a plugin that writes
+/// `20 Hz` and `20.0 kHz` has no one unit its plain numbers are in.
+/// `None` for a span of nothing.
+fn plain_range(
+    plugin: &mut dyn crate::plugin::PluginInstance,
+    info: &PluginParamInfo,
+) -> Option<daw_proto::FxParamRange> {
+    if (info.max - info.min).abs() < f64::EPSILON {
+        return None;
+    }
+    let mut unit_at = |plain: f64| {
+        plugin
+            .value_to_text(info.id, plain)
+            .map(|t| daw_proto::FxParamRange::unit_in(&t))
+            .filter(|u| !u.is_empty())
+    };
+    let unit = match (unit_at(info.min), unit_at(info.max)) {
+        (Some(low), Some(high)) if low != high => String::new(),
+        (low, high) => high.or(low).unwrap_or_default(),
+    };
+    Some(daw_proto::FxParamRange {
+        min: info.min,
+        max: info.max,
+        unit,
+    })
+}
+
 impl Standalone {
     /// Resolve `(fx guid, slot)` against the live plugin instance.
     /// `None` when the FX has no loaded instance (synthetic FX).
@@ -197,7 +226,9 @@ impl Standalone {
             let mut p = FxParameter::new(slot as u32, s.info.name.clone(), s.normalized());
             p.formatted = s.text.clone().unwrap_or_else(|| format!("{:.3}", s.plain));
             let choices = plugin.param_choices(s.info.id);
-            if !choices.is_empty() {
+            if choices.is_empty() {
+                p.range = plain_range(&mut **plugin, &s.info);
+            } else {
                 p.step_count = Some(choices.len() as u32);
                 p.step_labels = choices;
             }

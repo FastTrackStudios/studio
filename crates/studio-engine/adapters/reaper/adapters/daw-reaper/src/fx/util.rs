@@ -293,6 +293,8 @@ pub fn build_fx_parameter(param: &reaper_high::FxParameter) -> FxParameter {
         is_toggle,
         step_count,
         step_labels,
+        // REAPER speaks normalized values only; its text is the units.
+        range: None,
     }
 }
 
