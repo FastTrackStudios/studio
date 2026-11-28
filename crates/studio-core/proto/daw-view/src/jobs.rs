@@ -4,9 +4,11 @@
 //!
 //! A piece of work holds a [`Job`] while it runs and moves it on as it
 //! goes; dropping it ends it. The bottom bar shows what is running
-//! ([`running`]).
+//! ([`running`]). Work that can stop part way (an offline render) starts
+//! with [`start_cancellable`] and looks at [`Job::cancelled`] as it goes;
+//! [`cancel`] asks it to stop.
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 struct Inner {
@@ -14,6 +16,8 @@ struct Inner {
     label: String,
     done: AtomicUsize,
     total: AtomicUsize,
+    /// Set by [`cancel`]; `None` for work that cannot stop part way.
+    cancel: Option<AtomicBool>,
 }
 
 /// One piece of work, running while held.
@@ -53,12 +57,24 @@ fn base() -> u64 {
 /// that does not know).
 #[must_use]
 pub fn start(label: &str, total: usize) -> Job {
+    begin(label, total, None)
+}
+
+/// [`start`], for work that stops part way when [`cancel`]led: it reads
+/// [`Job::cancelled`] as it goes.
+#[must_use]
+pub fn start_cancellable(label: &str, total: usize) -> Job {
+    begin(label, total, Some(AtomicBool::new(false)))
+}
+
+fn begin(label: &str, total: usize, cancel: Option<AtomicBool>) -> Job {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let inner = Arc::new(Inner {
         id: base() + NEXT.fetch_add(1, Ordering::Relaxed),
         label: label.to_owned(),
         done: AtomicUsize::new(0),
         total: AtomicUsize::new(total),
+        cancel,
     });
     if let Ok(mut jobs) = all().lock() {
         jobs.retain(|j| j.strong_count() > 0);
@@ -71,6 +87,63 @@ impl Job {
     /// `n` more steps done.
     pub fn advance(&self, n: usize) {
         self.0.done.fetch_add(n, Ordering::Relaxed);
+    }
+
+    /// Its id, as [`running`] lists it and [`cancel`] takes it.
+    #[must_use]
+    pub fn id(&self) -> u64 {
+        self.0.id
+    }
+
+    /// Whether it has been asked to stop ([`cancel`]): never for work
+    /// started with [`start`].
+    #[must_use]
+    pub fn cancelled(&self) -> bool {
+        self.0
+            .cancel
+            .as_ref()
+            .is_some_and(|c| c.load(Ordering::Relaxed))
+    }
+}
+
+/// The running job `id`, if there is one.
+fn find(id: u64) -> Option<Arc<Inner>> {
+    all()
+        .lock()
+        .ok()?
+        .iter()
+        .filter_map(Weak::upgrade)
+        .find(|j| j.id == id)
+}
+
+/// Whether running job `id` can be [`cancel`]led.
+#[must_use]
+pub fn cancellable(id: u64) -> bool {
+    find(id).is_some_and(|j| j.cancel.is_some())
+}
+
+/// What [`cancel`] did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cancelled {
+    /// Asked to stop: it stops at its next step.
+    Asked,
+    /// It cannot stop part way.
+    NotCancellable,
+    /// No job of that id is running (it may have just finished).
+    NotRunning,
+}
+
+/// Ask running job `id` to stop.
+pub fn cancel(id: u64) -> Cancelled {
+    match find(id) {
+        None => Cancelled::NotRunning,
+        Some(j) => match &j.cancel {
+            None => Cancelled::NotCancellable,
+            Some(c) => {
+                c.store(true, Ordering::Relaxed);
+                Cancelled::Asked
+            }
+        },
     }
 }
 
@@ -95,7 +168,24 @@ pub fn running() -> Vec<Running> {
 
 #[cfg(test)]
 mod tests {
-    use super::{running, start};
+    use super::{Cancelled, cancel, cancellable, running, start, start_cancellable};
+
+    /// A render the person stops: asked once, it reads cancelled; work
+    /// that cannot stop part way, or is gone, says so (studio#685).
+    #[test]
+    fn a_cancellable_job_is_asked_to_stop_and_others_say_why_not() {
+        let render = start_cancellable("Measuring the mix", 10);
+        let saving = start("Saving", 0);
+        assert!(cancellable(render.id()) && !cancellable(saving.id()));
+        assert!(!render.cancelled());
+        assert_eq!(cancel(render.id()), Cancelled::Asked);
+        assert!(render.cancelled());
+        assert_eq!(cancel(saving.id()), Cancelled::NotCancellable);
+        assert!(!saving.cancelled());
+        let gone = render.id();
+        drop(render);
+        assert_eq!(cancel(gone), Cancelled::NotRunning);
+    }
 
     /// The bottom bar keys a job's row by its id: songs of a set open in
     /// parallel, each its own "Opening" — keyed by label, four of them

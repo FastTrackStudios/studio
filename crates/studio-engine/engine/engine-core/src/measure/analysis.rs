@@ -97,6 +97,8 @@ struct Biquad {
     a: [f64; 2],
 }
 
+/// Whole-signal runs: what [`k_sums`] is held to (the tests).
+#[cfg(test)]
 impl Biquad {
     fn run(self, x: &[f32]) -> Vec<f64> {
         let (mut x1, mut x2, mut y1, mut y2) = (0.0, 0.0, 0.0, 0.0);
@@ -158,9 +160,55 @@ fn k_filters(rate: f64) -> (Biquad, Biquad) {
 }
 
 /// Each channel K-weighted.
+#[cfg(test)]
 fn k_weighted(ch: &[f32], rate: f64) -> Vec<f64> {
     let (shelf, high) = k_filters(rate);
     high.run_f64(&shelf.run(ch))
+}
+
+/// One biquad's running state, a sample at a time: what [`Biquad::run`]
+/// computes, without the signal it would collect.
+#[derive(Default)]
+struct Stage {
+    x1: f64,
+    x2: f64,
+    y1: f64,
+    y2: f64,
+}
+
+impl Stage {
+    #[inline]
+    fn step(&mut self, f: &Biquad, s: f64) -> f64 {
+        let y =
+            f.b[0] * s + f.b[1] * self.x1 + f.b[2] * self.x2 - f.a[0] * self.y1 - f.a[1] * self.y2;
+        (self.x2, self.x1, self.y2, self.y1) = (self.x1, s, self.y1, y);
+        y
+    }
+}
+
+/// The running sums of both channels' K-weighted squares (`acc[i]`, the
+/// first `i` samples; `acc[0] = 0`): every window's power is a difference
+/// of two. One pass, no K-weighted signal kept: the same arithmetic, in
+/// the same order, as K-weighting each channel and then summing.
+fn k_sums(l: &[f32], r: &[f32], rate: f64) -> Vec<f64> {
+    let (shelf, high) = k_filters(rate);
+    let n = l.len().min(r.len());
+    let (mut ls, mut lh, mut rs, mut rh) = (
+        Stage::default(),
+        Stage::default(),
+        Stage::default(),
+        Stage::default(),
+    );
+    let mut acc = Vec::with_capacity(n + 1);
+    acc.push(0.0);
+    let mut sum = 0.0;
+    for (&a, &b) in l[..n].iter().zip(&r[..n]) {
+        let kl = lh.step(&high, ls.step(&shelf, f64::from(a)));
+        let kr = rh.step(&high, rs.step(&shelf, f64::from(b)));
+        sum += kl * kl + kr * kr;
+        acc.push(sum);
+    }
+    acc
 }
 
 /// Loudness of a mean square (summed over channels), LUFS.
@@ -173,19 +221,12 @@ fn lufs_of(power: f64) -> f64 {
 }
 
 /// Each window's K-weighted power (summed over both channels), `window`
-/// samples long every `hop`.
-fn window_powers(kl: &[f64], kr: &[f64], window: usize, hop: usize) -> Vec<f64> {
-    let n = kl.len().min(kr.len());
+/// samples long every `hop`, from the running sums of squares ([`k_sums`]):
+/// each window in O(1).
+fn window_powers(acc: &[f64], window: usize, hop: usize) -> Vec<f64> {
+    let n = acc.len().saturating_sub(1);
     if n == 0 || window == 0 {
         return Vec::new();
-    }
-    // Running sums of squares: each window in O(1).
-    let mut acc = Vec::with_capacity(n + 1);
-    acc.push(0.0);
-    let mut sum = 0.0;
-    for i in 0..n {
-        sum += kl[i] * kl[i] + kr[i] * kr[i];
-        acc.push(sum);
     }
     if n < window {
         return vec![acc[n] / n as f64];
@@ -335,10 +376,9 @@ pub fn spectrum(l: &[f32], r: &[f32], rate: f64, bands: Bands) -> Vec<f64> {
 #[must_use]
 pub fn short_term(l: &[f32], r: &[f32], rate: u32, hop: f64) -> Vec<f64> {
     let rate_f = f64::from(rate);
-    let n = l.len().min(r.len());
-    let (kl, kr) = (k_weighted(&l[..n], rate_f), k_weighted(&r[..n], rate_f));
+    let acc = k_sums(l, r, rate_f);
     let samples = |s: f64| (s * rate_f).round() as usize;
-    window_powers(&kl, &kr, samples(3.0), samples(hop))
+    window_powers(&acc, samples(3.0), samples(hop))
         .into_iter()
         .map(|p| (lufs_of(p) * 10.0).round() / 10.0)
         .collect()
@@ -350,16 +390,13 @@ pub fn measure(l: &[f32], r: &[f32], rate: u32, bands: Bands) -> Stats {
     let rate_f = f64::from(rate);
     let n = l.len().min(r.len());
     let (l, r) = (&l[..n], &r[..n]);
-    let (kl, kr) = (k_weighted(l, rate_f), k_weighted(r, rate_f));
+    let acc = k_sums(l, r, rate_f);
     let samples = |s: f64| (s * rate_f).round() as usize;
-    let blocks = window_powers(&kl, &kr, samples(0.4), samples(0.1));
-    let short = window_powers(&kl, &kr, samples(3.0), samples(0.1));
+    let blocks = window_powers(&acc, samples(0.4), samples(0.1));
+    let short = window_powers(&acc, samples(3.0), samples(0.1));
     let short_max = short.iter().copied().fold(0.0, f64::max);
-    let k_power = if n == 0 {
-        0.0
-    } else {
-        kl.iter().zip(&kr).map(|(a, b)| a * a + b * b).sum::<f64>() / n as f64
-    };
+    let k_power = if n == 0 { 0.0 } else { acc[n] / n as f64 };
+    drop(acc);
     let (mut sl, mut sr, mut slr, mut peak) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
     let (mut mid, mut side) = (0.0f64, 0.0f64);
     for i in 0..n {
@@ -468,6 +505,35 @@ mod tests {
         assert!((m.short_max - m.lufs).abs() < 0.1, "{m:?}");
         // True peak of a sine: its amplitude, -15 dBFS.
         assert!((m.true_peak - -14.99).abs() < 0.2, "{m:?}");
+    }
+
+    /// The one-pass running sums are the two-pass K-weighting's, to the
+    /// bit: a faster MIX_MEASURE reads the same LUFS (studio#685).
+    #[test]
+    fn one_pass_k_sums_are_the_two_pass_ones_exactly() {
+        let l: Vec<f32> = sine(60.0, -12.0, 2.0)
+            .iter()
+            .zip(sine(3_000.0, -20.0, 2.0))
+            .map(|(a, b)| a + b)
+            .collect();
+        let r: Vec<f32> = sine(440.0, -9.0, 2.0)[..90_000].to_vec();
+        let n = l.len().min(r.len());
+        let rate = f64::from(RATE);
+        let (kl, kr) = (k_weighted(&l[..n], rate), k_weighted(&r[..n], rate));
+        let mut want = vec![0.0];
+        let mut sum = 0.0;
+        for i in 0..n {
+            sum += kl[i] * kl[i] + kr[i] * kr[i];
+            want.push(sum);
+        }
+        let got = k_sums(&l, &r, rate);
+        assert_eq!(got.len(), want.len());
+        assert!(
+            got.iter()
+                .zip(&want)
+                .all(|(a, b)| a.to_bits() == b.to_bits()),
+            "the running sums moved"
+        );
     }
 
     #[test]
