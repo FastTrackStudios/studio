@@ -13,8 +13,25 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 # round-trip); the per-test overrides for the screenshot harnesses, the GPU
 # frame renders and the long fixture sweeps went with their tests.
 
-# The engine's real-time and lock-timing tests run alone; their overrides
-# went with daw-standalone to FastTrackStudios/daw (studio#510).
+# The engine's real-time and lock-timing tests run alone. Their overrides
+# went with daw-standalone to FastTrackStudios/daw (studio#510) and didn't
+# come back with it into the monorepo, so they ran beside everything else
+# and played short on a loaded runner (studio#803: CI runs 46068708750,
+# 46075930089, 46087726587, 46092913343 at load average 40-70). Alone, with
+# two retries: a real regression still fails all three tries.
+[[profile.default.overrides]]
+filter = '''
+    (package(daw-standalone) & (
+        test(/audio_engine::ahead::tests::/)
+        | test(/audio_engine::locate_pdc_tests::/)
+        | test(/audio_engine::render::automation_tests::/)
+        | test(/sync::daw::tests::/)
+        | test(/sync::stage::tests::/)
+    ))
+    | (package(sampler) & binary(document_player))
+'''
+threads-required = "num-test-threads"
+retries = 2
 
 # The Unbreakable run (daw-extension's tests/unbreakable, `just
 # test-unbreakable`) opens the owner's song and renders it whole: minutes.
