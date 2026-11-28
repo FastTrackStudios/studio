@@ -21173,6 +21173,7 @@ version = "26.10.3"
 dependencies = [
  "architect",
  "architect-extensions",
+ "architect-settings",
  "axum",
  "facet",
  "facet-json",
@@ -21184,6 +21185,7 @@ dependencies = [
  "signal-rig-host",
  "signal-rigs-proto",
  "studio-rig-discover",
+ "tempfile",
  "tokio",
  "tracing",
 ]

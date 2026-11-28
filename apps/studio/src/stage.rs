@@ -401,20 +401,24 @@ pub fn rig_window(layout: RigLayout, set: &str, next_id: u64) -> (Window, Vec<Pa
     (window, panes, b.next)
 }
 
-/// Opens the Rig window showing `layout` in `ws`, in place of the one
-/// there (a rig's window is one at a time); its first pane made active.
+/// Opens the Rig window showing `layout` in `ws`; its first pane made
+/// active. A Rig window already open keeps its window and shows `layout`
+/// in it: its panes swapped, the window itself (the desktop's, with its
+/// place) never closed and made again under the same id, which the
+/// native shell does not draw anew.
 pub fn open_rig(ws: &mut Workspace, layout: RigLayout, set: &str) {
     let id = WindowId::new(RIG_WINDOW);
-    if let Some(old) = ws.windows.iter().position(|w| w.id == id) {
-        let gone = ws.windows.remove(old);
-        if let Some(node) = gone.center.as_ref() {
-            ws.panes.retain(|p| !holds(node, &p.id));
-        }
-    }
-    let (window, panes, next) = rig_window(layout, set, ws.next_id);
+    let (fresh, panes, next) = rig_window(layout, set, ws.next_id);
     ws.next_id = next;
+    if let Some(window) = ws.windows.iter_mut().find(|w| w.id == id) {
+        if let Some(node) = window.center.take() {
+            ws.panes.retain(|p| !holds(&node, &p.id));
+        }
+        window.center = fresh.center;
+    } else {
+        ws.windows.push(fresh);
+    }
     ws.panes.extend(panes);
-    ws.windows.push(window);
     ws.active = Some(PaneId::new(layout.first()));
 }
 
@@ -610,6 +614,31 @@ mod tests {
         assert_eq!(rig_shown(&ws), Some(RigLayout::Keys));
         assert!(ws.pane(&PaneId::new(rig::STATUS)).is_none());
         assert_eq!(ws.pane(&PaneId::new(keys::BROWSER)).unwrap().title, "Rig");
+    }
+
+    #[test]
+    fn the_other_rig_is_shown_in_the_same_window_where_it_was() {
+        let mut ws = stage(Area::default(), &Names::default(), None);
+        open_rig(&mut ws, RigLayout::Guitar, "");
+        let at = ws
+            .windows
+            .iter()
+            .position(|w| w.id.0 == RIG_WINDOW)
+            .unwrap();
+        // The person moved it.
+        ws.windows[at].bounds = Some(Rect::new(10.0, 20.0, 800.0, 600.0));
+        open_rig(&mut ws, RigLayout::Keys, "");
+        // Kept, not closed and made again: same place in the list, same bounds.
+        assert_eq!(ws.windows[at].id.0, RIG_WINDOW);
+        assert_eq!(
+            ws.windows[at].bounds,
+            Some(Rect::new(10.0, 20.0, 800.0, 600.0))
+        );
+        assert_eq!(rig_shown(&ws), Some(RigLayout::Keys));
+        // No pane left over from the guitar's screens.
+        for gone in [rig::STATUS, rig::GRID, rig::SWITCHES, rig::TUNER] {
+            assert!(ws.pane(&PaneId::new(gone)).is_none(), "{gone}");
+        }
     }
 
     #[test]

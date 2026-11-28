@@ -80,6 +80,21 @@ fn index(args: &Json, key: &str) -> Result<Option<u32>, String> {
     }
 }
 
+/// `index` (0-based, as [`index`] made it) refused when `items` (a wire
+/// list) has no such place: a person's number out of range is an error,
+/// never the last one played instead (studio#560).
+fn within(index: u32, items: &Json, key: &str) -> Result<u32, String> {
+    let count = items.as_array().map_or(0, Vec::len);
+    if usize::try_from(index).is_ok_and(|i| i < count) {
+        Ok(index)
+    } else {
+        Err(format!(
+            "no `{key}` {}: there are {count}",
+            index.saturating_add(1)
+        ))
+    }
+}
+
 /// The 0-based place of the item named `name` in `items` (each a wire
 /// struct with a `name`), any case.
 fn named(items: &Json, name: &str) -> Option<u32> {
@@ -220,7 +235,11 @@ pub fn register(ext: &mut Builder) {
             let stack = match text(&args, "name") {
                 Some(name) => named(perf.get("stacks").unwrap_or(&Json::Null), &name)
                     .ok_or_else(|| format!("no stack named {name}"))?,
-                None => index(&args, "stack")?.ok_or("no stack (from 1) or name")?,
+                None => within(
+                    index(&args, "stack")?.ok_or("no stack (from 1) or name")?,
+                    perf.get("stacks").unwrap_or(&Json::Null),
+                    "stack",
+                )?,
             };
             match index(&args, "patch")? {
                 // One of the stack's patches, by its place in it.
@@ -240,10 +259,16 @@ pub fn register(ext: &mut Builder) {
     })
     .action("STUDIO_RIG_PATCH", |args| {
         on(move |r| {
+            let patches = wire(&Rig::patches(&r.guitar))?;
             let patch = match text(&args, "name") {
-                Some(name) => named(&wire(&Rig::patches(&r.guitar))?, &name)
-                    .ok_or_else(|| format!("no patch named {name}"))?,
-                None => index(&args, "patch")?.ok_or("no patch (from 1) or name")?,
+                Some(name) => {
+                    named(&patches, &name).ok_or_else(|| format!("no patch named {name}"))?
+                }
+                None => within(
+                    index(&args, "patch")?.ok_or("no patch (from 1) or name")?,
+                    &patches,
+                    "patch",
+                )?,
             };
             applied(&Rig::select_patch(&r.guitar, patch))?;
             place(r)
@@ -262,10 +287,16 @@ pub fn register(ext: &mut Builder) {
                     text(&args, "variation").unwrap_or_default(),
                 );
             } else {
+                let presets = wire(&Rig::presets(&r.guitar))?;
                 let preset = match text(&args, "name") {
-                    Some(name) => named(&wire(&Rig::presets(&r.guitar))?, &name)
-                        .ok_or_else(|| format!("no preset named {name}"))?,
-                    None => index(&args, "number")?.ok_or("no preset: number, name or preset")?,
+                    Some(name) => {
+                        named(&presets, &name).ok_or_else(|| format!("no preset named {name}"))?
+                    }
+                    None => within(
+                        index(&args, "number")?.ok_or("no preset: number, name or preset")?,
+                        &presets,
+                        "number",
+                    )?,
                 };
                 Rig::play_preset(&r.guitar, preset);
             }
@@ -285,7 +316,11 @@ pub fn register(ext: &mut Builder) {
                     let song = match text(&args, "name") {
                         Some(name) => named(perf.get("songs").unwrap_or(&Json::Null), &name)
                             .ok_or_else(|| format!("no song named {name} in the set"))?,
-                        None => index(&args, "song")?.ok_or("no song (from 1), name or step")?,
+                        None => within(
+                            index(&args, "song")?.ok_or("no song (from 1), name or step")?,
+                            perf.get("songs").unwrap_or(&Json::Null),
+                            "song",
+                        )?,
                     };
                     applied(&Rig::select_song(&r.guitar, song))?;
                 }
@@ -305,9 +340,11 @@ pub fn register(ext: &mut Builder) {
                     let part = match text(&args, "name") {
                         Some(name) => named(perf.get("parts").unwrap_or(&Json::Null), &name)
                             .ok_or_else(|| format!("no section named {name} in the song"))?,
-                        None => {
-                            index(&args, "section")?.ok_or("no section (from 1), name or step")?
-                        }
+                        None => within(
+                            index(&args, "section")?.ok_or("no section (from 1), name or step")?,
+                            perf.get("parts").unwrap_or(&Json::Null),
+                            "section",
+                        )?,
                     };
                     applied(&Rig::select_part(&r.guitar, part))?;
                 }
@@ -408,7 +445,17 @@ pub fn register(ext: &mut Builder) {
     })
     .action("STUDIO_RIG_INSTRUMENT", |args| {
         on(move |r| {
+            if let Some(asked) = text(&args, "instrument") {
+                let known = ["guitar", "bass"];
+                if !known.iter().any(|k| k.eq_ignore_ascii_case(asked.trim())) {
+                    return Err(format!("no instrument {asked}: guitar or bass"));
+                }
+            }
+            // The one playing already: nothing to do (the Rig window asks for
+            // the instrument it opens on, whichever plays).
+            let current = guitar::instrument::current().id();
             let problem = text(&args, "instrument")
+                .filter(|asked| !asked.trim().eq_ignore_ascii_case(current))
                 .map(|instrument| Rig::set_instrument(&r.guitar, instrument))
                 .filter(|problem| !problem.is_empty());
             match problem {
@@ -511,10 +558,16 @@ pub fn register(ext: &mut Builder) {
     })
     .action("STUDIO_RIG_KEYS_PRESET", |args| {
         on(move |r| {
+            let presets = wire(&Keys::presets(&r.keys))?;
             let preset = match text(&args, "name") {
-                Some(name) => named(&wire(&Keys::presets(&r.keys))?, &name)
-                    .ok_or_else(|| format!("no keys preset named {name}"))?,
-                None => index(&args, "number")?.ok_or("no preset: number (from 1) or name")?,
+                Some(name) => {
+                    named(&presets, &name).ok_or_else(|| format!("no keys preset named {name}"))?
+                }
+                None => within(
+                    index(&args, "number")?.ok_or("no preset: number (from 1) or name")?,
+                    &presets,
+                    "number",
+                )?,
             };
             Keys::load_preset(&r.keys, preset);
             wire(&Keys::status(&r.keys))
@@ -522,13 +575,17 @@ pub fn register(ext: &mut Builder) {
     })
     .action("STUDIO_RIG_KEYS_STACK", |args| {
         on(move |r| {
+            let perform = wire(&Keys::perform(&r.keys))?;
+            let stacks = perform.get("stacks").unwrap_or(&Json::Null);
             let stack = match text(&args, "name") {
                 Some(name) => {
-                    let perform = wire(&Keys::perform(&r.keys))?;
-                    named(perform.get("stacks").unwrap_or(&Json::Null), &name)
-                        .ok_or_else(|| format!("no keys stack named {name}"))?
+                    named(stacks, &name).ok_or_else(|| format!("no keys stack named {name}"))?
                 }
-                None => index(&args, "stack")?.ok_or("no stack (from 1) or name")?,
+                None => within(
+                    index(&args, "stack")?.ok_or("no stack (from 1) or name")?,
+                    stacks,
+                    "stack",
+                )?,
             };
             Keys::press_stack(&r.keys, stack);
             wire(&Keys::perform(&r.keys))
@@ -629,4 +686,24 @@ pub fn register(ext: &mut Builder) {
         Ok(serde_json::from_slice(&out)
             .unwrap_or_else(|_| Json::String(String::from_utf8_lossy(&out).into_owned())))
     });
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::{index, json, within};
+
+    #[test]
+    fn a_number_counts_from_one_and_stays_inside_its_list() {
+        let three = json!(["a", "b", "c"]);
+        let at = |n: i64| index(&json!({ "song": n }), "song").map(|i| i.unwrap());
+        assert_eq!(within(at(3).unwrap(), &three, "song"), Ok(2));
+        assert_eq!(
+            within(at(4).unwrap(), &three, "song"),
+            Err("no `song` 4: there are 3".to_owned())
+        );
+        assert!(at(0).unwrap_err().contains("counts from 1"));
+        assert!(within(0, &json!([]), "patch").is_err());
+        assert_eq!(index(&json!({}), "song"), Ok(None));
+    }
 }
