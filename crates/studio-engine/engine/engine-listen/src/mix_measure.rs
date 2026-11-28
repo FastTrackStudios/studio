@@ -221,10 +221,21 @@ pub(crate) fn make_fresh(name: &str) -> Option<Box<dyn daw_standalone::plugin::P
         .flatten()
 }
 
+/// What a render of `span` is called while it runs (`SESSION_JOBS`): a
+/// measure taps tracks, a render to a file taps none.
+fn label(span: &Span<'_>) -> &'static str {
+    if span.tap.is_empty() {
+        "Rendering the mix"
+    } else {
+        "Measuring the mix"
+    }
+}
+
 /// Render `span` of song `project` offline.
 ///
 /// # Errors
-/// The span is empty or too long.
+/// The span is empty or too long, or it was cancelled
+/// (`SESSION_JOB_CANCEL`).
 pub fn render_span(daw: &Standalone, project: &str, span: &Span<'_>) -> Result<Rendered, String> {
     let began = web_time::Instant::now();
     if !(span.to > span.from) {
@@ -344,9 +355,21 @@ pub fn render_span(daw: &Standalone, project: &str, span: &Span<'_>) -> Result<R
             dst[i + 1] = src[f * 2 + 1];
         }
     };
+    let progress = crate::jobs::start_cancellable(label(span), to - start);
     let mut at = start;
     while at < end {
+        if progress.cancelled() {
+            drop(renderer);
+            drop_later(
+                fx_guids
+                    .iter()
+                    .filter_map(|g| plugins.write().remove(g))
+                    .collect(),
+            );
+            return Err(crate::listen::render::CANCELLED.to_owned());
+        }
         let n = BLOCK.min(end - at);
+        progress.advance(n.min(to.saturating_sub(at)));
         let block = renderer.render_block(at as u64, n);
         place(&mut master, &block.samples, at, latency as usize);
         renderer.with_taps(|taps| {
@@ -411,7 +434,8 @@ impl Cost {
 /// on fresh copies, only such recordings played back.
 ///
 /// # Errors
-/// The span is empty or too long.
+/// The span is empty or too long, or it was cancelled
+/// (`SESSION_JOB_CANCEL`).
 pub fn render_cached(
     daw: &Standalone,
     project: &ProjectContext,
@@ -457,6 +481,7 @@ pub fn render_cached(
             cold: exact,
             master,
             more: &more,
+            label: label(span),
             ..lr::Ask::plain((span.from, span.to), &points, &keyed, &none)
         },
     )?;
@@ -499,7 +524,52 @@ pub fn render_cached(
 
 /// Split interleaved stereo.
 fn channels(s: &[f32]) -> (Vec<f32>, Vec<f32>) {
-    s.chunks_exact(2).map(|f| (f[0], f[1])).unzip()
+    let n = s.len() / 2;
+    let (mut l, mut r) = (Vec::with_capacity(n), Vec::with_capacity(n));
+    for f in s.chunks_exact(2) {
+        l.push(f[0]);
+        r.push(f[1]);
+    }
+    (l, r)
+}
+
+/// Which signal of a measure one analysis is: the processed pass's or the
+/// raw one's, of a track (by guid) or the master.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Signal<'a> {
+    Track(&'a str, bool),
+    Master(bool),
+}
+
+/// Every signal a measure says (each track asked for, the master when
+/// `master`; each also raw when there is a raw pass), measured side by
+/// side on the cores free: the slowest one's time, not their sum
+/// (studio#685: the master was measured after the tracks).
+fn analyse_all<'a>(
+    (processed, raw): (&'a Rendered, Option<&'a Rendered>),
+    asked: &'a [String],
+    master: bool,
+    stats: impl Fn(&[f32]) -> Stats + Sync,
+) -> HashMap<Signal<'a>, Stats> {
+    use rayon::prelude::*;
+    let mut todo: Vec<(Signal<'a>, &'a [f32])> = Vec::new();
+    for g in asked {
+        if let Some(s) = processed.tracks.get(g) {
+            todo.push((Signal::Track(g, false), s));
+        }
+        if let Some(s) = raw.and_then(|r| r.tracks.get(g)) {
+            todo.push((Signal::Track(g, true), s));
+        }
+    }
+    if master {
+        todo.push((Signal::Master(false), &processed.master));
+        if let Some(r) = raw {
+            todo.push((Signal::Master(true), &r.master));
+        }
+    }
+    todo.into_par_iter()
+        .map(|(which, s)| (which, stats(s)))
+        .collect()
 }
 
 /// The Drums folder and everything in it (every track when the song has
@@ -671,14 +741,14 @@ fn measure(
     };
     let by_guid: HashMap<&str, &daw_proto::Track> =
         all.iter().map(|t| (t.guid.as_str(), t)).collect();
-    // Each track's numbers on a core of its own.
-    use rayon::prelude::*;
+    let master_measured = full || with_master;
+    let mut all_stats = analyse_all((&processed, raw.as_ref()), &asked, master_measured, stats);
     let measured: Vec<(String, Stats, Option<Stats>)> = asked
-        .par_iter()
+        .iter()
         .filter_map(|g| {
-            let mine = processed.tracks.get(g)?;
-            let theirs = raw.as_ref().and_then(|r| r.tracks.get(g));
-            Some((g.clone(), stats(mine), theirs.map(|s| stats(s))))
+            let mine = all_stats.remove(&Signal::Track(g, false))?;
+            let theirs = all_stats.remove(&Signal::Track(g, true));
+            Some((g.clone(), mine, theirs))
         })
         .collect();
     let power: HashMap<&str, f64> = measured
@@ -713,12 +783,8 @@ fn measure(
             }
         })
         .collect();
-    let master_measured = full || with_master;
-    let (master, master_raw) = rayon::join(
-        || stats(&processed.master),
-        || raw.as_ref().map(|r| stats(&r.master)),
-    );
-    if master_measured {
+    let master_raw = all_stats.remove(&Signal::Master(true));
+    if let Some(master) = all_stats.remove(&Signal::Master(false)) {
         rows.push(TrackNumbers {
             path: "MASTER".into(),
             kind: "master".into(),

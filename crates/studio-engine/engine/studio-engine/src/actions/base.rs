@@ -818,7 +818,7 @@ pub(crate) static JOBS: ActionMeta = meta(
     "SESSION_JOBS",
     "session_jobs",
     "Work in the background",
-    "What is being done off the window's thread right now — reading waveforms, slicing them, opening or saving a project file — each with how far along (`done` of `total`; a total of 0 is work that does not know its length). What the bottom bar shows. Empty when nothing is running. Read-only.",
+    "What is being done off the window's thread right now — reading waveforms, slicing them, opening or saving a project file, an offline render (`Measuring the mix`, `Rendering the mix`, `Listening`) — each with its `id`, how far along (`done` of `total`; a total of 0 is work that does not know its length), and whether SESSION_JOB_CANCEL can stop it (`cancellable`). What the bottom bar shows. Empty when nothing is running. Read-only.",
     "View",
     "",
 );
@@ -826,9 +826,26 @@ pub(crate) static JOBS: ActionMeta = meta(
 /// One job, as listed.
 #[derive(Facet)]
 pub(crate) struct JobRow {
+    id: u64,
     label: String,
     done: u64,
     total: u64,
+    cancellable: bool,
+}
+
+pub(crate) static JOB_CANCEL: ActionMeta = meta(
+    "SESSION_JOB_CANCEL",
+    "session_job_cancel",
+    "Stop work in the background",
+    "Stop the background job `id` (a SESSION_JOBS row's): an offline render (MIX_MEASURE, MIX_RENDER, LISTEN) stops at its next block and answers that it was cancelled, rendering nothing more. Answers `cancelled` (asked to stop), `not_cancellable` (work that cannot stop part way) or `not_running` (no such job now; it may just have finished). Touches neither the song nor playback.",
+    "View",
+    "",
+);
+
+/// The job to stop.
+#[derive(Facet)]
+pub(crate) struct JobCancelArg {
+    id: u64,
 }
 
 pub(crate) static ITEM_STYLE: ActionMeta = meta(
@@ -873,14 +890,26 @@ pub(crate) fn register_style(list: &ActionList) -> Result<(), architect::action:
             .into_iter()
             .map(
                 |crate::jobs::Running {
-                     label, done, total, ..
+                     id,
+                     label,
+                     done,
+                     total,
                  }| JobRow {
+                    id,
                     label,
                     done: u64::try_from(done).unwrap_or(u64::MAX),
                     total: u64::try_from(total).unwrap_or(u64::MAX),
+                    cancellable: crate::jobs::cancellable(id),
                 },
             )
             .collect::<Vec<_>>())
+    })?;
+    list.register(&JOB_CANCEL, Effect::Mutating, |a: JobCancelArg| {
+        Ok::<_, String>(match crate::jobs::cancel(a.id) {
+            crate::jobs::Cancelled::Asked => "cancelled",
+            crate::jobs::Cancelled::NotCancellable => "not_cancellable",
+            crate::jobs::Cancelled::NotRunning => "not_running",
+        })
     })?;
     list.register(&ITEM_STYLE, Effect::Mutating, |a: ItemStyleArg| {
         crate::options::OUTLINED.set(a.outlined);

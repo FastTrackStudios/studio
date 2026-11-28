@@ -26,6 +26,9 @@ struct Late {
     line: Vec<[f32; 2]>,
     at: usize,
     gain: f32,
+    /// `Cancel`: asks every running measure to stop (`SESSION_JOB_CANCEL`)
+    /// from its first block, as a person would part way through.
+    cancels: bool,
 }
 
 impl daw_standalone::plugin::PluginInstance for Late {
@@ -61,6 +64,13 @@ impl daw_standalone::plugin::PluginInstance for Late {
         out_r: &mut [f32],
         _: &daw_standalone::plugin::PluginEvents<'_>,
     ) -> Result<(), daw_standalone::plugin::PluginError> {
+        if self.cancels {
+            for job in crate::jobs::running() {
+                if job.label == "Measuring the mix" {
+                    let _ = crate::jobs::cancel(job.id);
+                }
+            }
+        }
         for f in 0..in_l.len() {
             let (l, r) = if self.line.is_empty() {
                 (in_l[f], in_r[f])
@@ -78,8 +88,9 @@ impl daw_standalone::plugin::PluginInstance for Late {
     fn deactivate(&mut self) {}
 }
 
-/// `Late 848` (848 samples, unity, as Signal's keyed tracks report) and
-/// `Gain 6` (+6 dB, no latency).
+/// `Late 848` (848 samples, unity, as Signal's keyed tracks report),
+/// `Gain 6` (+6 dB, no latency) and `Cancel` (unity; it cancels the
+/// measure it runs in).
 struct Plugins;
 
 impl daw_standalone::plugin::FxFactory for Plugins {
@@ -87,7 +98,7 @@ impl daw_standalone::plugin::FxFactory for Plugins {
         Vec::new()
     }
     fn provides(&self, name: &str) -> bool {
-        name == "Late 848" || name == "Gain 6"
+        matches!(name, "Late 848" | "Gain 6" | "Cancel")
     }
     fn create(
         &self,
@@ -97,12 +108,14 @@ impl daw_standalone::plugin::FxFactory for Plugins {
         let (late, gain) = match name {
             "Late 848" => (848, 1.0),
             "Gain 6" => (0, 10f32.powf(6.0 / 20.0)),
+            "Cancel" => (0, 1.0),
             _ => return None,
         };
         Some(Box::new(Late {
             line: vec![[0.0; 2]; late],
             at: 0,
             gain,
+            cancels: name == "Cancel",
         }))
     }
 }
@@ -788,4 +801,50 @@ fn the_raw_pass_renders_beside_the_processed_one_in_the_same_render() {
     let master = rms(&on.master) - rms(&off.master);
     assert!((master - 6.0).abs() < 0.05, "{master}");
     assert_ne!(cost.answered, "replayed");
+}
+
+/// A measure cancelled part way stops at its next block and says so,
+/// renders nothing more, and leaves no job behind; the next one runs
+/// whole (studio#685: a long measure can be cancelled). The cancel comes
+/// from inside the render (the `Cancel` FX), so it lands mid-span every
+/// time; nextest runs each test in a process of its own, so it reaches no
+/// other test's measure.
+#[test]
+fn a_cancelled_measure_stops_and_says_so() {
+    let (daw, ctx) = song("measure-cancel", None);
+    let kick = guid_of(&daw, &ctx, "Drums/Kick");
+    let fx = daw_proto::fx::Effects::add(
+        &daw,
+        ctx.clone(),
+        daw_proto::fx::FxChainContext::Track(kick.clone()),
+        "Cancel",
+    )
+    .expect("the cancelling FX");
+    for full in [None, Some(true)] {
+        let mut a = args(&["Drums/Kick"], true);
+        a.from = "0s".into();
+        a.to = "9s".into();
+        a.full = full;
+        let why = measure(&daw, &ctx, &a)
+            .err()
+            .unwrap_or_else(|| panic!("full {full:?}: measured though cancelled"));
+        assert!(why.contains("cancelled"), "full {full:?}: {why}");
+        assert!(
+            crate::jobs::running()
+                .iter()
+                .all(|j| j.label != "Measuring the mix"),
+            "full {full:?}: the job outlived its render"
+        );
+    }
+    daw_proto::fx::Effects::remove(
+        &daw,
+        ctx.clone(),
+        daw_proto::fx::FxTarget {
+            context: daw_proto::fx::FxChainContext::Track(kick),
+            fx: daw_proto::fx::FxRef::Guid(fx),
+        },
+    )
+    .expect("removed");
+    let m = measure(&daw, &ctx, &args(&["Drums/Kick"], true)).expect("measured whole");
+    assert!((row(&m, "Drums/Kick").numbers.rms - -18.0).abs() < 0.1);
 }

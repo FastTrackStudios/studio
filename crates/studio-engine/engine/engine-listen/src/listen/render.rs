@@ -221,6 +221,10 @@ pub struct Ask<'a> {
     /// points, cuts and bypasses, side by side with this one on copies of
     /// their own ([`Heard::more`], in order).
     pub more: &'a [Pass<'a>],
+    /// What the render is called while it runs (`SESSION_JOBS`, the bottom
+    /// bar), where it says how far along it is and can be cancelled
+    /// (`SESSION_JOB_CANCEL`).
+    pub label: &'a str,
 }
 
 impl Ask<'_> {
@@ -248,6 +252,7 @@ impl Ask<'_> {
             master: false,
             cold: false,
             more: &[],
+            label: "Listening",
         }
     }
 }
@@ -1641,6 +1646,13 @@ pub fn render(
         }
     }
     let chunk_count = spans.len();
+    // How far along, as the bottom bar shows it: every hearing's span
+    // frames, and a way to stop it part way.
+    let progress = (!jobs.is_empty()).then(|| {
+        let frames: u64 = spans.iter().map(|(first, _, end)| end - first).sum();
+        let total = frames.saturating_mul(jobs.len() as u64);
+        crate::jobs::start_cancellable(ask.label, usize::try_from(total).unwrap_or(usize::MAX))
+    });
     // Every chunk of every hearing that renders, side by side.
     let outs: Vec<(usize, Vec<Result<ChunkOut, String>>)> = std::thread::scope(|sc| {
         let mut pools: Vec<Option<&mut Vec<HashMap<String, Warm>>>> =
@@ -1665,6 +1677,7 @@ pub fn render(
                     probes: &job.probes,
                     only: &job.only,
                     fed: &job.fed,
+                    progress: progress.as_ref(),
                 };
                 let threads = spans
                     .iter()
@@ -1767,7 +1780,7 @@ pub fn render(
         let raw: Vec<Arc<[f32]>> = (0..job.probes.len())
             .map(|i| match outs.as_slice() {
                 [one] => one.raw[i].clone(),
-                _ => outs.iter().flat_map(|o| o.raw[i].iter().copied()).collect(),
+                _ => joined(outs.iter().map(|o| &*o.raw[i])).into(),
             })
             .collect();
         let latencies: Vec<u32> = outs
@@ -1775,13 +1788,17 @@ pub fn render(
             .map(|o| o.latencies.clone())
             .unwrap_or_default();
         let master_latency = outs.first().map_or(0, |o| o.master_latency);
-        let signals: Vec<Vec<f32>> = raw[..n]
-            .iter()
-            .zip(&latencies)
-            .map(|(r, late)| line_up(r, start, (from, to), *late))
-            .collect();
+        // Side by side: each is a whole song's copy (studio#685).
+        let signals: Vec<Vec<f32>> = {
+            use rayon::prelude::*;
+            raw[..n]
+                .par_iter()
+                .zip(&latencies[..n.min(latencies.len())])
+                .map(|(r, late)| line_up(r, start, (from, to), *late))
+                .collect()
+        };
         let master = spec.master.then(|| {
-            let m: Vec<f32> = outs.iter().flat_map(|o| o.master.iter().copied()).collect();
+            let m: Vec<f32> = joined(outs.iter().map(|o| o.master.as_slice()));
             let lined = line_up(&m, start, (from, to), master_latency);
             kept.keep(
                 master_at.clone(),
@@ -1942,7 +1959,13 @@ struct Shared<'a> {
     probes: &'a [ProbeAt],
     only: &'a HashSet<String>,
     fed: &'a HashMap<String, Fed>,
+    /// The render's job: moved on as blocks are rendered, and asked
+    /// whether it has been cancelled.
+    progress: Option<&'a crate::jobs::Job>,
 }
+
+/// What a render cancelled part way answers.
+pub const CANCELLED: &str = "cancelled (SESSION_JOB_CANCEL) before it finished";
 
 /// What one chunk heard.
 struct ChunkOut {
@@ -2060,22 +2083,14 @@ fn run_chunk(
         start: from,
         frames: to - from,
     });
-    let master = render_blocks(&renderer, (first, last), c.master);
+    let rendered = render_blocks(&renderer, (first, end, last), c.master, c.progress);
     let raw = renderer.take_recordings();
     let blocks_ms = blocks.elapsed().as_secs_f64() * 1e3;
     drop(renderer);
-    let meters = if c.meters.is_empty() {
+    let meters = if c.meters.is_empty() || rendered.is_err() {
         Vec::new()
     } else {
         signal_meters(&ready.plugins, c.meters, &serde_json::json!({}))
-    };
-    let master = if c.master {
-        master
-            .get(((from - first) * 2) as usize..((to - first) * 2) as usize)
-            .map(<[f32]>::to_vec)
-            .unwrap_or_default()
-    } else {
-        Vec::new()
     };
     // Kept warm, a cold render's copies too: the next cold render resets
     // them in place of making them again (copying and priming a song's
@@ -2093,6 +2108,17 @@ fn run_chunk(
             );
         }
     }
+    // Cancelled: its copies are kept warm all the same (a reset clears
+    // a partial render as it clears a whole one).
+    let master = if c.master {
+        kept_frames(
+            rendered?,
+            ((from - first) * 2) as usize..((to - first) * 2) as usize,
+        )
+    } else {
+        rendered?;
+        Vec::new()
+    };
     Ok(ChunkOut {
         raw,
         latencies,
@@ -2110,13 +2136,28 @@ fn run_chunk(
 
 /// The renderer's blocks over render frames `start..end` (its probes
 /// recorded as it goes, [`Record`]), and (when `master`) what reached the
-/// master, interleaved stereo.
-fn render_blocks(renderer: &ProjectRenderer, (start, end): (u64, u64), master: bool) -> Vec<f32> {
+/// master, interleaved stereo. Each block of `start..body` moves
+/// `progress` on; a cancelled one stops it ([`CANCELLED`]).
+///
+/// # Errors
+/// [`CANCELLED`].
+fn render_blocks(
+    renderer: &ProjectRenderer,
+    (start, body, end): (u64, u64, u64),
+    master: bool,
+    progress: Option<&crate::jobs::Job>,
+) -> Result<Vec<f32>, String> {
     let frames = (end - start) as usize;
     let mut sum: Vec<f32> = Vec::with_capacity(if master { frames * 2 } else { 0 });
     let mut at = start;
     while at < end {
+        if progress.is_some_and(crate::jobs::Job::cancelled) {
+            return Err(CANCELLED.to_owned());
+        }
         let n = BLOCK.min((end - at) as usize);
+        if let Some(job) = progress {
+            job.advance(n.min(usize::try_from(body.saturating_sub(at)).unwrap_or(n)));
+        }
         let block = renderer.render_block(at, n);
         if master {
             let got = &block.samples[..(n * 2).min(block.samples.len())];
@@ -2125,7 +2166,7 @@ fn render_blocks(renderer: &ProjectRenderer, (start, end): (u64, u64), master: b
         }
         at += n as u64;
     }
-    sum
+    Ok(sum)
 }
 
 /// A probe's signal (from render frame `start`, `late` samples late) as
@@ -2133,8 +2174,33 @@ fn render_blocks(renderer: &ProjectRenderer, (start, end): (u64, u64), master: b
 fn line_up(raw: &[f32], start: u64, (from, to): (u64, u64), late: u32) -> Vec<f32> {
     let len = ((to - from) * 2) as usize;
     let skip = ((from - start + u64::from(late)) * 2) as usize;
-    let mut out: Vec<f32> = raw.iter().skip(skip).take(len).copied().collect();
+    // A slice copy: a whole song's signal is tens of millions of samples
+    // (copied one by one, 5 s of a measure's 45, studio#685).
+    let held = raw.get(skip..).unwrap_or_default();
+    let mut out = Vec::with_capacity(len);
+    out.extend_from_slice(&held[..len.min(held.len())]);
     out.resize(len, 0.0);
+    out
+}
+
+/// `all`'s samples `keep`, in place: the first chunk keeps from its start,
+/// so a whole song's master is cut, never copied (studio#685); empty when
+/// `keep` is not inside it.
+fn kept_frames(mut all: Vec<f32>, keep: std::ops::Range<usize>) -> Vec<f32> {
+    if keep.start > keep.end || keep.end > all.len() {
+        return Vec::new();
+    }
+    all.truncate(keep.end);
+    all.drain(..keep.start);
+    all
+}
+
+/// One signal from its chunks' parts, in order.
+fn joined<'a>(parts: impl Iterator<Item = &'a [f32]> + Clone) -> Vec<f32> {
+    let mut out = Vec::with_capacity(parts.clone().map(<[f32]>::len).sum());
+    for p in parts {
+        out.extend_from_slice(p);
+    }
     out
 }
 
@@ -2219,6 +2285,31 @@ mod tests {
             track: track.into(),
             at,
         }
+    }
+
+    /// A probe lined up as the timeline's `from..to`: skipped past the
+    /// preroll and its latency, padded with silence where it ran short,
+    /// and joined from chunks in order (studio#685's slice copies).
+    #[test]
+    fn a_probe_lines_up_on_the_timeline_and_chunks_join_in_order() {
+        let raw: Vec<f32> = (0..20).map(|i| i as f32).collect();
+        // Render frame 2 first; frames 4..7 wanted; 1 frame late.
+        assert_eq!(
+            line_up(&raw, 2, (4, 7), 1),
+            [6.0, 7.0, 8.0, 9.0, 10.0, 11.0]
+        );
+        // Past what was recorded: silence.
+        assert_eq!(
+            line_up(&raw, 2, (10, 13), 1),
+            [18.0, 19.0, 0.0, 0.0, 0.0, 0.0]
+        );
+        assert_eq!(line_up(&raw, 0, (30, 31), 0), [0.0, 0.0]);
+        let all: Vec<f32> = (0..8).map(|i| i as f32).collect();
+        assert_eq!(kept_frames(all.clone(), 0..4), [0.0, 1.0, 2.0, 3.0]);
+        assert_eq!(kept_frames(all.clone(), 2..6), [2.0, 3.0, 4.0, 5.0]);
+        assert!(kept_frames(all, 4..10).is_empty());
+        let parts: [&[f32]; 3] = [&[1.0, 2.0], &[], &[3.0]];
+        assert_eq!(joined(parts.iter().copied()), [1.0, 2.0, 3.0]);
     }
 
     #[test]
