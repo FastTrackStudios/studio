@@ -1309,11 +1309,20 @@ impl GuitarRigBackend {
         // is live. Everything else on this payload is genuinely absent — there
         // is no engine to report a block size or a render time, and inventing
         // those would make the DSP strip lie about a rig that is not running.
+        // It opens no device either way; `running` is whether it was started
+        // (START, RESTART) and not stopped since, as a real rig's is, so the
+        // stopped surfaces can be designed too and audio reads as closed
+        // until asked for (studio#555). Silent while stopped.
         if crate::library::rig_is_design() && self.rig.lock_ok().is_none() {
-            let f = crate::design::frame(self.design_seconds());
+            let started = self.wants_audio.load(std::sync::atomic::Ordering::Relaxed);
+            let f = if started {
+                crate::design::frame(self.design_seconds())
+            } else {
+                crate::design::Frame::default()
+            };
             let patch = self.design_patch.lock_ok().clone();
             return RigStatus {
-                running: true,
+                running: started,
                 input_peak: f.input,
                 output_peak: f.output,
                 active_patch: Some(patch).filter(|p| !p.is_empty()),
@@ -11993,6 +12002,16 @@ impl RigStreamSource for GuitarRigBackend {
 
 impl AudioSettings for GuitarRigBackend {
     fn devices(&self) -> AudioDevices {
+        // Design mode touches no audio hardware (studio#555): listing the
+        // devices opens each one to ask what it is (ALSA's every PCM), which
+        // can block on a device another program holds.
+        if crate::library::rig_is_design() {
+            return AudioDevices {
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_access: GuitarRig::input_access().to_string(),
+            };
+        }
         AudioDevices {
             inputs: GuitarRig::input_devices()
                 .into_iter()

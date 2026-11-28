@@ -72,7 +72,12 @@ async fn a_member_follows_every_load_on_one_attachment() {
             .contains_key(&room::state::here_key("member-1"))
     })
     .await;
-    assert_eq!(room::net::people(&member.presence()), vec!["Alex", "Cody"]);
+    // The leader seeing the member says nothing of the other way round:
+    // the leader's presence reaches the member on its own path.
+    eventually("the member sees the leader", || {
+        room::net::people(&member.presence()) == ["Alex", "Cody"]
+    })
+    .await;
 
     // The leader plays: the member reads the transport.
     let entry = room::lead::entry(

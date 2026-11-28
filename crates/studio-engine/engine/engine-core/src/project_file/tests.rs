@@ -560,3 +560,55 @@ fn edits_from_elsewhere_are_named_as_they_were_made() {
         "Agent: a; Set volume"
     );
 }
+
+/// A step this replica wrote, then (before its append) a room member's
+/// step made on top of it, imported: the local step's append reaches only
+/// as far as its own commit, so the member's step is left past `saved` for
+/// the remote append, under its own name (CI run 46126082689: the leader's
+/// history `["Set track","Save"]`, the agent's step folded into the
+/// leader's own).
+#[test]
+fn a_step_imported_before_the_local_append_keeps_its_own_moment() {
+    let leader = engine_sync::loro::LoroDoc::new();
+    let member = engine_sync::loro::LoroDoc::new();
+    let saved = leader.oplog_vv();
+    leader
+        .get_map("tracks")
+        .insert("Bass", -6.0)
+        .expect("the leader's edit");
+    leader.set_next_commit_message("Set track");
+    leader.commit();
+    let own = leader.oplog_vv();
+    member
+        .import(
+            &leader
+                .export(engine_sync::loro::ExportMode::all_updates())
+                .expect("exported"),
+        )
+        .expect("the member has it");
+    member
+        .get_map("tracks")
+        .insert("Keys", -9.0)
+        .expect("the agent's edit");
+    member.set_next_commit_message("Agent: level the keys");
+    member.commit();
+    leader
+        .import(
+            &member
+                .export(engine_sync::loro::ExportMode::updates(&own))
+                .expect("exported"),
+        )
+        .expect("the leader has it");
+
+    let (reach, frontiers) = super::own_reach(&leader, &leader.oplog_vv(), &saved)
+        .expect("more than the leader's own step arrived");
+    assert_eq!(reach, own, "the local step reaches its own commit only");
+    assert_eq!(leader.frontiers_to_vv(&frontiers), Some(own.clone()));
+    let left = SessionDoc::from_loro(leader.clone()).messages_since(&reach);
+    assert_eq!(left, vec!["Agent: level the keys".to_owned()]);
+
+    // Nothing arrived after it: the step's append takes the doc whole.
+    assert!(super::own_reach(&member, &member.oplog_vv(), &own).is_none());
+    // No commit of its own since the save: nothing to reach.
+    assert!(super::own_reach(&leader, &leader.oplog_vv(), &leader.oplog_vv()).is_none());
+}

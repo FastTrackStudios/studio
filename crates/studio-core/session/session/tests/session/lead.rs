@@ -53,7 +53,13 @@ async fn a_follower_draws_where_the_leader_plays() {
         let _ = driver.run(&presence).await;
     });
 
+    // Where the leader plays is 48 s plus the time since it published:
+    // measured, not assumed. How soon the follower hears it is the
+    // network's (a loaded runner took 9.9 s once, CI run 46131003811);
+    // where it draws the playhead once it has is what this checks.
+    let before = now_micros_f64();
     assert!(leader.publish(true, 48.0, 1.0));
+    let after = now_micros_f64();
     let mut heard = None;
     until("the follower hears the leader", || {
         heard = peer.states().get("lead/play").and_then(transport_of);
@@ -63,10 +69,22 @@ async fn a_follower_draws_where_the_leader_plays() {
     let mut tracker = Tracker::default();
     tracker.observe(heard.unwrap());
     tokio::time::sleep(Duration::from_millis(250)).await;
+    let at = now_micros_f64();
     let shown = tracker
-        .position(now_micros_f64(), clock.offset_ms().unwrap() * 1000.0)
+        .position(at, clock.offset_ms().unwrap() * 1000.0)
         .unwrap();
-    assert!((48.2..48.6).contains(&shown), "shown {shown}");
+    // The clock estimate's error, both ways (one process: half a loopback
+    // round trip, well under this).
+    const SLACK: f64 = 0.1;
+    let (earliest, latest) = (
+        48.0 + (at - after) / 1e6 - SLACK,
+        48.0 + (at - before) / 1e6 + SLACK,
+    );
+    assert!(
+        (earliest..latest).contains(&shown),
+        "shown {shown}, the leader at {earliest:.3}..{latest:.3}"
+    );
+    assert!(shown >= 48.2, "the playhead moved on: shown {shown}");
 
     // A stop holds where it stopped.
     assert!(leader.publish(false, 60.0, 1.0));

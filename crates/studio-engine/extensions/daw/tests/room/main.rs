@@ -204,6 +204,25 @@ fn history(mcp: &Mcp) -> Vec<String> {
         .collect()
 }
 
+/// The song's history as `mcp` has it, each moment's label and action.
+fn moments(mcp: &Mcp) -> Value {
+    mcp.run("SESSION_HISTORY", &json!({"limit": 20}))
+        .map_or_else(
+            |e| json!(e),
+            |h| {
+                json!(
+                    h["moments"]
+                        .as_array()
+                        .cloned()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|m| json!([m["step"], m["label"], m["action"]]))
+                        .collect::<Vec<_>>()
+                )
+            },
+        )
+}
+
 /// The leader and the member edit the open song together: a person's
 /// fader move on the leader reaches the member, and an agent's on the
 /// member (through AGENT_RUN, as Studio's MCP runs every call) reaches the
@@ -305,7 +324,17 @@ fn edits(l: &Mcp, m: &Mcp, checks: &mut Checks) {
     checks.add(
         "the leader has the agent's undo step",
         ok,
-        format!("the leader's history {got}"),
+        if ok {
+            format!("the leader's history {got}")
+        } else {
+            // Which side lost the step's name: each one's moments, with
+            // the action that made each.
+            format!(
+                "the leader's history {got}; the leader's moments {}; the member's {}",
+                moments(l),
+                moments(m)
+            )
+        },
     );
     let (ok, got) = until(
         FOLLOW_WAIT,
@@ -364,18 +393,17 @@ fn followed(mcp: &Mcp) -> Result<Value, String> {
     Ok(json!({ "file": file, "led": led }))
 }
 
-/// The leader's session goes from `before` to another, and the member's
-/// lighting follows it there: check `name`. The leader's, for the next.
-fn lighting_follows(
-    (l, m): (&Mcp, &Mcp),
-    before: &Value,
-    checks: &mut Checks,
-    name: &str,
-) -> Value {
+/// The leader's chart and lighting follow the session `to` (its file's
+/// stem), led from there, and the member's follow it there: check `name`.
+/// Waited for by name, not as "anything but the last one": the leader's
+/// goes back to song 1 after the last check, so a change seen before the
+/// next load lands was taken for it (CI, under load).
+fn lighting_follows((l, m): (&Mcp, &Mcp), to: &str, checks: &mut Checks, name: &str) {
+    let file = json!(format!("{to}.session"));
     let (moved, leader) = until(
         FOLLOW_WAIT,
         || followed(l),
-        |v| v["file"].is_string() && v["led"] == json!(true) && v != before,
+        |v| v["file"] == file && v["led"] == json!(true),
     );
     let (ok, member) = until(FOLLOW_WAIT, || followed(m), |v| moved && *v == leader);
     checks.add(
@@ -383,7 +411,6 @@ fn lighting_follows(
         moved && ok,
         format!("leader {leader}, member {member}"),
     );
-    leader
 }
 
 /// Run `id` and note it; an error fails the check `name`.
@@ -493,9 +520,9 @@ fn room(
         let what = "joined by the link, the setlist open";
         times.judge(checks, "join time", "join", what, began.elapsed());
     }
-    let lit = lighting_follows(
+    lighting_follows(
         (l, m),
-        &Value::Null,
+        FIRST[0],
         checks,
         "member's lighting follows the session",
     );
@@ -518,7 +545,12 @@ fn room(
         ok,
         format!("member on song {got}"),
     );
-    let lit = lighting_follows((l, m), &lit, checks, "member's lighting follows the song");
+    lighting_follows(
+        (l, m),
+        FIRST[1],
+        checks,
+        "member's lighting follows the song",
+    );
 
     // The leader plays: the member plays at the leader's playhead.
     if let Err(e) = check::play_from(l, 1.0) {
@@ -592,9 +624,9 @@ fn room(
         let took = began.elapsed();
         times.judge(checks, "follow time (setlist)", "follow_load", what, took);
     }
-    let lit = lighting_follows(
+    lighting_follows(
         (l, m),
-        &lit,
+        SECOND[0],
         checks,
         "member's lighting moves to the second setlist",
     );
@@ -625,7 +657,7 @@ fn room(
     }
     lighting_follows(
         (l, m),
-        &lit,
+        LONE,
         checks,
         "member's lighting moves to the lone session",
     );
