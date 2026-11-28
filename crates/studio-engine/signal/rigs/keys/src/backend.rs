@@ -44,14 +44,15 @@ fn pack_library() -> PathBuf {
 }
 
 /// The raw sample and patch tree (the extractions the packs were built from,
-/// and the instruments' own patch files): `FTS_SAMPLED_ROOT`, else the studio
-/// machine's mount.
+/// and the instruments' own patch files): `FTS_SAMPLED_ROOT`, else AudioHaven's
+/// `Sampled` where this machine has it, else `Sampled` in the Libraries home
+/// (Drive's `Studio/Libraries/Sampled`, `utils::home`).
 fn sampled_root() -> PathBuf {
     std::env::var("FTS_SAMPLED_ROOT")
         .ok()
         .filter(|s| !s.is_empty())
         .map_or_else(
-            || PathBuf::from("/run/media/AudioHaven/Sampled"),
+            || utils::home::located("/run/media/AudioHaven/Sampled"),
             PathBuf::from,
         )
 }
