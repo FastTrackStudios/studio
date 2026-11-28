@@ -477,9 +477,9 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         };
         // One undo step: the engine's undo keeps the tempo map, and a
         // later undo of an earlier edit must not take this tempo with it.
-        daw::service::Projects::begin_undo_block(daw, project.clone(), "Set the tempo");
-        let set = set_tempo(daw, &project, a.bpm, at, follow);
-        daw::service::Projects::end_undo_block(daw, project.clone(), "Set the tempo", None);
+        let set = one_step(daw, &project, "Set the tempo", || {
+            set_tempo(daw, &project, a.bpm, at, follow)
+        });
         set?;
         regenerate_guide(daw);
         crate::song_model::request_resync();
@@ -504,10 +504,9 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             return Err("`bar_one` is a time in the song, seconds".to_owned());
         }
         // One undo step, as TEMPO_SET is.
-        daw::service::Projects::begin_undo_block(daw, project.clone(), "Set the tempo map");
-        let meters = set_tempo_map(daw, &project, &a.points, a.follow.unwrap_or(false));
-        daw::service::Projects::end_undo_block(daw, project.clone(), "Set the tempo map", None);
-        let meters = meters?;
+        let meters = one_step(daw, &project, "Set the tempo map", || {
+            set_tempo_map(daw, &project, &a.points, a.follow.unwrap_or(false))
+        })?;
         let started = a
             .bar_one
             .map(|at| set_song_start(daw, &project, at))
@@ -614,6 +613,30 @@ fn tempo_read(
             .map(|&at| BarOut { at, bar: bar(at) })
             .collect(),
     }
+}
+
+/// Run `f` as the undo step `label`, kept apart in the song's history: the
+/// steps before it recorded first, and it recorded before the action
+/// returns (`crate::history_marks::settle`, as the FX actions do). Inside
+/// a step already open (an agent's group, a caller's), it is part of that
+/// one.
+fn one_step<R>(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    label: &str,
+    f: impl FnOnce() -> R,
+) -> R {
+    let own = !daw.undo_step_open(project);
+    if own {
+        crate::history_marks::settle(crate::history_marks::SETTLE);
+        daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+    }
+    let out = f();
+    if own {
+        daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+        crate::history_marks::settle(crate::history_marks::SETTLE);
+    }
+    out
 }
 
 /// Whether anything in the song is audio — a take recorded or imported

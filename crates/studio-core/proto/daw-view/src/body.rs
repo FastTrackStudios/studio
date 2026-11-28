@@ -110,6 +110,14 @@ pub trait Body: Send + Sync {
         Vec::new()
     }
 
+    /// How many undo steps the engine finished that the song's history has
+    /// not recorded yet (`engine_core::project_file::steps_pending`): what
+    /// an action waits on before and after its own step, so a fast run of
+    /// calls is a step each and not one commit. None with no engine here.
+    fn steps_pending(&self) -> usize {
+        0
+    }
+
     /// Run an action on the page's own list (`studio_engine::web_actions::run`).
     #[cfg(feature = "web")]
     fn web_run(
