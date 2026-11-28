@@ -1788,11 +1788,15 @@ pub fn render(
             .map(|o| o.latencies.clone())
             .unwrap_or_default();
         let master_latency = outs.first().map_or(0, |o| o.master_latency);
-        let signals: Vec<Vec<f32>> = raw[..n]
-            .iter()
-            .zip(&latencies)
-            .map(|(r, late)| line_up(r, start, (from, to), *late))
-            .collect();
+        // Side by side: each is a whole song's copy (studio#685).
+        let signals: Vec<Vec<f32>> = {
+            use rayon::prelude::*;
+            raw[..n]
+                .par_iter()
+                .zip(&latencies[..n.min(latencies.len())])
+                .map(|(r, late)| line_up(r, start, (from, to), *late))
+                .collect()
+        };
         let master = spec.master.then(|| {
             let m: Vec<f32> = joined(outs.iter().map(|o| o.master.as_slice()));
             let lined = line_up(&m, start, (from, to), master_latency);
@@ -2106,13 +2110,13 @@ fn run_chunk(
     }
     // Cancelled: its copies are kept warm all the same (a reset clears
     // a partial render as it clears a whole one).
-    let master = rendered?;
     let master = if c.master {
-        master
-            .get(((from - first) * 2) as usize..((to - first) * 2) as usize)
-            .map(<[f32]>::to_vec)
-            .unwrap_or_default()
+        kept_frames(
+            rendered?,
+            ((from - first) * 2) as usize..((to - first) * 2) as usize,
+        )
     } else {
+        rendered?;
         Vec::new()
     };
     Ok(ChunkOut {
@@ -2177,6 +2181,18 @@ fn line_up(raw: &[f32], start: u64, (from, to): (u64, u64), late: u32) -> Vec<f3
     out.extend_from_slice(&held[..len.min(held.len())]);
     out.resize(len, 0.0);
     out
+}
+
+/// `all`'s samples `keep`, in place: the first chunk keeps from its start,
+/// so a whole song's master is cut, never copied (studio#685); empty when
+/// `keep` is not inside it.
+fn kept_frames(mut all: Vec<f32>, keep: std::ops::Range<usize>) -> Vec<f32> {
+    if keep.start > keep.end || keep.end > all.len() {
+        return Vec::new();
+    }
+    all.truncate(keep.end);
+    all.drain(..keep.start);
+    all
 }
 
 /// One signal from its chunks' parts, in order.
@@ -2288,6 +2304,10 @@ mod tests {
             [18.0, 19.0, 0.0, 0.0, 0.0, 0.0]
         );
         assert_eq!(line_up(&raw, 0, (30, 31), 0), [0.0, 0.0]);
+        let all: Vec<f32> = (0..8).map(|i| i as f32).collect();
+        assert_eq!(kept_frames(all.clone(), 0..4), [0.0, 1.0, 2.0, 3.0]);
+        assert_eq!(kept_frames(all.clone(), 2..6), [2.0, 3.0, 4.0, 5.0]);
+        assert!(kept_frames(all, 4..10).is_empty());
         let parts: [&[f32]; 3] = [&[1.0, 2.0], &[], &[3.0]];
         assert_eq!(joined(parts.iter().copied()), [1.0, 2.0, 3.0]);
     }
