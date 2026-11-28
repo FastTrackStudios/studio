@@ -25,6 +25,9 @@ enum Toggle {
     /// The mixer under the arrangement: `x` on a keyboard, and only in the
     /// menu, for a screen without one.
     Mixer,
+    /// The ruler's TEMPO lane, where the tempo and the meter are set: only
+    /// in the menu, and only for a slim ruler (a full one always has it).
+    TempoLane,
     Compact,
     Follow,
     Metronome,
@@ -67,6 +70,7 @@ impl Toggle {
             Self::Razor => "Razor tool — a drag over the lanes draws a razor area",
             Self::Compact => "Compact track panel — more room for the arrangement",
             Self::Mixer => "The mixer (x)",
+            Self::TempoLane => "The ruler's tempo lane — set the tempo and the meter there",
             Self::Follow => "Follow the play cursor — page the view to wherever it goes",
         }
     }
@@ -85,6 +89,7 @@ impl Toggle {
             Self::Follow => "Follow the play cursor",
             Self::Compact => "Compact track panel",
             Self::Mixer => "Mixer",
+            Self::TempoLane => "Tempo lane",
         }
     }
 
@@ -93,6 +98,7 @@ impl Toggle {
     const fn option_name(self) -> Option<&'static str> {
         match self {
             Self::Compact | Self::Follow | Self::Metronome | Self::Mixer | Self::Grouping => None,
+            Self::TempoLane => Some("tempo_lane"),
             Self::AutoCrossfade => Some("auto_crossfade"),
             Self::Ripple => Some("ripple"),
             Self::Grid => Some("grid"),
@@ -105,7 +111,7 @@ impl Toggle {
     const fn option(self) -> Option<&'static options::Option> {
         match self {
             // These are the window's, not the session's.
-            Self::Compact | Self::Follow | Self::Metronome | Self::Mixer => None,
+            Self::Compact | Self::Follow | Self::Metronome | Self::Mixer | Self::TempoLane => None,
             Self::AutoCrossfade => Some(&options::AUTO_CROSSFADE),
             Self::Grouping => Some(&options::GROUPING),
             Self::Ripple => Some(&options::RIPPLE),
@@ -165,6 +171,9 @@ impl Toggle {
             // The play cursor, and the page turning to keep it in view:
             // the line, and an arrow along to the right of it.
             Self::Follow => &["M7 4 V20", "M11 12 H19", "M15.5 8.5 L19 12 L15.5 15.5"],
+            // A tempo map: a step up from one tempo to the next, and the
+            // change's flag.
+            Self::TempoLane => &["M3 17 H10 V9 H21", "M10 9 V4 L14 5.5 L10 7"],
             // Three faders: their grooves and their caps.
             Self::Mixer => &[
                 "M6 4 V20",
@@ -223,11 +232,18 @@ pub fn MainToolbar(
     // The window's one way to open the mixer, when it has one.
     let switch = try_use_context::<crate::chrome::MixerToggle>();
     let mut following = use_signal(|| follow.get());
+    let mut tempo_lane = use_signal(crate::ruler_layout::tempo_shown);
     let mut open = use_signal(|| false);
     let is_on = move |t: Toggle| match t {
         Toggle::Metronome => metronome(),
         Toggle::Compact => shape(),
         Toggle::Follow => following(),
+        // The lane itself is the truth (`SESSION_OPTION` over MCP moves it
+        // too); the signal is what re-renders the row.
+        Toggle::TempoLane => {
+            let _ = tempo_lane();
+            crate::ruler_layout::tempo_shown()
+        }
         Toggle::Mixer => switch.map_or_else(|| mixer.is_some_and(|open| open()), |s| s.showing()),
         // The lock is shown in the bottom bar too: its signal, when the
         // shell has one, is the one both re-render on.
@@ -257,6 +273,16 @@ pub fn MainToolbar(
             let now = !follow.get();
             follow.set(now);
             following.set(now);
+        }
+        Toggle::TempoLane => {
+            // `SESSION_OPTION` switches it, as over MCP (what `watch`
+            // sees); the lane is the ruler's, read as each frame lays out.
+            let now = !crate::ruler_layout::tempo_shown();
+            let _ = crate::press::press(
+                crate::view_actions::OPTION.id,
+                &serde_json::json!({ "option": "tempo_lane", "on": now }),
+            );
+            tempo_lane.set(now);
         }
         Toggle::Compact => {
             let now = !compact.get();
@@ -326,11 +352,7 @@ pub fn MainToolbar(
                                 display:flex; flex-direction:column; gap:2px; padding:6px; \
                                 border-radius:12px; background:#1c1e22; border:1px solid {HOVER_RULE}; \
                                 box-shadow:0 12px 32px rgba(0,0,0,0.6);",
-                        for toggle in mixer
-                            .map(|_| Toggle::Mixer)
-                            .into_iter()
-                            .chain(Toggle::ROWS.iter().flat_map(|row| row.iter()).copied())
-                        {
+                        for toggle in menu(mixer.is_some(), crate::ruler_layout::slim()) {
                             button {
                                 key: "{toggle:?}",
                                 style: menu_row_style(is_on(toggle)),
@@ -368,6 +390,18 @@ pub fn MainToolbar(
             }
         }
     }
+}
+
+/// The menu's toggles, in order: the mixer when the view has one, the
+/// tempo lane on a slim ruler (a touchscreen's, whose lane is hidden until
+/// asked for, #808), then the rows'.
+fn menu(mixer: bool, slim: bool) -> Vec<Toggle> {
+    mixer
+        .then_some(Toggle::Mixer)
+        .into_iter()
+        .chain(slim.then_some(Toggle::TempoLane))
+        .chain(Toggle::ROWS.iter().flat_map(|row| row.iter()).copied())
+        .collect()
 }
 
 #[component]
@@ -417,4 +451,32 @@ fn button_style(on: bool) -> String {
         "flex:0 1 30px; min-width:0; height:26px; padding:0; display:flex; align-items:center; \
          justify-content:center; border-radius:4px; border:1px solid {rule}; background:{bg};"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Toggle, menu};
+
+    #[test]
+    fn a_slim_ruler_offers_its_tempo_lane_in_the_menu() {
+        let slim = menu(true, true);
+        assert_eq!(slim.first(), Some(&Toggle::Mixer));
+        assert_eq!(slim.get(1), Some(&Toggle::TempoLane));
+        assert!(
+            !menu(true, false).contains(&Toggle::TempoLane),
+            "a full ruler always has the lane"
+        );
+        assert!(!menu(false, true).contains(&Toggle::Mixer));
+        assert_eq!(Toggle::TempoLane.option_name(), Some("tempo_lane"));
+    }
+
+    #[test]
+    fn the_tempo_lane_is_not_in_the_rows() {
+        let rows: Vec<Toggle> = Toggle::ROWS
+            .iter()
+            .flat_map(|r| r.iter())
+            .copied()
+            .collect();
+        assert!(!rows.contains(&Toggle::TempoLane));
+    }
 }

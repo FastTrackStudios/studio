@@ -558,19 +558,21 @@ impl Standalone {
                 crate::journal::Side::After => (&mut history.redo, &mut history.undo),
             };
             let step = from.pop()?;
-            let tempo = step.put_back(&mut slot.project, side);
+            let restored = step.put_back(&mut slot.project, side);
             let label = step.label.clone();
             to.push(step);
-            Some((label, tempo))
+            Some((label, restored))
         });
-        let Some(Some((label, tempo))) = moved else {
+        let Some(Some((label, restored))) = moved else {
             return false;
         };
         // A step that set the tempo or the meter: the engine plays the map
         // it went back to, and whoever follows the map hears of it.
-        if tempo {
+        if restored.tempo {
             crate::tempo_map::restored(self, &guid);
         }
+        // A step that changed an FX chain: the plugins behind it follow.
+        self.fx_put_back(&guid, restored);
         let verb = match side {
             crate::journal::Side::Before => "Undo",
             crate::journal::Side::After => "Redo",

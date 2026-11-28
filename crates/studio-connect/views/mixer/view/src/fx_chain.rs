@@ -57,6 +57,11 @@ const FTS: &[&str] = &[
 /// Signal, built into a desktop's and an iPad's engine (nothing installed).
 pub const SIGNAL: &str = "Signal Dev";
 
+/// Signal's rigs, which every engine builds, a page's too (`signal_fx`):
+/// the whole guitar or bass rig, the bass rig, the kit voice. Offered after
+/// the processors, the whole rig first.
+pub const SIGNAL_RIGS: &[&str] = &["FTS Signal Rig", "FTS Bass Rig", "FTS Kit Mic"];
+
 // ── The chain ─────────────────────────────────────────────────────────
 
 /// How a window changes the chain.
@@ -165,19 +170,29 @@ pub fn moved<T: Clone>(chain: &[T], from: usize, to: usize) -> Vec<T> {
 
 /// What the panel offers to add, in the order offered: the engine's FTS
 /// processors (`installed`, its list; [`FTS`] when it said nothing), then
-/// Signal where the engine builds it (`signal`).
+/// Signal's rigs ([`SIGNAL_RIGS`]: what the engine lists, every one when it
+/// said nothing — a page's engine builds them too, #808), then Signal's
+/// plugin where the engine hosts it (`signal`, a desktop's and an iPad's).
 #[must_use]
 pub fn addable(installed: &[String], signal: bool) -> Vec<String> {
+    let is_rig = |name: &str| SIGNAL_RIGS.iter().any(|r| r.eq_ignore_ascii_case(name));
     let mut out: Vec<String> = installed
         .iter()
-        .filter(|name| name.starts_with("FTS "))
+        .filter(|name| name.starts_with("FTS ") && !is_rig(name))
         .cloned()
         .collect();
+    let said = !installed.is_empty();
     if out.is_empty() {
         out = FTS.iter().map(|&n| n.to_owned()).collect();
     }
     out.sort();
     out.dedup();
+    out.extend(
+        SIGNAL_RIGS
+            .iter()
+            .filter(|rig| !said || installed.iter().any(|n| n.eq_ignore_ascii_case(rig)))
+            .map(|&rig| rig.to_owned()),
+    );
     if signal {
         out.push(SIGNAL.to_owned());
     }
@@ -1261,8 +1276,20 @@ mod tests {
         );
         assert_eq!(
             addable(&[], false).len(),
-            FTS.len(),
-            "the FTS processors when the engine said nothing"
+            FTS.len() + SIGNAL_RIGS.len(),
+            "the FTS processors and Signal's rigs when the engine said nothing"
+        );
+        // A page's engine: Signal's rigs, after the processors, the whole
+        // rig first; no Signal plugin, which only a desktop hosts.
+        let page = vec![
+            "FTS Kit Mic".to_owned(),
+            "FTS EQ".to_owned(),
+            "FTS Signal Rig".to_owned(),
+            "FTS Bass Rig".to_owned(),
+        ];
+        assert_eq!(
+            addable(&page, false),
+            ["FTS EQ", "FTS Signal Rig", "FTS Bass Rig", "FTS Kit Mic"]
         );
     }
 
