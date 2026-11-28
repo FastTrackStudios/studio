@@ -13,9 +13,9 @@ doctest = false
 architect = { workspace = true, features = ["connect", "vox", "platform"] }
 architect-extensions = { workspace = true, features = ["linked-core"] }
 architect-extensions-dioxus = { workspace = true, features = ["guest"] }
-guitar = { workspace = true }
 guitar-ui = { workspace = true }
-keys = { workspace = true }
+keys-ui = { workspace = true }
+studio-rig-discover = { workspace = true }
 signal-rigs-proto = { workspace = true }
 signal-rig-perform-ui = { workspace = true }
 signal-tone3000 = { workspace = true, features = ["ui"] }
@@ -26,8 +26,6 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full", "rt-multi-thread", "sync", "time"] }
 futures-timer = { workspace = true }
 tracing = { workspace = true }
-dirs = { workspace = true }
-libc = { workspace = true }
 
 [lints]
 workspace = true

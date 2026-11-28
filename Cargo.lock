@@ -21168,6 +21168,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "rig-extension"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "architect-extensions",
+ "axum",
+ "facet",
+ "facet-json",
+ "guitar",
+ "keys",
+ "sampler",
+ "serde_json",
+ "signal-proto",
+ "signal-rig-host",
+ "signal-rigs-proto",
+ "studio-rig-discover",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -24335,6 +24356,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-audio-settings"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "dioxus",
+ "facet",
+ "facet-json",
+ "guitar-ui",
+ "serde_json",
+ "studio-rig-link",
+]
+
+[[package]]
 name = "studio-engine"
 version = "26.10.3"
 dependencies = [
@@ -24415,6 +24450,20 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
+]
+
+[[package]]
+name = "studio-keys"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "dioxus",
+ "keys-ui",
+ "serde_json",
+ "signal-widgets",
+ "studio-rig-link",
+ "tokio",
 ]
 
 [[package]]
@@ -24571,6 +24620,111 @@ dependencies = [
  "uuid",
  "vox",
  "vox-types",
+]
+
+[[package]]
+name = "studio-rig-browser"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "dioxus",
+ "guitar-ui",
+ "serde_json",
+ "studio-rig-link",
+]
+
+[[package]]
+name = "studio-rig-discover"
+version = "26.10.3"
+dependencies = [
+ "dirs 6.0.0",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "studio-rig-grid"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "dioxus",
+ "guitar-ui",
+ "serde_json",
+ "studio-rig-link",
+]
+
+[[package]]
+name = "studio-rig-link"
+version = "26.10.3"
+dependencies = [
+ "architect",
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "dioxus",
+ "futures-timer",
+ "guitar-ui",
+ "keys-ui",
+ "serde",
+ "serde_json",
+ "signal-rig-perform-ui",
+ "signal-rigs-proto",
+ "signal-tone3000",
+ "studio-rig-discover",
+ "tokio",
+ "tracing",
+ "vox-core",
+]
+
+[[package]]
+name = "studio-rig-macros"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "dioxus",
+ "guitar-ui",
+ "serde_json",
+ "studio-rig-link",
+]
+
+[[package]]
+name = "studio-rig-setlist"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "dioxus",
+ "guitar-ui",
+ "serde_json",
+ "studio-rig-link",
+]
+
+[[package]]
+name = "studio-rig-status"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "dioxus",
+ "guitar-ui",
+ "serde_json",
+ "studio-rig-link",
+]
+
+[[package]]
+name = "studio-rig-switches"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "dioxus",
+ "guitar-ui",
+ "serde_json",
+ "studio-rig-link",
 ]
 
 [[package]]

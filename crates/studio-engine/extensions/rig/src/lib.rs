@@ -5,15 +5,18 @@
 //! backends on one `signal_rig_host::Engine` (one project, one device:
 //! `docs/design/one-engine.md`), their vox services on one router, served
 //! on loopback at a free port. It says where it is
-//! (`studio_rig_link::discover`), and Studio's rig views, extensions of
+//! (`studio_rig_discover`), and Studio's rig views, extensions of
 //! their own, are vox clients of it as every Signal GUI is. It draws
 //! nothing.
 //!
 //! Every control is an action ([`actions`]): the process is the engine,
 //! so they run with no window open.
 //!
-//! The guitar's audio opens at start, as the headless engine's does,
-//! unless `STUDIO_RIG_AUTOSTART=0` (then `STUDIO_RIG_START` opens it).
+//! The engine starts with Studio, its audio closed: the interface opens
+//! (and the instrument's input reaches the outputs) on `STUDIO_RIG_START`,
+//! which opening the Rig window asks for (studio#555, option 2).
+//! `STUDIO_RIG_AUTOSTART=1` opens it as the engine starts, as the headless
+//! engine does.
 //! `SIGNAL_RIG_DIR`, `SIGNAL_RIG_DESIGN`, `SIGNAL_RIG_SILENT` and
 //! `SIGNAL_RIG_EPHEMERAL` mean what they mean to any rig engine
 //! (`guitar::library`).
@@ -54,11 +57,14 @@ pub fn url() -> Option<String> {
     SERVING.get().and_then(|s| s.as_ref().ok().cloned())
 }
 
-/// Whether the guitar's audio opens as the engine starts.
+/// Whether the guitar's audio opens as the engine starts: only when
+/// `STUDIO_RIG_AUTOSTART` says so (`1`, `true`). Studio starts the engine
+/// with every launch, and an interface passing the guitar through to the
+/// outputs is a surprise on a machine used for mixing (studio#555).
 fn autostart() -> bool {
-    std::env::var("STUDIO_RIG_AUTOSTART").map_or(true, |v| {
+    std::env::var("STUDIO_RIG_AUTOSTART").is_ok_and(|v| {
         let v = v.trim();
-        !(v == "0" || v.eq_ignore_ascii_case("false"))
+        v == "1" || v.eq_ignore_ascii_case("true")
     })
 }
 
@@ -91,7 +97,7 @@ pub fn start_engine() {
 
 /// The rigs' services on one router: each rig's own, the shared RigCore
 /// and performance surfaces under each rig's scope, the engine's daw, the
-/// sample packs and TONE3000.
+/// sample packs.
 fn router(guitar: &GuitarRigBackend, keys: &KeysRigBackend) -> architect::LayerRouter {
     use architect::Layer as _;
     use signal_rigs_proto::Rig;
@@ -116,20 +122,11 @@ fn router(guitar: &GuitarRigBackend, keys: &KeysRigBackend) -> architect::LayerR
         None => router,
     };
     let packs = sampler::library::PackLibraryBackend::new();
-    let router = router.merge_router(packs.router());
-    // TONE3000: the session and the fetching live on the engine.
-    let config = sampler::rig_prefs::signal_config_dir();
-    let account = std::sync::Arc::new(signal_tone3000::account::Account::new(
-        signal_tone3000::account::AccountConfig::from_env(&config),
-    ));
-    let tone3000 =
-        signal_tone3000::client::Tone3000Backend::new(signal_tone3000::client::Config::from_env(
-            &config,
-            signal_nam::nam_root_from_env(&config.join("nam")),
-        ))
-        .with_account(account.clone());
-    let router = router.merge_router(tone3000.router());
-    router.merge_router(signal_tone3000::account::AccountBackend::new(account).router())
+    // TONE3000 is not served here yet: its client and sign-in live in a
+    // connect crate (`signal-tone3000`, with its UI) an engine may not
+    // depend on. Served again once it is split (wire types to core, the
+    // client to the engine); the panes show this device's captures.
+    router.merge_router(packs.router())
 }
 
 /// Builds the rigs and serves them until the process ends.
@@ -154,7 +151,8 @@ async fn serve() -> Result<(), String> {
         guitar::proto::rig::Rig::start(&guitar);
     }
     let _ = RIGS.set(Rigs { guitar, keys });
-    let published = studio_rig_link::discover::publish(&url);
+    // Kept while the engine serves; the file goes when it stops.
+    let published = studio_rig_discover::publish(&url);
     tracing::info!(
         rig.url = %url,
         rig.autostart = autostart,

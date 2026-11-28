@@ -14,9 +14,8 @@ name = "rig-extension"
 path = "src/main.rs"
 
 [dependencies]
-studio-rig-link = { workspace = true }
+studio-rig-discover = { workspace = true }
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
-architect-extensions-dioxus = { workspace = true, features = ["guest"] }
 architect = { workspace = true, features = ["host", "rig", "vox", "action-list"] }
 guitar = { workspace = true }
 keys = { workspace = true }
@@ -24,8 +23,6 @@ sampler = { workspace = true, features = ["library"] }
 signal-rig-host = { workspace = true }
 signal-rigs-proto = { workspace = true }
 signal-proto = { workspace = true }
-signal-tone3000 = { workspace = true, features = ["client"] }
-signal-nam = { workspace = true }
 facet = { workspace = true }
 facet-json = { workspace = true }
 serde_json = { workspace = true }
