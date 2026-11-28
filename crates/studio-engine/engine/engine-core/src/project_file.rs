@@ -740,29 +740,97 @@ fn append(open: &mut Open, label: &str) -> Result<(), String> {
     append_as(open, label, None)
 }
 
+/// A step this replica wrote into the song's doc (`write_read`), appended
+/// as far as its own commit: what arrived from elsewhere after it (a room
+/// member's edit, an agent's step made there) is left for
+/// [`watch_remote`]'s append, its own moment under its own name. The doc
+/// is written before the songs are held, so an import can land between
+/// the write and this append; read whole, it was folded into this step's
+/// moment, and the step made elsewhere was missing from the history.
+fn append_step(open: &mut Open, label: &str, action: Option<&str>) -> Result<(), String> {
+    let loro = open.bridge.doc().loro().clone();
+    let now = loro.oplog_vv();
+    let (upto, frontiers) = own_reach(&loro, &now, &open.saved)
+        .unwrap_or_else(|| (now.clone(), loro.vv_to_frontiers(&now)));
+    append_upto(open, (label, action), &upto, &frontiers)
+}
+
+/// The version and frontier of `loro` just after its own last commit, when
+/// `now` (its version, read once) holds more than that past `saved` (an
+/// import landed after it); `None` when there is nothing else, or no
+/// commit of its own since.
+fn own_reach(
+    loro: &engine_sync::loro::LoroDoc,
+    now: &engine_sync::loro::VersionVector,
+    saved: &engine_sync::loro::VersionVector,
+) -> Option<(
+    engine_sync::loro::VersionVector,
+    engine_sync::loro::Frontiers,
+)> {
+    let me = loro.peer_id();
+    let end = now.get(&me).copied().unwrap_or(0);
+    if end <= saved.get(&me).copied().unwrap_or(0) {
+        return None;
+    }
+    let frontiers = engine_sync::loro::Frontiers::from_id(engine_sync::loro::ID::new(
+        me,
+        end.saturating_sub(1),
+    ));
+    let mut reach = loro.frontiers_to_vv(&frontiers)?;
+    reach.merge(saved);
+    (reach != *now).then_some((reach, frontiers))
+}
+
 /// [`append`], `action` the action that made the step, kept in the song's
 /// history ([`history`]) with its label and frontier.
 fn append_as(open: &mut Open, label: &str, action: Option<&str>) -> Result<(), String> {
-    let doc = open.bridge.doc();
-    if doc.version() != open.saved {
+    let loro = open.bridge.doc().loro().clone();
+    let now = loro.oplog_vv();
+    // The state the history goes back to: the doc's own, which is the
+    // oplog's unless the doc is checked out at another version.
+    let frontiers = if loro.is_detached() {
+        loro.state_frontiers()
+    } else {
+        loro.vv_to_frontiers(&now)
+    };
+    append_upto(open, (label, action), &now, &frontiers)
+}
+
+/// The doc from the last save up to `upto` (at `frontiers`) appended to the
+/// song's branch as the step `label`, and `saved` moved there. The version
+/// is read once by the caller: what is imported while the store is written
+/// (a slow disk under load) is past `upto`, left for the next append under
+/// its own name, never exported under this one.
+fn append_upto(
+    open: &mut Open,
+    (label, action): (&str, Option<&str>),
+    upto: &engine_sync::loro::VersionVector,
+    frontiers: &engine_sync::loro::Frontiers,
+) -> Result<(), String> {
+    if *upto != open.saved {
         // Every step in the history: a name, a time and the frontier to go
         // back to, never folded away.
-        let frontiers = doc.loro().state_frontiers();
         with_store(&open.store, |s| {
             s.note(
                 &open.branch,
                 (session_format::store::MomentKind::Step, label, action),
-                &frontiers,
+                frontiers,
             )
             .map(drop)
             .map_err(|e| e.to_string())
         })?;
-        let update = doc.updates_since(&open.saved).map_err(|e| e.to_string())?;
+        let spans: Vec<engine_sync::loro::IdSpan> = upto.sub_iter(&open.saved).collect();
+        let update = open
+            .bridge
+            .doc()
+            .loro()
+            .export(engine_sync::loro::ExportMode::updates_in_range(spans))
+            .map_err(|e| e.to_string())?;
         with_store(&open.store, |s| {
             s.append_update(&open.branch, label, &update)
                 .map_err(|e| e.to_string())
         })?;
-        open.saved = doc.version();
+        open.saved = upto.clone();
         open.uncompacted = open.uncompacted.saturating_add(1);
         if let Ok(mut at) = LAST_WRITE.lock() {
             *at = Some(web_time::Instant::now());
@@ -920,7 +988,7 @@ fn write_read(job: Write) {
             tracing::warn!(project.guid = %job.guid, why = %e, "an edit step was not written to the song's doc");
         } else if let Some(open) = songs.get_mut(&job.guid) {
             let appended = tracing::info_span!("project_file.append")
-                .in_scope(|| append_as(open, &job.label, job.action.as_deref()));
+                .in_scope(|| append_step(open, &job.label, job.action.as_deref()));
             if let Err(why) = appended {
                 tracing::warn!(project.guid = %job.guid, why, "an edit step was not appended to the song's file");
             }
@@ -1095,22 +1163,36 @@ pub fn record_steps() {
             if let Some(engine) = crate::assembly::get() {
                 (engine.step_finished)(label);
             }
-            if let Ok(tx) = tx.lock()
-                && tx
-                    .send((
-                        project.to_owned(),
-                        label.to_owned(),
-                        crate::history::running_run(),
-                        (tracing::Span::current(), crate::history::running_action()),
-                    ))
-                    .is_ok()
-            {
-                *pending_songs()
+            // Counted before it is sent: the recorder may take it and count
+            // it off before this thread runs again (a loaded machine), and a
+            // count made after that was never taken off — the song read as
+            // pending for good, every undo after it reading a "pending" step
+            // that changed nothing and undoing that, by the engine's last
+            // name, instead of the step (CI: "undid Set track").
+            let Ok(tx) = tx.lock() else { return };
+            *pending_songs()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .entry(project.to_owned())
+                .or_default() += 1;
+            PENDING.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let sent = tx.send((
+                project.to_owned(),
+                label.to_owned(),
+                crate::history::running_run(),
+                (tracing::Span::current(), crate::history::running_action()),
+            ));
+            if sent.is_err() {
+                PENDING.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                let mut songs = pending_songs()
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .entry(project.to_owned())
-                    .or_default() += 1;
-                PENDING.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(left) = songs.get_mut(project) {
+                    *left = left.saturating_sub(1);
+                    if *left == 0 {
+                        songs.remove(project);
+                    }
+                }
             }
         }));
         let _ = std::thread::Builder::new()

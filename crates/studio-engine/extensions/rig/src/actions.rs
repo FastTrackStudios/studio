@@ -454,17 +454,24 @@ pub fn register(ext: &mut Builder) {
             // The one playing already: nothing to do (the Rig window asks for
             // the instrument it opens on, whichever plays).
             let current = guitar::instrument::current().id();
-            let problem = text(&args, "instrument")
-                .filter(|asked| !asked.trim().eq_ignore_ascii_case(current))
-                .map(|instrument| Rig::set_instrument(&r.guitar, instrument))
-                .filter(|problem| !problem.is_empty());
-            match problem {
-                Some(problem) => Err(problem),
-                None => Ok(json!({
-                    "instrument": guitar::instrument::current().id(),
-                    "library": guitar::library::rig_dir().display().to_string(),
-                })),
+            // The rig answers what it did in a line (`now the bass`), never
+            // a refusal: the name was checked above.
+            let asked = text(&args, "instrument").map(|a| a.trim().to_ascii_lowercase());
+            let said = asked
+                .as_ref()
+                .filter(|asked| !asked.eq_ignore_ascii_case(current))
+                .map(|instrument| Rig::set_instrument(&r.guitar, instrument.clone()));
+            let now = guitar::instrument::current().id();
+            if let Some(asked) = asked.filter(|a| !a.eq_ignore_ascii_case(now)) {
+                return Err(format!(
+                    "the rig is still the {now}, not the {asked}: {}",
+                    said.unwrap_or_default()
+                ));
             }
+            Ok(json!({
+                "instrument": now,
+                "library": guitar::library::rig_dir().display().to_string(),
+            }))
         })
     })
     .action("STUDIO_RIG_SETUP", |args| {

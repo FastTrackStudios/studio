@@ -1459,6 +1459,17 @@ opt-level = 3
 [profile.dev.package.phon-jit]
 opt-level = 3
 
+# opentelemetry_sdk 0.30's BatchSpanProcessor counts a span into its batch
+# after sending it (`on_end`: `try_send`, then `current_batch_size.fetch_add`),
+# so its worker can take it off first and the count wraps below zero for a
+# moment. Release wraps back; with overflow checks the `+ 1` after it panics,
+# poisoning a mutex in the QUIC stack, and the engine aborts (the room test
+# on a loaded runner: "attempt to add with overflow",
+# span_processor.rs:537). Built as release builds it, until a version that
+# counts first.
+[profile.dev.package.opentelemetry_sdk]
+overflow-checks = false
+
 # Build scripts + proc macros and their deps. `package."*"` does NOT cover
 # these — cargo routes them through build-override, where they were landing
 # at opt-level 0 with full debuginfo. This tree leans hard on derive macros
