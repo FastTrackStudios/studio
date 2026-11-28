@@ -1340,22 +1340,9 @@ mod imp {
             }
             "STUDIO_RIG_WINDOW" => {
                 let a: RigWindowArgs = args(raw)?;
-                let name = a.rig.clone().unwrap_or_else(|| "guitar".to_owned());
-                let layout = crate::stage::RigLayout::parse(&name)
-                    .ok_or_else(|| format!("no rig {name}: guitar, bass or keys"))?;
-                if crate::hosted::open_rig_window(layout, "") {
-                    // The instrument when one was named (the guitar rig
-                    // plays a guitar or a bass), then its audio.
-                    let instrument = a
-                        .rig
-                        .filter(|_| layout == crate::stage::RigLayout::Guitar)
-                        .map(|r| r.trim().to_ascii_lowercase());
-                    let audio = a.audio.unwrap_or(true);
-                    crate::hosted::start_rig(layout, instrument, audio);
-                    Ok(json!({ "window": "Rig", "rig": layout.slug(), "audio": audio }))
-                } else {
-                    Err("the rig's window opens beside a session: open one first".into())
-                }
+                let audio = a.audio.unwrap_or(true);
+                let layout = crate::hosted::open_rig(a.rig.as_deref().unwrap_or("guitar"), audio)?;
+                Ok(json!({ "window": "Rig", "rig": layout.slug(), "audio": audio }))
             }
             "STUDIO_ENGINE" => Ok(json!({
                 "status": format!("{:?}", (app.engine)()),

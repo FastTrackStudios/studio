@@ -442,13 +442,44 @@ pub fn carry_rig(was: &Workspace, next: &mut Workspace) {
     if next.window(&id).is_some() {
         return;
     }
-    if let Some(node) = window.center.as_ref() {
+    let mut window = window;
+    if let Some(node) = window.center.as_mut() {
         next.panes
             .extend(was.panes.iter().filter(|p| holds(node, &p.id)).cloned());
+        // The new Stage numbered its groups and splits from 1: the carried
+        // window's are numbered again past them, so no id is used twice.
+        renumber(node, &mut next.next_id);
     }
-    // Its group and split ids stay its own: the new Stage's go on past them.
-    next.next_id = next.next_id.max(was.next_id);
     next.windows.push(window);
+}
+
+/// Gives every group and split in `node` a new id from `next` on.
+fn renumber(node: &mut Node, next: &mut u64) {
+    let mut take = || {
+        let id = *next;
+        *next = next.saturating_add(1);
+        id
+    };
+    match node {
+        Node::Group(g) => g.id = GroupId(take()),
+        Node::Split(s) => {
+            s.id = SplitId(take());
+            for child in &mut s.children {
+                renumber(&mut child.node, next);
+            }
+        }
+    }
+}
+
+/// Every group and split id in `node`.
+#[cfg(test)]
+fn ids(node: &Node) -> Vec<u64> {
+    match node {
+        Node::Group(g) => vec![g.id.0],
+        Node::Split(s) => std::iter::once(s.id.0)
+            .chain(s.children.iter().flat_map(|c| ids(&c.node)))
+            .collect(),
+    }
 }
 
 /// Whether `node` has `pane` in it.
@@ -649,7 +680,19 @@ mod tests {
         carry_rig(&was, &mut next);
         assert_eq!(rig_shown(&next), Some(RigLayout::Guitar));
         assert!(next.pane(&PaneId::new(rig::SWITCHES)).is_some());
-        assert!(next.next_id >= was.next_id);
+        // No group or split id used twice across the new Stage and the
+        // carried window, and the next id past them all.
+        let mut all: Vec<u64> = next
+            .windows
+            .iter()
+            .filter_map(|w| w.center.as_ref())
+            .flat_map(ids)
+            .collect();
+        let n = all.len();
+        all.sort_unstable();
+        all.dedup();
+        assert_eq!(all.len(), n, "an id used twice: {all:?}");
+        assert!(all.iter().all(|id| *id < next.next_id));
         // Twice is still one window.
         carry_rig(&was, &mut next);
         assert_eq!(

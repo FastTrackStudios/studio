@@ -86,16 +86,13 @@ pub fn Signal() -> Element {
 /// app runs no second process: iPhone, iPad, the web).
 fn open_rig(app: crate::state::AppState, name: &'static str) {
     #[cfg(all(feature = "native", any(target_os = "linux", target_os = "macos")))]
-    if let Some(layout) = crate::stage::RigLayout::parse(name) {
-        if crate::hosted::open_rig_window(layout, "") {
-            let instrument = (layout == crate::stage::RigLayout::Guitar)
-                .then(|| name.to_ascii_lowercase());
-            crate::hosted::start_rig(layout, instrument, true);
-            app.say(format!("Opened the {name} rig beside the session"));
-        } else {
-            app.say("The rig opens beside a session: open one first".to_owned());
+    {
+        match crate::hosted::open_rig(name, true) {
+            Ok(_) => app.say(format!("Opened the {name} rig beside the session")),
+            Err(why) => app.say(why),
         }
         return;
     }
+    #[cfg(not(all(feature = "native", any(target_os = "linux", target_os = "macos"))))]
     app.say(format!("The {name} rig opens in Studio on a computer"));
 }

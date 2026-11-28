@@ -316,7 +316,7 @@ app or in its build's `target/`; `just studio` builds it).
 opens the layout above in a window beside the session. The launcher's
 Signal page opens it from the Guitar, Bass and Keys rows. Showing the
 other rig swaps the panes inside the same window. A change of view keeps
-it open, and closing the session closes it. Without a session it does
+it open, and closing the session closes it and the rig's audio. Without a session it does
 not open (the launcher says so).
 
 **Audio (studio#555, option 2, pending the owner's confirmation).** The

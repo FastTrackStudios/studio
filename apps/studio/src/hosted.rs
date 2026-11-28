@@ -68,6 +68,9 @@ pub fn close_stage_windows() -> bool {
     let Some(ui) = SESSION_UI.with(std::cell::Cell::get) else {
         return false;
     };
+    if crate::stage::rig_shown(&ui.layout().peek()).is_some() {
+        stop_rig();
+    }
     for id in [
         crate::stage::LIGHTING_WINDOW,
         crate::stage::MIXER_WINDOW,
@@ -481,12 +484,29 @@ pub fn open_rig_window(layout: crate::stage::RigLayout, set: &str) -> bool {
     true
 }
 
+/// Opens rig `name` (`guitar`, `bass` or `keys`) in the Rig window beside
+/// the session, then asks the rig engine for what it shows: the
+/// instrument named (the guitar rig plays a guitar or a bass) and, with
+/// `audio`, the rig's audio opened. What `STUDIO_RIG_WINDOW` and the
+/// launcher's Signal page both do. The rig shown, or why not.
+pub fn open_rig(name: &str, audio: bool) -> Result<crate::stage::RigLayout, String> {
+    let layout = crate::stage::RigLayout::parse(name)
+        .ok_or_else(|| format!("no rig {name}: guitar, bass or keys"))?;
+    if !open_rig_window(layout, "") {
+        return Err("the rig's window opens beside a session: open one first".to_owned());
+    }
+    let instrument =
+        (layout == crate::stage::RigLayout::Guitar).then(|| name.trim().to_ascii_lowercase());
+    start_rig(layout, instrument, audio);
+    Ok(layout)
+}
+
 /// What the Rig window asks of the rig engine once it opens: the
-/// instrument named (`guitar`, `bass`) played, and (`audio`) the rig's
-/// audio opened, the guitar's or the keys'. Each step's failure is logged
-/// (the window shows the engine's own state); none stops the next.
-pub fn start_rig(layout: crate::stage::RigLayout, instrument: Option<String>, audio: bool) {
-    spawn(async move {
+/// instrument named played, and (`audio`) the rig's audio opened, the
+/// guitar's or the keys'. Each step's failure goes on the span (the window
+/// shows the engine's own state); none stops the next.
+fn start_rig(layout: crate::stage::RigLayout, instrument: Option<String>, audio: bool) {
+    architect::platform::spawn(async move {
         let mut span = crate::trace::Span::root("studio.rig.window");
         span.set("studio.rig.layout", layout.slug());
         if let Some(instrument) = instrument {
@@ -508,6 +528,19 @@ pub fn start_rig(layout: crate::stage::RigLayout, instrument: Option<String>, au
             match run(start, serde_json::json!({})).await {
                 Ok(_) => span.set("studio.rig.audio", "started"),
                 Err(e) => span.set("studio.rig.audio", e),
+            }
+        }
+    });
+}
+
+/// The rig's audio closed as the session closes with its Rig window: the
+/// interface stops passing the instrument to the outputs (studio#555).
+fn stop_rig() {
+    architect::platform::spawn(async {
+        let mut span = crate::trace::Span::root("studio.rig.stop");
+        for id in ["STUDIO_RIG_STOP", "STUDIO_RIG_KEYS_STOP"] {
+            if let Err(e) = run(id, serde_json::json!({})).await {
+                span.set(&format!("studio.rig.{id}"), e);
             }
         }
     });
