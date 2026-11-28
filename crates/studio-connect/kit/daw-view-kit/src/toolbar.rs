@@ -280,7 +280,7 @@ pub fn MainToolbar(
             let now = !crate::ruler_layout::tempo_shown();
             let _ = crate::press::press(
                 crate::view_actions::OPTION.id,
-                &serde_json::json!({ "option": "tempo_lane", "on": now }),
+                &serde_json::json!({ "option": Toggle::TempoLane.option_name(), "on": now }),
             );
             tempo_lane.set(now);
         }

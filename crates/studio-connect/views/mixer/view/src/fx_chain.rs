@@ -376,7 +376,10 @@ pub fn parse_value(kind: &Kind, text: &str) -> Option<f64> {
     if let Some(raw) = text.strip_prefix('=') {
         return raw.trim().parse::<f64>().ok().map(|v| snap(kind, v));
     }
-    if let Some(raw) = text.strip_suffix('%') {
+    // A span in percent is the plugin's own: `0%` is its 0, not the
+    // middle of its travel.
+    let percent_is_units = matches!(kind, Kind::Ranged(r) if r.unit == "%");
+    if let Some(raw) = text.strip_suffix('%').filter(|_| !percent_is_units) {
         return raw
             .trim()
             .parse::<f64>()
@@ -1178,6 +1181,13 @@ mod tests {
         assert_eq!(parse_value(&db, "=0.25"), Some(0.25));
         assert_eq!(parse_value(&db, "+12 dB"), Some(1.0), "held to the range");
         assert_eq!(parse_value(&db, "loud"), None);
+        let pan = Kind::Ranged(FxParamRange {
+            min: -100.0,
+            max: 100.0,
+            unit: "%".into(),
+        });
+        assert_eq!(parse_value(&pan, "0%"), Some(0.5), "its own percent");
+        assert_eq!(value_text(&pan, 0.5, (0.0, "")), "0%");
     }
 
     #[test]

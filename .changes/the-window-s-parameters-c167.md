@@ -1,4 +1,5 @@
 ---
+"arrangement-view" = "minor"
 "daw-proto" = "minor"
 "daw-reaper" = "minor"
 "daw-standalone" = "minor"

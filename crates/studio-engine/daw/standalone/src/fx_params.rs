@@ -70,8 +70,10 @@ impl SlotInfo {
 }
 
 /// A live parameter's span in the plugin's own units (#808): its plain
-/// min and max, and the unit the plugin writes them in (its text for the
-/// max, else for the min). `None` for a span of nothing.
+/// min and max, and the unit the plugin writes them in. A unit only when
+/// both ends say the same one (or one says none): a plugin that writes
+/// `20 Hz` and `20.0 kHz` has no one unit its plain numbers are in.
+/// `None` for a span of nothing.
 fn plain_range(
     plugin: &mut dyn crate::plugin::PluginInstance,
     info: &PluginParamInfo,
@@ -85,9 +87,10 @@ fn plain_range(
             .map(|t| daw_proto::FxParamRange::unit_in(&t))
             .filter(|u| !u.is_empty())
     };
-    let unit = unit_at(info.max)
-        .or_else(|| unit_at(info.min))
-        .unwrap_or_default();
+    let unit = match (unit_at(info.min), unit_at(info.max)) {
+        (Some(low), Some(high)) if low != high => String::new(),
+        (low, high) => high.or(low).unwrap_or_default(),
+    };
     Some(daw_proto::FxParamRange {
         min: info.min,
         max: info.max,

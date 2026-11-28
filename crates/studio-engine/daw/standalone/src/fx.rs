@@ -1243,11 +1243,13 @@ impl Standalone {
             );
         }
         // What is stored is what plays; a plugin that holds its own
-        // values is told them again.
+        // values is told them again — and one the step first stored, now
+        // unset, its default (a knob's first move undone).
         for (fx_guid, params) in restored.fx_params {
             self.plugin_instances.with(&fx_guid, |plugin| {
-                for (&id, &plain) in &params {
-                    plugin.set_param_value(id, plain);
+                for info in plugin.params() {
+                    let plain = params.get(&info.id).copied().unwrap_or(info.default);
+                    plugin.set_param_value(info.id, plain);
                 }
             });
         }
