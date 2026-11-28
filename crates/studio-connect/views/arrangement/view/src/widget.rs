@@ -4000,9 +4000,17 @@ impl ArrangementWidget {
                 );
                 return;
             }
-            // The rack is a surface this widget does not own yet. Left
-            // alone rather than guessed at.
-            C::Fx | C::Volume | C::Pan => return,
+            // The FX button opens the track's chain close-up, as the
+            // mixer strip's does (`SESSION_CLOSEUP {chain}`).
+            C::Fx => {
+                let name = track.name.clone();
+                let _ = self.press_control(
+                    "SESSION_CLOSEUP",
+                    &serde_json::json!({ "track": guid, "chain": true, "name": name }),
+                );
+                return;
+            }
+            C::Volume | C::Pan => return,
         };
         // Shown before it is true.
         //

@@ -15,6 +15,7 @@ pub mod app;
 pub mod balance;
 pub mod closeup;
 pub mod faces;
+pub mod fx_chain;
 pub mod fx_view;
 pub mod live;
 pub mod macros;

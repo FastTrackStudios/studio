@@ -159,6 +159,10 @@ mod presses {
         let ids: &[&str] = &[
             "FX_SET",
             "FX_ENABLE",
+            // The FX chain close-up's adds, removes and moves.
+            "FX_ADD",
+            "FX_REMOVE",
+            "FX_MOVE",
             #[cfg(feature = "signal")]
             "RIG_BLOCK_SET",
             #[cfg(feature = "signal")]

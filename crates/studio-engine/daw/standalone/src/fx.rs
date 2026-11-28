@@ -616,17 +616,31 @@ impl Effects for Standalone {
     fn move_to(&self, project: ProjectContext, target: FxTarget, new_index: u32) -> DawResult<()> {
         let guid = resolve_project(self, &project).ok_or_else(not_found_proj)?;
         let key: FxChainKey = (&target.context).into();
-        self.with_project_mut(&guid, |p| {
+        let (fx_guid, old_index, dest) = self.with_project_mut(&guid, |p| {
             let chain = p.fx_chains.get_mut(&key).ok_or_else(not_found_fx)?;
             let i = find_fx_index(chain, &target.fx).ok_or_else(not_found_fx)?;
             let entry = chain.remove(i);
+            let fx_guid = entry.fx.guid.clone();
             let dest = (new_index as usize).min(chain.len());
             chain.insert(dest, entry);
             for (i, e) in chain.iter_mut().enumerate() {
                 e.fx.index = i as u32;
             }
-            Ok::<(), DawError>(())
-        })?
+            Ok::<_, DawError>((fx_guid, i as u32, dest as u32))
+        })??;
+        // A window following the chain (its FX row) reads it again.
+        if old_index != dest {
+            self.publish_fx_event(
+                &guid,
+                daw_proto::FxEvent::Moved {
+                    context: target.context,
+                    fx_guid,
+                    old_index,
+                    new_index: dest,
+                },
+            );
+        }
+        Ok(())
     }
 
     fn parameters(&self, project: ProjectContext, target: FxTarget) -> Vec<FxParameter> {

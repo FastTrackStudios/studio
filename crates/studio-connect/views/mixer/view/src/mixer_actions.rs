@@ -88,7 +88,7 @@ pub static CLOSEUP: ActionMeta = meta(
     "SESSION_CLOSEUP",
     "closeup",
     "Close-up",
-    "Show one panel of a track's rack over the whole window — `track` (its GUID), `panel` (`eq`, `comp`, `sat`, `gate`, `rescue_eq`, `reverb`, `delay`, …), `name` the title (the track's name) — or one block of the track's Signal FX, `block` (its id, `rescue.gate`: its parameters and meters) — or the track's routing, `routing: true` (its sends, receives and hardware outputs: level, pan, mute, tap, remove, and a send added) — or `close` it. A rack's zoom button, a strip's routing widget, the close-up's tabs and its Back.",
+    "Show one panel of a track's rack over the whole window — `track` (its GUID), `panel` (`eq`, `comp`, `sat`, `gate`, `rescue_eq`, `reverb`, `delay`, …), `name` the title (the track's name) — or one block of the track's Signal FX, `block` (its id, `rescue.gate`: its parameters and meters) — or the track's routing, `routing: true` (its sends, receives and hardware outputs: level, pan, mute, tap, remove, and a send added) — or the track's FX chain, `chain: true` (every FX on it: add, remove, reorder, bypass; `fx` an FX's guid opens its parameters, every parameter of any plugin with its name, value and range) — or `close` it. A rack's zoom button, a strip's routing widget, the close-up's tabs and its Back.",
     "View",
     "",
 );
@@ -110,6 +110,12 @@ pub struct CloseupArg {
     /// place of a rack panel: what the strip's routing widget opens.
     #[facet(default)]
     pub routing: bool,
+    /// The track's FX chain (add, remove, reorder, bypass), in place of
+    /// a rack panel; with `fx` (an FX's guid), that FX's parameters.
+    #[facet(default)]
+    pub chain: bool,
+    #[facet(default)]
+    pub fx: Option<String>,
     #[facet(default)]
     pub close: bool,
 }
@@ -182,6 +188,24 @@ fn closeup(a: CloseupArg) -> Result<String, String> {
             Some(crate::closeup::Closeup::Routing { guid: track, name }),
         );
         return Ok("the track's routing close up".to_owned());
+    }
+    if a.chain || a.fx.is_some() {
+        let name = a.name.unwrap_or_else(|| track.clone());
+        let fx = a.fx.filter(|fx| !fx.trim().is_empty());
+        let said = if fx.is_some() {
+            "the FX's parameters close up"
+        } else {
+            "the track's FX chain close up"
+        };
+        post(
+            &CLOSEUP_ASKS,
+            Some(crate::closeup::Closeup::Chain {
+                guid: track,
+                name,
+                fx,
+            }),
+        );
+        return Ok(said.to_owned());
     }
     if let Some(block) = a.block {
         if block.trim().is_empty() {
@@ -274,6 +298,14 @@ mod tests {
             .is_err()
         );
         assert!(closeup(CloseupArg::default()).is_err());
+        assert_eq!(
+            closeup(CloseupArg {
+                track: Some("{t}".into()),
+                chain: true,
+                ..CloseupArg::default()
+            }),
+            Ok("the track's FX chain close up".to_owned())
+        );
         assert!(
             fx_view(FxView {
                 fold: Some(FxFold {

@@ -68,6 +68,24 @@ static ADD: ActionMeta = meta(
     "",
 );
 
+static REMOVE: ActionMeta = meta(
+    "FX_REMOVE",
+    "fx_remove",
+    "Remove an FX",
+    "Take one FX off `track` (`fx` its name, `#place` or guid). Says what is left in the chain. One undo step: SESSION_UNDO puts it back where it was, as it was.",
+    "FX",
+    "",
+);
+
+static MOVE: ActionMeta = meta(
+    "FX_MOVE",
+    "fx_move",
+    "Move an FX in its chain",
+    "Move one FX on `track` (`fx` its name, `#place` or guid) to place `to` in the chain (1 is first; past the end is last). Says the chain's order after. One undo step.",
+    "FX",
+    "",
+);
+
 static AUTOMATION: ActionMeta = meta(
     "FX_AUTOMATION",
     "fx_automation",
@@ -206,6 +224,14 @@ struct AddArg {
     set: std::collections::HashMap<String, String>,
 }
 
+/// One FX to a new place in its chain.
+#[derive(Facet)]
+struct MoveArg {
+    track: String,
+    fx: String,
+    to: u32,
+}
+
 /// One FX on or off.
 #[derive(Facet)]
 struct EnableArg {
@@ -275,6 +301,106 @@ struct FxRow {
     name: String,
     on: bool,
     parameters: u32,
+    /// What names this FX and no other (two of one plugin are two FX).
+    guid: String,
+}
+
+/// Run `f` as one undo step named `label` — or inside the step already
+/// open (a window's gesture commits FX_SET in its own): a step begun in
+/// another would replace it.
+///
+/// A step of its own is kept apart in the song's history
+/// (`engine_core::history_marks`): the steps before it are read off the
+/// engine first, and it is read before the action returns. The recorder
+/// reads the engine as it is when it gets there, so an add, a move and a
+/// remove made faster than it reads would land as one commit holding the
+/// remove, and undoing the remove would bring nothing back.
+fn one_step<R>(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    label: &str,
+    f: impl FnOnce() -> R,
+) -> R {
+    let own = begin_own(daw, project, label);
+    let out = f();
+    end_own(daw, project, label, own);
+    out
+}
+
+/// Open the undo step `label` unless one is open, the steps before it
+/// recorded first; whether it is this action's own.
+fn begin_own(daw: &daw::standalone::Standalone, project: &ProjectContext, label: &str) -> bool {
+    let own = !daw.undo_step_open(project);
+    if own {
+        engine_core::history_marks::settle(engine_core::history_marks::SETTLE);
+        daw::service::Projects::begin_undo_block(daw, project.clone(), label);
+    }
+    own
+}
+
+/// Close this action's own undo step (`own`), and wait for it to be
+/// recorded.
+fn end_own(daw: &daw::standalone::Standalone, project: &ProjectContext, label: &str, own: bool) {
+    if own {
+        daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
+        engine_core::history_marks::settle(engine_core::history_marks::SETTLE);
+    }
+}
+
+/// A chain's names in order, as an answer says it: `#1 FTS EQ, #2 FTS Comp`.
+fn order_of(chain: &[daw_proto::fx::Fx]) -> String {
+    if chain.is_empty() {
+        return "nothing".to_owned();
+    }
+    chain
+        .iter()
+        .enumerate()
+        .map(|(i, fx)| {
+            format!(
+                "#{} {}",
+                i.saturating_add(1),
+                crate::clap_fx::display_name(fx)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// `FX_REMOVE`.
+fn remove(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    a: &FxArg,
+) -> Result<String, String> {
+    let (target, fx) = target(daw, project, &a.track, &a.fx)?;
+    let name = crate::clap_fx::display_name(&fx);
+    one_step(daw, project, &format!("Remove {name}"), || {
+        Effects::remove(daw, project.clone(), target.clone()).map_err(|e| e.to_string())
+    })?;
+    // A Signal chain kept by Studio is of an FX no longer there.
+    crate::clap_host::signal::forget_chain(&fx.guid);
+    crate::actions::list().changed("fx", &fx.guid);
+    let left = Effects::list(daw, project.clone(), target.context);
+    Ok(format!("{name} removed — the chain is {}", order_of(&left)))
+}
+
+/// `FX_MOVE`.
+fn move_fx(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    a: &MoveArg,
+) -> Result<String, String> {
+    let (target, fx) = target(daw, project, &a.track, &a.fx)?;
+    let to =
+        a.to.checked_sub(1)
+            .ok_or("places count from 1: `to: 1` is first")?;
+    let name = crate::clap_fx::display_name(&fx);
+    one_step(daw, project, &format!("Move {name}"), || {
+        Effects::move_to(daw, project.clone(), target.clone(), to).map_err(|e| e.to_string())
+    })?;
+    crate::actions::list().changed("fx", &fx.guid);
+    let chain = Effects::list(daw, project.clone(), target.context);
+    Ok(format!("{name} moved — the chain is {}", order_of(&chain)))
 }
 
 /// One parameter, as listed.
@@ -699,7 +825,10 @@ pub fn set(
     set: &std::collections::HashMap<String, String>,
 ) -> Result<Vec<String>, String> {
     let (target, fx) = target(daw, project, track, fx)?;
-    let said = settle(daw, project, (&target, &fx), set);
+    let label = format!("Set {}", crate::clap_fx::display_name(&fx));
+    let said = one_step(daw, project, &label, || {
+        settle(daw, project, (&target, &fx), set)
+    });
     crate::actions::list().changed("fx", &fx.guid);
     Ok(said)
 }
@@ -800,7 +929,8 @@ fn add(
     let context = FxChainContext::Track(guid);
     let index = a.at.unwrap_or(u32::MAX).saturating_sub(1);
     let label = format!("Add {}", a.fx);
-    daw::service::Projects::begin_undo_block(daw, project.clone(), &label);
+    // Its own step unless one is open (`one_step`).
+    let own = begin_own(daw, project, &label);
     let added = match &what {
         Addable::Builtin(name) => {
             span.record("fx.kind", "builtin");
@@ -855,7 +985,7 @@ fn add(
         crate::actions::list().changed("fx", &fx_guid);
         Ok(said)
     });
-    daw::service::Projects::end_undo_block(daw, project.clone(), &label, None);
+    end_own(daw, project, &label, own);
     span.record("fx.added", out.is_ok());
     span.record("fx.ms", began.elapsed().as_secs_f64() * 1e3);
     out
@@ -1035,6 +1165,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                 .unwrap_or(u32::MAX),
                 name: crate::clap_fx::display_name(&fx),
                 on: fx.enabled,
+                guid: fx.guid,
             })
             .collect::<Vec<_>>())
     })?;
@@ -1066,6 +1197,14 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         let (daw, project) = song()?;
         add(daw, &project, &a)
     })?;
+    list.register(&REMOVE, Effect::Mutating, |a: FxArg| {
+        let (daw, project) = song()?;
+        remove(daw, &project, &a)
+    })?;
+    list.register(&MOVE, Effect::Mutating, |a: MoveArg| {
+        let (daw, project) = song()?;
+        move_fx(daw, &project, &a)
+    })?;
     list.register(&STATE, Effect::ReadOnly, |a: FxArg| {
         let (daw, project) = song()?;
         state(daw, &project, &a)
@@ -1088,7 +1227,15 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     list.register(&ENABLE, Effect::Mutating, |a: EnableArg| {
         let (daw, project) = song()?;
         let (target, fx) = target(daw, &project, &a.track, &a.fx)?;
-        Effects::set_enabled(daw, project, target, a.on).map_err(|e| e.to_string())?;
+        let label = format!(
+            "{} {}",
+            if a.on { "Switch on" } else { "Bypass" },
+            crate::clap_fx::display_name(&fx)
+        );
+        one_step(daw, &project, &label, || {
+            Effects::set_enabled(daw, project.clone(), target, a.on).map_err(|e| e.to_string())
+        })?;
+        crate::actions::list().changed("fx", &fx.guid);
         Ok(format!(
             "{} {}",
             fx.name,

@@ -382,7 +382,7 @@ impl Routes {
 /// Run `work` where the facade can be awaited: a thread of its own on the
 /// engine's runtime in a native window. Nothing runs with no runtime.
 #[cfg(feature = "native")]
-fn spawn_on_engine(name: &str, work: impl std::future::Future<Output = ()> + Send + 'static) {
+pub fn spawn_on_engine(name: &str, work: impl std::future::Future<Output = ()> + Send + 'static) {
     let Some(runtime) = crate::open::runtime() else {
         return;
     };
@@ -394,7 +394,7 @@ fn spawn_on_engine(name: &str, work: impl std::future::Future<Output = ()> + Sen
 
 /// A page's: on its event loop, where the engine in the page answers.
 #[cfg(not(feature = "native"))]
-fn spawn_on_engine(_name: &str, work: impl std::future::Future<Output = ()> + 'static) {
+pub fn spawn_on_engine(_name: &str, work: impl std::future::Future<Output = ()> + 'static) {
     #[cfg(feature = "web")]
     wasm_bindgen_futures::spawn_local(work);
     #[cfg(not(feature = "web"))]
