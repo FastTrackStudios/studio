@@ -288,6 +288,56 @@ Studio's launcher (`feat/project-launcher`, `STUDIO_LAUNCHER_LAYOUT_SAVE`)
 is not in this branch's base; when it lands this is the layout to save
 through it as "Rig".
 
+## In Studio (2026-11-28, studio#670)
+
+The crates are members of the monorepo again, inside the group rules
+with no allow-list entry:
+
+- `rig-extension` (`crates/studio-engine/extensions/rig`) is the engine,
+  served with no view runner, so it resolves no Dioxus. Where it is goes
+  in `studio-rig-discover` (core), which both sides read. Of two engines
+  under one host, the newest wins, the same for every view (part of
+  studio#566).
+- The views (`crates/studio-connect/views/rig/*`) reach the rig's vox
+  clients through `guitar-ui`'s and `keys-ui`'s proto re-exports, never
+  the `guitar` and `keys` engine crates.
+- **TONE3000 is not served by the engine yet.** `signal-tone3000` mixes
+  its wire types, its HTTP client and sign-in, and its UI in one connect
+  crate. It needs splitting before the engine can serve it: the types to
+  core, the client to the engine, the UI staying in connect. Until then
+  the browser shows only this device's captures.
+
+Studio (`apps/studio`) links the eight views on Linux and macOS and runs
+`rig-extension` as a process package, as it runs the daw extension (its
+program found as the engine is: `FTS_RIG_ENGINE_BIN`, else beside the
+app or in its build's `target/`; `just studio` builds it).
+
+**The Rig window.** `STUDIO_RIG_WINDOW` (`rig`: guitar, bass or keys)
+opens the layout above in a window beside the session. The launcher's
+Signal page opens it from the Guitar, Bass and Keys rows. Showing the
+other rig swaps the panes inside the same window. A change of view keeps
+it open, and closing the session closes it and the rig's audio. Without a session it does
+not open (the launcher says so).
+
+**Audio (studio#555, option 2, pending the owner's confirmation).** The
+engine starts with Studio with its audio closed. Opening the Rig window
+opens it (`audio: false` keeps it closed), as does `STUDIO_RIG_START`.
+`STUDIO_RIG_AUTOSTART=1` opens it as the engine starts.
+
+**Actions.** A song, section, patch, stack or preset number past its list
+is refused, where it was clamped to the last before. Asking for the
+instrument already playing does nothing. An unknown instrument is
+refused. `tests/it` runs every declared `STUDIO_RIG_*` action against a
+design-mode engine (studio#560).
+
+**Left for the iPad and the web** (studio#641, #571, #572), where an app
+runs no second process: the engine in the app's process (`router()`
+served in memory, its clients handed to the panes, as "Web and iOS"
+above says), the views built for those targets, and the Rig window's
+place in their layouts. The desktop's release bundle does not carry
+`rig-extension` yet (the scripts in `scripts/desktop/` package
+`daw-extension` only).
+
 ## Where it stands (2026-11-18)
 
 Verified in an isolated instance (`studio dev`, a headless

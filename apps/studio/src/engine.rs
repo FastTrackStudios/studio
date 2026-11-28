@@ -247,12 +247,18 @@ fn engine_program() -> Option<(PathBuf, Vec<String>)> {
     if let Some(bin) = env("FTS_DAW_ENGINE_BIN") {
         return Some((bin, vec!["--engine".into()]));
     }
-    // Beside the app, or (a development build) in its build's target/:
-    // `target/dx/studio-app/…/studio-app` beside `target/<triple>/<profile>/`.
+    program_beside("daw-extension").map(|p| (p, vec!["--engine".into()]))
+}
+
+/// Program `name` beside the app, or (a development build) in its build's
+/// target/: `target/dx/studio-app/…/studio-app` beside
+/// `target/<triple>/<profile>/`. How the engine (`daw-extension`) and the
+/// rig engine (`rig-extension`) are found.
+pub fn program_beside(name: &str) -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    let beside = exe.with_file_name("daw-extension");
+    let beside = exe.with_file_name(name);
     if beside.is_file() {
-        return Some((beside, vec!["--engine".into()]));
+        return Some(beside);
     }
     let target = exe
         .ancestors()
@@ -271,9 +277,8 @@ fn engine_program() -> Option<(PathBuf, Vec<String>)> {
         target.join("debug"),
     ]
     .into_iter()
-    .map(|d| d.join("daw-extension"))
+    .map(|d| d.join(name))
     .find(|p| p.is_file())
-    .map(|p| (p, vec!["--engine".into()]))
 }
 
 fn log_file() -> Option<PathBuf> {

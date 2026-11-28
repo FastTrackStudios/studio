@@ -411,7 +411,7 @@ fn Chip(label: String, on: bool, onclick: EventHandler<()>) -> Element {
 #[component]
 fn Learn() -> Element {
     let state = try_use_context::<guitar_ui::RigViewState>();
-    let rig = use_hook(try_consume_context::<guitar::proto::rig::RigClient>);
+    let rig = use_hook(try_consume_context::<guitar_ui::proto::rig::RigClient>);
     let (Some(state), Some(rig)) = (state, rig) else {
         return rsx! {};
     };

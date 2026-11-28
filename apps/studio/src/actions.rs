@@ -350,6 +350,13 @@ mod imp {
         "Opens the launcher in a window of its own, titled \"Launcher\" (⌘⇧L), beside the session that plays on."
     );
     meta!(
+        RIG_WINDOW,
+        "STUDIO_RIG_WINDOW",
+        "The rig's window",
+        "Session",
+        "Opens Signal's rig in a window beside the session, titled \"Rig\": `rig` guitar (the default), bass (the guitar rig on the bass) or keys, laid out as the iPad's screen (status, setlist, macros, the grid with its FX row, Edit and the browser, the switches and tuner; or the keys' browser, rack, keyboard and switches). With `audio` (true unless said), the rig's audio opens: the interface's input reaches the outputs at the rig's last patch. Showing the other rig replaces it. STUDIO_RIG_* drive what it shows."
+    );
+    meta!(
         UI_MODE,
         "SESSION_MODE",
         "Mode",
@@ -392,6 +399,11 @@ mod imp {
         play: Option<bool>,
         #[facet(default)]
         view: Option<String>,
+    }
+    #[derive(Facet)]
+    struct RigWindowArgs {
+        rig: Option<String>,
+        audio: Option<bool>,
     }
     #[derive(Facet)]
     struct ViewArgs {
@@ -688,6 +700,7 @@ mod imp {
             forward::<()>(&list, &SESSION_CLOSE, M, false);
             forward::<()>(&list, &HOME, M, false);
             forward::<()>(&list, &LAUNCHER_WINDOW, M, false);
+            forward::<RigWindowArgs>(&list, &RIG_WINDOW, M, true);
             forward::<ViewArgs>(&list, &SESSION_VIEW, M, true);
             forward::<ScreensetArgs>(&list, &SCREENSET, M, true);
             forward::<ModeArgs>(&list, &UI_MODE, M, true);
@@ -1324,6 +1337,12 @@ mod imp {
                 } else {
                     Err("the launcher's window opens beside a session: open one first".into())
                 }
+            }
+            "STUDIO_RIG_WINDOW" => {
+                let a: RigWindowArgs = args(raw)?;
+                let audio = a.audio.unwrap_or(true);
+                let layout = crate::hosted::open_rig(a.rig.as_deref().unwrap_or("guitar"), audio)?;
+                Ok(json!({ "window": "Rig", "rig": layout.slug(), "audio": audio }))
             }
             "STUDIO_ENGINE" => Ok(json!({
                 "status": format!("{:?}", (app.engine)()),

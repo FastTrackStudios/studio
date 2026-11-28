@@ -15,7 +15,9 @@
 //! build on it; none needs another installed.
 
 pub mod bus;
-pub mod discover;
+/// Where the rig engine is: the file the engine writes and the views read
+/// (`studio-rig-discover`, in core so the engine needs no view crate).
+pub use studio_rig_discover as discover;
 
 use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::Duration;
@@ -24,10 +26,10 @@ use architect::connect::{Endpoint, pool};
 use architect_extensions::hostcall::HostRequest;
 use architect_extensions::linked::Handle;
 use dioxus::prelude::*;
-use guitar::proto::audio::AudioSettingsClient;
-use guitar::proto::rig::{RigClient, RigStreamClient};
 use guitar_ui::panels::{BrowserFocus, BuildPick, PanelHost, RoutingSel};
-use keys::proto::keys::{KeysRigClient, KeysRigStreamClient};
+use guitar_ui::proto::audio::AudioSettingsClient;
+use guitar_ui::proto::rig::{RigClient, RigStreamClient};
+use keys_ui::proto::keys::{KeysRigClient, KeysRigStreamClient};
 use serde_json::{Value as Json, json};
 use signal_rigs_proto::perform::service::{RigPerformClient, RigPerformStreamClient};
 use signal_tone3000::tone3000::{Tone3000Client, Tone3000StreamClient};
@@ -122,8 +124,12 @@ async fn connect(url: &str) -> Option<Clients> {
         rig,
         stream: establish(url).await?,
         settings: establish(url).await?,
-        tones: establish(url).await,
-        tones_stream: establish(url).await,
+        // The engine serves no TONE3000 yet: its client and sign-in are in
+        // a connect crate (`signal-tone3000`) the engine may not depend on
+        // until it is split (wire types to core, the client to the engine).
+        // With none in context the browser shows this device's captures.
+        tones: None,
+        tones_stream: None,
         perform: perform.map(|c| architect::scope_client!(c, guitar)),
         perform_stream: perform_stream.map(|c| architect::scope_client!(c, guitar)),
         keys: establish(url).await,

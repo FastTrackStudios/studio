@@ -22,7 +22,7 @@ pub mod shared;
 use architect_extensions::linked::{Builder, Extension};
 use architect_extensions_dioxus::BuilderExt as _;
 use dioxus::prelude::*;
-use keys::proto::keys::KeysRigClient;
+use keys_ui::proto::keys::KeysRigClient;
 use keys_ui::{
     Browser, ControlView, Controllers, EngineView, KeyboardStrip, KeysViewState, LayerView,
     MacroPanel, MidiPanel, PerformStrip, RoutingView, Zoom, held_notes,

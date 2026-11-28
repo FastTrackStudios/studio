@@ -3,7 +3,8 @@
 //! Stage (`crate::stage`): `studio.arrangement`, `studio.mixer`,
 //! `studio.navigator`'s progress bar, `studio.lyrics`, Keyflow's chart
 //! (the live editor, its note-input toolbar on its pane) and Ignition's
-//! room and cue list. Studio's own views are each a Studio window on the
+//! room and cue list, and Signal's rig (`studio.rig`'s engine, a process,
+//! and its views in the Rig window). Studio's own views are each a Studio window on the
 //! engine (`studio_view_link`): the song read through the window
 //! protocol's replicas, its edits and transport sent back, the same panels
 //! the old Session window drew.
@@ -61,16 +62,20 @@ pub fn open_launcher_window() -> bool {
     true
 }
 
-/// Closes the Stage's Lighting and Chart windows, when a session is open:
+/// Closes the Stage's Lighting, Mixer, Chart and Rig windows, when a session is open:
 /// whether it was.
 pub fn close_stage_windows() -> bool {
     let Some(ui) = SESSION_UI.with(std::cell::Cell::get) else {
         return false;
     };
+    if crate::stage::rig_shown(&ui.layout().peek()).is_some() {
+        stop_rig();
+    }
     for id in [
         crate::stage::LIGHTING_WINDOW,
         crate::stage::MIXER_WINDOW,
         crate::stage::CHART_WINDOW,
+        crate::stage::RIG_WINDOW,
     ] {
         let window = app_shell::WindowId::new(id);
         let _ = ui.apply(|w| w.close_window(&window));
@@ -113,7 +118,11 @@ pub fn extensions() -> &'static Extensions {
             .unwrap_or_else(std::env::temp_dir)
             .join("fts")
             .join(crate::instance::extensions_folder());
-        let linked: [&dyn architect_extensions::linked::Extension; 6] = [
+        #[cfg_attr(
+            not(any(target_os = "linux", target_os = "macos")),
+            allow(unused_mut)
+        )]
+        let mut linked: Vec<&dyn architect_extensions::linked::Extension> = vec![
             &studio_arrangement::Arrangement,
             &studio_mixer::Mixer,
             &studio_lyrics::Lyrics,
@@ -121,6 +130,11 @@ pub fn extensions() -> &'static Extensions {
             &keyflow_extension::Keyflow,
             &ignition_pane::ext::Lighting,
         ];
+        // Signal's rig views (the Rig window, `crate::stage::rig`): vox
+        // clients of the rig engine, which runs as a process (below), so
+        // only where the app may start one.
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        linked.extend(RIG_VIEWS);
         let dev_root = installs.join("dev");
         let mut ext = Extensions::new(host, Installs::new(installs)).with_dev_root(&dev_root);
         if let Some(target) = std::env::var_os(DEV_TARGET) {
@@ -147,6 +161,15 @@ pub fn extensions() -> &'static Extensions {
                 ext.host().use_provider("fts.session", Some("daw"));
             }
             Err(e) => tracing::warn!(error = %e, "studio: the daw extension is not here"),
+        }
+        // Signal's rig engine (`studio.rig`), a process of its own as the
+        // engine is: the guitar and keys rigs on this machine's library,
+        // every control an action (STUDIO_RIG_*). Its audio stays closed
+        // until the Rig window opens or STUDIO_RIG_START (studio#555).
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        match rig_package() {
+            Ok(dir) => tell(&ext.dev(dir)),
+            Err(e) => tracing::warn!(error = %e, "studio: the rig engine is not here"),
         }
         // On iPhone and iPad an app runs no second process: the extension
         // is linked in like the views, and its `build` starts the engine in
@@ -399,6 +422,128 @@ fn daw_package() -> Result<std::path::PathBuf, String> {
     let _ = std::fs::remove_file(&link);
     std::os::unix::fs::symlink(&bin, &link).map_err(|e| e.to_string())?;
     Ok(dir)
+}
+
+/// Signal's rig views, linked in: each a pane of the Rig window.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+const RIG_VIEWS: [&dyn architect_extensions::linked::Extension; 8] = [
+    &studio_rig_status::Status,
+    &studio_rig_switches::Switches,
+    &studio_rig_setlist::Setlist,
+    &studio_rig_browser::Browser,
+    &studio_rig_grid::Grid,
+    &studio_rig_macros::Macros,
+    &studio_audio_settings::AudioSettings,
+    &studio_keys::Keys,
+];
+
+/// The rig engine's program: `FTS_RIG_ENGINE_BIN`, else `rig-extension`
+/// beside the app or in its build's target/ (as the engine is found).
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn rig_extension_bin() -> Option<std::path::PathBuf> {
+    std::env::var_os("FTS_RIG_ENGINE_BIN")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| crate::engine::program_beside("rig-extension"))
+}
+
+/// The rig engine's package: its manifest and its program
+/// (`rig-extension`), in Studio's folder, as the daw extension's is.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn rig_package() -> Result<std::path::PathBuf, String> {
+    let bin = rig_extension_bin().ok_or("no rig-extension program")?;
+    let dir = crate::storage::config_dir()
+        .ok_or("no config folder")?
+        .join("fts")
+        .join(crate::instance::extensions_folder())
+        .join("dev")
+        .join("rig");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("extension.toml"), rig_extension::MANIFEST)
+        .map_err(|e| e.to_string())?;
+    let link = dir.join("rig-extension");
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&bin, &link).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// Opens the Rig window beside the session (the guitar's or the keys'
+/// screens), or shows the other rig in it: whether a session is open.
+pub fn open_rig_window(layout: crate::stage::RigLayout, set: &str) -> bool {
+    let Some(ui) = SESSION_UI.with(std::cell::Cell::get) else {
+        return false;
+    };
+    let set = set.to_owned();
+    let _ = ui.apply(move |w| {
+        if crate::stage::rig_shown(w) == Some(layout) {
+            return w.activate(&PaneId::new(layout.first()));
+        }
+        crate::stage::open_rig(w, layout, &set);
+        Ok(())
+    });
+    true
+}
+
+/// Opens rig `name` (`guitar`, `bass` or `keys`) in the Rig window beside
+/// the session, then asks the rig engine for what it shows: the
+/// instrument named (the guitar rig plays a guitar or a bass) and, with
+/// `audio`, the rig's audio opened. What `STUDIO_RIG_WINDOW` and the
+/// launcher's Signal page both do. The rig shown, or why not.
+pub fn open_rig(name: &str, audio: bool) -> Result<crate::stage::RigLayout, String> {
+    let layout = crate::stage::RigLayout::parse(name)
+        .ok_or_else(|| format!("no rig {name}: guitar, bass or keys"))?;
+    if !open_rig_window(layout, "") {
+        return Err("the rig's window opens beside a session: open one first".to_owned());
+    }
+    let instrument =
+        (layout == crate::stage::RigLayout::Guitar).then(|| name.trim().to_ascii_lowercase());
+    start_rig(layout, instrument, audio);
+    Ok(layout)
+}
+
+/// What the Rig window asks of the rig engine once it opens: the
+/// instrument named played, and (`audio`) the rig's audio opened, the
+/// guitar's or the keys'. Each step's failure goes on the span (the window
+/// shows the engine's own state); none stops the next.
+fn start_rig(layout: crate::stage::RigLayout, instrument: Option<String>, audio: bool) {
+    architect::platform::spawn(async move {
+        let mut span = crate::trace::Span::root("studio.rig.window");
+        span.set("studio.rig.layout", layout.slug());
+        if let Some(instrument) = instrument {
+            let switched = run(
+                "STUDIO_RIG_INSTRUMENT",
+                serde_json::json!({ "instrument": instrument }),
+            )
+            .await;
+            span.set("studio.rig.instrument", instrument);
+            if let Err(e) = switched {
+                span.set("studio.rig.instrument_error", e);
+            }
+        }
+        if audio {
+            let start = match layout {
+                crate::stage::RigLayout::Guitar => "STUDIO_RIG_START",
+                crate::stage::RigLayout::Keys => "STUDIO_RIG_KEYS_START",
+            };
+            match run(start, serde_json::json!({})).await {
+                Ok(_) => span.set("studio.rig.audio", "started"),
+                Err(e) => span.set("studio.rig.audio", e),
+            }
+        }
+    });
+}
+
+/// The rig's audio closed as the session closes with its Rig window: the
+/// interface stops passing the instrument to the outputs (studio#555).
+fn stop_rig() {
+    architect::platform::spawn(async {
+        let mut span = crate::trace::Span::root("studio.rig.stop");
+        for id in ["STUDIO_RIG_STOP", "STUDIO_RIG_KEYS_STOP"] {
+            if let Err(e) = run(id, serde_json::json!({})).await {
+                span.set(&format!("studio.rig.{id}"), e);
+            }
+        }
+    });
 }
 
 /// The song's session as the engine's daw extension has it (`DAW_STATE`'s

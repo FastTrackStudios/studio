@@ -6,7 +6,7 @@
 //! asked through its `AudioSettings` service; a change reopens its device
 //! when it is open.
 
-use guitar::proto::AudioPrefs;
+use guitar_ui::proto::AudioPrefs;
 use serde_json::{Value as Json, json};
 
 use crate::{ID, LINK_KEY};
@@ -275,7 +275,7 @@ pub async fn set(target: Target, change: &Change) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{Change, Target};
-    use guitar::proto::AudioPrefs;
+    use guitar_ui::proto::AudioPrefs;
     use serde_json::json;
 
     #[test]
