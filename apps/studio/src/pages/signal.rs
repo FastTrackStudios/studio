@@ -26,15 +26,16 @@ pub fn rig_folders() -> Vec<(String, usize)> {
 #[component]
 pub fn Signal() -> Element {
     // Read off the UI thread: Drive's mount can stall.
-    let folders = use_resource(|| crate::state::off_thread(rig_folders));
-    let folders = move || folders().flatten();
+    let folders = use_resource(|| crate::state::read_home(rig_folders));
     rsx! {
         Page {
             Bar { title: "Signal" }
             div { class: "body",
                 if folders().is_none() {
                     p { class: "empty", "Looking in Studio's home…" }
-                } else if folders().unwrap_or_default().is_empty() {
+                } else if folders().is_some_and(|f| f.is_none()) {
+                    super::HomeNotAnswering {}
+                } else if folders().flatten().unwrap_or_default().is_empty() {
                     div { class: "empty", role: "status",
                         p { "No rig in Studio's home yet." }
                         p {
@@ -45,7 +46,7 @@ pub fn Signal() -> Element {
                     }
                 } else {
                     div { class: "agenda",
-                        for (name , n) in folders().unwrap_or_default() {
+                        for (name , n) in folders().flatten().unwrap_or_default() {
                             div { key: "{name}", class: "ag",
                                 span { class: "mid",
                                     span { class: "t1", "{name}" }

@@ -115,8 +115,8 @@ pub fn Home() -> Element {
         &records.clone().unwrap_or_default(),
     );
     // Read off the UI thread: Drive's mount can stall.
-    let recent = use_resource(|| crate::state::off_thread(|| recent_songs(6)));
-    let recent = move || recent().flatten();
+    let recent = use_resource(|| crate::state::read_home(|| recent_songs(6)));
+    let stalled = (app.home_stalled)();
     let name = crate::orgs::org_name(&org);
     let t = today();
     let date = format!("{}, {} {}", DAY[t.weekday()], MONTH[t.month0()], t.mday());
@@ -145,7 +145,9 @@ pub fn Home() -> Element {
                             Icon { name: I::ChevRight, size: 14 }
                         }
                     }
-                    if files.is_none() && work.setlists() == 0 {
+                    if stalled && work.setlists() == 0 {
+                        super::HomeNotAnswering {}
+                    } else if files.is_none() && work.setlists() == 0 {
                         p { class: "empty", "Looking for {name}'s setlists…" }
                     } else if work.setlists() == 0 {
                         div { class: "empty", role: "status",
@@ -179,7 +181,9 @@ pub fn Home() -> Element {
                             Icon { name: I::ChevRight, size: 14 }
                         }
                     }
-                    if records.is_none() {
+                    if stalled && work.records.is_empty() {
+                        super::HomeNotAnswering {}
+                    } else if records.is_none() {
                         p { class: "empty", "Looking for records…" }
                     } else if work.records.is_empty() {
                         super::records::NoRecords {}
@@ -194,7 +198,9 @@ pub fn Home() -> Element {
                         div { class: "dayhead", "Recent songs" }
                         if recent().is_none() {
                             p { class: "empty", "Looking for songs…" }
-                        } else if recent().unwrap_or_default().is_empty() {
+                        } else if recent().is_some_and(|r| r.is_none()) {
+                            super::HomeNotAnswering {}
+                        } else if recent().flatten().unwrap_or_default().is_empty() {
                             div { class: "empty", role: "status",
                                 p { "No songs in Studio's home yet." }
                                 p {
@@ -207,7 +213,7 @@ pub fn Home() -> Element {
                             }
                         } else {
                             div { class: "agenda",
-                                for s in recent().unwrap_or_default() {
+                                for s in recent().flatten().unwrap_or_default() {
                                     RecentRow { key: "{s.folder}", song: s }
                                 }
                             }
