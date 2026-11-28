@@ -579,6 +579,15 @@ pub fn use_app() -> AppState {
     use_context::<AppState>()
 }
 
+/// Run `f` off the UI thread (a disk read: Drive's mount can stall), and
+/// wait for it. A browser has no disk and no threads: it runs `f` here.
+pub async fn off_thread<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    #[cfg(target_arch = "wasm32")]
+    return Some(f());
+    #[cfg(not(target_arch = "wasm32"))]
+    tokio::task::spawn_blocking(f).await.ok()
+}
+
 /// Wait a while, on any platform.
 pub async fn sleep_ms(ms: u64) {
     #[cfg(target_arch = "wasm32")]

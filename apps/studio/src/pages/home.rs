@@ -114,7 +114,9 @@ pub fn Home() -> Element {
         &files.clone().unwrap_or_default(),
         &records.clone().unwrap_or_default(),
     );
-    let recent = use_signal(|| recent_songs(6));
+    // Read off the UI thread: Drive's mount can stall.
+    let recent = use_resource(|| crate::state::off_thread(|| recent_songs(6)));
+    let recent = move || recent().flatten();
     let name = crate::orgs::org_name(&org);
     let t = today();
     let date = format!("{}, {} {}", DAY[t.weekday()], MONTH[t.month0()], t.mday());
@@ -190,7 +192,9 @@ pub fn Home() -> Element {
                     }
                     if !cfg!(target_arch = "wasm32") {
                         div { class: "dayhead", "Recent songs" }
-                        if recent().is_empty() {
+                        if recent().is_none() {
+                            p { class: "empty", "Looking for songs…" }
+                        } else if recent().unwrap_or_default().is_empty() {
                             div { class: "empty", role: "status",
                                 p { "No songs in Studio's home yet." }
                                 p {
@@ -203,7 +207,7 @@ pub fn Home() -> Element {
                             }
                         } else {
                             div { class: "agenda",
-                                for s in recent() {
+                                for s in recent().unwrap_or_default() {
                                     RecentRow { key: "{s.folder}", song: s }
                                 }
                             }

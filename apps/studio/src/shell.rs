@@ -33,6 +33,17 @@ const SETLIST: ShellIcon = ShellIcon(&[
     "M16 6H3",
     "M12 18H3",
 ]);
+const RIG: ShellIcon = ShellIcon(&[
+    "M4 21v-7",
+    "M4 10V3",
+    "M12 21v-9",
+    "M12 8V3",
+    "M20 21v-5",
+    "M20 12V3",
+    "M1 14h6",
+    "M9 8h6",
+    "M17 16h6",
+]);
 const LIBRARY: ShellIcon = ShellIcon(&["m16 6 4 14", "M12 6v14", "M8 8v12", "M4 4v16"]);
 const USERS: ShellIcon = ShellIcon(&[
     "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
@@ -223,11 +234,17 @@ pub fn Shell() -> Element {
             }
             loop {
                 let here = app.here.peek().clone();
-                let found = (
-                    crate::drive_sets::on_disk(&here),
-                    crate::records::on_disk(&here),
-                );
-                if on_disk.peek().as_ref() != Some(&found) {
+                // Read off the UI thread: Drive's mount can stall.
+                let found = crate::state::off_thread(move || {
+                    (
+                        crate::drive_sets::on_disk(&here),
+                        crate::records::on_disk(&here),
+                    )
+                })
+                .await;
+                if let Some(found) = found
+                    && on_disk.peek().as_ref() != Some(&found)
+                {
                     on_disk.set(Some(found));
                 }
                 crate::state::sleep_ms(2000).await;
@@ -286,13 +303,14 @@ pub fn Shell() -> Element {
                 Destination::new("home", "Home", icons::HOME),
                 Destination::new("records", "Records", DISC),
                 Destination::new("setlists", "Setlists", SETLIST),
+                Destination::new("signal", "Signal", RIG),
             ],
             Some(
                 match route.tab() {
-                    // Signal is not in the navigation (`pages::signal`).
-                    Tab::Home | Tab::Signal => "home",
+                    Tab::Home => "home",
                     Tab::Records => "records",
                     Tab::Setlists => "setlists",
+                    Tab::Signal => "signal",
                 }
                 .to_string(),
             ),
@@ -317,6 +335,9 @@ pub fn Shell() -> Element {
             }
             (None, "setlists") => {
                 nav.push(Route::Setlists {});
+            }
+            (None, "signal") => {
+                nav.push(Route::Signal {});
             }
             (None, _) => {
                 nav.push(Route::Home {});
@@ -822,6 +843,7 @@ fn StudioSidebar(route: Route) -> Element {
                 SidebarItem { label: "Records", icon: DISC, badge: records_n.to_string(), selected: tab == Tab::Records, on_press: at(Route::Records {}) }
                 SidebarItem { label: "Setlists", icon: SETLIST, badge: upcoming_n.to_string(), selected: in_set_pages, on_press: at(Route::Setlists {}) }
                 SidebarItem { label: "Library", icon: LIBRARY, badge: lib.entries().len().to_string(), selected: matches!(route, Route::LibraryHome {} | Route::Library { .. } | Route::SongPage { .. } | Route::SharedSong { .. }), on_press: at(Route::LibraryHome {}) }
+                SidebarItem { label: "Signal", icon: RIG, selected: tab == Tab::Signal, on_press: at(Route::Signal {}) }
             }
             SidebarSection { title: "Organization",
                 SidebarItem { label: "People", icon: USERS, badge: people.len().to_string(), selected: route == Route::People {}, on_press: at(Route::People {}) }
