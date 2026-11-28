@@ -8,23 +8,70 @@
 //! it): the rig's NAM captures, IRs, presets and sample libraries. With
 //! Drive it is `~/Drive/Studio/Signal`, the same folder on every computer.
 //!
+//! The **Libraries home** is `<Studio home>/Libraries`: the raw sample
+//! libraries (`Sampled/…`, `Kontakt/…`), far too big to keep on every
+//! computer. With Drive it is `~/Drive/Studio/Libraries`, beside
+//! `Studio/Signal` (Drive's adoptions never nest).
+//!
 //! A rig file is named by its path **in the Signal home**
 //! (`NAM_models/Amp.nam`, `Libraries/Drum Kits/…`), never by a disk's path
-//! ([`stored`]). Presets and songs saved before that name it by the disk it
-//! was on (`/run/media/AudioHaven/Signal/…`, [`LEGACY_SIGNAL_ROOTS`]); those
-//! paths are read as the same file in the Signal home ([`locate`]), so they
+//! ([`stored`]). Presets, songs and code written before that name it by the
+//! disk it was on (`/run/media/AudioHaven/Signal/…`, [`LEGACY_ROOTS`]);
+//! those paths are read as the same file in its home ([`locate`]), so they
 //! open on a machine that has no such disk, without being rewritten.
 
 use std::path::{Path, PathBuf};
 
-/// Where the Signal home lived before it was in Drive: the disks old
-/// presets and songs name their rig files on. `X` under one of these is
-/// `<Signal home>/X`.
-pub const LEGACY_SIGNAL_ROOTS: &[&str] = &["/run/media/AudioHaven/Signal"];
+/// The part of the Drive tree a rig file is in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Area {
+    /// The Signal home, `Studio/Signal`: NAM captures, IRs, presets, packs.
+    Signal,
+    /// The Libraries home, `Studio/Libraries`: the raw sample libraries.
+    Libraries,
+}
+
+impl Area {
+    /// Its place in the Drive tree.
+    #[must_use]
+    pub const fn in_drive(self) -> &'static str {
+        match self {
+            Self::Signal => SIGNAL_IN_DRIVE,
+            Self::Libraries => LIBRARIES_IN_DRIVE,
+        }
+    }
+}
+
+/// The folders old presets, songs and code name rig files on, and where
+/// each is now: `X` under `disk` is `<folder>/X` in `area`'s home.
+///
+/// - AudioHaven's `Signal` is the Signal home itself (adopted).
+/// - The rig-models clone CI keeps on THEBATTLESHIP (Unbreakable's bass and
+///   guitar presets name it): a copy is in `rig-library/<kind>/models`, laid
+///   out as `assets.txt` links it into the tree.
+/// - AudioHaven's `Sampled` and `Kontakt` libraries (adopted).
+pub const LEGACY_ROOTS: &[(&str, Area, &str)] = &[
+    ("/run/media/AudioHaven/Signal", Area::Signal, ""),
+    (
+        "/run/media/Development/ci-assets/rig-models/bass",
+        Area::Signal,
+        "rig-library/bass/models",
+    ),
+    (
+        "/run/media/Development/ci-assets/rig-models/guitar",
+        Area::Signal,
+        "rig-library/guitar/models",
+    ),
+    ("/run/media/AudioHaven/Sampled", Area::Libraries, "Sampled"),
+    ("/run/media/AudioHaven/Kontakt", Area::Libraries, "Kontakt"),
+];
 
 /// The Signal home's place in the Drive tree, for what a person is told to
 /// pin.
 pub const SIGNAL_IN_DRIVE: &str = "Studio/Signal";
+
+/// The Libraries home's place in the Drive tree.
+pub const LIBRARIES_IN_DRIVE: &str = "Studio/Libraries";
 
 /// The config directory: `$XDG_CONFIG_HOME` or `~/.config` on Linux,
 /// `~/Library/Application Support` on macOS and iOS, `%APPDATA%` on
@@ -123,6 +170,30 @@ pub fn signal_home() -> Option<PathBuf> {
     env_path("SIGNAL_HOME").or_else(|| studio_home().map(|h| h.join("Signal")))
 }
 
+/// The Libraries home: `<Studio home>/Libraries`.
+#[must_use]
+pub fn libraries_home() -> Option<PathBuf> {
+    studio_home().map(|h| h.join("Libraries"))
+}
+
+/// The homes a rig file is looked for in, one per [`Area`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Homes<'a> {
+    /// The Signal home.
+    pub signal: Option<&'a Path>,
+    /// The Libraries home.
+    pub libraries: Option<&'a Path>,
+}
+
+impl<'a> Homes<'a> {
+    fn of(self, area: Area) -> Option<&'a Path> {
+        match area {
+            Area::Signal => self.signal,
+            Area::Libraries => self.libraries,
+        }
+    }
+}
+
 /// `home = "…"` in the settings file (a line of TOML; nothing else is read).
 #[must_use]
 pub fn home_setting(toml: &str) -> Option<String> {
@@ -162,33 +233,61 @@ const SIGNAL_FOLDERS: &[&str] = &[
     "rig-library",
 ];
 
-/// `path`'s place in the Signal home `home`, as `/`-separated text
-/// (`NAM_models/Amp.nam`): for a path under `home` or under one of
-/// [`LEGACY_SIGNAL_ROOTS`], and for a relative path that starts at one of
-/// the home's folders. `None` for anything else.
+/// A rig file's place: the [`Area`] it is in and its `/`-separated path in
+/// that area's home (`NAM_models/Amp.nam`, `Sampled/Guitar/Shreddage Abyss`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Place {
+    /// The home it is in.
+    pub area: Area,
+    /// Its path in that home.
+    pub rel: String,
+}
+
+impl Place {
+    /// Its path in the Drive tree (`Studio/Signal/NAM_models/Amp.nam`): what
+    /// to pin.
+    #[must_use]
+    pub fn in_drive(&self) -> String {
+        format!("{}/{}", self.area.in_drive(), self.rel)
+    }
+}
+
+/// `path`'s place ([`Place`]): for a path under one of [`LEGACY_ROOTS`] or
+/// under the Signal home `signal`, and for a relative path that starts at
+/// one of the Signal home's folders. `None` for anything else.
 #[must_use]
-pub fn in_signal(path: &str, home: Option<&Path>) -> Option<String> {
+pub fn place(path: &str, signal: Option<&Path>) -> Option<Place> {
     let path = path.trim();
     let unixy = path.replace('\\', "/");
-    let rel = LEGACY_SIGNAL_ROOTS
+    let under = |root: &str| -> Option<String> {
+        let root = root.trim_end_matches('/');
+        unixy
+            .strip_prefix(root)
+            .and_then(|rest| rest.strip_prefix('/'))
+            .map(str::to_owned)
+    };
+    let (area, rel) = LEGACY_ROOTS
         .iter()
-        .copied()
-        .map(str::to_owned)
-        .chain(home.map(|h| h.to_string_lossy().replace('\\', "/")))
-        .find_map(|root| {
-            let root = root.trim_end_matches('/');
-            unixy
-                .strip_prefix(root)
-                .and_then(|rest| rest.strip_prefix('/'))
-                .map(str::to_owned)
+        .find_map(|&(disk, area, folder)| {
+            let rest = under(disk)?;
+            Some((area, normal(&rest).map(|r| joined(folder, &r))))
+        })
+        .or_else(|| {
+            let home = signal?.to_string_lossy().replace('\\', "/");
+            Some((Area::Signal, normal(&under(&home)?)))
         })
         .or_else(|| {
             let first = unixy.split('/').next()?;
             (!Path::new(path).is_absolute() && SIGNAL_FOLDERS.contains(&first))
-                .then(|| unixy.clone())
+                .then(|| (Area::Signal, normal(&unixy)))
         })?;
-    // `..` taken out (a kit's `Presets/../Engines/x.signalengine`); a path
-    // in the home never climbs out of it.
+    Some(Place { area, rel: rel? })
+}
+
+/// `rel` with `.` and `..` taken out (a kit's
+/// `Presets/../Engines/x.signalengine`); `None` when it climbs out of its
+/// root or is empty.
+fn normal(rel: &str) -> Option<String> {
     let mut parts: Vec<&str> = Vec::new();
     for part in rel.split('/') {
         match part {
@@ -202,6 +301,23 @@ pub fn in_signal(path: &str, home: Option<&Path>) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join("/"))
 }
 
+fn joined(folder: &str, rel: &str) -> String {
+    if folder.is_empty() {
+        rel.to_owned()
+    } else {
+        format!("{folder}/{rel}")
+    }
+}
+
+/// `path`'s place in the Signal home `home`, as `/`-separated text
+/// (`NAM_models/Amp.nam`): a [`place`] in [`Area::Signal`].
+#[must_use]
+pub fn in_signal(path: &str, home: Option<&Path>) -> Option<String> {
+    place(path, home)
+        .filter(|p| p.area == Area::Signal)
+        .map(|p| p.rel)
+}
+
 /// How `path` is written into a preset, a song or a config: its place in
 /// the Signal home when it is in it (or on an old Signal disk), else as it
 /// is.
@@ -213,7 +329,9 @@ pub fn stored(path: &str) -> String {
 /// A rig file Drive has not brought to this computer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NotInDrive {
-    /// Its place in the Signal home (`NAM_models/Amp.nam`).
+    /// The home it is in.
+    pub area: Area,
+    /// Its path in that home (`NAM_models/Amp.nam`).
     pub rel: String,
     /// Where it was looked for.
     pub looked: PathBuf,
@@ -221,39 +339,59 @@ pub struct NotInDrive {
     pub silent: bool,
 }
 
+impl NotInDrive {
+    /// Its path in the Drive tree (`Studio/Signal/NAM_models/Amp.nam`).
+    #[must_use]
+    pub fn in_drive(&self) -> String {
+        format!("{}/{}", self.area.in_drive(), self.rel)
+    }
+
+    /// The `drive pin` command that brings it here, quoted for a shell.
+    #[must_use]
+    pub fn pin_command(&self) -> String {
+        format!("drive pin \"{}\"", self.in_drive())
+    }
+}
+
 impl std::fmt::Display for NotInDrive {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let at = self.in_drive();
+        let looked = self.looked.display();
         if self.silent {
             return write!(
                 f,
-                "{SIGNAL_IN_DRIVE}/{rel} could not be read: the Drive mount ({looked}) did not \
-                 answer. Check that Drive is running (`drive status {SIGNAL_IN_DRIVE}/{rel}`) \
-                 and open the song again",
-                rel = self.rel,
-                looked = self.looked.display(),
+                "{at} could not be read: the Drive mount ({looked}) did not answer. Check that \
+                 Drive is running (`drive status \"{at}\"`) and open the song again",
             );
         }
-        write!(
-            f,
-            "{SIGNAL_IN_DRIVE}/{rel} is not on this computer (looked at {looked}): it is not in \
-             Drive here yet. Pin it (`drive pin {SIGNAL_IN_DRIVE}/{rel}`, or a folder above it) \
-             and open the song again",
-            rel = self.rel,
-            looked = self.looked.display(),
-        )
+        let pin = self.pin_command();
+        match self.area {
+            Area::Signal => write!(
+                f,
+                "{at} is not on this computer (looked at {looked}): it is not in Drive here yet. \
+                 Pin it (`{pin}`, or a folder above it) and open the song again",
+            ),
+            // A library is hundreds of GB: pin the one a song plays, never
+            // all of Studio/Libraries.
+            Area::Libraries => write!(
+                f,
+                "{at} is not on this computer (looked at {looked}): this sample library is not \
+                 in Drive here yet. Pin it for the songs that play it (`{pin}`; not all of \
+                 {LIBRARIES_IN_DRIVE}, which is too big) and open the song again",
+            ),
+        }
     }
 }
 
 impl std::error::Error for NotInDrive {}
 
-/// The file on this computer that the rig file `path` names, in the
-/// Signal home `home`:
+/// The file on this computer that the rig file `path` names, in `homes`:
 ///
-/// - a path on an old Signal disk that this computer has is itself: the
-///   same bytes, read without the Drive mount;
-/// - any other path in the Signal home ([`in_signal`]: relative, or on an
-///   old Signal disk this computer lacks) is `<home>/<rel>`;
-/// - any other path is itself (a path already under `home` is a path on
+/// - a path on an old disk ([`LEGACY_ROOTS`]) that this computer has is
+///   itself: the same bytes, read without the Drive mount;
+/// - any other path with a [`place`] (relative, or on an old disk this
+///   computer lacks) is `<its area's home>/<rel>`;
+/// - any other path is itself (a path already under a home is a path on
 ///   this computer).
 ///
 /// The home is looked at with a time limit: a Drive mount that hangs gives
@@ -263,16 +401,17 @@ impl std::error::Error for NotInDrive {}
 ///
 /// [`NotInDrive`] for a path in the Signal home whose file is not here, or
 /// when the mount did not answer.
-pub fn locate_in(path: &str, home: Option<&Path>) -> Result<PathBuf, NotInDrive> {
+pub fn locate_in(path: &str, homes: Homes<'_>) -> Result<PathBuf, NotInDrive> {
     let given = PathBuf::from(path);
-    let Some(rel) = in_signal(path, None) else {
+    let Some(Place { area, rel }) = place(path, None) else {
         return Ok(given);
     };
     if given.is_absolute() && given.exists() {
         return Ok(given);
     }
-    let Some(at_home) = home.map(|h| h.join(&rel)) else {
+    let Some(at_home) = homes.of(area).map(|h| h.join(&rel)) else {
         return Err(NotInDrive {
+            area,
             rel,
             looked: given,
             silent: false,
@@ -281,6 +420,7 @@ pub fn locate_in(path: &str, home: Option<&Path>) -> Result<PathBuf, NotInDrive>
     match probe(&at_home, |p| p.exists()) {
         Some(true) => Ok(at_home),
         found => Err(NotInDrive {
+            area,
             rel,
             looked: at_home,
             silent: found.is_none(),
@@ -288,17 +428,25 @@ pub fn locate_in(path: &str, home: Option<&Path>) -> Result<PathBuf, NotInDrive>
     }
 }
 
-/// [`locate_in`] this machine's [`signal_home`], found only for a path in
-/// the Signal home.
+/// [`locate_in`] this machine's homes ([`signal_home`],
+/// [`libraries_home`]), found only for a path that has a [`place`].
 ///
 /// # Errors
 ///
 /// [`NotInDrive`] for a path in the Signal home whose file is not here.
 pub fn locate(path: &str) -> Result<PathBuf, NotInDrive> {
-    if in_signal(path, None).is_none() {
+    let Some(found) = place(path, None) else {
         return Ok(PathBuf::from(path));
-    }
-    locate_in(path, signal_home().as_deref())
+    };
+    let home = match found.area {
+        Area::Signal => signal_home(),
+        Area::Libraries => libraries_home(),
+    };
+    let homes = Homes {
+        signal: home.as_deref().filter(|_| found.area == Area::Signal),
+        libraries: home.as_deref().filter(|_| found.area == Area::Libraries),
+    };
+    locate_in(path, homes)
 }
 
 /// [`locate`], for a loader that reports its own error: the file found, or
@@ -313,6 +461,13 @@ mod tests {
     use super::*;
 
     const OLD: &str = "/run/media/AudioHaven/Signal/NAM_models/Helga B Boss OS-2.nam";
+
+    fn signal(home: &Path) -> Homes<'_> {
+        Homes {
+            signal: Some(home),
+            libraries: None,
+        }
+    }
 
     fn home_with(files: &[&str]) -> tempfile_lite::Dir {
         let dir = tempfile_lite::Dir::new();
@@ -373,9 +528,9 @@ mod tests {
         } else {
             home.path().join("NAM_models/Helga B Boss OS-2.nam")
         };
-        assert_eq!(locate_in(OLD, Some(home.path())).unwrap(), want);
+        assert_eq!(locate_in(OLD, signal(home.path())).unwrap(), want);
         assert_eq!(
-            locate_in("NAM_models/Helga B Boss OS-2.nam", Some(home.path())).unwrap(),
+            locate_in("NAM_models/Helga B Boss OS-2.nam", signal(home.path())).unwrap(),
             home.path().join("NAM_models/Helga B Boss OS-2.nam")
         );
     }
@@ -385,7 +540,7 @@ mod tests {
         let home = home_with(&[]);
         let err = locate_in(
             "/run/media/AudioHaven/Signal/Libraries/Drum Kits/GGD/Presets/Gone.signalpreset",
-            Some(home.path()),
+            signal(home.path()),
         )
         .unwrap_err();
         assert_eq!(err.rel, "Libraries/Drum Kits/GGD/Presets/Gone.signalpreset");
@@ -393,7 +548,7 @@ mod tests {
         assert!(said.contains("not in Drive here yet"), "{said}");
         assert!(
             said.contains(
-                "drive pin Studio/Signal/Libraries/Drum Kits/GGD/Presets/Gone.signalpreset"
+                "drive pin \"Studio/Signal/Libraries/Drum Kits/GGD/Presets/Gone.signalpreset\""
             ),
             "{said}"
         );
@@ -403,7 +558,7 @@ mod tests {
     fn a_path_outside_signal_is_left_as_it_is() {
         let home = home_with(&[]);
         assert_eq!(
-            locate_in("/tmp/elsewhere/x.nam", Some(home.path())).unwrap(),
+            locate_in("/tmp/elsewhere/x.nam", signal(home.path())).unwrap(),
             PathBuf::from("/tmp/elsewhere/x.nam")
         );
     }
@@ -425,6 +580,110 @@ mod tests {
         assert_eq!(
             locate("models/x.nam").unwrap(),
             PathBuf::from("models/x.nam")
+        );
+    }
+
+    #[test]
+    fn ci_assets_rig_models_are_the_rig_library_in_the_signal_home() {
+        let amp = "/run/media/Development/ci-assets/rig-models/guitar/1966 AC30 Bril OD.nam";
+        assert_eq!(
+            in_signal(amp, None).as_deref(),
+            Some("rig-library/guitar/models/1966 AC30 Bril OD.nam")
+        );
+        assert_eq!(
+            in_signal(
+                "/run/media/Development/ci-assets/rig-models/bass/PARALLAX DEFAULT.nam",
+                None
+            )
+            .as_deref(),
+            Some("rig-library/bass/models/PARALLAX DEFAULT.nam")
+        );
+        // Only the two capture folders: the clone's README is not a rig file.
+        assert_eq!(
+            in_signal(
+                "/run/media/Development/ci-assets/rig-models/README.md",
+                None
+            ),
+            None
+        );
+        assert_eq!(
+            in_signal(
+                "/run/media/Development/ci-assets/rig-models/guitar/../../x",
+                None
+            ),
+            None
+        );
+        let home = home_with(&["rig-library/guitar/models/1966 AC30 Bril OD.nam"]);
+        let want = if Path::new(amp).exists() {
+            PathBuf::from(amp) // THEBATTLESHIP: CI's own clone, read directly
+        } else {
+            home.path()
+                .join("rig-library/guitar/models/1966 AC30 Bril OD.nam")
+        };
+        assert_eq!(locate_in(amp, signal(home.path())).unwrap(), want);
+        let gone = "/run/media/Development/ci-assets/rig-models/bass/Gone.nam";
+        let said = locate_in(gone, signal(home.path()))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            said.contains("drive pin \"Studio/Signal/rig-library/bass/models/Gone.nam\""),
+            "{said}"
+        );
+    }
+
+    #[test]
+    fn sampled_and_kontakt_libraries_are_in_the_libraries_home() {
+        let abyss = "/run/media/AudioHaven/Sampled/Guitar/Shreddage Abyss";
+        assert_eq!(
+            place(abyss, None),
+            Some(Place {
+                area: Area::Libraries,
+                rel: "Sampled/Guitar/Shreddage Abyss".into(),
+            })
+        );
+        let kontakt = "/run/media/AudioHaven/Kontakt/Drums/Kit/a.nkx";
+        let at = place(kontakt, None).unwrap();
+        assert_eq!(at.area, Area::Libraries);
+        assert_eq!(at.in_drive(), "Studio/Libraries/Kontakt/Drums/Kit/a.nkx");
+        // Not the Signal home's: a Signal-only caller leaves them alone.
+        assert_eq!(in_signal(abyss, None), None);
+
+        let libraries = home_with(&["Sampled/Guitar/Shreddage Abyss/_patches/x.styx"]);
+        let homes = Homes {
+            signal: None,
+            libraries: Some(libraries.path()),
+        };
+        let patch = format!("{abyss}/_patches/x.styx");
+        let want = if Path::new(&patch).exists() {
+            PathBuf::from(&patch)
+        } else {
+            libraries
+                .path()
+                .join("Sampled/Guitar/Shreddage Abyss/_patches/x.styx")
+        };
+        assert_eq!(locate_in(&patch, homes).unwrap(), want);
+    }
+
+    #[test]
+    fn a_library_not_in_drive_yet_says_to_pin_that_library() {
+        let libraries = home_with(&[]);
+        let homes = Homes {
+            signal: None,
+            libraries: Some(libraries.path()),
+        };
+        let err =
+            locate_in("/run/media/AudioHaven/Sampled/Guitar/Gone Library", homes).unwrap_err();
+        assert_eq!(err.area, Area::Libraries);
+        let said = err.to_string();
+        assert!(
+            said.contains("drive pin \"Studio/Libraries/Sampled/Guitar/Gone Library\""),
+            "{said}"
+        );
+        assert!(said.contains("not all of Studio/Libraries"), "{said}");
+        let err = locate_in("/run/media/AudioHaven/Kontakt/Gone/a.nki", homes).unwrap_err();
+        assert_eq!(
+            err.pin_command(),
+            "drive pin \"Studio/Libraries/Kontakt/Gone/a.nki\""
         );
     }
 

@@ -211,40 +211,93 @@ IRs, block presets, module presets, rig presets and profiles, and the
 sample libraries. The rig's home files (styx) still live in signal's
 `default-config`, linked from `~/.config/signal/rig` (`SIGNAL_RIG_DIR`).
 
-The **Signal home** is `<home>/Signal` (`SIGNAL_HOME` overrides it). On
-THEBATTLESHIP it is the AudioHaven disk's `Signal/` folder, adopted into
-Drive in place on 2026-11-27 (nothing copied or moved):
+The **Signal home** is `<home>/Signal` (`SIGNAL_HOME` overrides it). The
+raw sample libraries are beside it, in the **Libraries home**,
+`<home>/Libraries`. On THEBATTLESHIP all three folders are on the
+AudioHaven disk, adopted into Drive in place (nothing copied or moved).
+Drive's adoptions never nest, so the libraries could not go under
+`Studio/Signal`:
 
 ```text
-drive adopt /run/media/AudioHaven/Signal --as Studio/Signal
-drive unadopt Studio/Signal        # undo: the mapping only, the files stay
+drive adopt /run/media/AudioHaven/Signal  --as Studio/Signal             # 2026-11-27
+drive adopt /run/media/AudioHaven/Sampled --as Studio/Libraries/Sampled  # 2026-11-28, 1.4 TB
+drive adopt /run/media/AudioHaven/Kontakt --as Studio/Libraries/Kontakt  # 2026-11-28, 423 GB
+drive unadopt <logical path>   # undo: the mapping only, the files stay
 ```
 
-So `~/Drive/Studio/Signal/{IR,Libraries,NAM,NAM_models,Orchestral,Patches,Reference,Songs}`
-is the same folder on every computer. Another computer reads it through
-Drive. To have a folder's files there, pin it in Drive
-(`drive pin Studio/Signal/NAM_models`).
+The layout in Drive, the same on every computer:
+
+```text
+Studio/
+  Signal/                 AudioHaven/Signal
+    NAM_models/  NAM/  IR/  Patches/  Orchestral/  Reference/  Songs/
+    Libraries/            packs, drum kits (Drum Kits/…), Proxy/, Presets/
+    rig-library/
+      bass/models/        a copy of the rig-models captures (below)
+      guitar/models/
+  Libraries/
+    Sampled/              AudioHaven/Sampled: Guitar/, Keys/, Orchestral/, Horns/, …
+    Kontakt/              AudioHaven/Kontakt
+```
+
+`rig-library/{bass,guitar}/models` is a **copy** of the rig-models
+captures at `/run/media/Development/ci-assets/rig-models/{bass,guitar}`,
+made 2026-11-28 (123 files, 35 MB, checksums matched). Unbreakable's bass
+and guitar presets name those files (#797). CI keeps and reads its own
+clone; the copy is for every other computer. When rig-models gains a
+capture, copy it here too.
+
+### What another computer pins
+
+Another computer reads all of it through Drive, but a song plays only
+what is on that computer. Pin:
+
+- **always**, small and used by every rig (sizes as of 2026-11-28):
+  `drive pin Studio/Signal/NAM_models` (138 MB),
+  `drive pin Studio/Signal/rig-library` (35 MB), `drive pin Studio/Signal/NAM`
+  and `drive pin Studio/Signal/Patches` (a few MB);
+- **on a computer that mixes**: `drive pin Studio/Signal/IR` (1.9 GB) and
+  `drive pin Studio/Signal/Libraries/Presets` (1.2 GB);
+- **the drum kits and packs the setlist plays**, e.g.
+  `drive pin "Studio/Signal/Libraries/Drum Kits/GGD Modern and Massive 2"`,
+  or `drive pin Studio/Signal/Libraries/Proxy` for the Ogg proxies;
+- **a raw library only for a song that plays it**, never all of
+  `Studio/Libraries`: e.g. `drive pin "Studio/Libraries/Sampled/Guitar/Shreddage Abyss"`
+  for the fretted rig, or `drive pin "Studio/Libraries/Sampled/Orchestral/Cinematic Series/Cinematic Studio Strings"`
+  for the orchestra.
+
+### Rig files by their place
 
 A rig file is named by its **place in the Signal home**
 (`NAM_models/Amp.nam`, `Libraries/Drum Kits/…/Heavy Thwacky.signalpreset`).
 It is never named by a disk's path. `utils::home` (studio-core) finds the
-home and the file:
+homes and the file:
 
-- A path saved before the move, `/run/media/AudioHaven/Signal/X`, is read
-  as `<Signal home>/X`. Old presets and songs open on any machine as they
-  are, and nothing rewrites them.
+- A path saved before the move is read as its place (`LEGACY_ROOTS`), so
+  old presets, songs and code defaults open on any machine as they are,
+  and nothing rewrites them:
+
+  | Old path | Place |
+  |---|---|
+  | `/run/media/AudioHaven/Signal/X` | `Studio/Signal/X` |
+  | `/run/media/Development/ci-assets/rig-models/bass/X` | `Studio/Signal/rig-library/bass/models/X` |
+  | `/run/media/Development/ci-assets/rig-models/guitar/X` | `Studio/Signal/rig-library/guitar/models/X` |
+  | `/run/media/AudioHaven/Sampled/X` | `Studio/Libraries/Sampled/X` |
+  | `/run/media/AudioHaven/Kontakt/X` | `Studio/Libraries/Kontakt/X` |
+
+- A computer that has the old path (THEBATTLESHIP, CI) reads it directly;
+  the Drive mount isn't involved.
 - The loaders map every path they are given this way: a NAM capture, an
-  IR, a `.signalpack`, a library spec, a kit's `.signalpreset` and
-  `.signalengine`, the plugin presets' folders, and the CLAP host's file
-  references.
-- A file of the Signal home that Drive has not brought to this computer
-  fails to load with `Studio/Signal/X is not on this computer … Pin it
-  (drive pin Studio/Signal/X)`. It never fails silently.
+  IR, a `.signalpack`, a library spec and its samples root (the fretted
+  and orchestra libraries, the sampler plugin's patch), a kit's
+  `.signalpreset` and `.signalengine`, the plugin presets' folders, keys'
+  `sampled_root`, and the CLAP host's file references.
+- A file that Drive has not brought to this computer fails to load with a
+  message naming what to pin. It never fails silently:
+  - `Studio/Signal/X is not on this computer … Pin it (drive pin "Studio/Signal/X", or a folder above it)`;
+  - `Studio/Libraries/Sampled/X is not on this computer … this sample library is not in Drive here yet. Pin it for the songs that play it (drive pin "Studio/Libraries/Sampled/X"; not all of Studio/Libraries …)`.
 - In a browser, a rig's file maps to the same key in the rig store
   whichever way it is named (`files::located`, `kit_key`).
-
-Raw libraries outside `Signal/` (`/run/media/AudioHaven/Sampled/…`,
-`Kontakt/…`) are not in Drive yet, and their paths are not mapped.
 
 ## Moving in
 
