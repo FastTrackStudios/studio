@@ -5,8 +5,9 @@
 use dioxus::prelude::*;
 
 use crate::Route;
-use crate::data::{self, DAY, FIFTHS, MON, TODAY, dur};
+use crate::day::{DAY, MON, today};
 use crate::icons::{I, Icon};
+use crate::look::{self, FIFTHS};
 use crate::orgs;
 use crate::pages::set::{Ctx, EntryEditor, initials, item_icon, use_ctx};
 use crate::setlist::{self, Entry, Info, ItemKind, Kind, Seat};
@@ -30,8 +31,8 @@ pub fn KeySheet(set: SetRef, entry: String) -> Element {
         return rsx! {};
     };
     let p = ctx.played(&e);
-    let own = p.own_key.as_deref().and_then(data::norm_key).unwrap_or("C");
-    let cur = p.key.as_deref().and_then(data::norm_key).unwrap_or(own);
+    let own = p.own_key.as_deref().and_then(look::norm_key).unwrap_or("C");
+    let cur = p.key.as_deref().and_then(look::norm_key).unwrap_or(own);
     let doc = ctx.set.clone();
     let pick = move |k: Option<&'static str>| {
         let (doc, e) = (doc.clone(), e.clone());
@@ -52,7 +53,7 @@ pub fn KeySheet(set: SetRef, entry: String) -> Element {
             div { class: "keypick",
                 for k in FIFTHS {
                     {
-                        let d = data::steps(own, k);
+                        let d = look::steps(own, k);
                         let mut cls = vec!["kp"];
                         if k == cur {
                             cls.push("on");
@@ -65,7 +66,7 @@ pub fn KeySheet(set: SetRef, entry: String) -> Element {
                             button {
                                 key: "{k}",
                                 class: "{cls.join(\" \")}",
-                                style: "--h:{data::hue(k).unwrap_or(0)}",
+                                style: "--h:{look::hue(k).unwrap_or(0)}",
                                 onclick: pick(Some(k)),
                                 b { "{k}" }
                                 small {
@@ -92,7 +93,7 @@ pub fn KeySheet(set: SetRef, entry: String) -> Element {
     }
 }
 
-/// A song's arrangement in a set, and what each does to its length.
+/// A song's arrangement in a set: as recorded, or one the org has of it.
 #[component]
 pub fn ArrSheet(set: SetRef, entry: String) -> Element {
     let app = use_app();
@@ -101,33 +102,37 @@ pub fn ArrSheet(set: SetRef, entry: String) -> Element {
         return rsx! {};
     };
     let cur = ctx.played(&e).arrangement;
-    let base = e.length.unwrap_or(270) as i32;
+    // As recorded, and the arrangements this org has of the song.
+    let mut arrangements = vec![look::AS_RECORDED.to_string()];
+    if let (Some(lib), Some(r)) = (&ctx.lib, &e.song) {
+        for a in lib.use_of(&r.owner, &r.id).arrangements {
+            if !arrangements.contains(&a) {
+                arrangements.push(a);
+            }
+        }
+    }
     rsx! {
         BSheet { label: "Arrangement",
             div { class: "bhead",
                 b { "{e.title}" }
                 span { class: "bsub", "Arrangement" }
             }
-            for (a , dt) in data::ARRS {
+            for a in arrangements {
                 {
-                    let note = if dt == 0 {
-                        format!("{} · as written", dur((base + dt) as f64))
+                    let note = if a == look::AS_RECORDED {
+                        "As recorded"
                     } else {
-                        format!(
-                            "{} · {}{}",
-                            dur((base + dt) as f64),
-                            if dt > 0 { "+" } else { "−" },
-                            dur(dt.abs() as f64),
-                        )
+                        "This org's arrangement"
                     };
-                    let (doc, e) = (ctx.set.clone(), e.clone());
+                    let (doc, e, pick) = (ctx.set.clone(), e.clone(), a.clone());
+                    let on = a == cur;
                     rsx! {
                         button {
                             key: "{a}",
                             class: "mi big",
                             onclick: move |_| {
                                 let mut x = doc.entry(&e.id).unwrap_or_else(|| e.clone());
-                                x.over.arrangement = Some(a.to_string());
+                                x.over.arrangement = Some(pick.clone());
                                 doc.update(&x);
                                 app.close();
                             },
@@ -138,7 +143,7 @@ pub fn ArrSheet(set: SetRef, entry: String) -> Element {
                                 span { class: "t1", "{a}" }
                                 span { class: "s1", "{note}" }
                             }
-                            if a == cur {
+                            if on {
                                 span { class: "ck",
                                     Icon { name: I::Check, size: 17, w: 2.2 }
                                 }
@@ -330,7 +335,7 @@ fn AddRow(ctx: Ctx, owner: String, song: crate::songs::Entry, added: bool) -> El
                 }
             }
             if let Some(k) = &song.key {
-                span { class: "kc", style: "--h:{data::hue(k).unwrap_or(0)}", "{k}" }
+                span { class: "kc", style: "--h:{look::hue(k).unwrap_or(0)}", "{k}" }
             }
         }
     }
@@ -355,7 +360,7 @@ pub fn BandSheet(set: SetRef) -> Element {
                 div { class: "s1", "{orgs::org_name(&ctx.set.org)}'s team plays this set." }
                 for s in band.iter() {
                     div { key: "{s.person}", class: "person",
-                        span { class: "pmark", style: "--h:{data::str_hue(&s.name)};width:34px;height:34px", "{initials(&s.name)}" }
+                        span { class: "pmark", style: "--h:{look::str_hue(&s.name)};width:34px;height:34px", "{initials(&s.name)}" }
                         span { class: "mid",
                             span { class: "t1", "{s.name}" }
                             span { class: "s1", "{s.parts.join(\", \")}" }
@@ -782,7 +787,7 @@ pub fn NewSetSheet(preset: Option<String>) -> Element {
     let mut for_series = use_signal(move || p_series.clone());
     let mut kind = use_signal(|| Kind::Service);
     let mut title = use_signal(String::new);
-    let mut date = use_signal(move || p_date.unwrap_or(TODAY.plus(3)).iso());
+    let mut date = use_signal(move || p_date.unwrap_or(today().plus(3)).iso());
     let mut from = use_signal(|| None::<String>);
     let sr = for_series().and_then(|id| series.iter().find(|s| s.id == id).cloned());
     // A meeting: its day (the next one without a set, unless one was given).
@@ -794,14 +799,14 @@ pub fn NewSetSheet(preset: Option<String>) -> Element {
                     .is_some_and(|p| p.starts_with(&format!("{}@", s.id)))
             })
             .unwrap_or_else(|| {
-                s.dates(TODAY, TODAY.plus(60))
+                s.dates(today(), today().plus(60))
                     .into_iter()
                     .find(|d| {
                         !faces
                             .iter()
                             .any(|f| f.id == setlist::meeting_id(&s.id, *d) && f.songs > 0)
                     })
-                    .unwrap_or(TODAY)
+                    .unwrap_or_else(today)
             })
     });
     let last = match (&sr, meeting_day) {
@@ -820,7 +825,7 @@ pub fn NewSetSheet(preset: Option<String>) -> Element {
             } else {
                 date()
             },
-            hue: data::str_hue(&title()),
+            hue: look::str_hue(&title()),
             ..Info::default()
         },
     };
@@ -1034,7 +1039,7 @@ pub fn BookSheet() -> Element {
             date: f.day(),
             day: f.day().map_or(0, |d| (d.from_today() - 1).max(0) as usize),
             time: "7:00 PM",
-            room: "Room 210",
+            room: f.place.clone(),
         });
     let Some(b) = booking().or(fallback) else {
         return rsx! {
@@ -1085,7 +1090,7 @@ pub fn BookSheet() -> Element {
             div { class: "seg days",
                 for k in 0..=last {
                     {
-                        let d = TODAY.plus(k as i32);
+                        let d = today().plus(k as i32);
                         let top = if k == 0 { "Today".to_string() } else { DAY[d.weekday()][..3].to_string() };
                         let b = b.clone();
                         rsx! {
@@ -1119,21 +1124,15 @@ pub fn BookSheet() -> Element {
                 }
             }
             div { class: "fsec", "Where" }
-            div { class: "seg",
-                for t in ["Room 210", "Chapel", "Worship Center", "The Loft"] {
-                    {
-                        let b = b.clone();
-                        rsx! {
-                            button {
-                                key: "{t}",
-                                class: "fopt",
-                                aria_pressed: "{b.room == t}",
-                                onclick: move |_| booking.set(Some(Booking { room: t, ..b.clone() })),
-                                "{t}"
-                            }
-                        }
-                    }
-                }
+            input {
+                class: "field",
+                placeholder: "A room",
+                aria_label: "Where",
+                value: "{b.room}",
+                oninput: {
+                    let b = b.clone();
+                    move |e: FormEvent| booking.set(Some(Booking { room: e.value(), ..b.clone() }))
+                },
             }
             BookButtonFor { b: b.clone(), day }
         }
@@ -1152,9 +1151,9 @@ fn BookButtonFor(b: Booking, day: usize) -> Element {
             onclick: move |_| {
                 let r = setlist::Rehearsal {
                     id: String::new(),
-                    date: TODAY.plus(day as i32).iso(),
+                    date: today().plus(day as i32).iso(),
                     time: b.time.into(),
-                    room: b.room.into(),
+                    room: b.room.clone(),
                 };
                 set.put_rehearsal(&r);
                 // The sheet closes now: its face and calendar follow here.

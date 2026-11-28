@@ -5,8 +5,8 @@
 use dioxus::prelude::*;
 
 use crate::Route;
-use crate::data::{self, FIFTHS};
 use crate::icons::{I, Icon};
+use crate::look::{self, FIFTHS};
 use crate::orgs::{self, Group, PARTS, Person, Role, Settings};
 use crate::pieces::{Bar, Page, Tool};
 use crate::songs::use_library_of;
@@ -569,7 +569,7 @@ fn GroupLine(team: Team, group: Group) -> Element {
         .collect();
     rsx! {
         div { class: "groupline",
-            span { class: "s1", "{data::cap(&group.kind)}" }
+            span { class: "s1", "{look::cap(&group.kind)}" }
             if !leads.is_empty() {
                 span { class: "s1", " · led by {leads.join(\", \")}" }
             }
@@ -858,7 +858,7 @@ pub fn OrgSettings() -> Element {
                             let v = e.value();
                             s2(&|s: &mut Settings| s.arrangement = v.clone());
                         },
-                        for (a , _) in data::ARRS {
+                        for a in [look::AS_RECORDED] {
                             option { key: "{a}", value: "{a}", selected: st.arrangement == a, "{a}" }
                         }
                     }
@@ -984,19 +984,21 @@ pub fn OrgSongSheet(owner: String, id: String) -> Element {
             }
             div { class: "songh", "Arrangement here" }
             div { class: "chips",
-                for (a , _) in data::ARRS {
+                for a in std::iter::once(look::AS_RECORDED.to_string()).chain(u.arrangements.iter().filter(|x| x.as_str() != look::AS_RECORDED).cloned()) {
                     {
                         let pa = pa.clone();
+                        let on = arr == a;
+                        let pick = a.clone();
                         rsx! {
                             button {
                                 key: "{a}",
                                 class: "tagchip",
-                                aria_pressed: "{arr == a}",
+                                aria_pressed: "{on}",
                                 onclick: move |_| {
                                     pa(&|u: &mut orgs::Use| {
-                                        u.arrangement = Some(a.to_string());
-                                        if !u.arrangements.iter().any(|x| x == a) {
-                                            u.arrangements.push(a.to_string());
+                                        u.arrangement = Some(pick.clone());
+                                        if !u.arrangements.iter().any(|x| *x == pick) {
+                                            u.arrangements.push(pick.clone());
                                         }
                                     })
                                 },

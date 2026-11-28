@@ -17,8 +17,8 @@
 
 use dioxus::prelude::*;
 
-use crate::data::Song;
 use crate::icons::{I, Icon};
+use crate::song::Song;
 use crate::state::Place;
 
 /// How a download stands.

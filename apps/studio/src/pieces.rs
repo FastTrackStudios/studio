@@ -3,8 +3,10 @@
 
 use dioxus::prelude::*;
 
-use crate::data::{self, Day, Song};
+use crate::day::Day;
 use crate::icons::{I, Icon};
+use crate::look;
+use crate::song::Song;
 
 /// Go back: the history's last page, or the tab the page belongs to.
 pub fn go_back(fallback: crate::Route) {
@@ -143,18 +145,13 @@ pub fn Art(img: Option<Asset>, title: String, hue: u32, #[props(default)] size: 
     }
 }
 
-/// A song's art: JT's cover on his own songs, a generated one otherwise.
+/// A song's art: a cover generated from its title and artist.
 #[component]
 pub fn SongArt(song: Song) -> Element {
-    let own = song.artist.is_some_and(|a| data::OWN.contains(&a));
-    let hue = data::str_hue(song.artist.unwrap_or(song.title));
+    let hue = look::str_hue(song.artist.unwrap_or(song.title));
     rsx! {
         span { class: "sart",
-            if own {
-                img { src: data::JT_COVER, alt: "" }
-            } else {
-                Cover { title: song.title, size: 44, hue }
-            }
+            Cover { title: song.title, size: 44, hue }
         }
     }
 }
@@ -279,7 +276,7 @@ pub fn Keys(songs: Vec<Song>, size: usize) -> Element {
     rsx! {
         span { class: "keys",
             for (i , x) in songs.iter().enumerate() {
-                i { key: "{i}", style: "--h:{data::hue(x.key.unwrap_or(\"\")).unwrap_or(0)}", "{x.key.unwrap_or(\"\")}" }
+                i { key: "{i}", style: "--h:{look::hue(x.key.unwrap_or(\"\")).unwrap_or(0)}", "{x.key.unwrap_or(\"\")}" }
             }
             for k in 0..gaps {
                 i { key: "g{k}", class: "gap" }
@@ -291,7 +288,7 @@ pub fn Keys(songs: Vec<Song>, size: usize) -> Element {
 /// A small coloured key, as in the library and the player.
 #[component]
 pub fn KeyC(k: &'static str) -> Element {
-    let h = data::hue(k).unwrap_or(0);
+    let h = look::hue(k).unwrap_or(0);
     rsx! {
         span { class: "kc", style: "--h:{h}", "{k}" }
     }
@@ -310,43 +307,6 @@ pub fn Energy(e: u8) -> Element {
                 }
             }
         }
-    }
-}
-
-/// A track's or a record's status as a chip; a button when it can be changed.
-#[component]
-pub fn StageTag(
-    stage: usize,
-    #[props(default)] onclick: Option<EventHandler<MouseEvent>>,
-) -> Element {
-    let (name, h) = data::STAGES[stage.min(data::STAGES.len() - 1)];
-    let none = h.is_none();
-    let h = h.unwrap_or(0);
-    rsx! {
-        if let Some(cb) = onclick {
-            button {
-                class: "stgtag",
-                style: "--h:{h}",
-                "data-none": "{none}",
-                onclick: move |e: MouseEvent| {
-                    e.stop_propagation();
-                    cb.call(e)
-                },
-                "{name}"
-            }
-        } else {
-            span { class: "stgtag", style: "--h:{h}", "data-none": "{none}", "{name}" }
-        }
-    }
-}
-
-/// A person's initial in their colour.
-#[component]
-pub fn Avatar(who: String) -> Element {
-    let h = data::person_hue(&who);
-    let first = who.chars().next().unwrap_or('?');
-    rsx! {
-        span { class: "av", style: "--h:{h}", "{first}" }
     }
 }
 

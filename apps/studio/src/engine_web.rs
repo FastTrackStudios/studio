@@ -476,7 +476,7 @@ pub fn EnginePlayer() -> Element {
                 .next()
                 .unwrap_or("Session")
                 .to_owned();
-            let song = crate::data::song_named(&title);
+            let song = crate::song::song_named(&title);
             app.np.set(Some(crate::state::NowPlaying::of_places(
                 vec![(song, place)],
                 "Link".into(),

@@ -9,18 +9,15 @@
 //!
 //! The library is one more document (`studio:library`): each song's
 //! readable face (title, artist, key, tempo, tags, energy), so the list
-//! is read without opening every song. It is seeded once from the
-//! built-in list.
+//! is read without opening every song. It starts empty: its songs are
+//! the ones the org adds.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dioxus::prelude::*;
 use session_sync::loro::{LoroDoc, LoroMap, LoroValue, ValueOrContainer};
-use session_sync::slug::slugify;
 use session_sync::{ORIGIN_LOCAL, RegionState, SessionDoc, SessionModel, TempoPoint};
-
-use crate::data::{self, LIB};
 
 /// The ruler lane a song's sections sit on.
 pub const SECTIONS_LANE: u32 = 1;
@@ -48,33 +45,15 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn from_lib(x: &data::LibSong) -> Entry {
-        Entry {
-            id: slugify(x.song.title),
-            title: x.song.title.to_string(),
-            artist: x.song.artist.map(str::to_string),
-            key: x.song.key.map(str::to_string),
-            tempo: x.song.tempo,
-            tags: x.tags.iter().map(|t| t.to_string()).collect(),
-            energy: x.energy,
-            ready: x.song.ready.to_string(),
-            shared_with: Vec::new(),
-        }
-    }
-
-    /// The built-in song of the same title, to play it.
-    pub fn builtin(&self) -> Option<data::Song> {
-        LIB.iter()
-            .find(|x| x.song.title == self.title)
-            .map(|x| x.song)
-    }
-
     pub fn admitted(&self, f: &crate::state::Filters) -> bool {
         let tags: Vec<&str> = self.tags.iter().map(String::as_str).collect();
         f.admits(&crate::state::Facts {
             title: &self.title,
             artist: self.artist.as_deref(),
-            key: self.key.as_deref().map(|k| data::norm_key(k).unwrap_or(k)),
+            key: self
+                .key
+                .as_deref()
+                .map(|k| crate::look::norm_key(k).unwrap_or(k)),
             tempo: self.tempo,
             tags: &tags,
             energy: self.energy,
@@ -186,15 +165,10 @@ pub fn put_entry(doc: &LoroDoc, e: &Entry) -> session_sync::loro::LoroResult<()>
     Ok(())
 }
 
-/// The built-in songs, into an empty library (each by its id, so two
-/// devices seeding at once agree).
-pub fn seed_library(doc: &LoroDoc) {
-    if doc.get_map("songs").is_empty() {
-        for x in LIB.iter() {
-            let _ = put_entry(doc, &Entry::from_lib(x));
-        }
-    }
-}
+/// The library's version 1 seeded the prototype's made-up songs; it
+/// seeds nothing now (version 3, `crate::orgs::library_v3`, takes them
+/// out of a library that has them).
+pub fn seed_library(_: &LoroDoc) {}
 
 // ── a song's session ────────────────────────────────────────────────────
 
@@ -305,7 +279,7 @@ pub fn section_hue(name: &str) -> u32 {
         "bridge" => 40,
         "tag" | "outro" | "ending" => 260,
         "instrumental" | "interlude" | "solo" => 180,
-        _ => data::str_hue(&kind),
+        _ => crate::look::str_hue(&kind),
     }
 }
 

@@ -55,7 +55,7 @@
 
 use loro::{LoroDoc, LoroMap, LoroMovableList, LoroValue, ValueOrContainer};
 
-use crate::data::{self, Day};
+use crate::day::{self, Day};
 use crate::orgs::{self, Settings, Use};
 
 /// The org's sets and recurring events.
@@ -64,12 +64,6 @@ pub const INDEX_DOC: &str = "studio:sets";
 /// A set's document.
 pub fn setlist_doc(id: &str) -> String {
     format!("studio:setlist:{id}")
-}
-
-/// The prototype's live document of a set before setlists were documents
-/// (its keys and arrangements by the song's place).
-pub fn legacy_doc(id: &str) -> String {
-    format!("studio:set:{id}")
 }
 
 /// The Drive project, in the owner's registry, that shares a set.
@@ -974,7 +968,7 @@ impl Series {
     fn day_name(&self, d: usize) -> String {
         match &self.note {
             Some((n, name)) if *n == d => name.clone(),
-            _ => data::DAY[d % 7].to_string(),
+            _ => day::DAY[d % 7].to_string(),
         }
     }
 
@@ -995,6 +989,7 @@ impl Series {
     }
 
     /// The next day it meets, from `from` on.
+    #[cfg(test)]
     pub fn next_from(&self, from: Day) -> Option<Day> {
         self.dates(from, from.plus(6)).into_iter().next()
     }
@@ -1046,6 +1041,9 @@ pub fn series_list(index: &LoroDoc) -> Vec<Series> {
     out
 }
 
+/// Write a recurring event into the index (none is made in Studio yet:
+/// the tests make them).
+#[cfg(test)]
 pub fn put_series(index: &LoroDoc, x: &Series) -> loro::LoroResult<()> {
     let m = index.get_map("series").ensure_mergeable_map(&x.id)?;
     put_s(&m, "id", &x.id)?;
@@ -1247,8 +1245,8 @@ pub fn plain_text(
     if let Some(d) = info.day() {
         out.push_str(&format!(
             " · {}, {} {} {}",
-            data::DAY[d.weekday()],
-            data::MONTH[d.month0()],
+            day::DAY[d.weekday()],
+            day::MONTH[d.month0()],
             d.mday(),
             d.year()
         ));
@@ -1317,276 +1315,67 @@ pub fn plain_text(
     out
 }
 
-// ── the built-in sets, and the versions ─────────────────────────────────
+// ── the versions ────────────────────────────────────────────────────────
 
-/// The org a built-in set belongs to: the weekly sets Crossroads
-/// Church's, the recital Rockstars of Tomorrow's, the Christmas show CBU's.
-pub fn builtin_home(id: &str) -> Option<&'static str> {
-    if data::occ(id).is_some() {
-        Some("crossroads-church")
-    } else {
-        match id {
-            "jt" => Some("rockstars-of-tomorrow"),
-            "mb" => Some("cbu"),
-            _ => None,
-        }
-    }
-}
+/// The recurring events the prototype's index wrote in (version 1).
+const PROTOTYPE_SERIES: [&str; 5] = ["jhms", "main", "hsm", "jhm", "cya"];
 
-/// A built-in song, as an entry: owned by its home org (phase 1's
-/// `home_of`), else by the set's.
-fn builtin_entry(org: &str, x: &data::Song) -> Entry {
-    let lib = data::LIB.iter().find(|l| l.song.title == x.title);
-    let tags: Vec<String> = lib
-        .map(|l| l.tags.iter().map(|t| t.to_string()).collect())
-        .unwrap_or_default();
-    let owner = orgs::home_of(&tags).unwrap_or(org);
-    Entry {
-        kind: ItemKind::Song,
-        song: Some(SongRef::new(owner, &session_sync::slug::slugify(x.title))),
-        title: x.title.into(),
-        artist: x.artist.map(str::to_string),
-        key: x.key.map(str::to_string),
-        tempo: x.tempo,
-        length: x.len,
-        ..Entry::default()
-    }
-}
-
-/// A person of the seeded teams, by the prototype's first name.
-fn person_of(name: &str) -> String {
-    match name {
-        "Cody" => "cody-wright".into(),
-        n => session_sync::slug::slugify(n),
-    }
-}
-
-/// The band a built-in set starts with (the seeded teams' people).
-fn builtin_band(id: &str) -> Vec<Seat> {
-    let seat = |p: &str, parts: &[&str]| Seat {
-        person: p.into(),
-        name: match p {
-            "cody-wright" => "Cody Wright".into(),
-            "dr-hale" => "Dr. Hale".into(),
-            p => data::cap(p),
-        },
-        parts: parts.iter().map(|x| x.to_string()).collect(),
-    };
-    let mine = data::mine(id).is_some();
-    match id {
-        "jt" => vec![
-            seat("cody-wright", &["Electric guitar", "Bass"]),
-            seat("jordan", &["Electric guitar", "Lead vocals"]),
-            seat("ava", &["Drums"]),
-            seat("liam", &["Bass"]),
-        ],
-        "mb" => vec![
-            seat("cody-wright", &["Electric guitar"]),
-            seat("dr-hale", &["Keys"]),
-        ],
-        _ => {
-            let mut v = vec![
-                seat("jake", &["Lead vocals", "Acoustic guitar"]),
-                seat("mia", &["Vocals", "Keys"]),
-                seat("sam", &["Drums"]),
-            ];
-            if mine {
-                v.push(seat("cody-wright", &["Electric guitar"]));
-            } else {
-                v.push(seat("riley", &["Sound", "Lights"]));
-            }
-            v
-        }
-    }
-}
-
-fn builtin_series(x: &data::Series) -> Series {
-    let pl = x.place();
-    Series {
-        id: x.id.into(),
-        name: x.name.into(),
-        days: x.days.to_vec(),
-        hue: x.hue,
-        size: x.size,
-        room: pl.map_or(String::new(), |p| p.room.into()),
-        starts: pl.map_or(String::new(), |p| p.starts.into()),
-        call: pl.map_or(String::new(), |p| p.call.into()),
-        note: x.note.map(|(d, n)| (d, n.to_string())),
-        group: if x.id == "main" { "worship" } else { "youth" }.into(),
-    }
-}
-
-/// Write a built-in set into an empty document; whether it was one.
-fn write_builtin(doc: &LoroDoc, org: &str, id: &str) -> bool {
-    if builtin_home(id) != Some(org) || !entries(doc).is_empty() {
-        return false;
-    }
-    if let Some(o) = data::occ(id) {
-        let sr = builtin_series(o.series);
-        let mut i = sr.meeting(o.date);
-        i.title = o.name();
-        let _ = put_info(doc, &i);
-        for (name, from, to) in data::sections_of(o) {
-            let mut sec = Entry::item(ItemKind::Section, name);
-            sec.id = format!("b-{}", session_sync::slug::slugify(name));
-            let _ = insert_entry(doc, None, &sec);
-            for (k, x) in o.songs.iter().enumerate().take(to).skip(from) {
-                let mut e = builtin_entry(org, x);
-                e.id = format!("b{k}");
-                let (lead, _) = data::leads_of(o, k, x);
-                e.over.leader = lead.map(person_of);
-                let arr = data::arr_default(o, k);
-                if arr != "Normal" {
-                    e.over.arrangement = Some(arr.into());
-                }
-                e.over.key = data::key_default(id, k).map(str::to_string);
-                let _ = insert_entry(doc, None, &e);
-            }
-        }
-        for seat in builtin_band(id) {
-            let _ = put_seat(doc, &seat);
-        }
-        for r in data::first_rehearsals().iter().filter(|r| r.set == id) {
-            let _ = put_rehearsal(
-                doc,
-                &Rehearsal {
-                    id: format!("r-{}", r.date.iso()),
-                    date: r.date.iso(),
-                    time: r.time.clone(),
-                    room: r.room.clone(),
-                },
-            );
-        }
+/// Whether a set's id is one of the prototype's made-up sets that version
+/// 1 wrote into a set's document and its org's index: its weekly meetings
+/// (`<series>_<date>`, October 18 to December 6 2026) and its two shows.
+pub fn prototype_set(id: &str) -> bool {
+    if matches!(id, "jt" | "mb") {
         return true;
     }
-    let Some(st) = data::show(id) else {
+    let Some((series, date)) = id.split_once('_') else {
         return false;
     };
-    let date = match id {
-        "jt" => Day::ymd(2026, 5, 15),
-        _ => Day::ymd(2026, 12, 12),
-    };
-    let _ = put_info(
-        doc,
-        &Info {
-            id: id.into(),
-            title: st.title.into(),
-            kind: Kind::Show,
-            date: date.iso(),
-            place: if id == "jt" {
-                "Studio A"
-            } else {
-                "Recital Hall"
-            }
-            .into(),
-            starts: "7:00".into(),
-            call: "5:30".into(),
-            leader: Some(if id == "jt" { "cody-wright" } else { "dr-hale" }.into()),
-            group: if id == "jt" { "recital" } else { "christmas" }.into(),
-            hue: st.hue,
-            ..Info::default()
-        },
-    );
-    let mut k = 0;
-    for (act, songs) in &st.acts {
-        let mut sec = Entry::item(ItemKind::Section, act);
-        sec.id = format!("b-{}", session_sync::slug::slugify(act));
-        let _ = insert_entry(doc, None, &sec);
-        for x in songs {
-            let mut e = builtin_entry(org, x);
-            e.id = format!("b{k}");
-            k += 1;
-            let _ = insert_entry(doc, None, &e);
-        }
-    }
-    for seat in builtin_band(id) {
-        let _ = put_seat(doc, &seat);
-    }
-    true
+    PROTOTYPE_SERIES.contains(&series)
+        && parse_day(date)
+            .is_some_and(|d| d >= Day::ymd(2026, 10, 18) && d <= Day::ymd(2026, 12, 6))
 }
 
-/// The ids of an org's built-in sets.
-pub fn builtin_ids(org: &str) -> Vec<String> {
-    let mut v: Vec<String> = data::OCC
-        .iter()
-        .map(|o| o.id.clone())
-        .chain(["jt".to_string(), "mb".to_string()])
-        .filter(|id| builtin_home(id) == Some(org))
-        .collect();
-    v.sort();
-    v
-}
+/// A set's version 1 wrote the prototype's made-up sets in; it writes
+/// nothing now (a new set is already version 1).
+pub fn setlist_v1(_: &LoroDoc) {}
 
-/// A set's version 1: a built-in set of its org (the prototype's weekly
-/// sets and shows), written in. A new set is already version 1.
-pub fn setlist_v1(doc: &LoroDoc) {
-    let (org, id) = (orgs::stamped_org(doc), stamped_set(doc));
-    write_builtin(doc, &org, &id);
+/// A set's version 2: a prototype set written by version 1 emptied (its
+/// running order, details, band and rehearsals). Every other set is left
+/// as it is.
+pub fn setlist_v2(doc: &LoroDoc) {
+    if !prototype_set(&stamped_set(doc)) {
+        return;
+    }
+    let _ = entries_list(doc).clear();
+    for k in ["set", "band", "rehearsals"] {
+        let _ = doc.get_map(k).clear();
+    }
 }
 
 /// A set's shape versions (`drive_spine::schema`).
-pub const SETLIST_STEPS: &[drive_spine::schema::Step] = &[setlist_v1];
+pub const SETLIST_STEPS: &[drive_spine::schema::Step] = &[setlist_v1, setlist_v2];
 
-/// The index's version 1: the org's recurring events and the faces of its
-/// built-in sets (each set's own document is written when it is first
-/// opened, by [`setlist_v1`]; the face here is the same set's).
-///
-/// Crossroads Church gets its recurring events only (Main, JHM Sunday,
-/// HSM, JHM, CYA, each with its room and times): its sets are planned in
-/// Studio as they come, not the prototype's sample weeks.
-pub fn index_v1(index: &LoroDoc) {
-    let org = orgs::stamped_org(index);
-    if org == "crossroads-church" {
-        for x in data::SERIES.iter() {
-            let _ = put_series(index, &builtin_series(x));
-        }
-        return;
+/// The index's version 1 wrote the prototype's recurring events and the
+/// faces of its sets; it writes nothing now.
+pub fn index_v1(_: &LoroDoc) {}
+
+/// The index's version 2: the prototype's recurring events and its sets'
+/// faces taken out again. The org's own sets stay.
+pub fn index_v2(index: &LoroDoc) {
+    let sets = index.get_map("sets");
+    for id in keys_of(&sets).into_iter().filter(|id| prototype_set(id)) {
+        let _ = sets.delete(&id);
     }
-    for id in builtin_ids(&org) {
-        let tmp = LoroDoc::new();
-        stamp_set(&tmp, &org, &id);
-        if write_builtin(&tmp, &org, &id) {
-            put_face(index, &face_of(&tmp));
-        }
+    let series = index.get_map("series");
+    for id in keys_of(&series)
+        .into_iter()
+        .filter(|id| PROTOTYPE_SERIES.contains(&id.as_str()))
+    {
+        let _ = series.delete(&id);
     }
 }
 
-pub const INDEX_STEPS: &[drive_spine::schema::Step] = &[index_v1];
-
-/// Carry the prototype's live keys and arrangements (`studio:set:<id>`:
-/// `songs`, by the song's place) onto a set's song entries, once. How
-/// many it moved.
-pub fn import_legacy(doc: &LoroDoc, legacy: &LoroDoc) -> usize {
-    let meta = doc.get_map("meta");
-    if matches!(
-        meta.get("legacy"),
-        Some(ValueOrContainer::Value(LoroValue::Bool(true)))
-    ) {
-        return 0;
-    }
-    let old = legacy.get_map("songs");
-    let songs = songs_of(doc);
-    let mut moved = 0;
-    for k in old.keys() {
-        let (Ok(i), Some(m)) = (k.parse::<usize>(), child(old.get(&k))) else {
-            continue;
-        };
-        let Some(mut e) = songs.get(i).cloned() else {
-            continue;
-        };
-        let (key, arr) = (opt(s(&m, "key")), opt(s(&m, "arr")));
-        if key.is_some() {
-            e.over.key = key;
-        }
-        if let Some(a) = arr {
-            e.over.arrangement = (a != "Normal").then_some(a);
-        }
-        let _ = update_entry(doc, &e);
-        moved += 1;
-    }
-    let _ = meta.insert("legacy", true);
-    moved
-}
+pub const INDEX_STEPS: &[drive_spine::schema::Step] = &[index_v1, index_v2];
 
 /// What the calendar says of a dated set (`base`: where the app is served).
 pub fn calendar_event(i: &Info, base: &str) -> Option<drive_spine::Event> {
@@ -1973,99 +1762,63 @@ mod tests {
     }
 
     #[test]
-    fn the_built_in_sets_become_documents() {
-        // The index: Crossroads' recurring events, and no sample sets.
+    fn no_made_up_set_is_written_and_the_prototype_s_are_taken_out() {
+        // A new index and a new set get nothing made up.
         let index = LoroDoc::new();
         orgs::stamp_org(&index, "crossroads-church");
         assert_eq!(
             schema::upgrade(&index, INDEX_STEPS),
             schema::Upgraded::From(0)
         );
-        assert_eq!(series_list(&index).len(), 5);
+        assert!(series_list(&index).is_empty());
         assert!(faces(&index).is_empty());
-        // A show's index has its built-in set.
-        let rot = LoroDoc::new();
-        orgs::stamp_org(&rot, "rockstars-of-tomorrow");
-        schema::upgrade(&rot, INDEX_STEPS);
-        assert!(face(&rot, "jt").is_some());
-        let tmp = LoroDoc::new();
-        stamp_set(&tmp, "crossroads-church", "cya_2026-11-19");
-        assert!(write_builtin(&tmp, "crossroads-church", "cya_2026-11-19"));
-        let cya = face_of(&tmp);
-        assert_eq!((cya.songs, cya.size), (4, 4));
-        assert!(cya.band.contains(&"cody-wright".to_string()));
-
-        // A set's document, when opened: the same set as its face.
-        let d = LoroDoc::new();
-        stamp_set(&d, "crossroads-church", "cya_2026-11-19");
-        schema::upgrade(&d, SETLIST_STEPS);
-        assert_eq!(face_of(&d), cya);
-        let secs = sections(&entries(&d));
-        assert_eq!(secs[0].0.as_ref().unwrap().title, "Top Set");
-        assert_eq!(secs[0].1.len(), 2);
-        let s = songs_of(&d);
-        assert_eq!(s[0].over.leader.as_deref(), Some("mia"));
-        assert_eq!(s[1].over.arrangement.as_deref(), Some("Big Intro"));
-        // Its songs point at their home org's library.
-        assert!(
-            s.iter()
-                .all(|e| e.song.as_ref().unwrap().owner == "crossroads-church")
-        );
-        // Two devices seeding it at once read as one set.
-        let d2 = LoroDoc::new();
-        stamp_set(&d2, "crossroads-church", "cya_2026-11-19");
-        schema::upgrade(&d2, SETLIST_STEPS);
-        sync(&d, &d2);
-        assert_eq!(face_of(&d), cya);
-        // Running it again changes nothing.
-        let before = entries(&d);
-        assert_eq!(
-            schema::upgrade(&d, SETLIST_STEPS),
-            schema::Upgraded::Current
-        );
-        setlist_v1(&d);
-        assert_eq!(entries(&d), before);
-
-        // The recital in Rockstars of Tomorrow, in its acts.
         let jt = LoroDoc::new();
         stamp_set(&jt, "rockstars-of-tomorrow", "jt");
         schema::upgrade(&jt, SETLIST_STEPS);
-        assert_eq!(info(&jt).kind, Kind::Show);
-        assert_eq!(songs_of(&jt).len(), 16);
-        assert_eq!(sections(&entries(&jt)).len(), 3);
-        // The same set in another org's document stays empty.
-        let other = LoroDoc::new();
-        stamp_set(&other, "cbu", "jt");
-        schema::upgrade(&other, SETLIST_STEPS);
-        assert!(entries(&other).is_empty());
+        assert!(entries(&jt).is_empty());
+        assert!(info(&jt).title.is_empty());
 
-        // A rehearsal carried over.
-        let jhms = LoroDoc::new();
-        stamp_set(&jhms, "crossroads-church", "jhms_2026-11-22");
-        schema::upgrade(&jhms, SETLIST_STEPS);
-        assert_eq!(rehearsals(&jhms)[0].room, "Room 210");
-    }
-
-    #[test]
-    fn the_live_keys_carry_over_once() {
-        let d = LoroDoc::new();
-        stamp_set(&d, "crossroads-church", "main_2026-11-22");
-        schema::upgrade(&d, SETLIST_STEPS);
-        // The old live document: song 2's key and song 3's arrangement.
+        // An index and a set version 1 of the prototype filled: version 2
+        // takes the prototype's out and keeps the org's own.
         let old = LoroDoc::new();
-        let m = old.get_map("songs").ensure_mergeable_map("2").unwrap();
-        m.insert("key", "F").unwrap();
-        let m = old.get_map("songs").ensure_mergeable_map("3").unwrap();
-        m.insert("arr", "Normal").unwrap();
-        assert_eq!(import_legacy(&d, &old), 2);
-        let s = songs_of(&d);
-        assert_eq!(s[2].over.key.as_deref(), Some("F"));
-        assert_eq!(s[3].over.arrangement, None);
-        // Once only: a later change to the old document does nothing.
-        let m = old.get_map("songs").ensure_mergeable_map("0").unwrap();
-        m.insert("key", "B").unwrap();
-        assert_eq!(import_legacy(&d, &old), 0);
-        assert_eq!(songs_of(&d)[0].over.key.as_deref(), Some("C"));
+        orgs::stamp_org(&old, "crossroads-church");
+        let _ = old.get_map("meta").insert("version", 1);
+        let made_up = Series {
+            id: "cya".into(),
+            name: "CYA".into(),
+            ..Series::default()
+        };
+        put_series(&old, &made_up).unwrap();
+        let cya = a_set();
+        stamp_set(&cya, "crossroads-church", "cya_2026-11-19");
+        let mut f = face_of(&cya);
+        f.id = "cya_2026-11-19".into();
+        put_face(&old, &f);
+        let mut own = face_of(&a_set());
+        own.id = "s1".into();
+        put_face(&old, &own);
+        schema::upgrade(&old, INDEX_STEPS);
+        assert!(series_list(&old).is_empty());
+        assert_eq!(
+            faces(&old)
+                .iter()
+                .map(|f| f.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["s1"]
+        );
+
+        let _ = cya.get_map("meta").insert("version", 1);
+        schema::upgrade(&cya, SETLIST_STEPS);
+        assert!(entries(&cya).is_empty());
+        let mine = a_set();
+        let _ = mine.get_map("meta").insert("version", 1);
+        schema::upgrade(&mine, SETLIST_STEPS);
+        assert_eq!(entries(&mine).len(), 4);
+
+        assert!(prototype_set("mb"));
+        assert!(prototype_set("main_2026-11-22"));
+        assert!(!prototype_set("main_2027-01-03"));
+        assert!(!prototype_set("s1"));
     }
 
     #[test]

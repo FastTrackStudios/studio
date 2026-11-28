@@ -1,18 +1,22 @@
-//! Studio, remade from the launcher prototype: one Dioxus app for the
-//! phone first, and later the desktop and the web. The content is made up
-//! and in memory; on the web its sets are live on Drive (`live_sync`), and
-//! its library and songs are Drive documents, each song a session
-//! (`songs`, on `session_sync`); each org has its own library, team and
-//! settings, and shares songs with others (`orgs`, `team`); its sets are
-//! Drive documents too (`setlist` the model, `sets` live).
+//! Studio: one Dioxus app for the phone, the desktop and the web. What it
+//! shows is real: the setlist files and records in Studio's home and
+//! Drive (`drive_sets`, `records`), the org's sets, library and songs as
+//! Drive documents, each song a session (`songs`, on `session_sync`);
+//! each org has its own library, team and settings, and shares songs with
+//! others (`orgs`, `team`); its sets are Drive documents too (`setlist`
+//! the model, `sets` live). Where there is nothing yet, a page says how
+//! to add the real thing.
 
 mod actions;
-mod data;
+mod day;
 mod door;
 #[cfg(feature = "drive")]
 mod drive_sets;
 #[cfg(feature = "native")]
 mod engine;
+// Every page's data from an empty home, and from one laid out as storage.md says.
+#[cfg(test)]
+mod empty_home;
 // The session's views: the real extensions, hosted (natively).
 mod files;
 mod files_live;
@@ -26,6 +30,7 @@ mod keys;
 // What a signed-out visitor to fasttrackstudio.app sees (the web build's).
 mod landing;
 mod live_sync;
+mod look;
 mod new_session;
 #[cfg(any(feature = "drive", test))]
 mod org_create;
@@ -34,10 +39,13 @@ mod org_members;
 mod orgs;
 mod pages;
 mod pieces;
+// Records: the studio-kind files, each an album and its tracks.
 #[cfg(feature = "native")]
 mod playback;
 #[cfg(feature = "web")]
 mod player;
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
+mod records;
 // The engine in the page: a session's multitracks and click (web).
 #[cfg(feature = "web")]
 mod engine_web;
@@ -80,6 +88,7 @@ mod setlist;
 mod sets;
 mod sheets;
 mod shell;
+mod song;
 mod song_ids;
 mod songs;
 #[cfg(feature = "native")]
@@ -99,7 +108,7 @@ use pages::library::{Library, LibraryHome};
 use pages::live::{Chart, Lyrics};
 use pages::orgs::{AllOrgs, OrgSettings, People};
 use pages::print::PrintSet;
-use pages::records::{Album, Records, TrackPage};
+use pages::records::{Album, Records};
 use pages::set::{OrgSet, SetPage};
 use pages::setlists::{Every, Series, Setlists};
 use pages::signal::Signal;
@@ -135,8 +144,6 @@ pub enum Route {
         Records {},
         #[route("/records/:id")]
         Album { id: String },
-        #[route("/track/:idx")]
-        TrackPage { idx: usize },
         #[route("/setlists")]
         Setlists {},
         #[route("/setlists/every")]
@@ -197,7 +204,7 @@ impl Route {
     pub fn tab(&self) -> Tab {
         match self {
             Route::Home {} => Tab::Home,
-            Route::Records {} | Route::Album { .. } | Route::TrackPage { .. } => Tab::Records,
+            Route::Records {} | Route::Album { .. } => Tab::Records,
             Route::Signal {} => Tab::Signal,
             Route::LandingPage {}
             | Route::AllOrgs {}
@@ -222,25 +229,6 @@ impl Route {
     /// Where to open a set or a show, by its id.
     pub fn set(id: &str) -> Route {
         Route::SetPage { id: id.to_string() }
-    }
-
-    /// Where an id from the prototype's data opens: a record, a track, a
-    /// recurring event, a set (a built-in show in its own org).
-    pub fn open(id: &str) -> Route {
-        if data::album(id).is_some() {
-            Route::Album { id: id.into() }
-        } else if let Some(t) = id.strip_prefix("t:").and_then(data::track) {
-            Route::TrackPage { idx: t.idx }
-        } else if data::series(id).is_some() {
-            Route::Series { id: id.into() }
-        } else if let Some(owner) = setlist::builtin_home(id) {
-            Route::OrgSet {
-                owner: owner.into(),
-                id: id.into(),
-            }
-        } else {
-            Route::set(id)
-        }
     }
 }
 

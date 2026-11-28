@@ -1,16 +1,17 @@
-//! Setlists: the org's sets, from its index document. Its recurring
-//! events as their logos, each ringed by how ready its next set is; what
-//! is coming up, what other orgs share with it, its templates and what
-//! was played before. A recurring event's page, and every set there is.
+//! Setlists: the org's sets, from its index document, and its setlist
+//! files in Studio's home and Drive: what is coming up, what other orgs
+//! share with it, its templates and what was played before. A recurring
+//! event's page (no longer in the navigation: none is made in Studio
+//! yet), and every set there is.
 
 use dioxus::prelude::*;
 
 use super::{FaceRow, progress_of, set_route};
 use crate::Route;
-use crate::data::{self, Day, MONTH, TODAY};
+use crate::day::{Day, MONTH, today};
 use crate::icons::{I, Icon};
 use crate::orgs;
-use crate::pieces::{Bar, Cover, DayTile, Hair, Hero, Joined, Page, Ring, Tool};
+use crate::pieces::{Bar, DayTile, Hair, Hero, Joined, Page, Tool};
 use crate::setlist::Series as Recurring;
 use crate::setlist::{self, Face, Kind};
 use crate::sets;
@@ -22,7 +23,6 @@ pub fn Setlists() -> Element {
     let here = (app.here)();
     let index = sets::use_index();
     let faces = index.faces();
-    let series = index.series();
     let dated: Vec<&Face> = faces.iter().filter(|f| f.kind != Kind::Template).collect();
     let mut upcoming: Vec<Face> = dated
         .iter()
@@ -74,24 +74,6 @@ pub fn Setlists() -> Element {
                 },
             }
             div { class: "body",
-                if !series.is_empty() {
-                    div { class: "dayhead dh2",
-                        span { "Recurring" }
-                        button {
-                            class: "seeall",
-                            onclick: move |_| {
-                                navigator().push(Route::Every {});
-                            },
-                            "Every setlist "
-                            Icon { name: I::ChevRight, size: 14 }
-                        }
-                    }
-                    div { class: "evgrid",
-                        for sr in sorted_series(&series, &faces) {
-                            EventTile { key: "{sr.id}", sr: sr.clone(), next: next_meeting(&faces, &sr) }
-                        }
-                    }
-                }
                 div { class: "dayhead", "Coming up" }
                 if upcoming.is_empty() {
                     button {
@@ -154,9 +136,13 @@ pub fn Setlists() -> Element {
 #[cfg(feature = "drive")]
 #[component]
 fn FromDrive(space: String) -> Element {
-    let _ = space;
     let app = crate::state::use_app();
-    let list = (app.drive_sets)().unwrap_or_default();
+    // The files of this org (a file's `# org:` line says which).
+    let list: Vec<crate::files::Hit> = (app.drive_sets)()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|h| h.space == space)
+        .collect();
     if list.is_empty() {
         return rsx! {};
     }
@@ -221,66 +207,6 @@ fn SharedSetRow(owner: String, id: String) -> Element {
     }
 }
 
-/// The next meeting of a recurring event from today: its set's face, or
-/// the day with no set yet.
-fn next_meeting(faces: &[Face], sr: &Recurring) -> (Day, Option<Face>) {
-    let day = sr.next_from(TODAY).unwrap_or(TODAY);
-    let id = setlist::meeting_id(&sr.id, day);
-    (day, faces.iter().find(|f| f.id == id).cloned())
-}
-
-/// The recurring events, the soonest next meeting first.
-fn sorted_series(list: &[Recurring], faces: &[Face]) -> Vec<Recurring> {
-    let mut v = list.to_vec();
-    v.sort_by_key(|sr| next_meeting(faces, sr).0);
-    v
-}
-
-/// A recurring event: its logo ringed by how ready its next set is.
-#[component]
-fn EventTile(sr: Recurring, next: (Day, Option<Face>)) -> Element {
-    let (day, face) = next;
-    let n = face.as_ref().map_or(0, |f| f.songs);
-    let of = sr.size.max(1);
-    let d = day.from_today();
-    let when = if d == 0 {
-        "Today".to_string()
-    } else if d < 7 {
-        day.dow3().to_string()
-    } else {
-        day.short()
-    };
-    let cls = if n >= of {
-        "ok"
-    } else if n > 0 {
-        ""
-    } else {
-        "none"
-    };
-    let id = sr.id.clone();
-    rsx! {
-        button {
-            class: "ev",
-            onclick: move |_| {
-                navigator().push(Route::Series { id: id.clone() });
-            },
-            span { class: "evlogo",
-                Ring { n, of, size: 84 }
-                if let Some(l) = data::logo(&sr.id) {
-                    img { src: l, alt: "" }
-                } else {
-                    Cover { title: sr.name.clone(), size: 64, hue: sr.hue }
-                }
-            }
-            span { class: "t1", "{sr.name}" }
-            span { class: "s1",
-                "{when} · "
-                b { class: "{cls}", "{n}/{of}" }
-            }
-        }
-    }
-}
-
 /// A recurring event: when and where it meets, its sets to come and before.
 #[component]
 pub fn Series(id: String) -> Element {
@@ -300,7 +226,7 @@ pub fn Series(id: String) -> Element {
     let have = setlist::meetings(&faces, &sr.id);
     // Its meetings from today for four weeks, planned or not.
     let mut up: Vec<(Day, Option<Face>)> = sr
-        .dates(TODAY, TODAY.plus(27))
+        .dates(today(), today().plus(27))
         .into_iter()
         .map(|d| {
             let mid = setlist::meeting_id(&sr.id, d);
@@ -349,7 +275,7 @@ pub fn Series(id: String) -> Element {
             }
             div { class: "body",
                 Hero {
-                    img: data::logo(&sr.id),
+                    img: None,
                     hue: sr.hue,
                     title: sr.name.clone(),
                     facts: rsx! {
@@ -383,7 +309,7 @@ pub fn Series(id: String) -> Element {
                 div { class: "dayhead", "Before" }
                 div { class: "agenda",
                     for f in past {
-                        MeetingRow { key: "{f.id}", sr: sr.clone(), day: f.day().unwrap_or(TODAY), face: Some(f.clone()) }
+                        MeetingRow { key: "{f.id}", sr: sr.clone(), day: f.day().unwrap_or_else(today), face: Some(f.clone()) }
                     }
                 }
             }

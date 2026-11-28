@@ -1,6 +1,6 @@
 //! The window, on app-shell: on a desktop its Spacedrive-style sidebar
-//! (the org switcher, Studio's places, the org's people, the weekly
-//! events and shows) and its top bar; on a phone the page with its own
+//! (the org switcher, the one place orgs are switched; Studio's places,
+//! the org's people and its sets coming up) and its top bar; on a phone the page with its own
 //! bar, and at the foot the tab pill (in a set, the set's tabs), the
 //! round button and the accessory over them (Now Playing, or in Chart
 //! and Lyrics the transport). The sidebar is the phone's drawer. The
@@ -15,7 +15,6 @@ use app_shell::ui::{
 };
 use dioxus::prelude::*;
 
-use crate::data::{self, DAY, TODAY};
 use crate::icons::{I, Icon};
 use crate::pieces::SongArt;
 use crate::sheets::{MenuView, SheetBody};
@@ -60,20 +59,10 @@ const CHART: ShellIcon = ShellIcon(&[
 ]);
 const LYRICS: ShellIcon = ShellIcon(&["M4 7V4h16v3", "M9 20h6", "M12 4v16"]);
 const PLAY: ShellIcon = ShellIcon(&["M6 3l14 9-14 9z"]);
-const CALENDAR: ShellIcon = ShellIcon(&["M8 2v4", "M16 2v4", "M3 6h18v15H3z", "M3 10h18"]);
 const SHARE: ShellIcon = ShellIcon(&[
     "M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8",
     "m16 6-4-4-4 4",
     "M12 2v13",
-]);
-const BUILDING: ShellIcon = ShellIcon(&[
-    "M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18z",
-    "M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2",
-    "M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2",
-    "M10 6h4",
-    "M10 10h4",
-    "M10 14h4",
-    "M10 18h4",
 ]);
 
 /// Studio's colours on the shell's variables: the prototype's true black,
@@ -107,7 +96,7 @@ pub(crate) fn theme() -> Theme {
 fn title_of(route: &Route, index: &crate::sets::Index) -> String {
     match route {
         Route::Home {} | Route::LandingPage {} => "Home".into(),
-        Route::Records {} | Route::Album { .. } | Route::TrackPage { .. } => "Records".into(),
+        Route::Records {} | Route::Album { .. } => "Records".into(),
         Route::Setlists {} | Route::Every {} => "Setlists".into(),
         Route::Series { id } => index.series_of(id).map_or("Setlists".into(), |s| s.name),
         Route::SetPage { id } | Route::Chart { id } | Route::Lyrics { id } => {
@@ -160,9 +149,6 @@ pub fn Root() -> Element {
                     }
                 });
             }
-            if app.review.peek().playing {
-                app.review.with_mut(|r| r.pos = (r.pos + 0.006).min(1.0));
-            }
         }
     });
 
@@ -211,7 +197,6 @@ pub fn Shell() -> Element {
     let app = use_app();
     let route = use_route::<Route>();
     let index = crate::sets::use_index();
-    let me = crate::team::use_me();
     let here = (app.here)();
 
     // The setlist files in Drive, in every org this person is in (a
@@ -228,14 +213,19 @@ pub fn Shell() -> Element {
             }
             v
         };
-        // Drive's, found once; Studio's own folder's, read again every two
-        // seconds natively (a file added or edited by hand shows up).
-        let mut from_drive = use_signal(|| None::<Vec<crate::files::Hit>>);
-        let mut on_disk = use_signal(Vec::<crate::files::Hit>::new);
+        // Drive's, found once and each read (a record's file is not a
+        // set's); Studio's own folder's, read again every two seconds
+        // natively (a file added or edited by hand shows up).
+        type Found = (Vec<crate::files::Hit>, Vec<crate::records::Record>);
+        let mut from_drive = use_signal(|| None::<Found>);
+        let mut on_disk = use_signal(|| None::<Found>);
         use_effect(use_reactive!(|spaces| {
             spawn(async move {
                 let found = crate::drive_sets::files_in(&spaces).await;
-                from_drive.set(Some(found));
+                let here = app.here.peek().clone();
+                from_drive.set(Some(
+                    crate::drive_sets::sets_and_records(found, &here).await,
+                ));
             });
         }));
         use_future(move || async move {
@@ -243,24 +233,34 @@ pub fn Shell() -> Element {
                 return;
             }
             loop {
-                let found = crate::drive_sets::on_disk(&app.here.peek());
-                if *on_disk.peek() != found {
-                    on_disk.set(found);
+                let here = app.here.peek().clone();
+                // Read off the UI thread: Drive's mount can stall.
+                let found = crate::state::off_thread(move || {
+                    (
+                        crate::drive_sets::on_disk(&here),
+                        crate::records::on_disk(&here),
+                    )
+                })
+                .await;
+                if let Some(found) = found
+                    && on_disk.peek().as_ref() != Some(&found)
+                {
+                    on_disk.set(Some(found));
                 }
                 crate::state::sleep_ms(2000).await;
             }
         });
         use_effect(move || {
             let (disk, drive) = (on_disk(), from_drive());
-            let mut sets = app.drive_sets;
             // On disk at once; from Drive once it answers.
-            if drive.is_none() && disk.is_empty() && cfg!(target_arch = "wasm32") {
+            if drive.is_none() && disk.is_none() {
                 return;
             }
-            sets.set(Some(crate::drive_sets::merge(
-                &disk,
-                &drive.unwrap_or_default(),
-            )));
+            let (disk, drive) = (disk.unwrap_or_default(), drive.unwrap_or_default());
+            let mut sets = app.drive_sets;
+            sets.set(Some(crate::drive_sets::merge(&disk.0, &drive.0)));
+            let mut records = app.records;
+            records.set(Some(crate::records::merge(&disk.1, &drive.1)));
         });
     }
 
@@ -274,13 +274,9 @@ pub fn Shell() -> Element {
         _ => SetRef::new(&here, id),
     });
     let song_view = matches!(route, Route::Chart { .. } | Route::Lyrics { .. });
-    let track_view = matches!(route, Route::TrackPage { .. });
     let mut cls = vec!["studio"];
     if song_view {
         cls.push("songview");
-    }
-    if track_view {
-        cls.push("trackview");
     }
     let cls = cls.join(" ");
 
@@ -348,12 +344,7 @@ pub fn Shell() -> Element {
             }
         }
     };
-    let mine = set.as_ref().and_then(|s| {
-        let f = index.face(&s.id).filter(|_| s.owner == here)?;
-        let me = me.as_ref()?;
-        f.band.contains(me).then_some(f.title)
-    });
-    let action = round_action(app, set.is_some(), mine);
+    let action = round_action(app, set.is_some());
     let accessory = if song_view {
         Some(rsx! {
             Transport {}
@@ -429,26 +420,14 @@ pub(crate) fn Content(class: String, children: Element) -> Element {
     }
 }
 
-/// The round button: Open anything; in a set, its primary action (open it
-/// in your rig when you play it, else play it).
-fn round_action(
-    app: crate::state::AppState,
-    in_set: bool,
-    mine: Option<String>,
-) -> Option<PrimaryAction> {
+/// The round button: Open anything; in a set, play it.
+fn round_action(app: crate::state::AppState, in_set: bool) -> Option<PrimaryAction> {
     if !in_set {
         let mut a = PrimaryAction::new("Open anything", icons::SEARCH, move |()| {
             app.open(Sheet::Palette)
         });
         a.prominent = false;
         return Some(a);
-    }
-    if let Some(title) = mine {
-        let r = data::loaded_rig().map_or("Guitar", |r| r.name);
-        let say = format!("Opened {title} in the {r} rig");
-        return Some(PrimaryAction::new(format!("Open in {r}"), RIG, move |()| {
-            app.say(say.clone())
-        }));
     }
     Some(PrimaryAction::new("Play the set", PLAY, move |()| {
         let titles: Vec<String> = app
@@ -702,7 +681,8 @@ fn Transport() -> Element {
     let mut live = app.live;
     let l = live();
     let n = (app.live_list)().len();
-    let secs = data::SECS.len();
+    // The song's form, when its session gave one (else sections do not step).
+    let secs = (app.live_form)().len().max(1);
     rsx! {
         div { class: "transport",
             button {
@@ -779,9 +759,9 @@ fn SideAccount(mark: String, hue: u32, name: String, line: String) -> Element {
     }
 }
 
-/// The sidebar (a phone's drawer): the org switcher, Studio's places,
-/// the org's people and settings, the weekly events, the shows, the
-/// loaded rig, and who is signed in.
+/// The sidebar (a phone's drawer): the org switcher (the one place orgs
+/// are switched), Studio's places, the org's people and settings, its
+/// sets coming up, and who is signed in.
 #[component]
 fn StudioSidebar(route: Route) -> Element {
     let app = use_app();
@@ -801,7 +781,6 @@ fn StudioSidebar(route: Route) -> Element {
     };
     let index = crate::sets::use_index();
     let faces = index.faces();
-    let series = index.series();
     let mut coming: Vec<crate::setlist::Face> = faces
         .iter()
         .filter(|f| f.series.is_empty() && f.upcoming())
@@ -810,13 +789,14 @@ fn StudioSidebar(route: Route) -> Element {
     coming.sort_by(|a, b| a.date.cmp(&b.date));
     coming.truncate(4);
     // The org's sets, and the setlist files in its Drive.
-    let upcoming_n =
-        faces.iter().filter(|f| f.upcoming()).count() + (app.drive_sets)().map_or(0, |v| v.len());
+    let upcoming_n = faces.iter().filter(|f| f.upcoming()).count()
+        + (app.drive_sets)().map_or(0, |v| v.iter().filter(|h| h.space == here).count());
+    let records_n =
+        crate::pages::records::of_org(&(app.records)().unwrap_or_default(), org.as_deref()).len();
     let (title, detail) = match &org {
         Some(_) => (team.name(), format!("Studio · {} orgs", orgs.len())),
         None => ("All orgs".to_string(), format!("{} orgs", orgs.len())),
     };
-    let _ = here;
     let me_hue = me.as_ref().map_or(210, |m| m.hue);
     let me_mark = me.as_ref().map_or("·".to_string(), |m| m.initials());
     let me_name = match &me {
@@ -835,7 +815,6 @@ fn StudioSidebar(route: Route) -> Element {
             | Route::OrgSet { .. }
             | Route::PrintSet { .. }
     );
-    let loaded = data::loaded_rig();
     rsx! {
         Sidebar {
             header: rsx! {
@@ -861,34 +840,15 @@ fn StudioSidebar(route: Route) -> Element {
             },
             SidebarSection { title: "Studio",
                 SidebarItem { label: "Home", icon: icons::HOME, selected: route == Route::Home {}, on_press: at(Route::Home {}) }
-                SidebarItem { label: "Records", icon: DISC, badge: data::RECENT_WORK.len().to_string(), selected: tab == Tab::Records, on_press: at(Route::Records {}) }
+                SidebarItem { label: "Records", icon: DISC, badge: records_n.to_string(), selected: tab == Tab::Records, on_press: at(Route::Records {}) }
                 SidebarItem { label: "Setlists", icon: SETLIST, badge: upcoming_n.to_string(), selected: in_set_pages, on_press: at(Route::Setlists {}) }
                 SidebarItem { label: "Library", icon: LIBRARY, badge: lib.entries().len().to_string(), selected: matches!(route, Route::LibraryHome {} | Route::Library { .. } | Route::SongPage { .. } | Route::SharedSong { .. }), on_press: at(Route::LibraryHome {}) }
-                SidebarItem { label: "Signal", icon: RIG, badge: data::RIGS.len().to_string(), selected: tab == Tab::Signal, on_press: at(Route::Signal {}) }
+                SidebarItem { label: "Signal", icon: RIG, selected: tab == Tab::Signal, on_press: at(Route::Signal {}) }
             }
             SidebarSection { title: "Organization",
                 SidebarItem { label: "People", icon: USERS, badge: people.len().to_string(), selected: route == Route::People {}, on_press: at(Route::People {}) }
                 SidebarItem { label: "Shared songs", icon: SHARE, selected: matches!(route, Route::Library { ref tag } if tag == "shared"), on_press: at(Route::Library { tag: "shared".into() }) }
                 SidebarItem { label: "Settings", icon: icons::SETTINGS, selected: route == Route::OrgSettings {}, on_press: at(Route::OrgSettings {}) }
-                SidebarItem { label: "All orgs", icon: BUILDING, badge: orgs.len().to_string(), selected: route == Route::AllOrgs {}, on_press: move |()| {
-                    let mut o = app.org;
-                    o.set(None);
-                    navigator().push(Route::AllOrgs {});
-                } }
-            }
-            if !series.is_empty() {
-                SidebarSection { title: "Recurring",
-                    for sr in series {
-                        SidebarItem {
-                            key: "{sr.id}",
-                            label: sr.name.clone(),
-                            icon: CALENDAR,
-                            badge: sr.next_from(TODAY).map(|d| if d.from_today() == 0 { "Today".to_string() } else { DAY[d.weekday()][..3].to_string() }).unwrap_or_default(),
-                            selected: matches!(&route, Route::Series { id } if *id == sr.id),
-                            on_press: at(Route::Series { id: sr.id.clone() }),
-                        }
-                    }
-                }
             }
             if !coming.is_empty() {
                 SidebarSection { title: "Coming up",
@@ -902,11 +862,6 @@ fn StudioSidebar(route: Route) -> Element {
                             on_press: at(Route::SetPage { id: f.id.clone() }),
                         }
                     }
-                }
-            }
-            if let Some(r) = loaded {
-                SidebarSection { title: "Loaded rig",
-                    SidebarItem { label: r.name, icon: RIG, badge: r.preset, on_press: at(Route::Signal {}) }
                 }
             }
         }

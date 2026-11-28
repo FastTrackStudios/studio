@@ -62,7 +62,7 @@ impl Team {
             let p = Person {
                 id: orgs::person_id(d, name),
                 name: name.to_string(),
-                hue: crate::data::str_hue(name),
+                hue: crate::look::str_hue(name),
                 ..Person::default()
             };
             let _ = orgs::put_person(d, &p);

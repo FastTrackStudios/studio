@@ -7,9 +7,9 @@ use dioxus::prelude::*;
 use session_sync::SessionModel;
 
 use crate::Route;
-use crate::data::{self, FIFTHS};
 use crate::icons::{I, Icon};
-use crate::pieces::{Bar, Cover, Page, Tool};
+use crate::look::{self, FIFTHS};
+use crate::pieces::{Bar, Cover, Page};
 use crate::songs::{self, Entry, Section, Song, use_library, use_song};
 use crate::state::use_app;
 
@@ -72,17 +72,9 @@ fn SongView(owner: String, id: String) -> Element {
             }
         };
     };
-    let hue = data::str_hue(e.artist.as_deref().unwrap_or(&e.title));
-    let play = e.builtin();
+    let hue = look::str_hue(e.artist.as_deref().unwrap_or(&e.title));
     let tools = rsx! {
         HereNow { song: song.clone() }
-        if let Some(s) = play {
-            Tool {
-                label: "Play",
-                icon: I::Play,
-                onclick: move |_| app.play(vec![s], "Library".into(), s.title),
-            }
-        }
     };
     rsx! {
         Page { tint: Some(hue),
@@ -222,7 +214,7 @@ fn Head(entry: Entry, song: Song, model: SessionModel, lib_put: Option<songs::Li
     let set_tempo2 = set_tempo.clone();
     rsx! {
         div { class: "songhead",
-            Cover { title: entry.title.clone(), size: 72, hue: data::str_hue(entry.artist.as_deref().unwrap_or(&entry.title)) }
+            Cover { title: entry.title.clone(), size: 72, hue: look::str_hue(entry.artist.as_deref().unwrap_or(&entry.title)) }
             div { class: "shmain",
                 span { class: "shtitle", "{entry.title}" }
                 if let Some(a) = &entry.artist {
