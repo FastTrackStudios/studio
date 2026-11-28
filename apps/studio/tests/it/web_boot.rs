@@ -885,8 +885,9 @@ const IPAD: Screen = Screen {
     height: 1180,
 };
 
-/// A built-in set with five songs, in the org a page starts in.
-const SET: &str = "/set/main_2026-11-22";
+/// The set [`seed_org`] writes, five songs long, in the org a page starts
+/// in (the node's).
+const SET: &str = "/set/s-web-screens";
 
 /// studio#702 at phone width: a set built (searched, added to, a key and a
 /// leader picked, a song moved), then the session's arrangement, mixer,
@@ -912,8 +913,10 @@ fn screens(screen: Screen) {
     let sessions = tempfile::tempdir().expect("a folder for the session");
     stage_session(&sessions.path().join("multitrack-click"));
     // A set is a Drive document, opened once its node answers: the page is
-    // served by a real node, as it is in use.
+    // served by a real node, as it is in use, and the org's library, people
+    // and set reach it as another device's edits would, synced to the node.
     let site = Node::start(&dist, sessions.path());
+    seed_org(&site.origin);
     let driver = Driver::start();
     let session = driver.new_session_at(Some(screen));
     let shots = Shots::new(screen);
@@ -1289,7 +1292,7 @@ impl Server {
 /// A Drive node of this test's (`DRIVE_NODE_BIN`, else `drive-node` on the
 /// PATH), open (no issuer), serving the web build at the root and the
 /// sessions under `/sessions/`; stopped when dropped. Its org is the one
-/// the built-in sets are in.
+/// [`seed_org`] writes into.
 struct Node {
     child: Child,
     origin: String,
@@ -1348,6 +1351,172 @@ impl Drop for Node {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+}
+
+/// The org's own data, as it reaches a page: Drive documents another
+/// device wrote and synced to the node. `tests/it/web_boot/org-docs.json`
+/// says what: songs in the org's library (`studio:library`), people in its
+/// team (`studio:org`), and a set of five of those songs with a band
+/// (`studio:setlist:<id>`), each in the shapes the app writes them in
+/// (`src/songs.rs`, `src/orgs.rs`, `src/setlist.rs`). Written through
+/// Drive's client to the node's `/sync`, then read back through a second
+/// client, so the node has them before the page asks.
+fn seed_org(origin: &str) {
+    use drive_client::loro::{LoroDoc, LoroMap};
+    use drive_client::{Drive, Status};
+
+    let here = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/web_boot/org-docs.json");
+    let fixture: Value = serde_json::from_slice(&std::fs::read(&here).expect("the org's fixture"))
+        .expect("the org's fixture is JSON");
+    let text = |v: &Value, k: &str| v[k].as_str().unwrap_or_default().to_string();
+    let joined = |v: &Value, k: &str| {
+        v[k].as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            })
+            .unwrap_or_default()
+    };
+    let org = text(&fixture, "org");
+    let set = &fixture["set"];
+    let set_id = text(set, "id");
+    let library: Vec<Value> = fixture["library"].as_array().cloned().unwrap_or_default();
+    let people: Vec<Value> = fixture["people"].as_array().cloned().unwrap_or_default();
+    let stamp = |d: &LoroDoc| {
+        d.get_map("meta")
+            .insert("org", org.as_str())
+            .expect("meta.org");
+    };
+
+    // Each document: its full id, and what is written into it.
+    type Write<'a> = Box<dyn Fn(&LoroDoc) + 'a>;
+    let docs: Vec<(String, Write<'_>)> = vec![
+        (
+            format!("{org}/studio:library"),
+            Box::new(|d: &LoroDoc| {
+                stamp(d);
+                let songs = d.get_map("songs");
+                for s in &library {
+                    let m = songs.ensure_mergeable_map(&text(s, "id")).expect("a song");
+                    for k in ["id", "title", "artist", "key"] {
+                        m.insert(k, text(s, k).as_str()).expect("a song's field");
+                    }
+                    m.insert("tempo", s["tempo"].as_i64().unwrap_or(0))
+                        .expect("tempo");
+                    m.insert("tags", "").expect("tags");
+                    m.insert("energy", 0i64).expect("energy");
+                    m.insert("ready", "").expect("ready");
+                }
+            }),
+        ),
+        (
+            format!("{org}/studio:org"),
+            Box::new(|d: &LoroDoc| {
+                stamp(d);
+                let map = d.get_map("people");
+                for p in &people {
+                    let m = map.ensure_mergeable_map(&text(p, "id")).expect("a person");
+                    for k in ["id", "name", "role"] {
+                        m.insert(k, text(p, k).as_str()).expect("a person's field");
+                    }
+                    m.insert("account", "").expect("account");
+                    m.insert("hue", 0i64).expect("hue");
+                    m.insert("parts", joined(p, "parts").as_str())
+                        .expect("parts");
+                    m.insert("groups", "").expect("groups");
+                    m.insert("leads", "").expect("leads");
+                }
+            }),
+        ),
+        (
+            format!("{org}/studio:setlist:{set_id}"),
+            Box::new(|d: &LoroDoc| {
+                stamp(d);
+                d.get_map("meta")
+                    .insert("set", set_id.as_str())
+                    .expect("meta.set");
+                let info = d.get_map("set");
+                for k in ["id", "title", "kind", "date", "starts", "call", "place"] {
+                    info.insert(k, text(set, k).as_str())
+                        .expect("the set's field");
+                }
+                let entries = d.get_movable_list("entries");
+                for (n, id) in set["songs"].as_array().into_iter().flatten().enumerate() {
+                    let id = id.as_str().unwrap_or_default();
+                    let song = library
+                        .iter()
+                        .find(|s| s["id"] == id)
+                        .unwrap_or_else(|| panic!("{id} is not in the fixture's library"));
+                    let m = entries
+                        .insert_container(n, LoroMap::new())
+                        .expect("an entry");
+                    m.insert("id", format!("e-fixture-{n}").as_str())
+                        .expect("id");
+                    m.insert("kind", "song").expect("kind");
+                    m.insert("song", format!("{org}/{id}").as_str())
+                        .expect("song");
+                    for k in ["title", "artist", "key"] {
+                        m.insert(k, text(song, k).as_str())
+                            .expect("an entry's field");
+                    }
+                    m.insert("tempo", song["tempo"].as_i64().unwrap_or(0))
+                        .expect("tempo");
+                }
+                let band = d.get_map("band");
+                for s in set["band"].as_array().into_iter().flatten() {
+                    let person = text(s, "person");
+                    let name = people
+                        .iter()
+                        .find(|p| p["id"] == person.as_str())
+                        .map(|p| text(p, "name"))
+                        .unwrap_or_else(|| panic!("{person} is not in the fixture's people"));
+                    let m = band.ensure_mergeable_map(&person).expect("a seat");
+                    m.insert("name", name.as_str()).expect("name");
+                    m.insert("parts", joined(s, "parts").as_str())
+                        .expect("parts");
+                }
+            }),
+        ),
+    ];
+
+    // The client keeps its copies in a folder of its own (process-wide).
+    let copies = tempfile::tempdir().expect("the client's copies");
+    drive_client::set_data_dir(copies.path());
+    let sync = format!("{}/sync", origin.replacen("http://", "ws://", 1));
+    let wait = |what: &str, done: &dyn Fn() -> bool| {
+        let began = Instant::now();
+        while !done() {
+            assert!(
+                began.elapsed() < Duration::from_secs(30),
+                "waited 30s for {what} on {sync}"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+
+    let (writer, _writes) = Drive::connect(Some(sync.clone()));
+    wait("the writer online", &|| writer.status() == Status::Online);
+    for (id, write) in &docs {
+        let doc = writer.open(id);
+        wait(&format!("{id} joined"), &|| writer.is_synced(id));
+        write(&doc);
+        writer.commit(id);
+    }
+
+    // Read back by another client: on the node, not only here.
+    let (reader, _reads) = Drive::connect(Some(sync.clone()));
+    wait("the reader online", &|| reader.status() == Status::Online);
+    for (id, _) in &docs {
+        let mine = writer.open(id).get_deep_value();
+        let doc = reader.open(id);
+        wait(&format!("{id} on the node"), &|| {
+            reader.is_synced(id) && doc.get_deep_value() == mine
+        });
+    }
+    writer.save_now();
+    reader.save_now();
 }
 
 /// The access token [`Server::with_issuer`]'s issuer gives.

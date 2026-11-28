@@ -289,3 +289,6 @@ tokio = { version = "1", features = ["macros", "rt", "net"] }
 # encoded where it runs, served from a folder of its own.
 fts-sample = { workspace = true, features = ["engine-native"] }
 tempfile = { workspace = true }
+# web_boot's screens: the org's library, people and a set written to the
+# test's Drive node as another device's edits, through Drive's own client.
+drive-client.workspace = true

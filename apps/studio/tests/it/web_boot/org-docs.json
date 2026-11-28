@@ -1,0 +1,31 @@
+{
+  "org": "crossroads-church",
+  "library": [
+    { "id": "s-fixture-1", "title": "Morning Light", "artist": "Fixture Band", "key": "G", "tempo": 72 },
+    { "id": "s-fixture-2", "title": "Open Road", "artist": "Fixture Band", "key": "D", "tempo": 128 },
+    { "id": "s-fixture-3", "title": "River Song", "artist": "Fixture Band", "key": "A", "tempo": 96 },
+    { "id": "s-fixture-4", "title": "Stillwater", "artist": "Fixture Band", "key": "E", "tempo": 68 },
+    { "id": "s-fixture-5", "title": "Hold The Line", "artist": "Fixture Band", "key": "C", "tempo": 110 },
+    { "id": "s-fixture-6", "title": "Lantern", "artist": "Fixture Band", "key": "Bb", "tempo": 84 }
+  ],
+  "people": [
+    { "id": "alex-rivera", "name": "Alex Rivera", "role": "leader", "parts": ["Lead vocals", "Acoustic guitar"] },
+    { "id": "jo-park", "name": "Jo Park", "role": "member", "parts": ["Keys"] },
+    { "id": "sam-lee", "name": "Sam Lee", "role": "member", "parts": ["Drums"] }
+  ],
+  "set": {
+    "id": "s-web-screens",
+    "title": "Sunday Morning",
+    "kind": "service",
+    "date": "2026-12-13",
+    "starts": "10:30",
+    "call": "8:30",
+    "place": "Main Hall",
+    "songs": ["s-fixture-1", "s-fixture-2", "s-fixture-3", "s-fixture-4", "s-fixture-5"],
+    "band": [
+      { "person": "alex-rivera", "parts": ["Lead vocals", "Acoustic guitar"] },
+      { "person": "jo-park", "parts": ["Keys"] },
+      { "person": "sam-lee", "parts": ["Drums"] }
+    ]
+  }
+}
