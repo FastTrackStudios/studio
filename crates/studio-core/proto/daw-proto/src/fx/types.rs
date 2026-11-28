@@ -198,6 +198,56 @@ pub struct FxParameter {
     /// Labels for each discrete step (empty for continuous params).
     /// Each entry is (normalized_value, display_label).
     pub step_labels: Vec<(f64, String)>,
+    /// What 0 and 1 are in the plugin's own units, when the host knows
+    /// (a hosted plugin's parameter): `None` when only the normalized
+    /// value is known.
+    #[facet(default)]
+    pub range: Option<FxParamRange>,
+}
+
+/// A parameter's span in the plugin's own units: the plain values at
+/// normalized 0 and 1, and the unit the plugin writes them in (`dB`,
+/// `Hz`, `ms`; empty for a bare number).
+#[derive(Clone, Debug, PartialEq, Facet)]
+pub struct FxParamRange {
+    pub min: f64,
+    pub max: f64,
+    pub unit: String,
+}
+
+impl FxParamRange {
+    /// The unit in a plugin's text for a value: what follows its last
+    /// digit (`-12.5 dB` → `dB`, `50%` → `%`), or what follows its first
+    /// word when it has no digit (`-inf dB` → `dB`). Empty for a bare
+    /// number or a word alone.
+    #[must_use]
+    pub fn unit_in(text: &str) -> String {
+        let text = text.trim();
+        let rest = match text.rfind(|c: char| c.is_ascii_digit()) {
+            Some(at) => text.get(at.saturating_add(1)..).unwrap_or_default(),
+            None => text.split_once(char::is_whitespace).map_or("", |(_, r)| r),
+        };
+        rest.trim().to_owned()
+    }
+
+    /// The plain value at normalized `value` (a hosted plugin's plain
+    /// value is linear in its range).
+    #[must_use]
+    pub fn plain(&self, value: f64) -> f64 {
+        self.min + value.clamp(0.0, 1.0) * (self.max - self.min)
+    }
+
+    /// The normalized value of `plain`, held to the range: 0 for a range
+    /// with no span.
+    #[must_use]
+    pub fn normalized(&self, plain: f64) -> f64 {
+        let span = self.max - self.min;
+        if span.abs() < f64::EPSILON {
+            0.0
+        } else {
+            ((plain - self.min) / span).clamp(0.0, 1.0)
+        }
+    }
 }
 
 impl FxParameter {
@@ -211,6 +261,7 @@ impl FxParameter {
             is_toggle: false,
             step_count: None,
             step_labels: Vec::new(),
+            range: None,
         }
     }
 }
@@ -502,4 +553,37 @@ pub struct FxStateChunk {
     /// plugin's internal state, including settings not exposed as
     /// automation parameters.
     pub encoded_chunk: String,
+}
+
+#[cfg(test)]
+mod range_tests {
+    use super::FxParamRange;
+
+    #[test]
+    fn a_unit_is_what_follows_the_number() {
+        assert_eq!(FxParamRange::unit_in("-12.5 dB"), "dB");
+        assert_eq!(FxParamRange::unit_in("20 kHz"), "kHz");
+        assert_eq!(FxParamRange::unit_in("50%"), "%");
+        assert_eq!(FxParamRange::unit_in("-inf dB"), "dB");
+        assert_eq!(FxParamRange::unit_in("0.25"), "");
+        assert_eq!(FxParamRange::unit_in("Off"), "");
+    }
+
+    #[test]
+    fn a_range_maps_both_ways() {
+        let r = FxParamRange {
+            min: -60.0,
+            max: 0.0,
+            unit: "dB".into(),
+        };
+        assert!((r.plain(0.5) - -30.0).abs() < 1e-9);
+        assert!((r.normalized(-30.0) - 0.5).abs() < 1e-9);
+        assert_eq!(r.normalized(12.0), 1.0, "held to the range");
+        let flat = FxParamRange {
+            min: 1.0,
+            max: 1.0,
+            unit: String::new(),
+        };
+        assert_eq!(flat.normalized(1.0), 0.0);
+    }
 }

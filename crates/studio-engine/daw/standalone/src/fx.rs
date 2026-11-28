@@ -684,6 +684,7 @@ impl Effects for Standalone {
                     is_toggle: false,
                     step_count: None,
                     step_labels: Vec::new(),
+                    range: None,
                 })
                 .collect()
         })

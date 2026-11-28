@@ -22,7 +22,7 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use daw_proto::fx::FxParameter;
+use daw_proto::fx::{FxParamRange, FxParameter};
 use dioxus::prelude::*;
 use fts_audio_ui::ParamHandle;
 use fts_audio_ui::controls::HSlider;
@@ -226,8 +226,10 @@ pub enum Kind {
     Choice(Vec<(f64, String)>),
     /// One of `n` evenly spaced values, unnamed.
     Steps(u32),
-    /// Anywhere from 0 to 1.
+    /// Anywhere from 0 to 1, its units unknown.
     Continuous,
+    /// Anywhere in a span the plugin gave in its own units (#808).
+    Ranged(FxParamRange),
 }
 
 /// The control `param` is.
@@ -241,14 +243,16 @@ pub fn kind_of(param: &FxParameter) -> Kind {
         choices.sort_by(|a, b| a.0.total_cmp(&b.0));
         return Kind::Choice(choices);
     }
-    match param.step_count {
-        Some(n) if n >= 2 => Kind::Steps(n),
+    match (param.step_count, &param.range) {
+        (Some(n), _) if n >= 2 => Kind::Steps(n),
+        (_, Some(range)) => Kind::Ranged(range.clone()),
         _ => Kind::Continuous,
     }
 }
 
-/// A parameter's range, as the panel says it: its choices, its steps, or
-/// its span as a share of its travel.
+/// A parameter's range, as the panel says it: its choices, its steps, its
+/// span in the plugin's units, or (units unknown) as a share of its
+/// travel.
 #[must_use]
 pub fn range_text(kind: &Kind) -> String {
     match kind {
@@ -265,7 +269,39 @@ pub fn range_text(kind: &Kind) -> String {
         },
         Kind::Steps(n) => format!("{n} steps"),
         Kind::Continuous => "0–100%".to_owned(),
+        Kind::Ranged(range) => format!(
+            "{} – {}",
+            in_units(range, range.min),
+            in_units(range, range.max)
+        ),
     }
+}
+
+/// A plain value with its unit: `-6 dB`, `440 Hz`, `0.25`.
+fn in_units(range: &FxParamRange, plain: f64) -> String {
+    let number = plain_text(plain);
+    match range.unit.as_str() {
+        "" => number,
+        "%" => format!("{number}%"),
+        unit => format!("{number} {unit}"),
+    }
+}
+
+/// A plain number as a person reads it: fewer places the larger it is,
+/// no trailing zeros.
+fn plain_text(plain: f64) -> String {
+    let places = match plain.abs() {
+        a if a >= 100.0 => 0,
+        a if a >= 10.0 => 1,
+        _ => 2,
+    };
+    let text = format!("{plain:.places$}");
+    let text = if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.').to_owned()
+    } else {
+        text
+    };
+    if text == "-0" { "0".to_owned() } else { text }
 }
 
 /// `value` on `kind`'s own values: a toggle off or on, a choice's or a
@@ -290,7 +326,7 @@ pub fn snap(kind: &Kind, value: f64) -> f64 {
             let last = f64::from(n.saturating_sub(1).max(1));
             (value * last).round() / last
         }
-        Kind::Continuous => value,
+        Kind::Continuous | Kind::Ranged(_) => value,
     }
 }
 
@@ -311,12 +347,13 @@ pub fn pressed(kind: &Kind, value: f64) -> Option<f64> {
                 .get(at.saturating_add(1) % choices.len().max(1))
                 .map(|(v, _)| *v)
         }
-        Kind::Steps(_) | Kind::Continuous => None,
+        Kind::Steps(_) | Kind::Continuous | Kind::Ranged(_) => None,
     }
 }
 
 /// A typed value for `kind` as a normalized one: `=0.42`, `42%`, a choice
-/// by its name, `on`/`off` for a toggle. The plugin's own words (`-6 dB`)
+/// by its name, `on`/`off` for a toggle, and a number in the plugin's
+/// units (`-6 dB`, `-6`) where it gave them. Other words of the plugin's
 /// are the engine's to read (FX_SET); the panel takes what it can know.
 #[must_use]
 pub fn parse_value(kind: &Kind, text: &str) -> Option<f64> {
@@ -341,13 +378,31 @@ pub fn parse_value(kind: &Kind, text: &str) -> Option<f64> {
             .iter()
             .find(|(_, label)| label.eq_ignore_ascii_case(text))
             .map(|(v, _)| *v),
+        Kind::Ranged(range) => {
+            let number = strip_unit(text, &range.unit);
+            number.parse::<f64>().ok().map(|v| range.normalized(v))
+        }
         Kind::Steps(_) | Kind::Continuous => text.parse::<f64>().ok().map(|v| snap(kind, v)),
+    }
+}
+
+/// `text` without `unit` at its end (case aside), trimmed.
+fn strip_unit<'a>(text: &'a str, unit: &str) -> &'a str {
+    let text = text.trim();
+    if unit.is_empty() || unit.len() > text.len() {
+        return text;
+    }
+    let cut = text.len().saturating_sub(unit.len());
+    match (text.get(..cut), text.get(cut..)) {
+        (Some(number), Some(end)) if end.eq_ignore_ascii_case(unit) => number.trim(),
+        _ => text,
     }
 }
 
 /// What a parameter reads: the plugin's own words while it is where the
 /// plugin last said (`read`, `formatted`), else the panel's — a choice's
-/// name, on/off, or a share of its travel — until the engine says again.
+/// name, on/off, the value in the plugin's units, or (units unknown) a
+/// share of its travel — until the engine says again.
 #[must_use]
 pub fn value_text(kind: &Kind, value: f64, read: (f64, &str)) -> String {
     if (value - read.0).abs() < 1e-6 && !read.1.trim().is_empty() {
@@ -367,6 +422,7 @@ pub fn value_text(kind: &Kind, value: f64, read: (f64, &str)) -> String {
                 .find(|(v, _)| (*v - now).abs() < 1e-9)
                 .map_or_else(|| percent(value), |(_, l)| l.clone())
         }
+        Kind::Ranged(range) => in_units(range, range.plain(value)),
         Kind::Steps(_) | Kind::Continuous => percent(value),
     }
 }
@@ -823,7 +879,7 @@ fn ParamsPanel(
                     }
                 }
             }
-            Kind::Steps(_) | Kind::Continuous => {
+            Kind::Steps(_) | Kind::Continuous | Kind::Ranged(_) => {
                 let handle = slider(&reader, &outbox, (&fx, index), &kind, &param.name);
                 rsx! { div { style: "flex:1; min-width:200px;", HSlider { handle, height: 26.0 } } }
             }
@@ -984,7 +1040,16 @@ mod tests {
             is_toggle: false,
             step_count: None,
             step_labels: Vec::new(),
+            range: None,
         }
+    }
+
+    fn decibels() -> Kind {
+        Kind::Ranged(FxParamRange {
+            min: -60.0,
+            max: 0.0,
+            unit: "dB".into(),
+        })
     }
 
     #[test]
@@ -1011,6 +1076,13 @@ mod tests {
         p.step_count = Some(4);
         assert_eq!(kind_of(&p), Kind::Steps(4));
         assert_eq!(kind_of(&param(3, "Mix")), Kind::Continuous);
+        let mut p = param(4, "Threshold");
+        p.range = Some(FxParamRange {
+            min: -60.0,
+            max: 0.0,
+            unit: "dB".into(),
+        });
+        assert_eq!(kind_of(&p), decibels(), "a span in the plugin's units");
     }
 
     #[test]
@@ -1026,6 +1098,19 @@ mod tests {
         assert_eq!(range_text(&three), "3 choices: A … C");
         assert_eq!(range_text(&Kind::Steps(4)), "4 steps");
         assert_eq!(range_text(&Kind::Continuous), "0–100%");
+        assert_eq!(range_text(&decibels()), "-60 dB – 0 dB");
+        let hz = Kind::Ranged(FxParamRange {
+            min: 20.0,
+            max: 20_000.0,
+            unit: "Hz".into(),
+        });
+        assert_eq!(range_text(&hz), "20 Hz – 20000 Hz");
+        let mix = Kind::Ranged(FxParamRange {
+            min: 0.0,
+            max: 100.0,
+            unit: "%".into(),
+        });
+        assert_eq!(range_text(&mix), "0% – 100%");
     }
 
     #[test]
@@ -1070,6 +1155,14 @@ mod tests {
         assert_eq!(parse_value(&choice, "Cathedral"), None);
         // The plugin's own words are the engine's to read.
         assert_eq!(parse_value(&Kind::Continuous, "-6 dB"), None);
+        // ...unless the plugin gave its units.
+        let db = decibels();
+        assert_eq!(parse_value(&db, "-30 dB"), Some(0.5));
+        assert_eq!(parse_value(&db, "-30db"), Some(0.5));
+        assert_eq!(parse_value(&db, "-15"), Some(0.75));
+        assert_eq!(parse_value(&db, "=0.25"), Some(0.25));
+        assert_eq!(parse_value(&db, "+12 dB"), Some(1.0), "held to the range");
+        assert_eq!(parse_value(&db, "loud"), None);
     }
 
     #[test]
@@ -1082,6 +1175,12 @@ mod tests {
         assert_eq!(value_text(&Kind::Continuous, 0.25, (0.5, "-6.0 dB")), "25%");
         assert_eq!(value_text(&choice, 1.0, (0.0, "Room")), "Hall");
         assert_eq!(value_text(&Kind::Toggle, 1.0, (0.0, "Off")), "On");
+        assert_eq!(
+            value_text(&decibels(), 0.25, (0.5, "-30.0 dB")),
+            "-45 dB",
+            "moved, in the plugin's units"
+        );
+        assert_eq!(value_text(&decibels(), 0.5, (0.5, "-30.0 dB")), "-30.0 dB");
     }
 
     #[test]
