@@ -661,6 +661,8 @@ mod native {
                 if before.is_some_and(|b| b != now) && page_for(view).is_none() {
                     let next = stage_for(view, &set_now, followed.peek().as_ref());
                     ui.apply(move |w| {
+                        let mut next = next;
+                        crate::stage::carry_rig(w, &mut next);
                         *w = next;
                         Ok::<_, app_shell::WorkspaceError>(())
                     });
@@ -688,6 +690,8 @@ mod native {
             if want != now.filter(|p| is_centre(p)) {
                 let next = stage_for(view, &set_title, followed.peek().as_ref());
                 ui.apply(move |w| {
+                    let mut next = next;
+                    crate::stage::carry_rig(w, &mut next);
                     *w = next;
                     Ok::<_, app_shell::WorkspaceError>(())
                 });

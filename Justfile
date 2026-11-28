@@ -43,7 +43,7 @@ default:
 # Hot-patching off: it wraps rustc (RUSTC_WORKSPACE_WRAPPER), which kache passes through uncached;
 # with it off, the fleet's dx (DX_NO_RUSTC_WRAPPER=1, devenv-fleet's dioxus) runs plain cargo under kache
 # The desktop app (apps/studio, Blitz) under `dx serve`, with the engine it starts built first
-studio *ARGS: _engine-build
+studio *ARGS: _engine-build _rig-build
     cd apps/studio && env {{otlp}} dx serve --platform desktop --renderer native --no-default-features --features native --hot-patch false {{dev_build}} {{ARGS}}
 
 # The engine, headless: `run` (the default) starts it in the foreground; `status` and `stop` ask the running one
@@ -69,6 +69,12 @@ telemetry:
 
 _engine-build:
     cargo build {{dev_build}} -p {{engine_package}} --bin {{engine_bin}}
+
+# Signal's rig engine (studio.rig), which Studio runs as a process. Its own
+# invocation: built with the engine's, cargo would unify their features and
+# compile the engine another way (another kache key).
+_rig-build:
+    cargo build {{dev_build}} -p rig-extension --bin rig-extension
 
 # ── Check and test ───────────────────────────────────────────────────────
 

@@ -247,6 +247,206 @@ pub fn with_centre(
     ws
 }
 
+/// The rig's window: Signal's screens as the iPad lays them out
+/// (`docs/design/signal-extensions.md`, "The Rig layout"), each pane a
+/// view of one of the rig's extensions (`studio.rig.*`, `studio.keys`).
+pub const RIG_WINDOW: &str = "rig";
+
+/// The guitar rig's panes (`studio.rig.*` views).
+pub mod rig {
+    pub const STATUS: &str = "studio.rig.status/status";
+    pub const TUNER: &str = "studio.rig.status/tuner";
+    pub const SETLIST: &str = "studio.rig.setlist/setlist";
+    pub const MACROS: &str = "studio.rig.macros/macros";
+    pub const GRID: &str = "studio.rig.grid/grid";
+    pub const FX: &str = "studio.rig.grid/fx";
+    pub const EDIT: &str = "studio.rig.grid/edit";
+    pub const BROWSER: &str = "studio.rig.browser/browser";
+    pub const SWITCHES: &str = "studio.rig.switches/switches";
+}
+
+/// The keys rig's panes (`studio.keys` views).
+pub mod keys {
+    pub const BROWSER: &str = "studio.keys/browser";
+    pub const RACK: &str = "studio.keys/rack";
+    pub const LAYERS: &str = "studio.keys/layers";
+    pub const ROUTING: &str = "studio.keys/routing";
+    pub const MIDI: &str = "studio.keys/midi";
+    pub const KEYBOARD: &str = "studio.keys/keyboard";
+    pub const SWITCHES: &str = "studio.keys/switches";
+    pub const MACROS: &str = "studio.keys/macros";
+}
+
+/// Which rig the Rig window shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RigLayout {
+    /// The guitar's (and the bass's: the same rig, another instrument).
+    Guitar,
+    Keys,
+}
+
+impl RigLayout {
+    /// `guitar`, `bass` or `keys`, any case.
+    pub fn parse(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "guitar" | "bass" => Some(Self::Guitar),
+            "keys" => Some(Self::Keys),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn slug(self) -> &'static str {
+        match self {
+            Self::Guitar => "guitar",
+            Self::Keys => "keys",
+        }
+    }
+
+    /// The pane the window is known by (its first, which titles it).
+    #[must_use]
+    pub const fn first(self) -> &'static str {
+        match self {
+            Self::Guitar => rig::STATUS,
+            Self::Keys => keys::BROWSER,
+        }
+    }
+}
+
+impl Builder {
+    /// `panes` as tabs of one group, the first showing.
+    fn tabs(&mut self, panes: &[&str]) -> Node {
+        let mut g = Group::new(GroupId(self.id()));
+        g.tabs = panes.iter().map(|p| PaneId::new(*p)).collect();
+        Node::Group(g)
+    }
+
+    /// The guitar rig: the status bar across the top; under it the
+    /// setlist on the left, and the macros, the grid (its FX row, Edit and
+    /// the browser as tabs) and the switches (and the tuner) down the
+    /// right.
+    fn guitar_rig(&mut self) -> Node {
+        let status = self.group(rig::STATUS);
+        let setlist = self.group(rig::SETLIST);
+        let macros = self.group(rig::MACROS);
+        let work = self.tabs(&[rig::GRID, rig::FX, rig::EDIT, rig::BROWSER]);
+        let feet = self.tabs(&[rig::SWITCHES, rig::TUNER]);
+        // 14 % macros, 48 % grid, 38 % switches of the right-hand column.
+        let lower = self.split(Axis::Column, work, feet, 0.48 / 0.86);
+        let right = self.split(Axis::Column, macros, lower, 0.14);
+        let body = self.split(Axis::Row, setlist, right, 0.24);
+        self.split(Axis::Column, status, body, 0.09)
+    }
+
+    /// The keys rig: the browser on the left; the rack (its layers,
+    /// routing and MIDI as tabs), the keyboard and the switches (and the
+    /// macros) down the right.
+    fn keys_rig(&mut self) -> Node {
+        let browser = self.group(keys::BROWSER);
+        let rack = self.tabs(&[keys::RACK, keys::LAYERS, keys::ROUTING, keys::MIDI]);
+        let keyboard = self.group(keys::KEYBOARD);
+        let feet = self.tabs(&[keys::SWITCHES, keys::MACROS]);
+        // 50 % rack, 26 % keyboard, 24 % switches.
+        let lower = self.split(Axis::Column, keyboard, feet, 0.26 / 0.5);
+        let right = self.split(Axis::Column, rack, lower, 0.5);
+        self.split(Axis::Row, browser, right, 0.22)
+    }
+}
+
+/// The Rig window showing `layout`, and its panes, its ids taken from
+/// `next_id` on (the workspace's next id after it).
+#[must_use]
+pub fn rig_window(layout: RigLayout, set: &str, next_id: u64) -> (Window, Vec<Pane>, u64) {
+    let mut b = Builder { next: next_id };
+    let titled = |id: &str, title: &str| Pane::new(id, id, title);
+    let window_title = if set.is_empty() {
+        "Rig".to_owned()
+    } else {
+        format!("Rig — {set}")
+    };
+    let (center, panes) = match layout {
+        RigLayout::Guitar => (
+            b.guitar_rig(),
+            vec![
+                titled(rig::STATUS, &window_title),
+                titled(rig::SETLIST, "Setlist"),
+                titled(rig::MACROS, "Macros"),
+                titled(rig::GRID, "Grid"),
+                titled(rig::FX, "FX"),
+                titled(rig::EDIT, "Edit"),
+                titled(rig::BROWSER, "Browser"),
+                titled(rig::SWITCHES, "Switches"),
+                titled(rig::TUNER, "Tuner"),
+            ],
+        ),
+        RigLayout::Keys => (
+            b.keys_rig(),
+            vec![
+                titled(keys::BROWSER, &window_title),
+                titled(keys::RACK, "Rack"),
+                titled(keys::LAYERS, "Layers"),
+                titled(keys::ROUTING, "Routing"),
+                titled(keys::MIDI, "MIDI"),
+                titled(keys::KEYBOARD, "Keyboard"),
+                titled(keys::SWITCHES, "Switches"),
+                titled(keys::MACROS, "Macros"),
+            ],
+        ),
+    };
+    let window = Window {
+        // An iPad's screen, landscape: what the layout was drawn for.
+        bounds: Some(Rect::new(120.0, 120.0, 1366.0, 1024.0)),
+        ..Window::new(WindowId::new(RIG_WINDOW), center)
+    };
+    (window, panes, b.next)
+}
+
+/// Opens the Rig window showing `layout` in `ws`, in place of the one
+/// there (a rig's window is one at a time); its first pane made active.
+pub fn open_rig(ws: &mut Workspace, layout: RigLayout, set: &str) {
+    let id = WindowId::new(RIG_WINDOW);
+    if let Some(old) = ws.windows.iter().position(|w| w.id == id) {
+        let gone = ws.windows.remove(old);
+        if let Some(node) = gone.center.as_ref() {
+            ws.panes.retain(|p| !holds(node, &p.id));
+        }
+    }
+    let (window, panes, next) = rig_window(layout, set, ws.next_id);
+    ws.next_id = next;
+    ws.panes.extend(panes);
+    ws.windows.push(window);
+    ws.active = Some(PaneId::new(layout.first()));
+}
+
+/// Which rig the Rig window in `ws` shows, when it is open.
+#[must_use]
+pub fn rig_shown(ws: &Workspace) -> Option<RigLayout> {
+    let window = ws.window(&WindowId::new(RIG_WINDOW))?;
+    let node = window.center.as_ref()?;
+    [RigLayout::Guitar, RigLayout::Keys]
+        .into_iter()
+        .find(|l| holds(node, &PaneId::new(l.first())))
+}
+
+/// `next` (a Stage laid out again) with the Rig window `was` had, so a
+/// change of view or of the window's shape keeps the rig open.
+pub fn carry_rig(was: &Workspace, next: &mut Workspace) {
+    let id = WindowId::new(RIG_WINDOW);
+    let Some(window) = was.window(&id).cloned() else {
+        return;
+    };
+    if next.window(&id).is_some() {
+        return;
+    }
+    if let Some(node) = window.center.as_ref() {
+        next.panes
+            .extend(was.panes.iter().filter(|p| holds(node, &p.id)).cloned());
+    }
+    // Its group and split ids stay its own: the new Stage's go on past them.
+    next.next_id = next.next_id.max(was.next_id);
+    next.windows.push(window);
+}
+
 /// Whether `node` has `pane` in it.
 fn holds(node: &Node, pane: &PaneId) -> bool {
     match node {
@@ -359,5 +559,81 @@ mod tests {
             }
         }
         assert_eq!(ws.windows[1].id.0, LIGHTING_WINDOW);
+    }
+
+    #[test]
+    fn the_rig_window_lays_the_guitar_out_as_the_ipad_does() {
+        let mut ws = stage(Area::default(), &Names::default(), None);
+        let before = ws.windows.len();
+        open_rig(&mut ws, RigLayout::Guitar, "CYA");
+        assert_eq!(ws.windows.len(), before + 1);
+        let window = ws.window(&WindowId::new(RIG_WINDOW)).unwrap();
+        let shown = views(window.center.as_ref().unwrap());
+        assert_eq!(
+            shown,
+            [
+                rig::STATUS,
+                rig::SETLIST,
+                rig::MACROS,
+                rig::GRID,
+                rig::FX,
+                rig::EDIT,
+                rig::BROWSER,
+                rig::SWITCHES,
+                rig::TUNER,
+            ]
+        );
+        // Every pane it shows is in the workspace, the first titling it.
+        for id in &shown {
+            assert!(ws.pane(&PaneId::new(id.as_str())).is_some(), "{id}");
+        }
+        assert_eq!(
+            ws.pane(&PaneId::new(rig::STATUS)).unwrap().title,
+            "Rig — CYA"
+        );
+        assert_eq!(ws.active, Some(PaneId::new(rig::STATUS)));
+        // The status bar across the top, the setlist down the left.
+        let top = split(window.center.as_ref().unwrap());
+        assert_eq!(top.axis, Axis::Column);
+        assert_eq!(views(&top.children[0].node), [rig::STATUS]);
+        assert_eq!(split(&top.children[1].node).axis, Axis::Row);
+        assert_eq!(rig_shown(&ws), Some(RigLayout::Guitar));
+    }
+
+    #[test]
+    fn opening_the_keys_rig_replaces_the_guitars_window() {
+        let mut ws = stage(Area::default(), &Names::default(), None);
+        open_rig(&mut ws, RigLayout::Guitar, "");
+        open_rig(&mut ws, RigLayout::Keys, "");
+        let rigs = ws.windows.iter().filter(|w| w.id.0 == RIG_WINDOW).count();
+        assert_eq!(rigs, 1);
+        assert_eq!(rig_shown(&ws), Some(RigLayout::Keys));
+        assert!(ws.pane(&PaneId::new(rig::STATUS)).is_none());
+        assert_eq!(ws.pane(&PaneId::new(keys::BROWSER)).unwrap().title, "Rig");
+    }
+
+    #[test]
+    fn a_stage_laid_out_again_keeps_the_rig_open() {
+        let mut was = stage(Area::default(), &Names::default(), None);
+        open_rig(&mut was, RigLayout::Guitar, "");
+        let mut next = with_centre(Area::default(), &Names::default(), Some(CHART), None, true);
+        carry_rig(&was, &mut next);
+        assert_eq!(rig_shown(&next), Some(RigLayout::Guitar));
+        assert!(next.pane(&PaneId::new(rig::SWITCHES)).is_some());
+        assert!(next.next_id >= was.next_id);
+        // Twice is still one window.
+        carry_rig(&was, &mut next);
+        assert_eq!(
+            next.windows.iter().filter(|w| w.id.0 == RIG_WINDOW).count(),
+            1
+        );
+    }
+
+    #[test]
+    fn rigs_are_named_as_the_launcher_names_them() {
+        assert_eq!(RigLayout::parse("Guitar"), Some(RigLayout::Guitar));
+        assert_eq!(RigLayout::parse("bass"), Some(RigLayout::Guitar));
+        assert_eq!(RigLayout::parse(" Keys "), Some(RigLayout::Keys));
+        assert_eq!(RigLayout::parse("drums"), None);
     }
 }
