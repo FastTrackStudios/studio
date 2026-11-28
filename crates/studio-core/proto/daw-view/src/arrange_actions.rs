@@ -816,6 +816,7 @@ async fn carry_out(arg: GestureArg) -> Result<Carried, String> {
     }
     let label = arg.label.filter(|l| !l.trim().is_empty());
     if let Some(label) = &label {
+        recorded().await;
         crate::engine::apply_reported(&Edit::BeginUndo(label.clone())).await;
     }
     let mut carried = Carried {
@@ -839,6 +840,7 @@ async fn carry_out(arg: GestureArg) -> Result<Carried, String> {
     }
     if let Some(label) = label {
         crate::engine::apply_reported(&Edit::EndUndo(label)).await;
+        recorded().await;
     }
     if items {
         crate::hit_overlay::refresh();
@@ -848,6 +850,32 @@ async fn carry_out(arg: GestureArg) -> Result<Carried, String> {
     // A tempo edit needs no read-back asked for here: every window follows
     // the engine's tempo map itself (`crate::engine::TempoWatch`).
     Ok(carried)
+}
+
+/// The longest a gesture waits for the song's history to catch up: a whole
+/// song's read included (`engine_core::history_marks::SETTLE`).
+const RECORDED: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Wait (at most [`RECORDED`]) until the song's history has recorded every
+/// undo step the engine finished. Before a gesture's step, so the steps
+/// before it are not read into its commit; after, so the next call's are
+/// not read into this one's. The recorder reads the engine as it is when
+/// it gets there: two gestures sent faster than it reads (a tempo, then a
+/// meter) were one commit, and an undo took both back. Awaited, never
+/// blocking the runtime the recorder may need.
+async fn recorded() {
+    let body = crate::body::body();
+    let began = web_time::Instant::now();
+    while body.steps_pending() > 0 {
+        if began.elapsed() >= RECORDED {
+            tracing::warn!(
+                history.pending = body.steps_pending(),
+                "the steps before a gesture were not recorded in time: it may share their commit"
+            );
+            return;
+        }
+        architect::platform::sleep(std::time::Duration::from_millis(1)).await;
+    }
 }
 
 /// Put the gesture actions on the list.

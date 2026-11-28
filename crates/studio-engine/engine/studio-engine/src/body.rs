@@ -14,6 +14,11 @@ impl Body for EngineBody {
     }
 
     #[cfg(feature = "native")]
+    fn steps_pending(&self) -> usize {
+        crate::project_file::steps_pending()
+    }
+
+    #[cfg(feature = "native")]
     fn overlay_read_current(&self) {
         if let Ok((daw, project)) = crate::actions::song()
             && let daw::service::ProjectContext::Project(song) = &project
