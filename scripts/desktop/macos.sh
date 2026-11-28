@@ -25,6 +25,10 @@
 #               password unlocked only when KEYCHAIN_PW is set)
 #   NOTARIZE    1 (default) notarize + staple; 0 signs only (a local test: the
 #               result is NOT distributable)
+#   SIGN_ID     the signing identity (default: the keychain's Developer ID
+#               Application). `-` signs ad hoc, with no keychain or
+#               timestamp, and implies NOTARIZE=0: a bundle to test on a Mac
+#               without the Developer ID (voyager), NOT distributable
 #   SKIP_BUILD  1 reuses target/$PROFILE/<bin> (iterate on sign/dmg)
 #
 # arm64 only for now (airlock is Apple silicon; x86_64-apple-darwin is in the
@@ -39,9 +43,12 @@ app=studio
 # Studio is apps/studio (the cargo package `studio-app`, its program
 # `Studio`), drawn by Blitz (`--features native`), with its engine beside
 # it in Contents/MacOS: `daw-extension`, which the app finds next to its own
-# program (apps/studio/docs/development.md, "The engine").
+# program (apps/studio/docs/development.md, "The engine"). Beside them, Signal's
+# rig engine (`rig-extension`, the Rig window's) and its headphone mixer
+# (`signal-phones`, which the rig starts from beside its own program).
 crate=studio-app; built=Studio; bin=Studio; title=Studio
 engine_crate=daw-extension; engine_bin=daw-extension
+rig_crates="-p rig-extension -p guitar"; rig_bins=(rig-extension signal-phones)
 features="--no-default-features --features native"
 # TODO(monorepo): Studio's own icon, in apps/studio, once it has one.
 icon=crates/studio-engine/engine/engine-host/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
@@ -66,7 +73,14 @@ command -v devenv >/dev/null || { echo "no devenv on this host" >&2; exit 1; }
 
 # ── The Developer ID identity ───────────────────────────────────────────────
 KEYCHAIN="${KEYCHAIN:-fts-build.keychain}"
-if [ -n "${KEYCHAIN_PW:-}" ]; then security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"; fi
+if [ "${SIGN_ID:-}" = - ]; then
+    NOTARIZE=0
+    # codesign's own flags for ad hoc: no keychain, no timestamp server.
+    SIGN_FLAGS=()
+else
+    SIGN_FLAGS=(--keychain "$KEYCHAIN" --timestamp)
+    if [ -n "${KEYCHAIN_PW:-}" ]; then security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"; fi
+fi
 SIGN_ID="${SIGN_ID:-$(security find-identity -v -p codesigning "$KEYCHAIN" \
     | awk -F'"' '/Developer ID Application/ {print $2; exit}')}"
 if [ -z "$SIGN_ID" ]; then
@@ -88,18 +102,24 @@ fi
 # ── Build ───────────────────────────────────────────────────────────────────
 BIN="$ROOT/target/$PROFILE/$built"
 ENGINE="$ROOT/target/$PROFILE/$engine_bin"
+RIG_BINS=()
+for b in "${rig_bins[@]}"; do RIG_BINS+=("$ROOT/target/$PROFILE/$b"); done
 if [ "${SKIP_BUILD:-}" = 1 ]; then
-    echo "=== SKIP_BUILD=1: reusing $BIN and $ENGINE ==="
+    echo "=== SKIP_BUILD=1: reusing $BIN, $ENGINE and ${RIG_BINS[*]} ==="
 else
     # zlib from the macOS SDK, not the dev shell's (macos-libs.sh).
     libs="$(bash "$SCRIPT_DIR/macos-libs.sh" config)"
-    # Two builds: the app's --no-default-features is not the engine's.
-    echo "=== cargo build --profile $PROFILE -p $engine_crate; -p $crate $features (--config $libs) ==="
+    # Three builds: the app's --no-default-features is not the engine's, and
+    # the rig's own invocation keeps cargo from unifying its features into
+    # the engine's (the Justfile's _rig-build, the same set).
+    echo "=== cargo build --profile $PROFILE -p $engine_crate; $rig_crates; -p $crate $features (--config $libs) ==="
     devenv shell -- cargo build --profile "$PROFILE" -p "$engine_crate" --config "$libs"
+    # shellcheck disable=SC2086
+    devenv shell -- cargo build --profile "$PROFILE" $rig_crates "${rig_bins[@]/#/--bin=}" --config "$libs"
     # shellcheck disable=SC2086
     devenv shell -- cargo build --profile "$PROFILE" -p "$crate" $features --config "$libs"
 fi
-for built_bin in "$BIN" "$ENGINE"; do
+for built_bin in "$BIN" "$ENGINE" "${RIG_BINS[@]}"; do
     [ -x "$built_bin" ] || { echo "ERROR: the build produced no $built_bin" >&2; exit 1; }
     file -b "$built_bin" | grep -q 'Mach-O 64-bit executable arm64' \
         || { echo "ERROR: $built_bin is not an arm64 Mach-O: $(file -b "$built_bin")" >&2; exit 1; }
@@ -117,10 +137,16 @@ chmod +x "$APP/Contents/MacOS/$bin"
 ENGINE_PKG="$APP/Contents/MacOS"
 cp "$ENGINE" "$ENGINE_PKG/$engine_bin"
 chmod +x "$ENGINE_PKG/$engine_bin"
+# The rig engine and its mixer, beside them.
+for b in "${RIG_BINS[@]}"; do
+    cp "$b" "$ENGINE_PKG/"
+    chmod +x "$ENGINE_PKG/$(basename "$b")"
+done
 
 # Only what every Mac has: nothing from /nix/store (macos-libs.sh guard).
 bash "$SCRIPT_DIR/macos-libs.sh" guard "$APP/Contents/MacOS/$bin"
 bash "$SCRIPT_DIR/macos-libs.sh" guard "$ENGINE_PKG/$engine_bin"
+for b in "${rig_bins[@]}"; do bash "$SCRIPT_DIR/macos-libs.sh" guard "$ENGINE_PKG/$b"; done
 
 if [ -f "$icon" ]; then
     iconset="$STAGE/$title.iconset"
@@ -161,13 +187,15 @@ plutil -lint "$ENT" >/dev/null
 echo "=== signing (Developer ID + hardened runtime) ==="
 find "$APP" \( -name '*.dylib' -o -name '*.so' -o -name '*.framework' \) -print0 \
     | while IFS= read -r -d '' f; do
-        codesign --force --keychain "$KEYCHAIN" --timestamp --options runtime --sign "$SIGN_ID" "$f"
+        codesign --force ${SIGN_FLAGS[@]+"${SIGN_FLAGS[@]}"} --options runtime --sign "$SIGN_ID" "$f"
       done
-# The engine first (inside out): a program of its own that opens the audio
-# device, so it carries the app's entitlements too.
-codesign --force --keychain "$KEYCHAIN" --timestamp --options runtime \
-    --entitlements "$ENT" --sign "$SIGN_ID" "$ENGINE_PKG/$engine_bin"
-codesign --force --keychain "$KEYCHAIN" --timestamp --options runtime \
+# The engine, the rig and its mixer first (inside out): programs of their
+# own that open the audio device, so they carry the app's entitlements too.
+for b in "$engine_bin" "${rig_bins[@]}"; do
+    codesign --force ${SIGN_FLAGS[@]+"${SIGN_FLAGS[@]}"} --options runtime \
+        --entitlements "$ENT" --sign "$SIGN_ID" "$ENGINE_PKG/$b"
+done
+codesign --force ${SIGN_FLAGS[@]+"${SIGN_FLAGS[@]}"} --options runtime \
     --entitlements "$ENT" --sign "$SIGN_ID" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
@@ -180,7 +208,7 @@ ln -s /Applications "$DMGROOT/Applications"
 rm -f "$DMG"
 hdiutil create -volname "$title $VERSION" -srcfolder "$DMGROOT" -ov -format UDZO "$DMG" >/dev/null
 # Gatekeeper checks the .dmg a person downloaded, not only the .app in it.
-codesign --force --keychain "$KEYCHAIN" --timestamp --sign "$SIGN_ID" "$DMG"
+codesign --force ${SIGN_FLAGS[@]+"${SIGN_FLAGS[@]}"} --sign "$SIGN_ID" "$DMG"
 
 if [ "$NOTARIZE" != 1 ]; then
     echo "=== NOTARIZE=0: signed only, NOT distributable: $DMG ==="

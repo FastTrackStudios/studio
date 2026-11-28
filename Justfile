@@ -70,11 +70,13 @@ telemetry:
 _engine-build:
     cargo build {{dev_build}} -p {{engine_package}} --bin {{engine_bin}}
 
-# Signal's rig engine (studio.rig), which Studio runs as a process. Its own
-# invocation: built with the engine's, cargo would unify their features and
-# compile the engine another way (another kache key).
+# Signal's rig engine (studio.rig), which Studio runs as a process, and its
+# headphone mixer (`signal-phones`, which the rig starts from beside itself).
+# Their own invocation: built with the engine's, cargo would unify their
+# features and compile the engine another way (another kache key). The
+# release scripts (scripts/desktop) build the same set.
 _rig-build:
-    cargo build {{dev_build}} -p rig-extension --bin rig-extension
+    cargo build {{dev_build}} -p rig-extension -p guitar --bin rig-extension --bin signal-phones
 
 # ── Check and test ───────────────────────────────────────────────────────
 

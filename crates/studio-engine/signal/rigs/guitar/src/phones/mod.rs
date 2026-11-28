@@ -27,7 +27,7 @@ use std::fs::{File, OpenOptions};
 use std::io;
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed};
 
 use memmap2::MmapMut;
 
@@ -437,13 +437,17 @@ pub fn default_state_path() -> PathBuf {
 }
 
 /// The `signal-phones` binary: `SIGNAL_PHONES_BIN`, else beside this
-/// executable (an app bundle's `MacOS/`, or `target/<profile>/`).
+/// executable (an app bundle's `MacOS/`, or `target/<profile>/`). Beside
+/// the real program, not a link to it: Studio starts `rig-extension`
+/// through a symlink in its extensions folder, and macOS reports the
+/// link's path as the executable.
 #[must_use]
 pub fn find_binary() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("SIGNAL_PHONES_BIN").filter(|p| !p.is_empty()) {
         return Some(p.into());
     }
     let exe = std::env::current_exe().ok()?;
+    let exe = exe.canonicalize().unwrap_or(exe);
     let dir = exe.parent()?;
     let here = dir.join("signal-phones");
     if here.is_file() {
@@ -452,6 +456,24 @@ pub fn find_binary() -> Option<PathBuf> {
     // An example or test binary one level down (`target/<profile>/examples`).
     let up = dir.parent()?.join("signal-phones");
     up.is_file().then_some(up)
+}
+
+/// Whether a missing mixer binary is news: true on the first miss after
+/// a find (or at the start), so a rig that looks every few seconds says
+/// so once per absence, not on every look.
+#[derive(Debug, Default)]
+pub struct MissingOnce(AtomicBool);
+
+impl MissingOnce {
+    /// `found` is this look's result; true when its miss should be reported.
+    pub fn first_miss(&self, found: bool) -> bool {
+        if found {
+            self.0.store(false, Relaxed);
+            false
+        } else {
+            !self.0.swap(true, Relaxed)
+        }
+    }
 }
 
 /// Start a mixer on `state`, detached — its own session, so it outlives the
@@ -495,4 +517,22 @@ pub fn default_log_path() -> PathBuf {
         return drive.join("phones-mixer.log");
     }
     std::env::temp_dir().join("signal-phones-mixer.log")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MissingOnce;
+
+    #[test]
+    fn a_missing_mixer_is_reported_once_per_absence() {
+        let missing = MissingOnce::default();
+        // The rig looks every few seconds; only the first miss says so.
+        assert!(missing.first_miss(false));
+        assert!(!missing.first_miss(false));
+        assert!(!missing.first_miss(false));
+        // Found, then gone again: a new absence, reported again.
+        assert!(!missing.first_miss(true));
+        assert!(missing.first_miss(false));
+        assert!(!missing.first_miss(false));
+    }
 }
